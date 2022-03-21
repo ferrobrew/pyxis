@@ -79,15 +79,23 @@ enum TypeRef {
     Array(Box<TypeRef>, usize),
 }
 impl TypeRef {
-    fn size(&self, type_registry: &TypeRegistry) -> usize {
+    // does not include any pointers/type mutators
+    #[allow(dead_code)]
+    fn base_path(&self) -> ItemPath {
         match self {
-            TypeRef::Raw(path) => type_registry
-                .get(path)
-                .and_then(|t| t.size())
-                .expect("unresolved type size"),
-            TypeRef::ConstPointer(_) => POINTER_SIZE,
-            TypeRef::MutPointer(_) => POINTER_SIZE,
-            TypeRef::Array(tr, count) => tr.size(type_registry) * count,
+            TypeRef::Raw(path) => path.clone(),
+            TypeRef::ConstPointer(tr) => tr.base_path(),
+            TypeRef::MutPointer(tr) => tr.base_path(),
+            TypeRef::Array(tr, _) => tr.base_path(),
+        }
+    }
+
+    fn size(&self, type_registry: &TypeRegistry) -> Option<usize> {
+        match self {
+            TypeRef::Raw(path) => type_registry.get(path).and_then(|t| t.size()),
+            TypeRef::ConstPointer(_) => Some(POINTER_SIZE),
+            TypeRef::MutPointer(_) => Some(POINTER_SIZE),
+            TypeRef::Array(tr, count) => tr.size(type_registry).map(|s| s * count),
         }
     }
 }
@@ -98,10 +106,10 @@ enum Region {
     Padding(usize),
 }
 impl Region {
-    fn size(&self, type_registry: &TypeRegistry) -> usize {
+    fn size(&self, type_registry: &TypeRegistry) -> Option<usize> {
         match self {
             Region::Field(_, type_ref) => type_ref.size(type_registry),
-            Region::Padding(size) => *size,
+            Region::Padding(size) => Some(*size),
         }
     }
 }
@@ -165,6 +173,11 @@ impl TypeRegistry {
 
     fn iter(&self) -> impl Iterator<Item = (&ItemPath, &TypeDefinition)> {
         self.0.iter()
+    }
+
+    #[allow(dead_code)]
+    fn has(&self, item_path: &ItemPath) -> bool {
+        self.0.contains_key(item_path)
     }
 
     fn get(&self, item_path: &ItemPath) -> Option<&TypeDefinition> {
@@ -314,13 +327,16 @@ impl Compiler {
 
         // todo: actual region resolution
         let regions: Vec<_> = regions.into_iter().map(|(_, r)| r).collect();
-        self.type_registry.get_mut(resolvee_path).unwrap().state = TypeState::Resolved {
-            size: regions
-                .iter()
-                .map(|r: &Region| r.size(&self.type_registry))
-                .sum(),
-            regions,
-        };
+        let sizes = regions
+            .iter()
+            .map(|r: &Region| r.size(&self.type_registry))
+            .collect::<Option<Vec<_>>>();
+
+        if let Some(sizes) = sizes {
+            let size = sizes.into_iter().sum();
+            self.type_registry.get_mut(resolvee_path).unwrap().state =
+                TypeState::Resolved { size, regions };
+        }
         Ok(())
     }
 
@@ -379,6 +395,66 @@ mod tests {
                     Region::Field("field_1".into(), TypeRef::Raw(ItemPath::from_str("i32"))),
                     Region::Padding(4),
                     Region::Field("field_2".into(), TypeRef::Raw(ItemPath::from_str("u64"))),
+                ],
+            },
+        };
+
+        let mut compiler = Compiler::new();
+        compiler
+            .add_module(module, ItemPath::from_str("test"))
+            .unwrap();
+        compiler.build().unwrap();
+        assert_eq!(compiler.type_registry().get(&path), Some(&type_definition));
+    }
+
+    #[test]
+    fn can_resolve_pointer_to_another_struct() {
+        let module = {
+            use super::grammar::*;
+
+            type TS = TypeStatement;
+            type TR = TypeRef;
+
+            Module::new(&[
+                TypeDefinition::new("TestType1", &[TS::field("field_1", TR::ident_type("u64"))]),
+                TypeDefinition::new(
+                    "TestType2",
+                    &[
+                        TS::field("field_1", TR::ident_type("i32")),
+                        TS::field("field_2", TR::ident_type("TestType1")),
+                        TS::field(
+                            "field_3",
+                            TR::Type(Type::ident("TestType1").const_pointer()),
+                        ),
+                        TS::field("field_4", TR::Type(Type::ident("TestType1").mut_pointer())),
+                    ],
+                ),
+            ])
+        };
+
+        let path = ItemPath::from_str("test::TestType2");
+        let type_definition = TypeDefinition {
+            path: path.clone(),
+            state: TypeState::Resolved {
+                size: 20,
+                regions: vec![
+                    Region::Field("field_1".into(), TypeRef::Raw(ItemPath::from_str("i32"))),
+                    Region::Field(
+                        "field_2".into(),
+                        TypeRef::Raw(ItemPath::from_str("test::TestType1")),
+                    ),
+                    Region::Field(
+                        "field_3".into(),
+                        TypeRef::ConstPointer(Box::new(TypeRef::Raw(ItemPath::from_str(
+                            "test::TestType1",
+                        )))),
+                    ),
+                    Region::Field(
+                        "field_4".into(),
+                        TypeRef::MutPointer(Box::new(TypeRef::Raw(ItemPath::from_str(
+                            "test::TestType1",
+                        )))),
+                    ),
                 ],
             },
         };
