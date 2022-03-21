@@ -26,10 +26,6 @@ impl ItemPath {
         ItemPath(vec![])
     }
 
-    fn from_segments(segments: &[&str]) -> ItemPath {
-        ItemPath(segments.iter().copied().map(|s| s.into()).collect())
-    }
-
     fn from_str(path: &str) -> ItemPath {
         ItemPath(path.split("::").map(|s| s.into()).collect())
     }
@@ -241,9 +237,13 @@ impl Compiler {
 
     // todo: define an actual error type
     fn add_file(&mut self, path: &Path) -> anyhow::Result<()> {
-        let module = super::parser::parse_str(&std::fs::read_to_string(path)?)?;
+        self.add_module(
+            super::parser::parse_str(&std::fs::read_to_string(path)?)?,
+            ItemPath::from_path(path),
+        )
+    }
 
-        let path = ItemPath::from_path(path);
+    fn add_module(&mut self, module: grammar::Module, path: ItemPath) -> Result<(), anyhow::Error> {
         for definition in &module.definitions {
             let path = path.join(definition.name.0.as_str().into());
             self.type_registry.add(TypeDefinition {
@@ -251,9 +251,7 @@ impl Compiler {
                 state: TypeState::Unresolved(definition.clone()),
             })
         }
-
         self.files.insert(path, module);
-
         Ok(())
     }
 
@@ -290,7 +288,7 @@ impl Compiler {
         let parent_path = resolvee_path.parent().unwrap_or(resolvee_path.clone());
         for statement in &definition.statements {
             match statement {
-                grammar::TypeStatement::Address(address, fields) => {
+                grammar::TypeStatement::Address(_address, _fieldss) => {
                     // regions.push((None, ))
                 }
                 grammar::TypeStatement::Field(grammar::TypeField(ident, type_ref)) => {
@@ -348,4 +346,48 @@ pub fn build_type_definitions() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn can_resolve_basic_struct() {
+        let module = {
+            use super::grammar::*;
+
+            type TS = TypeStatement;
+            type TR = TypeRef;
+
+            Module::new(&[TypeDefinition::new(
+                "TestType",
+                &[
+                    TS::field("field_1", TR::ident_type("i32")),
+                    TS::macro_("padding", &[Expr::IntLiteral(4)]),
+                    TS::field("field_2", TR::ident_type("u64")),
+                ],
+            )])
+        };
+
+        let path = ItemPath::from_str("test::TestType");
+        let type_definition = TypeDefinition {
+            path: path.clone(),
+            state: TypeState::Resolved {
+                size: 16,
+                regions: vec![
+                    Region::Field("field_1".into(), TypeRef::Raw(ItemPath::from_str("i32"))),
+                    Region::Padding(4),
+                    Region::Field("field_2".into(), TypeRef::Raw(ItemPath::from_str("u64"))),
+                ],
+            },
+        };
+
+        let mut compiler = Compiler::new();
+        compiler
+            .add_module(module, ItemPath::from_str("test"))
+            .unwrap();
+        compiler.build().unwrap();
+        assert_eq!(compiler.type_registry().get(&path), Some(&type_definition));
+    }
 }
