@@ -30,13 +30,12 @@ impl ItemPath {
         ItemPath(path.split("::").map(|s| s.into()).collect())
     }
 
-    // ignores src
     fn from_path(path: &Path) -> ItemPath {
         // consider making this a result
-        assert!(path.is_relative() && path.starts_with("src"));
+        assert!(path.is_relative() && path.starts_with("types"));
 
         ItemPath(
-            path.strip_prefix("src")
+            path.strip_prefix("types")
                 .unwrap()
                 .parent()
                 .map(Path::to_path_buf)
@@ -251,12 +250,16 @@ impl Compiler {
     // todo: define an actual error type
     fn add_file(&mut self, path: &Path) -> anyhow::Result<()> {
         self.add_module(
-            super::parser::parse_str(&std::fs::read_to_string(path)?)?,
-            ItemPath::from_path(path),
+            &super::parser::parse_str(&std::fs::read_to_string(path)?)?,
+            &ItemPath::from_path(path),
         )
     }
 
-    fn add_module(&mut self, module: grammar::Module, path: ItemPath) -> Result<(), anyhow::Error> {
+    fn add_module(
+        &mut self,
+        module: &grammar::Module,
+        path: &ItemPath,
+    ) -> Result<(), anyhow::Error> {
         for definition in &module.definitions {
             let path = path.join(definition.name.0.as_str().into());
             self.type_registry.add(TypeDefinition {
@@ -264,7 +267,7 @@ impl Compiler {
                 state: TypeState::Unresolved(definition.clone()),
             })
         }
-        self.files.insert(path, module);
+        self.files.insert(path.clone(), module.clone());
         Ok(())
     }
 
@@ -296,21 +299,42 @@ impl Compiler {
         resolvee_path: &ItemPath,
         definition: &grammar::TypeDefinition,
     ) -> Result<(), anyhow::Error> {
-        let mut regions: Vec<(Option<usize>, Region)> = vec![];
+        let parent_path = resolvee_path
+            .parent()
+            .unwrap_or_else(|| resolvee_path.clone());
 
-        let parent_path = resolvee_path.parent().unwrap_or(resolvee_path.clone());
+        let build_region_from_field = |grammar::TypeField(ident, type_ref): &grammar::TypeField| {
+            let type_ref = self
+                .type_registry
+                .resolve_typeref(&[&parent_path], type_ref);
+
+            type_ref.map(|tr| (None, Region::Field(ident.0.clone(), tr)))
+        };
+
+        let mut target_size: Option<usize> = None;
+        let mut regions: Vec<(Option<usize>, Region)> = vec![];
         for statement in &definition.statements {
             match statement {
-                grammar::TypeStatement::Address(_address, _fieldss) => {
-                    // regions.push((None, ))
+                grammar::TypeStatement::Meta(fields) => {
+                    if let Some(grammar::ExprField(_, grammar::Expr::IntLiteral(size))) =
+                        fields.iter().find(|tf| tf.0 .0 == "size")
+                    {
+                        target_size = Some(*size as usize);
+                    }
                 }
-                grammar::TypeStatement::Field(grammar::TypeField(ident, type_ref)) => {
-                    let type_ref = self
-                        .type_registry
-                        .resolve_typeref(&[&parent_path], type_ref);
-
-                    if let Some(type_ref) = type_ref {
-                        regions.push((None, Region::Field(ident.0.clone(), type_ref)));
+                grammar::TypeStatement::Address(address, fields) => {
+                    regions.push((Some(*address), Region::Padding(0)));
+                    for type_field in fields {
+                        if let Some(region_pair) = build_region_from_field(type_field) {
+                            regions.push(region_pair);
+                        } else {
+                            return Ok(());
+                        }
+                    }
+                }
+                grammar::TypeStatement::Field(type_field) => {
+                    if let Some(region_pair) = build_region_from_field(type_field) {
+                        regions.push(region_pair);
                     } else {
                         return Ok(());
                     }
@@ -325,17 +349,47 @@ impl Compiler {
             };
         }
 
-        // todo: actual region resolution
-        let regions: Vec<_> = regions.into_iter().map(|(_, r)| r).collect();
-        let sizes = regions
+        // this resolution algorithm is very simple and doesn't handle overlapping regions
+        // or regions that are out of order
+        let mut last_address: usize = 0;
+        let mut resolved_regions = vec![];
+        for (offset, region) in regions {
+            if let Some(offset) = offset {
+                let size = offset - last_address;
+                resolved_regions.push(Region::Padding(size));
+                last_address += size;
+            }
+
+            let region_size = match region.size(&self.type_registry) {
+                Some(size) => size,
+                None => return Ok(()),
+            };
+
+            if region_size == 0 {
+                continue;
+            }
+
+            resolved_regions.push(region);
+            last_address += region_size;
+        }
+
+        if let Some(target_size) = target_size {
+            if last_address < target_size {
+                resolved_regions.push(Region::Padding(target_size - last_address));
+            }
+        }
+
+        let sizes = resolved_regions
             .iter()
             .map(|r: &Region| r.size(&self.type_registry))
             .collect::<Option<Vec<_>>>();
 
         if let Some(sizes) = sizes {
             let size = sizes.into_iter().sum();
-            self.type_registry.get_mut(resolvee_path).unwrap().state =
-                TypeState::Resolved { size, regions };
+            self.type_registry.get_mut(resolvee_path).unwrap().state = TypeState::Resolved {
+                size,
+                regions: resolved_regions,
+            };
         }
         Ok(())
     }
@@ -348,7 +402,7 @@ impl Compiler {
 pub fn build_type_definitions() -> anyhow::Result<()> {
     let mut compiler = Compiler::new();
 
-    for path in glob::glob("src/**/*.rstl")?.filter_map(Result::ok) {
+    for path in glob::glob("types/**/*.rstl")?.filter_map(Result::ok) {
         compiler.add_file(&path)?;
     }
     compiler.build()?;
@@ -367,6 +421,17 @@ pub fn build_type_definitions() -> anyhow::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn build_type(module: &grammar::Module, path: &ItemPath) -> anyhow::Result<TypeDefinition> {
+        let mut compiler = Compiler::new();
+        compiler.add_module(module, &path.parent().context("failed to get path parent")?)?;
+        compiler.build()?;
+        compiler
+            .type_registry()
+            .get(path)
+            .cloned()
+            .context("failed to get type")
+    }
 
     #[test]
     fn can_resolve_basic_struct() {
@@ -399,12 +464,7 @@ mod tests {
             },
         };
 
-        let mut compiler = Compiler::new();
-        compiler
-            .add_module(module, ItemPath::from_str("test"))
-            .unwrap();
-        compiler.build().unwrap();
-        assert_eq!(compiler.type_registry().get(&path), Some(&type_definition));
+        assert_eq!(build_type(&module, &path).unwrap(), type_definition);
     }
 
     #[test]
@@ -459,11 +519,91 @@ mod tests {
             },
         };
 
-        let mut compiler = Compiler::new();
-        compiler
-            .add_module(module, ItemPath::from_str("test"))
-            .unwrap();
-        compiler.build().unwrap();
-        assert_eq!(compiler.type_registry().get(&path), Some(&type_definition));
+        assert_eq!(build_type(&module, &path).unwrap(), type_definition);
+    }
+
+    #[test]
+    fn can_resolve_complex_type() {
+        let module = {
+            use super::grammar::*;
+
+            type T = Type;
+            type TS = TypeStatement;
+            type TR = TypeRef;
+            type A = Argument;
+
+            Module::new(&[
+                TypeDefinition::new(
+                    "TestType",
+                    &[
+                        TS::field("field_1", TR::ident_type("i32")),
+                        TS::macro_("padding", &[Expr::IntLiteral(4)]),
+                    ],
+                ),
+                TypeDefinition::new(
+                    "Singleton",
+                    &[
+                        TS::meta(&[
+                            ("size", Expr::IntLiteral(0x1750)),
+                            ("singleton", Expr::IntLiteral(0x1_200_000)),
+                        ]),
+                        TS::address(
+                            0x78,
+                            &[
+                                ("max_num_1", TR::ident_type("u16")),
+                                ("max_num_2", TR::ident_type("u16")),
+                            ],
+                        ),
+                        TS::address(
+                            0xA00,
+                            &[
+                                ("test_type", TR::ident_type("TestType")),
+                                ("settings", MacroCall::unk(804).into()),
+                            ],
+                        ),
+                        TS::functions(&[(
+                            "free",
+                            &[Function::new(
+                                "test_function",
+                                &[Attribute::address(0x800_000)],
+                                &[
+                                    A::MutSelf,
+                                    A::field("arg1", T::ident("TestType").mut_pointer().into()),
+                                    A::field("arg2", TR::ident_type("i32")),
+                                    A::field("arg3", T::ident("u32").const_pointer().into()),
+                                ],
+                                Some(Type::ident("TestType").mut_pointer()),
+                            )],
+                        )]),
+                    ],
+                ),
+            ])
+        };
+
+        let path = ItemPath::from_str("test::Singleton");
+        // todo: handle functions
+        let type_definition = TypeDefinition {
+            path: path.clone(),
+            state: TypeState::Resolved {
+                size: 0x1750,
+                regions: vec![
+                    Region::Padding(0x78),
+                    Region::Field("max_num_1".into(), TypeRef::Raw(ItemPath::from_str("u16"))),
+                    Region::Field("max_num_2".into(), TypeRef::Raw(ItemPath::from_str("u16"))),
+                    Region::Padding(0x984),
+                    Region::Field(
+                        "test_type".into(),
+                        TypeRef::Raw(ItemPath::from_str("test::TestType")),
+                    ),
+                    Region::Field(
+                        "settings".into(),
+                        TypeRef::Array(Box::new(TypeRef::Raw(ItemPath::from_str("u8"))), 804),
+                    ),
+                    Region::Padding(0xA24),
+                ],
+            },
+        };
+
+        assert_eq!(build_type(&module, &path).unwrap(), type_definition);
     }
 }
