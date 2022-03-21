@@ -50,6 +50,10 @@ impl MacroCall {
             arguments: vec![Expr::IntLiteral(size as isize)],
         }
     }
+
+    pub fn match_repr(&self) -> (&str, &[Expr]) {
+        (self.name.0.as_str(), self.arguments.as_slice())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
