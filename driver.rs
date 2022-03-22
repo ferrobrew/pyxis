@@ -289,6 +289,15 @@ impl Compiler {
                     self.build_type(resolvee_path, &definition)?;
                 }
             }
+
+            if to_resolve == self.type_registry.unresolved() {
+                // Oh no! We failed to resolve any new types!
+                // Bail from the loop.
+                return Err(anyhow::anyhow!(
+                    "type resolution will not terminate, failed on types: {:?}",
+                    Vec::from_iter(to_resolve.iter().map(|s| s.to_string()))
+                ));
+            }
         }
 
         Ok(())
@@ -605,5 +614,26 @@ mod tests {
         };
 
         assert_eq!(build_type(&module, &path).unwrap(), type_definition);
+    }
+
+    #[test]
+    fn will_eventually_terminate_with_an_unknown_type() {
+        let module = {
+            use super::grammar::*;
+
+            type TS = TypeStatement;
+            type TR = TypeRef;
+
+            Module::new(&[TypeDefinition::new(
+                "TestType2",
+                &[TS::field("field_2", TR::ident_type("TestType1"))],
+            )])
+        };
+
+        let path = ItemPath::from_str("test::TestType2");
+        assert_eq!(
+            build_type(&module, &path).err().unwrap().to_string(),
+            r#"type resolution will not terminate, failed on types: ["test::TestType2"]"#
+        );
     }
 }
