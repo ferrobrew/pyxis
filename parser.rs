@@ -203,6 +203,21 @@ impl Parse for TypeField {
     }
 }
 
+fn parse_optionally_braced_content<T>(
+    input: ParseStream,
+    content_parser: fn(ParseStream) -> Result<T>,
+) -> Result<Vec<T>> {
+    if input.peek(syn::token::Brace) {
+        let content;
+        braced!(content in input);
+
+        let fields: Punctuated<_, Token![,]> = content.parse_terminated(content_parser)?;
+        Ok(Vec::from_iter(fields.into_iter()))
+    } else {
+        Ok(vec![content_parser(input)?])
+    }
+}
+
 impl Parse for TypeStatement {
     fn parse(input: ParseStream) -> Result<Self> {
         use syn::parse::discouraged::Speculative;
@@ -223,12 +238,8 @@ impl Parse for TypeStatement {
 
             let offset: syn::LitInt = content.parse()?;
             let offset = offset.base10_parse()?;
+            let fields = parse_optionally_braced_content(input, TypeField::parse)?;
 
-            let content;
-            braced!(content in input);
-
-            let fields: Punctuated<_, Token![,]> = content.parse_terminated(TypeField::parse)?;
-            let fields = Vec::from_iter(fields.into_iter());
             Ok(TypeStatement::Address(offset, fields))
         } else if lookahead.peek(kw::functions) {
             input.parse::<kw::functions>()?;
@@ -485,6 +496,27 @@ mod tests {
                         ],
                     )]),
                 ],
+            )])
+        };
+
+        assert_eq!(parse_str(text).ok(), Some(ast));
+    }
+
+    #[test]
+    fn can_parse_address_field() {
+        let text = r#"
+        type Test {
+            address(0x78) max_num_characters: u16,
+        }
+        "#;
+
+        let ast = {
+            Module::new(&[TypeDefinition::new(
+                "Test",
+                &[TypeStatement::address(
+                    0x78,
+                    &[("max_num_characters", TypeRef::ident_type("u16"))],
+                )],
             )])
         };
 
