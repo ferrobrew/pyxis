@@ -16,30 +16,34 @@ impl Parse for Ident {
     }
 }
 
+fn parse_type_ident(input: ParseStream) -> Result<String> {
+    // dodgy hack to "support" generics for now
+    let ident: syn::Ident = input.parse()?;
+    let mut name = ident.to_string();
+
+    loop {
+        if input.peek(syn::Token![<]) {
+            input.parse::<syn::Token![<]>()?;
+            name += "<";
+        } else if input.peek(syn::Ident) {
+            let ident: syn::Ident = input.parse()?;
+            name += &ident.to_string();
+        } else if input.peek(syn::Token![>]) {
+            input.parse::<syn::Token![>]>()?;
+            name += ">";
+        } else {
+            break;
+        }
+    }
+
+    Ok(name)
+}
+
 impl Parse for Type {
     fn parse(input: ParseStream) -> Result<Self> {
         let lookahead = input.lookahead1();
         if lookahead.peek(syn::Ident) {
-            // dodgy hack to "support" generics for now
-            let ident: syn::Ident = input.parse()?;
-            let mut name = ident.to_string();
-
-            loop {
-                if input.peek(syn::Token![<]) {
-                    input.parse::<syn::Token![<]>()?;
-                    name += "<";
-                } else if input.peek(syn::Ident) {
-                    let ident: syn::Ident = input.parse()?;
-                    name += &ident.to_string();
-                } else if input.peek(syn::Token![>]) {
-                    input.parse::<syn::Token![>]>()?;
-                    name += ">";
-                } else {
-                    break;
-                }
-            }
-
-            Ok(Type::Ident(name.as_str().into()))
+            Ok(Type::Ident(parse_type_ident(input)?.as_str().into()))
         } else if lookahead.peek(syn::Token![*]) {
             input.parse::<syn::Token![*]>()?;
 
@@ -295,13 +299,42 @@ impl Parse for TypeDefinition {
 
 impl Parse for Module {
     fn parse(input: ParseStream) -> Result<Self> {
+        let mut uses = vec![];
         let mut definitions = vec![];
+
+        // Exhaust all of our use declarations
+        while input.peek(Token![use]) {
+            input.parse::<Token![use]>()?;
+
+            // todo: make parsing stricter so that this takes idents
+            // separated by double-colons that end in a type, not just
+            // all types
+            // that is to say, `use lol<lol>::lol` should not parse, but
+            // `use lol::lol<lol>` should
+            // todo: consider implementing ItemPath::parse somehow
+            let mut item_path = ItemPath::empty();
+            while !input.peek(syn::Token![;]) {
+                let lookahead = input.lookahead1();
+                if lookahead.peek(syn::Ident) {
+                    item_path.push(parse_type_ident(input)?.into());
+                } else if lookahead.peek(syn::Token![::]) {
+                    input.parse::<syn::Token![::]>()?;
+                } else if lookahead.peek(syn::Token![super]) {
+                    input.parse::<syn::Token![super]>()?;
+                    item_path.push("super".into());
+                } else {
+                    return Err(lookahead.error());
+                }
+            }
+            input.parse::<syn::Token![;]>()?;
+            uses.push(item_path);
+        }
 
         while !input.is_empty() {
             definitions.push(input.parse()?);
         }
 
-        Ok(Module::new(&definitions))
+        Ok(Module::new(&uses, &definitions))
     }
 }
 
@@ -326,13 +359,16 @@ mod tests {
             type TS = TypeStatement;
             type TR = TypeRef;
 
-            Module::new(&[TypeDefinition::new(
-                "TestType",
-                &[
-                    TS::field("field_1", TR::ident_type("i32")),
-                    TS::field("field_2", TR::ident_type("i32")),
-                ],
-            )])
+            Module::new(
+                &[],
+                &[TypeDefinition::new(
+                    "TestType",
+                    &[
+                        TS::field("field_1", TR::ident_type("i32")),
+                        TS::field("field_2", TR::ident_type("i32")),
+                    ],
+                )],
+            )
         };
 
         assert_eq!(parse_str(text).ok(), Some(ast));
@@ -364,24 +400,27 @@ mod tests {
             type TS = TypeStatement;
             type TR = TypeRef;
 
-            Module::new(&[TypeDefinition::new(
-                "VehicleTypes",
-                &[
-                    TS::field("hash_edacd65b_likely_max_models", TR::ident_type("i32")),
-                    TS::field("hash_2ff58884", TR::ident_type("i32")),
-                    TS::field("maximum_gpu_cost", TR::ident_type("i32")),
-                    TS::field("maximum_cpu_cost", TR::ident_type("i32")),
-                    TS::field("field_10", TR::ident_type("i32")),
-                    TS::field("accumulated_gpu_cost", TR::ident_type("i32")),
-                    TS::field("accumulated_cpu_cost", TR::ident_type("i32")),
-                    TS::field("field_1c", TR::ident_type("i32")),
-                    TS::field(
-                        "loaded_models",
-                        T::ident("LoadedModel").const_pointer().into(),
-                    ),
-                    TS::macro_("padding", &[Expr::IntLiteral(0x10)]),
-                ],
-            )])
+            Module::new(
+                &[],
+                &[TypeDefinition::new(
+                    "VehicleTypes",
+                    &[
+                        TS::field("hash_edacd65b_likely_max_models", TR::ident_type("i32")),
+                        TS::field("hash_2ff58884", TR::ident_type("i32")),
+                        TS::field("maximum_gpu_cost", TR::ident_type("i32")),
+                        TS::field("maximum_cpu_cost", TR::ident_type("i32")),
+                        TS::field("field_10", TR::ident_type("i32")),
+                        TS::field("accumulated_gpu_cost", TR::ident_type("i32")),
+                        TS::field("accumulated_cpu_cost", TR::ident_type("i32")),
+                        TS::field("field_1c", TR::ident_type("i32")),
+                        TS::field(
+                            "loaded_models",
+                            T::ident("LoadedModel").const_pointer().into(),
+                        ),
+                        TS::macro_("padding", &[Expr::IntLiteral(0x10)]),
+                    ],
+                )],
+            )
         };
 
         assert_eq!(parse_str(text).ok(), Some(ast));
@@ -440,63 +479,78 @@ mod tests {
             type TR = TypeRef;
             type A = Argument;
 
-            Module::new(&[TypeDefinition::new(
-                "SpawnManager",
-                &[
-                    TS::meta(&[
-                        ("size", IntLiteral(0x1754)),
-                        ("singleton", IntLiteral(0x1_191_918)),
-                    ]),
-                    TS::address(
-                        0x78,
-                        &[
-                            ("max_num_characters", TR::ident_type("u16")),
-                            ("max_num_vehicles", TR::ident_type("u16")),
-                        ],
-                    ),
-                    TS::address(
-                        0xA00,
-                        &[
-                            ("world_sim", TR::ident_type("WorldSim")),
-                            ("enemy_type_spawn_settings", MacroCall::unk(804).into()),
-                            ("character_types", MacroCall::unk(0x74).into()),
-                            ("vehicle_types", TR::ident_type("VehicleTypes")),
-                        ],
-                    ),
-                    TS::functions(&[(
-                        "free",
-                        &[
-                            Function::new(
-                                "engine_spawn_vehicle",
-                                &[Attribute::address(0x84C_4C0)],
-                                &[
-                                    A::MutSelf,
-                                    A::field(
-                                        "vehicle",
-                                        T::ident("SharedPtr<Vehicle>").mut_pointer().into(),
-                                    ),
-                                    A::field("context", TR::ident_type("i32")),
-                                    A::field("unk1", T::ident("StdString").mut_pointer().into()),
-                                    A::field("model_id", T::ident("u32").const_pointer().into()),
-                                    A::field("faction", TR::ident_type("u32")),
-                                    A::field("unk2", T::ident("StdString").mut_pointer().into()),
-                                ],
-                                Some(Type::ident("SharedPtr<Vehicle>").mut_pointer()),
-                            ),
-                            Function::new(
-                                "request_vehicle_model",
-                                &[Attribute::address(0x73F_DB0)],
-                                &[
-                                    A::MutSelf,
-                                    A::field("model_id", T::ident("u32").const_pointer().into()),
-                                    A::field("category", TR::ident_type("i32")),
-                                ],
-                                None,
-                            ),
-                        ],
-                    )]),
-                ],
-            )])
+            Module::new(
+                &[],
+                &[TypeDefinition::new(
+                    "SpawnManager",
+                    &[
+                        TS::meta(&[
+                            ("size", IntLiteral(0x1754)),
+                            ("singleton", IntLiteral(0x1_191_918)),
+                        ]),
+                        TS::address(
+                            0x78,
+                            &[
+                                ("max_num_characters", TR::ident_type("u16")),
+                                ("max_num_vehicles", TR::ident_type("u16")),
+                            ],
+                        ),
+                        TS::address(
+                            0xA00,
+                            &[
+                                ("world_sim", TR::ident_type("WorldSim")),
+                                ("enemy_type_spawn_settings", MacroCall::unk(804).into()),
+                                ("character_types", MacroCall::unk(0x74).into()),
+                                ("vehicle_types", TR::ident_type("VehicleTypes")),
+                            ],
+                        ),
+                        TS::functions(&[(
+                            "free",
+                            &[
+                                Function::new(
+                                    "engine_spawn_vehicle",
+                                    &[Attribute::address(0x84C_4C0)],
+                                    &[
+                                        A::MutSelf,
+                                        A::field(
+                                            "vehicle",
+                                            T::ident("SharedPtr<Vehicle>").mut_pointer().into(),
+                                        ),
+                                        A::field("context", TR::ident_type("i32")),
+                                        A::field(
+                                            "unk1",
+                                            T::ident("StdString").mut_pointer().into(),
+                                        ),
+                                        A::field(
+                                            "model_id",
+                                            T::ident("u32").const_pointer().into(),
+                                        ),
+                                        A::field("faction", TR::ident_type("u32")),
+                                        A::field(
+                                            "unk2",
+                                            T::ident("StdString").mut_pointer().into(),
+                                        ),
+                                    ],
+                                    Some(Type::ident("SharedPtr<Vehicle>").mut_pointer()),
+                                ),
+                                Function::new(
+                                    "request_vehicle_model",
+                                    &[Attribute::address(0x73F_DB0)],
+                                    &[
+                                        A::MutSelf,
+                                        A::field(
+                                            "model_id",
+                                            T::ident("u32").const_pointer().into(),
+                                        ),
+                                        A::field("category", TR::ident_type("i32")),
+                                    ],
+                                    None,
+                                ),
+                            ],
+                        )]),
+                    ],
+                )],
+            )
         };
 
         assert_eq!(parse_str(text).ok(), Some(ast));
@@ -511,13 +565,41 @@ mod tests {
         "#;
 
         let ast = {
-            Module::new(&[TypeDefinition::new(
-                "Test",
-                &[TypeStatement::address(
-                    0x78,
-                    &[("max_num_characters", TypeRef::ident_type("u16"))],
+            Module::new(
+                &[],
+                &[TypeDefinition::new(
+                    "Test",
+                    &[TypeStatement::address(
+                        0x78,
+                        &[("max_num_characters", TypeRef::ident_type("u16"))],
+                    )],
                 )],
-            )])
+            )
+        };
+
+        assert_eq!(parse_str(text).ok(), Some(ast));
+    }
+
+    #[test]
+    fn can_parse_use() {
+        let text = r#"
+        use super::TestType<Hey>;
+        type Test {
+            test: TestType<Hey>,
+        }
+        "#;
+
+        let ast = {
+            Module::new(
+                &[ItemPath::from_colon_delimited_str("super::TestType<Hey>")],
+                &[TypeDefinition::new(
+                    "Test",
+                    &[TypeStatement::field(
+                        "test",
+                        TypeRef::ident_type("TestType<Hey>"),
+                    )],
+                )],
+            )
         };
 
         assert_eq!(parse_str(text).ok(), Some(ast));

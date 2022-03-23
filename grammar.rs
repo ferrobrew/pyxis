@@ -1,3 +1,5 @@
+use std::{fmt, path::Path};
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Ident(pub String);
 impl From<&str> for Ident {
@@ -28,6 +30,83 @@ impl Type {
 impl From<&str> for Type {
     fn from(item: &str) -> Self {
         Type::Ident(item.into())
+    }
+}
+
+#[derive(PartialEq, Hash, Eq, Clone, Debug)]
+pub struct ItemPathSegment(String);
+impl From<&str> for ItemPathSegment {
+    fn from(value: &str) -> Self {
+        ItemPathSegment(value.to_string())
+    }
+}
+impl From<String> for ItemPathSegment {
+    fn from(value: String) -> Self {
+        ItemPathSegment(value)
+    }
+}
+impl fmt::Display for ItemPathSegment {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+#[derive(PartialEq, Hash, Eq, Clone, Debug)]
+pub struct ItemPath(Vec<ItemPathSegment>);
+impl ItemPath {
+    pub fn empty() -> ItemPath {
+        ItemPath(vec![])
+    }
+
+    pub fn from_colon_delimited_str(path: &str) -> ItemPath {
+        ItemPath(path.split("::").map(|s| s.into()).collect())
+    }
+
+    pub fn from_path(path: &Path) -> ItemPath {
+        // consider making this a result
+        assert!(path.is_relative() && path.starts_with("types"));
+
+        ItemPath(
+            path.strip_prefix("types")
+                .unwrap()
+                .parent()
+                .map(Path::to_path_buf)
+                .unwrap_or_default()
+                .iter()
+                .chain(std::iter::once(path.file_stem().unwrap_or_default()))
+                .map(|s| s.to_string_lossy().as_ref().into())
+                .collect(),
+        )
+    }
+
+    pub fn parent(&self) -> Option<ItemPath> {
+        (!self.0.is_empty()).then(|| ItemPath(self.0[..self.0.len() - 1].to_vec()))
+    }
+
+    pub fn push(&mut self, segment: ItemPathSegment) {
+        self.0.push(segment);
+    }
+
+    pub fn join(&self, segment: ItemPathSegment) -> ItemPath {
+        let mut path = self.0.clone();
+        path.push(segment);
+        ItemPath(path)
+    }
+}
+impl fmt::Display for ItemPath {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for (index, segment) in self.0.iter().enumerate() {
+            if index > 0 {
+                write!(f, "::")?;
+            }
+            write!(f, "{}", segment)?;
+        }
+        Ok(())
+    }
+}
+impl FromIterator<ItemPathSegment> for ItemPath {
+    fn from_iter<I: IntoIterator<Item = ItemPathSegment>>(iter: I) -> Self {
+        ItemPath(Vec::from_iter(iter))
     }
 }
 
@@ -213,11 +292,13 @@ impl TypeDefinition {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Module {
+    pub uses: Vec<ItemPath>,
     pub definitions: Vec<TypeDefinition>,
 }
 impl Module {
-    pub fn new(definitions: &[TypeDefinition]) -> Self {
+    pub fn new(uses: &[ItemPath], definitions: &[TypeDefinition]) -> Self {
         Self {
+            uses: uses.to_vec(),
             definitions: definitions.to_vec(),
         }
     }

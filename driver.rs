@@ -1,74 +1,10 @@
 use anyhow::Context;
 
-use super::grammar;
-use std::{collections::HashMap, fmt, io::Write, path::Path, vec};
+use super::grammar::{self, ItemPath};
+use std::{collections::HashMap, io::Write, path::Path, vec};
 
 // todo: factor architecture in
 const POINTER_SIZE: usize = 4;
-
-#[derive(PartialEq, Hash, Eq, Clone, Debug)]
-struct ItemPathSegment(String);
-impl From<&str> for ItemPathSegment {
-    fn from(value: &str) -> Self {
-        ItemPathSegment(value.to_string())
-    }
-}
-impl fmt::Display for ItemPathSegment {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-#[derive(PartialEq, Hash, Eq, Clone, Debug)]
-struct ItemPath(Vec<ItemPathSegment>);
-impl ItemPath {
-    fn empty() -> ItemPath {
-        ItemPath(vec![])
-    }
-
-    fn from_str(path: &str) -> ItemPath {
-        ItemPath(path.split("::").map(|s| s.into()).collect())
-    }
-
-    fn from_path(path: &Path) -> ItemPath {
-        // consider making this a result
-        assert!(path.is_relative() && path.starts_with("types"));
-
-        ItemPath(
-            path.strip_prefix("types")
-                .unwrap()
-                .parent()
-                .map(Path::to_path_buf)
-                .unwrap_or_default()
-                .iter()
-                .chain(std::iter::once(path.file_stem().unwrap_or_default()))
-                .map(|s| s.to_string_lossy().as_ref().into())
-                .collect(),
-        )
-    }
-
-    fn parent(&self) -> Option<ItemPath> {
-        (!self.0.is_empty()).then(|| ItemPath(self.0[..self.0.len() - 1].to_vec()))
-    }
-
-    fn join(&self, segment: ItemPathSegment) -> ItemPath {
-        let mut path = self.0.clone();
-        path.push(segment);
-        ItemPath(path)
-    }
-}
-
-impl fmt::Display for ItemPath {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for (index, segment) in self.0.iter().enumerate() {
-            if index > 0 {
-                write!(f, "::")?;
-            }
-            write!(f, "{}", segment)?;
-        }
-        Ok(())
-    }
-}
 
 #[derive(PartialEq, Eq, Debug, Clone)]
 enum TypeRef {
@@ -164,7 +100,7 @@ impl TypeRegistry {
         TypeRegistry(
             predefined_types
                 .into_iter()
-                .map(|(name, size)| (ItemPath::from_str(name), size))
+                .map(|(name, size)| (ItemPath::from_colon_delimited_str(name), size))
                 .map(|(path, size)| (path.clone(), TypeDefinition::new_resolved(path, size)))
                 .collect(),
         )
@@ -450,25 +386,34 @@ mod tests {
             type TS = TypeStatement;
             type TR = TypeRef;
 
-            Module::new(&[TypeDefinition::new(
-                "TestType",
-                &[
-                    TS::field("field_1", TR::ident_type("i32")),
-                    TS::macro_("padding", &[Expr::IntLiteral(4)]),
-                    TS::field("field_2", TR::ident_type("u64")),
-                ],
-            )])
+            Module::new(
+                &[],
+                &[TypeDefinition::new(
+                    "TestType",
+                    &[
+                        TS::field("field_1", TR::ident_type("i32")),
+                        TS::macro_("padding", &[Expr::IntLiteral(4)]),
+                        TS::field("field_2", TR::ident_type("u64")),
+                    ],
+                )],
+            )
         };
 
-        let path = ItemPath::from_str("test::TestType");
+        let path = ItemPath::from_colon_delimited_str("test::TestType");
         let type_definition = TypeDefinition {
             path: path.clone(),
             state: TypeState::Resolved {
                 size: 16,
                 regions: vec![
-                    Region::Field("field_1".into(), TypeRef::Raw(ItemPath::from_str("i32"))),
+                    Region::Field(
+                        "field_1".into(),
+                        TypeRef::Raw(ItemPath::from_colon_delimited_str("i32")),
+                    ),
                     Region::Padding(4),
-                    Region::Field("field_2".into(), TypeRef::Raw(ItemPath::from_str("u64"))),
+                    Region::Field(
+                        "field_2".into(),
+                        TypeRef::Raw(ItemPath::from_colon_delimited_str("u64")),
+                    ),
                 ],
             },
         };
@@ -484,45 +429,54 @@ mod tests {
             type TS = TypeStatement;
             type TR = TypeRef;
 
-            Module::new(&[
-                TypeDefinition::new("TestType1", &[TS::field("field_1", TR::ident_type("u64"))]),
-                TypeDefinition::new(
-                    "TestType2",
-                    &[
-                        TS::field("field_1", TR::ident_type("i32")),
-                        TS::field("field_2", TR::ident_type("TestType1")),
-                        TS::field(
-                            "field_3",
-                            TR::Type(Type::ident("TestType1").const_pointer()),
-                        ),
-                        TS::field("field_4", TR::Type(Type::ident("TestType1").mut_pointer())),
-                    ],
-                ),
-            ])
+            Module::new(
+                &[],
+                &[
+                    TypeDefinition::new(
+                        "TestType1",
+                        &[TS::field("field_1", TR::ident_type("u64"))],
+                    ),
+                    TypeDefinition::new(
+                        "TestType2",
+                        &[
+                            TS::field("field_1", TR::ident_type("i32")),
+                            TS::field("field_2", TR::ident_type("TestType1")),
+                            TS::field(
+                                "field_3",
+                                TR::Type(Type::ident("TestType1").const_pointer()),
+                            ),
+                            TS::field("field_4", TR::Type(Type::ident("TestType1").mut_pointer())),
+                        ],
+                    ),
+                ],
+            )
         };
 
-        let path = ItemPath::from_str("test::TestType2");
+        let path = ItemPath::from_colon_delimited_str("test::TestType2");
         let type_definition = TypeDefinition {
             path: path.clone(),
             state: TypeState::Resolved {
                 size: 20,
                 regions: vec![
-                    Region::Field("field_1".into(), TypeRef::Raw(ItemPath::from_str("i32"))),
+                    Region::Field(
+                        "field_1".into(),
+                        TypeRef::Raw(ItemPath::from_colon_delimited_str("i32")),
+                    ),
                     Region::Field(
                         "field_2".into(),
-                        TypeRef::Raw(ItemPath::from_str("test::TestType1")),
+                        TypeRef::Raw(ItemPath::from_colon_delimited_str("test::TestType1")),
                     ),
                     Region::Field(
                         "field_3".into(),
-                        TypeRef::ConstPointer(Box::new(TypeRef::Raw(ItemPath::from_str(
-                            "test::TestType1",
-                        )))),
+                        TypeRef::ConstPointer(Box::new(TypeRef::Raw(
+                            ItemPath::from_colon_delimited_str("test::TestType1"),
+                        ))),
                     ),
                     Region::Field(
                         "field_4".into(),
-                        TypeRef::MutPointer(Box::new(TypeRef::Raw(ItemPath::from_str(
-                            "test::TestType1",
-                        )))),
+                        TypeRef::MutPointer(Box::new(TypeRef::Raw(
+                            ItemPath::from_colon_delimited_str("test::TestType1"),
+                        ))),
                     ),
                 ],
             },
@@ -541,55 +495,58 @@ mod tests {
             type TR = TypeRef;
             type A = Argument;
 
-            Module::new(&[
-                TypeDefinition::new(
-                    "TestType",
-                    &[
-                        TS::field("field_1", TR::ident_type("i32")),
-                        TS::macro_("padding", &[Expr::IntLiteral(4)]),
-                    ],
-                ),
-                TypeDefinition::new(
-                    "Singleton",
-                    &[
-                        TS::meta(&[
-                            ("size", Expr::IntLiteral(0x1750)),
-                            ("singleton", Expr::IntLiteral(0x1_200_000)),
-                        ]),
-                        TS::address(
-                            0x78,
-                            &[
-                                ("max_num_1", TR::ident_type("u16")),
-                                ("max_num_2", TR::ident_type("u16")),
-                            ],
-                        ),
-                        TS::address(
-                            0xA00,
-                            &[
-                                ("test_type", TR::ident_type("TestType")),
-                                ("settings", MacroCall::unk(804).into()),
-                            ],
-                        ),
-                        TS::functions(&[(
-                            "free",
-                            &[Function::new(
-                                "test_function",
-                                &[Attribute::address(0x800_000)],
+            Module::new(
+                &[],
+                &[
+                    TypeDefinition::new(
+                        "TestType",
+                        &[
+                            TS::field("field_1", TR::ident_type("i32")),
+                            TS::macro_("padding", &[Expr::IntLiteral(4)]),
+                        ],
+                    ),
+                    TypeDefinition::new(
+                        "Singleton",
+                        &[
+                            TS::meta(&[
+                                ("size", Expr::IntLiteral(0x1750)),
+                                ("singleton", Expr::IntLiteral(0x1_200_000)),
+                            ]),
+                            TS::address(
+                                0x78,
                                 &[
-                                    A::MutSelf,
-                                    A::field("arg1", T::ident("TestType").mut_pointer().into()),
-                                    A::field("arg2", TR::ident_type("i32")),
-                                    A::field("arg3", T::ident("u32").const_pointer().into()),
+                                    ("max_num_1", TR::ident_type("u16")),
+                                    ("max_num_2", TR::ident_type("u16")),
                                 ],
-                                Some(Type::ident("TestType").mut_pointer()),
-                            )],
-                        )]),
-                    ],
-                ),
-            ])
+                            ),
+                            TS::address(
+                                0xA00,
+                                &[
+                                    ("test_type", TR::ident_type("TestType")),
+                                    ("settings", MacroCall::unk(804).into()),
+                                ],
+                            ),
+                            TS::functions(&[(
+                                "free",
+                                &[Function::new(
+                                    "test_function",
+                                    &[Attribute::address(0x800_000)],
+                                    &[
+                                        A::MutSelf,
+                                        A::field("arg1", T::ident("TestType").mut_pointer().into()),
+                                        A::field("arg2", TR::ident_type("i32")),
+                                        A::field("arg3", T::ident("u32").const_pointer().into()),
+                                    ],
+                                    Some(Type::ident("TestType").mut_pointer()),
+                                )],
+                            )]),
+                        ],
+                    ),
+                ],
+            )
         };
 
-        let path = ItemPath::from_str("test::Singleton");
+        let path = ItemPath::from_colon_delimited_str("test::Singleton");
         // todo: handle functions
         let type_definition = TypeDefinition {
             path: path.clone(),
@@ -597,16 +554,25 @@ mod tests {
                 size: 0x1750,
                 regions: vec![
                     Region::Padding(0x78),
-                    Region::Field("max_num_1".into(), TypeRef::Raw(ItemPath::from_str("u16"))),
-                    Region::Field("max_num_2".into(), TypeRef::Raw(ItemPath::from_str("u16"))),
+                    Region::Field(
+                        "max_num_1".into(),
+                        TypeRef::Raw(ItemPath::from_colon_delimited_str("u16")),
+                    ),
+                    Region::Field(
+                        "max_num_2".into(),
+                        TypeRef::Raw(ItemPath::from_colon_delimited_str("u16")),
+                    ),
                     Region::Padding(0x984),
                     Region::Field(
                         "test_type".into(),
-                        TypeRef::Raw(ItemPath::from_str("test::TestType")),
+                        TypeRef::Raw(ItemPath::from_colon_delimited_str("test::TestType")),
                     ),
                     Region::Field(
                         "settings".into(),
-                        TypeRef::Array(Box::new(TypeRef::Raw(ItemPath::from_str("u8"))), 804),
+                        TypeRef::Array(
+                            Box::new(TypeRef::Raw(ItemPath::from_colon_delimited_str("u8"))),
+                            804,
+                        ),
                     ),
                     Region::Padding(0xA24),
                 ],
@@ -624,13 +590,16 @@ mod tests {
             type TS = TypeStatement;
             type TR = TypeRef;
 
-            Module::new(&[TypeDefinition::new(
-                "TestType2",
-                &[TS::field("field_2", TR::ident_type("TestType1"))],
-            )])
+            Module::new(
+                &[],
+                &[TypeDefinition::new(
+                    "TestType2",
+                    &[TS::field("field_2", TR::ident_type("TestType1"))],
+                )],
+            )
         };
 
-        let path = ItemPath::from_str("test::TestType2");
+        let path = ItemPath::from_colon_delimited_str("test::TestType2");
         assert_eq!(
             build_type(&module, &path).err().unwrap().to_string(),
             r#"type resolution will not terminate, failed on types: ["test::TestType2"]"#
