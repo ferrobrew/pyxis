@@ -147,11 +147,25 @@ impl TypeRegistry {
     }
 
     fn find_type_by_name(&self, scope: &[&ItemPath], name: &str) -> Option<TypeRef> {
-        std::iter::once(&ItemPath::empty())
-            .chain(scope.iter().copied())
-            .map(|ip| ip.join(name.into()))
-            .find(|ip| self.0.contains_key(ip))
-            .map(TypeRef::Raw)
+        // todo: take scope_modules and scope_types instead of scope so that we don't need
+        // to do this partitioning
+        let (scope_types, scope_modules): (Vec<&ItemPath>, Vec<&ItemPath>) =
+            scope.iter().partition(|ip| self.0.contains_key(ip));
+
+        // If we find the relevant type within our scope, take the last one
+        scope_types
+            .into_iter()
+            .rev()
+            .find(|st| st.last().map(|i| i.as_str()) == Some(name))
+            .map(|ip| TypeRef::Raw(ip.clone()))
+            .or_else(|| {
+                // Otherwise, search our scopes
+                std::iter::once(&ItemPath::empty())
+                    .chain(scope_modules.iter().copied())
+                    .map(|ip| ip.join(name.into()))
+                    .find(|ip| self.0.contains_key(ip))
+                    .map(TypeRef::Raw)
+            })
     }
 
     fn resolve_type(&self, scope: &[&ItemPath], type_: &grammar::Type) -> Option<TypeRef> {
@@ -261,12 +275,22 @@ impl Compiler {
             .parent()
             .unwrap_or_else(|| resolvee_path.clone());
 
-        let build_region_from_field = |grammar::TypeField(ident, type_ref): &grammar::TypeField| {
-            let type_ref = self
-                .type_registry
-                .resolve_typeref(&[&parent_path], type_ref);
+        let scope = {
+            let mut v = vec![&parent_path];
+            v.append(
+                &mut self
+                    .files
+                    .get(&parent_path)
+                    .map(|f| f.uses.iter().by_ref().collect())
+                    .unwrap_or_default(),
+            );
+            v
+        };
 
-            type_ref.map(|tr| (None, Region::Field(ident.0.clone(), tr)))
+        let build_region_from_field = |grammar::TypeField(ident, type_ref): &grammar::TypeField| {
+            self.type_registry
+                .resolve_typeref(&scope, type_ref)
+                .map(|tr| (None, Region::Field(ident.0.clone(), tr)))
         };
 
         let mut target_size: Option<usize> = None;
@@ -621,5 +645,67 @@ mod tests {
             build_type(&module, &path).err().unwrap().to_string(),
             r#"type resolution will not terminate, failed on types: ["test::TestType2"] (resolved types: [])"#
         );
+    }
+
+    #[test]
+    fn can_use_type_from_another_module() {
+        let module1 = {
+            use super::grammar::*;
+
+            type TS = TypeStatement;
+            type TR = TypeRef;
+
+            Module::new(
+                &[ItemPath::from_colon_delimited_str("module2::TestType2")],
+                &[TypeDefinition::new(
+                    "TestType1",
+                    &[TS::field("field", TR::ident_type("TestType2"))],
+                )],
+            )
+        };
+        let module2 = {
+            use super::grammar::*;
+
+            type TS = TypeStatement;
+            type TR = TypeRef;
+
+            Module::new(
+                &[],
+                &[TypeDefinition::new(
+                    "TestType2",
+                    &[TS::field("field", TR::ident_type("u32"))],
+                )],
+            )
+        };
+
+        let path = ItemPath::from_colon_delimited_str("module1::TestType1");
+        let target_resolved_type = TypeDefinition {
+            path: path.clone(),
+            state: TypeState::Resolved {
+                size: 4,
+                regions: vec![Region::Field(
+                    "field".into(),
+                    TypeRef::Raw(ItemPath::from_colon_delimited_str("module2::TestType2")),
+                )],
+            },
+            is_predefined: false,
+        };
+
+        let mut compiler = Compiler::new();
+        compiler
+            .add_module(&module1, &ItemPath::from_colon_delimited_str("module1"))
+            .unwrap();
+        compiler
+            .add_module(&module2, &ItemPath::from_colon_delimited_str("module2"))
+            .unwrap();
+        compiler.build().unwrap();
+
+        let resolved_type = compiler
+            .type_registry()
+            .get(&path)
+            .cloned()
+            .context("failed to get type")
+            .unwrap();
+        assert_eq!(resolved_type, target_resolved_type);
     }
 }
