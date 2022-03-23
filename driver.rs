@@ -241,8 +241,9 @@ impl Compiler {
                 // Oh no! We failed to resolve any new types!
                 // Bail from the loop.
                 return Err(anyhow::anyhow!(
-                    "type resolution will not terminate, failed on types: {:?}",
-                    Vec::from_iter(to_resolve.iter().map(|s| s.to_string()))
+                    "type resolution will not terminate, failed on types: {:?} (resolved types: {:?})",
+                    Vec::from_iter(to_resolve.iter().map(|s| s.to_string())),
+                    Vec::from_iter(self.type_registry.resolved().iter().map(|s| s.to_string())),
                 ));
             }
         }
@@ -616,7 +617,7 @@ mod tests {
         let path = ItemPath::from_colon_delimited_str("test::TestType2");
         assert_eq!(
             build_type(&module, &path).err().unwrap().to_string(),
-            r#"type resolution will not terminate, failed on types: ["test::TestType2"]"#
+            r#"type resolution will not terminate, failed on types: ["test::TestType2"] (resolved types: [])"#
         );
     }
 }
