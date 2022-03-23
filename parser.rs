@@ -32,11 +32,9 @@ fn parse_type_ident(input: ParseStream) -> Result<String> {
             input.parse::<syn::Token![>]>()?;
             name += ">";
         } else {
-            break;
+            break Ok(name);
         }
     }
-
-    Ok(name)
 }
 
 impl Parse for Type {

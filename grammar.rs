@@ -84,6 +84,10 @@ impl ItemPath {
         )
     }
 
+    pub fn iter(&self) -> impl Iterator<Item = &ItemPathSegment> {
+        self.0.iter()
+    }
+
     pub fn parent(&self) -> Option<ItemPath> {
         (!self.0.is_empty()).then(|| ItemPath(self.0[..self.0.len() - 1].to_vec()))
     }
