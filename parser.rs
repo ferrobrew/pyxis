@@ -320,8 +320,7 @@ impl Parse for Module {
                 } else if lookahead.peek(syn::Token![::]) {
                     input.parse::<syn::Token![::]>()?;
                 } else if lookahead.peek(syn::Token![super]) {
-                    input.parse::<syn::Token![super]>()?;
-                    item_path.push("super".into());
+                    return Err(input.error("super not supported"));
                 } else {
                     return Err(lookahead.error());
                 }
@@ -583,7 +582,7 @@ mod tests {
     #[test]
     fn can_parse_use() {
         let text = r#"
-        use super::TestType<Hey>;
+        use hello::TestType<Hey>;
         type Test {
             test: TestType<Hey>,
         }
@@ -591,7 +590,7 @@ mod tests {
 
         let ast = {
             Module::new(
-                &[ItemPath::from_colon_delimited_str("super::TestType<Hey>")],
+                &[ItemPath::from_colon_delimited_str("hello::TestType<Hey>")],
                 &[TypeDefinition::new(
                     "Test",
                     &[TypeStatement::field(
@@ -603,5 +602,17 @@ mod tests {
         };
 
         assert_eq!(parse_str(text).ok(), Some(ast));
+    }
+
+    #[test]
+    fn will_die_on_super_for_now() {
+        let text = r#"
+        use super::TestType<Hey>;
+        "#;
+
+        assert_eq!(
+            parse_str(text).err().unwrap().to_string(),
+            "super not supported"
+        );
     }
 }
