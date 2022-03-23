@@ -59,16 +59,18 @@ enum TypeState {
 struct TypeDefinition {
     path: ItemPath,
     state: TypeState,
+    is_predefined: bool,
 }
 
 impl TypeDefinition {
-    const fn new_resolved(path: ItemPath, size: usize) -> Self {
+    const fn new_predefined(path: ItemPath, size: usize) -> Self {
         Self {
             path,
             state: TypeState::Resolved {
                 size,
                 regions: vec![],
             },
+            is_predefined: true,
         }
     }
 
@@ -101,7 +103,7 @@ impl TypeRegistry {
             predefined_types
                 .into_iter()
                 .map(|(name, size)| (ItemPath::from_colon_delimited_str(name), size))
-                .map(|(path, size)| (path.clone(), TypeDefinition::new_resolved(path, size)))
+                .map(|(path, size)| (path.clone(), TypeDefinition::new_predefined(path, size)))
                 .collect(),
         )
     }
@@ -130,7 +132,7 @@ impl TypeRegistry {
     fn unresolved(&self) -> Vec<ItemPath> {
         self.0
             .iter()
-            .filter(|(_, t)| matches!(t.state, TypeState::Unresolved(_)))
+            .filter(|(_, t)| !t.is_predefined && matches!(t.state, TypeState::Unresolved(_)))
             .map(|(k, _)| k.clone())
             .collect()
     }
@@ -201,6 +203,7 @@ impl Compiler {
             self.type_registry.add(TypeDefinition {
                 path,
                 state: TypeState::Unresolved(definition.clone()),
+                is_predefined: false,
             })
         }
         self.files.insert(path.clone(), module.clone());
@@ -416,6 +419,7 @@ mod tests {
                     ),
                 ],
             },
+            is_predefined: false,
         };
 
         assert_eq!(build_type(&module, &path).unwrap(), type_definition);
@@ -480,6 +484,7 @@ mod tests {
                     ),
                 ],
             },
+            is_predefined: false,
         };
 
         assert_eq!(build_type(&module, &path).unwrap(), type_definition);
@@ -577,6 +582,7 @@ mod tests {
                     Region::Padding(0xA24),
                 ],
             },
+            is_predefined: false,
         };
 
         assert_eq!(build_type(&module, &path).unwrap(), type_definition);
