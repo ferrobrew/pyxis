@@ -35,6 +35,11 @@ impl From<&str> for Type {
 
 #[derive(PartialEq, Hash, Eq, Clone, Debug)]
 pub struct ItemPathSegment(String);
+impl ItemPathSegment {
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+}
 impl From<&str> for ItemPathSegment {
     fn from(value: &str) -> Self {
         ItemPathSegment(value.to_string())
@@ -91,6 +96,10 @@ impl ItemPath {
         let mut path = self.0.clone();
         path.push(segment);
         ItemPath(path)
+    }
+
+    pub fn last(&self) -> Option<&ItemPathSegment> {
+        self.0.last()
     }
 }
 impl fmt::Display for ItemPath {

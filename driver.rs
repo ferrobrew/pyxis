@@ -86,6 +86,7 @@ pub struct TypeRegistry(HashMap<ItemPath, TypeDefinition>);
 impl TypeRegistry {
     fn new() -> TypeRegistry {
         let predefined_types = [
+            ("void", 0),
             ("bool", 1),
             ("u8", 1),
             ("u16", 2),
