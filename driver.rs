@@ -129,6 +129,14 @@ impl TypeRegistry {
         self.0.insert(type_.path.clone(), type_);
     }
 
+    fn resolved(&self) -> Vec<ItemPath> {
+        self.0
+            .iter()
+            .filter(|(_, t)| !t.is_predefined && matches!(t.state, TypeState::Resolved { .. }))
+            .map(|(k, _)| k.clone())
+            .collect()
+    }
+
     fn unresolved(&self) -> Vec<ItemPath> {
         self.0
             .iter()
