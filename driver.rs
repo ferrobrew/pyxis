@@ -365,7 +365,8 @@ pub fn build_type_definitions() -> anyhow::Result<()> {
     }
     compiler.build()?;
 
-    let mut file = std::fs::File::create("rstl.md")?;
+    let path = Path::new(&std::env::var("OUT_DIR")?).join("rstl.md");
+    let mut file = std::fs::File::create(&path)?;
     writeln!(file, "# Types")?;
     writeln!(file)?;
     writeln!(file, "- Pointer size: {}", POINTER_SIZE)?;
