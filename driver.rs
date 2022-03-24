@@ -1,6 +1,9 @@
 use std::{env, io::Write, path::PathBuf, process::Command};
 
-use super::semantic_analysis::{Region, SemanticState, TypeState};
+use super::{
+    grammar::ItemPath,
+    semantic_analysis::{Region, SemanticState, TypeState},
+};
 
 use itertools::Itertools;
 use quote::quote;
@@ -15,7 +18,6 @@ pub fn build() -> anyhow::Result<()> {
     }
     semantic_state.build()?;
 
-    const FORMAT_OUTPUT: bool = true;
     for (key, group) in semantic_state
         .type_registry()
         .resolved()
@@ -25,22 +27,33 @@ pub fn build() -> anyhow::Result<()> {
         .into_iter()
         .filter_map(|(key, group)| key.map(|k| (k, group)))
     {
+        write_module(key, group, &semantic_state)?;
+    }
+
+    Ok(())
+}
+
+fn write_module(
+    key: ItemPath,
+    types: impl Iterator<Item = &ItemPath>,
+    semantic_state: &SemanticState,
+) -> Result<(), anyhow::Error> {
+    const FORMAT_OUTPUT: bool = true;
+
         let path = std::iter::once(env::var("OUT_DIR")?)
             .chain(key.iter().map(|s| s.as_str().to_string()))
             .collect::<PathBuf>()
             .with_extension("rs");
-
         let directory_path = path.parent().map(|p| p.to_path_buf()).unwrap_or_default();
         std::fs::create_dir_all(&directory_path)?;
 
         let mut file = std::fs::File::create(&path)?;
-        for item_path in group {
-            write_type(&semantic_state, item_path, &mut file)?;
+    for item_path in types {
+        write_type(semantic_state, item_path, &mut file)?;
         }
 
         if FORMAT_OUTPUT {
             Command::new("rustfmt").args([&path]).output()?;
-        }
     }
 
     Ok(())
@@ -48,7 +61,7 @@ pub fn build() -> anyhow::Result<()> {
 
 fn write_type(
     semantic_state: &SemanticState,
-    item_path: &super::grammar::ItemPath,
+    item_path: &ItemPath,
     file: &mut std::fs::File,
 ) -> Result<(), anyhow::Error> {
     let type_definition = semantic_state.type_registry().get(item_path).unwrap();
