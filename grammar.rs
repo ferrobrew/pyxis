@@ -33,7 +33,7 @@ impl From<&str> for Type {
     }
 }
 
-#[derive(PartialEq, Hash, Eq, Clone, Debug)]
+#[derive(PartialEq, Hash, Eq, Clone, Debug, PartialOrd, Ord)]
 pub struct ItemPathSegment(String);
 impl ItemPathSegment {
     pub fn as_str(&self) -> &str {
@@ -56,7 +56,7 @@ impl fmt::Display for ItemPathSegment {
     }
 }
 
-#[derive(PartialEq, Hash, Eq, Clone, Debug)]
+#[derive(PartialEq, Hash, Eq, Clone, Debug, PartialOrd, Ord)]
 pub struct ItemPath(Vec<ItemPathSegment>);
 impl ItemPath {
     pub fn empty() -> ItemPath {

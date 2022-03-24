@@ -20,6 +20,7 @@ pub fn build() -> anyhow::Result<()> {
         .type_registry()
         .resolved()
         .iter()
+        .sorted()
         .group_by(|t| t.parent())
         .into_iter()
         .filter_map(|(key, group)| key.map(|k| (k, group)))
