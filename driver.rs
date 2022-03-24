@@ -1,4 +1,4 @@
-use std::{env, io::Write, path::PathBuf};
+use std::{env, io::Write, path::PathBuf, process::Command};
 
 use super::semantic_analysis::{Region, SemanticState, TypeState};
 
@@ -15,6 +15,7 @@ pub fn build() -> anyhow::Result<()> {
     }
     semantic_state.build()?;
 
+    const FORMAT_OUTPUT: bool = true;
     for (key, group) in semantic_state
         .type_registry()
         .resolved()
@@ -31,9 +32,13 @@ pub fn build() -> anyhow::Result<()> {
         let directory_path = path.parent().map(|p| p.to_path_buf()).unwrap_or_default();
         std::fs::create_dir_all(&directory_path)?;
 
-        let mut file = std::fs::File::create(path)?;
+        let mut file = std::fs::File::create(&path)?;
         for item_path in group {
             write_type(&semantic_state, item_path, &mut file)?;
+        }
+
+        if FORMAT_OUTPUT {
+            Command::new("rustfmt").args([&path]).output()?;
         }
     }
 
