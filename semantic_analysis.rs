@@ -67,9 +67,15 @@ impl Region {
 }
 
 #[derive(PartialEq, Eq, Debug, Clone)]
+pub struct TypeStateResolved {
+    pub size: usize,
+    pub regions: Vec<Region>,
+}
+
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub enum TypeState {
     Unresolved(grammar::TypeDefinition),
-    Resolved { size: usize, regions: Vec<Region> },
+    Resolved(TypeStateResolved),
 }
 
 #[derive(PartialEq, Eq, Debug, Clone)]
@@ -83,17 +89,17 @@ impl TypeDefinition {
     const fn new_predefined(path: ItemPath, size: usize) -> Self {
         Self {
             path,
-            state: TypeState::Resolved {
+            state: TypeState::Resolved(TypeStateResolved {
                 size,
                 regions: vec![],
-            },
+            }),
             is_predefined: true,
         }
     }
 
     pub fn size(&self) -> Option<usize> {
-        match self.state {
-            TypeState::Resolved { size, .. } => Some(size),
+        match &self.state {
+            TypeState::Resolved(tsr) => Some(tsr.size),
             _ => None,
         }
     }
@@ -396,10 +402,11 @@ impl SemanticState {
 
         if let Some(sizes) = sizes {
             let size = sizes.into_iter().sum();
-            self.type_registry.get_mut(resolvee_path).unwrap().state = TypeState::Resolved {
-                size,
-                regions: resolved_regions,
-            };
+            self.type_registry.get_mut(resolvee_path).unwrap().state =
+                TypeState::Resolved(TypeStateResolved {
+                    size,
+                    regions: resolved_regions,
+                });
         }
         Ok(())
     }
@@ -448,7 +455,7 @@ mod tests {
         let path = ItemPath::from_colon_delimited_str("test::TestType");
         let type_definition = TypeDefinition {
             path: path.clone(),
-            state: TypeState::Resolved {
+            state: TypeState::Resolved(TypeStateResolved {
                 size: 16,
                 regions: vec![
                     Region::Field(
@@ -461,7 +468,7 @@ mod tests {
                         TypeRef::Raw(ItemPath::from_colon_delimited_str("u64")),
                     ),
                 ],
-            },
+            }),
             is_predefined: false,
         };
 
@@ -502,7 +509,7 @@ mod tests {
         let path = ItemPath::from_colon_delimited_str("test::TestType2");
         let type_definition = TypeDefinition {
             path: path.clone(),
-            state: TypeState::Resolved {
+            state: TypeState::Resolved(TypeStateResolved {
                 size: 20,
                 regions: vec![
                     Region::Field(
@@ -526,7 +533,7 @@ mod tests {
                         ))),
                     ),
                 ],
-            },
+            }),
             is_predefined: false,
         };
 
@@ -598,7 +605,7 @@ mod tests {
         // todo: handle functions
         let type_definition = TypeDefinition {
             path: path.clone(),
-            state: TypeState::Resolved {
+            state: TypeState::Resolved(TypeStateResolved {
                 size: 0x1750,
                 regions: vec![
                     Region::Padding(0x78),
@@ -624,7 +631,7 @@ mod tests {
                     ),
                     Region::Padding(0xA24),
                 ],
-            },
+            }),
             is_predefined: false,
         };
 
@@ -689,13 +696,13 @@ mod tests {
         let path = ItemPath::from_colon_delimited_str("module1::TestType1");
         let target_resolved_type = TypeDefinition {
             path: path.clone(),
-            state: TypeState::Resolved {
+            state: TypeState::Resolved(TypeStateResolved {
                 size: 4,
                 regions: vec![Region::Field(
                     "field".into(),
                     TypeRef::Raw(ItemPath::from_colon_delimited_str("module2::TestType2")),
                 )],
-            },
+            }),
             is_predefined: false,
         };
 

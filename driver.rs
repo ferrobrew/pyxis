@@ -2,7 +2,7 @@ use std::{env, io::Write, path::PathBuf, process::Command};
 
 use super::{
     grammar::ItemPath,
-    semantic_analysis::{Region, SemanticState, TypeState},
+    semantic_analysis::{Region, SemanticState, TypeState, TypeStateResolved},
 };
 
 use itertools::Itertools;
@@ -65,7 +65,7 @@ fn write_type(
     file: &mut std::fs::File,
 ) -> Result<(), anyhow::Error> {
     let type_definition = semantic_state.type_registry().get(item_path).unwrap();
-    if let (Some(name), TypeState::Resolved { size, regions }) =
+    if let (Some(name), TypeState::Resolved(TypeStateResolved { size, regions })) =
         (item_path.last(), &type_definition.state)
     {
         use super::semantic_analysis::TypeRef;
