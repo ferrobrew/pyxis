@@ -88,6 +88,15 @@ impl ItemPath {
         self.0.iter()
     }
 
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     pub fn parent(&self) -> Option<ItemPath> {
         (!self.0.is_empty()).then(|| ItemPath(self.0[..self.0.len() - 1].to_vec()))
     }
