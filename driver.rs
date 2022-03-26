@@ -70,6 +70,7 @@ fn write_type(
         TypeState::Resolved(TypeStateResolved {
             size,
             regions,
+            functions,
             metadata,
         }),
     ) = (item_path.last(), &type_definition.state)

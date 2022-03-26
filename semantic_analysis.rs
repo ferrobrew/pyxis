@@ -3,6 +3,26 @@ use anyhow::Context;
 use super::grammar::{self, ItemPath};
 use std::{collections::HashMap, fmt, path::Path, vec};
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Attribute {
+    Address(usize),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Argument {
+    ConstSelf,
+    MutSelf,
+    Field(String, TypeRef),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Function {
+    pub name: String,
+    pub attributes: Vec<Attribute>,
+    pub arguments: Vec<Argument>,
+    pub return_type: Option<TypeRef>,
+}
+
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub enum TypeRef {
     Raw(ItemPath),
@@ -75,6 +95,7 @@ pub enum MetadataValue {
 pub struct TypeStateResolved {
     pub size: usize,
     pub regions: Vec<Region>,
+    pub functions: HashMap<String, Vec<Function>>,
     pub metadata: HashMap<String, MetadataValue>,
 }
 
@@ -98,6 +119,7 @@ impl TypeDefinition {
             state: TypeState::Resolved(TypeStateResolved {
                 size,
                 regions: vec![],
+                functions: HashMap::new(),
                 metadata: HashMap::new(),
             }),
             is_predefined: true,
@@ -318,6 +340,58 @@ impl SemanticState {
         }
     }
 
+    fn build_function(
+        &self,
+        scope: &[&ItemPath],
+        function: &grammar::Function,
+    ) -> Result<Function, anyhow::Error> {
+        let attributes = function
+            .attributes
+            .iter()
+            .map(|a| match a {
+                grammar::Attribute::Function(ident, exprs) => {
+                    match (ident.0.as_str(), &exprs[..]) {
+                        ("address", [grammar::Expr::IntLiteral(address)]) => {
+                            Ok(Attribute::Address(*address as usize))
+                        }
+                        (_, _) => Err(anyhow::anyhow!(
+                            "failed to resolve function attribute, unsupported name"
+                        )),
+                    }
+                }
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let arguments = function
+            .arguments
+            .iter()
+            .map(|a| match a {
+                grammar::Argument::ConstSelf => Ok(Argument::ConstSelf),
+                grammar::Argument::MutSelf => Ok(Argument::MutSelf),
+                grammar::Argument::Field(grammar::TypeField(name, type_ref)) => {
+                    Ok(Argument::Field(
+                        name.0.clone(),
+                        self.type_registry
+                            .resolve_grammar_typeref(scope, type_ref)
+                            .ok_or_else(|| anyhow::anyhow!("failed to resolve type of field"))?,
+                    ))
+                }
+            })
+            .collect::<anyhow::Result<Vec<_>>>()?;
+
+        let return_type = function
+            .return_type
+            .as_ref()
+            .and_then(|t| self.type_registry.resolve_grammar_type(scope, t));
+
+        Ok(Function {
+            name: function.name.0.clone(),
+            attributes,
+            arguments,
+            return_type,
+        })
+    }
+
     fn build_type(
         &mut self,
         resolvee_path: &ItemPath,
@@ -346,8 +420,9 @@ impl SemanticState {
         };
 
         let mut target_size: Option<usize> = None;
-        let mut metadata: HashMap<String, MetadataValue> = HashMap::new();
         let mut regions: Vec<(Option<usize>, Region)> = vec![];
+        let mut metadata: HashMap<String, MetadataValue> = HashMap::new();
+        let mut functions: HashMap<String, Vec<Function>> = HashMap::new();
         for statement in &definition.statements {
             match statement {
                 grammar::TypeStatement::Meta(fields) => {
@@ -387,7 +462,20 @@ impl SemanticState {
                         regions.push((None, Region::Padding(*size as usize)));
                     }
                 }
-                _ => (),
+                grammar::TypeStatement::Functions(functions_by_category) => {
+                    functions = functions_by_category
+                        .iter()
+                        .map(|(category, functions)| {
+                            Ok((
+                                category.0.clone(),
+                                functions
+                                    .iter()
+                                    .map(|function| self.build_function(&scope, function))
+                                    .collect::<Result<Vec<_>, _>>()?,
+                            ))
+                        })
+                        .collect::<anyhow::Result<HashMap<_, _>>>()?;
+                }
             };
         }
 
@@ -432,6 +520,7 @@ impl SemanticState {
                 TypeState::Resolved(TypeStateResolved {
                     size,
                     regions: resolved_regions,
+                    functions,
                     metadata,
                 });
         }
@@ -496,6 +585,7 @@ mod tests {
                         TypeRef::Raw(ItemPath::from_colon_delimited_str("u64")),
                     ),
                 ],
+                functions: HashMap::new(),
                 metadata: HashMap::new(),
             }),
             is_predefined: false,
@@ -563,6 +653,7 @@ mod tests {
                         ))),
                     ),
                 ],
+                functions: HashMap::new(),
                 metadata: HashMap::new(),
             }),
             is_predefined: false,
@@ -663,6 +754,37 @@ mod tests {
                     ),
                     Region::Padding(0xA24),
                 ],
+                functions: [(
+                    "free".to_string(),
+                    vec![Function {
+                        name: "test_function".to_string(),
+                        attributes: vec![Attribute::Address(0x800_000)],
+                        arguments: vec![
+                            Argument::MutSelf,
+                            Argument::Field(
+                                "arg1".to_string(),
+                                TypeRef::MutPointer(Box::new(TypeRef::Raw(
+                                    ItemPath::from_colon_delimited_str("test::TestType"),
+                                ))),
+                            ),
+                            Argument::Field(
+                                "arg2".to_string(),
+                                TypeRef::Raw(ItemPath::from_colon_delimited_str("i32")),
+                            ),
+                            Argument::Field(
+                                "arg3".to_string(),
+                                TypeRef::ConstPointer(Box::new(TypeRef::Raw(
+                                    ItemPath::from_colon_delimited_str("u32"),
+                                ))),
+                            ),
+                        ],
+                        return_type: Some(TypeRef::MutPointer(Box::new(TypeRef::Raw(
+                            ItemPath::from_colon_delimited_str("test::TestType"),
+                        )))),
+                    }],
+                )]
+                .into_iter()
+                .collect(),
                 metadata: HashMap::from([(
                     "singleton".to_string(),
                     MetadataValue::Integer(0x1_200_000),
@@ -737,6 +859,7 @@ mod tests {
             path: path.clone(),
             state: TypeState::Resolved(TypeStateResolved {
                 size: 4,
+                functions: HashMap::new(),
                 regions: vec![Region::Field(
                     "field".into(),
                     TypeRef::Raw(ItemPath::from_colon_delimited_str("module2::TestType2")),
@@ -817,6 +940,7 @@ mod tests {
                         ))),
                     ),
                 ],
+                functions: HashMap::new(),
                 metadata: HashMap::new(),
             }),
             is_predefined: false,
