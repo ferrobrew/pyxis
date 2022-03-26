@@ -299,39 +299,50 @@ impl Parse for Module {
     fn parse(input: ParseStream) -> Result<Self> {
         let mut uses = vec![];
         let mut definitions = vec![];
+        let mut externs = vec![];
 
-        // Exhaust all of our use declarations
-        while input.peek(Token![use]) {
-            input.parse::<Token![use]>()?;
+        // Exhaust all of our declarations
+        while input.peek(syn::Token![use]) || input.peek(syn::Token![extern]) {
+            if input.peek(syn::Token![use]) {
+                input.parse::<syn::Token![use]>()?;
 
-            // todo: make parsing stricter so that this takes idents
-            // separated by double-colons that end in a type, not just
-            // all types
-            // that is to say, `use lol<lol>::lol` should not parse, but
-            // `use lol::lol<lol>` should
-            // todo: consider implementing ItemPath::parse somehow
-            let mut item_path = ItemPath::empty();
-            while !input.peek(syn::Token![;]) {
-                let lookahead = input.lookahead1();
-                if lookahead.peek(syn::Ident) {
-                    item_path.push(parse_type_ident(input)?.into());
-                } else if lookahead.peek(syn::Token![::]) {
-                    input.parse::<syn::Token![::]>()?;
-                } else if lookahead.peek(syn::Token![super]) {
-                    return Err(input.error("super not supported"));
-                } else {
-                    return Err(lookahead.error());
+                // todo: make parsing stricter so that this takes idents
+                // separated by double-colons that end in a type, not just
+                // all types
+                // that is to say, `use lol<lol>::lol` should not parse, but
+                // `use lol::lol<lol>` should
+                // todo: consider implementing ItemPath::parse somehow
+                let mut item_path = ItemPath::empty();
+                while !input.peek(syn::Token![;]) {
+                    let lookahead = input.lookahead1();
+                    if lookahead.peek(syn::Ident) {
+                        item_path.push(parse_type_ident(input)?.into());
+                    } else if lookahead.peek(syn::Token![::]) {
+                        input.parse::<syn::Token![::]>()?;
+                    } else if lookahead.peek(syn::Token![super]) {
+                        return Err(input.error("super not supported"));
+                    } else {
+                        return Err(lookahead.error());
+                    }
                 }
+                input.parse::<syn::Token![;]>()?;
+                uses.push(item_path);
+            } else if input.peek(syn::Token![extern]) {
+                input.parse::<syn::Token![extern]>()?;
+                let item_path = ItemPath::empty().join(parse_type_ident(input)?.into());
+                input.parse::<syn::Token![=]>()?;
+                // only accept an integer for now, can get an expr later
+                let size: usize = input.parse::<syn::LitInt>()?.base10_parse()?;
+                input.parse::<syn::Token![;]>()?;
+                externs.push((item_path, size));
             }
-            input.parse::<syn::Token![;]>()?;
-            uses.push(item_path);
         }
 
         while !input.is_empty() {
             definitions.push(input.parse()?);
         }
 
-        Ok(Module::new(&uses, &definitions))
+        Ok(Module::new(&uses, &externs, &definitions))
     }
 }
 
@@ -357,6 +368,7 @@ mod tests {
             type TR = TypeRef;
 
             Module::new(
+                &[],
                 &[],
                 &[TypeDefinition::new(
                     "TestType",
@@ -398,6 +410,7 @@ mod tests {
             type TR = TypeRef;
 
             Module::new(
+                &[],
                 &[],
                 &[TypeDefinition::new(
                     "VehicleTypes",
@@ -477,6 +490,7 @@ mod tests {
             type A = Argument;
 
             Module::new(
+                &[],
                 &[],
                 &[TypeDefinition::new(
                     "SpawnManager",
@@ -564,6 +578,7 @@ mod tests {
         let ast = {
             Module::new(
                 &[],
+                &[],
                 &[TypeDefinition::new(
                     "Test",
                     &[TypeStatement::address(
@@ -589,6 +604,7 @@ mod tests {
         let ast = {
             Module::new(
                 &[ItemPath::from_colon_delimited_str("hello::TestType<Hey>")],
+                &[],
                 &[TypeDefinition::new(
                     "Test",
                     &[TypeStatement::field(
@@ -612,5 +628,31 @@ mod tests {
             parse_str(text).err().unwrap().to_string(),
             "super not supported"
         );
+    }
+
+    #[test]
+    fn can_parse_extern() {
+        let text = r#"
+        extern TestType<Hey> = 12;
+        type Test {
+            test: TestType<Hey>,
+        }
+        "#;
+
+        let ast = {
+            Module::new(
+                &[],
+                &[(ItemPath::from_colon_delimited_str("TestType<Hey>"), 12)],
+                &[TypeDefinition::new(
+                    "Test",
+                    &[TypeStatement::field(
+                        "test",
+                        TypeRef::ident_type("TestType<Hey>"),
+                    )],
+                )],
+            )
+        };
+
+        assert_eq!(parse_str(text).ok(), Some(ast));
     }
 }

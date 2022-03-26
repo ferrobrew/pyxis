@@ -315,12 +315,18 @@ impl TypeDefinition {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Module {
     pub uses: Vec<ItemPath>,
+    pub externs: Vec<(ItemPath, usize)>,
     pub definitions: Vec<TypeDefinition>,
 }
 impl Module {
-    pub fn new(uses: &[ItemPath], definitions: &[TypeDefinition]) -> Self {
+    pub fn new(
+        uses: &[ItemPath],
+        externs: &[(ItemPath, usize)],
+        definitions: &[TypeDefinition],
+    ) -> Self {
         Self {
             uses: uses.to_vec(),
+            externs: externs.to_vec(),
             definitions: definitions.to_vec(),
         }
     }

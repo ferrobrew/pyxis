@@ -271,6 +271,17 @@ impl SemanticState {
                 is_predefined: false,
             })
         }
+        for (extern_path, size) in &module.externs {
+            self.type_registry.add(TypeDefinition::new_predefined(
+                path.join(
+                    extern_path
+                        .last()
+                        .context("failed to get extern path segment")?
+                        .clone(),
+                ),
+                *size,
+            ));
+        }
         self.files.insert(path.clone(), module.clone());
         Ok(())
     }
@@ -457,6 +468,7 @@ mod tests {
 
             Module::new(
                 &[],
+                &[],
                 &[TypeDefinition::new(
                     "TestType",
                     &[
@@ -501,6 +513,7 @@ mod tests {
             type TR = TypeRef;
 
             Module::new(
+                &[],
                 &[],
                 &[
                     TypeDefinition::new(
@@ -569,6 +582,7 @@ mod tests {
             type A = Argument;
 
             Module::new(
+                &[],
                 &[],
                 &[
                     TypeDefinition::new(
@@ -670,6 +684,7 @@ mod tests {
 
             Module::new(
                 &[],
+                &[],
                 &[TypeDefinition::new(
                     "TestType2",
                     &[TS::field("field_2", TR::ident_type("TestType1"))],
@@ -694,6 +709,7 @@ mod tests {
 
             Module::new(
                 &[ItemPath::from_colon_delimited_str("module2::TestType2")],
+                &[],
                 &[TypeDefinition::new(
                     "TestType1",
                     &[TS::field("field", TR::ident_type("TestType2"))],
@@ -707,6 +723,7 @@ mod tests {
             type TR = TypeRef;
 
             Module::new(
+                &[],
                 &[],
                 &[TypeDefinition::new(
                     "TestType2",
@@ -745,5 +762,66 @@ mod tests {
             .context("failed to get type")
             .unwrap();
         assert_eq!(resolved_type, target_resolved_type);
+    }
+
+    #[test]
+    fn can_resolve_embed_of_an_extern() {
+        let module = {
+            use super::grammar::*;
+
+            type TS = TypeStatement;
+            type TR = TypeRef;
+
+            Module::new(
+                &[],
+                &[(ItemPath::from_colon_delimited_str("TestType1"), 16)],
+                &[TypeDefinition::new(
+                    "TestType2",
+                    &[
+                        TS::field("field_1", TR::ident_type("i32")),
+                        TS::field("field_2", TR::ident_type("TestType1")),
+                        TS::field(
+                            "field_3",
+                            TR::Type(Type::ident("TestType1").const_pointer()),
+                        ),
+                        TS::field("field_4", TR::Type(Type::ident("TestType1").mut_pointer())),
+                    ],
+                )],
+            )
+        };
+
+        let path = ItemPath::from_colon_delimited_str("test::TestType2");
+        let type_definition = TypeDefinition {
+            path: path.clone(),
+            state: TypeState::Resolved(TypeStateResolved {
+                size: 28,
+                regions: vec![
+                    Region::Field(
+                        "field_1".into(),
+                        TypeRef::Raw(ItemPath::from_colon_delimited_str("i32")),
+                    ),
+                    Region::Field(
+                        "field_2".into(),
+                        TypeRef::Raw(ItemPath::from_colon_delimited_str("test::TestType1")),
+                    ),
+                    Region::Field(
+                        "field_3".into(),
+                        TypeRef::ConstPointer(Box::new(TypeRef::Raw(
+                            ItemPath::from_colon_delimited_str("test::TestType1"),
+                        ))),
+                    ),
+                    Region::Field(
+                        "field_4".into(),
+                        TypeRef::MutPointer(Box::new(TypeRef::Raw(
+                            ItemPath::from_colon_delimited_str("test::TestType1"),
+                        ))),
+                    ),
+                ],
+                metadata: HashMap::new(),
+            }),
+            is_predefined: false,
+        };
+
+        assert_eq!(build_type(&module, &path).unwrap(), type_definition);
     }
 }
