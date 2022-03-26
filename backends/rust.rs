@@ -162,7 +162,7 @@ fn build_function(
 fn write_type(
     semantic_state: &SemanticState,
     item_path: &ItemPath,
-    file: &mut std::fs::File,
+    out: &mut impl Write,
 ) -> Result<(), anyhow::Error> {
     let type_definition = semantic_state.type_registry().get(item_path).unwrap();
     if let (
@@ -244,8 +244,20 @@ fn write_type(
             }
         };
 
-        writeln!(file, "{}", body)?;
+        writeln!(out, "{}", body)?;
     };
+    Ok(())
+}
+
+pub fn write_types<'a>(
+    output: &mut impl Write,
+    types: impl Iterator<Item = &'a ItemPath>,
+    semantic_state: &SemanticState,
+) -> Result<(), anyhow::Error> {
+    for item_path in types {
+        write_type(semantic_state, item_path, output)?;
+    }
+
     Ok(())
 }
 
@@ -264,9 +276,7 @@ pub fn write_module<'a>(
     std::fs::create_dir_all(&directory_path)?;
 
     let mut file = std::fs::File::create(&path)?;
-    for item_path in types {
-        write_type(semantic_state, item_path, &mut file)?;
-    }
+    write_types(&mut file, types, semantic_state)?;
 
     if FORMAT_OUTPUT {
         Command::new("rustfmt").args([&path]).output()?;
