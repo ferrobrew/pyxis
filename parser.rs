@@ -329,6 +329,7 @@ impl Parse for Module {
                 uses.push(item_path);
             } else if input.peek(syn::Token![extern]) {
                 input.parse::<syn::Token![extern]>()?;
+                input.parse::<syn::Token![type]>()?;
                 let item_path = ItemPath::empty().join(parse_type_ident(input)?.into());
                 input.parse::<syn::Token![=]>()?;
                 // only accept an integer for now, can get an expr later
@@ -633,7 +634,7 @@ mod tests {
     #[test]
     fn can_parse_extern() {
         let text = r#"
-        extern TestType<Hey> = 12;
+        extern type TestType<Hey> = 12;
         type Test {
             test: TestType<Hey>,
         }
