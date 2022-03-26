@@ -21,11 +21,15 @@ fn fully_qualified_type_ref_impl(
     use std::fmt::Write;
     match type_ref {
         TypeRef::Raw(path) => {
-            // todo: re-evaluate this hack
-            if path.len() > 1 {
-                write!(out, "crate::")?;
+            if path.len() == 1 && path.last() == Some(&"void".into()) {
+                write!(out, "::std::ffi::c_void")
+            } else {
+                // todo: re-evaluate this hack
+                if path.len() > 1 {
+                    write!(out, "crate::")?;
+                }
+                write!(out, "{}", path)
             }
-            write!(out, "{}", path)
         }
         TypeRef::ConstPointer(tr) => {
             write!(out, "*const ")?;
