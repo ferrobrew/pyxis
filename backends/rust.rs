@@ -199,6 +199,17 @@ fn write_type(
 
         let name_ident = str_to_ident(name.as_str());
         let size_check_ident = quote::format_ident!("_{}_size_check", name.as_str());
+        let size_check_impl = (*size > 0).then(|| {
+            quote! {
+                #[allow(non_snake_case)]
+                fn #size_check_ident() {
+                    unsafe {
+                        ::std::mem::transmute::<_, #name_ident>([0u8; #size]);
+                    }
+                    unreachable!()
+                }
+            }
+        });
 
         let singleton_impl = metadata
             .iter()
@@ -231,13 +242,7 @@ fn write_type(
             pub struct #name_ident {
                 #(#fields),*
             }
-            #[allow(non_snake_case)]
-            fn #size_check_ident() {
-                unsafe {
-                    ::std::mem::transmute::<_, #name_ident>([0u8; #size]);
-                }
-                unreachable!()
-            }
+            #size_check_impl
             #singleton_impl
             impl #name_ident {
                 #(#functions_impl)*
