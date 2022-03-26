@@ -2,7 +2,7 @@ use std::{env, io::Write, path::PathBuf, process::Command};
 
 use super::{
     grammar::ItemPath,
-    semantic_analysis::{Region, SemanticState, TypeState, TypeStateResolved},
+    semantic_analysis::{MetadataValue, Region, SemanticState, TypeState, TypeStateResolved},
 };
 
 use itertools::Itertools;
@@ -65,8 +65,14 @@ fn write_type(
     file: &mut std::fs::File,
 ) -> Result<(), anyhow::Error> {
     let type_definition = semantic_state.type_registry().get(item_path).unwrap();
-    if let (Some(name), TypeState::Resolved(TypeStateResolved { size, regions })) =
-        (item_path.last(), &type_definition.state)
+    if let (
+        Some(name),
+        TypeState::Resolved(TypeStateResolved {
+            size,
+            regions,
+            metadata,
+        }),
+    ) = (item_path.last(), &type_definition.state)
     {
         use super::semantic_analysis::TypeRef;
 
@@ -130,6 +136,25 @@ fn write_type(
 
         let name_ident = quote::format_ident!("{}", name.as_str());
         let size_check_ident = quote::format_ident!("_{}_size_check", name.as_str());
+
+        let singleton_impl = metadata
+            .iter()
+            .find(|(k, _)| k.as_str() == "singleton")
+            .map(|(_, address)| match address {
+                MetadataValue::Integer(ref address) => {
+                    let address = *address as usize;
+                    quote! {
+                        impl #name_ident {
+                            pub fn get() -> &'static mut Self {
+                                unsafe {
+                                    &mut **::std::mem::transmute::<usize, *mut *mut Self>(#address)
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
         let body = quote! {
             #[repr(C)]
             pub struct #name_ident {
@@ -142,6 +167,7 @@ fn write_type(
                 }
                 unreachable!()
             }
+            #singleton_impl
         };
 
         writeln!(file, "{}", body)?;

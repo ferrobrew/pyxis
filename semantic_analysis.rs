@@ -67,9 +67,15 @@ impl Region {
 }
 
 #[derive(PartialEq, Eq, Debug, Clone)]
+pub enum MetadataValue {
+    Integer(isize),
+}
+
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub struct TypeStateResolved {
     pub size: usize,
     pub regions: Vec<Region>,
+    pub metadata: HashMap<String, MetadataValue>,
 }
 
 #[derive(PartialEq, Eq, Debug, Clone)]
@@ -86,12 +92,13 @@ pub struct TypeDefinition {
 }
 
 impl TypeDefinition {
-    const fn new_predefined(path: ItemPath, size: usize) -> Self {
+    fn new_predefined(path: ItemPath, size: usize) -> Self {
         Self {
             path,
             state: TypeState::Resolved(TypeStateResolved {
                 size,
                 regions: vec![],
+                metadata: HashMap::new(),
             }),
             is_predefined: true,
         }
@@ -328,14 +335,22 @@ impl SemanticState {
         };
 
         let mut target_size: Option<usize> = None;
+        let mut metadata: HashMap<String, MetadataValue> = HashMap::new();
         let mut regions: Vec<(Option<usize>, Region)> = vec![];
         for statement in &definition.statements {
             match statement {
                 grammar::TypeStatement::Meta(fields) => {
-                    if let Some(grammar::ExprField(_, grammar::Expr::IntLiteral(size))) =
-                        fields.iter().find(|tf| tf.0 .0 == "size")
-                    {
-                        target_size = Some(*size as usize);
+                    for field in fields {
+                        if let grammar::ExprField(ident, grammar::Expr::IntLiteral(value)) = field {
+                            if ident.0 == "size" {
+                                target_size = Some(*value as usize);
+                            } else if ident.0 == "singleton" {
+                                metadata.insert(
+                                    "singleton".to_string(),
+                                    MetadataValue::Integer(*value as isize),
+                                );
+                            }
+                        }
                     }
                 }
                 grammar::TypeStatement::Address(address, fields) => {
@@ -406,6 +421,7 @@ impl SemanticState {
                 TypeState::Resolved(TypeStateResolved {
                     size,
                     regions: resolved_regions,
+                    metadata,
                 });
         }
         Ok(())
@@ -468,6 +484,7 @@ mod tests {
                         TypeRef::Raw(ItemPath::from_colon_delimited_str("u64")),
                     ),
                 ],
+                metadata: HashMap::new(),
             }),
             is_predefined: false,
         };
@@ -533,6 +550,7 @@ mod tests {
                         ))),
                     ),
                 ],
+                metadata: HashMap::new(),
             }),
             is_predefined: false,
         };
@@ -631,6 +649,10 @@ mod tests {
                     ),
                     Region::Padding(0xA24),
                 ],
+                metadata: HashMap::from([(
+                    "singleton".to_string(),
+                    MetadataValue::Integer(0x1_200_000),
+                )]),
             }),
             is_predefined: false,
         };
@@ -702,6 +724,7 @@ mod tests {
                     "field".into(),
                     TypeRef::Raw(ItemPath::from_colon_delimited_str("module2::TestType2")),
                 )],
+                metadata: HashMap::new(),
             }),
             is_predefined: false,
         };
