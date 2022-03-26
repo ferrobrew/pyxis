@@ -29,25 +29,16 @@ pub enum TypeRef {
     ConstPointer(Box<TypeRef>),
     MutPointer(Box<TypeRef>),
     Array(Box<TypeRef>, usize),
+    Function(Vec<(String, Box<TypeRef>)>, Option<Box<TypeRef>>),
 }
 impl TypeRef {
-    // does not include any pointers/type mutators
-    #[allow(dead_code)]
-    fn base_path(&self) -> ItemPath {
-        match self {
-            TypeRef::Raw(path) => path.clone(),
-            TypeRef::ConstPointer(tr) => tr.base_path(),
-            TypeRef::MutPointer(tr) => tr.base_path(),
-            TypeRef::Array(tr, _) => tr.base_path(),
-        }
-    }
-
     fn size(&self, type_registry: &TypeRegistry) -> Option<usize> {
         match self {
             TypeRef::Raw(path) => type_registry.get(path).and_then(|t| t.size()),
             TypeRef::ConstPointer(_) => Some(type_registry.pointer_size()),
             TypeRef::MutPointer(_) => Some(type_registry.pointer_size()),
             TypeRef::Array(tr, count) => tr.size(type_registry).map(|s| s * count),
+            TypeRef::Function(_, _) => Some(type_registry.pointer_size()),
         }
     }
 }
@@ -67,6 +58,22 @@ impl fmt::Display for TypeRef {
                 write!(f, "[")?;
                 tr.fmt(f)?;
                 write!(f, "; {}]", size)
+            }
+            TypeRef::Function(args, return_type) => {
+                write!(f, "fn (")?;
+                for (index, (field, type_ref)) in args.iter().enumerate() {
+                    write!(f, "{field}: ")?;
+                    type_ref.fmt(f)?;
+                    if index > 0 {
+                        write!(f, ", ")?;
+                    }
+                }
+                write!(f, ")")?;
+                if let Some(type_ref) = return_type {
+                    write!(f, " -> ")?;
+                    type_ref.fmt(f)?;
+                }
+                Ok(())
             }
         }
     }
@@ -485,6 +492,58 @@ impl SemanticState {
         // or regions that are out of order
         let mut last_address: usize = 0;
         let mut resolved_regions = vec![];
+
+        let vftable = functions.get(&"vftable".to_string());
+        if let (Some(vftable), Some(name)) = (vftable, resolvee_path.last()) {
+            let resolvee_vtable_path = parent_path.join(format!("{}Vftable", name.as_str()).into());
+            self.type_registry.add(TypeDefinition {
+                path: resolvee_vtable_path.clone(),
+                state: TypeState::Resolved(TypeStateResolved {
+                    size: 0,
+                    regions: vftable
+                        .iter()
+                        .map(|f| {
+                            let arguments = f
+                                .arguments
+                                .iter()
+                                .map(|a| match a {
+                                    Argument::ConstSelf => (
+                                        "this".to_string(),
+                                        Box::new(TypeRef::ConstPointer(Box::new(TypeRef::Raw(
+                                            resolvee_path.clone(),
+                                        )))),
+                                    ),
+                                    Argument::MutSelf => (
+                                        "this".to_string(),
+                                        Box::new(TypeRef::MutPointer(Box::new(TypeRef::Raw(
+                                            resolvee_path.clone(),
+                                        )))),
+                                    ),
+                                    Argument::Field(name, type_ref) => {
+                                        (name.clone(), Box::new(type_ref.clone()))
+                                    }
+                                })
+                                .collect();
+                            let return_type = f.return_type.as_ref().map(|t| Box::new(t.clone()));
+
+                            Region::Field(f.name.clone(), TypeRef::Function(arguments, return_type))
+                        })
+                        .collect(),
+                    functions: HashMap::new(),
+                    metadata: HashMap::new(),
+                }),
+                is_predefined: false,
+            });
+
+            resolved_regions.push(Region::Field(
+                "vftable".to_string(),
+                TypeRef::ConstPointer(Box::new(TypeRef::Raw(resolvee_vtable_path))),
+            ));
+            last_address += self.type_registry.pointer_size();
+
+            // to-do: add impl functions that forward onto the vftable methods
+        }
+
         for (offset, region) in regions {
             if let Some(offset) = offset {
                 let size = offset - last_address;
@@ -538,11 +597,15 @@ impl SemanticState {
 mod tests {
     use super::*;
 
-    fn build_type(module: &grammar::Module, path: &ItemPath) -> anyhow::Result<TypeDefinition> {
+    fn build_state(module: &grammar::Module, path: &ItemPath) -> anyhow::Result<SemanticState> {
         let mut semantic_state = SemanticState::new(4);
         semantic_state.add_module(module, &path.parent().context("failed to get path parent")?)?;
         semantic_state.build()?;
-        semantic_state
+        Ok(semantic_state)
+    }
+
+    fn build_type(module: &grammar::Module, path: &ItemPath) -> anyhow::Result<TypeDefinition> {
+        build_state(module, path)?
             .type_registry()
             .get(path)
             .cloned()
@@ -948,5 +1011,199 @@ mod tests {
         };
 
         assert_eq!(build_type(&module, &path).unwrap(), type_definition);
+    }
+
+    #[test]
+    fn can_generate_vftable() {
+        let module = {
+            use super::grammar::*;
+
+            type TS = TypeStatement;
+            type TR = TypeRef;
+
+            Module::new(
+                &[],
+                &[],
+                &[TypeDefinition::new(
+                    "TestType",
+                    &[TS::Functions(vec![(
+                        "vftable".into(),
+                        vec![
+                            Function {
+                                name: "test_function0".into(),
+                                attributes: vec![],
+                                arguments: vec![
+                                    Argument::MutSelf,
+                                    Argument::Field(TypeField(
+                                        "arg0".into(),
+                                        TR::ident_type("u32"),
+                                    )),
+                                    Argument::Field(TypeField(
+                                        "arg1".into(),
+                                        TR::ident_type("f32"),
+                                    )),
+                                ],
+                                return_type: Some("i32".into()),
+                            },
+                            Function {
+                                name: "test_function1".into(),
+                                attributes: vec![],
+                                arguments: vec![
+                                    Argument::MutSelf,
+                                    Argument::Field(TypeField(
+                                        "arg0".into(),
+                                        TR::ident_type("u32"),
+                                    )),
+                                    Argument::Field(TypeField(
+                                        "arg1".into(),
+                                        TR::ident_type("f32"),
+                                    )),
+                                ],
+                                return_type: None,
+                            },
+                        ],
+                    )])],
+                )],
+            )
+        };
+
+        let type_definition = TypeDefinition {
+            path: ItemPath::from_colon_delimited_str("test::TestType"),
+            state: TypeState::Resolved(TypeStateResolved {
+                size: 4,
+                regions: vec![Region::Field(
+                    "vftable".to_string(),
+                    TypeRef::ConstPointer(Box::new(TypeRef::Raw(
+                        ItemPath::from_colon_delimited_str("test::TestTypeVftable"),
+                    ))),
+                )],
+                functions: HashMap::from([(
+                    "vftable".into(),
+                    vec![
+                        Function {
+                            name: "test_function0".to_string(),
+                            attributes: vec![],
+                            arguments: vec![
+                                Argument::MutSelf,
+                                Argument::Field(
+                                    "arg0".to_string(),
+                                    TypeRef::Raw(ItemPath::from_colon_delimited_str("u32")),
+                                ),
+                                Argument::Field(
+                                    "arg1".to_string(),
+                                    TypeRef::Raw(ItemPath::from_colon_delimited_str("f32")),
+                                ),
+                            ],
+                            return_type: Some(TypeRef::Raw(ItemPath::from_colon_delimited_str(
+                                "i32",
+                            ))),
+                        },
+                        Function {
+                            name: "test_function1".to_string(),
+                            attributes: vec![],
+                            arguments: vec![
+                                Argument::MutSelf,
+                                Argument::Field(
+                                    "arg0".to_string(),
+                                    TypeRef::Raw(ItemPath::from_colon_delimited_str("u32")),
+                                ),
+                                Argument::Field(
+                                    "arg1".to_string(),
+                                    TypeRef::Raw(ItemPath::from_colon_delimited_str("f32")),
+                                ),
+                            ],
+                            return_type: None,
+                        },
+                    ],
+                )]),
+                metadata: HashMap::new(),
+            }),
+            is_predefined: false,
+        };
+        let vftable_type_definition = TypeDefinition {
+            path: ItemPath::from_colon_delimited_str("test::TestTypeVftable"),
+            state: TypeState::Resolved(TypeStateResolved {
+                size: 0,
+                regions: vec![
+                    Region::Field(
+                        "test_function0".to_string(),
+                        TypeRef::Function(
+                            vec![
+                                (
+                                    "this".to_string(),
+                                    Box::new(TypeRef::MutPointer(Box::new(TypeRef::Raw(
+                                        ItemPath::from_colon_delimited_str("test::TestType"),
+                                    )))),
+                                ),
+                                (
+                                    "arg0".to_string(),
+                                    Box::new(TypeRef::Raw(ItemPath::from_colon_delimited_str(
+                                        "u32",
+                                    ))),
+                                ),
+                                (
+                                    "arg1".to_string(),
+                                    Box::new(TypeRef::Raw(ItemPath::from_colon_delimited_str(
+                                        "f32",
+                                    ))),
+                                ),
+                            ],
+                            Some(Box::new(TypeRef::Raw(ItemPath::from_colon_delimited_str(
+                                "i32",
+                            )))),
+                        ),
+                    ),
+                    Region::Field(
+                        "test_function1".to_string(),
+                        TypeRef::Function(
+                            vec![
+                                (
+                                    "this".to_string(),
+                                    Box::new(TypeRef::MutPointer(Box::new(TypeRef::Raw(
+                                        ItemPath::from_colon_delimited_str("test::TestType"),
+                                    )))),
+                                ),
+                                (
+                                    "arg0".to_string(),
+                                    Box::new(TypeRef::Raw(ItemPath::from_colon_delimited_str(
+                                        "u32",
+                                    ))),
+                                ),
+                                (
+                                    "arg1".to_string(),
+                                    Box::new(TypeRef::Raw(ItemPath::from_colon_delimited_str(
+                                        "f32",
+                                    ))),
+                                ),
+                            ],
+                            None,
+                        ),
+                    ),
+                ],
+                functions: HashMap::new(),
+                metadata: HashMap::new(),
+            }),
+            is_predefined: false,
+        };
+
+        let build_state = build_state(
+            &module,
+            &ItemPath::from_colon_delimited_str("test::TestType"),
+        )
+        .unwrap();
+        assert_eq!(
+            build_state
+                .type_registry()
+                .get(&ItemPath::from_colon_delimited_str("test::TestType"))
+                .unwrap(),
+            &type_definition
+        );
+        assert_eq!(
+            build_state
+                .type_registry()
+                .get(&ItemPath::from_colon_delimited_str("test::TestTypeVftable"))
+                .unwrap(),
+            &vftable_type_definition
+        );
     }
 }

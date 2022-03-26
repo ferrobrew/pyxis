@@ -43,6 +43,21 @@ fn fully_qualified_type_ref_impl(
             fully_qualified_type_ref_impl(out, tr.as_ref())?;
             write!(out, "; {}]", size)
         }
+        TypeRef::Function(args, return_type) => {
+            // todo: revisit the thiscall here when we have non-thiscall functions
+            write!(out, r#"unsafe extern "thiscall" fn ("#)?;
+            for (field, type_ref) in args.iter() {
+                write!(out, "{field}: ")?;
+                fully_qualified_type_ref_impl(out, type_ref)?;
+                write!(out, ", ")?;
+            }
+            write!(out, ")")?;
+            if let Some(type_ref) = return_type {
+                write!(out, " -> ")?;
+                fully_qualified_type_ref_impl(out, type_ref)?;
+            }
+            Ok(())
+        }
     }
 }
 
@@ -57,13 +72,14 @@ fn type_ref_to_syn_type(type_ref: &TypeRef) -> anyhow::Result<syn::Type> {
 }
 
 fn build_function(
-    f: &semantic_analysis::Function,
+    function: &semantic_analysis::Function,
+    is_vftable: bool,
 ) -> Result<proc_macro2::TokenStream, anyhow::Error> {
     use semantic_analysis::{Argument, Attribute};
 
-    let name = str_to_ident(&f.name);
+    let name = str_to_ident(&function.name);
 
-    let arguments = f
+    let arguments = function
         .arguments
         .iter()
         .map(|a| {
@@ -81,7 +97,7 @@ fn build_function(
         })
         .collect::<anyhow::Result<Vec<_>>>()?;
 
-    let lambda_arguments = f
+    let lambda_arguments = function
         .arguments
         .iter()
         .map(|a| {
@@ -99,7 +115,7 @@ fn build_function(
         })
         .collect::<anyhow::Result<Vec<_>>>()?;
 
-    let call_arguments = f
+    let call_arguments = function
         .arguments
         .iter()
         .map(|a| {
@@ -114,7 +130,7 @@ fn build_function(
         })
         .collect::<anyhow::Result<Vec<_>>>()?;
 
-    let return_type = f
+    let return_type = function
         .return_type
         .as_ref()
         .map(|type_ref| -> anyhow::Result<proc_macro2::TokenStream> {
@@ -126,18 +142,23 @@ fn build_function(
     #[derive(Debug)]
     enum FunctionGetter {
         Address(usize),
+        Vftable,
     }
     let mut function_getter = None;
-    for attribute in &f.attributes {
-        let Attribute::Address(address) = attribute;
-        if function_getter.is_some() {
-            return Err(anyhow::anyhow!(
-                "function getter already set: {:?}",
-                function_getter
-            ));
-        }
+    if is_vftable {
+        function_getter = Some(FunctionGetter::Vftable);
+    } else {
+        for attribute in &function.attributes {
+            let Attribute::Address(address) = attribute;
+            if function_getter.is_some() {
+                return Err(anyhow::anyhow!(
+                    "function getter already set: {:?}",
+                    function_getter
+                ));
+            }
 
-        function_getter = Some(FunctionGetter::Address(*address));
+            function_getter = Some(FunctionGetter::Address(*address));
+        }
     }
     if function_getter.is_none() {
         return Err(anyhow::anyhow!("no function getter set"));
@@ -146,15 +167,16 @@ fn build_function(
         FunctionGetter::Address(address) => quote! {
             ::std::mem::transmute(#address)
         },
+        FunctionGetter::Vftable => quote! {
+            std::ptr::addr_of!((*self.vftable).#name).read()
+        },
     });
 
     Ok(quote! {
         #[allow(dead_code)]
-        pub fn #name(#(#arguments),*) #return_type {
-            unsafe {
-                let f: extern "thiscall" fn(#(#lambda_arguments),*) #return_type = #function_getter_impl;
-                f(#(#call_arguments),*)
-            }
+        pub unsafe fn #name(#(#arguments),*) #return_type {
+            let f: unsafe extern "thiscall" fn(#(#lambda_arguments),*) #return_type = #function_getter_impl;
+            f(#(#call_arguments),*)
         }
     })
 }
@@ -229,12 +251,20 @@ fn write_type(
                 }
             });
 
-        let functions_impl = functions
+        let free_functions_impl = functions
             .get("free")
             .cloned()
             .unwrap_or_default()
             .iter()
-            .map(build_function)
+            .map(|f| build_function(f, false))
+            .collect::<anyhow::Result<Vec<_>>>()?;
+
+        let vftable_function_impl = functions
+            .get("vftable")
+            .cloned()
+            .unwrap_or_default()
+            .iter()
+            .map(|f| build_function(f, true))
             .collect::<anyhow::Result<Vec<_>>>()?;
 
         let body = quote! {
@@ -245,7 +275,8 @@ fn write_type(
             #size_check_impl
             #singleton_impl
             impl #name_ident {
-                #(#functions_impl)*
+                #(#free_functions_impl)*
+                #(#vftable_function_impl)*
             }
         };
 
