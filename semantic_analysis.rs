@@ -382,7 +382,13 @@ impl SemanticState {
                         name.0.clone(),
                         self.type_registry
                             .resolve_grammar_typeref(scope, type_ref)
-                            .ok_or_else(|| anyhow::anyhow!("failed to resolve type of field"))?,
+                            .ok_or_else(|| {
+                                anyhow::anyhow!(
+                                    "failed to resolve type of field {:?} ({:?}",
+                                    name,
+                                    type_ref
+                                )
+                            })?,
                     ))
                 }
             })
