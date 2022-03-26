@@ -2,11 +2,56 @@ use std::{env, io::Write, path::PathBuf, process::Command};
 
 use super::{
     grammar::ItemPath,
-    semantic_analysis::{MetadataValue, Region, SemanticState, TypeState, TypeStateResolved},
+    semantic_analysis::{
+        MetadataValue, Region, SemanticState, TypeRef, TypeState, TypeStateResolved,
+    },
 };
 
 use itertools::Itertools;
 use quote::quote;
+
+fn str_to_ident(s: &str) -> syn::Ident {
+    quote::format_ident!("{}", s)
+}
+
+fn fully_qualified_type_ref_impl(
+    out: &mut String,
+    type_ref: &TypeRef,
+) -> Result<(), std::fmt::Error> {
+    use std::fmt::Write;
+    match type_ref {
+        TypeRef::Raw(path) => {
+            // todo: re-evaluate this hack
+            if path.len() > 1 {
+                write!(out, "crate::")?;
+            }
+            write!(out, "{}", path)
+        }
+        TypeRef::ConstPointer(tr) => {
+            write!(out, "*const ")?;
+            fully_qualified_type_ref_impl(out, tr.as_ref())
+        }
+        TypeRef::MutPointer(tr) => {
+            write!(out, "*mut ")?;
+            fully_qualified_type_ref_impl(out, tr.as_ref())
+        }
+        TypeRef::Array(tr, size) => {
+            write!(out, "[")?;
+            fully_qualified_type_ref_impl(out, tr.as_ref())?;
+            write!(out, "; {}]", size)
+        }
+    }
+}
+
+fn fully_qualified_type_ref(type_ref: &TypeRef) -> Result<String, std::fmt::Error> {
+    let mut out = String::new();
+    fully_qualified_type_ref_impl(&mut out, type_ref)?;
+    Ok(out)
+}
+
+fn type_ref_to_syn_type(type_ref: &TypeRef) -> anyhow::Result<syn::Type> {
+    Ok(syn::parse_str(&fully_qualified_type_ref(type_ref)?)?)
+}
 
 pub fn build() -> anyhow::Result<()> {
     let pointer_size = env::var("CARGO_CFG_TARGET_POINTER_WIDTH")?.parse::<usize>()? / 8;
@@ -75,52 +120,14 @@ fn write_type(
         }),
     ) = (item_path.last(), &type_definition.state)
     {
-        use super::semantic_analysis::TypeRef;
-
-        fn fully_qualified_type_ref_impl(
-            out: &mut String,
-            type_ref: &TypeRef,
-        ) -> Result<(), std::fmt::Error> {
-            use std::fmt::Write;
-            match type_ref {
-                TypeRef::Raw(path) => {
-                    // todo: re-evaluate this hack
-                    if path.len() > 1 {
-                        write!(out, "crate::")?;
-                    }
-                    write!(out, "{}", path)
-                }
-                TypeRef::ConstPointer(tr) => {
-                    write!(out, "*const ")?;
-                    fully_qualified_type_ref_impl(out, tr.as_ref())
-                }
-                TypeRef::MutPointer(tr) => {
-                    write!(out, "*mut ")?;
-                    fully_qualified_type_ref_impl(out, tr.as_ref())
-                }
-                TypeRef::Array(tr, size) => {
-                    write!(out, "[")?;
-                    fully_qualified_type_ref_impl(out, tr.as_ref())?;
-                    write!(out, "; {}]", size)
-                }
-            }
-        }
-
-        fn fully_qualified_type_ref(type_ref: &TypeRef) -> Result<String, std::fmt::Error> {
-            let mut out = String::new();
-            fully_qualified_type_ref_impl(&mut out, type_ref)?;
-            Ok(out)
-        }
-
         let fields = regions
             .iter()
             .enumerate()
             .map(|(i, r)| {
                 Ok(match r {
                     Region::Field(field, type_ref) => {
-                        let field_ident = quote::format_ident!("{}", field);
-                        let syn_type: syn::Type =
-                            syn::parse_str(&fully_qualified_type_ref(type_ref)?)?;
+                        let field_ident = str_to_ident(field);
+                        let syn_type = type_ref_to_syn_type(type_ref)?;
                         quote! {
                             pub #field_ident: #syn_type
                         }
@@ -135,7 +142,7 @@ fn write_type(
             })
             .collect::<anyhow::Result<Vec<_>>>()?;
 
-        let name_ident = quote::format_ident!("{}", name.as_str());
+        let name_ident = str_to_ident(name.as_str());
         let size_check_ident = quote::format_ident!("_{}_size_check", name.as_str());
 
         let singleton_impl = metadata
@@ -156,6 +163,14 @@ fn write_type(
                 }
             });
 
+        let functions_impl = functions
+            .get("free")
+            .cloned()
+            .unwrap_or_default()
+            .iter()
+            .map(build_function)
+            .collect::<anyhow::Result<Vec<_>>>()?;
+
         let body = quote! {
             #[repr(C)]
             pub struct #name_ident {
@@ -169,9 +184,115 @@ fn write_type(
                 unreachable!()
             }
             #singleton_impl
+            impl #name_ident {
+                #(#functions_impl)*
+            }
         };
 
         writeln!(file, "{}", body)?;
     };
     Ok(())
+}
+
+fn build_function(
+    f: &super::semantic_analysis::Function,
+) -> Result<proc_macro2::TokenStream, anyhow::Error> {
+    use super::semantic_analysis::{Argument, Attribute};
+
+    let name = str_to_ident(&f.name);
+
+    let arguments = f
+        .arguments
+        .iter()
+        .map(|a| {
+            Ok(match a {
+                Argument::ConstSelf => quote! { &self },
+                Argument::MutSelf => quote! { &mut self },
+                Argument::Field(name, type_ref) => {
+                    let name = str_to_ident(name);
+                    let syn_type = type_ref_to_syn_type(type_ref)?;
+                    quote! {
+                        #name: #syn_type
+                    }
+                }
+            })
+        })
+        .collect::<anyhow::Result<Vec<_>>>()?;
+
+    let lambda_arguments = f
+        .arguments
+        .iter()
+        .map(|a| {
+            Ok(match a {
+                Argument::ConstSelf => quote! { this: *const Self },
+                Argument::MutSelf => quote! { this: *mut Self },
+                Argument::Field(name, type_ref) => {
+                    let name = str_to_ident(name);
+                    let syn_type = type_ref_to_syn_type(type_ref)?;
+                    quote! {
+                        #name: #syn_type
+                    }
+                }
+            })
+        })
+        .collect::<anyhow::Result<Vec<_>>>()?;
+
+    let call_arguments = f
+        .arguments
+        .iter()
+        .map(|a| {
+            Ok(match a {
+                Argument::ConstSelf => quote! { self as *const Self},
+                Argument::MutSelf => quote! { self as *mut Self },
+                Argument::Field(name, _) => {
+                    let name = str_to_ident(name);
+                    quote! { #name }
+                }
+            })
+        })
+        .collect::<anyhow::Result<Vec<_>>>()?;
+
+    let return_type = f
+        .return_type
+        .as_ref()
+        .map(|type_ref| -> anyhow::Result<proc_macro2::TokenStream> {
+            let syn_type = type_ref_to_syn_type(type_ref)?;
+            Ok(quote! { -> #syn_type })
+        })
+        .transpose()?;
+
+    #[derive(Debug)]
+    enum FunctionGetter {
+        Address(usize),
+    }
+    let mut function_getter = None;
+    for attribute in &f.attributes {
+        let Attribute::Address(address) = attribute;
+        if function_getter.is_some() {
+            return Err(anyhow::anyhow!(
+                "function getter already set: {:?}",
+                function_getter
+            ));
+        }
+
+        function_getter = Some(FunctionGetter::Address(*address));
+    }
+    if function_getter.is_none() {
+        return Err(anyhow::anyhow!("no function getter set"));
+    }
+    let function_getter_impl = function_getter.map(|fg| match fg {
+        FunctionGetter::Address(address) => quote! {
+            ::std::mem::transmute(#address)
+        },
+    });
+
+    Ok(quote! {
+        #[allow(dead_code)]
+        pub fn #name(#(#arguments),*) #return_type {
+            unsafe {
+                let f: extern "thiscall" fn(#(#lambda_arguments),*) #return_type = #function_getter_impl;
+                f(#(#call_arguments),*)
+            }
+        }
+    })
 }

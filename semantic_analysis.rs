@@ -725,7 +725,6 @@ mod tests {
         };
 
         let path = ItemPath::from_colon_delimited_str("test::Singleton");
-        // todo: handle functions
         let type_definition = TypeDefinition {
             path: path.clone(),
             state: TypeState::Resolved(TypeStateResolved {
