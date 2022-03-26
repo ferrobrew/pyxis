@@ -284,7 +284,8 @@ impl SemanticState {
     // todo: define an actual error type
     pub fn add_file(&mut self, path: &Path) -> anyhow::Result<()> {
         self.add_module(
-            &super::parser::parse_str(&std::fs::read_to_string(path)?)?,
+            &super::parser::parse_str(&std::fs::read_to_string(path)?)
+                .context(format!("{:?}", path))?,
             &ItemPath::from_path(path),
         )
     }
