@@ -284,12 +284,17 @@ impl Parse for TypeDefinition {
         input.parse::<Token![type]>()?;
         let name: Ident = input.parse()?;
 
-        let content;
-        braced!(content in input);
+        let statements = if input.peek(syn::Token![;]) {
+            input.parse::<syn::Token![;]>()?;
+            vec![]
+        } else {
+            let content;
+            braced!(content in input);
 
-        let statements: Punctuated<TypeStatement, Token![,]> =
-            content.parse_terminated(TypeStatement::parse)?;
-        let statements = Vec::from_iter(statements.into_iter());
+            let statements: Punctuated<TypeStatement, Token![,]> =
+                content.parse_terminated(TypeStatement::parse)?;
+            Vec::from_iter(statements.into_iter())
+        };
 
         Ok(TypeDefinition { name, statements })
     }
@@ -653,6 +658,17 @@ mod tests {
                 )],
             )
         };
+
+        assert_eq!(parse_str(text).ok(), Some(ast));
+    }
+
+    #[test]
+    fn can_parse_an_empty_type() {
+        let text = r#"
+        type Test;
+        "#;
+
+        let ast = { Module::new(&[], &[], &[TypeDefinition::new("Test", &[])]) };
 
         assert_eq!(parse_str(text).ok(), Some(ast));
     }
