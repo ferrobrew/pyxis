@@ -247,7 +247,7 @@ impl TypeRegistry {
             grammar::Type::MutPointer(t) => self
                 .resolve_grammar_type(scope, t.as_ref())
                 .map(|t| TypeRef::MutPointer(Box::new(t))),
-            grammar::Type::Ident(ident) => self.resolve_string(scope, ident.0.as_str()),
+            grammar::Type::Ident(ident) => self.resolve_string(scope, ident.as_str()),
         }
     }
 
@@ -296,7 +296,7 @@ impl SemanticState {
         path: &ItemPath,
     ) -> Result<(), anyhow::Error> {
         for definition in &module.definitions {
-            let path = path.join(definition.name.0.as_str().into());
+            let path = path.join(definition.name.as_str().into());
             self.type_registry.add(TypeDefinition {
                 path,
                 state: TypeState::Unresolved(definition.clone()),
@@ -359,16 +359,14 @@ impl SemanticState {
             .attributes
             .iter()
             .map(|a| match a {
-                grammar::Attribute::Function(ident, exprs) => {
-                    match (ident.0.as_str(), &exprs[..]) {
-                        ("address", [grammar::Expr::IntLiteral(address)]) => {
-                            Ok(Attribute::Address(*address as usize))
-                        }
-                        (_, _) => Err(anyhow::anyhow!(
-                            "failed to resolve function attribute, unsupported name"
-                        )),
+                grammar::Attribute::Function(ident, exprs) => match (ident.as_str(), &exprs[..]) {
+                    ("address", [grammar::Expr::IntLiteral(address)]) => {
+                        Ok(Attribute::Address(*address as usize))
                     }
-                }
+                    (_, _) => Err(anyhow::anyhow!(
+                        "failed to resolve function attribute, unsupported name"
+                    )),
+                },
             })
             .collect::<Result<Vec<_>, _>>()?;
 

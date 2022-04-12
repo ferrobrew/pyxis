@@ -7,6 +7,16 @@ impl From<&str> for Ident {
         Ident(item.to_string())
     }
 }
+impl Ident {
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+}
+impl AsRef<str> for Ident {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Type {
@@ -153,7 +163,7 @@ impl MacroCall {
     }
 
     pub fn match_repr(&self) -> (&str, &[Expr]) {
-        (self.name.0.as_str(), self.arguments.as_slice())
+        (self.name.as_str(), self.arguments.as_slice())
     }
 }
 
