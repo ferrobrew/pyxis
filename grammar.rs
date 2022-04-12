@@ -325,13 +325,13 @@ impl TypeDefinition {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Module {
     pub uses: Vec<ItemPath>,
-    pub externs: Vec<(ItemPath, usize)>,
+    pub externs: Vec<(ItemPath, Vec<ExprField>)>,
     pub definitions: Vec<TypeDefinition>,
 }
 impl Module {
     pub fn new(
         uses: &[ItemPath],
-        externs: &[(ItemPath, usize)],
+        externs: &[(ItemPath, Vec<ExprField>)],
         definitions: &[TypeDefinition],
     ) -> Self {
         Self {

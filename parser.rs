@@ -336,11 +336,14 @@ impl Parse for Module {
                 input.parse::<syn::Token![extern]>()?;
                 input.parse::<syn::Token![type]>()?;
                 let item_path = ItemPath::empty().join(parse_type_ident(input)?.into());
-                input.parse::<syn::Token![=]>()?;
-                // only accept an integer for now, can get an expr later
-                let size: usize = input.parse::<syn::LitInt>()?.base10_parse()?;
-                input.parse::<syn::Token![;]>()?;
-                externs.push((item_path, size));
+
+                let content;
+                braced!(content in input);
+
+                let fields: Punctuated<_, Token![,]> =
+                    content.parse_terminated(ExprField::parse)?;
+
+                externs.push((item_path, Vec::from_iter(fields.into_iter())));
             }
         }
 
@@ -639,7 +642,7 @@ mod tests {
     #[test]
     fn can_parse_extern() {
         let text = r#"
-        extern type TestType<Hey> = 12;
+        extern type TestType<Hey> { size: 12 }
         type Test {
             test: TestType<Hey>,
         }
@@ -648,7 +651,10 @@ mod tests {
         let ast = {
             Module::new(
                 &[],
-                &[(ItemPath::from_colon_delimited_str("TestType<Hey>"), 12)],
+                &[(
+                    ItemPath::from_colon_delimited_str("TestType<Hey>"),
+                    vec![ExprField("size".into(), Expr::IntLiteral(12))],
+                )],
                 &[TypeDefinition::new(
                     "Test",
                     &[TypeStatement::field(

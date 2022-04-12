@@ -303,7 +303,23 @@ impl SemanticState {
                 is_predefined: false,
             })
         }
-        for (extern_path, size) in &module.externs {
+        for (extern_path, fields) in &module.externs {
+            let size = if let grammar::Expr::IntLiteral(s) = fields
+                .iter()
+                .find(|grammar::ExprField(name, _)| name.as_str() == "size")
+                .context("failed to find size field in extern type for module")?
+                .1
+            {
+                Ok(s)
+            } else {
+                Err(anyhow::anyhow!(
+                    "size field of extern type {} is not an int literal",
+                    extern_path
+                ))
+            }?
+            .try_into()
+            .context("the size could not be converted into an unsigned integer")?;
+
             self.type_registry.add(TypeDefinition::new_predefined(
                 path.join(
                     extern_path
@@ -311,7 +327,7 @@ impl SemanticState {
                         .context("failed to get extern path segment")?
                         .clone(),
                 ),
-                *size,
+                size,
             ));
         }
         self.files.insert(path.clone(), module.clone());
@@ -957,6 +973,27 @@ mod tests {
     }
 
     #[test]
+    fn will_fail_on_an_extern_without_size() {
+        let module = {
+            use super::grammar::*;
+
+            Module::new(
+                &[],
+                &[(ItemPath::from_colon_delimited_str("TestType"), vec![])],
+                &[],
+            )
+        };
+
+        assert_eq!(
+            build_type(&module, &ItemPath::from_colon_delimited_str("module"))
+                .err()
+                .unwrap()
+                .to_string(),
+            "failed to find size field in extern type for module"
+        );
+    }
+
+    #[test]
     fn can_resolve_embed_of_an_extern() {
         let module = {
             use super::grammar::*;
@@ -966,7 +1003,10 @@ mod tests {
 
             Module::new(
                 &[],
-                &[(ItemPath::from_colon_delimited_str("TestType1"), 16)],
+                &[(
+                    ItemPath::from_colon_delimited_str("TestType1"),
+                    vec![ExprField("size".into(), Expr::IntLiteral(16))],
+                )],
                 &[TypeDefinition::new(
                     "TestType2",
                     &[
