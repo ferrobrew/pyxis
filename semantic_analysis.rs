@@ -385,15 +385,24 @@ impl SemanticState {
         }
 
         for (extern_path, fields) in &module.externs {
-            let size = fields
+            let singleton = fields
                 .iter()
-                .find(|ef| ef.ident_as_str() == "size")
-                .context("failed to find size field in extern type for module")?
-                .1
-                .int_literal()
-                .context("size field of extern type is not an int literal")?
-                .try_into()
-                .context("the size could not be converted into an unsigned integer")?;
+                .find(|ef| ef.ident_as_str() == "singleton")
+                .and_then(|ef| ef.1.int_literal());
+
+            let size = if singleton.is_some() {
+                0
+            } else {
+                fields
+                    .iter()
+                    .find(|ef| ef.ident_as_str() == "size")
+                    .context("failed to find size field in extern type for module")?
+                    .1
+                    .int_literal()
+                    .context("size field of extern type is not an int literal")?
+                    .try_into()
+                    .context("the size could not be converted into an unsigned integer")?
+            };
 
             let extern_path = path.join(
                 extern_path
@@ -403,11 +412,7 @@ impl SemanticState {
             );
 
             let mut type_state_resolved = TypeStateResolved::new(size);
-            if let Some(address) = fields
-                .iter()
-                .find(|ef| ef.ident_as_str() == "singleton")
-                .and_then(|ef| ef.1.int_literal())
-            {
+            if let Some(address) = singleton {
                 type_state_resolved
                     .metadata
                     .insert("singleton".to_string(), MetadataValue::Integer(address));
@@ -1171,10 +1176,7 @@ mod tests {
                 &[],
                 &[(
                     ItemPath::from_colon_delimited_str("TestType1"),
-                    vec![
-                        ExprField("size".into(), Expr::IntLiteral(0)),
-                        ExprField("singleton".into(), Expr::IntLiteral(0x1337)),
-                    ],
+                    vec![ExprField("singleton".into(), Expr::IntLiteral(0x1337))],
                 )],
                 &[],
             )
