@@ -1,7 +1,12 @@
 use anyhow::Context;
 
 use super::grammar::{self, ItemPath};
-use std::{collections::HashMap, fmt, path::Path, vec};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt,
+    path::Path,
+    vec,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Attribute {
@@ -106,38 +111,66 @@ pub struct TypeStateResolved {
     pub metadata: HashMap<String, MetadataValue>,
 }
 
+impl TypeStateResolved {
+    pub fn new(size: usize) -> Self {
+        Self {
+            size,
+            regions: Default::default(),
+            functions: Default::default(),
+            metadata: Default::default(),
+        }
+    }
+}
+
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub enum TypeState {
     Unresolved(grammar::TypeDefinition),
     Resolved(TypeStateResolved),
 }
 
+#[derive(PartialEq, Eq, Debug, Copy, Clone)]
+pub enum TypeCategory {
+    Defined,
+    Predefined,
+    Extern,
+}
+
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct TypeDefinition {
     pub path: ItemPath,
     pub state: TypeState,
-    pub is_predefined: bool,
+    pub category: TypeCategory,
 }
-
 impl TypeDefinition {
-    fn new_predefined(path: ItemPath, size: usize) -> Self {
-        Self {
-            path,
-            state: TypeState::Resolved(TypeStateResolved {
-                size,
-                regions: vec![],
-                functions: HashMap::new(),
-                metadata: HashMap::new(),
-            }),
-            is_predefined: true,
+    pub fn resolved(&self) -> Option<&TypeStateResolved> {
+        match &self.state {
+            TypeState::Resolved(tsr) => Some(tsr),
+            _ => None,
         }
     }
 
     pub fn size(&self) -> Option<usize> {
-        match &self.state {
-            TypeState::Resolved(tsr) => Some(tsr.size),
-            _ => None,
-        }
+        self.resolved().map(|r| r.size)
+    }
+
+    pub fn is_resolved(&self) -> bool {
+        self.resolved().is_some()
+    }
+
+    pub fn is_defined(&self) -> bool {
+        self.category == TypeCategory::Defined
+    }
+
+    pub fn is_predefined(&self) -> bool {
+        self.category == TypeCategory::Predefined
+    }
+
+    pub fn is_extern(&self) -> bool {
+        self.category == TypeCategory::Extern
+    }
+
+    pub fn category(&self) -> TypeCategory {
+        self.category
     }
 }
 
@@ -147,31 +180,8 @@ pub struct TypeRegistry {
 }
 impl TypeRegistry {
     fn new(pointer_size: usize) -> TypeRegistry {
-        let predefined_types = [
-            ("void", 0),
-            ("bool", 1),
-            ("u8", 1),
-            ("u16", 2),
-            ("u32", 4),
-            ("u64", 8),
-            ("u128", 16),
-            ("i8", 1),
-            ("i16", 2),
-            ("i32", 4),
-            ("i64", 8),
-            ("i128", 16),
-            ("f32", 4),
-            ("f64", 8),
-        ];
-
-        let types = predefined_types
-            .into_iter()
-            .map(|(name, size)| (ItemPath::from_colon_delimited_str(name), size))
-            .map(|(path, size)| (path.clone(), TypeDefinition::new_predefined(path, size)))
-            .collect();
-
         TypeRegistry {
-            types,
+            types: HashMap::new(),
             pointer_size,
         }
     }
@@ -196,18 +206,18 @@ impl TypeRegistry {
         self.types.get_mut(item_path)
     }
 
-    pub fn resolved(&self) -> Vec<ItemPath> {
+    fn resolved(&self) -> Vec<ItemPath> {
         self.types
             .iter()
-            .filter(|(_, t)| !t.is_predefined && matches!(t.state, TypeState::Resolved { .. }))
+            .filter(|(_, t)| !t.is_predefined() && t.is_resolved())
             .map(|(k, _)| k.clone())
             .collect()
     }
 
-    pub fn unresolved(&self) -> Vec<ItemPath> {
+    fn unresolved(&self) -> Vec<ItemPath> {
         self.types
             .iter()
-            .filter(|(_, t)| !t.is_predefined && matches!(t.state, TypeState::Unresolved(_)))
+            .filter(|(_, t)| !t.is_predefined() && !t.is_resolved())
             .map(|(k, _)| k.clone())
             .collect()
     }
@@ -268,17 +278,88 @@ impl TypeRegistry {
     }
 }
 
+#[derive(Debug)]
+pub struct Module {
+    ast: grammar::Module,
+    definition_paths: HashSet<ItemPath>,
+}
+impl Module {
+    fn new(ast: grammar::Module) -> Self {
+        Self {
+            ast,
+            definition_paths: HashSet::new(),
+        }
+    }
+
+    pub fn ast(&self) -> &grammar::Module {
+        &self.ast
+    }
+
+    pub fn uses(&self) -> &[ItemPath] {
+        &self.ast.uses
+    }
+
+    pub fn definition_paths(&self) -> &HashSet<ItemPath> {
+        &self.definition_paths
+    }
+
+    pub fn definitions<'a>(
+        &'a self,
+        type_registry: &'a TypeRegistry,
+    ) -> impl Iterator<Item = &'a TypeDefinition> {
+        self.definition_paths
+            .iter()
+            .filter_map(|p| type_registry.get(p))
+    }
+}
+
 pub struct SemanticState {
-    files: HashMap<ItemPath, grammar::Module>,
+    modules: HashMap<ItemPath, Module>,
     type_registry: TypeRegistry,
 }
 
 impl SemanticState {
     pub fn new(pointer_size: usize) -> Self {
-        Self {
-            files: HashMap::new(),
+        let mut semantic_state = Self {
+            modules: HashMap::new(),
             type_registry: TypeRegistry::new(pointer_size),
+        };
+
+        // Insert the empty root module.
+        semantic_state
+            .modules
+            .insert(ItemPath::empty(), Module::new(grammar::Module::default()));
+
+        // Insert all of our predefined types.
+        let predefined_types = [
+            ("void", 0),
+            ("bool", 1),
+            ("u8", 1),
+            ("u16", 2),
+            ("u32", 4),
+            ("u64", 8),
+            ("u128", 16),
+            ("i8", 1),
+            ("i16", 2),
+            ("i32", 4),
+            ("i64", 8),
+            ("i128", 16),
+            ("f32", 4),
+            ("f64", 8),
+        ];
+
+        for (name, size) in predefined_types {
+            let path = ItemPath::from_colon_delimited_str(name);
+            semantic_state
+                .add_type(TypeDefinition {
+                    path: path,
+                    state: TypeState::Resolved(TypeStateResolved::new(size)),
+                    category: TypeCategory::Predefined,
+                })
+                .expect("failed to add predefined type");
         }
+
+        semantic_state
     }
 
     // todo: define an actual error type
@@ -290,48 +371,69 @@ impl SemanticState {
         )
     }
 
-    pub fn add_module(
-        &mut self,
-        module: &grammar::Module,
-        path: &ItemPath,
-    ) -> Result<(), anyhow::Error> {
+    pub fn add_module(&mut self, module: &grammar::Module, path: &ItemPath) -> anyhow::Result<()> {
+        self.modules
+            .insert(path.clone(), Module::new(module.clone()));
+
         for definition in &module.definitions {
             let path = path.join(definition.name.as_str().into());
-            self.type_registry.add(TypeDefinition {
-                path,
+            self.add_type(TypeDefinition {
+                path: path.clone(),
                 state: TypeState::Unresolved(definition.clone()),
-                is_predefined: false,
-            })
+                category: TypeCategory::Defined,
+            })?;
         }
+
         for (extern_path, fields) in &module.externs {
-            let size = if let grammar::Expr::IntLiteral(s) = fields
+            let size = fields
                 .iter()
-                .find(|grammar::ExprField(name, _)| name.as_str() == "size")
+                .find(|ef| ef.ident_as_str() == "size")
                 .context("failed to find size field in extern type for module")?
                 .1
-            {
-                Ok(s)
-            } else {
-                Err(anyhow::anyhow!(
-                    "size field of extern type {} is not an int literal",
-                    extern_path
-                ))
-            }?
-            .try_into()
-            .context("the size could not be converted into an unsigned integer")?;
+                .int_literal()
+                .context("size field of extern type is not an int literal")?
+                .try_into()
+                .context("the size could not be converted into an unsigned integer")?;
 
-            self.type_registry.add(TypeDefinition::new_predefined(
-                path.join(
-                    extern_path
-                        .last()
-                        .context("failed to get extern path segment")?
-                        .clone(),
-                ),
-                size,
-            ));
+            let extern_path = path.join(
+                extern_path
+                    .last()
+                    .context("failed to get extern path segment")?
+                    .clone(),
+            );
+
+            let mut type_state_resolved = TypeStateResolved::new(size);
+            if let Some(address) = fields
+                .iter()
+                .find(|ef| ef.ident_as_str() == "singleton")
+                .and_then(|ef| ef.1.int_literal())
+            {
+                type_state_resolved
+                    .metadata
+                    .insert("singleton".to_string(), MetadataValue::Integer(address));
+            }
+
+            let path = extern_path.clone();
+            self.add_type(TypeDefinition {
+                path,
+                state: TypeState::Resolved(type_state_resolved),
+                category: TypeCategory::Extern,
+            })?;
         }
-        self.files.insert(path.clone(), module.clone());
         Ok(())
+    }
+
+    pub fn add_type(&mut self, type_definition: TypeDefinition) -> anyhow::Result<()> {
+        let parent_path = &type_definition
+            .path
+            .parent()
+            .context("failed to get parent type")?;
+        self.modules
+            .get_mut(parent_path)
+            .context("failed to get module")?
+            .definition_paths
+            .insert(type_definition.path.clone());
+        Ok(self.type_registry.add(type_definition))
     }
 
     // todo: consider consuming self and returning a new type
@@ -426,7 +528,7 @@ impl SemanticState {
         &mut self,
         resolvee_path: &ItemPath,
         definition: &grammar::TypeDefinition,
-    ) -> Result<(), anyhow::Error> {
+    ) -> anyhow::Result<()> {
         let parent_path = resolvee_path
             .parent()
             .unwrap_or_else(|| resolvee_path.clone());
@@ -435,9 +537,9 @@ impl SemanticState {
             let mut v = vec![&parent_path];
             v.append(
                 &mut self
-                    .files
+                    .modules
                     .get(&parent_path)
-                    .map(|f| f.uses.iter().by_ref().collect())
+                    .map(|f| f.uses().iter().collect())
                     .unwrap_or_default(),
             );
             v
@@ -517,52 +619,50 @@ impl SemanticState {
         let vftable = functions.get(&"vftable".to_string());
         if let (Some(vftable), Some(name)) = (vftable, resolvee_path.last()) {
             let resolvee_vtable_path = parent_path.join(format!("{}Vftable", name.as_str()).into());
-            self.type_registry.add(TypeDefinition {
+            let function_to_field = |function: &Function| -> Region {
+                let argument_to_type = |argument: &Argument| -> (String, Box<TypeRef>) {
+                    match argument {
+                        Argument::ConstSelf => (
+                            "this".to_string(),
+                            Box::new(TypeRef::ConstPointer(Box::new(TypeRef::Raw(
+                                resolvee_path.clone(),
+                            )))),
+                        ),
+                        Argument::MutSelf => (
+                            "this".to_string(),
+                            Box::new(TypeRef::MutPointer(Box::new(TypeRef::Raw(
+                                resolvee_path.clone(),
+                            )))),
+                        ),
+                        Argument::Field(name, type_ref) => {
+                            (name.clone(), Box::new(type_ref.clone()))
+                        }
+                    }
+                };
+                let arguments = function.arguments.iter().map(argument_to_type).collect();
+                let return_type = function.return_type.as_ref().map(|t| Box::new(t.clone()));
+
+                Region::Field(
+                    function.name.clone(),
+                    TypeRef::Function(arguments, return_type),
+                )
+            };
+            self.add_type(TypeDefinition {
                 path: resolvee_vtable_path.clone(),
                 state: TypeState::Resolved(TypeStateResolved {
                     size: 0,
-                    regions: vftable
-                        .iter()
-                        .map(|f| {
-                            let arguments = f
-                                .arguments
-                                .iter()
-                                .map(|a| match a {
-                                    Argument::ConstSelf => (
-                                        "this".to_string(),
-                                        Box::new(TypeRef::ConstPointer(Box::new(TypeRef::Raw(
-                                            resolvee_path.clone(),
-                                        )))),
-                                    ),
-                                    Argument::MutSelf => (
-                                        "this".to_string(),
-                                        Box::new(TypeRef::MutPointer(Box::new(TypeRef::Raw(
-                                            resolvee_path.clone(),
-                                        )))),
-                                    ),
-                                    Argument::Field(name, type_ref) => {
-                                        (name.clone(), Box::new(type_ref.clone()))
-                                    }
-                                })
-                                .collect();
-                            let return_type = f.return_type.as_ref().map(|t| Box::new(t.clone()));
-
-                            Region::Field(f.name.clone(), TypeRef::Function(arguments, return_type))
-                        })
-                        .collect(),
+                    regions: vftable.iter().map(function_to_field).collect(),
                     functions: HashMap::new(),
                     metadata: HashMap::new(),
                 }),
-                is_predefined: false,
-            });
+                category: TypeCategory::Defined,
+            })?;
 
             resolved_regions.push(Region::Field(
                 "vftable".to_string(),
                 TypeRef::ConstPointer(Box::new(TypeRef::Raw(resolvee_vtable_path))),
             ));
             last_address += self.type_registry.pointer_size();
-
-            // to-do: add impl functions that forward onto the vftable methods
         }
 
         for (offset, region) in regions {
@@ -611,6 +711,10 @@ impl SemanticState {
 
     pub fn type_registry(&self) -> &TypeRegistry {
         &self.type_registry
+    }
+
+    pub fn modules(&self) -> &HashMap<ItemPath, Module> {
+        &self.modules
     }
 }
 
@@ -674,7 +778,7 @@ mod tests {
                 functions: HashMap::new(),
                 metadata: HashMap::new(),
             }),
-            is_predefined: false,
+            category: TypeCategory::Defined,
         };
 
         assert_eq!(build_type(&module, &path).unwrap(), type_definition);
@@ -742,7 +846,7 @@ mod tests {
                 functions: HashMap::new(),
                 metadata: HashMap::new(),
             }),
-            is_predefined: false,
+            category: TypeCategory::Defined,
         };
 
         assert_eq!(build_type(&module, &path).unwrap(), type_definition);
@@ -875,7 +979,7 @@ mod tests {
                     MetadataValue::Integer(0x1_200_000),
                 )]),
             }),
-            is_predefined: false,
+            category: TypeCategory::Defined,
         };
 
         assert_eq!(build_type(&module, &path).unwrap(), type_definition);
@@ -951,7 +1055,7 @@ mod tests {
                 )],
                 metadata: HashMap::new(),
             }),
-            is_predefined: false,
+            category: TypeCategory::Defined,
         };
 
         let mut semantic_state = SemanticState::new(4);
@@ -1052,10 +1156,41 @@ mod tests {
                 functions: HashMap::new(),
                 metadata: HashMap::new(),
             }),
-            is_predefined: false,
+            category: TypeCategory::Defined,
         };
 
         assert_eq!(build_type(&module, &path).unwrap(), type_definition);
+    }
+
+    #[test]
+    fn can_handle_an_extern_with_a_singleton() {
+        let module = {
+            use super::grammar::*;
+
+            Module::new(
+                &[],
+                &[(
+                    ItemPath::from_colon_delimited_str("TestType1"),
+                    vec![
+                        ExprField("size".into(), Expr::IntLiteral(0)),
+                        ExprField("singleton".into(), Expr::IntLiteral(0x1337)),
+                    ],
+                )],
+                &[],
+            )
+        };
+
+        let path = ItemPath::from_colon_delimited_str("module::TestType1");
+        assert_eq!(
+            build_type(&module, &path)
+                .unwrap()
+                .resolved()
+                .unwrap()
+                .metadata
+                .get(&"singleton".to_string())
+                .unwrap(),
+            &MetadataValue::Integer(0x1337)
+        );
     }
 
     #[test]
@@ -1163,7 +1298,7 @@ mod tests {
                 )]),
                 metadata: HashMap::new(),
             }),
-            is_predefined: false,
+            category: TypeCategory::Defined,
         };
         let vftable_type_definition = TypeDefinition {
             path: ItemPath::from_colon_delimited_str("test::TestTypeVftable"),
@@ -1228,25 +1363,36 @@ mod tests {
                 functions: HashMap::new(),
                 metadata: HashMap::new(),
             }),
-            is_predefined: false,
+            category: TypeCategory::Defined,
         };
 
-        let build_state = build_state(
-            &module,
-            &ItemPath::from_colon_delimited_str("test::TestType"),
-        )
-        .unwrap();
+        let test_type_path = ItemPath::from_colon_delimited_str("test::TestType");
+        let test_type_vftable_path = ItemPath::from_colon_delimited_str("test::TestTypeVftable");
+
+        let build_state = build_state(&module, &test_type_path).unwrap();
+        let type_registry = build_state.type_registry();
+
+        let test_module = build_state
+            .modules()
+            .get(&ItemPath::from_colon_delimited_str("test"))
+            .unwrap();
+
         assert_eq!(
-            build_state
-                .type_registry()
-                .get(&ItemPath::from_colon_delimited_str("test::TestType"))
+            test_module.definition_paths(),
+            &HashSet::from_iter([test_type_path.clone(), test_type_vftable_path.clone()])
+        );
+
+        assert_eq!(
+            test_module
+                .definitions(type_registry)
+                .find(|td| td.path == test_type_path)
                 .unwrap(),
             &type_definition
         );
         assert_eq!(
-            build_state
-                .type_registry()
-                .get(&ItemPath::from_colon_delimited_str("test::TestTypeVftable"))
+            test_module
+                .definitions(type_registry)
+                .find(|td| td.path == test_type_vftable_path)
                 .unwrap(),
             &vftable_type_definition
         );

@@ -1,12 +1,13 @@
-use std::{env, io::Write, path::PathBuf, process::Command};
+use std::{collections::HashMap, env, io::Write, path::PathBuf, process::Command};
 
 use super::super::{
-    grammar::ItemPath,
+    grammar::{ItemPath, ItemPathSegment},
     semantic_analysis::{
-        self, MetadataValue, Region, SemanticState, TypeRef, TypeState, TypeStateResolved,
+        self, MetadataValue, Region, SemanticState, TypeDefinition, TypeRef, TypeStateResolved,
     },
 };
 
+use anyhow::Context;
 use quote::quote;
 
 fn str_to_ident(s: &str) -> syn::Ident {
@@ -181,126 +182,121 @@ fn build_function(
     })
 }
 
-fn write_type(
-    semantic_state: &SemanticState,
-    item_path: &ItemPath,
-    out: &mut impl Write,
-) -> Result<(), anyhow::Error> {
-    let type_definition = semantic_state.type_registry().get(item_path).unwrap();
-    if let (
-        Some(name),
-        TypeState::Resolved(TypeStateResolved {
-            size,
-            regions,
-            functions,
-            metadata,
-        }),
-    ) = (item_path.last(), &type_definition.state)
-    {
-        let fields = regions
-            .iter()
-            .enumerate()
-            .map(|(i, r)| {
-                Ok(match r {
-                    Region::Field(field, type_ref) => {
-                        let field_ident = str_to_ident(field);
-                        let syn_type = type_ref_to_syn_type(type_ref)?;
-                        quote! {
-                            pub #field_ident: #syn_type
-                        }
-                    }
-                    Region::Padding(size) => {
-                        let field_ident = quote::format_ident!("padding_{}", i);
-                        quote! {
-                            #field_ident: [u8; #size]
-                        }
-                    }
-                })
-            })
-            .collect::<anyhow::Result<Vec<_>>>()?;
-
-        let name_ident = str_to_ident(name.as_str());
-        let size_check_ident = quote::format_ident!("_{}_size_check", name.as_str());
-        let size_check_impl = (*size > 0).then(|| {
-            quote! {
-                #[allow(non_snake_case)]
-                fn #size_check_ident() {
-                    unsafe {
-                        ::std::mem::transmute::<_, #name_ident>([0u8; #size]);
-                    }
-                    unreachable!()
-                }
-            }
-        });
-
-        let singleton_impl = metadata
-            .iter()
-            .find(|(k, _)| k.as_str() == "singleton")
-            .map(|(_, address)| match address {
-                MetadataValue::Integer(ref address) => {
-                    let address = *address as usize;
+fn build_defined_type(
+    regions: &Vec<Region>,
+    name: &ItemPathSegment,
+    size: usize,
+    metadata: &HashMap<String, MetadataValue>,
+    functions: &HashMap<String, Vec<semantic_analysis::Function>>,
+) -> anyhow::Result<proc_macro2::TokenStream> {
+    let fields = regions
+        .iter()
+        .enumerate()
+        .map(|(i, r)| {
+            Ok(match r {
+                Region::Field(field, type_ref) => {
+                    let field_ident = str_to_ident(field);
+                    let syn_type = type_ref_to_syn_type(type_ref)?;
                     quote! {
-                        impl #name_ident {
-                            pub fn get() -> &'static mut Self {
-                                unsafe {
-                                    &mut **::std::mem::transmute::<usize, *mut *mut Self>(#address)
-                                }
+                        pub #field_ident: #syn_type
+                    }
+                }
+                Region::Padding(size) => {
+                    let field_ident = quote::format_ident!("padding_{}", i);
+                    quote! {
+                        #field_ident: [u8; #size]
+                    }
+                }
+            })
+        })
+        .collect::<anyhow::Result<Vec<_>>>()?;
+
+    let name_ident = str_to_ident(name.as_str());
+    let size_check_ident = quote::format_ident!("_{}_size_check", name.as_str());
+    let size_check_impl = (size > 0).then(|| {
+        quote! {
+            #[allow(non_snake_case)]
+            fn #size_check_ident() {
+                unsafe {
+                    ::std::mem::transmute::<_, #name_ident>([0u8; #size]);
+                }
+                unreachable!()
+            }
+        }
+    });
+
+    let singleton_impl = metadata
+        .iter()
+        .find(|(k, _)| k.as_str() == "singleton")
+        .map(|(_, address)| match address {
+            MetadataValue::Integer(ref address) => {
+                let address = *address as usize;
+                quote! {
+                    impl #name_ident {
+                        pub fn get() -> &'static mut Self {
+                            unsafe {
+                                &mut **::std::mem::transmute::<usize, *mut *mut Self>(#address)
                             }
                         }
                     }
                 }
-            });
-
-        let free_functions_impl = functions
-            .get("free")
-            .cloned()
-            .unwrap_or_default()
-            .iter()
-            .map(|f| build_function(f, false))
-            .collect::<anyhow::Result<Vec<_>>>()?;
-
-        let vftable_function_impl = functions
-            .get("vftable")
-            .cloned()
-            .unwrap_or_default()
-            .iter()
-            .map(|f| build_function(f, true))
-            .collect::<anyhow::Result<Vec<_>>>()?;
-
-        let body = quote! {
-            #[repr(C)]
-            pub struct #name_ident {
-                #(#fields),*
             }
-            #size_check_impl
-            #singleton_impl
-            impl #name_ident {
-                #(#free_functions_impl)*
-                #(#vftable_function_impl)*
-            }
-        };
+        });
 
-        writeln!(out, "{}", body)?;
-    };
-    Ok(())
+    let free_functions_impl = functions
+        .get("free")
+        .cloned()
+        .unwrap_or_default()
+        .iter()
+        .map(|f| build_function(f, false))
+        .collect::<anyhow::Result<Vec<_>>>()?;
+
+    let vftable_function_impl = functions
+        .get("vftable")
+        .cloned()
+        .unwrap_or_default()
+        .iter()
+        .map(|f| build_function(f, true))
+        .collect::<anyhow::Result<Vec<_>>>()?;
+
+    Ok(quote! {
+        #[repr(C)]
+        pub struct #name_ident {
+            #(#fields),*
+        }
+        #size_check_impl
+        #singleton_impl
+
+        impl #name_ident {
+            #(#free_functions_impl)*
+            #(#vftable_function_impl)*
+        }
+    })
 }
 
-pub fn write_types<'a>(
-    output: &mut impl Write,
-    types: impl Iterator<Item = &'a ItemPath>,
-    semantic_state: &SemanticState,
-) -> Result<(), anyhow::Error> {
-    for item_path in types {
-        write_type(semantic_state, item_path, output)?;
+fn build_type(
+    name: &ItemPathSegment,
+    definition: &TypeDefinition,
+) -> Result<proc_macro2::TokenStream, anyhow::Error> {
+    let TypeStateResolved {
+        size,
+        regions,
+        functions,
+        metadata,
+    } = definition.resolved().context("type was not resolved")?;
+
+    match definition.category() {
+        semantic_analysis::TypeCategory::Defined => {
+            build_defined_type(regions, name, *size, metadata, functions)
+        }
+        semantic_analysis::TypeCategory::Predefined => Ok(quote! {}),
+        semantic_analysis::TypeCategory::Extern => Ok(quote! {}),
     }
-
-    Ok(())
 }
-
 pub fn write_module<'a>(
-    key: ItemPath,
-    types: impl Iterator<Item = &'a ItemPath>,
+    key: &ItemPath,
     semantic_state: &SemanticState,
+    module: &semantic_analysis::Module,
 ) -> Result<(), anyhow::Error> {
     const FORMAT_OUTPUT: bool = true;
 
@@ -312,7 +308,18 @@ pub fn write_module<'a>(
     std::fs::create_dir_all(&directory_path)?;
 
     let mut file = std::fs::File::create(&path)?;
-    write_types(&mut file, types, semantic_state)?;
+    for item_path in module.definition_paths() {
+        let name = item_path
+            .last()
+            .context("failed to get last of item path")?;
+
+        let type_definition = semantic_state
+            .type_registry()
+            .get(item_path)
+            .context("failed to get type definition for item path")?;
+
+        writeln!(file, "{}", build_type(name, type_definition)?)?;
+    }
 
     if FORMAT_OUTPUT {
         Command::new("rustfmt").args([&path]).output()?;

@@ -1,7 +1,5 @@
 use super::semantic_analysis::SemanticState;
 
-use itertools::Itertools;
-
 pub fn build() -> anyhow::Result<()> {
     let pointer_size = std::env::var("CARGO_CFG_TARGET_POINTER_WIDTH")?.parse::<usize>()? / 8;
     let mut semantic_state = SemanticState::new(pointer_size);
@@ -12,16 +10,8 @@ pub fn build() -> anyhow::Result<()> {
     }
     semantic_state.build()?;
 
-    for (key, group) in semantic_state
-        .type_registry()
-        .resolved()
-        .iter()
-        .sorted()
-        .group_by(|t| t.parent())
-        .into_iter()
-        .filter_map(|(key, group)| key.map(|k| (k, group)))
-    {
-        super::backends::rust::write_module(key, group, &semantic_state)?;
+    for (key, module) in semantic_state.modules() {
+        super::backends::rust::write_module(key, &semantic_state, module)?;
     }
 
     Ok(())
