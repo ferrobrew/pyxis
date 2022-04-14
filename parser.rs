@@ -307,7 +307,7 @@ impl Parse for Module {
         let mut externs = vec![];
 
         // Exhaust all of our declarations
-        while input.peek(syn::Token![use]) || input.peek(syn::Token![extern]) {
+        while !input.is_empty() {
             if input.peek(syn::Token![use]) {
                 input.parse::<syn::Token![use]>()?;
 
@@ -344,11 +344,11 @@ impl Parse for Module {
                     content.parse_terminated(ExprField::parse)?;
 
                 externs.push((item_path, Vec::from_iter(fields.into_iter())));
+            } else if input.peek(syn::Token![type]) {
+                definitions.push(input.parse()?);
+            } else {
+                return Err(input.error("unexpected keyword"));
             }
-        }
-
-        while !input.is_empty() {
-            definitions.push(input.parse()?);
         }
 
         Ok(Module::new(&uses, &externs, &definitions))
