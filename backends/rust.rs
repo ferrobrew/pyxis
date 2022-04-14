@@ -3,8 +3,7 @@ use std::{collections::HashMap, env, io::Write, path::PathBuf, process::Command}
 use super::super::{
     grammar::{ItemPath, ItemPathSegment},
     semantic_analysis::{
-        self, MetadataValue, Region, ResolvedSemanticState, TypeDefinition, TypeRef,
-        TypeStateResolved,
+        self, MetadataValue, Region, ResolvedSemanticState, Type, TypeDefinition, TypeStateResolved,
     },
 };
 
@@ -15,13 +14,10 @@ fn str_to_ident(s: &str) -> syn::Ident {
     quote::format_ident!("{}", s)
 }
 
-fn fully_qualified_type_ref_impl(
-    out: &mut String,
-    type_ref: &TypeRef,
-) -> Result<(), std::fmt::Error> {
+fn fully_qualified_type_ref_impl(out: &mut String, type_ref: &Type) -> Result<(), std::fmt::Error> {
     use std::fmt::Write;
     match type_ref {
-        TypeRef::Raw(path) => {
+        Type::Raw(path) => {
             if path.len() == 1 && path.last() == Some(&"void".into()) {
                 write!(out, "::std::ffi::c_void")
             } else {
@@ -32,20 +28,20 @@ fn fully_qualified_type_ref_impl(
                 write!(out, "{}", path)
             }
         }
-        TypeRef::ConstPointer(tr) => {
+        Type::ConstPointer(tr) => {
             write!(out, "*const ")?;
             fully_qualified_type_ref_impl(out, tr.as_ref())
         }
-        TypeRef::MutPointer(tr) => {
+        Type::MutPointer(tr) => {
             write!(out, "*mut ")?;
             fully_qualified_type_ref_impl(out, tr.as_ref())
         }
-        TypeRef::Array(tr, size) => {
+        Type::Array(tr, size) => {
             write!(out, "[")?;
             fully_qualified_type_ref_impl(out, tr.as_ref())?;
             write!(out, "; {}]", size)
         }
-        TypeRef::Function(args, return_type) => {
+        Type::Function(args, return_type) => {
             // todo: revisit the thiscall here when we have non-thiscall functions
             write!(out, r#"unsafe extern "thiscall" fn ("#)?;
             for (field, type_ref) in args.iter() {
@@ -63,13 +59,13 @@ fn fully_qualified_type_ref_impl(
     }
 }
 
-fn fully_qualified_type_ref(type_ref: &TypeRef) -> Result<String, std::fmt::Error> {
+fn fully_qualified_type_ref(type_ref: &Type) -> Result<String, std::fmt::Error> {
     let mut out = String::new();
     fully_qualified_type_ref_impl(&mut out, type_ref)?;
     Ok(out)
 }
 
-fn type_ref_to_syn_type(type_ref: &TypeRef) -> anyhow::Result<syn::Type> {
+fn type_ref_to_syn_type(type_ref: &Type) -> anyhow::Result<syn::Type> {
     Ok(syn::parse_str(&fully_qualified_type_ref(type_ref)?)?)
 }
 

@@ -17,7 +17,7 @@ pub enum Attribute {
 pub enum Argument {
     ConstSelf,
     MutSelf,
-    Field(String, TypeRef),
+    Field(String, Type),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -25,46 +25,46 @@ pub struct Function {
     pub name: String,
     pub attributes: Vec<Attribute>,
     pub arguments: Vec<Argument>,
-    pub return_type: Option<TypeRef>,
+    pub return_type: Option<Type>,
 }
 
 #[derive(PartialEq, Eq, Debug, Clone)]
-pub enum TypeRef {
+pub enum Type {
     Raw(ItemPath),
-    ConstPointer(Box<TypeRef>),
-    MutPointer(Box<TypeRef>),
-    Array(Box<TypeRef>, usize),
-    Function(Vec<(String, Box<TypeRef>)>, Option<Box<TypeRef>>),
+    ConstPointer(Box<Type>),
+    MutPointer(Box<Type>),
+    Array(Box<Type>, usize),
+    Function(Vec<(String, Box<Type>)>, Option<Box<Type>>),
 }
-impl TypeRef {
+impl Type {
     fn size(&self, type_registry: &TypeRegistry) -> Option<usize> {
         match self {
-            TypeRef::Raw(path) => type_registry.get(path).and_then(|t| t.size()),
-            TypeRef::ConstPointer(_) => Some(type_registry.pointer_size()),
-            TypeRef::MutPointer(_) => Some(type_registry.pointer_size()),
-            TypeRef::Array(tr, count) => tr.size(type_registry).map(|s| s * count),
-            TypeRef::Function(_, _) => Some(type_registry.pointer_size()),
+            Type::Raw(path) => type_registry.get(path).and_then(|t| t.size()),
+            Type::ConstPointer(_) => Some(type_registry.pointer_size()),
+            Type::MutPointer(_) => Some(type_registry.pointer_size()),
+            Type::Array(tr, count) => tr.size(type_registry).map(|s| s * count),
+            Type::Function(_, _) => Some(type_registry.pointer_size()),
         }
     }
 }
-impl fmt::Display for TypeRef {
+impl fmt::Display for Type {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            TypeRef::Raw(path) => write!(f, "{}", path),
-            TypeRef::ConstPointer(tr) => {
+            Type::Raw(path) => write!(f, "{}", path),
+            Type::ConstPointer(tr) => {
                 write!(f, "*const ")?;
                 tr.fmt(f)
             }
-            TypeRef::MutPointer(tr) => {
+            Type::MutPointer(tr) => {
                 write!(f, "*mut ")?;
                 tr.fmt(f)
             }
-            TypeRef::Array(tr, size) => {
+            Type::Array(tr, size) => {
                 write!(f, "[")?;
                 tr.fmt(f)?;
                 write!(f, "; {}]", size)
             }
-            TypeRef::Function(args, return_type) => {
+            Type::Function(args, return_type) => {
                 write!(f, "fn (")?;
                 for (index, (field, type_ref)) in args.iter().enumerate() {
                     write!(f, "{field}: ")?;
@@ -86,7 +86,7 @@ impl fmt::Display for TypeRef {
 
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub enum Region {
-    Field(String, TypeRef),
+    Field(String, Type),
     Padding(usize),
 }
 impl Region {
@@ -226,7 +226,7 @@ impl TypeRegistry {
         self.types.insert(type_.path.clone(), type_);
     }
 
-    fn resolve_string(&self, scope: &[&ItemPath], name: &str) -> Option<TypeRef> {
+    fn resolve_string(&self, scope: &[&ItemPath], name: &str) -> Option<Type> {
         // todo: take scope_modules and scope_types instead of scope so that we don't need
         // to do this partitioning
         let (scope_types, scope_modules): (Vec<&ItemPath>, Vec<&ItemPath>) =
@@ -237,26 +237,26 @@ impl TypeRegistry {
             .into_iter()
             .rev()
             .find(|st| st.last().map(|i| i.as_str()) == Some(name))
-            .map(|ip| TypeRef::Raw(ip.clone()))
+            .map(|ip| Type::Raw(ip.clone()))
             .or_else(|| {
                 // Otherwise, search our scopes
                 std::iter::once(&ItemPath::empty())
                     .chain(scope_modules.iter().copied())
                     .map(|ip| ip.join(name.into()))
                     .find(|ip| self.types.contains_key(ip))
-                    .map(TypeRef::Raw)
+                    .map(Type::Raw)
             })
     }
 
-    fn resolve_grammar_type(&self, scope: &[&ItemPath], type_: &grammar::Type) -> Option<TypeRef> {
+    fn resolve_grammar_type(&self, scope: &[&ItemPath], type_: &grammar::Type) -> Option<Type> {
         // todo: consider building a better module import/scope system
         match type_ {
             grammar::Type::ConstPointer(t) => self
                 .resolve_grammar_type(scope, t.as_ref())
-                .map(|t| TypeRef::ConstPointer(Box::new(t))),
+                .map(|t| Type::ConstPointer(Box::new(t))),
             grammar::Type::MutPointer(t) => self
                 .resolve_grammar_type(scope, t.as_ref())
-                .map(|t| TypeRef::MutPointer(Box::new(t))),
+                .map(|t| Type::MutPointer(Box::new(t))),
             grammar::Type::Ident(ident) => self.resolve_string(scope, ident.as_str()),
         }
     }
@@ -265,13 +265,13 @@ impl TypeRegistry {
         &self,
         scope: &[&ItemPath],
         type_ref: &grammar::TypeRef,
-    ) -> Option<TypeRef> {
+    ) -> Option<Type> {
         match type_ref {
             grammar::TypeRef::Type(type_) => self.resolve_grammar_type(scope, type_),
             grammar::TypeRef::Macro(macro_call) => match macro_call.match_repr() {
                 ("unk", [grammar::Expr::IntLiteral(size)]) => self
                     .resolve_string(&[], "u8")
-                    .map(|t| TypeRef::Array(Box::new(t), *size as usize)),
+                    .map(|t| Type::Array(Box::new(t), *size as usize)),
                 _ => panic!("unsupported macro call"),
             },
         }
@@ -374,6 +374,9 @@ impl SemanticState {
         self.modules
             .insert(path.clone(), Module::new(module.clone()));
 
+        // Consider changing this so that instead of creating unresolved types, we're creating
+        // unresolved type references for each field. This will make it simpler to handle extern values,
+        // too.
         for definition in &module.definitions {
             let path = path.join(definition.name.as_str().into());
             self.add_type(TypeDefinition {
@@ -606,19 +609,17 @@ impl SemanticState {
         if let (Some(vftable), Some(name)) = (vftable, resolvee_path.last()) {
             let resolvee_vtable_path = parent_path.join(format!("{}Vftable", name.as_str()).into());
             let function_to_field = |function: &Function| -> Region {
-                let argument_to_type = |argument: &Argument| -> (String, Box<TypeRef>) {
+                let argument_to_type = |argument: &Argument| -> (String, Box<Type>) {
                     match argument {
                         Argument::ConstSelf => (
                             "this".to_string(),
-                            Box::new(TypeRef::ConstPointer(Box::new(TypeRef::Raw(
+                            Box::new(Type::ConstPointer(Box::new(Type::Raw(
                                 resolvee_path.clone(),
                             )))),
                         ),
                         Argument::MutSelf => (
                             "this".to_string(),
-                            Box::new(TypeRef::MutPointer(Box::new(TypeRef::Raw(
-                                resolvee_path.clone(),
-                            )))),
+                            Box::new(Type::MutPointer(Box::new(Type::Raw(resolvee_path.clone())))),
                         ),
                         Argument::Field(name, type_ref) => {
                             (name.clone(), Box::new(type_ref.clone()))
@@ -630,7 +631,7 @@ impl SemanticState {
 
                 Region::Field(
                     function.name.clone(),
-                    TypeRef::Function(arguments, return_type),
+                    Type::Function(arguments, return_type),
                 )
             };
             self.add_type(TypeDefinition {
@@ -646,7 +647,7 @@ impl SemanticState {
 
             resolved_regions.push(Region::Field(
                 "vftable".to_string(),
-                TypeRef::ConstPointer(Box::new(TypeRef::Raw(resolvee_vtable_path))),
+                Type::ConstPointer(Box::new(Type::Raw(resolvee_vtable_path))),
             ));
             last_address += self.type_registry.pointer_size();
         }
@@ -762,12 +763,12 @@ mod tests {
                 regions: vec![
                     Region::Field(
                         "field_1".into(),
-                        TypeRef::Raw(ItemPath::from_colon_delimited_str("i32")),
+                        Type::Raw(ItemPath::from_colon_delimited_str("i32")),
                     ),
                     Region::Padding(4),
                     Region::Field(
                         "field_2".into(),
-                        TypeRef::Raw(ItemPath::from_colon_delimited_str("u64")),
+                        Type::Raw(ItemPath::from_colon_delimited_str("u64")),
                     ),
                 ],
                 functions: HashMap::new(),
@@ -843,23 +844,23 @@ mod tests {
                 regions: vec![
                     Region::Field(
                         "field_1".into(),
-                        TypeRef::Raw(ItemPath::from_colon_delimited_str("i32")),
+                        Type::Raw(ItemPath::from_colon_delimited_str("i32")),
                     ),
                     Region::Field(
                         "field_2".into(),
-                        TypeRef::Raw(ItemPath::from_colon_delimited_str("test::TestType1")),
+                        Type::Raw(ItemPath::from_colon_delimited_str("test::TestType1")),
                     ),
                     Region::Field(
                         "field_3".into(),
-                        TypeRef::ConstPointer(Box::new(TypeRef::Raw(
+                        Type::ConstPointer(Box::new(Type::Raw(
                             ItemPath::from_colon_delimited_str("test::TestType1"),
                         ))),
                     ),
                     Region::Field(
                         "field_4".into(),
-                        TypeRef::MutPointer(Box::new(TypeRef::Raw(
-                            ItemPath::from_colon_delimited_str("test::TestType1"),
-                        ))),
+                        Type::MutPointer(Box::new(Type::Raw(ItemPath::from_colon_delimited_str(
+                            "test::TestType1",
+                        )))),
                     ),
                 ],
                 functions: HashMap::new(),
@@ -943,21 +944,21 @@ mod tests {
                     Region::Padding(0x78),
                     Region::Field(
                         "max_num_1".into(),
-                        TypeRef::Raw(ItemPath::from_colon_delimited_str("u16")),
+                        Type::Raw(ItemPath::from_colon_delimited_str("u16")),
                     ),
                     Region::Field(
                         "max_num_2".into(),
-                        TypeRef::Raw(ItemPath::from_colon_delimited_str("u16")),
+                        Type::Raw(ItemPath::from_colon_delimited_str("u16")),
                     ),
                     Region::Padding(0x984),
                     Region::Field(
                         "test_type".into(),
-                        TypeRef::Raw(ItemPath::from_colon_delimited_str("test::TestType")),
+                        Type::Raw(ItemPath::from_colon_delimited_str("test::TestType")),
                     ),
                     Region::Field(
                         "settings".into(),
-                        TypeRef::Array(
-                            Box::new(TypeRef::Raw(ItemPath::from_colon_delimited_str("u8"))),
+                        Type::Array(
+                            Box::new(Type::Raw(ItemPath::from_colon_delimited_str("u8"))),
                             804,
                         ),
                     ),
@@ -972,22 +973,22 @@ mod tests {
                             Argument::MutSelf,
                             Argument::Field(
                                 "arg1".to_string(),
-                                TypeRef::MutPointer(Box::new(TypeRef::Raw(
+                                Type::MutPointer(Box::new(Type::Raw(
                                     ItemPath::from_colon_delimited_str("test::TestType"),
                                 ))),
                             ),
                             Argument::Field(
                                 "arg2".to_string(),
-                                TypeRef::Raw(ItemPath::from_colon_delimited_str("i32")),
+                                Type::Raw(ItemPath::from_colon_delimited_str("i32")),
                             ),
                             Argument::Field(
                                 "arg3".to_string(),
-                                TypeRef::ConstPointer(Box::new(TypeRef::Raw(
+                                Type::ConstPointer(Box::new(Type::Raw(
                                     ItemPath::from_colon_delimited_str("u32"),
                                 ))),
                             ),
                         ],
-                        return_type: Some(TypeRef::MutPointer(Box::new(TypeRef::Raw(
+                        return_type: Some(Type::MutPointer(Box::new(Type::Raw(
                             ItemPath::from_colon_delimited_str("test::TestType"),
                         )))),
                     }],
@@ -1074,7 +1075,7 @@ mod tests {
                 functions: HashMap::new(),
                 regions: vec![Region::Field(
                     "field".into(),
-                    TypeRef::Raw(ItemPath::from_colon_delimited_str("module2::TestType2")),
+                    Type::Raw(ItemPath::from_colon_delimited_str("module2::TestType2")),
                 )],
                 metadata: HashMap::new(),
             }),
@@ -1154,23 +1155,23 @@ mod tests {
                 regions: vec![
                     Region::Field(
                         "field_1".into(),
-                        TypeRef::Raw(ItemPath::from_colon_delimited_str("i32")),
+                        Type::Raw(ItemPath::from_colon_delimited_str("i32")),
                     ),
                     Region::Field(
                         "field_2".into(),
-                        TypeRef::Raw(ItemPath::from_colon_delimited_str("test::TestType1")),
+                        Type::Raw(ItemPath::from_colon_delimited_str("test::TestType1")),
                     ),
                     Region::Field(
                         "field_3".into(),
-                        TypeRef::ConstPointer(Box::new(TypeRef::Raw(
+                        Type::ConstPointer(Box::new(Type::Raw(
                             ItemPath::from_colon_delimited_str("test::TestType1"),
                         ))),
                     ),
                     Region::Field(
                         "field_4".into(),
-                        TypeRef::MutPointer(Box::new(TypeRef::Raw(
-                            ItemPath::from_colon_delimited_str("test::TestType1"),
-                        ))),
+                        Type::MutPointer(Box::new(Type::Raw(ItemPath::from_colon_delimited_str(
+                            "test::TestType1",
+                        )))),
                     ),
                 ],
                 functions: HashMap::new(),
@@ -1243,9 +1244,9 @@ mod tests {
                 size: 4,
                 regions: vec![Region::Field(
                     "vftable".to_string(),
-                    TypeRef::ConstPointer(Box::new(TypeRef::Raw(
-                        ItemPath::from_colon_delimited_str("test::TestTypeVftable"),
-                    ))),
+                    Type::ConstPointer(Box::new(Type::Raw(ItemPath::from_colon_delimited_str(
+                        "test::TestTypeVftable",
+                    )))),
                 )],
                 functions: HashMap::from([(
                     "vftable".into(),
@@ -1257,16 +1258,14 @@ mod tests {
                                 Argument::MutSelf,
                                 Argument::Field(
                                     "arg0".to_string(),
-                                    TypeRef::Raw(ItemPath::from_colon_delimited_str("u32")),
+                                    Type::Raw(ItemPath::from_colon_delimited_str("u32")),
                                 ),
                                 Argument::Field(
                                     "arg1".to_string(),
-                                    TypeRef::Raw(ItemPath::from_colon_delimited_str("f32")),
+                                    Type::Raw(ItemPath::from_colon_delimited_str("f32")),
                                 ),
                             ],
-                            return_type: Some(TypeRef::Raw(ItemPath::from_colon_delimited_str(
-                                "i32",
-                            ))),
+                            return_type: Some(Type::Raw(ItemPath::from_colon_delimited_str("i32"))),
                         },
                         Function {
                             name: "test_function1".to_string(),
@@ -1275,11 +1274,11 @@ mod tests {
                                 Argument::MutSelf,
                                 Argument::Field(
                                     "arg0".to_string(),
-                                    TypeRef::Raw(ItemPath::from_colon_delimited_str("u32")),
+                                    Type::Raw(ItemPath::from_colon_delimited_str("u32")),
                                 ),
                                 Argument::Field(
                                     "arg1".to_string(),
-                                    TypeRef::Raw(ItemPath::from_colon_delimited_str("f32")),
+                                    Type::Raw(ItemPath::from_colon_delimited_str("f32")),
                                 ),
                             ],
                             return_type: None,
@@ -1297,53 +1296,45 @@ mod tests {
                 regions: vec![
                     Region::Field(
                         "test_function0".to_string(),
-                        TypeRef::Function(
+                        Type::Function(
                             vec![
                                 (
                                     "this".to_string(),
-                                    Box::new(TypeRef::MutPointer(Box::new(TypeRef::Raw(
+                                    Box::new(Type::MutPointer(Box::new(Type::Raw(
                                         ItemPath::from_colon_delimited_str("test::TestType"),
                                     )))),
                                 ),
                                 (
                                     "arg0".to_string(),
-                                    Box::new(TypeRef::Raw(ItemPath::from_colon_delimited_str(
-                                        "u32",
-                                    ))),
+                                    Box::new(Type::Raw(ItemPath::from_colon_delimited_str("u32"))),
                                 ),
                                 (
                                     "arg1".to_string(),
-                                    Box::new(TypeRef::Raw(ItemPath::from_colon_delimited_str(
-                                        "f32",
-                                    ))),
+                                    Box::new(Type::Raw(ItemPath::from_colon_delimited_str("f32"))),
                                 ),
                             ],
-                            Some(Box::new(TypeRef::Raw(ItemPath::from_colon_delimited_str(
+                            Some(Box::new(Type::Raw(ItemPath::from_colon_delimited_str(
                                 "i32",
                             )))),
                         ),
                     ),
                     Region::Field(
                         "test_function1".to_string(),
-                        TypeRef::Function(
+                        Type::Function(
                             vec![
                                 (
                                     "this".to_string(),
-                                    Box::new(TypeRef::MutPointer(Box::new(TypeRef::Raw(
+                                    Box::new(Type::MutPointer(Box::new(Type::Raw(
                                         ItemPath::from_colon_delimited_str("test::TestType"),
                                     )))),
                                 ),
                                 (
                                     "arg0".to_string(),
-                                    Box::new(TypeRef::Raw(ItemPath::from_colon_delimited_str(
-                                        "u32",
-                                    ))),
+                                    Box::new(Type::Raw(ItemPath::from_colon_delimited_str("u32"))),
                                 ),
                                 (
                                     "arg1".to_string(),
-                                    Box::new(TypeRef::Raw(ItemPath::from_colon_delimited_str(
-                                        "f32",
-                                    ))),
+                                    Box::new(Type::Raw(ItemPath::from_colon_delimited_str("f32"))),
                                 ),
                             ],
                             None,
