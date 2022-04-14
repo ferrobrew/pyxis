@@ -3,7 +3,8 @@ use std::{collections::HashMap, env, io::Write, path::PathBuf, process::Command}
 use super::super::{
     grammar::{ItemPath, ItemPathSegment},
     semantic_analysis::{
-        self, MetadataValue, Region, SemanticState, TypeDefinition, TypeRef, TypeStateResolved,
+        self, MetadataValue, Region, ResolvedSemanticState, TypeDefinition, TypeRef,
+        TypeStateResolved,
     },
 };
 
@@ -297,7 +298,7 @@ fn build_type(
 }
 pub fn write_module<'a>(
     key: &ItemPath,
-    semantic_state: &SemanticState,
+    semantic_state: &ResolvedSemanticState,
     module: &semantic_analysis::Module,
 ) -> Result<(), anyhow::Error> {
     const FORMAT_OUTPUT: bool = true;

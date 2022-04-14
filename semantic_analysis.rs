@@ -317,7 +317,6 @@ pub struct SemanticState {
     modules: HashMap<ItemPath, Module>,
     type_registry: TypeRegistry,
 }
-
 impl SemanticState {
     pub fn new(pointer_size: usize) -> Self {
         let mut semantic_state = Self {
@@ -419,12 +418,11 @@ impl SemanticState {
         Ok(self.type_registry.add(type_definition))
     }
 
-    // todo: consider consuming self and returning a new type
-    pub fn build(&mut self) -> anyhow::Result<()> {
+    pub fn build(mut self) -> anyhow::Result<ResolvedSemanticState> {
         loop {
             let to_resolve = self.type_registry.unresolved();
             if to_resolve.is_empty() {
-                break Ok(());
+                break;
             }
 
             for resolvee_path in &to_resolve {
@@ -449,6 +447,11 @@ impl SemanticState {
                 ));
             }
         }
+
+        Ok(ResolvedSemanticState {
+            modules: self.modules,
+            type_registry: self.type_registry,
+        })
     }
 
     fn build_function(
@@ -691,7 +694,13 @@ impl SemanticState {
         }
         Ok(())
     }
+}
 
+pub struct ResolvedSemanticState {
+    modules: HashMap<ItemPath, Module>,
+    type_registry: TypeRegistry,
+}
+impl ResolvedSemanticState {
     pub fn type_registry(&self) -> &TypeRegistry {
         &self.type_registry
     }
@@ -705,11 +714,13 @@ impl SemanticState {
 mod tests {
     use super::*;
 
-    fn build_state(module: &grammar::Module, path: &ItemPath) -> anyhow::Result<SemanticState> {
+    fn build_state(
+        module: &grammar::Module,
+        path: &ItemPath,
+    ) -> anyhow::Result<ResolvedSemanticState> {
         let mut semantic_state = SemanticState::new(4);
         semantic_state.add_module(module, &path.parent().context("failed to get path parent")?)?;
-        semantic_state.build()?;
-        Ok(semantic_state)
+        semantic_state.build()
     }
 
     fn build_type(module: &grammar::Module, path: &ItemPath) -> anyhow::Result<TypeDefinition> {
@@ -1054,7 +1065,7 @@ mod tests {
         semantic_state
             .add_module(&module2, &ItemPath::from_colon_delimited_str("module2"))
             .unwrap();
-        semantic_state.build().unwrap();
+        let semantic_state = semantic_state.build().unwrap();
 
         let resolved_type = semantic_state
             .type_registry()

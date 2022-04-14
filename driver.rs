@@ -8,10 +8,10 @@ pub fn build() -> anyhow::Result<()> {
     for path in glob::glob("types/**/*.rstl")?.filter_map(Result::ok) {
         semantic_state.add_file(&path)?;
     }
-    semantic_state.build()?;
 
-    for (key, module) in semantic_state.modules() {
-        super::backends::rust::write_module(key, &semantic_state, module)?;
+    let resolved_semantic_state = semantic_state.build()?;
+    for (key, module) in resolved_semantic_state.modules() {
+        super::backends::rust::write_module(key, &resolved_semantic_state, module)?;
     }
 
     Ok(())
