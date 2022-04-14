@@ -353,7 +353,7 @@ impl Parse for Module {
                 } else {
                     let name: Ident = input.parse()?;
                     input.parse::<syn::Token![:]>()?;
-                    let type_: ItemPath = input.parse()?;
+                    let type_: Type = input.parse()?;
                     input.parse::<syn::Token![@]>()?;
                     let address: Expr = input.parse()?;
                     input.parse::<syn::Token![;]>()?;
@@ -716,7 +716,7 @@ mod tests {
     fn can_parse_extern_value() {
         let text = r#"
         extern type SomeType { size: 4 }
-        extern some_value: SomeType @ 0x1337;
+        extern some_value: *mut SomeType @ 0x1337;
         "#;
 
         let ast = {
@@ -728,7 +728,7 @@ mod tests {
                 )],
                 &[(
                     "some_value".into(),
-                    ItemPath::from_colon_delimited_str("SomeType"),
+                    Type::ident("SomeType").mut_pointer(),
                     0x1337,
                 )],
                 &[],

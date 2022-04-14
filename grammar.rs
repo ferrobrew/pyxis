@@ -343,14 +343,14 @@ impl TypeDefinition {
 pub struct Module {
     pub uses: Vec<ItemPath>,
     pub extern_types: Vec<(Ident, Vec<ExprField>)>,
-    pub extern_values: Vec<(Ident, ItemPath, usize)>,
+    pub extern_values: Vec<(Ident, Type, usize)>,
     pub definitions: Vec<TypeDefinition>,
 }
 impl Module {
     pub fn new(
         uses: &[ItemPath],
         extern_types: &[(Ident, Vec<ExprField>)],
-        extern_values: &[(Ident, ItemPath, usize)],
+        extern_values: &[(Ident, Type, usize)],
         definitions: &[TypeDefinition],
     ) -> Self {
         Self {
