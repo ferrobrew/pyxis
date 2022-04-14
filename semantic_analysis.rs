@@ -385,38 +385,21 @@ impl SemanticState {
         }
 
         for (extern_path, fields) in &module.extern_types {
-            let singleton = fields
+            let size = fields
                 .iter()
-                .find(|ef| ef.ident_as_str() == "singleton")
-                .and_then(|ef| ef.1.int_literal());
-
-            let size = if singleton.is_some() {
-                0
-            } else {
-                fields
-                    .iter()
-                    .find(|ef| ef.ident_as_str() == "size")
-                    .context("failed to find size field in extern type for module")?
-                    .1
-                    .int_literal()
-                    .context("size field of extern type is not an int literal")?
-                    .try_into()
-                    .context("the size could not be converted into an unsigned integer")?
-            };
+                .find(|ef| ef.ident_as_str() == "size")
+                .context("failed to find size field in extern type for module")?
+                .1
+                .int_literal()
+                .context("size field of extern type is not an int literal")?
+                .try_into()
+                .context("the size could not be converted into an unsigned integer")?;
 
             let extern_path = path.join(extern_path.as_str().into());
 
-            let mut type_state_resolved = TypeStateResolved::new(size);
-            if let Some(address) = singleton {
-                type_state_resolved
-                    .metadata
-                    .insert("singleton".to_string(), MetadataValue::Integer(address));
-            }
-
-            let path = extern_path.clone();
             self.add_type(TypeDefinition {
-                path,
-                state: TypeState::Resolved(type_state_resolved),
+                path: extern_path.clone(),
+                state: TypeState::Resolved(TypeStateResolved::new(size)),
                 category: TypeCategory::Extern,
             })?;
         }
@@ -1163,35 +1146,6 @@ mod tests {
         };
 
         assert_eq!(build_type(&module, &path).unwrap(), type_definition);
-    }
-
-    #[test]
-    fn can_handle_an_extern_with_a_singleton() {
-        let module = {
-            use super::grammar::*;
-
-            Module::new(
-                &[],
-                &[(
-                    "TestType1".into(),
-                    vec![ExprField("singleton".into(), Expr::IntLiteral(0x1337))],
-                )],
-                &[],
-                &[],
-            )
-        };
-
-        let path = ItemPath::from_colon_delimited_str("module::TestType1");
-        assert_eq!(
-            build_type(&module, &path)
-                .unwrap()
-                .resolved()
-                .unwrap()
-                .metadata
-                .get(&"singleton".to_string())
-                .unwrap(),
-            &MetadataValue::Integer(0x1337)
-        );
     }
 
     #[test]
