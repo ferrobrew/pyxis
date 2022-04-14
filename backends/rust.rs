@@ -174,7 +174,6 @@ fn build_function(
     });
 
     Ok(quote! {
-        #[allow(dead_code)]
         pub unsafe fn #name(#(#arguments),*) #return_type {
             let f: unsafe extern "thiscall" fn(#(#lambda_arguments),*) #return_type = #function_getter_impl;
             f(#(#call_arguments),*)
@@ -216,6 +215,7 @@ fn build_defined_type(
     let size_check_impl = (size > 0).then(|| {
         quote! {
             #[allow(non_snake_case)]
+            #[allow(dead_code)]
             fn #size_check_ident() {
                 unsafe {
                     ::std::mem::transmute::<_, #name_ident>([0u8; #size]);
@@ -232,6 +232,7 @@ fn build_defined_type(
             MetadataValue::Integer(ref address) => {
                 let address = *address as usize;
                 quote! {
+                    #[allow(dead_code)]
                     impl #name_ident {
                         pub fn get() -> &'static mut Self {
                             unsafe {
@@ -267,6 +268,7 @@ fn build_defined_type(
         #size_check_impl
         #singleton_impl
 
+        #[allow(dead_code)]
         impl #name_ident {
             #(#free_functions_impl)*
             #(#vftable_function_impl)*
