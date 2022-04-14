@@ -384,7 +384,7 @@ impl SemanticState {
             })?;
         }
 
-        for (extern_path, fields) in &module.externs {
+        for (extern_path, fields) in &module.extern_types {
             let singleton = fields
                 .iter()
                 .find(|ef| ef.ident_as_str() == "singleton")
@@ -404,12 +404,7 @@ impl SemanticState {
                     .context("the size could not be converted into an unsigned integer")?
             };
 
-            let extern_path = path.join(
-                extern_path
-                    .last()
-                    .context("failed to get extern path segment")?
-                    .clone(),
-            );
+            let extern_path = path.join(extern_path.as_str().into());
 
             let mut type_state_resolved = TypeStateResolved::new(size);
             if let Some(address) = singleton {
@@ -753,6 +748,7 @@ mod tests {
             Module::new(
                 &[],
                 &[],
+                &[],
                 &[TypeDefinition::new(
                     "TestType",
                     &[
@@ -798,6 +794,7 @@ mod tests {
             type TR = TypeRef;
 
             Module::new(
+                &[],
                 &[],
                 &[],
                 &[
@@ -868,6 +865,7 @@ mod tests {
             type A = Argument;
 
             Module::new(
+                &[],
                 &[],
                 &[],
                 &[
@@ -1001,6 +999,7 @@ mod tests {
             Module::new(
                 &[],
                 &[],
+                &[],
                 &[TypeDefinition::new(
                     "TestType2",
                     &[TS::field("field_2", TR::ident_type("TestType1"))],
@@ -1026,6 +1025,7 @@ mod tests {
             Module::new(
                 &[ItemPath::from_colon_delimited_str("module2::TestType2")],
                 &[],
+                &[],
                 &[TypeDefinition::new(
                     "TestType1",
                     &[TS::field("field", TR::ident_type("TestType2"))],
@@ -1039,6 +1039,7 @@ mod tests {
             type TR = TypeRef;
 
             Module::new(
+                &[],
                 &[],
                 &[],
                 &[TypeDefinition::new(
@@ -1086,11 +1087,7 @@ mod tests {
         let module = {
             use super::grammar::*;
 
-            Module::new(
-                &[],
-                &[(ItemPath::from_colon_delimited_str("TestType"), vec![])],
-                &[],
-            )
+            Module::new(&[], &[("TestType".into(), vec![])], &[], &[])
         };
 
         assert_eq!(
@@ -1113,9 +1110,10 @@ mod tests {
             Module::new(
                 &[],
                 &[(
-                    ItemPath::from_colon_delimited_str("TestType1"),
+                    "TestType1".into(),
                     vec![ExprField("size".into(), Expr::IntLiteral(16))],
                 )],
+                &[],
                 &[TypeDefinition::new(
                     "TestType2",
                     &[
@@ -1175,9 +1173,10 @@ mod tests {
             Module::new(
                 &[],
                 &[(
-                    ItemPath::from_colon_delimited_str("TestType1"),
+                    "TestType1".into(),
                     vec![ExprField("singleton".into(), Expr::IntLiteral(0x1337))],
                 )],
+                &[],
                 &[],
             )
         };
@@ -1204,6 +1203,7 @@ mod tests {
             type TR = TypeRef;
 
             Module::new(
+                &[],
                 &[],
                 &[],
                 &[TypeDefinition::new(

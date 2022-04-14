@@ -37,6 +37,29 @@ fn parse_type_ident(input: ParseStream) -> Result<String> {
     }
 }
 
+impl Parse for ItemPath {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let mut item_path = ItemPath::empty();
+        loop {
+            // todo: make parsing stricter so that this takes idents
+            // separated by double-colons that end in a type, not just
+            // all types
+            // that is to say, `use lol<lol>::lol` should not parse, but
+            // `use lol::lol<lol>` should
+            if input.peek(syn::Ident) {
+                item_path.push(parse_type_ident(input)?.into());
+            } else if input.peek(syn::Token![::]) {
+                input.parse::<syn::Token![::]>()?;
+            } else if input.peek(syn::Token![super]) {
+                return Err(input.error("super not supported"));
+            } else {
+                break;
+            }
+        }
+        return Ok(item_path);
+    }
+}
+
 impl Parse for Type {
     fn parse(input: ParseStream) -> Result<Self> {
         let lookahead = input.lookahead1();
@@ -303,47 +326,46 @@ impl Parse for TypeDefinition {
 impl Parse for Module {
     fn parse(input: ParseStream) -> Result<Self> {
         let mut uses = vec![];
+        let mut extern_types = vec![];
+        let mut extern_values = vec![];
         let mut definitions = vec![];
-        let mut externs = vec![];
 
         // Exhaust all of our declarations
         while !input.is_empty() {
             if input.peek(syn::Token![use]) {
                 input.parse::<syn::Token![use]>()?;
-
-                // todo: make parsing stricter so that this takes idents
-                // separated by double-colons that end in a type, not just
-                // all types
-                // that is to say, `use lol<lol>::lol` should not parse, but
-                // `use lol::lol<lol>` should
-                // todo: consider implementing ItemPath::parse somehow
-                let mut item_path = ItemPath::empty();
-                while !input.peek(syn::Token![;]) {
-                    let lookahead = input.lookahead1();
-                    if lookahead.peek(syn::Ident) {
-                        item_path.push(parse_type_ident(input)?.into());
-                    } else if lookahead.peek(syn::Token![::]) {
-                        input.parse::<syn::Token![::]>()?;
-                    } else if lookahead.peek(syn::Token![super]) {
-                        return Err(input.error("super not supported"));
-                    } else {
-                        return Err(lookahead.error());
-                    }
-                }
+                let item_path = input.parse()?;
                 input.parse::<syn::Token![;]>()?;
                 uses.push(item_path);
             } else if input.peek(syn::Token![extern]) {
                 input.parse::<syn::Token![extern]>()?;
-                input.parse::<syn::Token![type]>()?;
-                let item_path = ItemPath::empty().join(parse_type_ident(input)?.into());
+                if input.peek(syn::Token![type]) {
+                    input.parse::<syn::Token![type]>()?;
+                    let ident: Ident = parse_type_ident(input)?.as_str().into();
 
-                let content;
-                braced!(content in input);
+                    let content;
+                    braced!(content in input);
 
-                let fields: Punctuated<_, Token![,]> =
-                    content.parse_terminated(ExprField::parse)?;
+                    let fields: Punctuated<_, Token![,]> =
+                        content.parse_terminated(ExprField::parse)?;
 
-                externs.push((item_path, Vec::from_iter(fields.into_iter())));
+                    extern_types.push((ident, Vec::from_iter(fields.into_iter())));
+                } else {
+                    let name: Ident = input.parse()?;
+                    input.parse::<syn::Token![:]>()?;
+                    let type_: ItemPath = input.parse()?;
+                    input.parse::<syn::Token![@]>()?;
+                    let address: Expr = input.parse()?;
+                    input.parse::<syn::Token![;]>()?;
+
+                    extern_values.push((
+                        name,
+                        type_,
+                        address.int_literal().map(|i| i as usize).ok_or_else(|| {
+                            input.error("expected integer for extern value address")
+                        })?,
+                    ));
+                }
             } else if input.peek(syn::Token![type]) {
                 definitions.push(input.parse()?);
             } else {
@@ -351,7 +373,12 @@ impl Parse for Module {
             }
         }
 
-        Ok(Module::new(&uses, &externs, &definitions))
+        Ok(Module::new(
+            &uses,
+            &extern_types,
+            &extern_values,
+            &definitions,
+        ))
     }
 }
 
@@ -377,6 +404,7 @@ mod tests {
             type TR = TypeRef;
 
             Module::new(
+                &[],
                 &[],
                 &[],
                 &[TypeDefinition::new(
@@ -419,6 +447,7 @@ mod tests {
             type TR = TypeRef;
 
             Module::new(
+                &[],
                 &[],
                 &[],
                 &[TypeDefinition::new(
@@ -499,6 +528,7 @@ mod tests {
             type A = Argument;
 
             Module::new(
+                &[],
                 &[],
                 &[],
                 &[TypeDefinition::new(
@@ -588,6 +618,7 @@ mod tests {
             Module::new(
                 &[],
                 &[],
+                &[],
                 &[TypeDefinition::new(
                     "Test",
                     &[TypeStatement::address(
@@ -613,6 +644,7 @@ mod tests {
         let ast = {
             Module::new(
                 &[ItemPath::from_colon_delimited_str("hello::TestType<Hey>")],
+                &[],
                 &[],
                 &[TypeDefinition::new(
                     "Test",
@@ -652,9 +684,10 @@ mod tests {
             Module::new(
                 &[],
                 &[(
-                    ItemPath::from_colon_delimited_str("TestType<Hey>"),
+                    "TestType<Hey>".into(),
                     vec![ExprField("size".into(), Expr::IntLiteral(12))],
                 )],
+                &[],
                 &[TypeDefinition::new(
                     "Test",
                     &[TypeStatement::field(
@@ -674,7 +707,33 @@ mod tests {
         type Test;
         "#;
 
-        let ast = { Module::new(&[], &[], &[TypeDefinition::new("Test", &[])]) };
+        let ast = { Module::new(&[], &[], &[], &[TypeDefinition::new("Test", &[])]) };
+
+        assert_eq!(parse_str(text).ok(), Some(ast));
+    }
+
+    #[test]
+    fn can_parse_extern_value() {
+        let text = r#"
+        extern type SomeType { size: 4 }
+        extern some_value: SomeType @ 0x1337;
+        "#;
+
+        let ast = {
+            Module::new(
+                &[],
+                &[(
+                    "SomeType".into(),
+                    vec![ExprField("size".into(), Expr::IntLiteral(4))],
+                )],
+                &[(
+                    "some_value".into(),
+                    ItemPath::from_colon_delimited_str("SomeType"),
+                    0x1337,
+                )],
+                &[],
+            )
+        };
 
         assert_eq!(parse_str(text).ok(), Some(ast));
     }
