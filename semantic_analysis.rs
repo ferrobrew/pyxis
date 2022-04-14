@@ -574,12 +574,12 @@ impl SemanticState {
                         return Ok(());
                     }
                 }
-                grammar::TypeStatement::Macro(macro_call) => {
-                    if let ("padding", [grammar::Expr::IntLiteral(size)]) = macro_call.match_repr()
-                    {
+                grammar::TypeStatement::Macro(macro_call) => match macro_call.match_repr() {
+                    ("padding", [grammar::Expr::IntLiteral(size)]) => {
                         regions.push((None, Region::Padding(*size as usize)));
                     }
-                }
+                    (name, _) => return Err(anyhow::anyhow!("unsupported macro: {}", name)),
+                },
                 grammar::TypeStatement::Functions(functions_by_category) => {
                     functions = functions_by_category
                         .iter()
@@ -777,6 +777,29 @@ mod tests {
         };
 
         assert_eq!(build_type(&module, &path).unwrap(), type_definition);
+    }
+
+    #[test]
+    fn will_fail_on_unsupported_macro() {
+        let module = {
+            use super::grammar::*;
+
+            Module::new(
+                &[],
+                &[],
+                &[],
+                &[TypeDefinition::new(
+                    "TestType",
+                    &[TypeStatement::macro_("foobar", &[Expr::IntLiteral(4)])],
+                )],
+            )
+        };
+
+        let path = ItemPath::from_colon_delimited_str("test::TestType");
+        assert_eq!(
+            build_type(&module, &path).err().unwrap().to_string(),
+            "unsupported macro: foobar"
+        );
     }
 
     #[test]
