@@ -69,7 +69,7 @@ fn fully_qualified_type_ref(type_ref: &types::Type) -> Result<String, std::fmt::
     Ok(out)
 }
 
-fn type_ref_to_syn_type(type_ref: &types::Type) -> anyhow::Result<syn::Type> {
+fn sa_type_to_syn_type(type_ref: &types::Type) -> anyhow::Result<syn::Type> {
     Ok(syn::parse_str(&fully_qualified_type_ref(type_ref)?)?)
 }
 
@@ -90,7 +90,7 @@ fn build_function(
                 Argument::MutSelf => quote! { &mut self },
                 Argument::Field(name, type_ref) => {
                     let name = str_to_ident(name);
-                    let syn_type = type_ref_to_syn_type(type_ref)?;
+                    let syn_type = sa_type_to_syn_type(type_ref)?;
                     quote! {
                         #name: #syn_type
                     }
@@ -108,7 +108,7 @@ fn build_function(
                 Argument::MutSelf => quote! { this: *mut Self },
                 Argument::Field(name, type_ref) => {
                     let name = str_to_ident(name);
-                    let syn_type = type_ref_to_syn_type(type_ref)?;
+                    let syn_type = sa_type_to_syn_type(type_ref)?;
                     quote! {
                         #name: #syn_type
                     }
@@ -136,7 +136,7 @@ fn build_function(
         .return_type
         .as_ref()
         .map(|type_ref| -> anyhow::Result<proc_macro2::TokenStream> {
-            let syn_type = type_ref_to_syn_type(type_ref)?;
+            let syn_type = sa_type_to_syn_type(type_ref)?;
             Ok(quote! { -> #syn_type })
         })
         .transpose()?;
@@ -196,7 +196,7 @@ fn build_defined_type(
             Ok(match r {
                 types::Region::Field(field, type_ref) => {
                     let field_ident = str_to_ident(field);
-                    let syn_type = type_ref_to_syn_type(type_ref)?;
+                    let syn_type = sa_type_to_syn_type(type_ref)?;
                     quote! {
                         pub #field_ident: #syn_type
                     }
@@ -299,6 +299,22 @@ fn build_type(definition: &types::TypeDefinition) -> anyhow::Result<proc_macro2:
     }
 }
 
+fn build_extern_value(
+    name: &str,
+    type_: &types::Type,
+    address: usize,
+) -> anyhow::Result<proc_macro2::TokenStream> {
+    let function_ident = quote::format_ident!("get_{name}");
+    let type_ = sa_type_to_syn_type(type_)?;
+
+    Ok(quote! {
+        #[allow(dead_code)]
+        pub fn #function_ident() -> Option<::std::ptr::NonNull<#type_>> {
+            unsafe { ::std::ptr::NonNull::new(::std::mem::transmute::<_, *mut _>(#address)) }
+        }
+    })
+}
+
 pub fn write_module<'a>(
     key: &ItemPath,
     semantic_state: &semantic_state::ResolvedSemanticState,
@@ -317,6 +333,10 @@ pub fn write_module<'a>(
     let mut file = std::fs::File::create(&path)?;
     for definition in module.definitions(semantic_state.type_registry()) {
         writeln!(file, "{}", build_type(definition)?)?;
+    }
+
+    for (name, type_, address) in &module.extern_values {
+        writeln!(file, "{}", build_extern_value(&name, type_, *address)?)?;
     }
 
     if FORMAT_OUTPUT {
