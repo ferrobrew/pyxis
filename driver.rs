@@ -1,4 +1,4 @@
-use super::semantic_analysis::SemanticState;
+use super::semantic_analysis::semantic_state::SemanticState;
 
 pub fn build() -> anyhow::Result<()> {
     let pointer_size = std::env::var("CARGO_CFG_TARGET_POINTER_WIDTH")?.parse::<usize>()? / 8;

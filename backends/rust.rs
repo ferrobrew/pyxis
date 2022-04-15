@@ -2,9 +2,7 @@ use std::{collections::HashMap, env, io::Write, path::PathBuf, process::Command}
 
 use super::super::{
     grammar::{ItemPath, ItemPathSegment},
-    semantic_analysis::{
-        self, MetadataValue, Region, ResolvedSemanticState, Type, TypeDefinition, TypeStateResolved,
-    },
+    semantic_analysis::{module, semantic_state, types},
 };
 
 use anyhow::Context;
@@ -14,8 +12,13 @@ fn str_to_ident(s: &str) -> syn::Ident {
     quote::format_ident!("{}", s)
 }
 
-fn fully_qualified_type_ref_impl(out: &mut String, type_ref: &Type) -> Result<(), std::fmt::Error> {
+fn fully_qualified_type_ref_impl(
+    out: &mut String,
+    type_ref: &types::Type,
+) -> Result<(), std::fmt::Error> {
     use std::fmt::Write;
+    use types::Type;
+
     match type_ref {
         Type::Unresolved(_) => panic!("received unresolved type {:?}", type_ref),
         Type::Raw(path) => {
@@ -60,21 +63,21 @@ fn fully_qualified_type_ref_impl(out: &mut String, type_ref: &Type) -> Result<()
     }
 }
 
-fn fully_qualified_type_ref(type_ref: &Type) -> Result<String, std::fmt::Error> {
+fn fully_qualified_type_ref(type_ref: &types::Type) -> Result<String, std::fmt::Error> {
     let mut out = String::new();
     fully_qualified_type_ref_impl(&mut out, type_ref)?;
     Ok(out)
 }
 
-fn type_ref_to_syn_type(type_ref: &Type) -> anyhow::Result<syn::Type> {
+fn type_ref_to_syn_type(type_ref: &types::Type) -> anyhow::Result<syn::Type> {
     Ok(syn::parse_str(&fully_qualified_type_ref(type_ref)?)?)
 }
 
 fn build_function(
-    function: &semantic_analysis::Function,
+    function: &types::Function,
     is_vftable: bool,
 ) -> Result<proc_macro2::TokenStream, anyhow::Error> {
-    use semantic_analysis::{Argument, Attribute};
+    use types::Argument;
 
     let name = str_to_ident(&function.name);
 
@@ -148,7 +151,7 @@ fn build_function(
         function_getter = Some(FunctionGetter::Vftable);
     } else {
         for attribute in &function.attributes {
-            let Attribute::Address(address) = attribute;
+            let types::Attribute::Address(address) = attribute;
             if function_getter.is_some() {
                 return Err(anyhow::anyhow!(
                     "function getter already set: {:?}",
@@ -180,25 +183,25 @@ fn build_function(
 }
 
 fn build_defined_type(
-    regions: &Vec<Region>,
+    regions: &Vec<types::Region>,
     name: &ItemPathSegment,
     size: usize,
-    metadata: &HashMap<String, MetadataValue>,
-    functions: &HashMap<String, Vec<semantic_analysis::Function>>,
+    metadata: &HashMap<String, types::MetadataValue>,
+    functions: &HashMap<String, Vec<types::Function>>,
 ) -> anyhow::Result<proc_macro2::TokenStream> {
     let fields = regions
         .iter()
         .enumerate()
         .map(|(i, r)| {
             Ok(match r {
-                Region::Field(field, type_ref) => {
+                types::Region::Field(field, type_ref) => {
                     let field_ident = str_to_ident(field);
                     let syn_type = type_ref_to_syn_type(type_ref)?;
                     quote! {
                         pub #field_ident: #syn_type
                     }
                 }
-                Region::Padding(size) => {
+                types::Region::Padding(size) => {
                     let field_ident = quote::format_ident!("padding_{}", i);
                     quote! {
                         #field_ident: [u8; #size]
@@ -227,7 +230,7 @@ fn build_defined_type(
         .iter()
         .find(|(k, _)| k.as_str() == "singleton")
         .map(|(_, address)| match address {
-            MetadataValue::Integer(ref address) => {
+            types::MetadataValue::Integer(ref address) => {
                 let address = *address as usize;
                 quote! {
                     #[allow(dead_code)]
@@ -276,27 +279,28 @@ fn build_defined_type(
 
 fn build_type(
     name: &ItemPathSegment,
-    definition: &TypeDefinition,
+    definition: &types::TypeDefinition,
 ) -> Result<proc_macro2::TokenStream, anyhow::Error> {
-    let TypeStateResolved {
+    let types::TypeStateResolved {
         size,
         regions,
         functions,
         metadata,
-    } = definition.resolved().context("type was not resolved")?;
+    } = &definition.resolved().context("type was not resolved")?;
+
+    use types::TypeCategory;
 
     match definition.category() {
-        semantic_analysis::TypeCategory::Defined => {
-            build_defined_type(regions, name, *size, metadata, functions)
-        }
-        semantic_analysis::TypeCategory::Predefined => Ok(quote! {}),
-        semantic_analysis::TypeCategory::Extern => Ok(quote! {}),
+        TypeCategory::Defined => build_defined_type(regions, name, *size, metadata, functions),
+        TypeCategory::Predefined => Ok(quote! {}),
+        TypeCategory::Extern => Ok(quote! {}),
     }
 }
+
 pub fn write_module<'a>(
     key: &ItemPath,
-    semantic_state: &ResolvedSemanticState,
-    module: &semantic_analysis::Module,
+    semantic_state: &semantic_state::ResolvedSemanticState,
+    module: &module::Module,
 ) -> Result<(), anyhow::Error> {
     const FORMAT_OUTPUT: bool = true;
 
