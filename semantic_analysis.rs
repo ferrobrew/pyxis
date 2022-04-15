@@ -651,53 +651,12 @@ impl SemanticState {
         let mut last_address: usize = 0;
         let mut resolved_regions = vec![];
 
-        let vftable = functions.get(&"vftable".to_string());
-        if let (Some(vftable), Some(name)) = (vftable, resolvee_path.last()) {
-            let resolvee_vtable_path = module
-                .path()
-                .join(format!("{}Vftable", name.as_str()).into());
-            let function_to_field = |function: &Function| -> Region {
-                let argument_to_type = |argument: &Argument| -> (String, Box<Type>) {
-                    match argument {
-                        Argument::ConstSelf => (
-                            "this".to_string(),
-                            Box::new(Type::ConstPointer(Box::new(Type::Raw(
-                                resolvee_path.clone(),
-                            )))),
-                        ),
-                        Argument::MutSelf => (
-                            "this".to_string(),
-                            Box::new(Type::MutPointer(Box::new(Type::Raw(resolvee_path.clone())))),
-                        ),
-                        Argument::Field(name, type_ref) => {
-                            (name.clone(), Box::new(type_ref.clone()))
-                        }
-                    }
-                };
-                let arguments = function.arguments.iter().map(argument_to_type).collect();
-                let return_type = function.return_type.as_ref().map(|t| Box::new(t.clone()));
-
-                Region::Field(
-                    function.name.clone(),
-                    Type::Function(arguments, return_type),
-                )
-            };
-            self.add_type(TypeDefinition {
-                path: resolvee_vtable_path.clone(),
-                state: TypeState::Resolved(TypeStateResolved {
-                    size: 0,
-                    regions: vftable.iter().map(function_to_field).collect(),
-                    functions: HashMap::new(),
-                    metadata: HashMap::new(),
-                }),
-                category: TypeCategory::Defined,
-            })?;
-
-            resolved_regions.push(Region::Field(
-                "vftable".to_string(),
-                Type::ConstPointer(Box::new(Type::Raw(resolvee_vtable_path))),
-            ));
-            last_address += self.type_registry.pointer_size();
+        if let Some((type_definition, region, size)) =
+            self.build_vftable(&resolvee_path, &functions)
+        {
+            self.add_type(type_definition)?;
+            resolved_regions.push(region);
+            last_address += size;
         }
 
         for (offset, region) in regions {
@@ -742,6 +701,62 @@ impl SemanticState {
                 });
         }
         Ok(())
+    }
+
+    fn build_vftable(
+        &self,
+        resolvee_path: &ItemPath,
+        functions: &HashMap<String, Vec<Function>>,
+    ) -> Option<(TypeDefinition, Region, usize)> {
+        let vftable = functions.get(&"vftable".to_string())?;
+        let name = resolvee_path.last()?;
+
+        let resolvee_vtable_path = resolvee_path
+            .parent()?
+            .join(format!("{}Vftable", name.as_str()).into());
+
+        let function_to_field = |function: &Function| -> Region {
+            let argument_to_type = |argument: &Argument| -> (String, Box<Type>) {
+                match argument {
+                    Argument::ConstSelf => (
+                        "this".to_string(),
+                        Box::new(Type::ConstPointer(Box::new(Type::Raw(
+                            resolvee_path.clone(),
+                        )))),
+                    ),
+                    Argument::MutSelf => (
+                        "this".to_string(),
+                        Box::new(Type::MutPointer(Box::new(Type::Raw(resolvee_path.clone())))),
+                    ),
+                    Argument::Field(name, type_ref) => (name.clone(), Box::new(type_ref.clone())),
+                }
+            };
+            let arguments = function.arguments.iter().map(argument_to_type).collect();
+            let return_type = function.return_type.as_ref().map(|t| Box::new(t.clone()));
+
+            Region::Field(
+                function.name.clone(),
+                Type::Function(arguments, return_type),
+            )
+        };
+
+        Some((
+            TypeDefinition {
+                path: resolvee_vtable_path.clone(),
+                state: TypeState::Resolved(TypeStateResolved {
+                    size: 0,
+                    regions: vftable.iter().map(function_to_field).collect(),
+                    functions: HashMap::new(),
+                    metadata: HashMap::new(),
+                }),
+                category: TypeCategory::Defined,
+            },
+            Region::Field(
+                "vftable".to_string(),
+                Type::ConstPointer(Box::new(Type::Raw(resolvee_vtable_path))),
+            ),
+            self.type_registry.pointer_size(),
+        ))
     }
 
     fn get_module_for_path(&self, path: &ItemPath) -> Option<&Module> {
