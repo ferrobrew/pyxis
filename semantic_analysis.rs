@@ -30,6 +30,7 @@ pub struct Function {
 
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub enum Type {
+    Unresolved(grammar::TypeRef),
     Raw(ItemPath),
     ConstPointer(Box<Type>),
     MutPointer(Box<Type>),
@@ -39,6 +40,7 @@ pub enum Type {
 impl Type {
     fn size(&self, type_registry: &TypeRegistry) -> Option<usize> {
         match self {
+            Type::Unresolved(_) => None,
             Type::Raw(path) => type_registry.get(path).and_then(|t| t.size()),
             Type::ConstPointer(_) => Some(type_registry.pointer_size()),
             Type::MutPointer(_) => Some(type_registry.pointer_size()),
@@ -50,6 +52,7 @@ impl Type {
 impl fmt::Display for Type {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Type::Unresolved(tr) => write!(f, "unresolved:{:?}", tr),
             Type::Raw(path) => write!(f, "{}", path),
             Type::ConstPointer(tr) => {
                 write!(f, "*const ")?;
@@ -226,7 +229,7 @@ impl TypeRegistry {
         self.types.insert(type_.path.clone(), type_);
     }
 
-    fn resolve_string(&self, scope: &[&ItemPath], name: &str) -> Option<Type> {
+    fn resolve_string(&self, scope: &[ItemPath], name: &str) -> Option<Type> {
         // todo: take scope_modules and scope_types instead of scope so that we don't need
         // to do this partitioning
         let (scope_types, scope_modules): (Vec<&ItemPath>, Vec<&ItemPath>) =
@@ -248,7 +251,7 @@ impl TypeRegistry {
             })
     }
 
-    fn resolve_grammar_type(&self, scope: &[&ItemPath], type_: &grammar::Type) -> Option<Type> {
+    fn resolve_grammar_type(&self, scope: &[ItemPath], type_: &grammar::Type) -> Option<Type> {
         // todo: consider building a better module import/scope system
         match type_ {
             grammar::Type::ConstPointer(t) => self
@@ -263,7 +266,7 @@ impl TypeRegistry {
 
     fn resolve_grammar_typeref(
         &self,
-        scope: &[&ItemPath],
+        scope: &[ItemPath],
         type_ref: &grammar::TypeRef,
     ) -> Option<Type> {
         match type_ref {
@@ -280,15 +283,27 @@ impl TypeRegistry {
 
 #[derive(Debug)]
 pub struct Module {
+    path: ItemPath,
     ast: grammar::Module,
     definition_paths: HashSet<ItemPath>,
+    extern_values: Vec<(String, Type, usize)>,
 }
 impl Module {
-    fn new(ast: grammar::Module) -> Self {
+    fn new(
+        path: ItemPath,
+        ast: grammar::Module,
+        extern_values: Vec<(String, Type, usize)>,
+    ) -> Self {
         Self {
+            path,
             ast,
             definition_paths: HashSet::new(),
+            extern_values,
         }
+    }
+
+    pub fn path(&self) -> &ItemPath {
+        &self.path
     }
 
     pub fn ast(&self) -> &grammar::Module {
@@ -311,6 +326,30 @@ impl Module {
             .iter()
             .filter_map(|p| type_registry.get(p))
     }
+
+    pub fn extern_values(&self) -> &[(String, Type, usize)] {
+        &self.extern_values
+    }
+
+    pub fn scope(&self) -> Vec<ItemPath> {
+        std::iter::once(self.path.clone())
+            .chain(self.uses().iter().cloned())
+            .collect()
+    }
+
+    fn resolve_extern_values(&mut self, type_registry: &mut TypeRegistry) -> anyhow::Result<()> {
+        let scope = self.scope();
+
+        for (name, type_, _) in &mut self.extern_values {
+            if let Type::Unresolved(type_ref) = type_ {
+                *type_ = type_registry
+                    .resolve_grammar_typeref(&scope, type_ref)
+                    .ok_or_else(|| anyhow::anyhow!("failed to resolve type for {}", name))?;
+            }
+        }
+
+        Ok(())
+    }
 }
 
 pub struct SemanticState {
@@ -325,9 +364,10 @@ impl SemanticState {
         };
 
         // Insert the empty root module.
-        semantic_state
-            .modules
-            .insert(ItemPath::empty(), Module::new(grammar::Module::default()));
+        semantic_state.modules.insert(
+            ItemPath::empty(),
+            Module::new(ItemPath::empty(), grammar::Module::default(), vec![]),
+        );
 
         // Insert all of our predefined types.
         let predefined_types = [
@@ -371,12 +411,23 @@ impl SemanticState {
     }
 
     pub fn add_module(&mut self, module: &grammar::Module, path: &ItemPath) -> anyhow::Result<()> {
-        self.modules
-            .insert(path.clone(), Module::new(module.clone()));
+        let extern_values: Vec<_> = module
+            .extern_values
+            .iter()
+            .map(|(name, type_, address)| {
+                (
+                    name.as_str().to_owned(),
+                    Type::Unresolved(grammar::TypeRef::Type(type_.clone())),
+                    *address,
+                )
+            })
+            .collect();
 
-        // Consider changing this so that instead of creating unresolved types, we're creating
-        // unresolved type references for each field. This will make it simpler to handle extern values,
-        // too.
+        self.modules.insert(
+            path.clone(),
+            Module::new(path.clone(), module.clone(), extern_values),
+        );
+
         for definition in &module.definitions {
             let path = path.join(definition.name.as_str().into());
             self.add_type(TypeDefinition {
@@ -405,6 +456,7 @@ impl SemanticState {
                 category: TypeCategory::Extern,
             })?;
         }
+
         Ok(())
     }
 
@@ -451,6 +503,12 @@ impl SemanticState {
             }
         }
 
+        // Now that we've finished resolving all of our types, we should be able
+        // to resolve our extern values.
+        for (_, module) in &mut self.modules {
+            module.resolve_extern_values(&mut self.type_registry)?;
+        }
+
         Ok(ResolvedSemanticState {
             modules: self.modules,
             type_registry: self.type_registry,
@@ -459,7 +517,7 @@ impl SemanticState {
 
     fn build_function(
         &self,
-        scope: &[&ItemPath],
+        scope: &[ItemPath],
         function: &grammar::Function,
     ) -> Result<Function, anyhow::Error> {
         let attributes = function
@@ -518,25 +576,13 @@ impl SemanticState {
         resolvee_path: &ItemPath,
         definition: &grammar::TypeDefinition,
     ) -> anyhow::Result<()> {
-        let parent_path = resolvee_path
-            .parent()
-            .unwrap_or_else(|| resolvee_path.clone());
-
-        let scope = {
-            let mut v = vec![&parent_path];
-            v.append(
-                &mut self
-                    .modules
-                    .get(&parent_path)
-                    .map(|f| f.uses().iter().collect())
-                    .unwrap_or_default(),
-            );
-            v
-        };
+        let module = self
+            .get_module_for_path(resolvee_path)
+            .context("failed to get module for path")?;
 
         let build_region_from_field = |grammar::TypeField(ident, type_ref): &grammar::TypeField| {
             self.type_registry
-                .resolve_grammar_typeref(&scope, type_ref)
+                .resolve_grammar_typeref(&module.scope(), type_ref)
                 .map(|tr| (None, Region::Field(ident.0.clone(), tr)))
         };
 
@@ -591,7 +637,7 @@ impl SemanticState {
                                 category.0.clone(),
                                 functions
                                     .iter()
-                                    .map(|function| self.build_function(&scope, function))
+                                    .map(|function| self.build_function(&module.scope(), function))
                                     .collect::<Result<Vec<_>, _>>()?,
                             ))
                         })
@@ -607,7 +653,9 @@ impl SemanticState {
 
         let vftable = functions.get(&"vftable".to_string());
         if let (Some(vftable), Some(name)) = (vftable, resolvee_path.last()) {
-            let resolvee_vtable_path = parent_path.join(format!("{}Vftable", name.as_str()).into());
+            let resolvee_vtable_path = module
+                .path()
+                .join(format!("{}Vftable", name.as_str()).into());
             let function_to_field = |function: &Function| -> Region {
                 let argument_to_type = |argument: &Argument| -> (String, Box<Type>) {
                     match argument {
@@ -695,11 +743,15 @@ impl SemanticState {
         }
         Ok(())
     }
+
+    fn get_module_for_path(&self, path: &ItemPath) -> Option<&Module> {
+        self.modules.get(&path.parent()?)
+    }
 }
 
 pub struct ResolvedSemanticState {
-    modules: HashMap<ItemPath, Module>,
     type_registry: TypeRegistry,
+    modules: HashMap<ItemPath, Module>,
 }
 impl ResolvedSemanticState {
     pub fn type_registry(&self) -> &TypeRegistry {
@@ -1376,6 +1428,49 @@ mod tests {
                 .find(|td| td.path == test_type_vftable_path)
                 .unwrap(),
             &vftable_type_definition
+        );
+    }
+
+    #[test]
+    fn can_define_extern_value() {
+        let module1 = {
+            use super::grammar::*;
+
+            Module::new(
+                &[],
+                &[],
+                &[(
+                    "test".into(),
+                    Type::Ident("u32".into()).mut_pointer(),
+                    0x1337,
+                )],
+                &[],
+            )
+        };
+
+        let mut semantic_state = SemanticState::new(4);
+        semantic_state
+            .add_module(&module1, &ItemPath::from_colon_delimited_str("module1"))
+            .unwrap();
+        let semantic_state = semantic_state.build().unwrap();
+
+        let extern_value = semantic_state
+            .modules()
+            .get(&ItemPath::from_colon_delimited_str("module1"))
+            .unwrap()
+            .extern_values
+            .first()
+            .unwrap();
+
+        assert_eq!(
+            extern_value,
+            &(
+                "test".into(),
+                Type::MutPointer(Box::new(Type::Raw(ItemPath::from_colon_delimited_str(
+                    "u32"
+                )))),
+                0x1337
+            )
         );
     }
 }

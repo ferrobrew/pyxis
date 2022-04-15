@@ -17,6 +17,7 @@ fn str_to_ident(s: &str) -> syn::Ident {
 fn fully_qualified_type_ref_impl(out: &mut String, type_ref: &Type) -> Result<(), std::fmt::Error> {
     use std::fmt::Write;
     match type_ref {
+        Type::Unresolved(_) => panic!("received unresolved type {:?}", type_ref),
         Type::Raw(path) => {
             if path.len() == 1 && path.last() == Some(&"void".into()) {
                 write!(out, "::std::ffi::c_void")
