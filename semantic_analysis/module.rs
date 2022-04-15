@@ -35,12 +35,11 @@ impl Module {
         &self.definition_paths
     }
 
-    #[cfg(test)]
     pub fn definitions<'a>(
         &'a self,
         type_registry: &'a type_registry::TypeRegistry,
     ) -> impl Iterator<Item = &'a types::TypeDefinition> {
-        self.definition_paths
+        self.definition_paths()
             .iter()
             .filter_map(|p| type_registry.get(p))
     }

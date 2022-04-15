@@ -277,18 +277,20 @@ fn build_defined_type(
     })
 }
 
-fn build_type(
-    name: &ItemPathSegment,
-    definition: &types::TypeDefinition,
-) -> Result<proc_macro2::TokenStream, anyhow::Error> {
+fn build_type(definition: &types::TypeDefinition) -> anyhow::Result<proc_macro2::TokenStream> {
+    use types::TypeCategory;
+
+    let name = definition
+        .path
+        .last()
+        .context("failed to get last of item path")?;
+
     let types::TypeStateResolved {
         size,
         regions,
         functions,
         metadata,
     } = &definition.resolved().context("type was not resolved")?;
-
-    use types::TypeCategory;
 
     match definition.category() {
         TypeCategory::Defined => build_defined_type(regions, name, *size, metadata, functions),
@@ -308,21 +310,13 @@ pub fn write_module<'a>(
         .chain(key.iter().map(|s| s.as_str().to_string()))
         .collect::<PathBuf>()
         .with_extension("rs");
+
     let directory_path = path.parent().map(|p| p.to_path_buf()).unwrap_or_default();
     std::fs::create_dir_all(&directory_path)?;
 
     let mut file = std::fs::File::create(&path)?;
-    for item_path in module.definition_paths() {
-        let name = item_path
-            .last()
-            .context("failed to get last of item path")?;
-
-        let type_definition = semantic_state
-            .type_registry()
-            .get(item_path)
-            .context("failed to get type definition for item path")?;
-
-        writeln!(file, "{}", build_type(name, type_definition)?)?;
+    for definition in module.definitions(semantic_state.type_registry()) {
+        writeln!(file, "{}", build_type(definition)?)?;
     }
 
     if FORMAT_OUTPUT {
