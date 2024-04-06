@@ -1,6 +1,6 @@
 use std::{collections::HashMap, env, io::Write, path::PathBuf, process::Command};
 
-use super::super::{
+use crate::{
     grammar::{ItemPath, ItemPathSegment},
     semantic_analysis::{module, semantic_state, types},
 };
@@ -183,7 +183,7 @@ fn build_function(
 }
 
 fn build_defined_type(
-    regions: &Vec<types::Region>,
+    regions: &[types::Region],
     name: &ItemPathSegment,
     size: usize,
     metadata: &HashMap<String, types::MetadataValue>,
@@ -315,7 +315,7 @@ fn build_extern_value(
     })
 }
 
-pub fn write_module<'a>(
+pub fn write_module(
     key: &ItemPath,
     semantic_state: &semantic_state::ResolvedSemanticState,
     module: &module::Module,
@@ -328,7 +328,7 @@ pub fn write_module<'a>(
         .with_extension("rs");
 
     let directory_path = path.parent().map(|p| p.to_path_buf()).unwrap_or_default();
-    std::fs::create_dir_all(&directory_path)?;
+    std::fs::create_dir_all(directory_path)?;
 
     let mut file = std::fs::File::create(&path)?;
     for definition in module.definitions(semantic_state.type_registry()) {
@@ -336,7 +336,7 @@ pub fn write_module<'a>(
     }
 
     for (name, type_, address) in &module.extern_values {
-        writeln!(file, "{}", build_extern_value(&name, type_, *address)?)?;
+        writeln!(file, "{}", build_extern_value(name, type_, *address)?)?;
     }
 
     if FORMAT_OUTPUT {

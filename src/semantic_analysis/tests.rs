@@ -1,9 +1,12 @@
 use std::collections::{HashMap, HashSet};
 
-use super::{types::TypeDefinition, *};
-use crate::type_language::{
+use crate::{
     grammar::{self, ItemPath},
-    semantic_analysis::{semantic_state::SemanticState, types::*},
+    semantic_analysis::{
+        semantic_state::SemanticState,
+        types::{TypeDefinition, *},
+        *,
+    },
 };
 
 use anyhow::Context;

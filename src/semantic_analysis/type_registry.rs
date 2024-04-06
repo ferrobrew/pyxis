@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
-use super::{
-    super::grammar::{self, ItemPath},
-    types::{Type, TypeDefinition},
+use crate::{
+    grammar::{self, ItemPath},
+    semantic_analysis::types::{Type, TypeDefinition},
 };
 
 pub struct TypeRegistry {

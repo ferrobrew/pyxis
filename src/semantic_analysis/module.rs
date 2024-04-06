@@ -1,8 +1,8 @@
 use std::collections::HashSet;
 
-use super::{
-    super::grammar::{self, ItemPath},
-    type_registry, types,
+use crate::{
+    grammar::{self, ItemPath},
+    semantic_analysis::{type_registry, types},
 };
 
 #[derive(Debug)]

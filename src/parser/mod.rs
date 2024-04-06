@@ -1,8 +1,11 @@
-use syn::parse::{Parse, ParseStream, Result};
-use syn::punctuated::Punctuated;
-use syn::{braced, bracketed, parenthesized, Token};
+use syn::{
+    braced, bracketed, parenthesized,
+    parse::{Parse, ParseStream, Result},
+    punctuated::Punctuated,
+    Token,
+};
 
-use super::grammar::*;
+use crate::grammar::*;
 
 #[cfg(test)]
 mod tests;
@@ -59,7 +62,7 @@ impl Parse for ItemPath {
                 break;
             }
         }
-        return Ok(item_path);
+        Ok(item_path)
     }
 }
 
@@ -96,7 +99,7 @@ impl Parse for MacroCall {
         parenthesized!(content in input);
 
         let arguments: Punctuated<_, Token![,]> = content.parse_terminated(Expr::parse)?;
-        let arguments = Vec::from_iter(arguments.into_iter());
+        let arguments = Vec::from_iter(arguments);
 
         Ok(MacroCall { name, arguments })
     }
@@ -136,7 +139,7 @@ impl Parse for Attribute {
         parenthesized!(content2 in content);
 
         let arguments: Punctuated<_, Token![,]> = content2.parse_terminated(Expr::parse)?;
-        let arguments = Vec::from_iter(arguments.into_iter());
+        let arguments = Vec::from_iter(arguments);
 
         Ok(Attribute::Function(name, arguments))
     }
@@ -183,7 +186,7 @@ impl Parse for Function {
         parenthesized!(content in input);
 
         let arguments: Punctuated<_, Token![,]> = content.parse_terminated(Argument::parse)?;
-        let arguments = Vec::from_iter(arguments.into_iter());
+        let arguments = Vec::from_iter(arguments);
 
         let return_type = if input.peek(syn::Token![->]) {
             input.parse::<syn::Token![->]>()?;
@@ -240,7 +243,7 @@ fn parse_optionally_braced_content<T>(
         braced!(content in input);
 
         let fields: Punctuated<_, Token![,]> = content.parse_terminated(content_parser)?;
-        Ok(Vec::from_iter(fields.into_iter()))
+        Ok(Vec::from_iter(fields))
     } else {
         Ok(vec![content_parser(input)?])
     }
@@ -257,7 +260,7 @@ impl Parse for TypeStatement {
             braced!(content in input);
 
             let fields: Punctuated<_, Token![,]> = content.parse_terminated(ExprField::parse)?;
-            Ok(TypeStatement::Meta(Vec::from_iter(fields.into_iter())))
+            Ok(TypeStatement::Meta(Vec::from_iter(fields)))
         } else if lookahead.peek(kw::address) {
             input.parse::<kw::address>()?;
             // keep the grammar strict for now, we can loosen it to an expr later
@@ -288,7 +291,7 @@ impl Parse for TypeStatement {
 
                     Ok((name, functions))
                 })?;
-            let function_blocks = Vec::from_iter(function_blocks.into_iter());
+            let function_blocks = Vec::from_iter(function_blocks);
 
             Ok(TypeStatement::Functions(function_blocks))
         } else if lookahead.peek(syn::Ident) {
@@ -319,7 +322,7 @@ impl Parse for TypeDefinition {
 
             let statements: Punctuated<TypeStatement, Token![,]> =
                 content.parse_terminated(TypeStatement::parse)?;
-            Vec::from_iter(statements.into_iter())
+            Vec::from_iter(statements)
         };
 
         Ok(TypeDefinition { name, statements })

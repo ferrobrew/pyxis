@@ -1,10 +1,9 @@
 use std::{collections::HashMap, path::Path};
 
-use crate::type_language::parser;
-
-use super::{
-    super::grammar::{self, ItemPath},
-    module, type_registry, types,
+use crate::{
+    grammar::{self, ItemPath},
+    parser,
+    semantic_analysis::{module, type_registry, types},
 };
 
 use anyhow::Context;
@@ -49,7 +48,7 @@ impl SemanticState {
             let path = ItemPath::from_colon_delimited_str(name);
             semantic_state
                 .add_type(types::TypeDefinition {
-                    path: path,
+                    path,
                     state: types::TypeState::Resolved(types::TypeStateResolved::new(size)),
                     category: types::TypeCategory::Predefined,
                 })
@@ -127,7 +126,8 @@ impl SemanticState {
             .context("failed to get module")?
             .definition_paths
             .insert(type_definition.path.clone());
-        Ok(self.type_registry.add(type_definition))
+        self.type_registry.add(type_definition);
+        Ok(())
     }
 
     pub fn build(mut self) -> anyhow::Result<ResolvedSemanticState> {
@@ -162,7 +162,7 @@ impl SemanticState {
 
         // Now that we've finished resolving all of our types, we should be able
         // to resolve our extern values.
-        for (_, module) in &mut self.modules {
+        for module in self.modules.values_mut() {
             module.resolve_extern_values(&mut self.type_registry)?;
         }
 
@@ -259,7 +259,7 @@ impl SemanticState {
                             } else if ident.0 == "singleton" {
                                 metadata.insert(
                                     "singleton".to_string(),
-                                    types::MetadataValue::Integer(*value as isize),
+                                    types::MetadataValue::Integer(*value),
                                 );
                             }
                         }
@@ -310,8 +310,7 @@ impl SemanticState {
         let mut last_address: usize = 0;
         let mut resolved_regions = vec![];
 
-        if let Some((type_definition, region, size)) =
-            self.build_vftable(&resolvee_path, &functions)
+        if let Some((type_definition, region, size)) = self.build_vftable(resolvee_path, &functions)
         {
             self.add_type(type_definition)?;
             resolved_regions.push(region);

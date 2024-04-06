@@ -1,8 +1,8 @@
 use std::{collections::HashMap, fmt};
 
-use super::{
-    super::grammar::{self, ItemPath},
-    type_registry,
+use crate::{
+    grammar::{self, ItemPath},
+    semantic_analysis::type_registry,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
