@@ -237,7 +237,7 @@ fn build_defined_type(
                     impl #name_ident {
                         pub fn get() -> &'static mut Self {
                             unsafe {
-                                &mut **::std::mem::transmute::<usize, *mut *mut Self>(#address)
+                                &mut **(#address as *mut *mut Self)
                             }
                         }
                     }
