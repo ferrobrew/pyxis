@@ -235,7 +235,7 @@ fn build_defined_type(
                 quote! {
                     #[allow(dead_code)]
                     impl #name_ident {
-                        pub fn get() -> &'static mut Self {
+                        pub unsafe fn get() -> &'static mut Self {
                             unsafe {
                                 &mut **(#address as *mut *mut Self)
                             }
@@ -309,7 +309,7 @@ fn build_extern_value(
 
     Ok(quote! {
         #[allow(dead_code)]
-        pub fn #function_ident() -> Option<::std::ptr::NonNull<#type_>> {
+        pub unsafe fn #function_ident() -> Option<::std::ptr::NonNull<#type_>> {
             unsafe { ::std::ptr::NonNull::new(::std::mem::transmute::<_, *mut _>(#address)) }
         }
     })
