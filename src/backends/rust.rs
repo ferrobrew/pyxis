@@ -277,25 +277,29 @@ fn build_defined_type(
     })
 }
 
-fn build_type(definition: &types::TypeDefinition) -> anyhow::Result<proc_macro2::TokenStream> {
-    use types::TypeCategory;
+fn build_type(definition: &types::ItemDefinition) -> anyhow::Result<proc_macro2::TokenStream> {
+    use types::ItemCategory;
 
     let name = definition
         .path
         .last()
         .context("failed to get last of item path")?;
 
-    let types::TypeStateResolved {
-        size,
+    let types::ItemStateResolved { size, inner } =
+        &definition.resolved().context("type was not resolved")?;
+
+    let types::TypeDefinition {
         regions,
-        functions,
         metadata,
-    } = &definition.resolved().context("type was not resolved")?;
+        functions,
+    } = match inner {
+        types::ItemDefinitionInner::Type(td) => td,
+    };
 
     match definition.category() {
-        TypeCategory::Defined => build_defined_type(regions, name, *size, metadata, functions),
-        TypeCategory::Predefined => Ok(quote! {}),
-        TypeCategory::Extern => Ok(quote! {}),
+        ItemCategory::Defined => build_defined_type(regions, name, *size, metadata, functions),
+        ItemCategory::Predefined => Ok(quote! {}),
+        ItemCategory::Extern => Ok(quote! {}),
     }
 }
 

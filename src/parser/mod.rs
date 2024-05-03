@@ -308,24 +308,37 @@ impl Parse for TypeStatement {
     }
 }
 
-impl Parse for TypeDefinition {
+fn parse_type_definition(input: ParseStream) -> Result<(Ident, TypeDefinition)> {
+    input.parse::<Token![type]>()?;
+    let name: Ident = input.parse()?;
+
+    let statements = if input.peek(syn::Token![;]) {
+        input.parse::<syn::Token![;]>()?;
+        vec![]
+    } else {
+        let content;
+        braced!(content in input);
+
+        let statements: Punctuated<TypeStatement, Token![,]> =
+            content.parse_terminated(TypeStatement::parse)?;
+        Vec::from_iter(statements)
+    };
+
+    Ok((name, TypeDefinition { statements }))
+}
+
+impl Parse for ItemDefinition {
     fn parse(input: ParseStream) -> Result<Self> {
-        input.parse::<Token![type]>()?;
-        let name: Ident = input.parse()?;
-
-        let statements = if input.peek(syn::Token![;]) {
-            input.parse::<syn::Token![;]>()?;
-            vec![]
+        let lookahead = input.lookahead1();
+        if lookahead.peek(Token![type]) {
+            let (name, inner) = parse_type_definition(input)?;
+            Ok(ItemDefinition {
+                name,
+                inner: inner.into(),
+            })
         } else {
-            let content;
-            braced!(content in input);
-
-            let statements: Punctuated<TypeStatement, Token![,]> =
-                content.parse_terminated(TypeStatement::parse)?;
-            Vec::from_iter(statements)
-        };
-
-        Ok(TypeDefinition { name, statements })
+            Err(lookahead.error())
+        }
     }
 }
 

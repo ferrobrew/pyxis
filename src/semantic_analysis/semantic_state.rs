@@ -47,10 +47,13 @@ impl SemanticState {
         for (name, size) in predefined_types {
             let path = ItemPath::from_colon_delimited_str(name);
             semantic_state
-                .add_type(types::TypeDefinition {
+                .add_type(types::ItemDefinition {
                     path,
-                    state: types::TypeState::Resolved(types::TypeStateResolved::new(size)),
-                    category: types::TypeCategory::Predefined,
+                    state: types::ItemState::Resolved(types::ItemStateResolved {
+                        size,
+                        inner: types::TypeDefinition::default().into(),
+                    }),
+                    category: types::ItemCategory::Predefined,
                 })
                 .expect("failed to add predefined type");
         }
@@ -86,10 +89,10 @@ impl SemanticState {
 
         for definition in &module.definitions {
             let path = path.join(definition.name.as_str().into());
-            self.add_type(types::TypeDefinition {
+            self.add_type(types::ItemDefinition {
                 path: path.clone(),
-                state: types::TypeState::Unresolved(definition.clone()),
-                category: types::TypeCategory::Defined,
+                state: types::ItemState::Unresolved(definition.clone()),
+                category: types::ItemCategory::Defined,
             })?;
         }
 
@@ -106,17 +109,20 @@ impl SemanticState {
 
             let extern_path = path.join(extern_path.as_str().into());
 
-            self.add_type(types::TypeDefinition {
+            self.add_type(types::ItemDefinition {
                 path: extern_path.clone(),
-                state: types::TypeState::Resolved(types::TypeStateResolved::new(size)),
-                category: types::TypeCategory::Extern,
+                state: types::ItemState::Resolved(types::ItemStateResolved {
+                    size,
+                    inner: types::TypeDefinition::default().into(),
+                }),
+                category: types::ItemCategory::Extern,
             })?;
         }
 
         Ok(())
     }
 
-    pub fn add_type(&mut self, type_definition: types::TypeDefinition) -> anyhow::Result<()> {
+    pub fn add_type(&mut self, type_definition: types::ItemDefinition) -> anyhow::Result<()> {
         let parent_path = &type_definition
             .path
             .parent()
@@ -138,14 +144,14 @@ impl SemanticState {
             }
 
             for resolvee_path in &to_resolve {
-                if let types::TypeState::Unresolved(definition) = self
+                if let types::ItemState::Unresolved(definition) = self
                     .type_registry
                     .get(resolvee_path)
                     .context("failed to get type")?
                     .state
                     .clone()
                 {
-                    self.build_type(resolvee_path, &definition)?;
+                    self.build_item(resolvee_path, &definition)?;
                 }
             }
 
@@ -228,6 +234,16 @@ impl SemanticState {
             arguments,
             return_type,
         })
+    }
+
+    fn build_item(
+        &mut self,
+        resolvee_path: &ItemPath,
+        definition: &grammar::ItemDefinition,
+    ) -> anyhow::Result<()> {
+        match &definition.inner {
+            grammar::ItemDefinitionInner::Type(ty) => self.build_type(resolvee_path, ty),
+        }
     }
 
     fn build_type(
@@ -351,11 +367,14 @@ impl SemanticState {
         if let Some(sizes) = sizes {
             let size = sizes.into_iter().sum();
             self.type_registry.get_mut(resolvee_path).unwrap().state =
-                types::TypeState::Resolved(types::TypeStateResolved {
+                types::ItemState::Resolved(types::ItemStateResolved {
                     size,
-                    regions: resolved_regions,
-                    functions,
-                    metadata,
+                    inner: types::TypeDefinition {
+                        regions: resolved_regions,
+                        functions,
+                        metadata,
+                    }
+                    .into(),
                 });
         }
         Ok(())
@@ -365,7 +384,7 @@ impl SemanticState {
         &self,
         resolvee_path: &ItemPath,
         functions: &HashMap<String, Vec<types::Function>>,
-    ) -> Option<(types::TypeDefinition, types::Region, usize)> {
+    ) -> Option<(types::ItemDefinition, types::Region, usize)> {
         let vftable = functions.get(&"vftable".to_string())?;
         let name = resolvee_path.last()?;
 
@@ -403,15 +422,18 @@ impl SemanticState {
         };
 
         Some((
-            types::TypeDefinition {
+            types::ItemDefinition {
                 path: resolvee_vtable_path.clone(),
-                state: types::TypeState::Resolved(types::TypeStateResolved {
+                state: types::ItemState::Resolved(types::ItemStateResolved {
                     size: 0,
-                    regions: vftable.iter().map(function_to_field).collect(),
-                    functions: HashMap::new(),
-                    metadata: HashMap::new(),
+                    inner: types::TypeDefinition {
+                        regions: vftable.iter().map(function_to_field).collect(),
+                        functions: HashMap::new(),
+                        metadata: HashMap::new(),
+                    }
+                    .into(),
                 }),
-                category: types::TypeCategory::Defined,
+                category: types::ItemCategory::Defined,
             },
             types::Region::Field(
                 "vftable".to_string(),

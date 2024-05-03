@@ -106,49 +106,53 @@ pub enum MetadataValue {
     Integer(isize),
 }
 
-#[derive(PartialEq, Eq, Debug, Clone)]
-pub struct TypeStateResolved {
-    pub size: usize,
+#[derive(PartialEq, Eq, Debug, Clone, Default)]
+pub struct TypeDefinition {
     pub regions: Vec<Region>,
     pub functions: HashMap<String, Vec<Function>>,
     pub metadata: HashMap<String, MetadataValue>,
 }
 
-impl TypeStateResolved {
-    pub fn new(size: usize) -> Self {
-        Self {
-            size,
-            regions: Default::default(),
-            functions: Default::default(),
-            metadata: Default::default(),
-        }
+#[derive(PartialEq, Eq, Debug, Clone)]
+pub enum ItemDefinitionInner {
+    Type(TypeDefinition),
+}
+impl From<TypeDefinition> for ItemDefinitionInner {
+    fn from(td: TypeDefinition) -> Self {
+        ItemDefinitionInner::Type(td)
     }
 }
 
 #[derive(PartialEq, Eq, Debug, Clone)]
-pub enum TypeState {
-    Unresolved(grammar::TypeDefinition),
-    Resolved(TypeStateResolved),
+pub struct ItemStateResolved {
+    pub size: usize,
+    pub inner: ItemDefinitionInner,
+}
+
+#[derive(PartialEq, Eq, Debug, Clone)]
+pub enum ItemState {
+    Unresolved(grammar::ItemDefinition),
+    Resolved(ItemStateResolved),
 }
 
 #[derive(PartialEq, Eq, Debug, Copy, Clone)]
-pub enum TypeCategory {
+pub enum ItemCategory {
     Defined,
     Predefined,
     Extern,
 }
 
 #[derive(PartialEq, Eq, Debug, Clone)]
-pub struct TypeDefinition {
+pub struct ItemDefinition {
     pub path: ItemPath,
-    pub state: TypeState,
-    pub category: TypeCategory,
+    pub state: ItemState,
+    pub category: ItemCategory,
 }
 
-impl TypeDefinition {
-    pub fn resolved(&self) -> Option<&TypeStateResolved> {
+impl ItemDefinition {
+    pub fn resolved(&self) -> Option<&ItemStateResolved> {
         match &self.state {
-            TypeState::Resolved(tsr) => Some(tsr),
+            ItemState::Resolved(tsr) => Some(tsr),
             _ => None,
         }
     }
@@ -162,10 +166,10 @@ impl TypeDefinition {
     }
 
     pub fn is_predefined(&self) -> bool {
-        self.category == TypeCategory::Predefined
+        self.category == ItemCategory::Predefined
     }
 
-    pub fn category(&self) -> TypeCategory {
+    pub fn category(&self) -> ItemCategory {
         self.category
     }
 }

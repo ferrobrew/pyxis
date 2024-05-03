@@ -17,12 +17,12 @@ fn can_parse_basic_struct() {
             &[],
             &[],
             &[],
-            &[TypeDefinition::new(
+            &[ItemDefinition::new(
                 "TestType",
-                &[
+                TypeDefinition::new(&[
                     TS::field("field_1", TR::ident_type("i32")),
                     TS::field("field_2", TR::ident_type("i32")),
-                ],
+                ]),
             )],
         )
     };
@@ -60,9 +60,9 @@ fn can_parse_vehicle_types() {
             &[],
             &[],
             &[],
-            &[TypeDefinition::new(
+            &[ItemDefinition::new(
                 "VehicleTypes",
-                &[
+                TypeDefinition::new(&[
                     TS::field("hash_edacd65b_likely_max_models", TR::ident_type("i32")),
                     TS::field("hash_2ff58884", TR::ident_type("i32")),
                     TS::field("maximum_gpu_cost", TR::ident_type("i32")),
@@ -76,7 +76,7 @@ fn can_parse_vehicle_types() {
                         T::ident("LoadedModel").const_pointer().into(),
                     ),
                     TS::macro_("padding", &[Expr::IntLiteral(0x10)]),
-                ],
+                ]),
             )],
         )
     };
@@ -141,9 +141,9 @@ fn can_parse_spawn_manager() {
             &[],
             &[],
             &[],
-            &[TypeDefinition::new(
+            &[ItemDefinition::new(
                 "SpawnManager",
-                &[
+                TypeDefinition::new(&[
                     TS::meta(&[
                         ("size", IntLiteral(0x1754)),
                         ("singleton", IntLiteral(0x1_191_918)),
@@ -196,7 +196,7 @@ fn can_parse_spawn_manager() {
                             ),
                         ],
                     )]),
-                ],
+                ]),
             )],
         )
     };
@@ -217,12 +217,12 @@ fn can_parse_address_field() {
             &[],
             &[],
             &[],
-            &[TypeDefinition::new(
+            &[ItemDefinition::new(
                 "Test",
-                &[TypeStatement::address(
+                TypeDefinition::new(&[TypeStatement::address(
                     0x78,
                     &[("max_num_characters", TypeRef::ident_type("u16"))],
-                )],
+                )]),
             )],
         )
     };
@@ -244,12 +244,12 @@ fn can_parse_use() {
             &[ItemPath::from_colon_delimited_str("hello::TestType<Hey>")],
             &[],
             &[],
-            &[TypeDefinition::new(
+            &[ItemDefinition::new(
                 "Test",
-                &[TypeStatement::field(
+                TypeDefinition::new(&[TypeStatement::field(
                     "test",
                     TypeRef::ident_type("TestType<Hey>"),
-                )],
+                )]),
             )],
         )
     };
@@ -286,12 +286,12 @@ fn can_parse_extern() {
                 vec![ExprField("size".into(), Expr::IntLiteral(12))],
             )],
             &[],
-            &[TypeDefinition::new(
+            &[ItemDefinition::new(
                 "Test",
-                &[TypeStatement::field(
+                TypeDefinition::new(&[TypeStatement::field(
                     "test",
                     TypeRef::ident_type("TestType<Hey>"),
-                )],
+                )]),
             )],
         )
     };
@@ -305,8 +305,12 @@ fn can_parse_an_empty_type() {
         type Test;
         "#;
 
-    let ast = { Module::new(&[], &[], &[], &[TypeDefinition::new("Test", &[])]) };
-
+    let ast = Module::new(
+        &[],
+        &[],
+        &[],
+        &[ItemDefinition::new("Test", TypeDefinition::new(&[]))],
+    );
     assert_eq!(parse_str(text).ok(), Some(ast));
 }
 

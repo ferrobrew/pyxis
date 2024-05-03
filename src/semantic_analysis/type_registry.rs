@@ -2,11 +2,11 @@ use std::collections::HashMap;
 
 use crate::{
     grammar::{self, ItemPath},
-    semantic_analysis::types::{Type, TypeDefinition},
+    semantic_analysis::types::{ItemDefinition, Type},
 };
 
 pub struct TypeRegistry {
-    pub(crate) types: HashMap<ItemPath, TypeDefinition>,
+    pub(crate) types: HashMap<ItemPath, ItemDefinition>,
     pub(crate) pointer_size: usize,
 }
 
@@ -22,11 +22,11 @@ impl TypeRegistry {
         self.pointer_size
     }
 
-    pub fn get(&self, item_path: &ItemPath) -> Option<&TypeDefinition> {
+    pub fn get(&self, item_path: &ItemPath) -> Option<&ItemDefinition> {
         self.types.get(item_path)
     }
 
-    pub fn get_mut(&mut self, item_path: &ItemPath) -> Option<&mut TypeDefinition> {
+    pub fn get_mut(&mut self, item_path: &ItemPath) -> Option<&mut ItemDefinition> {
         self.types.get_mut(item_path)
     }
 
@@ -46,7 +46,7 @@ impl TypeRegistry {
             .collect()
     }
 
-    pub(crate) fn add(&mut self, type_: TypeDefinition) {
+    pub(crate) fn add(&mut self, type_: ItemDefinition) {
         self.types.insert(type_.path.clone(), type_);
     }
 

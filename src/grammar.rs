@@ -327,14 +327,36 @@ impl TypeStatement {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TypeDefinition {
-    pub name: Ident,
     pub statements: Vec<TypeStatement>,
 }
 impl TypeDefinition {
-    pub fn new(name: &str, statements: &[TypeStatement]) -> Self {
+    pub fn new(statements: &[TypeStatement]) -> Self {
+        Self {
+            statements: statements.to_vec(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ItemDefinitionInner {
+    Type(TypeDefinition),
+}
+impl From<TypeDefinition> for ItemDefinitionInner {
+    fn from(item: TypeDefinition) -> Self {
+        ItemDefinitionInner::Type(item)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ItemDefinition {
+    pub name: Ident,
+    pub inner: ItemDefinitionInner,
+}
+impl ItemDefinition {
+    pub fn new(name: &str, inner: impl Into<ItemDefinitionInner>) -> Self {
         Self {
             name: name.into(),
-            statements: statements.to_vec(),
+            inner: inner.into(),
         }
     }
 }
@@ -344,14 +366,14 @@ pub struct Module {
     pub uses: Vec<ItemPath>,
     pub extern_types: Vec<(Ident, Vec<ExprField>)>,
     pub extern_values: Vec<(Ident, Type, usize)>,
-    pub definitions: Vec<TypeDefinition>,
+    pub definitions: Vec<ItemDefinition>,
 }
 impl Module {
     pub fn new(
         uses: &[ItemPath],
         extern_types: &[(Ident, Vec<ExprField>)],
         extern_values: &[(Ident, Type, usize)],
-        definitions: &[TypeDefinition],
+        definitions: &[ItemDefinition],
     ) -> Self {
         Self {
             uses: uses.to_vec(),

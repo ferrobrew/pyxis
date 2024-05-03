@@ -38,7 +38,7 @@ impl Module {
     pub fn definitions<'a>(
         &'a self,
         type_registry: &'a type_registry::TypeRegistry,
-    ) -> impl Iterator<Item = &'a types::TypeDefinition> {
+    ) -> impl Iterator<Item = &'a types::ItemDefinition> {
         self.definition_paths()
             .iter()
             .filter_map(|p| type_registry.get(p))

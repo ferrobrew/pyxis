@@ -4,7 +4,7 @@ use crate::{
     grammar::{self, ItemPath},
     semantic_analysis::{
         semantic_state::SemanticState,
-        types::{TypeDefinition, *},
+        types::{ItemDefinition, *},
         *,
     },
 };
@@ -20,7 +20,7 @@ fn build_state(
     semantic_state.build()
 }
 
-fn build_type(module: &grammar::Module, path: &ItemPath) -> anyhow::Result<TypeDefinition> {
+fn build_type(module: &grammar::Module, path: &ItemPath) -> anyhow::Result<ItemDefinition> {
     build_state(module, path)?
         .type_registry()
         .get(path)
@@ -40,37 +40,40 @@ fn can_resolve_basic_struct() {
             &[],
             &[],
             &[],
-            &[TypeDefinition::new(
+            &[ItemDefinition::new(
                 "TestType",
-                &[
+                TypeDefinition::new(&[
                     TS::field("field_1", TR::ident_type("i32")),
                     TS::macro_("padding", &[Expr::IntLiteral(4)]),
                     TS::field("field_2", TR::ident_type("u64")),
-                ],
+                ]),
             )],
         )
     };
 
     let path = ItemPath::from_colon_delimited_str("test::TestType");
-    let type_definition = TypeDefinition {
+    let type_definition = ItemDefinition {
         path: path.clone(),
-        state: TypeState::Resolved(TypeStateResolved {
+        state: ItemState::Resolved(ItemStateResolved {
             size: 16,
-            regions: vec![
-                Region::Field(
-                    "field_1".into(),
-                    Type::Raw(ItemPath::from_colon_delimited_str("i32")),
-                ),
-                Region::Padding(4),
-                Region::Field(
-                    "field_2".into(),
-                    Type::Raw(ItemPath::from_colon_delimited_str("u64")),
-                ),
-            ],
-            functions: HashMap::new(),
-            metadata: HashMap::new(),
+            inner: TypeDefinition {
+                regions: vec![
+                    Region::Field(
+                        "field_1".into(),
+                        Type::Raw(ItemPath::from_colon_delimited_str("i32")),
+                    ),
+                    Region::Padding(4),
+                    Region::Field(
+                        "field_2".into(),
+                        Type::Raw(ItemPath::from_colon_delimited_str("u64")),
+                    ),
+                ],
+                functions: HashMap::new(),
+                metadata: HashMap::new(),
+            }
+            .into(),
         }),
-        category: TypeCategory::Defined,
+        category: ItemCategory::Defined,
     };
 
     assert_eq!(build_type(&module, &path).unwrap(), type_definition);
@@ -85,9 +88,9 @@ fn will_fail_on_unsupported_macro() {
             &[],
             &[],
             &[],
-            &[TypeDefinition::new(
+            &[ItemDefinition::new(
                 "TestType",
-                &[TypeStatement::macro_("foobar", &[Expr::IntLiteral(4)])],
+                TypeDefinition::new(&[TypeStatement::macro_("foobar", &[Expr::IntLiteral(4)])]),
             )],
         )
     };
@@ -112,10 +115,13 @@ fn can_resolve_pointer_to_another_struct() {
             &[],
             &[],
             &[
-                TypeDefinition::new("TestType1", &[TS::field("field_1", TR::ident_type("u64"))]),
-                TypeDefinition::new(
+                ItemDefinition::new(
+                    "TestType1",
+                    TypeDefinition::new(&[TS::field("field_1", TR::ident_type("u64"))]),
+                ),
+                ItemDefinition::new(
                     "TestType2",
-                    &[
+                    TypeDefinition::new(&[
                         TS::field("field_1", TR::ident_type("i32")),
                         TS::field("field_2", TR::ident_type("TestType1")),
                         TS::field(
@@ -123,43 +129,46 @@ fn can_resolve_pointer_to_another_struct() {
                             TR::Type(Type::ident("TestType1").const_pointer()),
                         ),
                         TS::field("field_4", TR::Type(Type::ident("TestType1").mut_pointer())),
-                    ],
+                    ]),
                 ),
             ],
         )
     };
 
     let path = ItemPath::from_colon_delimited_str("test::TestType2");
-    let type_definition = TypeDefinition {
+    let type_definition = ItemDefinition {
         path: path.clone(),
-        state: TypeState::Resolved(TypeStateResolved {
+        state: ItemState::Resolved(ItemStateResolved {
             size: 20,
-            regions: vec![
-                Region::Field(
-                    "field_1".into(),
-                    Type::Raw(ItemPath::from_colon_delimited_str("i32")),
-                ),
-                Region::Field(
-                    "field_2".into(),
-                    Type::Raw(ItemPath::from_colon_delimited_str("test::TestType1")),
-                ),
-                Region::Field(
-                    "field_3".into(),
-                    Type::ConstPointer(Box::new(Type::Raw(ItemPath::from_colon_delimited_str(
-                        "test::TestType1",
-                    )))),
-                ),
-                Region::Field(
-                    "field_4".into(),
-                    Type::MutPointer(Box::new(Type::Raw(ItemPath::from_colon_delimited_str(
-                        "test::TestType1",
-                    )))),
-                ),
-            ],
-            functions: HashMap::new(),
-            metadata: HashMap::new(),
+            inner: TypeDefinition {
+                regions: vec![
+                    Region::Field(
+                        "field_1".into(),
+                        Type::Raw(ItemPath::from_colon_delimited_str("i32")),
+                    ),
+                    Region::Field(
+                        "field_2".into(),
+                        Type::Raw(ItemPath::from_colon_delimited_str("test::TestType1")),
+                    ),
+                    Region::Field(
+                        "field_3".into(),
+                        Type::ConstPointer(Box::new(Type::Raw(
+                            ItemPath::from_colon_delimited_str("test::TestType1"),
+                        ))),
+                    ),
+                    Region::Field(
+                        "field_4".into(),
+                        Type::MutPointer(Box::new(Type::Raw(ItemPath::from_colon_delimited_str(
+                            "test::TestType1",
+                        )))),
+                    ),
+                ],
+                functions: HashMap::new(),
+                metadata: HashMap::new(),
+            }
+            .into(),
         }),
-        category: TypeCategory::Defined,
+        category: ItemCategory::Defined,
     };
 
     assert_eq!(build_type(&module, &path).unwrap(), type_definition);
@@ -180,16 +189,16 @@ fn can_resolve_complex_type() {
             &[],
             &[],
             &[
-                TypeDefinition::new(
+                ItemDefinition::new(
                     "TestType",
-                    &[
+                    TypeDefinition::new(&[
                         TS::field("field_1", TR::ident_type("i32")),
                         TS::macro_("padding", &[Expr::IntLiteral(4)]),
-                    ],
+                    ]),
                 ),
-                TypeDefinition::new(
+                ItemDefinition::new(
                     "Singleton",
-                    &[
+                    TypeDefinition::new(&[
                         TS::meta(&[
                             ("size", Expr::IntLiteral(0x1750)),
                             ("singleton", Expr::IntLiteral(0x1_200_000)),
@@ -222,78 +231,81 @@ fn can_resolve_complex_type() {
                                 Some(Type::ident("TestType").mut_pointer()),
                             )],
                         )]),
-                    ],
+                    ]),
                 ),
             ],
         )
     };
 
     let path = ItemPath::from_colon_delimited_str("test::Singleton");
-    let type_definition = types::TypeDefinition {
+    let type_definition = types::ItemDefinition {
         path: path.clone(),
-        state: types::TypeState::Resolved(types::TypeStateResolved {
+        state: types::ItemState::Resolved(types::ItemStateResolved {
             size: 0x1750,
-            regions: vec![
-                Region::Padding(0x78),
-                Region::Field(
-                    "max_num_1".into(),
-                    Type::Raw(ItemPath::from_colon_delimited_str("u16")),
-                ),
-                Region::Field(
-                    "max_num_2".into(),
-                    Type::Raw(ItemPath::from_colon_delimited_str("u16")),
-                ),
-                Region::Padding(0x984),
-                Region::Field(
-                    "test_type".into(),
-                    Type::Raw(ItemPath::from_colon_delimited_str("test::TestType")),
-                ),
-                Region::Field(
-                    "settings".into(),
-                    Type::Array(
-                        Box::new(Type::Raw(ItemPath::from_colon_delimited_str("u8"))),
-                        804,
+            inner: TypeDefinition {
+                regions: vec![
+                    Region::Padding(0x78),
+                    Region::Field(
+                        "max_num_1".into(),
+                        Type::Raw(ItemPath::from_colon_delimited_str("u16")),
                     ),
-                ),
-                Region::Padding(0xA24),
-            ],
-            functions: [(
-                "free".to_string(),
-                vec![Function {
-                    name: "test_function".to_string(),
-                    attributes: vec![Attribute::Address(0x800_000)],
-                    arguments: vec![
-                        Argument::MutSelf,
-                        Argument::Field(
-                            "arg1".to_string(),
-                            Type::MutPointer(Box::new(Type::Raw(
-                                ItemPath::from_colon_delimited_str("test::TestType"),
-                            ))),
+                    Region::Field(
+                        "max_num_2".into(),
+                        Type::Raw(ItemPath::from_colon_delimited_str("u16")),
+                    ),
+                    Region::Padding(0x984),
+                    Region::Field(
+                        "test_type".into(),
+                        Type::Raw(ItemPath::from_colon_delimited_str("test::TestType")),
+                    ),
+                    Region::Field(
+                        "settings".into(),
+                        Type::Array(
+                            Box::new(Type::Raw(ItemPath::from_colon_delimited_str("u8"))),
+                            804,
                         ),
-                        Argument::Field(
-                            "arg2".to_string(),
-                            Type::Raw(ItemPath::from_colon_delimited_str("i32")),
-                        ),
-                        Argument::Field(
-                            "arg3".to_string(),
-                            Type::ConstPointer(Box::new(Type::Raw(
-                                ItemPath::from_colon_delimited_str("u32"),
-                            ))),
-                        ),
-                    ],
-                    return_type: Some(Type::MutPointer(Box::new(Type::Raw(
-                        ItemPath::from_colon_delimited_str("test::TestType"),
-                    )))),
-                }],
-            )]
-            .into_iter()
-            .collect(),
-            metadata: HashMap::from([(
-                "singleton".to_string(),
-                types::MetadataValue::Integer(0x1_200_000),
-            )]),
+                    ),
+                    Region::Padding(0xA24),
+                ],
+                functions: [(
+                    "free".to_string(),
+                    vec![Function {
+                        name: "test_function".to_string(),
+                        attributes: vec![Attribute::Address(0x800_000)],
+                        arguments: vec![
+                            Argument::MutSelf,
+                            Argument::Field(
+                                "arg1".to_string(),
+                                Type::MutPointer(Box::new(Type::Raw(
+                                    ItemPath::from_colon_delimited_str("test::TestType"),
+                                ))),
+                            ),
+                            Argument::Field(
+                                "arg2".to_string(),
+                                Type::Raw(ItemPath::from_colon_delimited_str("i32")),
+                            ),
+                            Argument::Field(
+                                "arg3".to_string(),
+                                Type::ConstPointer(Box::new(Type::Raw(
+                                    ItemPath::from_colon_delimited_str("u32"),
+                                ))),
+                            ),
+                        ],
+                        return_type: Some(Type::MutPointer(Box::new(Type::Raw(
+                            ItemPath::from_colon_delimited_str("test::TestType"),
+                        )))),
+                    }],
+                )]
+                .into_iter()
+                .collect(),
+                metadata: HashMap::from([(
+                    "singleton".to_string(),
+                    types::MetadataValue::Integer(0x1_200_000),
+                )]),
+            }
+            .into(),
         }),
-        category: types::TypeCategory::Defined,
+        category: types::ItemCategory::Defined,
     };
 
     assert_eq!(build_type(&module, &path).unwrap(), type_definition);
@@ -311,9 +323,9 @@ fn will_eventually_terminate_with_an_unknown_type() {
             &[],
             &[],
             &[],
-            &[TypeDefinition::new(
+            &[ItemDefinition::new(
                 "TestType2",
-                &[TS::field("field_2", TR::ident_type("TestType1"))],
+                TypeDefinition::new(&[TS::field("field_2", TR::ident_type("TestType1"))]),
             )],
         )
     };
@@ -337,9 +349,9 @@ fn can_use_type_from_another_module() {
             &[ItemPath::from_colon_delimited_str("module2::TestType2")],
             &[],
             &[],
-            &[TypeDefinition::new(
+            &[ItemDefinition::new(
                 "TestType1",
-                &[TS::field("field", TR::ident_type("TestType2"))],
+                TypeDefinition::new(&[TS::field("field", TR::ident_type("TestType2"))]),
             )],
         )
     };
@@ -353,26 +365,29 @@ fn can_use_type_from_another_module() {
             &[],
             &[],
             &[],
-            &[TypeDefinition::new(
+            &[ItemDefinition::new(
                 "TestType2",
-                &[TS::field("field", TR::ident_type("u32"))],
+                TypeDefinition::new(&[TS::field("field", TR::ident_type("u32"))]),
             )],
         )
     };
 
     let path = ItemPath::from_colon_delimited_str("module1::TestType1");
-    let target_resolved_type = types::TypeDefinition {
+    let target_resolved_type = types::ItemDefinition {
         path: path.clone(),
-        state: types::TypeState::Resolved(types::TypeStateResolved {
+        state: types::ItemState::Resolved(types::ItemStateResolved {
             size: 4,
-            functions: HashMap::new(),
-            regions: vec![Region::Field(
-                "field".into(),
-                Type::Raw(ItemPath::from_colon_delimited_str("module2::TestType2")),
-            )],
-            metadata: HashMap::new(),
+            inner: TypeDefinition {
+                functions: HashMap::new(),
+                regions: vec![Region::Field(
+                    "field".into(),
+                    Type::Raw(ItemPath::from_colon_delimited_str("module2::TestType2")),
+                )],
+                metadata: HashMap::new(),
+            }
+            .into(),
         }),
-        category: types::TypeCategory::Defined,
+        category: types::ItemCategory::Defined,
     };
 
     let mut semantic_state = SemanticState::new(4);
@@ -425,9 +440,9 @@ fn can_resolve_embed_of_an_extern() {
                 vec![ExprField("size".into(), Expr::IntLiteral(16))],
             )],
             &[],
-            &[TypeDefinition::new(
+            &[ItemDefinition::new(
                 "TestType2",
-                &[
+                TypeDefinition::new(&[
                     TS::field("field_1", TR::ident_type("i32")),
                     TS::field("field_2", TR::ident_type("TestType1")),
                     TS::field(
@@ -435,42 +450,45 @@ fn can_resolve_embed_of_an_extern() {
                         TR::Type(Type::ident("TestType1").const_pointer()),
                     ),
                     TS::field("field_4", TR::Type(Type::ident("TestType1").mut_pointer())),
-                ],
+                ]),
             )],
         )
     };
 
     let path = ItemPath::from_colon_delimited_str("test::TestType2");
-    let type_definition = types::TypeDefinition {
+    let type_definition = types::ItemDefinition {
         path: path.clone(),
-        state: types::TypeState::Resolved(types::TypeStateResolved {
+        state: types::ItemState::Resolved(types::ItemStateResolved {
             size: 28,
-            regions: vec![
-                Region::Field(
-                    "field_1".into(),
-                    Type::Raw(ItemPath::from_colon_delimited_str("i32")),
-                ),
-                Region::Field(
-                    "field_2".into(),
-                    Type::Raw(ItemPath::from_colon_delimited_str("test::TestType1")),
-                ),
-                Region::Field(
-                    "field_3".into(),
-                    Type::ConstPointer(Box::new(Type::Raw(ItemPath::from_colon_delimited_str(
-                        "test::TestType1",
-                    )))),
-                ),
-                Region::Field(
-                    "field_4".into(),
-                    Type::MutPointer(Box::new(Type::Raw(ItemPath::from_colon_delimited_str(
-                        "test::TestType1",
-                    )))),
-                ),
-            ],
-            functions: HashMap::new(),
-            metadata: HashMap::new(),
+            inner: TypeDefinition {
+                regions: vec![
+                    Region::Field(
+                        "field_1".into(),
+                        Type::Raw(ItemPath::from_colon_delimited_str("i32")),
+                    ),
+                    Region::Field(
+                        "field_2".into(),
+                        Type::Raw(ItemPath::from_colon_delimited_str("test::TestType1")),
+                    ),
+                    Region::Field(
+                        "field_3".into(),
+                        Type::ConstPointer(Box::new(Type::Raw(
+                            ItemPath::from_colon_delimited_str("test::TestType1"),
+                        ))),
+                    ),
+                    Region::Field(
+                        "field_4".into(),
+                        Type::MutPointer(Box::new(Type::Raw(ItemPath::from_colon_delimited_str(
+                            "test::TestType1",
+                        )))),
+                    ),
+                ],
+                functions: HashMap::new(),
+                metadata: HashMap::new(),
+            }
+            .into(),
         }),
-        category: types::TypeCategory::Defined,
+        category: types::ItemCategory::Defined,
     };
 
     assert_eq!(build_type(&module, &path).unwrap(), type_definition);
@@ -488,9 +506,9 @@ fn can_generate_vftable() {
             &[],
             &[],
             &[],
-            &[TypeDefinition::new(
+            &[ItemDefinition::new(
                 "TestType",
-                &[TS::Functions(vec![(
+                TypeDefinition::new(&[TS::Functions(vec![(
                     "vftable".into(),
                     vec![
                         Function {
@@ -514,118 +532,124 @@ fn can_generate_vftable() {
                             return_type: None,
                         },
                     ],
-                )])],
+                )])]),
             )],
         )
     };
 
-    let type_definition = types::TypeDefinition {
+    let type_definition = types::ItemDefinition {
         path: ItemPath::from_colon_delimited_str("test::TestType"),
-        state: types::TypeState::Resolved(types::TypeStateResolved {
+        state: types::ItemState::Resolved(types::ItemStateResolved {
             size: 4,
-            regions: vec![Region::Field(
-                "vftable".to_string(),
-                Type::ConstPointer(Box::new(Type::Raw(ItemPath::from_colon_delimited_str(
-                    "test::TestTypeVftable",
-                )))),
-            )],
-            functions: HashMap::from([(
-                "vftable".into(),
-                vec![
-                    Function {
-                        name: "test_function0".to_string(),
-                        attributes: vec![],
-                        arguments: vec![
-                            Argument::MutSelf,
-                            Argument::Field(
-                                "arg0".to_string(),
-                                Type::Raw(ItemPath::from_colon_delimited_str("u32")),
-                            ),
-                            Argument::Field(
-                                "arg1".to_string(),
-                                Type::Raw(ItemPath::from_colon_delimited_str("f32")),
-                            ),
-                        ],
-                        return_type: Some(Type::Raw(ItemPath::from_colon_delimited_str("i32"))),
-                    },
-                    Function {
-                        name: "test_function1".to_string(),
-                        attributes: vec![],
-                        arguments: vec![
-                            Argument::MutSelf,
-                            Argument::Field(
-                                "arg0".to_string(),
-                                Type::Raw(ItemPath::from_colon_delimited_str("u32")),
-                            ),
-                            Argument::Field(
-                                "arg1".to_string(),
-                                Type::Raw(ItemPath::from_colon_delimited_str("f32")),
-                            ),
-                        ],
-                        return_type: None,
-                    },
-                ],
-            )]),
-            metadata: HashMap::new(),
+            inner: TypeDefinition {
+                regions: vec![Region::Field(
+                    "vftable".to_string(),
+                    Type::ConstPointer(Box::new(Type::Raw(ItemPath::from_colon_delimited_str(
+                        "test::TestTypeVftable",
+                    )))),
+                )],
+                functions: HashMap::from([(
+                    "vftable".into(),
+                    vec![
+                        Function {
+                            name: "test_function0".to_string(),
+                            attributes: vec![],
+                            arguments: vec![
+                                Argument::MutSelf,
+                                Argument::Field(
+                                    "arg0".to_string(),
+                                    Type::Raw(ItemPath::from_colon_delimited_str("u32")),
+                                ),
+                                Argument::Field(
+                                    "arg1".to_string(),
+                                    Type::Raw(ItemPath::from_colon_delimited_str("f32")),
+                                ),
+                            ],
+                            return_type: Some(Type::Raw(ItemPath::from_colon_delimited_str("i32"))),
+                        },
+                        Function {
+                            name: "test_function1".to_string(),
+                            attributes: vec![],
+                            arguments: vec![
+                                Argument::MutSelf,
+                                Argument::Field(
+                                    "arg0".to_string(),
+                                    Type::Raw(ItemPath::from_colon_delimited_str("u32")),
+                                ),
+                                Argument::Field(
+                                    "arg1".to_string(),
+                                    Type::Raw(ItemPath::from_colon_delimited_str("f32")),
+                                ),
+                            ],
+                            return_type: None,
+                        },
+                    ],
+                )]),
+                metadata: HashMap::new(),
+            }
+            .into(),
         }),
-        category: types::TypeCategory::Defined,
+        category: types::ItemCategory::Defined,
     };
-    let vftable_type_definition = types::TypeDefinition {
+    let vftable_type_definition = types::ItemDefinition {
         path: ItemPath::from_colon_delimited_str("test::TestTypeVftable"),
-        state: types::TypeState::Resolved(types::TypeStateResolved {
+        state: types::ItemState::Resolved(types::ItemStateResolved {
             size: 0,
-            regions: vec![
-                Region::Field(
-                    "test_function0".to_string(),
-                    Type::Function(
-                        vec![
-                            (
-                                "this".to_string(),
-                                Box::new(Type::MutPointer(Box::new(Type::Raw(
-                                    ItemPath::from_colon_delimited_str("test::TestType"),
-                                )))),
-                            ),
-                            (
-                                "arg0".to_string(),
-                                Box::new(Type::Raw(ItemPath::from_colon_delimited_str("u32"))),
-                            ),
-                            (
-                                "arg1".to_string(),
-                                Box::new(Type::Raw(ItemPath::from_colon_delimited_str("f32"))),
-                            ),
-                        ],
-                        Some(Box::new(Type::Raw(ItemPath::from_colon_delimited_str(
-                            "i32",
-                        )))),
+            inner: TypeDefinition {
+                regions: vec![
+                    Region::Field(
+                        "test_function0".to_string(),
+                        Type::Function(
+                            vec![
+                                (
+                                    "this".to_string(),
+                                    Box::new(Type::MutPointer(Box::new(Type::Raw(
+                                        ItemPath::from_colon_delimited_str("test::TestType"),
+                                    )))),
+                                ),
+                                (
+                                    "arg0".to_string(),
+                                    Box::new(Type::Raw(ItemPath::from_colon_delimited_str("u32"))),
+                                ),
+                                (
+                                    "arg1".to_string(),
+                                    Box::new(Type::Raw(ItemPath::from_colon_delimited_str("f32"))),
+                                ),
+                            ],
+                            Some(Box::new(Type::Raw(ItemPath::from_colon_delimited_str(
+                                "i32",
+                            )))),
+                        ),
                     ),
-                ),
-                Region::Field(
-                    "test_function1".to_string(),
-                    Type::Function(
-                        vec![
-                            (
-                                "this".to_string(),
-                                Box::new(Type::MutPointer(Box::new(Type::Raw(
-                                    ItemPath::from_colon_delimited_str("test::TestType"),
-                                )))),
-                            ),
-                            (
-                                "arg0".to_string(),
-                                Box::new(Type::Raw(ItemPath::from_colon_delimited_str("u32"))),
-                            ),
-                            (
-                                "arg1".to_string(),
-                                Box::new(Type::Raw(ItemPath::from_colon_delimited_str("f32"))),
-                            ),
-                        ],
-                        None,
+                    Region::Field(
+                        "test_function1".to_string(),
+                        Type::Function(
+                            vec![
+                                (
+                                    "this".to_string(),
+                                    Box::new(Type::MutPointer(Box::new(Type::Raw(
+                                        ItemPath::from_colon_delimited_str("test::TestType"),
+                                    )))),
+                                ),
+                                (
+                                    "arg0".to_string(),
+                                    Box::new(Type::Raw(ItemPath::from_colon_delimited_str("u32"))),
+                                ),
+                                (
+                                    "arg1".to_string(),
+                                    Box::new(Type::Raw(ItemPath::from_colon_delimited_str("f32"))),
+                                ),
+                            ],
+                            None,
+                        ),
                     ),
-                ),
-            ],
-            functions: HashMap::new(),
-            metadata: HashMap::new(),
+                ],
+                functions: HashMap::new(),
+                metadata: HashMap::new(),
+            }
+            .into(),
         }),
-        category: types::TypeCategory::Defined,
+        category: types::ItemCategory::Defined,
     };
 
     let test_type_path = ItemPath::from_colon_delimited_str("test::TestType");
