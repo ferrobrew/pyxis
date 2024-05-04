@@ -1,4 +1,4 @@
-use std::{collections::HashMap, env, io::Write, path::PathBuf, process::Command};
+use std::{collections::HashMap, io::Write, path::Path, process::Command};
 
 use crate::{
     grammar::{ItemPath, ItemPathSegment},
@@ -321,16 +321,18 @@ fn build_extern_value(
 }
 
 pub fn write_module(
+    out_dir: &Path,
     key: &ItemPath,
     semantic_state: &semantic_state::ResolvedSemanticState,
     module: &module::Module,
 ) -> Result<(), anyhow::Error> {
     const FORMAT_OUTPUT: bool = true;
 
-    let path = std::iter::once(env::var("OUT_DIR")?)
-        .chain(key.iter().map(|s| s.as_str().to_string()))
-        .collect::<PathBuf>()
-        .with_extension("rs");
+    let mut path = out_dir.to_path_buf();
+    for segment in key.iter() {
+        path.push(segment.as_str());
+    }
+    path.set_extension("rs");
 
     let directory_path = path.parent().map(|p| p.to_path_buf()).unwrap_or_default();
     std::fs::create_dir_all(directory_path)?;

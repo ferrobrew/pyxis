@@ -79,16 +79,11 @@ impl ItemPath {
 
     pub fn from_path(path: &Path) -> ItemPath {
         // consider making this a result
-        assert!(path.is_relative() && path.starts_with("types"));
+        assert!(path.is_relative());
 
         ItemPath(
-            path.strip_prefix("types")
-                .unwrap()
-                .parent()
-                .map(Path::to_path_buf)
-                .unwrap_or_default()
+            path.with_extension("")
                 .iter()
-                .chain(std::iter::once(path.file_stem().unwrap_or_default()))
                 .map(|s| s.to_string_lossy().as_ref().into())
                 .collect(),
         )
