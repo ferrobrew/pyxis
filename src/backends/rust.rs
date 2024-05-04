@@ -294,6 +294,7 @@ fn build_type(definition: &types::ItemDefinition) -> anyhow::Result<proc_macro2:
         functions,
     } = match inner {
         types::ItemDefinitionInner::Type(td) => td,
+        _ => unimplemented!(),
     };
 
     match definition.category() {

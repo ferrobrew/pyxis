@@ -726,3 +726,58 @@ fn can_define_extern_value() {
         )
     );
 }
+
+#[test]
+fn can_resolve_enum() {
+    let module = {
+        use grammar::*;
+
+        type ES = EnumStatement;
+        type TR = TypeRef;
+        use Expr::IntLiteral;
+
+        Module::new(
+            &[],
+            &[],
+            &[],
+            &[ItemDefinition::new(
+                "TestType",
+                EnumDefinition::new(
+                    TR::ident_type("u32"),
+                    &[
+                        ES::meta(&[("singleton", IntLiteral(0x1234))]),
+                        ES::field("Item1"),
+                        ES::field("Item2"),
+                        ES::field_with_expr("Item3", IntLiteral(10)),
+                        ES::field("Item4"),
+                    ],
+                ),
+            )],
+        )
+    };
+
+    let path = ItemPath::from_colon_delimited_str("test::TestType");
+    let type_definition = ItemDefinition {
+        path: path.clone(),
+        state: ItemState::Resolved(ItemStateResolved {
+            size: 4,
+            inner: EnumDefinition {
+                ty: Type::Raw(ItemPath::from_colon_delimited_str("u32")),
+                fields: vec![
+                    ("Item1".to_string(), 0),
+                    ("Item2".to_string(), 1),
+                    ("Item3".to_string(), 10),
+                    ("Item4".to_string(), 11),
+                ],
+                metadata: HashMap::from([(
+                    "singleton".to_string(),
+                    types::MetadataValue::Integer(0x1234),
+                )]),
+            }
+            .into(),
+        }),
+        category: ItemCategory::Defined,
+    };
+
+    assert_eq!(build_type(&module, &path).unwrap(), type_definition);
+}

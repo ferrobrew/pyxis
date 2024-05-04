@@ -36,6 +36,7 @@ pub enum Type {
 }
 
 impl Type {
+    /// Returns `None` if this type is unresolved
     pub(crate) fn size(&self, type_registry: &type_registry::TypeRegistry) -> Option<usize> {
         match self {
             Type::Unresolved(_) => None,
@@ -114,12 +115,25 @@ pub struct TypeDefinition {
 }
 
 #[derive(PartialEq, Eq, Debug, Clone)]
+pub struct EnumDefinition {
+    pub ty: Type,
+    pub fields: Vec<(String, isize)>,
+    pub metadata: HashMap<String, MetadataValue>,
+}
+
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub enum ItemDefinitionInner {
     Type(TypeDefinition),
+    Enum(EnumDefinition),
 }
 impl From<TypeDefinition> for ItemDefinitionInner {
     fn from(td: TypeDefinition) -> Self {
         ItemDefinitionInner::Type(td)
+    }
+}
+impl From<EnumDefinition> for ItemDefinitionInner {
+    fn from(ed: EnumDefinition) -> Self {
+        ItemDefinitionInner::Enum(ed)
     }
 }
 

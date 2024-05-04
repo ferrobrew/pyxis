@@ -144,14 +144,20 @@ impl SemanticState {
             }
 
             for resolvee_path in &to_resolve {
-                if let types::ItemState::Unresolved(definition) = self
+                let types::ItemState::Unresolved(definition) = self
                     .type_registry
                     .get(resolvee_path)
                     .context("failed to get type")?
                     .state
                     .clone()
-                {
-                    self.build_item(resolvee_path, &definition)?;
+                else {
+                    continue;
+                };
+
+                let item = self.build_item(resolvee_path, &definition)?;
+                if let Some(item) = item {
+                    self.type_registry.get_mut(resolvee_path).unwrap().state =
+                        types::ItemState::Resolved(item);
                 }
             }
 
@@ -240,10 +246,10 @@ impl SemanticState {
         &mut self,
         resolvee_path: &ItemPath,
         definition: &grammar::ItemDefinition,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<Option<types::ItemStateResolved>> {
         match &definition.inner {
             grammar::ItemDefinitionInner::Type(ty) => self.build_type(resolvee_path, ty),
-            _ => unimplemented!(),
+            grammar::ItemDefinitionInner::Enum(e) => self.build_enum(resolvee_path, e),
         }
     }
 
@@ -251,7 +257,7 @@ impl SemanticState {
         &mut self,
         resolvee_path: &ItemPath,
         definition: &grammar::TypeDefinition,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<Option<types::ItemStateResolved>> {
         let module = self
             .get_module_for_path(resolvee_path)
             .context("failed to get module for path")?;
@@ -288,7 +294,7 @@ impl SemanticState {
                         if let Some(region_pair) = build_region_from_field(type_field) {
                             regions.push(region_pair);
                         } else {
-                            return Ok(());
+                            return Ok(None);
                         }
                     }
                 }
@@ -296,7 +302,7 @@ impl SemanticState {
                     if let Some(region_pair) = build_region_from_field(type_field) {
                         regions.push(region_pair);
                     } else {
-                        return Ok(());
+                        return Ok(None);
                     }
                 }
                 grammar::TypeStatement::Macro(macro_call) => match macro_call.match_repr() {
@@ -343,7 +349,7 @@ impl SemanticState {
 
             let region_size = match region.size(&self.type_registry) {
                 Some(size) => size,
-                None => return Ok(()),
+                None => return Ok(None),
             };
 
             if region_size == 0 {
@@ -364,21 +370,82 @@ impl SemanticState {
             .iter()
             .map(|r: &types::Region| r.size(&self.type_registry))
             .collect::<Option<Vec<_>>>();
+        let Some(sizes) = sizes else {
+            return Ok(None);
+        };
 
-        if let Some(sizes) = sizes {
-            let size = sizes.into_iter().sum();
-            self.type_registry.get_mut(resolvee_path).unwrap().state =
-                types::ItemState::Resolved(types::ItemStateResolved {
-                    size,
-                    inner: types::TypeDefinition {
-                        regions: resolved_regions,
-                        functions,
-                        metadata,
+        let size = sizes.into_iter().sum();
+        Ok(Some(types::ItemStateResolved {
+            size,
+            inner: types::TypeDefinition {
+                regions: resolved_regions,
+                functions,
+                metadata,
+            }
+            .into(),
+        }))
+    }
+
+    fn build_enum(
+        &mut self,
+        resolvee_path: &ItemPath,
+        definition: &grammar::EnumDefinition,
+    ) -> anyhow::Result<Option<types::ItemStateResolved>> {
+        let module = self
+            .get_module_for_path(resolvee_path)
+            .context("failed to get module for path")?;
+
+        let Some(ty) = self
+            .type_registry
+            .resolve_grammar_typeref(&module.scope(), &definition.ty)
+        else {
+            return Ok(None);
+        };
+
+        // TODO: verify that `ty` actually makes sense for an enum
+        let Some(size) = ty.size(&self.type_registry) else {
+            return Ok(None);
+        };
+
+        let mut metadata: HashMap<String, types::MetadataValue> = HashMap::new();
+        let mut fields: Vec<(String, isize)> = vec![];
+        let mut last_field = 0;
+        for statement in &definition.statements {
+            match statement {
+                grammar::EnumStatement::Meta(fields) => {
+                    for field in fields {
+                        if let grammar::ExprField(ident, grammar::Expr::IntLiteral(value)) = field {
+                            if ident.0 == "singleton" {
+                                metadata.insert(
+                                    "singleton".to_string(),
+                                    types::MetadataValue::Integer(*value),
+                                );
+                            }
+                        }
                     }
-                    .into(),
-                });
+                }
+                grammar::EnumStatement::Field(optional_expr_field) => {
+                    let grammar::OptionalExprField(ident, expr) = optional_expr_field;
+                    let value = match expr {
+                        Some(grammar::Expr::IntLiteral(value)) => *value,
+                        Some(_) => anyhow::bail!("unsupported enum field value {expr:?}"),
+                        None => last_field,
+                    };
+                    fields.push((ident.0.clone(), value));
+                    last_field = value + 1;
+                }
+            };
         }
-        Ok(())
+
+        Ok(Some(types::ItemStateResolved {
+            size,
+            inner: types::EnumDefinition {
+                ty,
+                fields,
+                metadata,
+            }
+            .into(),
+        }))
     }
 
     fn build_vftable(
