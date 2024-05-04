@@ -226,6 +226,19 @@ impl Parse for ExprField {
     }
 }
 
+impl Parse for OptionalExprField {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let name: Ident = input.parse()?;
+        let expr = if input.peek(Token![:]) {
+            input.parse::<Token![:]>()?;
+            Some(input.parse()?)
+        } else {
+            None
+        };
+        Ok(OptionalExprField(name, expr))
+    }
+}
+
 impl Parse for TypeField {
     fn parse(input: ParseStream) -> Result<Self> {
         let name: Ident = input.parse()?;
@@ -327,11 +340,53 @@ fn parse_type_definition(input: ParseStream) -> Result<(Ident, TypeDefinition)> 
     Ok((name, TypeDefinition { statements }))
 }
 
+impl Parse for EnumStatement {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let lookahead = input.lookahead1();
+        if lookahead.peek(kw::meta) {
+            input.parse::<kw::meta>()?;
+            let content;
+            braced!(content in input);
+
+            let fields: Punctuated<_, Token![,]> = content.parse_terminated(ExprField::parse)?;
+            Ok(EnumStatement::Meta(Vec::from_iter(fields)))
+        } else if lookahead.peek(syn::Ident) {
+            Ok(EnumStatement::Field(input.parse()?))
+        } else {
+            Err(lookahead.error())
+        }
+    }
+}
+
+fn parse_enum_definition(input: ParseStream) -> Result<(Ident, EnumDefinition)> {
+    input.parse::<Token![enum]>()?;
+    let name: Ident = input.parse()?;
+    input.parse::<Token![:]>()?;
+    let ty: TypeRef = input.parse()?;
+
+    let statements = {
+        let content;
+        braced!(content in input);
+
+        let statements: Punctuated<EnumStatement, Token![,]> =
+            content.parse_terminated(EnumStatement::parse)?;
+        Vec::from_iter(statements)
+    };
+
+    Ok((name, EnumDefinition { ty, statements }))
+}
+
 impl Parse for ItemDefinition {
     fn parse(input: ParseStream) -> Result<Self> {
         let lookahead = input.lookahead1();
         if lookahead.peek(Token![type]) {
             let (name, inner) = parse_type_definition(input)?;
+            Ok(ItemDefinition {
+                name,
+                inner: inner.into(),
+            })
+        } else if lookahead.peek(Token![enum]) {
+            let (name, inner) = parse_enum_definition(input)?;
             Ok(ItemDefinition {
                 name,
                 inner: inner.into(),
@@ -385,7 +440,7 @@ impl Parse for Module {
                         })?,
                     ));
                 }
-            } else if input.peek(syn::Token![type]) {
+            } else if input.peek(syn::Token![type]) || input.peek(syn::Token![enum]) {
                 definitions.push(input.parse()?);
             } else {
                 return Err(input.error("unexpected keyword"));

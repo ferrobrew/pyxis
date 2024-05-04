@@ -339,3 +339,46 @@ fn can_parse_extern_value() {
 
     assert_eq!(parse_str(text).ok(), Some(ast));
 }
+
+#[test]
+fn can_parse_enum() {
+    let text = r#"
+        enum TestType: u32 {
+            meta {
+                singleton: 0x1234,
+            },
+
+            Item1,
+            Item2,
+            Item3: 10,
+            Item4
+        }
+        "#;
+
+    let ast = {
+        type ES = EnumStatement;
+        type TR = TypeRef;
+        use Expr::IntLiteral;
+
+        Module::new(
+            &[],
+            &[],
+            &[],
+            &[ItemDefinition::new(
+                "TestType",
+                EnumDefinition::new(
+                    TR::ident_type("u32"),
+                    &[
+                        ES::meta(&[("singleton", IntLiteral(0x1234))]),
+                        ES::field("Item1"),
+                        ES::field("Item2"),
+                        ES::field_with_expr("Item3", IntLiteral(10)),
+                        ES::field("Item4"),
+                    ],
+                ),
+            )],
+        )
+    };
+
+    assert_eq!(parse_str(text).unwrap(), ast);
+}

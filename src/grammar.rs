@@ -269,6 +269,27 @@ impl From<(Ident, Expr)> for ExprField {
         ExprField(item.0, item.1)
     }
 }
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OptionalExprField(pub Ident, pub Option<Expr>);
+impl OptionalExprField {
+    pub fn ident(&self) -> &Ident {
+        &self.0
+    }
+
+    pub fn ident_as_str(&self) -> &str {
+        self.0.as_str()
+    }
+}
+impl From<Ident> for OptionalExprField {
+    fn from(item: Ident) -> Self {
+        OptionalExprField(item, None)
+    }
+}
+impl From<(Ident, Expr)> for OptionalExprField {
+    fn from(item: (Ident, Expr)) -> Self {
+        OptionalExprField(item.0, Some(item.1))
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TypeField(pub Ident, pub TypeRef);
@@ -338,12 +359,54 @@ impl TypeDefinition {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub enum EnumStatement {
+    Meta(Vec<ExprField>),
+    Field(OptionalExprField),
+}
+impl EnumStatement {
+    pub fn meta(fields: &[(&str, Expr)]) -> EnumStatement {
+        EnumStatement::Meta(
+            fields
+                .iter()
+                .map(|(n, e)| ((*n).into(), e.clone()).into())
+                .collect(),
+        )
+    }
+    pub fn field(name: &str) -> EnumStatement {
+        EnumStatement::Field(Ident::from(name).into())
+    }
+    pub fn field_with_expr(name: &str, expr: Expr) -> EnumStatement {
+        EnumStatement::Field((name.into(), expr).into())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EnumDefinition {
+    pub ty: TypeRef,
+    pub statements: Vec<EnumStatement>,
+}
+impl EnumDefinition {
+    pub fn new(ty: TypeRef, statements: &[EnumStatement]) -> Self {
+        Self {
+            ty,
+            statements: statements.to_vec(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ItemDefinitionInner {
     Type(TypeDefinition),
+    Enum(EnumDefinition),
 }
 impl From<TypeDefinition> for ItemDefinitionInner {
     fn from(item: TypeDefinition) -> Self {
         ItemDefinitionInner::Type(item)
+    }
+}
+impl From<EnumDefinition> for ItemDefinitionInner {
+    fn from(item: EnumDefinition) -> Self {
+        ItemDefinitionInner::Enum(item)
     }
 }
 

@@ -243,6 +243,7 @@ impl SemanticState {
     ) -> anyhow::Result<()> {
         match &definition.inner {
             grammar::ItemDefinitionInner::Type(ty) => self.build_type(resolvee_path, ty),
+            _ => unimplemented!(),
         }
     }
 
