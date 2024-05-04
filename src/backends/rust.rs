@@ -1,4 +1,4 @@
-use std::{collections::HashMap, io::Write, path::Path, process::Command};
+use std::{io::Write, path::Path, process::Command};
 
 use crate::{
     grammar::{ItemPath, ItemPathSegment},
@@ -182,13 +182,17 @@ fn build_function(
     })
 }
 
-fn build_defined_type(
-    regions: &[types::Region],
+fn build_type(
     name: &ItemPathSegment,
     size: usize,
-    metadata: &HashMap<String, types::MetadataValue>,
-    functions: &HashMap<String, Vec<types::Function>>,
+    type_definition: &types::TypeDefinition,
 ) -> anyhow::Result<proc_macro2::TokenStream> {
+    let types::TypeDefinition {
+        metadata,
+        regions,
+        functions,
+    } = type_definition;
+
     let fields = regions
         .iter()
         .enumerate()
@@ -277,7 +281,72 @@ fn build_defined_type(
     })
 }
 
-fn build_type(definition: &types::ItemDefinition) -> anyhow::Result<proc_macro2::TokenStream> {
+fn build_enum(
+    name: &ItemPathSegment,
+    size: usize,
+    enum_definition: &types::EnumDefinition,
+) -> anyhow::Result<proc_macro2::TokenStream> {
+    let types::EnumDefinition {
+        metadata,
+        fields,
+        ty,
+    } = enum_definition;
+
+    let syn_type = sa_type_to_syn_type(ty)?;
+    let name_ident = str_to_ident(name.as_str());
+
+    let syn_fields = fields.iter().map(|(name, value)| {
+        let name_ident = str_to_ident(name);
+        quote! {
+            #name_ident = #value as _
+        }
+    });
+
+    let size_check_ident = quote::format_ident!("_{}_size_check", name.as_str());
+    let size_check_impl = (size > 0).then(|| {
+        quote! {
+            #[allow(non_snake_case)]
+            #[allow(dead_code)]
+            fn #size_check_ident() {
+                unsafe {
+                    ::std::mem::transmute::<_, #name_ident>([0u8; #size]);
+                }
+                unreachable!()
+            }
+        }
+    });
+
+    let singleton_impl = metadata
+        .iter()
+        .find(|(k, _)| k.as_str() == "singleton")
+        .map(|(_, address)| match address {
+            types::MetadataValue::Integer(ref address) => {
+                let address = *address as usize;
+                quote! {
+                    #[allow(dead_code)]
+                    impl #name_ident {
+                        pub unsafe fn get() -> Self {
+                            unsafe {
+                                *(#address as *const Self)
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+    Ok(quote! {
+        #[repr(#syn_type)]
+        #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
+        pub enum #name_ident {
+            #(#syn_fields),*
+        }
+        #size_check_impl
+        #singleton_impl
+    })
+}
+
+fn build_item(definition: &types::ItemDefinition) -> anyhow::Result<proc_macro2::TokenStream> {
     use types::ItemCategory;
 
     let name = definition
@@ -288,17 +357,11 @@ fn build_type(definition: &types::ItemDefinition) -> anyhow::Result<proc_macro2:
     let types::ItemStateResolved { size, inner } =
         &definition.resolved().context("type was not resolved")?;
 
-    let types::TypeDefinition {
-        regions,
-        metadata,
-        functions,
-    } = match inner {
-        types::ItemDefinitionInner::Type(td) => td,
-        _ => unimplemented!(),
-    };
-
     match definition.category() {
-        ItemCategory::Defined => build_defined_type(regions, name, *size, metadata, functions),
+        ItemCategory::Defined => match inner {
+            types::ItemDefinitionInner::Type(td) => build_type(name, *size, td),
+            types::ItemDefinitionInner::Enum(ed) => build_enum(name, *size, ed),
+        },
         ItemCategory::Predefined => Ok(quote! {}),
         ItemCategory::Extern => Ok(quote! {}),
     }
@@ -339,7 +402,7 @@ pub fn write_module(
 
     let mut file = std::fs::File::create(&path)?;
     for definition in module.definitions(semantic_state.type_registry()) {
-        writeln!(file, "{}", build_type(definition)?)?;
+        writeln!(file, "{}", build_item(definition)?)?;
     }
 
     for (name, type_, address) in &module.extern_values {
