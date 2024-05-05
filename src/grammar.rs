@@ -22,6 +22,7 @@ impl AsRef<str> for Ident {
 pub enum Type {
     ConstPointer(Box<Type>),
     MutPointer(Box<Type>),
+    Array(Box<Type>, usize),
     Ident(Ident),
 }
 impl Type {
@@ -35,6 +36,10 @@ impl Type {
 
     pub fn mut_pointer(self) -> Type {
         Type::MutPointer(Box::new(self))
+    }
+
+    pub fn array(self, size: usize) -> Type {
+        Type::Array(Box::new(self), size)
     }
 }
 impl From<&str> for Type {

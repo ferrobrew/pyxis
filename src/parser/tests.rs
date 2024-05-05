@@ -382,3 +382,28 @@ fn can_parse_enum() {
 
     assert_eq!(parse_str(text).unwrap(), ast);
 }
+
+#[test]
+fn can_parse_array_field() {
+    let text = r#"
+        type TestType {
+            field_1: [i32; 4],
+        }
+        "#;
+
+    let ast = {
+        type TS = TypeStatement;
+
+        Module::new(
+            &[],
+            &[],
+            &[],
+            &[ItemDefinition::new(
+                "TestType",
+                TypeDefinition::new(&[TS::field("field_1", Type::ident("i32").array(4).into())]),
+            )],
+        )
+    };
+
+    assert_eq!(parse_str(text).unwrap(), ast);
+}

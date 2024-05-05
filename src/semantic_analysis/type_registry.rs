@@ -85,6 +85,9 @@ impl TypeRegistry {
             grammar::Type::MutPointer(t) => self
                 .resolve_grammar_type(scope, t.as_ref())
                 .map(|t| Type::MutPointer(Box::new(t))),
+            grammar::Type::Array(t, size) => self
+                .resolve_grammar_type(scope, t.as_ref())
+                .map(|t| Type::Array(Box::new(t), *size as usize)),
             grammar::Type::Ident(ident) => self.resolve_string(scope, ident.as_str()),
         }
     }

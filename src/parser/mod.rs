@@ -84,6 +84,15 @@ impl Parse for Type {
             } else {
                 Err(lookahead.error())
             }
+        } else if lookahead.peek(syn::token::Bracket) {
+            let content;
+            bracketed!(content in input);
+
+            let ty: Type = content.parse()?;
+            content.parse::<Token![;]>()?;
+            let size: syn::LitInt = content.parse()?;
+            let size: usize = size.base10_parse()?;
+            Ok(Type::Array(Box::new(ty), size))
         } else {
             Err(lookahead.error())
         }
