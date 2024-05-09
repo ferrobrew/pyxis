@@ -6,6 +6,7 @@ use crate::{
 };
 
 use anyhow::Context;
+use itertools::Itertools;
 use quote::quote;
 
 fn str_to_ident(s: &str) -> syn::Ident {
@@ -405,11 +406,18 @@ pub fn write_module(
     std::fs::create_dir_all(directory_path)?;
 
     let mut file = std::fs::File::create(&path)?;
-    for definition in module.definitions(semantic_state.type_registry()) {
+    for definition in module
+        .definitions(semantic_state.type_registry())
+        .sorted_by_key(|d| &d.path)
+    {
         writeln!(file, "{}", build_item(definition)?)?;
     }
 
-    for (name, type_, address) in &module.extern_values {
+    for (name, type_, address) in module
+        .extern_values
+        .iter()
+        .sorted_by_key(|(name, _, _)| name)
+    {
         writeln!(file, "{}", build_extern_value(name, type_, *address)?)?;
     }
 
