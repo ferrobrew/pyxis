@@ -388,8 +388,12 @@ pub fn write_module(
     key: &ItemPath,
     semantic_state: &semantic_state::ResolvedSemanticState,
     module: &module::Module,
-) -> Result<(), anyhow::Error> {
+) -> anyhow::Result<()> {
     const FORMAT_OUTPUT: bool = true;
+
+    if key.is_empty() {
+        return Ok(());
+    }
 
     let mut path = out_dir.to_path_buf();
     for segment in key.iter() {
