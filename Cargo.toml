@@ -1,5 +1,5 @@
 [package]
-name = "re-utilities-type-language"
+name = "pyxis"
 version = "0.1.0"
 edition = "2021"
 

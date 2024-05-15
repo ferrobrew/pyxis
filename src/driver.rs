@@ -11,7 +11,7 @@ pub fn build(out_dir: Option<&Path>) -> anyhow::Result<()> {
     let pointer_size = std::env::var("CARGO_CFG_TARGET_POINTER_WIDTH")?.parse::<usize>()? / 8;
     let mut semantic_state = SemanticState::new(pointer_size);
 
-    for path in glob::glob("types/**/*.rstl")?.filter_map(Result::ok) {
+    for path in glob::glob("types/**/*.pyx")?.filter_map(Result::ok) {
         semantic_state.add_file(std::path::Path::new("types"), &path)?;
     }
 

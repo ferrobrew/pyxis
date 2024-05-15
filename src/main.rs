@@ -1,10 +1,10 @@
-//! Very rudimentary CLI application to run rstl with the Rust backend
+//! Very rudimentary CLI application to run Pyxis with the Rust backend
 //! to test what the output will look like without having to look at it
 //! in situ
 
 use anyhow::Context;
 
-use re_utilities_type_language::{backends, semantic_analysis::SemanticState};
+use pyxis::{backends, semantic_analysis::SemanticState};
 
 fn main() -> anyhow::Result<()> {
     // get input directory from first argument
@@ -20,7 +20,7 @@ fn main() -> anyhow::Result<()> {
     let pointer_size = 4;
     let mut semantic_state = SemanticState::new(pointer_size);
 
-    for path in glob::glob(&format!("{in_dir}/**/*.rstl"))?.filter_map(Result::ok) {
+    for path in glob::glob(&format!("{in_dir}/**/*.pyx"))?.filter_map(Result::ok) {
         semantic_state.add_file(std::path::Path::new(&in_dir), &path)?;
     }
 
