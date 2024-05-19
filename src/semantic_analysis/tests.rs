@@ -43,9 +43,9 @@ fn can_resolve_basic_struct() {
             &[ItemDefinition::new(
                 "TestType",
                 TypeDefinition::new(&[
-                    TS::field("field_1", TR::ident_type("i32")),
+                    TS::field("field_1", TR::ident_type("i32"), []),
                     TS::macro_("padding", &[Expr::IntLiteral(4)]),
-                    TS::field("field_2", TR::ident_type("u64")),
+                    TS::field("field_2", TR::ident_type("u64"), []),
                 ]),
             )],
         )
@@ -117,18 +117,23 @@ fn can_resolve_pointer_to_another_struct() {
             &[
                 ItemDefinition::new(
                     "TestType1",
-                    TypeDefinition::new(&[TS::field("field_1", TR::ident_type("u64"))]),
+                    TypeDefinition::new(&[TS::field("field_1", TR::ident_type("u64"), [])]),
                 ),
                 ItemDefinition::new(
                     "TestType2",
                     TypeDefinition::new(&[
-                        TS::field("field_1", TR::ident_type("i32")),
-                        TS::field("field_2", TR::ident_type("TestType1")),
+                        TS::field("field_1", TR::ident_type("i32"), []),
+                        TS::field("field_2", TR::ident_type("TestType1"), []),
                         TS::field(
                             "field_3",
                             TR::Type(Type::ident("TestType1").const_pointer()),
+                            [],
                         ),
-                        TS::field("field_4", TR::Type(Type::ident("TestType1").mut_pointer())),
+                        TS::field(
+                            "field_4",
+                            TR::Type(Type::ident("TestType1").mut_pointer()),
+                            [],
+                        ),
                     ]),
                 ),
             ],
@@ -192,7 +197,7 @@ fn can_resolve_complex_type() {
                 ItemDefinition::new(
                     "TestType",
                     TypeDefinition::new(&[
-                        TS::field("field_1", TR::ident_type("i32")),
+                        TS::field("field_1", TR::ident_type("i32"), []),
                         TS::macro_("padding", &[Expr::IntLiteral(4)]),
                     ]),
                 ),
@@ -203,10 +208,18 @@ fn can_resolve_complex_type() {
                             ("size", Expr::IntLiteral(0x1750)),
                             ("singleton", Expr::IntLiteral(0x1_200_000)),
                         ]),
-                        TS::address(0x78, ("max_num_1", TR::ident_type("u16"))),
-                        TS::field("max_num_2", TR::ident_type("u16")),
-                        TS::address(0xA00, ("test_type", TR::ident_type("TestType"))),
-                        TS::field("settings", MacroCall::unk(804).into()),
+                        TS::field(
+                            "max_num_1",
+                            TR::ident_type("u16"),
+                            [Attribute::address(0x78)],
+                        ),
+                        TS::field("max_num_2", TR::ident_type("u16"), []),
+                        TS::field(
+                            "test_type",
+                            TR::ident_type("TestType"),
+                            [Attribute::address(0xA00)],
+                        ),
+                        TS::field("settings", MacroCall::unk(804).into(), []),
                         TS::functions(&[(
                             "free",
                             &[Function::new(
@@ -315,7 +328,7 @@ fn will_eventually_terminate_with_an_unknown_type() {
             &[],
             &[ItemDefinition::new(
                 "TestType2",
-                TypeDefinition::new(&[TS::field("field_2", TR::ident_type("TestType1"))]),
+                TypeDefinition::new(&[TS::field("field_2", TR::ident_type("TestType1"), [])]),
             )],
         )
     };
@@ -341,7 +354,7 @@ fn can_use_type_from_another_module() {
             &[],
             &[ItemDefinition::new(
                 "TestType1",
-                TypeDefinition::new(&[TS::field("field", TR::ident_type("TestType2"))]),
+                TypeDefinition::new(&[TS::field("field", TR::ident_type("TestType2"), [])]),
             )],
         )
     };
@@ -357,7 +370,7 @@ fn can_use_type_from_another_module() {
             &[],
             &[ItemDefinition::new(
                 "TestType2",
-                TypeDefinition::new(&[TS::field("field", TR::ident_type("u32"))]),
+                TypeDefinition::new(&[TS::field("field", TR::ident_type("u32"), [])]),
             )],
         )
     };
@@ -433,13 +446,18 @@ fn can_resolve_embed_of_an_extern() {
             &[ItemDefinition::new(
                 "TestType2",
                 TypeDefinition::new(&[
-                    TS::field("field_1", TR::ident_type("i32")),
-                    TS::field("field_2", TR::ident_type("TestType1")),
+                    TS::field("field_1", TR::ident_type("i32"), []),
+                    TS::field("field_2", TR::ident_type("TestType1"), []),
                     TS::field(
                         "field_3",
                         TR::Type(Type::ident("TestType1").const_pointer()),
+                        [],
                     ),
-                    TS::field("field_4", TR::Type(Type::ident("TestType1").mut_pointer())),
+                    TS::field(
+                        "field_4",
+                        TR::Type(Type::ident("TestType1").mut_pointer()),
+                        [],
+                    ),
                 ]),
             )],
         )

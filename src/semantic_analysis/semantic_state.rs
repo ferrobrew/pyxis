@@ -288,16 +288,37 @@ impl SemanticState {
                         }
                     }
                 }
-                grammar::TypeStatement::Address(address, field) => {
-                    regions.push((Some(*address), types::Region::Padding(0)));
-                    if let Some(region_pair) = build_region_from_field(field) {
-                        regions.push(region_pair);
-                    } else {
-                        return Ok(None);
+                grammar::TypeStatement::Field { field, attributes } => {
+                    let mut attributes = attributes.clone();
+                    let mut remove_indices = vec![];
+
+                    let mut address = None;
+
+                    for (idx, attribute) in attributes.iter().enumerate() {
+                        let Some((ident, exprs)) = attribute.function() else {
+                            anyhow::bail!("unsupported attribute: {attribute:?}");
+                        };
+                        match (ident.as_str(), &exprs[..]) {
+                            ("address", [grammar::Expr::IntLiteral(addr)]) => {
+                                address = Some(*addr as usize);
+                                remove_indices.push(idx);
+                            }
+                            _ => anyhow::bail!("unsupported attribute: {attribute:?}"),
+                        }
                     }
-                }
-                grammar::TypeStatement::Field(type_field) => {
-                    if let Some(region_pair) = build_region_from_field(type_field) {
+
+                    for idx in remove_indices.into_iter().rev() {
+                        attributes.remove(idx);
+                    }
+                    if !attributes.is_empty() {
+                        anyhow::bail!("unsupported attributes: {attributes:?}");
+                    }
+
+                    if let Some(address) = address {
+                        regions.push((Some(address), types::Region::Padding(0)));
+                    }
+
+                    if let Some(region_pair) = build_region_from_field(field) {
                         regions.push(region_pair);
                     } else {
                         return Ok(None);

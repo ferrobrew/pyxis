@@ -1,6 +1,6 @@
 use syn::{
     braced, bracketed, parenthesized,
-    parse::{Parse, ParseStream, Result},
+    parse::{Lookahead1, Parse, ParseStream, Result},
     punctuated::Punctuated,
     Token,
 };
@@ -12,7 +12,6 @@ mod tests;
 
 mod kw {
     syn::custom_keyword!(meta);
-    syn::custom_keyword!(address);
     syn::custom_keyword!(functions);
 }
 
@@ -260,6 +259,27 @@ impl Parse for TypeStatement {
     fn parse(input: ParseStream) -> Result<Self> {
         use syn::parse::discouraged::Speculative;
 
+        fn parse_field(
+            input: ParseStream,
+            lookahead: Lookahead1,
+            attributes: Vec<Attribute>,
+        ) -> Result<TypeStatement> {
+            if lookahead.peek(syn::Ident) {
+                let ahead = input.fork();
+                if let Ok(macro_call) = ahead.call(MacroCall::parse) {
+                    input.advance_to(&ahead);
+                    Ok(TypeStatement::Macro(macro_call))
+                } else {
+                    Ok(TypeStatement::Field {
+                        field: input.parse()?,
+                        attributes,
+                    })
+                }
+            } else {
+                Err(lookahead.error())
+            }
+        }
+
         let lookahead = input.lookahead1();
         if lookahead.peek(kw::meta) {
             input.parse::<kw::meta>()?;
@@ -268,16 +288,6 @@ impl Parse for TypeStatement {
 
             let fields: Punctuated<_, Token![,]> = content.parse_terminated(ExprField::parse)?;
             Ok(TypeStatement::Meta(Vec::from_iter(fields)))
-        } else if lookahead.peek(kw::address) {
-            input.parse::<kw::address>()?;
-            // keep the grammar strict for now, we can loosen it to an expr later
-            let content;
-            parenthesized!(content in input);
-
-            let offset: syn::LitInt = content.parse()?;
-            let offset = offset.base10_parse()?;
-
-            Ok(TypeStatement::Address(offset, input.parse()?))
         } else if lookahead.peek(kw::functions) {
             input.parse::<kw::functions>()?;
 
@@ -300,16 +310,15 @@ impl Parse for TypeStatement {
             let function_blocks = Vec::from_iter(function_blocks);
 
             Ok(TypeStatement::Functions(function_blocks))
-        } else if lookahead.peek(syn::Ident) {
-            let ahead = input.fork();
-            if let Ok(macro_call) = ahead.call(MacroCall::parse) {
-                input.advance_to(&ahead);
-                Ok(TypeStatement::Macro(macro_call))
-            } else {
-                Ok(TypeStatement::Field(input.parse()?))
+        } else if lookahead.peek(syn::Token![#]) {
+            let mut attributes = vec![];
+            while input.peek(syn::Token![#]) {
+                attributes.push(input.parse()?);
             }
+
+            parse_field(input, input.lookahead1(), attributes)
         } else {
-            Err(lookahead.error())
+            parse_field(input, lookahead, vec![])
         }
     }
 }

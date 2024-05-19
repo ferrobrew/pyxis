@@ -20,8 +20,8 @@ fn can_parse_basic_struct() {
             &[ItemDefinition::new(
                 "TestType",
                 TypeDefinition::new(&[
-                    TS::field("field_1", TR::ident_type("i32")),
-                    TS::field("field_2", TR::ident_type("i32")),
+                    TS::field("field_1", TR::ident_type("i32"), []),
+                    TS::field("field_2", TR::ident_type("i32"), []),
                 ]),
             )],
         )
@@ -63,17 +63,18 @@ fn can_parse_vehicle_types() {
             &[ItemDefinition::new(
                 "VehicleTypes",
                 TypeDefinition::new(&[
-                    TS::field("hash_edacd65b_likely_max_models", TR::ident_type("i32")),
-                    TS::field("hash_2ff58884", TR::ident_type("i32")),
-                    TS::field("maximum_gpu_cost", TR::ident_type("i32")),
-                    TS::field("maximum_cpu_cost", TR::ident_type("i32")),
-                    TS::field("field_10", TR::ident_type("i32")),
-                    TS::field("accumulated_gpu_cost", TR::ident_type("i32")),
-                    TS::field("accumulated_cpu_cost", TR::ident_type("i32")),
-                    TS::field("field_1c", TR::ident_type("i32")),
+                    TS::field("hash_edacd65b_likely_max_models", TR::ident_type("i32"), []),
+                    TS::field("hash_2ff58884", TR::ident_type("i32"), []),
+                    TS::field("maximum_gpu_cost", TR::ident_type("i32"), []),
+                    TS::field("maximum_cpu_cost", TR::ident_type("i32"), []),
+                    TS::field("field_10", TR::ident_type("i32"), []),
+                    TS::field("accumulated_gpu_cost", TR::ident_type("i32"), []),
+                    TS::field("accumulated_cpu_cost", TR::ident_type("i32"), []),
+                    TS::field("field_1c", TR::ident_type("i32"), []),
                     TS::field(
                         "loaded_models",
                         T::ident("LoadedModel").const_pointer().into(),
+                        [],
                     ),
                     TS::macro_("padding", &[Expr::IntLiteral(0x10)]),
                 ]),
@@ -93,11 +94,11 @@ fn can_parse_spawn_manager() {
                 singleton: 0x1_191_918,
             },
 
-            address(0x78)
+            #[address(0x78)]
             max_num_characters: u16,
             max_num_vehicles: u16,
 
-            address(0xA00)
+            #[address(0xA00)]
             world_sim: WorldSim,
             enemy_type_spawn_settings: unk!(804),
             character_types: unk!(0x74),
@@ -146,12 +147,20 @@ fn can_parse_spawn_manager() {
                         ("size", IntLiteral(0x1754)),
                         ("singleton", IntLiteral(0x1_191_918)),
                     ]),
-                    TS::address(0x78, ("max_num_characters", TR::ident_type("u16"))),
-                    TS::field("max_num_vehicles", TR::ident_type("u16")),
-                    TS::address(0xA00, ("world_sim", TR::ident_type("WorldSim"))),
-                    TS::field("enemy_type_spawn_settings", MacroCall::unk(804).into()),
-                    TS::field("character_types", MacroCall::unk(0x74).into()),
-                    TS::field("vehicle_types", TR::ident_type("VehicleTypes")),
+                    TS::field(
+                        "max_num_characters",
+                        TR::ident_type("u16"),
+                        [Attribute::address(0x78)],
+                    ),
+                    TS::field("max_num_vehicles", TR::ident_type("u16"), []),
+                    TS::field(
+                        "world_sim",
+                        TR::ident_type("WorldSim"),
+                        [Attribute::address(0xA00)],
+                    ),
+                    TS::field("enemy_type_spawn_settings", MacroCall::unk(804).into(), []),
+                    TS::field("character_types", MacroCall::unk(0x74).into(), []),
+                    TS::field("vehicle_types", TR::ident_type("VehicleTypes"), []),
                     TS::functions(&[(
                         "free",
                         &[
@@ -196,7 +205,7 @@ fn can_parse_spawn_manager() {
 fn can_parse_address_field() {
     let text = r#"
         type Test {
-            address(0x78) max_num_characters: u16,
+            #[address(0x78)] max_num_characters: u16,
         }
         "#;
 
@@ -207,9 +216,10 @@ fn can_parse_address_field() {
             &[],
             &[ItemDefinition::new(
                 "Test",
-                TypeDefinition::new(&[TypeStatement::address(
-                    0x78,
-                    ("max_num_characters", TypeRef::ident_type("u16")),
+                TypeDefinition::new(&[TypeStatement::field(
+                    "max_num_characters",
+                    TypeRef::ident_type("u16"),
+                    [Attribute::address(0x78)],
                 )]),
             )],
         )
@@ -237,6 +247,7 @@ fn can_parse_use() {
                 TypeDefinition::new(&[TypeStatement::field(
                     "test",
                     TypeRef::ident_type("TestType<Hey>"),
+                    [],
                 )]),
             )],
         )
@@ -279,6 +290,7 @@ fn can_parse_extern() {
                 TypeDefinition::new(&[TypeStatement::field(
                     "test",
                     TypeRef::ident_type("TestType<Hey>"),
+                    [],
                 )]),
             )],
         )
@@ -388,7 +400,11 @@ fn can_parse_array_field() {
             &[],
             &[ItemDefinition::new(
                 "TestType",
-                TypeDefinition::new(&[TS::field("field_1", Type::ident("i32").array(4).into())]),
+                TypeDefinition::new(&[TS::field(
+                    "field_1",
+                    Type::ident("i32").array(4).into(),
+                    [],
+                )]),
             )],
         )
     };

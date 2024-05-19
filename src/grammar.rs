@@ -191,6 +191,12 @@ impl Attribute {
     pub fn address(address: usize) -> Self {
         Attribute::Function("address".into(), vec![Expr::IntLiteral(address as isize)])
     }
+
+    pub fn function(&self) -> Option<(&Ident, &Vec<Expr>)> {
+        match self {
+            Attribute::Function(ident, exprs) => Some((ident, exprs)),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -307,9 +313,11 @@ impl From<(Ident, TypeRef)> for TypeField {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TypeStatement {
     Meta(Vec<ExprField>),
-    Address(usize, TypeField),
     Functions(Vec<(Ident, Vec<Function>)>),
-    Field(TypeField),
+    Field {
+        field: TypeField,
+        attributes: Vec<Attribute>,
+    },
     Macro(MacroCall),
 }
 impl TypeStatement {
@@ -321,9 +329,6 @@ impl TypeStatement {
                 .collect(),
         )
     }
-    pub fn address(address: usize, field: (&str, TypeRef)) -> TypeStatement {
-        TypeStatement::Address(address, TypeField::new(field.0, field.1))
-    }
     pub fn functions(functions: &[(&str, &[Function])]) -> TypeStatement {
         TypeStatement::Functions(
             functions
@@ -332,8 +337,15 @@ impl TypeStatement {
                 .collect(),
         )
     }
-    pub fn field(name: &str, type_ref: TypeRef) -> TypeStatement {
-        TypeStatement::Field((name.into(), type_ref).into())
+    pub fn field(
+        name: &str,
+        type_ref: TypeRef,
+        attributes: impl Into<Vec<Attribute>>,
+    ) -> TypeStatement {
+        TypeStatement::Field {
+            field: (name.into(), type_ref).into(),
+            attributes: attributes.into(),
+        }
     }
     pub fn macro_(ident: &str, exprs: &[Expr]) -> TypeStatement {
         TypeStatement::Macro(MacroCall::new(ident, exprs))
