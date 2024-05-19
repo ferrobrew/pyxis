@@ -256,21 +256,6 @@ impl Parse for TypeField {
     }
 }
 
-fn parse_optionally_braced_content<T>(
-    input: ParseStream,
-    content_parser: fn(ParseStream) -> Result<T>,
-) -> Result<Vec<T>> {
-    if input.peek(syn::token::Brace) {
-        let content;
-        braced!(content in input);
-
-        let fields: Punctuated<_, Token![,]> = content.parse_terminated(content_parser)?;
-        Ok(Vec::from_iter(fields))
-    } else {
-        Ok(vec![content_parser(input)?])
-    }
-}
-
 impl Parse for TypeStatement {
     fn parse(input: ParseStream) -> Result<Self> {
         use syn::parse::discouraged::Speculative;
@@ -291,9 +276,8 @@ impl Parse for TypeStatement {
 
             let offset: syn::LitInt = content.parse()?;
             let offset = offset.base10_parse()?;
-            let fields = parse_optionally_braced_content(input, TypeField::parse)?;
 
-            Ok(TypeStatement::Address(offset, fields))
+            Ok(TypeStatement::Address(offset, input.parse()?))
         } else if lookahead.peek(kw::functions) {
             input.parse::<kw::functions>()?;
 

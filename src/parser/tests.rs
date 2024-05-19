@@ -93,17 +93,15 @@ fn can_parse_spawn_manager() {
                 singleton: 0x1_191_918,
             },
 
-            address(0x78) {
-                max_num_characters: u16,
-                max_num_vehicles: u16,
-            },
+            address(0x78)
+            max_num_characters: u16,
+            max_num_vehicles: u16,
 
-            address(0xA00) {
-                world_sim: WorldSim,
-                enemy_type_spawn_settings: unk!(804),
-                character_types: unk!(0x74),
-                vehicle_types: VehicleTypes,
-            },
+            address(0xA00)
+            world_sim: WorldSim,
+            enemy_type_spawn_settings: unk!(804),
+            character_types: unk!(0x74),
+            vehicle_types: VehicleTypes,
 
             functions {
                 free {
@@ -148,22 +146,12 @@ fn can_parse_spawn_manager() {
                         ("size", IntLiteral(0x1754)),
                         ("singleton", IntLiteral(0x1_191_918)),
                     ]),
-                    TS::address(
-                        0x78,
-                        &[
-                            ("max_num_characters", TR::ident_type("u16")),
-                            ("max_num_vehicles", TR::ident_type("u16")),
-                        ],
-                    ),
-                    TS::address(
-                        0xA00,
-                        &[
-                            ("world_sim", TR::ident_type("WorldSim")),
-                            ("enemy_type_spawn_settings", MacroCall::unk(804).into()),
-                            ("character_types", MacroCall::unk(0x74).into()),
-                            ("vehicle_types", TR::ident_type("VehicleTypes")),
-                        ],
-                    ),
+                    TS::address(0x78, ("max_num_characters", TR::ident_type("u16"))),
+                    TS::field("max_num_vehicles", TR::ident_type("u16")),
+                    TS::address(0xA00, ("world_sim", TR::ident_type("WorldSim"))),
+                    TS::field("enemy_type_spawn_settings", MacroCall::unk(804).into()),
+                    TS::field("character_types", MacroCall::unk(0x74).into()),
+                    TS::field("vehicle_types", TR::ident_type("VehicleTypes")),
                     TS::functions(&[(
                         "free",
                         &[
@@ -221,7 +209,7 @@ fn can_parse_address_field() {
                 "Test",
                 TypeDefinition::new(&[TypeStatement::address(
                     0x78,
-                    &[("max_num_characters", TypeRef::ident_type("u16"))],
+                    ("max_num_characters", TypeRef::ident_type("u16")),
                 )]),
             )],
         )

@@ -307,7 +307,7 @@ impl From<(Ident, TypeRef)> for TypeField {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TypeStatement {
     Meta(Vec<ExprField>),
-    Address(usize, Vec<TypeField>),
+    Address(usize, TypeField),
     Functions(Vec<(Ident, Vec<Function>)>),
     Field(TypeField),
     Macro(MacroCall),
@@ -321,14 +321,8 @@ impl TypeStatement {
                 .collect(),
         )
     }
-    pub fn address(address: usize, fields: &[(&str, TypeRef)]) -> TypeStatement {
-        TypeStatement::Address(
-            address,
-            fields
-                .iter()
-                .map(|(n, t)| ((*n).into(), t.clone()).into())
-                .collect(),
-        )
+    pub fn address(address: usize, field: (&str, TypeRef)) -> TypeStatement {
+        TypeStatement::Address(address, TypeField::new(field.0, field.1))
     }
     pub fn functions(functions: &[(&str, &[Function])]) -> TypeStatement {
         TypeStatement::Functions(

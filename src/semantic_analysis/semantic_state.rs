@@ -288,14 +288,12 @@ impl SemanticState {
                         }
                     }
                 }
-                grammar::TypeStatement::Address(address, fields) => {
+                grammar::TypeStatement::Address(address, field) => {
                     regions.push((Some(*address), types::Region::Padding(0)));
-                    for type_field in fields {
-                        if let Some(region_pair) = build_region_from_field(type_field) {
-                            regions.push(region_pair);
-                        } else {
-                            return Ok(None);
-                        }
+                    if let Some(region_pair) = build_region_from_field(field) {
+                        regions.push(region_pair);
+                    } else {
+                        return Ok(None);
                     }
                 }
                 grammar::TypeStatement::Field(type_field) => {

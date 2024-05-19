@@ -203,20 +203,10 @@ fn can_resolve_complex_type() {
                             ("size", Expr::IntLiteral(0x1750)),
                             ("singleton", Expr::IntLiteral(0x1_200_000)),
                         ]),
-                        TS::address(
-                            0x78,
-                            &[
-                                ("max_num_1", TR::ident_type("u16")),
-                                ("max_num_2", TR::ident_type("u16")),
-                            ],
-                        ),
-                        TS::address(
-                            0xA00,
-                            &[
-                                ("test_type", TR::ident_type("TestType")),
-                                ("settings", MacroCall::unk(804).into()),
-                            ],
-                        ),
+                        TS::address(0x78, ("max_num_1", TR::ident_type("u16"))),
+                        TS::field("max_num_2", TR::ident_type("u16")),
+                        TS::address(0xA00, ("test_type", TR::ident_type("TestType"))),
+                        TS::field("settings", MacroCall::unk(804).into()),
                         TS::functions(&[(
                             "free",
                             &[Function::new(
