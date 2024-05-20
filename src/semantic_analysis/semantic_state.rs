@@ -288,8 +288,8 @@ impl SemanticState {
             .context("failed to get module for path")?;
 
         let mut target_size: Option<usize> = None;
+        let mut singleton = None;
         let mut regions: Vec<(Option<usize>, types::Region)> = vec![];
-        let mut metadata: HashMap<String, types::MetadataValue> = HashMap::new();
         let mut functions: HashMap<String, Vec<types::Function>> = HashMap::new();
         for statement in &definition.statements {
             match statement {
@@ -356,10 +356,7 @@ impl SemanticState {
                     target_size = Some(*size as usize);
                 }
                 ("singleton", [grammar::Expr::IntLiteral(value)]) => {
-                    metadata.insert(
-                        "singleton".to_string(),
-                        types::MetadataValue::Integer(*value),
-                    );
+                    singleton = Some(*value as usize);
                 }
                 _ => anyhow::bail!("unsupported attribute: {attribute:?}"),
             }
@@ -444,7 +441,7 @@ impl SemanticState {
             inner: types::TypeDefinition {
                 regions: resolved_regions,
                 functions,
-                metadata,
+                singleton,
             }
             .into(),
         }))
@@ -471,7 +468,7 @@ impl SemanticState {
             return Ok(None);
         };
 
-        let mut metadata: HashMap<String, types::MetadataValue> = HashMap::new();
+        let mut singleton = None;
         let mut fields: Vec<(String, isize)> = vec![];
         let mut last_field = 0;
         for statement in &definition.statements {
@@ -489,10 +486,7 @@ impl SemanticState {
             let grammar::Attribute::Function(ident, exprs) = attribute;
             match (ident.as_str(), exprs.as_slice()) {
                 ("singleton", [grammar::Expr::IntLiteral(value)]) => {
-                    metadata.insert(
-                        "singleton".to_string(),
-                        types::MetadataValue::Integer(*value),
-                    );
+                    singleton = Some(*value as usize);
                 }
                 _ => anyhow::bail!("unsupported attribute: {attribute:?}"),
             }
@@ -503,7 +497,7 @@ impl SemanticState {
             inner: types::EnumDefinition {
                 type_: ty,
                 fields,
-                metadata,
+                singleton,
             }
             .into(),
         }))
@@ -558,7 +552,7 @@ impl SemanticState {
                     inner: types::TypeDefinition {
                         regions: vftable.iter().map(function_to_field).collect(),
                         functions: HashMap::new(),
-                        metadata: HashMap::new(),
+                        singleton: None,
                     }
                     .into(),
                 }),

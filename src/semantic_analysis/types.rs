@@ -113,23 +113,18 @@ impl Region {
     }
 }
 
-#[derive(PartialEq, Eq, Debug, Clone)]
-pub enum MetadataValue {
-    Integer(isize),
-}
-
 #[derive(PartialEq, Eq, Debug, Clone, Default)]
 pub struct TypeDefinition {
     pub regions: Vec<Region>,
     pub functions: HashMap<String, Vec<Function>>,
-    pub metadata: HashMap<String, MetadataValue>,
+    pub singleton: Option<usize>,
 }
 
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct EnumDefinition {
     pub type_: Type,
     pub fields: Vec<(String, isize)>,
-    pub metadata: HashMap<String, MetadataValue>,
+    pub singleton: Option<usize>,
 }
 
 #[derive(PartialEq, Eq, Debug, Clone)]

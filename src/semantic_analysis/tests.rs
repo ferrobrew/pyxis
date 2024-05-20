@@ -79,7 +79,7 @@ fn can_resolve_basic_struct() {
                     ),
                 ],
                 functions: HashMap::new(),
-                metadata: HashMap::new(),
+                singleton: None,
             }
             .into(),
         }),
@@ -151,7 +151,7 @@ fn can_resolve_pointer_to_another_struct() {
                     ),
                 ],
                 functions: HashMap::new(),
-                metadata: HashMap::new(),
+                singleton: None,
             }
             .into(),
         }),
@@ -275,10 +275,7 @@ fn can_resolve_complex_type() {
                 )]
                 .into_iter()
                 .collect(),
-                metadata: HashMap::from([(
-                    "singleton".to_string(),
-                    types::MetadataValue::Integer(0x1_200_000),
-                )]),
+                singleton: Some(0x1_200_000),
             }
             .into(),
         }),
@@ -360,7 +357,7 @@ fn can_use_type_from_another_module() {
                     "field",
                     Type::Raw(ItemPath::from_colon_delimited_str("module2::TestType2")),
                 )],
-                metadata: HashMap::new(),
+                singleton: None,
             }
             .into(),
         }),
@@ -458,7 +455,7 @@ fn can_resolve_embed_of_an_extern() {
                     ),
                 ],
                 functions: HashMap::new(),
-                metadata: HashMap::new(),
+                singleton: None,
             }
             .into(),
         }),
@@ -562,7 +559,7 @@ fn can_generate_vftable() {
                         },
                     ],
                 )]),
-                metadata: HashMap::new(),
+                singleton: None,
             }
             .into(),
         }),
@@ -622,7 +619,7 @@ fn can_generate_vftable() {
                     ),
                 ],
                 functions: HashMap::new(),
-                metadata: HashMap::new(),
+                singleton: None,
             }
             .into(),
         }),
@@ -746,10 +743,7 @@ fn can_resolve_enum() {
                     ("Item3".to_string(), 10),
                     ("Item4".to_string(), 11),
                 ],
-                metadata: HashMap::from([(
-                    "singleton".to_string(),
-                    types::MetadataValue::Integer(0x1234),
-                )]),
+                singleton: Some(0x1234),
             }
             .into(),
         }),

@@ -189,7 +189,7 @@ fn build_type(
     type_definition: &types::TypeDefinition,
 ) -> anyhow::Result<proc_macro2::TokenStream> {
     let types::TypeDefinition {
-        metadata,
+        singleton,
         regions,
         functions,
     } = type_definition;
@@ -226,24 +226,18 @@ fn build_type(
         }
     });
 
-    let singleton_impl = metadata
-        .iter()
-        .find(|(k, _)| k.as_str() == "singleton")
-        .map(|(_, address)| match address {
-            types::MetadataValue::Integer(ref address) => {
-                let address = *address as usize;
-                quote! {
-                    #[allow(dead_code)]
-                    impl #name_ident {
-                        pub unsafe fn get() -> &'static mut Self {
-                            unsafe {
-                                &mut **(#address as *mut *mut Self)
-                            }
-                        }
+    let singleton_impl = singleton.map(|address| {
+        quote! {
+            #[allow(dead_code)]
+            impl #name_ident {
+                pub unsafe fn get() -> &'static mut Self {
+                    unsafe {
+                        &mut **(#address as *mut *mut Self)
                     }
                 }
             }
-        });
+        }
+    });
 
     let free_functions_impl = functions
         .get("free")
@@ -283,12 +277,12 @@ fn build_enum(
     enum_definition: &types::EnumDefinition,
 ) -> anyhow::Result<proc_macro2::TokenStream> {
     let types::EnumDefinition {
-        metadata,
+        singleton,
         fields,
-        type_: ty,
+        type_,
     } = enum_definition;
 
-    let syn_type = sa_type_to_syn_type(ty)?;
+    let syn_type = sa_type_to_syn_type(type_)?;
     let name_ident = str_to_ident(name.as_str());
 
     let syn_fields = fields.iter().map(|(name, value)| {
@@ -312,24 +306,18 @@ fn build_enum(
         }
     });
 
-    let singleton_impl = metadata
-        .iter()
-        .find(|(k, _)| k.as_str() == "singleton")
-        .map(|(_, address)| match address {
-            types::MetadataValue::Integer(ref address) => {
-                let address = *address as usize;
-                quote! {
-                    #[allow(dead_code)]
-                    impl #name_ident {
-                        pub unsafe fn get() -> Self {
-                            unsafe {
-                                *(#address as *const Self)
-                            }
-                        }
+    let singleton_impl = singleton.map(|address| {
+        quote! {
+            #[allow(dead_code)]
+            impl #name_ident {
+                pub unsafe fn get() -> Self {
+                    unsafe {
+                        *(#address as *const Self)
                     }
                 }
             }
-        });
+        }
+    });
 
     Ok(quote! {
         #[repr(#syn_type)]
