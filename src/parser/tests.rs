@@ -70,11 +70,7 @@ fn can_parse_vehicle_types() {
                     TS::field("accumulated_gpu_cost", T::ident("i32"), []),
                     TS::field("accumulated_cpu_cost", T::ident("i32"), []),
                     TS::field("field_1c", T::ident("i32"), []),
-                    TS::field(
-                        "loaded_models",
-                        T::ident("LoadedModel").const_pointer(),
-                        [],
-                    ),
+                    TS::field("loaded_models", T::ident("LoadedModel").const_pointer(), []),
                     TS::field("_", T::unknown(0x10), []),
                 ]),
             )],
@@ -89,8 +85,8 @@ fn can_parse_spawn_manager() {
     let text = r#"
         type SpawnManager {
             meta {
-                size: 0x1754,
-                singleton: 0x1_191_918,
+                #[size(0x1754)]
+                #[singleton(0x1_191_918)]
             },
 
             #[address(0x78)]
@@ -343,7 +339,7 @@ fn can_parse_enum() {
     let text = r#"
         enum TestType: u32 {
             meta {
-                singleton: 0x1234,
+                #[singleton(0x1234)]
             },
 
             Item1,
@@ -398,11 +394,7 @@ fn can_parse_array_field() {
             &[],
             &[ItemDefinition::new(
                 "TestType",
-                TypeDefinition::new(&[TS::field(
-                    "field_1",
-                    Type::ident("i32").array(4),
-                    [],
-                )]),
+                TypeDefinition::new(&[TS::field("field_1", Type::ident("i32").array(4), [])]),
             )],
         )
     };

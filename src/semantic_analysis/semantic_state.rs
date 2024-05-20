@@ -270,17 +270,20 @@ impl SemanticState {
         let mut functions: HashMap<String, Vec<types::Function>> = HashMap::new();
         for statement in &definition.statements {
             match statement {
-                grammar::TypeStatement::Meta(fields) => {
-                    for field in fields {
-                        if let grammar::ExprField(ident, grammar::Expr::IntLiteral(value)) = field {
-                            if ident.0 == "size" {
-                                target_size = Some(*value as usize);
-                            } else if ident.0 == "singleton" {
+                grammar::TypeStatement::Meta(attributes) => {
+                    for attribute in attributes {
+                        let grammar::Attribute::Function(ident, exprs) = attribute;
+                        match (ident.as_str(), exprs.as_slice()) {
+                            ("size", [grammar::Expr::IntLiteral(size)]) => {
+                                target_size = Some(*size as usize);
+                            }
+                            ("singleton", [grammar::Expr::IntLiteral(value)]) => {
                                 metadata.insert(
                                     "singleton".to_string(),
                                     types::MetadataValue::Integer(*value),
                                 );
                             }
+                            _ => anyhow::bail!("unsupported attribute: {attribute:?}"),
                         }
                     }
                 }
@@ -462,15 +465,17 @@ impl SemanticState {
         let mut last_field = 0;
         for statement in &definition.statements {
             match statement {
-                grammar::EnumStatement::Meta(fields) => {
-                    for field in fields {
-                        if let grammar::ExprField(ident, grammar::Expr::IntLiteral(value)) = field {
-                            if ident.0 == "singleton" {
+                grammar::EnumStatement::Meta(attributes) => {
+                    for attribute in attributes {
+                        let grammar::Attribute::Function(ident, exprs) = attribute;
+                        match (ident.as_str(), exprs.as_slice()) {
+                            ("singleton", [grammar::Expr::IntLiteral(value)]) => {
                                 metadata.insert(
                                     "singleton".to_string(),
                                     types::MetadataValue::Integer(*value),
                                 );
                             }
+                            _ => anyhow::bail!("unsupported attribute: {attribute:?}"),
                         }
                     }
                 }

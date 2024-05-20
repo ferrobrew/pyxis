@@ -266,7 +266,7 @@ impl From<(Ident, Type)> for TypeField {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TypeStatement {
-    Meta(Vec<ExprField>),
+    Meta(Vec<Attribute>),
     Functions(Vec<(Ident, Vec<Function>)>),
     Field {
         field: TypeField,
@@ -278,7 +278,7 @@ impl TypeStatement {
         TypeStatement::Meta(
             fields
                 .iter()
-                .map(|(n, e)| ((*n).into(), e.clone()).into())
+                .map(|(n, e)| Attribute::Function((*n).into(), vec![e.clone()]))
                 .collect(),
         )
     }
@@ -312,7 +312,7 @@ impl TypeDefinition {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EnumStatement {
-    Meta(Vec<ExprField>),
+    Meta(Vec<Attribute>),
     Field(OptionalExprField),
 }
 impl EnumStatement {
@@ -320,7 +320,7 @@ impl EnumStatement {
         EnumStatement::Meta(
             fields
                 .iter()
-                .map(|(n, e)| ((*n).into(), e.clone()).into())
+                .map(|(n, e)| Attribute::Function((*n).into(), vec![e.clone()]))
                 .collect(),
         )
     }
