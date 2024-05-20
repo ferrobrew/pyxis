@@ -153,6 +153,15 @@ impl Parse for Attribute {
         Ok(Attribute::Function(name, arguments))
     }
 }
+impl Attribute {
+    fn parse_many(input: ParseStream) -> Result<Vec<Attribute>> {
+        let mut attributes = vec![];
+        while input.peek(syn::Token![#]) {
+            attributes.push(input.parse()?);
+        }
+        Ok(attributes)
+    }
+}
 
 impl Parse for Argument {
     fn parse(input: ParseStream) -> Result<Self> {
@@ -183,10 +192,7 @@ impl Parse for Argument {
 
 impl Parse for Function {
     fn parse(input: ParseStream) -> Result<Self> {
-        let mut attributes = vec![];
-        while input.peek(syn::Token![#]) {
-            attributes.push(input.parse()?);
-        }
+        let attributes = Attribute::parse_many(input)?;
 
         input.parse::<syn::Token![fn]>()?;
         let name: Ident = input.parse()?;
@@ -265,7 +271,7 @@ impl Parse for TypeStatement {
             let content;
             braced!(content in input);
 
-            let attributes = parse_attributes(&content)?;
+            let attributes = Attribute::parse_many(&content)?;
             Ok(TypeStatement::Meta(Vec::from_iter(attributes)))
         } else if lookahead.peek(kw::functions) {
             input.parse::<kw::functions>()?;
@@ -290,20 +296,12 @@ impl Parse for TypeStatement {
 
             Ok(TypeStatement::Functions(function_blocks))
         } else if lookahead.peek(syn::Token![#]) {
-            let attributes = parse_attributes(input)?;
+            let attributes = Attribute::parse_many(input)?;
             parse_field(input, input.lookahead1(), attributes)
         } else {
             parse_field(input, lookahead, vec![])
         }
     }
-}
-
-fn parse_attributes(input: &ParseBuffer) -> Result<Vec<Attribute>> {
-    let mut attributes = vec![];
-    while input.peek(syn::Token![#]) {
-        attributes.push(input.parse()?);
-    }
-    Ok(attributes)
 }
 
 fn parse_type_definition(input: ParseStream) -> Result<(Ident, TypeDefinition)> {
@@ -333,7 +331,7 @@ impl Parse for EnumStatement {
             let content;
             braced!(content in input);
 
-            let attributes = parse_attributes(&content)?;
+            let attributes = Attribute::parse_many(&content)?;
             Ok(EnumStatement::Meta(Vec::from_iter(attributes)))
         } else if lookahead.peek(syn::Ident) {
             Ok(EnumStatement::Field(input.parse()?))
