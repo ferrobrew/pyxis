@@ -199,11 +199,12 @@ fn build_type(
         .map(|r| {
             Ok(match r {
                 types::Region::Field(field, type_ref) => {
-                    let field_ident =
-                        str_to_ident(field.as_deref().context("field name not present")?);
+                    let field_name = field.as_deref().context("field name not present")?;
+                    let field_ident = str_to_ident(field_name);
+                    let visibility = (!field_name.starts_with("_")).then(|| quote! { pub });
                     let syn_type = sa_type_to_syn_type(type_ref)?;
                     quote! {
-                        pub #field_ident: #syn_type
+                        #visibility #field_ident: #syn_type
                     }
                 }
             })
