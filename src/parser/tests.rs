@@ -19,10 +19,13 @@ fn can_parse_basic_struct() {
             [],
             [ItemDefinition::new(
                 "TestType",
-                TypeDefinition::new(&[
-                    TS::field("field_1", T::ident("i32"), []),
-                    TS::field("field_2", T::ident("i32"), []),
-                ]),
+                TypeDefinition::new(
+                    [
+                        TS::field("field_1", T::ident("i32"), []),
+                        TS::field("field_2", T::ident("i32"), []),
+                    ],
+                    [],
+                ),
             )],
         )
     };
@@ -56,23 +59,26 @@ fn can_parse_vehicle_types() {
         type TS = TypeStatement;
 
         Module::new(
-            &[],
-            &[],
-            &[],
-            &[ItemDefinition::new(
+            [],
+            [],
+            [],
+            [ItemDefinition::new(
                 "VehicleTypes",
-                TypeDefinition::new(&[
-                    TS::field("hash_edacd65b_likely_max_models", T::ident("i32"), []),
-                    TS::field("hash_2ff58884", T::ident("i32"), []),
-                    TS::field("maximum_gpu_cost", T::ident("i32"), []),
-                    TS::field("maximum_cpu_cost", T::ident("i32"), []),
-                    TS::field("field_10", T::ident("i32"), []),
-                    TS::field("accumulated_gpu_cost", T::ident("i32"), []),
-                    TS::field("accumulated_cpu_cost", T::ident("i32"), []),
-                    TS::field("field_1c", T::ident("i32"), []),
-                    TS::field("loaded_models", T::ident("LoadedModel").const_pointer(), []),
-                    TS::field("_", T::unknown(0x10), []),
-                ]),
+                TypeDefinition::new(
+                    [
+                        TS::field("hash_edacd65b_likely_max_models", T::ident("i32"), []),
+                        TS::field("hash_2ff58884", T::ident("i32"), []),
+                        TS::field("maximum_gpu_cost", T::ident("i32"), []),
+                        TS::field("maximum_cpu_cost", T::ident("i32"), []),
+                        TS::field("field_10", T::ident("i32"), []),
+                        TS::field("accumulated_gpu_cost", T::ident("i32"), []),
+                        TS::field("accumulated_cpu_cost", T::ident("i32"), []),
+                        TS::field("field_1c", T::ident("i32"), []),
+                        TS::field("loaded_models", T::ident("LoadedModel").const_pointer(), []),
+                        TS::field("_", T::unknown(0x10), []),
+                    ],
+                    [],
+                ),
             )],
         )
     };
@@ -83,12 +89,9 @@ fn can_parse_vehicle_types() {
 #[test]
 fn can_parse_spawn_manager() {
     let text = r#"
+        #[size(0x1754)]
+        #[singleton(0x1_191_918)]
         type SpawnManager {
-            meta {
-                #[size(0x1754)]
-                #[singleton(0x1_191_918)]
-            },
-
             #[address(0x78)]
             max_num_characters: u16,
             max_num_vehicles: u16,
@@ -124,8 +127,6 @@ fn can_parse_spawn_manager() {
         "#;
 
     let ast = {
-        use Expr::*;
-
         type T = Type;
         type TS = TypeStatement;
         type A = Argument;
@@ -136,58 +137,58 @@ fn can_parse_spawn_manager() {
             [],
             [ItemDefinition::new(
                 "SpawnManager",
-                TypeDefinition::new(&[
-                    TS::meta(&[
-                        ("size", IntLiteral(0x1754)),
-                        ("singleton", IntLiteral(0x1_191_918)),
-                    ]),
-                    TS::field(
-                        "max_num_characters",
-                        T::ident("u16"),
-                        [Attribute::address(0x78)],
-                    ),
-                    TS::field("max_num_vehicles", T::ident("u16"), []),
-                    TS::field(
-                        "world_sim",
-                        T::ident("WorldSim"),
-                        [Attribute::address(0xA00)],
-                    ),
-                    TS::field("enemy_type_spawn_settings", T::unknown(804), []),
-                    TS::field("character_types", T::unknown(0x74), []),
-                    TS::field("vehicle_types", T::ident("VehicleTypes"), []),
-                    TS::functions(&[(
-                        "free",
-                        &[
-                            Function::new(
-                                "engine_spawn_vehicle",
-                                &[Attribute::address(0x84C_4C0)],
-                                &[
-                                    A::MutSelf,
-                                    A::field(
-                                        "vehicle",
-                                        T::ident("SharedPtr<Vehicle>").mut_pointer(),
-                                    ),
-                                    A::field("context", T::ident("i32")),
-                                    A::field("unk1", T::ident("StdString").mut_pointer()),
-                                    A::field("model_id", T::ident("u32").const_pointer()),
-                                    A::field("faction", T::ident("u32")),
-                                    A::field("unk2", T::ident("StdString").mut_pointer()),
-                                ],
-                                Some(Type::ident("SharedPtr<Vehicle>").mut_pointer()),
-                            ),
-                            Function::new(
-                                "request_vehicle_model",
-                                &[Attribute::address(0x73F_DB0)],
-                                &[
-                                    A::MutSelf,
-                                    A::field("model_id", T::ident("u32").const_pointer()),
-                                    A::field("category", T::ident("i32")),
-                                ],
-                                None,
-                            ),
-                        ],
-                    )]),
-                ]),
+                TypeDefinition::new(
+                    [
+                        TS::field(
+                            "max_num_characters",
+                            T::ident("u16"),
+                            [Attribute::address(0x78)],
+                        ),
+                        TS::field("max_num_vehicles", T::ident("u16"), []),
+                        TS::field(
+                            "world_sim",
+                            T::ident("WorldSim"),
+                            [Attribute::address(0xA00)],
+                        ),
+                        TS::field("enemy_type_spawn_settings", T::unknown(804), []),
+                        TS::field("character_types", T::unknown(0x74), []),
+                        TS::field("vehicle_types", T::ident("VehicleTypes"), []),
+                        TS::functions([(
+                            "free",
+                            [
+                                Function::new(
+                                    "engine_spawn_vehicle",
+                                    [Attribute::address(0x84C_4C0)],
+                                    [
+                                        A::MutSelf,
+                                        A::field(
+                                            "vehicle",
+                                            T::ident("SharedPtr<Vehicle>").mut_pointer(),
+                                        ),
+                                        A::field("context", T::ident("i32")),
+                                        A::field("unk1", T::ident("StdString").mut_pointer()),
+                                        A::field("model_id", T::ident("u32").const_pointer()),
+                                        A::field("faction", T::ident("u32")),
+                                        A::field("unk2", T::ident("StdString").mut_pointer()),
+                                    ],
+                                    Some(Type::ident("SharedPtr<Vehicle>").mut_pointer()),
+                                ),
+                                Function::new(
+                                    "request_vehicle_model",
+                                    [Attribute::address(0x73F_DB0)],
+                                    [
+                                        A::MutSelf,
+                                        A::field("model_id", T::ident("u32").const_pointer()),
+                                        A::field("category", T::ident("i32")),
+                                    ],
+                                    None,
+                                ),
+                            ]
+                            .as_slice(),
+                        )]),
+                    ],
+                    [Attribute::size(0x1754), Attribute::singleton(0x1_191_918)],
+                ),
             )],
         )
     };
@@ -210,11 +211,14 @@ fn can_parse_address_field() {
             [],
             [ItemDefinition::new(
                 "Test",
-                TypeDefinition::new(&[TypeStatement::field(
-                    "max_num_characters",
-                    Type::ident("u16"),
-                    [Attribute::address(0x78)],
-                )]),
+                TypeDefinition::new(
+                    [TypeStatement::field(
+                        "max_num_characters",
+                        Type::ident("u16"),
+                        [Attribute::address(0x78)],
+                    )],
+                    [],
+                ),
             )],
         )
     };
@@ -238,11 +242,14 @@ fn can_parse_use() {
             [],
             [ItemDefinition::new(
                 "Test",
-                TypeDefinition::new(&[TypeStatement::field(
-                    "test",
-                    Type::ident("TestType<Hey>"),
+                TypeDefinition::new(
+                    [TypeStatement::field(
+                        "test",
+                        Type::ident("TestType<Hey>"),
+                        [],
+                    )],
                     [],
-                )]),
+                ),
             )],
         )
     };
@@ -274,16 +281,19 @@ fn can_parse_extern() {
 
     let ast = {
         Module::new(
-            &[],
-            &[("TestType<Hey>".into(), vec![Attribute::size(12)])],
-            &[],
-            &[ItemDefinition::new(
+            [],
+            [("TestType<Hey>".into(), vec![Attribute::size(12)])],
+            [],
+            [ItemDefinition::new(
                 "Test",
-                TypeDefinition::new(&[TypeStatement::field(
-                    "test",
-                    Type::ident("TestType<Hey>"),
+                TypeDefinition::new(
+                    [TypeStatement::field(
+                        "test",
+                        Type::ident("TestType<Hey>"),
+                        [],
+                    )],
                     [],
-                )]),
+                ),
             )],
         )
     };
@@ -301,7 +311,7 @@ fn can_parse_an_empty_type() {
         [],
         [],
         [],
-        [ItemDefinition::new("Test", TypeDefinition::new(&[]))],
+        [ItemDefinition::new("Test", TypeDefinition::new([], []))],
     );
     assert_eq!(parse_str(text).unwrap(), ast);
 }
@@ -334,11 +344,8 @@ fn can_parse_extern_value() {
 #[test]
 fn can_parse_enum() {
     let text = r#"
+        #[singleton(0x1234)]
         enum TestType: u32 {
-            meta {
-                #[singleton(0x1234)]
-            },
-
             Item1,
             Item2,
             Item3: 10,
@@ -352,20 +359,20 @@ fn can_parse_enum() {
         use Expr::IntLiteral;
 
         Module::new(
-            &[],
-            &[],
-            &[],
-            &[ItemDefinition::new(
+            [],
+            [],
+            [],
+            [ItemDefinition::new(
                 "TestType",
                 EnumDefinition::new(
                     T::ident("u32"),
-                    &[
-                        ES::meta(&[("singleton", IntLiteral(0x1234))]),
+                    [
                         ES::field("Item1"),
                         ES::field("Item2"),
                         ES::field_with_expr("Item3", IntLiteral(10)),
                         ES::field("Item4"),
                     ],
+                    [Attribute::singleton(0x1234)],
                 ),
             )],
         )
@@ -386,12 +393,12 @@ fn can_parse_array_field() {
         type TS = TypeStatement;
 
         Module::new(
-            &[],
-            &[],
-            &[],
-            &[ItemDefinition::new(
+            [],
+            [],
+            [],
+            [ItemDefinition::new(
                 "TestType",
-                TypeDefinition::new(&[TS::field("field_1", Type::ident("i32").array(4), [])]),
+                TypeDefinition::new([TS::field("field_1", Type::ident("i32").array(4), [])], []),
             )],
         )
     };

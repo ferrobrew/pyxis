@@ -167,12 +167,20 @@ pub enum Attribute {
     Function(Ident, Vec<Expr>),
 }
 impl Attribute {
+    pub fn integer_fn(name: &str, value: isize) -> Self {
+        Attribute::Function(name.into(), vec![Expr::IntLiteral(value)])
+    }
+
     pub fn address(address: usize) -> Self {
-        Attribute::Function("address".into(), vec![Expr::IntLiteral(address as isize)])
+        Self::integer_fn("address", address as isize)
     }
 
     pub fn size(size: usize) -> Self {
-        Attribute::Function("size".into(), vec![Expr::IntLiteral(size as isize)])
+        Self::integer_fn("size", size as isize)
+    }
+
+    pub fn singleton(address: usize) -> Self {
+        Self::integer_fn("singleton", address as isize)
     }
 
     pub fn function(&self) -> Option<(&Ident, &Vec<Expr>)> {
@@ -204,14 +212,14 @@ pub struct Function {
 impl Function {
     pub fn new(
         name: &str,
-        attributes: &[Attribute],
-        arguments: &[Argument],
+        attributes: impl Into<Vec<Attribute>>,
+        arguments: impl Into<Vec<Argument>>,
         return_type: Option<Type>,
     ) -> Self {
         Self {
             name: name.into(),
-            attributes: attributes.to_vec(),
-            arguments: arguments.to_vec(),
+            attributes: attributes.into(),
+            arguments: arguments.into(),
             return_type,
         }
     }
@@ -270,7 +278,6 @@ impl From<(Ident, Type)> for TypeField {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TypeStatement {
-    Meta(Vec<Attribute>),
     Functions(Vec<(Ident, Vec<Function>)>),
     Field {
         field: TypeField,
@@ -278,19 +285,13 @@ pub enum TypeStatement {
     },
 }
 impl TypeStatement {
-    pub fn meta(fields: &[(&str, Expr)]) -> TypeStatement {
-        TypeStatement::Meta(
-            fields
-                .iter()
-                .map(|(n, e)| Attribute::Function((*n).into(), vec![e.clone()]))
-                .collect(),
-        )
-    }
-    pub fn functions(functions: &[(&str, &[Function])]) -> TypeStatement {
+    pub fn functions<'a>(
+        functions: impl IntoIterator<Item = (&'a str, &'a [Function])>,
+    ) -> TypeStatement {
         TypeStatement::Functions(
             functions
-                .iter()
-                .map(|&(i, f)| (i.into(), f.to_vec()))
+                .into_iter()
+                .map(|(i, f)| (i.into(), f.to_vec()))
                 .collect(),
         )
     }
@@ -305,29 +306,25 @@ impl TypeStatement {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TypeDefinition {
     pub statements: Vec<TypeStatement>,
+    pub attributes: Vec<Attribute>,
 }
 impl TypeDefinition {
-    pub fn new(statements: &[TypeStatement]) -> Self {
+    pub fn new(
+        statements: impl Into<Vec<TypeStatement>>,
+        attributes: impl Into<Vec<Attribute>>,
+    ) -> Self {
         Self {
-            statements: statements.to_vec(),
+            statements: statements.into(),
+            attributes: attributes.into(),
         }
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EnumStatement {
-    Meta(Vec<Attribute>),
     Field(OptionalExprField),
 }
 impl EnumStatement {
-    pub fn meta(fields: &[(&str, Expr)]) -> EnumStatement {
-        EnumStatement::Meta(
-            fields
-                .iter()
-                .map(|(n, e)| Attribute::Function((*n).into(), vec![e.clone()]))
-                .collect(),
-        )
-    }
     pub fn field(name: &str) -> EnumStatement {
         EnumStatement::Field(Ident::from(name).into())
     }
@@ -340,12 +337,18 @@ impl EnumStatement {
 pub struct EnumDefinition {
     pub type_: Type,
     pub statements: Vec<EnumStatement>,
+    pub attributes: Vec<Attribute>,
 }
 impl EnumDefinition {
-    pub fn new(type_: Type, statements: &[EnumStatement]) -> Self {
+    pub fn new(
+        type_: Type,
+        statements: impl Into<Vec<EnumStatement>>,
+        attributes: impl Into<Vec<Attribute>>,
+    ) -> Self {
         Self {
             type_,
-            statements: statements.to_vec(),
+            statements: statements.into(),
+            attributes: attributes.into(),
         }
     }
 }

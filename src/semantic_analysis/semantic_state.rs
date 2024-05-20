@@ -293,23 +293,6 @@ impl SemanticState {
         let mut functions: HashMap<String, Vec<types::Function>> = HashMap::new();
         for statement in &definition.statements {
             match statement {
-                grammar::TypeStatement::Meta(attributes) => {
-                    for attribute in attributes {
-                        let grammar::Attribute::Function(ident, exprs) = attribute;
-                        match (ident.as_str(), exprs.as_slice()) {
-                            ("size", [grammar::Expr::IntLiteral(size)]) => {
-                                target_size = Some(*size as usize);
-                            }
-                            ("singleton", [grammar::Expr::IntLiteral(value)]) => {
-                                metadata.insert(
-                                    "singleton".to_string(),
-                                    types::MetadataValue::Integer(*value),
-                                );
-                            }
-                            _ => anyhow::bail!("unsupported attribute: {attribute:?}"),
-                        }
-                    }
-                }
                 grammar::TypeStatement::Field { field, attributes } => {
                     let mut address = None;
 
@@ -364,6 +347,22 @@ impl SemanticState {
                         .collect::<anyhow::Result<HashMap<_, _>>>()?;
                 }
             };
+        }
+
+        for attribute in &definition.attributes {
+            let grammar::Attribute::Function(ident, exprs) = attribute;
+            match (ident.as_str(), exprs.as_slice()) {
+                ("size", [grammar::Expr::IntLiteral(size)]) => {
+                    target_size = Some(*size as usize);
+                }
+                ("singleton", [grammar::Expr::IntLiteral(value)]) => {
+                    metadata.insert(
+                        "singleton".to_string(),
+                        types::MetadataValue::Integer(*value),
+                    );
+                }
+                _ => anyhow::bail!("unsupported attribute: {attribute:?}"),
+            }
         }
 
         // this resolution algorithm is very simple and doesn't handle overlapping regions
@@ -477,20 +476,6 @@ impl SemanticState {
         let mut last_field = 0;
         for statement in &definition.statements {
             match statement {
-                grammar::EnumStatement::Meta(attributes) => {
-                    for attribute in attributes {
-                        let grammar::Attribute::Function(ident, exprs) = attribute;
-                        match (ident.as_str(), exprs.as_slice()) {
-                            ("singleton", [grammar::Expr::IntLiteral(value)]) => {
-                                metadata.insert(
-                                    "singleton".to_string(),
-                                    types::MetadataValue::Integer(*value),
-                                );
-                            }
-                            _ => anyhow::bail!("unsupported attribute: {attribute:?}"),
-                        }
-                    }
-                }
                 grammar::EnumStatement::Field(optional_expr_field) => {
                     let grammar::OptionalExprField(ident, expr) = optional_expr_field;
                     let value = match expr {
@@ -502,6 +487,19 @@ impl SemanticState {
                     last_field = value + 1;
                 }
             };
+        }
+
+        for attribute in &definition.attributes {
+            let grammar::Attribute::Function(ident, exprs) = attribute;
+            match (ident.as_str(), exprs.as_slice()) {
+                ("singleton", [grammar::Expr::IntLiteral(value)]) => {
+                    metadata.insert(
+                        "singleton".to_string(),
+                        types::MetadataValue::Integer(*value),
+                    );
+                }
+                _ => anyhow::bail!("unsupported attribute: {attribute:?}"),
+            }
         }
 
         Ok(Some(types::ItemStateResolved {

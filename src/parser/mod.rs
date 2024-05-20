@@ -266,14 +266,7 @@ impl Parse for TypeStatement {
         }
 
         let lookahead = input.lookahead1();
-        if lookahead.peek(kw::meta) {
-            input.parse::<kw::meta>()?;
-            let content;
-            braced!(content in input);
-
-            let attributes = Attribute::parse_many(&content)?;
-            Ok(TypeStatement::Meta(Vec::from_iter(attributes)))
-        } else if lookahead.peek(kw::functions) {
+        if lookahead.peek(kw::functions) {
             input.parse::<kw::functions>()?;
 
             let content;
@@ -304,7 +297,10 @@ impl Parse for TypeStatement {
     }
 }
 
-fn parse_type_definition(input: ParseStream) -> Result<(Ident, TypeDefinition)> {
+fn parse_type_definition(
+    input: ParseStream,
+    attributes: Vec<Attribute>,
+) -> Result<(Ident, TypeDefinition)> {
     input.parse::<Token![type]>()?;
     let name: Ident = input.parse()?;
 
@@ -320,20 +316,19 @@ fn parse_type_definition(input: ParseStream) -> Result<(Ident, TypeDefinition)> 
         Vec::from_iter(statements)
     };
 
-    Ok((name, TypeDefinition { statements }))
+    Ok((
+        name,
+        TypeDefinition {
+            statements,
+            attributes,
+        },
+    ))
 }
 
 impl Parse for EnumStatement {
     fn parse(input: ParseStream) -> Result<Self> {
         let lookahead = input.lookahead1();
-        if lookahead.peek(kw::meta) {
-            input.parse::<kw::meta>()?;
-            let content;
-            braced!(content in input);
-
-            let attributes = Attribute::parse_many(&content)?;
-            Ok(EnumStatement::Meta(Vec::from_iter(attributes)))
-        } else if lookahead.peek(syn::Ident) {
+        if lookahead.peek(syn::Ident) {
             Ok(EnumStatement::Field(input.parse()?))
         } else {
             Err(lookahead.error())
@@ -341,7 +336,10 @@ impl Parse for EnumStatement {
     }
 }
 
-fn parse_enum_definition(input: ParseStream) -> Result<(Ident, EnumDefinition)> {
+fn parse_enum_definition(
+    input: ParseStream,
+    attributes: Vec<Attribute>,
+) -> Result<(Ident, EnumDefinition)> {
     input.parse::<Token![enum]>()?;
     let name: Ident = input.parse()?;
     input.parse::<Token![:]>()?;
@@ -356,27 +354,32 @@ fn parse_enum_definition(input: ParseStream) -> Result<(Ident, EnumDefinition)> 
         Vec::from_iter(statements)
     };
 
-    Ok((name, EnumDefinition { type_, statements }))
+    Ok((
+        name,
+        EnumDefinition {
+            type_,
+            statements,
+            attributes,
+        },
+    ))
 }
 
-impl Parse for ItemDefinition {
-    fn parse(input: ParseStream) -> Result<Self> {
-        let lookahead = input.lookahead1();
-        if lookahead.peek(Token![type]) {
-            let (name, inner) = parse_type_definition(input)?;
-            Ok(ItemDefinition {
-                name,
-                inner: inner.into(),
-            })
-        } else if lookahead.peek(Token![enum]) {
-            let (name, inner) = parse_enum_definition(input)?;
-            Ok(ItemDefinition {
-                name,
-                inner: inner.into(),
-            })
-        } else {
-            Err(lookahead.error())
-        }
+fn parse_item_definition(input: ParseStream, attributes: Vec<Attribute>) -> Result<ItemDefinition> {
+    let lookahead = input.lookahead1();
+    if lookahead.peek(Token![type]) {
+        let (name, inner) = parse_type_definition(input, attributes)?;
+        Ok(ItemDefinition {
+            name,
+            inner: inner.into(),
+        })
+    } else if lookahead.peek(Token![enum]) {
+        let (name, inner) = parse_enum_definition(input, attributes)?;
+        Ok(ItemDefinition {
+            name,
+            inner: inner.into(),
+        })
+    } else {
+        Err(lookahead.error())
     }
 }
 
@@ -417,7 +420,7 @@ impl Parse for Module {
                     extern_values.push((name, type_, attributes));
                 }
             } else if input.peek(syn::Token![type]) || input.peek(syn::Token![enum]) {
-                definitions.push(input.parse()?);
+                definitions.push(parse_item_definition(input, attributes)?);
             } else {
                 return Err(input.error("unexpected keyword"));
             }
