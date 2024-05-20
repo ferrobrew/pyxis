@@ -265,7 +265,8 @@ fn will_die_on_super_for_now() {
 #[test]
 fn can_parse_extern() {
     let text = r#"
-        extern type TestType<Hey> { #[size(12)] }
+        #[size(12)]
+        extern type TestType<Hey>;
         type Test {
             test: TestType<Hey>,
         }
@@ -308,8 +309,10 @@ fn can_parse_an_empty_type() {
 #[test]
 fn can_parse_extern_value() {
     let text = r#"
-        extern type SomeType { #[size(4)] }
-        extern some_value: *mut SomeType { #[address(0x1337)] }
+        #[size(4)]
+        extern type SomeType;
+        #[address(0x1337)]
+        extern some_value: *mut SomeType;
         "#;
 
     let ast = {

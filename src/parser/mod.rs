@@ -389,7 +389,13 @@ impl Parse for Module {
 
         // Exhaust all of our declarations
         while !input.is_empty() {
+            let attributes = Attribute::parse_many(input)?;
+
             if input.peek(syn::Token![use]) {
+                if !attributes.is_empty() {
+                    return Err(input.error("attributes not allowed on use statements"));
+                }
+
                 input.parse::<syn::Token![use]>()?;
                 let item_path = input.parse()?;
                 input.parse::<syn::Token![;]>()?;
@@ -399,20 +405,14 @@ impl Parse for Module {
                 if input.peek(syn::Token![type]) {
                     input.parse::<syn::Token![type]>()?;
                     let ident: Ident = parse_type_ident(input)?.as_str().into();
-
-                    let content;
-                    braced!(content in input);
-                    let attributes = Attribute::parse_many(&content)?;
+                    input.parse::<syn::Token![;]>()?;
 
                     extern_types.push((ident, attributes));
                 } else {
                     let name: Ident = input.parse()?;
                     input.parse::<syn::Token![:]>()?;
                     let type_: Type = input.parse()?;
-
-                    let content;
-                    braced!(content in input);
-                    let attributes = Attribute::parse_many(&content)?;
+                    input.parse::<syn::Token![;]>()?;
 
                     extern_values.push((name, type_, attributes));
                 }
