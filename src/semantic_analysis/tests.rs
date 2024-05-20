@@ -198,9 +198,9 @@ fn can_resolve_complex_type() {
                                 &[Attribute::address(0x800_000)],
                                 &[
                                     A::MutSelf,
-                                    A::field("arg1", T::ident("TestType").mut_pointer().into()),
+                                    A::field("arg1", T::ident("TestType").mut_pointer()),
                                     A::field("arg2", T::ident("i32")),
-                                    A::field("arg3", T::ident("u32").const_pointer().into()),
+                                    A::field("arg3", T::ident("u32").const_pointer()),
                                 ],
                                 Some(T::ident("TestType").mut_pointer()),
                             )],

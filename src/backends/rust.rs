@@ -197,19 +197,16 @@ fn build_type(
     let fields = regions
         .iter()
         .map(|r| {
-            Ok(match r {
-                types::Region {
-                    name: field,
-                    type_ref,
-                } => {
-                    let field_name = field.as_deref().context("field name not present")?;
-                    let field_ident = str_to_ident(field_name);
-                    let visibility = (!field_name.starts_with("_")).then(|| quote! { pub });
-                    let syn_type = sa_type_to_syn_type(type_ref)?;
-                    quote! {
-                        #visibility #field_ident: #syn_type
-                    }
-                }
+            let types::Region {
+                name: field,
+                type_ref,
+            } = r;
+            let field_name = field.as_deref().context("field name not present")?;
+            let field_ident = str_to_ident(field_name);
+            let visibility = (!field_name.starts_with('_')).then(|| quote! { pub });
+            let syn_type = sa_type_to_syn_type(type_ref)?;
+            Ok(quote! {
+                #visibility #field_ident: #syn_type
             })
         })
         .collect::<anyhow::Result<Vec<_>>>()?;
