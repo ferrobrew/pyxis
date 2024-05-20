@@ -288,7 +288,7 @@ fn build_enum(
     let types::EnumDefinition {
         metadata,
         fields,
-        ty,
+        type_: ty,
     } = enum_definition;
 
     let syn_type = sa_type_to_syn_type(ty)?;

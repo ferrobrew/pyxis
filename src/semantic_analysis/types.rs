@@ -27,7 +27,7 @@ pub struct Function {
 
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub enum Type {
-    Unresolved(grammar::TypeRef),
+    Unresolved(grammar::Type),
     Raw(ItemPath),
     ConstPointer(Box<Type>),
     MutPointer(Box<Type>),
@@ -127,7 +127,7 @@ pub struct TypeDefinition {
 
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct EnumDefinition {
-    pub ty: Type,
+    pub type_: Type,
     pub fields: Vec<(String, isize)>,
     pub metadata: HashMap<String, MetadataValue>,
 }

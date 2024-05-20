@@ -41,7 +41,7 @@ fn can_resolve_basic_struct() {
         use grammar::*;
 
         type TS = TypeStatement;
-        type TR = TypeRef;
+        type T = Type;
 
         Module::new(
             &[],
@@ -50,9 +50,9 @@ fn can_resolve_basic_struct() {
             &[ItemDefinition::new(
                 "TestType",
                 TypeDefinition::new(&[
-                    TS::field("field_1", TR::ident_type("i32"), []),
-                    TS::field("_", TR::unknown(4), []),
-                    TS::field("field_2", TR::ident_type("u64"), []),
+                    TS::field("field_1", T::ident("i32"), []),
+                    TS::field("_", Type::unknown(4), []),
+                    TS::field("field_2", T::ident("u64"), []),
                 ]),
             )],
         )
@@ -92,7 +92,7 @@ fn can_resolve_pointer_to_another_struct() {
         use grammar::*;
 
         type TS = TypeStatement;
-        type TR = TypeRef;
+        type T = Type;
 
         Module::new(
             &[],
@@ -101,23 +101,15 @@ fn can_resolve_pointer_to_another_struct() {
             &[
                 ItemDefinition::new(
                     "TestType1",
-                    TypeDefinition::new(&[TS::field("field_1", TR::ident_type("u64"), [])]),
+                    TypeDefinition::new(&[TS::field("field_1", T::ident("u64"), [])]),
                 ),
                 ItemDefinition::new(
                     "TestType2",
                     TypeDefinition::new(&[
-                        TS::field("field_1", TR::ident_type("i32"), []),
-                        TS::field("field_2", TR::ident_type("TestType1"), []),
-                        TS::field(
-                            "field_3",
-                            TR::Type(Type::ident("TestType1").const_pointer()),
-                            [],
-                        ),
-                        TS::field(
-                            "field_4",
-                            TR::Type(Type::ident("TestType1").mut_pointer()),
-                            [],
-                        ),
+                        TS::field("field_1", T::ident("i32"), []),
+                        TS::field("field_2", T::ident("TestType1"), []),
+                        TS::field("field_3", Type::ident("TestType1").const_pointer(), []),
+                        TS::field("field_4", Type::ident("TestType1").mut_pointer(), []),
                     ]),
                 ),
             ],
@@ -170,7 +162,6 @@ fn can_resolve_complex_type() {
 
         type T = Type;
         type TS = TypeStatement;
-        type TR = TypeRef;
         type A = Argument;
 
         Module::new(
@@ -181,8 +172,8 @@ fn can_resolve_complex_type() {
                 ItemDefinition::new(
                     "TestType",
                     TypeDefinition::new(&[
-                        TS::field("field_1", TR::ident_type("i32"), []),
-                        TS::field("_", TR::unknown(4), []),
+                        TS::field("field_1", T::ident("i32"), []),
+                        TS::field("_", T::unknown(4), []),
                     ]),
                 ),
                 ItemDefinition::new(
@@ -192,18 +183,14 @@ fn can_resolve_complex_type() {
                             ("size", Expr::IntLiteral(0x1750)),
                             ("singleton", Expr::IntLiteral(0x1_200_000)),
                         ]),
-                        TS::field(
-                            "max_num_1",
-                            TR::ident_type("u16"),
-                            [Attribute::address(0x78)],
-                        ),
-                        TS::field("max_num_2", TR::ident_type("u16"), []),
+                        TS::field("max_num_1", T::ident("u16"), [Attribute::address(0x78)]),
+                        TS::field("max_num_2", T::ident("u16"), []),
                         TS::field(
                             "test_type",
-                            TR::ident_type("TestType"),
+                            T::ident("TestType"),
                             [Attribute::address(0xA00)],
                         ),
-                        TS::field("settings", TR::unknown(804), []),
+                        TS::field("settings", T::unknown(804), []),
                         TS::functions(&[(
                             "free",
                             &[Function::new(
@@ -212,10 +199,10 @@ fn can_resolve_complex_type() {
                                 &[
                                     A::MutSelf,
                                     A::field("arg1", T::ident("TestType").mut_pointer().into()),
-                                    A::field("arg2", TR::ident_type("i32")),
+                                    A::field("arg2", T::ident("i32")),
                                     A::field("arg3", T::ident("u32").const_pointer().into()),
                                 ],
-                                Some(Type::ident("TestType").mut_pointer()),
+                                Some(T::ident("TestType").mut_pointer()),
                             )],
                         )]),
                     ]),
@@ -298,7 +285,7 @@ fn will_eventually_terminate_with_an_unknown_type() {
         use grammar::*;
 
         type TS = TypeStatement;
-        type TR = TypeRef;
+        type T = Type;
 
         Module::new(
             &[],
@@ -306,7 +293,7 @@ fn will_eventually_terminate_with_an_unknown_type() {
             &[],
             &[ItemDefinition::new(
                 "TestType2",
-                TypeDefinition::new(&[TS::field("field_2", TR::ident_type("TestType1"), [])]),
+                TypeDefinition::new(&[TS::field("field_2", T::ident("TestType1"), [])]),
             )],
         )
     };
@@ -324,7 +311,7 @@ fn can_use_type_from_another_module() {
         use grammar::*;
 
         type TS = TypeStatement;
-        type TR = TypeRef;
+        type T = Type;
 
         Module::new(
             &[ItemPath::from_colon_delimited_str("module2::TestType2")],
@@ -332,7 +319,7 @@ fn can_use_type_from_another_module() {
             &[],
             &[ItemDefinition::new(
                 "TestType1",
-                TypeDefinition::new(&[TS::field("field", TR::ident_type("TestType2"), [])]),
+                TypeDefinition::new(&[TS::field("field", T::ident("TestType2"), [])]),
             )],
         )
     };
@@ -340,7 +327,7 @@ fn can_use_type_from_another_module() {
         use grammar::*;
 
         type TS = TypeStatement;
-        type TR = TypeRef;
+        type T = Type;
 
         Module::new(
             &[],
@@ -348,7 +335,7 @@ fn can_use_type_from_another_module() {
             &[],
             &[ItemDefinition::new(
                 "TestType2",
-                TypeDefinition::new(&[TS::field("field", TR::ident_type("u32"), [])]),
+                TypeDefinition::new(&[TS::field("field", T::ident("u32"), [])]),
             )],
         )
     };
@@ -412,7 +399,7 @@ fn can_resolve_embed_of_an_extern() {
         use grammar::*;
 
         type TS = TypeStatement;
-        type TR = TypeRef;
+        type T = Type;
 
         Module::new(
             &[],
@@ -424,18 +411,10 @@ fn can_resolve_embed_of_an_extern() {
             &[ItemDefinition::new(
                 "TestType2",
                 TypeDefinition::new(&[
-                    TS::field("field_1", TR::ident_type("i32"), []),
-                    TS::field("field_2", TR::ident_type("TestType1"), []),
-                    TS::field(
-                        "field_3",
-                        TR::Type(Type::ident("TestType1").const_pointer()),
-                        [],
-                    ),
-                    TS::field(
-                        "field_4",
-                        TR::Type(Type::ident("TestType1").mut_pointer()),
-                        [],
-                    ),
+                    TS::field("field_1", T::ident("i32"), []),
+                    TS::field("field_2", T::ident("TestType1"), []),
+                    TS::field("field_3", Type::ident("TestType1").const_pointer(), []),
+                    TS::field("field_4", Type::ident("TestType1").mut_pointer(), []),
                 ]),
             )],
         )
@@ -486,7 +465,7 @@ fn can_generate_vftable() {
         use grammar::*;
 
         type TS = TypeStatement;
-        type TR = TypeRef;
+        type T = Type;
 
         Module::new(
             &[],
@@ -502,8 +481,8 @@ fn can_generate_vftable() {
                             attributes: vec![],
                             arguments: vec![
                                 Argument::MutSelf,
-                                Argument::Field(TypeField("arg0".into(), TR::ident_type("u32"))),
-                                Argument::Field(TypeField("arg1".into(), TR::ident_type("f32"))),
+                                Argument::Field(TypeField("arg0".into(), T::ident("u32"))),
+                                Argument::Field(TypeField("arg1".into(), T::ident("f32"))),
                             ],
                             return_type: Some("i32".into()),
                         },
@@ -512,8 +491,8 @@ fn can_generate_vftable() {
                             attributes: vec![],
                             arguments: vec![
                                 Argument::MutSelf,
-                                Argument::Field(TypeField("arg0".into(), TR::ident_type("u32"))),
-                                Argument::Field(TypeField("arg1".into(), TR::ident_type("f32"))),
+                                Argument::Field(TypeField("arg0".into(), T::ident("u32"))),
+                                Argument::Field(TypeField("arg1".into(), T::ident("f32"))),
                             ],
                             return_type: None,
                         },
@@ -719,7 +698,7 @@ fn can_resolve_enum() {
         use grammar::*;
 
         type ES = EnumStatement;
-        type TR = TypeRef;
+        type T = Type;
         use Expr::IntLiteral;
 
         Module::new(
@@ -729,7 +708,7 @@ fn can_resolve_enum() {
             &[ItemDefinition::new(
                 "TestType",
                 EnumDefinition::new(
-                    TR::ident_type("u32"),
+                    T::ident("u32"),
                     &[
                         ES::meta(&[("singleton", IntLiteral(0x1234))]),
                         ES::field("Item1"),
@@ -748,7 +727,7 @@ fn can_resolve_enum() {
         state: ItemState::Resolved(ItemStateResolved {
             size: 4,
             inner: EnumDefinition {
-                ty: Type::Raw(ItemPath::from_colon_delimited_str("u32")),
+                type_: Type::Raw(ItemPath::from_colon_delimited_str("u32")),
                 fields: vec![
                     ("Item1".to_string(), 0),
                     ("Item2".to_string(), 1),

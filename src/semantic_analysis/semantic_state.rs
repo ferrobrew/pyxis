@@ -78,7 +78,7 @@ impl SemanticState {
             .map(|(name, type_, address)| {
                 (
                     name.as_str().to_owned(),
-                    types::Type::Unresolved(grammar::TypeRef::Type(type_.clone())),
+                    types::Type::Unresolved(type_.clone()),
                     *address,
                 )
             })
@@ -214,16 +214,16 @@ impl SemanticState {
             .map(|a| match a {
                 grammar::Argument::ConstSelf => Ok(types::Argument::ConstSelf),
                 grammar::Argument::MutSelf => Ok(types::Argument::MutSelf),
-                grammar::Argument::Field(grammar::TypeField(name, type_ref)) => {
+                grammar::Argument::Field(grammar::TypeField(name, type_)) => {
                     Ok(types::Argument::Field(
                         name.0.clone(),
                         self.type_registry
-                            .resolve_grammar_typeref(scope, type_ref)
+                            .resolve_grammar_type(scope, type_)
                             .ok_or_else(|| {
                                 anyhow::anyhow!(
                                     "failed to resolve type of field {:?} ({:?}",
                                     name,
-                                    type_ref
+                                    type_
                                 )
                             })?,
                     ))
@@ -317,10 +317,10 @@ impl SemanticState {
                         ));
                     }
 
-                    let grammar::TypeField(ident, type_ref) = field;
+                    let grammar::TypeField(ident, type_) = field;
                     let Some(type_) = self
                         .type_registry
-                        .resolve_grammar_typeref(&module.scope(), type_ref)
+                        .resolve_grammar_type(&module.scope(), type_)
                     else {
                         return Ok(None);
                     };
@@ -447,7 +447,7 @@ impl SemanticState {
 
         let Some(ty) = self
             .type_registry
-            .resolve_grammar_typeref(&module.scope(), &definition.ty)
+            .resolve_grammar_type(&module.scope(), &definition.type_)
         else {
             return Ok(None);
         };
@@ -490,7 +490,7 @@ impl SemanticState {
         Ok(Some(types::ItemStateResolved {
             size,
             inner: types::EnumDefinition {
-                ty,
+                type_: ty,
                 fields,
                 metadata,
             }

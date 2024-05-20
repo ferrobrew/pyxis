@@ -93,16 +93,6 @@ impl TypeRegistry {
         }
     }
 
-    pub(crate) fn resolve_grammar_typeref(
-        &self,
-        scope: &[ItemPath],
-        type_ref: &grammar::TypeRef,
-    ) -> Option<Type> {
-        match type_ref {
-            grammar::TypeRef::Type(type_) => self.resolve_grammar_type(scope, type_),
-        }
-    }
-
     pub(crate) fn padding_type(&self, bytes: usize) -> Type {
         Type::Array(Box::new(self.resolve_string(&[], "u8").unwrap()), bytes)
     }

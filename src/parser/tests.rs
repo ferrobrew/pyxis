@@ -11,7 +11,7 @@ fn can_parse_basic_struct() {
 
     let ast = {
         type TS = TypeStatement;
-        type TR = TypeRef;
+        type T = Type;
 
         Module::new(
             &[],
@@ -20,8 +20,8 @@ fn can_parse_basic_struct() {
             &[ItemDefinition::new(
                 "TestType",
                 TypeDefinition::new(&[
-                    TS::field("field_1", TR::ident_type("i32"), []),
-                    TS::field("field_2", TR::ident_type("i32"), []),
+                    TS::field("field_1", T::ident("i32"), []),
+                    TS::field("field_2", T::ident("i32"), []),
                 ]),
             )],
         )
@@ -54,7 +54,6 @@ fn can_parse_vehicle_types() {
     let ast = {
         type T = Type;
         type TS = TypeStatement;
-        type TR = TypeRef;
 
         Module::new(
             &[],
@@ -63,20 +62,20 @@ fn can_parse_vehicle_types() {
             &[ItemDefinition::new(
                 "VehicleTypes",
                 TypeDefinition::new(&[
-                    TS::field("hash_edacd65b_likely_max_models", TR::ident_type("i32"), []),
-                    TS::field("hash_2ff58884", TR::ident_type("i32"), []),
-                    TS::field("maximum_gpu_cost", TR::ident_type("i32"), []),
-                    TS::field("maximum_cpu_cost", TR::ident_type("i32"), []),
-                    TS::field("field_10", TR::ident_type("i32"), []),
-                    TS::field("accumulated_gpu_cost", TR::ident_type("i32"), []),
-                    TS::field("accumulated_cpu_cost", TR::ident_type("i32"), []),
-                    TS::field("field_1c", TR::ident_type("i32"), []),
+                    TS::field("hash_edacd65b_likely_max_models", T::ident("i32"), []),
+                    TS::field("hash_2ff58884", T::ident("i32"), []),
+                    TS::field("maximum_gpu_cost", T::ident("i32"), []),
+                    TS::field("maximum_cpu_cost", T::ident("i32"), []),
+                    TS::field("field_10", T::ident("i32"), []),
+                    TS::field("accumulated_gpu_cost", T::ident("i32"), []),
+                    TS::field("accumulated_cpu_cost", T::ident("i32"), []),
+                    TS::field("field_1c", T::ident("i32"), []),
                     TS::field(
                         "loaded_models",
                         T::ident("LoadedModel").const_pointer().into(),
                         [],
                     ),
-                    TS::field("_", TR::unknown(0x10), []),
+                    TS::field("_", T::unknown(0x10), []),
                 ]),
             )],
         )
@@ -133,7 +132,6 @@ fn can_parse_spawn_manager() {
 
         type T = Type;
         type TS = TypeStatement;
-        type TR = TypeRef;
         type A = Argument;
 
         Module::new(
@@ -149,18 +147,18 @@ fn can_parse_spawn_manager() {
                     ]),
                     TS::field(
                         "max_num_characters",
-                        TR::ident_type("u16"),
+                        T::ident("u16"),
                         [Attribute::address(0x78)],
                     ),
-                    TS::field("max_num_vehicles", TR::ident_type("u16"), []),
+                    TS::field("max_num_vehicles", T::ident("u16"), []),
                     TS::field(
                         "world_sim",
-                        TR::ident_type("WorldSim"),
+                        T::ident("WorldSim"),
                         [Attribute::address(0xA00)],
                     ),
-                    TS::field("enemy_type_spawn_settings", TR::unknown(804), []),
-                    TS::field("character_types", TR::unknown(0x74), []),
-                    TS::field("vehicle_types", TR::ident_type("VehicleTypes"), []),
+                    TS::field("enemy_type_spawn_settings", T::unknown(804), []),
+                    TS::field("character_types", T::unknown(0x74), []),
+                    TS::field("vehicle_types", T::ident("VehicleTypes"), []),
                     TS::functions(&[(
                         "free",
                         &[
@@ -173,10 +171,10 @@ fn can_parse_spawn_manager() {
                                         "vehicle",
                                         T::ident("SharedPtr<Vehicle>").mut_pointer().into(),
                                     ),
-                                    A::field("context", TR::ident_type("i32")),
+                                    A::field("context", T::ident("i32")),
                                     A::field("unk1", T::ident("StdString").mut_pointer().into()),
                                     A::field("model_id", T::ident("u32").const_pointer().into()),
-                                    A::field("faction", TR::ident_type("u32")),
+                                    A::field("faction", T::ident("u32")),
                                     A::field("unk2", T::ident("StdString").mut_pointer().into()),
                                 ],
                                 Some(Type::ident("SharedPtr<Vehicle>").mut_pointer()),
@@ -187,7 +185,7 @@ fn can_parse_spawn_manager() {
                                 &[
                                     A::MutSelf,
                                     A::field("model_id", T::ident("u32").const_pointer().into()),
-                                    A::field("category", TR::ident_type("i32")),
+                                    A::field("category", T::ident("i32")),
                                 ],
                                 None,
                             ),
@@ -218,7 +216,7 @@ fn can_parse_address_field() {
                 "Test",
                 TypeDefinition::new(&[TypeStatement::field(
                     "max_num_characters",
-                    TypeRef::ident_type("u16"),
+                    Type::ident("u16"),
                     [Attribute::address(0x78)],
                 )]),
             )],
@@ -246,7 +244,7 @@ fn can_parse_use() {
                 "Test",
                 TypeDefinition::new(&[TypeStatement::field(
                     "test",
-                    TypeRef::ident_type("TestType<Hey>"),
+                    Type::ident("TestType<Hey>"),
                     [],
                 )]),
             )],
@@ -289,7 +287,7 @@ fn can_parse_extern() {
                 "Test",
                 TypeDefinition::new(&[TypeStatement::field(
                     "test",
-                    TypeRef::ident_type("TestType<Hey>"),
+                    Type::ident("TestType<Hey>"),
                     [],
                 )]),
             )],
@@ -357,7 +355,7 @@ fn can_parse_enum() {
 
     let ast = {
         type ES = EnumStatement;
-        type TR = TypeRef;
+        type T = Type;
         use Expr::IntLiteral;
 
         Module::new(
@@ -367,7 +365,7 @@ fn can_parse_enum() {
             &[ItemDefinition::new(
                 "TestType",
                 EnumDefinition::new(
-                    TR::ident_type("u32"),
+                    T::ident("u32"),
                     &[
                         ES::meta(&[("singleton", IntLiteral(0x1234))]),
                         ES::field("Item1"),

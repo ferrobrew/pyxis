@@ -107,11 +107,11 @@ impl Parse for Type {
             let content;
             bracketed!(content in input);
 
-            let ty: Type = content.parse()?;
+            let type_: Type = content.parse()?;
             content.parse::<Token![;]>()?;
             let size: syn::LitInt = content.parse()?;
             let size: usize = size.base10_parse()?;
-            Ok(Type::Array(Box::new(ty), size))
+            Ok(Type::Array(Box::new(type_), size))
         } else {
             Err(lookahead.error())
         }
@@ -210,12 +210,6 @@ impl Parse for Function {
             arguments,
             return_type,
         })
-    }
-}
-
-impl Parse for TypeRef {
-    fn parse(input: ParseStream) -> Result<Self> {
-        Ok(TypeRef::Type(input.parse()?))
     }
 }
 
@@ -349,7 +343,7 @@ fn parse_enum_definition(input: ParseStream) -> Result<(Ident, EnumDefinition)> 
     input.parse::<Token![enum]>()?;
     let name: Ident = input.parse()?;
     input.parse::<Token![:]>()?;
-    let ty: TypeRef = input.parse()?;
+    let type_: Type = input.parse()?;
 
     let statements = {
         let content;
@@ -360,7 +354,7 @@ fn parse_enum_definition(input: ParseStream) -> Result<(Ident, EnumDefinition)> 
         Vec::from_iter(statements)
     };
 
-    Ok((name, EnumDefinition { ty, statements }))
+    Ok((name, EnumDefinition { type_, statements }))
 }
 
 impl Parse for ItemDefinition {

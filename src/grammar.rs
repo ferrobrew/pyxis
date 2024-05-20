@@ -185,8 +185,8 @@ pub enum Argument {
     Field(TypeField),
 }
 impl Argument {
-    pub fn field(ident: &str, type_ref: TypeRef) -> Argument {
-        Argument::Field(TypeField::new(ident, type_ref))
+    pub fn field(ident: &str, type_: Type) -> Argument {
+        Argument::Field(TypeField::new(ident, type_))
     }
 }
 
@@ -210,25 +210,6 @@ impl Function {
             arguments: arguments.to_vec(),
             return_type,
         }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum TypeRef {
-    Type(Type),
-}
-impl TypeRef {
-    pub fn ident_type(name: &str) -> TypeRef {
-        TypeRef::Type(name.into())
-    }
-
-    pub fn unknown(size: usize) -> TypeRef {
-        TypeRef::Type(Type::unknown(size))
-    }
-}
-impl From<Type> for TypeRef {
-    fn from(item: Type) -> Self {
-        TypeRef::Type(item)
     }
 }
 
@@ -271,14 +252,14 @@ impl From<(Ident, Expr)> for OptionalExprField {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TypeField(pub Ident, pub TypeRef);
+pub struct TypeField(pub Ident, pub Type);
 impl TypeField {
-    pub fn new(name: &str, type_ref: TypeRef) -> TypeField {
-        TypeField(name.into(), type_ref)
+    pub fn new(name: &str, type_: Type) -> TypeField {
+        TypeField(name.into(), type_)
     }
 }
-impl From<(Ident, TypeRef)> for TypeField {
-    fn from(item: (Ident, TypeRef)) -> Self {
+impl From<(Ident, Type)> for TypeField {
+    fn from(item: (Ident, Type)) -> Self {
         TypeField(item.0, item.1)
     }
 }
@@ -309,13 +290,9 @@ impl TypeStatement {
                 .collect(),
         )
     }
-    pub fn field(
-        name: &str,
-        type_ref: TypeRef,
-        attributes: impl Into<Vec<Attribute>>,
-    ) -> TypeStatement {
+    pub fn field(name: &str, type_: Type, attributes: impl Into<Vec<Attribute>>) -> TypeStatement {
         TypeStatement::Field {
-            field: (name.into(), type_ref).into(),
+            field: (name.into(), type_).into(),
             attributes: attributes.into(),
         }
     }
@@ -357,13 +334,13 @@ impl EnumStatement {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EnumDefinition {
-    pub ty: TypeRef,
+    pub type_: Type,
     pub statements: Vec<EnumStatement>,
 }
 impl EnumDefinition {
-    pub fn new(ty: TypeRef, statements: &[EnumStatement]) -> Self {
+    pub fn new(type_: Type, statements: &[EnumStatement]) -> Self {
         Self {
-            ty,
+            type_,
             statements: statements.to_vec(),
         }
     }

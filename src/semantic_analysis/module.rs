@@ -59,7 +59,7 @@ impl Module {
         for (name, type_, _) in &mut self.extern_values {
             if let types::Type::Unresolved(type_ref) = type_ {
                 *type_ = type_registry
-                    .resolve_grammar_typeref(&scope, type_ref)
+                    .resolve_grammar_type(&scope, type_ref)
                     .ok_or_else(|| anyhow::anyhow!("failed to resolve type for {}", name))?;
             }
         }
