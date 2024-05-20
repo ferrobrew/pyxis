@@ -100,11 +100,15 @@ impl TypeRegistry {
         match type_ref {
             grammar::TypeRef::Type(type_) => self.resolve_grammar_type(scope, type_),
             grammar::TypeRef::Macro(macro_call) => match macro_call.match_repr() {
-                ("unk", [grammar::Expr::IntLiteral(size)]) => self
-                    .resolve_string(&[], "u8")
-                    .map(|t| Type::Array(Box::new(t), *size as usize)),
+                ("unk", [grammar::Expr::IntLiteral(size)]) => {
+                    Some(self.padding_type(*size as usize))
+                }
                 _ => panic!("unsupported macro call"),
             },
         }
+    }
+
+    pub(crate) fn padding_type(&self, bytes: usize) -> Type {
+        Type::Array(Box::new(self.resolve_string(&[], "u8").unwrap()), bytes)
     }
 }

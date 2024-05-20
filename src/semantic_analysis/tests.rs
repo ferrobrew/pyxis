@@ -28,6 +28,13 @@ fn build_type(module: &grammar::Module, path: &ItemPath) -> anyhow::Result<ItemD
         .context("failed to get type")
 }
 
+fn unknown(size: usize) -> Type {
+    Type::Array(
+        Box::new(Type::Raw(ItemPath::from_colon_delimited_str("u8"))),
+        size,
+    )
+}
+
 #[test]
 fn can_resolve_basic_struct() {
     let module = {
@@ -44,7 +51,7 @@ fn can_resolve_basic_struct() {
                 "TestType",
                 TypeDefinition::new(&[
                     TS::field("field_1", TR::ident_type("i32"), []),
-                    TS::macro_("padding", &[Expr::IntLiteral(4)]),
+                    TS::field("_", MacroCall::unk(4).into(), []),
                     TS::field("field_2", TR::ident_type("u64"), []),
                 ]),
             )],
@@ -58,13 +65,13 @@ fn can_resolve_basic_struct() {
             size: 16,
             inner: TypeDefinition {
                 regions: vec![
-                    Region::Field(
-                        "field_1".into(),
+                    Region::field(
+                        "field_1",
                         Type::Raw(ItemPath::from_colon_delimited_str("i32")),
                     ),
-                    Region::Padding(4),
-                    Region::Field(
-                        "field_2".into(),
+                    Region::field("_field_4", unknown(4)),
+                    Region::field(
+                        "field_2",
                         Type::Raw(ItemPath::from_colon_delimited_str("u64")),
                     ),
                 ],
@@ -77,29 +84,6 @@ fn can_resolve_basic_struct() {
     };
 
     assert_eq!(build_type(&module, &path).unwrap(), type_definition);
-}
-
-#[test]
-fn will_fail_on_unsupported_macro() {
-    let module = {
-        use grammar::*;
-
-        Module::new(
-            &[],
-            &[],
-            &[],
-            &[ItemDefinition::new(
-                "TestType",
-                TypeDefinition::new(&[TypeStatement::macro_("foobar", &[Expr::IntLiteral(4)])]),
-            )],
-        )
-    };
-
-    let path = ItemPath::from_colon_delimited_str("test::TestType");
-    assert_eq!(
-        build_type(&module, &path).err().unwrap().to_string(),
-        "unsupported macro: foobar"
-    );
 }
 
 #[test]
@@ -147,22 +131,22 @@ fn can_resolve_pointer_to_another_struct() {
             size: 20,
             inner: TypeDefinition {
                 regions: vec![
-                    Region::Field(
-                        "field_1".into(),
+                    Region::field(
+                        "field_1",
                         Type::Raw(ItemPath::from_colon_delimited_str("i32")),
                     ),
-                    Region::Field(
-                        "field_2".into(),
+                    Region::field(
+                        "field_2",
                         Type::Raw(ItemPath::from_colon_delimited_str("test::TestType1")),
                     ),
-                    Region::Field(
-                        "field_3".into(),
+                    Region::field(
+                        "field_3",
                         Type::ConstPointer(Box::new(Type::Raw(
                             ItemPath::from_colon_delimited_str("test::TestType1"),
                         ))),
                     ),
-                    Region::Field(
-                        "field_4".into(),
+                    Region::field(
+                        "field_4",
                         Type::MutPointer(Box::new(Type::Raw(ItemPath::from_colon_delimited_str(
                             "test::TestType1",
                         )))),
@@ -198,7 +182,7 @@ fn can_resolve_complex_type() {
                     "TestType",
                     TypeDefinition::new(&[
                         TS::field("field_1", TR::ident_type("i32"), []),
-                        TS::macro_("padding", &[Expr::IntLiteral(4)]),
+                        TS::field("_", MacroCall::unk(4).into(), []),
                     ]),
                 ),
                 ItemDefinition::new(
@@ -247,28 +231,22 @@ fn can_resolve_complex_type() {
             size: 0x1750,
             inner: TypeDefinition {
                 regions: vec![
-                    Region::Padding(0x78),
-                    Region::Field(
-                        "max_num_1".into(),
+                    Region::field("_field_0", unknown(0x78)),
+                    Region::field(
+                        "max_num_1",
                         Type::Raw(ItemPath::from_colon_delimited_str("u16")),
                     ),
-                    Region::Field(
-                        "max_num_2".into(),
+                    Region::field(
+                        "max_num_2",
                         Type::Raw(ItemPath::from_colon_delimited_str("u16")),
                     ),
-                    Region::Padding(0x984),
-                    Region::Field(
-                        "test_type".into(),
+                    Region::field("_field_7C", unknown(0x984)),
+                    Region::field(
+                        "test_type",
                         Type::Raw(ItemPath::from_colon_delimited_str("test::TestType")),
                     ),
-                    Region::Field(
-                        "settings".into(),
-                        Type::Array(
-                            Box::new(Type::Raw(ItemPath::from_colon_delimited_str("u8"))),
-                            804,
-                        ),
-                    ),
-                    Region::Padding(0xA24),
+                    Region::field("settings", unknown(804)),
+                    Region::field("_field_D2C", unknown(0xA24)),
                 ],
                 functions: [(
                     "free".to_string(),
@@ -382,8 +360,8 @@ fn can_use_type_from_another_module() {
             size: 4,
             inner: TypeDefinition {
                 functions: HashMap::new(),
-                regions: vec![Region::Field(
-                    "field".into(),
+                regions: vec![Region::field(
+                    "field",
                     Type::Raw(ItemPath::from_colon_delimited_str("module2::TestType2")),
                 )],
                 metadata: HashMap::new(),
@@ -470,22 +448,22 @@ fn can_resolve_embed_of_an_extern() {
             size: 28,
             inner: TypeDefinition {
                 regions: vec![
-                    Region::Field(
-                        "field_1".into(),
+                    Region::field(
+                        "field_1",
                         Type::Raw(ItemPath::from_colon_delimited_str("i32")),
                     ),
-                    Region::Field(
-                        "field_2".into(),
+                    Region::field(
+                        "field_2",
                         Type::Raw(ItemPath::from_colon_delimited_str("test::TestType1")),
                     ),
-                    Region::Field(
-                        "field_3".into(),
+                    Region::field(
+                        "field_3",
                         Type::ConstPointer(Box::new(Type::Raw(
                             ItemPath::from_colon_delimited_str("test::TestType1"),
                         ))),
                     ),
-                    Region::Field(
-                        "field_4".into(),
+                    Region::field(
+                        "field_4",
                         Type::MutPointer(Box::new(Type::Raw(ItemPath::from_colon_delimited_str(
                             "test::TestType1",
                         )))),
@@ -550,8 +528,8 @@ fn can_generate_vftable() {
         state: types::ItemState::Resolved(types::ItemStateResolved {
             size: 4,
             inner: TypeDefinition {
-                regions: vec![Region::Field(
-                    "vftable".to_string(),
+                regions: vec![Region::field(
+                    "vftable",
                     Type::ConstPointer(Box::new(Type::Raw(ItemPath::from_colon_delimited_str(
                         "test::TestTypeVftable",
                     )))),
@@ -605,7 +583,7 @@ fn can_generate_vftable() {
             size: 0,
             inner: TypeDefinition {
                 regions: vec![
-                    Region::Field(
+                    Region::field(
                         "test_function0".to_string(),
                         Type::Function(
                             vec![
@@ -629,7 +607,7 @@ fn can_generate_vftable() {
                             )))),
                         ),
                     ),
-                    Region::Field(
+                    Region::field(
                         "test_function1".to_string(),
                         Type::Function(
                             vec![

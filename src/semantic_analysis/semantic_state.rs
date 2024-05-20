@@ -8,6 +8,8 @@ use crate::{
 
 use anyhow::Context;
 
+use super::types::Region;
+
 pub struct SemanticState {
     pub(crate) modules: HashMap<ItemPath, module::Module>,
     pub(crate) type_registry: type_registry::TypeRegistry,
@@ -262,12 +264,6 @@ impl SemanticState {
             .get_module_for_path(resolvee_path)
             .context("failed to get module for path")?;
 
-        let build_region_from_field = |grammar::TypeField(ident, type_ref): &grammar::TypeField| {
-            self.type_registry
-                .resolve_grammar_typeref(&module.scope(), type_ref)
-                .map(|tr| (None, types::Region::Field(ident.0.clone(), tr)))
-        };
-
         let mut target_size: Option<usize> = None;
         let mut regions: Vec<(Option<usize>, types::Region)> = vec![];
         let mut metadata: HashMap<String, types::MetadataValue> = HashMap::new();
@@ -315,21 +311,23 @@ impl SemanticState {
                     }
 
                     if let Some(address) = address {
-                        regions.push((Some(address), types::Region::Padding(0)));
+                        regions.push((
+                            Some(address),
+                            types::Region::unnamed_field(self.type_registry.padding_type(0)),
+                        ));
                     }
 
-                    if let Some(region_pair) = build_region_from_field(field) {
-                        regions.push(region_pair);
-                    } else {
+                    let grammar::TypeField(ident, type_ref) = field;
+                    let Some(type_) = self
+                        .type_registry
+                        .resolve_grammar_typeref(&module.scope(), type_ref)
+                    else {
                         return Ok(None);
-                    }
+                    };
+
+                    let ident = (ident.0 != "_").then(|| ident.0.clone());
+                    regions.push((None, types::Region::Field(ident, type_)));
                 }
-                grammar::TypeStatement::Macro(macro_call) => match macro_call.match_repr() {
-                    ("padding", [grammar::Expr::IntLiteral(size)]) => {
-                        regions.push((None, types::Region::Padding(*size as usize)));
-                    }
-                    (name, _) => return Err(anyhow::anyhow!("unsupported macro: {}", name)),
-                },
                 grammar::TypeStatement::Functions(functions_by_category) => {
                     functions = functions_by_category
                         .iter()
@@ -362,7 +360,9 @@ impl SemanticState {
         for (offset, region) in regions {
             if let Some(offset) = offset {
                 let size = offset - last_address;
-                resolved_regions.push(types::Region::Padding(size));
+                resolved_regions.push(types::Region::unnamed_field(
+                    self.type_registry.padding_type(size),
+                ));
                 last_address += size;
             }
 
@@ -381,19 +381,31 @@ impl SemanticState {
 
         if let Some(target_size) = target_size {
             if last_address < target_size {
-                resolved_regions.push(types::Region::Padding(target_size - last_address));
+                resolved_regions.push(types::Region::unnamed_field(
+                    self.type_registry.padding_type(target_size - last_address),
+                ));
             }
         }
 
-        let sizes = resolved_regions
-            .iter()
-            .map(|r: &types::Region| r.size(&self.type_registry))
-            .collect::<Option<Vec<_>>>();
-        let Some(sizes) = sizes else {
-            return Ok(None);
-        };
+        let mut size = 0;
+        for region in &mut resolved_regions {
+            let Some(region_size) = region.size(&self.type_registry) else {
+                return Ok(None);
+            };
 
-        let size = sizes.into_iter().sum();
+            if let Region::Field(None, type_) = region {
+                *region = Region::Field(Some(format!("_field_{size:X}")), type_.clone());
+            }
+
+            size += region_size;
+        }
+
+        for region in &resolved_regions {
+            if let Region::Field(None, type_) = region {
+                anyhow::bail!("unnamed field with type {type_} in type definition {resolvee_path}");
+            }
+        }
+
         Ok(Some(types::ItemStateResolved {
             size,
             inner: types::TypeDefinition {
@@ -503,7 +515,7 @@ impl SemanticState {
             let return_type = function.return_type.as_ref().map(|t| Box::new(t.clone()));
 
             types::Region::Field(
-                function.name.clone(),
+                Some(function.name.clone()),
                 types::Type::Function(arguments, return_type),
             )
         };
@@ -523,7 +535,7 @@ impl SemanticState {
                 category: types::ItemCategory::Defined,
             },
             types::Region::Field(
-                "vftable".to_string(),
+                Some("vftable".to_string()),
                 types::Type::ConstPointer(Box::new(types::Type::Raw(resolvee_vtable_path))),
             ),
             self.type_registry.pointer_size(),

@@ -17,7 +17,19 @@ mod kw {
 
 impl Parse for Ident {
     fn parse(input: ParseStream) -> Result<Self> {
-        Ok(Ident(input.parse::<syn::Ident>()?.to_string()))
+        if input.peek(syn::Token![_]) {
+            input.parse::<syn::Token![_]>()?;
+            Ok(Ident("_".to_string()))
+        } else if input.peek(syn::Ident) {
+            Ok(Ident(input.parse::<syn::Ident>()?.to_string()))
+        } else {
+            Err(input.error("expected identifier"))
+        }
+    }
+}
+impl Ident {
+    fn peek(lookahead: &Lookahead1) -> bool {
+        lookahead.peek(syn::Token![_]) || lookahead.peek(syn::Ident)
     }
 }
 
@@ -257,24 +269,16 @@ impl Parse for TypeField {
 
 impl Parse for TypeStatement {
     fn parse(input: ParseStream) -> Result<Self> {
-        use syn::parse::discouraged::Speculative;
-
         fn parse_field(
             input: ParseStream,
             lookahead: Lookahead1,
             attributes: Vec<Attribute>,
         ) -> Result<TypeStatement> {
-            if lookahead.peek(syn::Ident) {
-                let ahead = input.fork();
-                if let Ok(macro_call) = ahead.call(MacroCall::parse) {
-                    input.advance_to(&ahead);
-                    Ok(TypeStatement::Macro(macro_call))
-                } else {
-                    Ok(TypeStatement::Field {
-                        field: input.parse()?,
-                        attributes,
-                    })
-                }
+            if Ident::peek(&lookahead) {
+                Ok(TypeStatement::Field {
+                    field: input.parse()?,
+                    attributes,
+                })
             } else {
                 Err(lookahead.error())
             }

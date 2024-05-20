@@ -318,7 +318,6 @@ pub enum TypeStatement {
         field: TypeField,
         attributes: Vec<Attribute>,
     },
-    Macro(MacroCall),
 }
 impl TypeStatement {
     pub fn meta(fields: &[(&str, Expr)]) -> TypeStatement {
@@ -346,9 +345,6 @@ impl TypeStatement {
             field: (name.into(), type_ref).into(),
             attributes: attributes.into(),
         }
-    }
-    pub fn macro_(ident: &str, exprs: &[Expr]) -> TypeStatement {
-        TypeStatement::Macro(MacroCall::new(ident, exprs))
     }
 }
 

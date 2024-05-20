@@ -196,20 +196,14 @@ fn build_type(
 
     let fields = regions
         .iter()
-        .enumerate()
-        .map(|(i, r)| {
+        .map(|r| {
             Ok(match r {
                 types::Region::Field(field, type_ref) => {
-                    let field_ident = str_to_ident(field);
+                    let field_ident =
+                        str_to_ident(field.as_deref().context("field name not present")?);
                     let syn_type = sa_type_to_syn_type(type_ref)?;
                     quote! {
                         pub #field_ident: #syn_type
-                    }
-                }
-                types::Region::Padding(size) => {
-                    let field_ident = quote::format_ident!("padding_{}", i);
-                    quote! {
-                        #field_ident: [u8; #size]
                     }
                 }
             })

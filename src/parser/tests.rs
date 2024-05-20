@@ -27,7 +27,7 @@ fn can_parse_basic_struct() {
         )
     };
 
-    assert_eq!(parse_str(text).ok(), Some(ast));
+    assert_eq!(parse_str(text).unwrap(), ast);
 }
 
 #[test]
@@ -47,7 +47,7 @@ fn can_parse_vehicle_types() {
 
             field_1c: i32,
             loaded_models: *const LoadedModel,
-            padding!(0x10),
+            _: unk!(0x10),
         }
         "#;
 
@@ -76,13 +76,13 @@ fn can_parse_vehicle_types() {
                         T::ident("LoadedModel").const_pointer().into(),
                         [],
                     ),
-                    TS::macro_("padding", &[Expr::IntLiteral(0x10)]),
+                    TS::field("_", MacroCall::unk(0x10).into(), []),
                 ]),
             )],
         )
     };
 
-    assert_eq!(parse_str(text).ok(), Some(ast));
+    assert_eq!(parse_str(text).unwrap(), ast);
 }
 
 #[test]
@@ -198,7 +198,7 @@ fn can_parse_spawn_manager() {
         )
     };
 
-    assert_eq!(parse_str(text).ok(), Some(ast));
+    assert_eq!(parse_str(text).unwrap(), ast);
 }
 
 #[test]
@@ -225,7 +225,7 @@ fn can_parse_address_field() {
         )
     };
 
-    assert_eq!(parse_str(text).ok(), Some(ast));
+    assert_eq!(parse_str(text).unwrap(), ast);
 }
 
 #[test]
@@ -253,7 +253,7 @@ fn can_parse_use() {
         )
     };
 
-    assert_eq!(parse_str(text).ok(), Some(ast));
+    assert_eq!(parse_str(text).unwrap(), ast);
 }
 
 #[test]
@@ -296,7 +296,7 @@ fn can_parse_extern() {
         )
     };
 
-    assert_eq!(parse_str(text).ok(), Some(ast));
+    assert_eq!(parse_str(text).unwrap(), ast);
 }
 
 #[test]
@@ -311,7 +311,7 @@ fn can_parse_an_empty_type() {
         &[],
         &[ItemDefinition::new("Test", TypeDefinition::new(&[]))],
     );
-    assert_eq!(parse_str(text).ok(), Some(ast));
+    assert_eq!(parse_str(text).unwrap(), ast);
 }
 
 #[test]
@@ -337,7 +337,7 @@ fn can_parse_extern_value() {
         )
     };
 
-    assert_eq!(parse_str(text).ok(), Some(ast));
+    assert_eq!(parse_str(text).unwrap(), ast);
 }
 
 #[test]
