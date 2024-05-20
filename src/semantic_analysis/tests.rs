@@ -51,7 +51,7 @@ fn can_resolve_basic_struct() {
                 "TestType",
                 TypeDefinition::new(&[
                     TS::field("field_1", TR::ident_type("i32"), []),
-                    TS::field("_", MacroCall::unk(4).into(), []),
+                    TS::field("_", TR::unknown(4), []),
                     TS::field("field_2", TR::ident_type("u64"), []),
                 ]),
             )],
@@ -182,7 +182,7 @@ fn can_resolve_complex_type() {
                     "TestType",
                     TypeDefinition::new(&[
                         TS::field("field_1", TR::ident_type("i32"), []),
-                        TS::field("_", MacroCall::unk(4).into(), []),
+                        TS::field("_", TR::unknown(4), []),
                     ]),
                 ),
                 ItemDefinition::new(
@@ -203,7 +203,7 @@ fn can_resolve_complex_type() {
                             TR::ident_type("TestType"),
                             [Attribute::address(0xA00)],
                         ),
-                        TS::field("settings", MacroCall::unk(804).into(), []),
+                        TS::field("settings", TR::unknown(804), []),
                         TS::functions(&[(
                             "free",
                             &[Function::new(

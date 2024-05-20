@@ -47,7 +47,7 @@ fn can_parse_vehicle_types() {
 
             field_1c: i32,
             loaded_models: *const LoadedModel,
-            _: unk!(0x10),
+            _: unknown<0x10>,
         }
         "#;
 
@@ -76,7 +76,7 @@ fn can_parse_vehicle_types() {
                         T::ident("LoadedModel").const_pointer().into(),
                         [],
                     ),
-                    TS::field("_", MacroCall::unk(0x10).into(), []),
+                    TS::field("_", TR::unknown(0x10), []),
                 ]),
             )],
         )
@@ -100,8 +100,8 @@ fn can_parse_spawn_manager() {
 
             #[address(0xA00)]
             world_sim: WorldSim,
-            enemy_type_spawn_settings: unk!(804),
-            character_types: unk!(0x74),
+            enemy_type_spawn_settings: unknown<804>,
+            character_types: unknown<0x74>,
             vehicle_types: VehicleTypes,
 
             functions {
@@ -158,8 +158,8 @@ fn can_parse_spawn_manager() {
                         TR::ident_type("WorldSim"),
                         [Attribute::address(0xA00)],
                     ),
-                    TS::field("enemy_type_spawn_settings", MacroCall::unk(804).into(), []),
-                    TS::field("character_types", MacroCall::unk(0x74).into(), []),
+                    TS::field("enemy_type_spawn_settings", TR::unknown(804), []),
+                    TS::field("character_types", TR::unknown(0x74), []),
                     TS::field("vehicle_types", TR::ident_type("VehicleTypes"), []),
                     TS::functions(&[(
                         "free",

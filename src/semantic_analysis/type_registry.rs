@@ -89,6 +89,7 @@ impl TypeRegistry {
                 .resolve_grammar_type(scope, t.as_ref())
                 .map(|t| Type::Array(Box::new(t), *size as usize)),
             grammar::Type::Ident(ident) => self.resolve_string(scope, ident.as_str()),
+            grammar::Type::Unknown(size) => Some(self.padding_type(*size as usize)),
         }
     }
 
@@ -99,12 +100,6 @@ impl TypeRegistry {
     ) -> Option<Type> {
         match type_ref {
             grammar::TypeRef::Type(type_) => self.resolve_grammar_type(scope, type_),
-            grammar::TypeRef::Macro(macro_call) => match macro_call.match_repr() {
-                ("unk", [grammar::Expr::IntLiteral(size)]) => {
-                    Some(self.padding_type(*size as usize))
-                }
-                _ => panic!("unsupported macro call"),
-            },
         }
     }
 

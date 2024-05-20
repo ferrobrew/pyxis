@@ -24,6 +24,7 @@ pub enum Type {
     MutPointer(Box<Type>),
     Array(Box<Type>, usize),
     Ident(Ident),
+    Unknown(usize),
 }
 impl Type {
     pub fn ident(ident: &str) -> Type {
@@ -40,6 +41,10 @@ impl Type {
 
     pub fn array(self, size: usize) -> Type {
         Type::Array(Box::new(self), size)
+    }
+
+    pub fn unknown(size: usize) -> Type {
+        Type::Unknown(size)
     }
 }
 impl From<&str> for Type {
@@ -143,35 +148,9 @@ impl FromIterator<ItemPathSegment> for ItemPath {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MacroCall {
-    pub name: Ident,
-    pub arguments: Vec<Expr>,
-}
-impl MacroCall {
-    pub fn new(name: &str, arguments: &[Expr]) -> Self {
-        Self {
-            name: name.into(),
-            arguments: arguments.to_vec(),
-        }
-    }
-
-    pub fn unk(size: usize) -> Self {
-        MacroCall {
-            name: "unk".into(),
-            arguments: vec![Expr::IntLiteral(size as isize)],
-        }
-    }
-
-    pub fn match_repr(&self) -> (&str, &[Expr]) {
-        (self.name.as_str(), self.arguments.as_slice())
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Expr {
     IntLiteral(isize),
     StringLiteral(String),
-    Macro(MacroCall),
     Ident(Ident),
 }
 impl Expr {
@@ -237,25 +216,19 @@ impl Function {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TypeRef {
     Type(Type),
-    Macro(MacroCall),
 }
 impl TypeRef {
     pub fn ident_type(name: &str) -> TypeRef {
         TypeRef::Type(name.into())
     }
 
-    pub fn macro_(name: &str, args: &[Expr]) -> TypeRef {
-        TypeRef::Macro(MacroCall::new(name, args))
+    pub fn unknown(size: usize) -> TypeRef {
+        TypeRef::Type(Type::unknown(size))
     }
 }
 impl From<Type> for TypeRef {
     fn from(item: Type) -> Self {
         TypeRef::Type(item)
-    }
-}
-impl From<MacroCall> for TypeRef {
-    fn from(item: MacroCall) -> Self {
-        TypeRef::Macro(item)
     }
 }
 

@@ -13,6 +13,7 @@ mod tests;
 mod kw {
     syn::custom_keyword!(meta);
     syn::custom_keyword!(functions);
+    syn::custom_keyword!(unknown);
 }
 
 impl Parse for Ident {
@@ -80,7 +81,14 @@ impl Parse for ItemPath {
 impl Parse for Type {
     fn parse(input: ParseStream) -> Result<Self> {
         let lookahead = input.lookahead1();
-        if lookahead.peek(syn::Ident) {
+        if lookahead.peek(kw::unknown) {
+            input.parse::<kw::unknown>()?;
+            input.parse::<Token![<]>()?;
+            let size: usize = input.parse::<syn::LitInt>()?.base10_parse()?;
+            input.parse::<Token![>]>()?;
+
+            Ok(Type::Unknown(size))
+        } else if lookahead.peek(syn::Ident) {
             Ok(Type::Ident(parse_type_ident(input)?.as_str().into()))
         } else if lookahead.peek(syn::Token![*]) {
             input.parse::<syn::Token![*]>()?;
@@ -110,30 +118,11 @@ impl Parse for Type {
     }
 }
 
-impl Parse for MacroCall {
-    fn parse(input: ParseStream) -> Result<Self> {
-        let name: Ident = input.parse()?;
-        input.parse::<Token![!]>()?;
-
-        let content;
-        parenthesized!(content in input);
-
-        let arguments: Punctuated<_, Token![,]> = content.parse_terminated(Expr::parse)?;
-        let arguments = Vec::from_iter(arguments);
-
-        Ok(MacroCall { name, arguments })
-    }
-}
-
 impl Parse for Expr {
     fn parse(input: ParseStream) -> Result<Self> {
         let lookahead = input.lookahead1();
         if lookahead.peek(syn::Ident) {
-            if input.peek2(syn::Token![!]) {
-                Ok(Expr::Macro(input.parse()?))
-            } else {
-                Ok(Expr::Ident(input.parse()?))
-            }
+            Ok(Expr::Ident(input.parse()?))
         } else if lookahead.peek(syn::LitInt) {
             let lit: syn::LitInt = input.parse()?;
             Ok(Expr::IntLiteral(lit.base10_parse()?))
@@ -226,15 +215,7 @@ impl Parse for Function {
 
 impl Parse for TypeRef {
     fn parse(input: ParseStream) -> Result<Self> {
-        use syn::parse::discouraged::Speculative;
-
-        let ahead = input.fork();
-        if let Ok(macro_call) = ahead.call(MacroCall::parse) {
-            input.advance_to(&ahead);
-            Ok(TypeRef::Macro(macro_call))
-        } else {
-            Ok(TypeRef::Type(input.parse()?))
-        }
+        Ok(TypeRef::Type(input.parse()?))
     }
 }
 
