@@ -88,23 +88,28 @@ impl fmt::Display for Type {
 }
 
 #[derive(PartialEq, Eq, Debug, Clone)]
-pub enum Region {
-    Field(Option<String>, Type),
+pub struct Region {
+    pub name: Option<String>,
+    pub type_ref: Type,
 }
 
 impl Region {
     pub fn field(name: impl Into<String>, type_ref: Type) -> Self {
-        Region::Field(Some(name.into()), type_ref)
+        Region {
+            name: Some(name.into()),
+            type_ref,
+        }
     }
 
     pub fn unnamed_field(type_ref: Type) -> Self {
-        Region::Field(None, type_ref)
+        Region {
+            name: None,
+            type_ref,
+        }
     }
 
     pub fn size(&self, type_registry: &type_registry::TypeRegistry) -> Option<usize> {
-        match self {
-            Region::Field(_, type_ref) => type_ref.size(type_registry),
-        }
+        self.type_ref.size(type_registry)
     }
 }
 

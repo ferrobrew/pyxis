@@ -198,7 +198,10 @@ fn build_type(
         .iter()
         .map(|r| {
             Ok(match r {
-                types::Region::Field(field, type_ref) => {
+                types::Region {
+                    name: field,
+                    type_ref,
+                } => {
                     let field_name = field.as_deref().context("field name not present")?;
                     let field_ident = str_to_ident(field_name);
                     let visibility = (!field_name.starts_with("_")).then(|| quote! { pub });

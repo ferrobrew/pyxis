@@ -326,7 +326,13 @@ impl SemanticState {
                     };
 
                     let ident = (ident.0 != "_").then(|| ident.0.clone());
-                    regions.push((None, types::Region::Field(ident, type_)));
+                    regions.push((
+                        None,
+                        types::Region {
+                            name: ident,
+                            type_ref: type_,
+                        },
+                    ));
                 }
                 grammar::TypeStatement::Functions(functions_by_category) => {
                     functions = functions_by_category
@@ -393,16 +399,29 @@ impl SemanticState {
                 return Ok(None);
             };
 
-            if let Region::Field(None, type_) = region {
-                *region = Region::Field(Some(format!("_field_{size:X}")), type_.clone());
+            if let Region {
+                name: None,
+                type_ref,
+            } = region
+            {
+                *region = Region {
+                    name: Some(format!("_field_{size:X}")),
+                    type_ref: type_ref.clone(),
+                };
             }
 
             size += region_size;
         }
 
         for region in &resolved_regions {
-            if let Region::Field(None, type_) = region {
-                anyhow::bail!("unnamed field with type {type_} in type definition {resolvee_path}");
+            if let Region {
+                name: None,
+                type_ref,
+            } = region
+            {
+                anyhow::bail!(
+                    "unnamed field with type {type_ref} in type definition {resolvee_path}"
+                );
             }
         }
 
@@ -514,10 +533,10 @@ impl SemanticState {
             let arguments = function.arguments.iter().map(argument_to_type).collect();
             let return_type = function.return_type.as_ref().map(|t| Box::new(t.clone()));
 
-            types::Region::Field(
-                Some(function.name.clone()),
-                types::Type::Function(arguments, return_type),
-            )
+            types::Region {
+                name: Some(function.name.clone()),
+                type_ref: types::Type::Function(arguments, return_type),
+            }
         };
 
         Some((
@@ -534,10 +553,12 @@ impl SemanticState {
                 }),
                 category: types::ItemCategory::Defined,
             },
-            types::Region::Field(
-                Some("vftable".to_string()),
-                types::Type::ConstPointer(Box::new(types::Type::Raw(resolvee_vtable_path))),
-            ),
+            types::Region {
+                name: Some("vftable".to_string()),
+                type_ref: types::Type::ConstPointer(Box::new(types::Type::Raw(
+                    resolvee_vtable_path,
+                ))),
+            },
             self.type_registry.pointer_size(),
         ))
     }
