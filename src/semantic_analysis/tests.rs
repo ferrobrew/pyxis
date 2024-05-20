@@ -389,7 +389,7 @@ fn will_fail_on_an_extern_without_size() {
             .err()
             .unwrap()
             .to_string(),
-        "failed to find size field in extern type for module"
+        "failed to find size attribute for extern type"
     );
 }
 
@@ -403,10 +403,7 @@ fn can_resolve_embed_of_an_extern() {
 
         Module::new(
             &[],
-            &[(
-                "TestType1".into(),
-                vec![ExprField("size".into(), Expr::IntLiteral(16))],
-            )],
+            &[("TestType1".into(), vec![Attribute::size(16)])],
             &[],
             &[ItemDefinition::new(
                 "TestType2",
@@ -660,7 +657,7 @@ fn can_define_extern_value() {
             &[(
                 "test".into(),
                 Type::Ident("u32".into()).mut_pointer(),
-                0x1337,
+                vec![grammar::Attribute::address(0x1337)],
             )],
             &[],
         )

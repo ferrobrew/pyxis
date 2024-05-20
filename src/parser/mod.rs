@@ -1,6 +1,6 @@
 use syn::{
     braced, bracketed, parenthesized,
-    parse::{Lookahead1, Parse, ParseBuffer, ParseStream, Result},
+    parse::{Lookahead1, Parse, ParseStream, Result},
     punctuated::Punctuated,
     Token,
 };
@@ -402,26 +402,19 @@ impl Parse for Module {
 
                     let content;
                     braced!(content in input);
+                    let attributes = Attribute::parse_many(&content)?;
 
-                    let fields: Punctuated<_, Token![,]> =
-                        content.parse_terminated(ExprField::parse)?;
-
-                    extern_types.push((ident, Vec::from_iter(fields.into_iter())));
+                    extern_types.push((ident, attributes));
                 } else {
                     let name: Ident = input.parse()?;
                     input.parse::<syn::Token![:]>()?;
                     let type_: Type = input.parse()?;
-                    input.parse::<syn::Token![@]>()?;
-                    let address: Expr = input.parse()?;
-                    input.parse::<syn::Token![;]>()?;
 
-                    extern_values.push((
-                        name,
-                        type_,
-                        address.int_literal().map(|i| i as usize).ok_or_else(|| {
-                            input.error("expected integer for extern value address")
-                        })?,
-                    ));
+                    let content;
+                    braced!(content in input);
+                    let attributes = Attribute::parse_many(&content)?;
+
+                    extern_values.push((name, type_, attributes));
                 }
             } else if input.peek(syn::Token![type]) || input.peek(syn::Token![enum]) {
                 definitions.push(input.parse()?);
@@ -430,12 +423,7 @@ impl Parse for Module {
             }
         }
 
-        Ok(Module::new(
-            &uses,
-            &extern_types,
-            &extern_values,
-            &definitions,
-        ))
+        Ok(Module::new(uses, extern_types, extern_values, definitions))
     }
 }
 

@@ -171,6 +171,10 @@ impl Attribute {
         Attribute::Function("address".into(), vec![Expr::IntLiteral(address as isize)])
     }
 
+    pub fn size(size: usize) -> Self {
+        Attribute::Function("size".into(), vec![Expr::IntLiteral(size as isize)])
+    }
+
     pub fn function(&self) -> Option<(&Ident, &Vec<Expr>)> {
         match self {
             Attribute::Function(ident, exprs) => Some((ident, exprs)),
@@ -379,22 +383,22 @@ impl ItemDefinition {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Module {
     pub uses: Vec<ItemPath>,
-    pub extern_types: Vec<(Ident, Vec<ExprField>)>,
-    pub extern_values: Vec<(Ident, Type, usize)>,
+    pub extern_types: Vec<(Ident, Vec<Attribute>)>,
+    pub extern_values: Vec<(Ident, Type, Vec<Attribute>)>,
     pub definitions: Vec<ItemDefinition>,
 }
 impl Module {
     pub fn new(
-        uses: &[ItemPath],
-        extern_types: &[(Ident, Vec<ExprField>)],
-        extern_values: &[(Ident, Type, usize)],
-        definitions: &[ItemDefinition],
+        uses: impl Into<Vec<ItemPath>>,
+        extern_types: impl Into<Vec<(Ident, Vec<Attribute>)>>,
+        extern_values: impl Into<Vec<(Ident, Type, Vec<Attribute>)>>,
+        definitions: impl Into<Vec<ItemDefinition>>,
     ) -> Self {
         Self {
-            uses: uses.to_vec(),
-            extern_types: extern_types.to_vec(),
-            extern_values: extern_values.to_vec(),
-            definitions: definitions.to_vec(),
+            uses: uses.into(),
+            extern_types: extern_types.into(),
+            extern_values: extern_values.into(),
+            definitions: definitions.into(),
         }
     }
 }

@@ -14,10 +14,10 @@ fn can_parse_basic_struct() {
         type T = Type;
 
         Module::new(
-            &[],
-            &[],
-            &[],
-            &[ItemDefinition::new(
+            [],
+            [],
+            [],
+            [ItemDefinition::new(
                 "TestType",
                 TypeDefinition::new(&[
                     TS::field("field_1", T::ident("i32"), []),
@@ -131,10 +131,10 @@ fn can_parse_spawn_manager() {
         type A = Argument;
 
         Module::new(
-            &[],
-            &[],
-            &[],
-            &[ItemDefinition::new(
+            [],
+            [],
+            [],
+            [ItemDefinition::new(
                 "SpawnManager",
                 TypeDefinition::new(&[
                     TS::meta(&[
@@ -205,10 +205,10 @@ fn can_parse_address_field() {
 
     let ast = {
         Module::new(
-            &[],
-            &[],
-            &[],
-            &[ItemDefinition::new(
+            [],
+            [],
+            [],
+            [ItemDefinition::new(
                 "Test",
                 TypeDefinition::new(&[TypeStatement::field(
                     "max_num_characters",
@@ -233,10 +233,10 @@ fn can_parse_use() {
 
     let ast = {
         Module::new(
-            &[ItemPath::from_colon_delimited_str("hello::TestType<Hey>")],
-            &[],
-            &[],
-            &[ItemDefinition::new(
+            [ItemPath::from_colon_delimited_str("hello::TestType<Hey>")],
+            [],
+            [],
+            [ItemDefinition::new(
                 "Test",
                 TypeDefinition::new(&[TypeStatement::field(
                     "test",
@@ -265,7 +265,7 @@ fn will_die_on_super_for_now() {
 #[test]
 fn can_parse_extern() {
     let text = r#"
-        extern type TestType<Hey> { size: 12 }
+        extern type TestType<Hey> { #[size(12)] }
         type Test {
             test: TestType<Hey>,
         }
@@ -274,10 +274,7 @@ fn can_parse_extern() {
     let ast = {
         Module::new(
             &[],
-            &[(
-                "TestType<Hey>".into(),
-                vec![ExprField("size".into(), Expr::IntLiteral(12))],
-            )],
+            &[("TestType<Hey>".into(), vec![Attribute::size(12)])],
             &[],
             &[ItemDefinition::new(
                 "Test",
@@ -300,10 +297,10 @@ fn can_parse_an_empty_type() {
         "#;
 
     let ast = Module::new(
-        &[],
-        &[],
-        &[],
-        &[ItemDefinition::new("Test", TypeDefinition::new(&[]))],
+        [],
+        [],
+        [],
+        [ItemDefinition::new("Test", TypeDefinition::new(&[]))],
     );
     assert_eq!(parse_str(text).unwrap(), ast);
 }
@@ -311,23 +308,20 @@ fn can_parse_an_empty_type() {
 #[test]
 fn can_parse_extern_value() {
     let text = r#"
-        extern type SomeType { size: 4 }
-        extern some_value: *mut SomeType @ 0x1337;
+        extern type SomeType { #[size(4)] }
+        extern some_value: *mut SomeType { #[address(0x1337)] }
         "#;
 
     let ast = {
         Module::new(
-            &[],
-            &[(
-                "SomeType".into(),
-                vec![ExprField("size".into(), Expr::IntLiteral(4))],
-            )],
-            &[(
+            [],
+            [("SomeType".into(), vec![Attribute::size(4)])],
+            [(
                 "some_value".into(),
                 Type::ident("SomeType").mut_pointer(),
-                0x1337,
+                vec![Attribute::address(0x1337)],
             )],
-            &[],
+            [],
         )
     };
 

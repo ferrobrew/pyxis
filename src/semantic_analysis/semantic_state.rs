@@ -72,17 +72,32 @@ impl SemanticState {
     }
 
     pub fn add_module(&mut self, module: &grammar::Module, path: &ItemPath) -> anyhow::Result<()> {
-        let extern_values: Vec<_> = module
+        let extern_values = module
             .extern_values
             .iter()
-            .map(|(name, type_, address)| {
-                (
+            .map(|(name, type_, attributes)| {
+                let mut address = None;
+                for attribute in attributes {
+                    let Some((ident, exprs)) = attribute.function() else {
+                        anyhow::bail!("unsupported attribute: {attribute:?}");
+                    };
+                    match (ident.as_str(), &exprs[..]) {
+                        ("address", [grammar::Expr::IntLiteral(addr)]) => {
+                            address = Some(*addr as usize);
+                        }
+                        _ => anyhow::bail!("unsupported attribute: {attribute:?}"),
+                    }
+                }
+
+                let address =
+                    address.context("failed to find address attribute for extern value")?;
+                Ok((
                     name.as_str().to_owned(),
                     types::Type::Unresolved(type_.clone()),
-                    *address,
-                )
+                    address,
+                ))
             })
-            .collect();
+            .collect::<anyhow::Result<Vec<_>>>()?;
 
         self.modules.insert(
             path.clone(),
@@ -98,16 +113,24 @@ impl SemanticState {
             })?;
         }
 
-        for (extern_path, fields) in &module.extern_types {
-            let size = fields
-                .iter()
-                .find(|ef| ef.ident_as_str() == "size")
-                .context("failed to find size field in extern type for module")?
-                .1
-                .int_literal()
-                .context("size field of extern type is not an int literal")?
-                .try_into()
-                .context("the size could not be converted into an unsigned integer")?;
+        for (extern_path, attributes) in &module.extern_types {
+            let mut size = None;
+            for attribute in attributes {
+                let Some((ident, exprs)) = attribute.function() else {
+                    anyhow::bail!("unsupported attribute: {attribute:?}");
+                };
+                match (ident.as_str(), &exprs[..]) {
+                    ("size", [grammar::Expr::IntLiteral(size_)]) => {
+                        size = Some(
+                            (*size_)
+                                .try_into()
+                                .context("failed to convert size into usize")?,
+                        );
+                    }
+                    _ => anyhow::bail!("unsupported attribute: {attribute:?}"),
+                }
+            }
+            let size = size.context("failed to find size attribute for extern type")?;
 
             let extern_path = path.join(extern_path.as_str().into());
 
@@ -288,29 +311,18 @@ impl SemanticState {
                     }
                 }
                 grammar::TypeStatement::Field { field, attributes } => {
-                    let mut attributes = attributes.clone();
-                    let mut remove_indices = vec![];
-
                     let mut address = None;
 
-                    for (idx, attribute) in attributes.iter().enumerate() {
+                    for attribute in attributes {
                         let Some((ident, exprs)) = attribute.function() else {
                             anyhow::bail!("unsupported attribute: {attribute:?}");
                         };
                         match (ident.as_str(), &exprs[..]) {
                             ("address", [grammar::Expr::IntLiteral(addr)]) => {
                                 address = Some(*addr as usize);
-                                remove_indices.push(idx);
                             }
                             _ => anyhow::bail!("unsupported attribute: {attribute:?}"),
                         }
-                    }
-
-                    for idx in remove_indices.into_iter().rev() {
-                        attributes.remove(idx);
-                    }
-                    if !attributes.is_empty() {
-                        anyhow::bail!("unsupported attributes: {attributes:?}");
                     }
 
                     if let Some(address) = address {
