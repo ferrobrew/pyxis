@@ -227,19 +227,6 @@ impl Parse for ExprField {
     }
 }
 
-impl Parse for OptionalExprField {
-    fn parse(input: ParseStream) -> Result<Self> {
-        let name: Ident = input.parse()?;
-        let expr = if input.peek(Token![:]) {
-            input.parse::<Token![:]>()?;
-            Some(input.parse()?)
-        } else {
-            None
-        };
-        Ok(OptionalExprField(name, expr))
-    }
-}
-
 impl Parse for TypeField {
     fn parse(input: ParseStream) -> Result<Self> {
         let name: Ident = input.parse()?;
@@ -327,12 +314,15 @@ fn parse_type_definition(
 
 impl Parse for EnumStatement {
     fn parse(input: ParseStream) -> Result<Self> {
-        let lookahead = input.lookahead1();
-        if lookahead.peek(syn::Ident) {
-            Ok(EnumStatement::Field(input.parse()?))
+        let name: Ident = input.parse()?;
+        let expr = if input.peek(Token![:]) {
+            input.parse::<Token![:]>()?;
+            Some(input.parse()?)
         } else {
-            Err(lookahead.error())
-        }
+            None
+        };
+
+        Ok(EnumStatement::new(name, expr))
     }
 }
 

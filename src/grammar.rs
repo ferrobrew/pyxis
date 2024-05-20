@@ -241,27 +241,6 @@ impl From<(Ident, Expr)> for ExprField {
         ExprField(item.0, item.1)
     }
 }
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct OptionalExprField(pub Ident, pub Option<Expr>);
-impl OptionalExprField {
-    pub fn ident(&self) -> &Ident {
-        &self.0
-    }
-
-    pub fn ident_as_str(&self) -> &str {
-        self.0.as_str()
-    }
-}
-impl From<Ident> for OptionalExprField {
-    fn from(item: Ident) -> Self {
-        OptionalExprField(item, None)
-    }
-}
-impl From<(Ident, Expr)> for OptionalExprField {
-    fn from(item: (Ident, Expr)) -> Self {
-        OptionalExprField(item.0, Some(item.1))
-    }
-}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TypeField(pub Ident, pub Type);
@@ -321,15 +300,19 @@ impl TypeDefinition {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum EnumStatement {
-    Field(OptionalExprField),
+pub struct EnumStatement {
+    pub name: Ident,
+    pub expr: Option<Expr>,
 }
 impl EnumStatement {
+    pub fn new(name: Ident, expr: Option<Expr>) -> EnumStatement {
+        EnumStatement { name, expr }
+    }
     pub fn field(name: &str) -> EnumStatement {
-        EnumStatement::Field(Ident::from(name).into())
+        Self::new(name.into(), None)
     }
     pub fn field_with_expr(name: &str, expr: Expr) -> EnumStatement {
-        EnumStatement::Field((name.into(), expr).into())
+        Self::new(name.into(), Some(expr))
     }
 }
 

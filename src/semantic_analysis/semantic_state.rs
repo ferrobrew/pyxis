@@ -475,18 +475,14 @@ impl SemanticState {
         let mut fields: Vec<(String, isize)> = vec![];
         let mut last_field = 0;
         for statement in &definition.statements {
-            match statement {
-                grammar::EnumStatement::Field(optional_expr_field) => {
-                    let grammar::OptionalExprField(ident, expr) = optional_expr_field;
-                    let value = match expr {
-                        Some(grammar::Expr::IntLiteral(value)) => *value,
-                        Some(_) => anyhow::bail!("unsupported enum field value {expr:?}"),
-                        None => last_field,
-                    };
-                    fields.push((ident.0.clone(), value));
-                    last_field = value + 1;
-                }
+            let grammar::EnumStatement { name, expr } = statement;
+            let value = match expr {
+                Some(grammar::Expr::IntLiteral(value)) => *value,
+                Some(_) => anyhow::bail!("unsupported enum field value {expr:?}"),
+                None => last_field,
             };
+            fields.push((name.0.clone(), value));
+            last_field = value + 1;
         }
 
         for attribute in &definition.attributes {
