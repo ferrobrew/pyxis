@@ -374,17 +374,33 @@ pub struct Module {
     pub definitions: Vec<ItemDefinition>,
 }
 impl Module {
-    pub fn new(
-        uses: impl Into<Vec<ItemPath>>,
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn with_uses(mut self, uses: impl Into<Vec<ItemPath>>) -> Self {
+        self.uses = uses.into();
+        self
+    }
+
+    pub fn with_extern_types(
+        mut self,
         extern_types: impl Into<Vec<(Ident, Vec<Attribute>)>>,
-        extern_values: impl Into<Vec<(Ident, Type, Vec<Attribute>)>>,
-        definitions: impl Into<Vec<ItemDefinition>>,
     ) -> Self {
-        Self {
-            uses: uses.into(),
-            extern_types: extern_types.into(),
-            extern_values: extern_values.into(),
-            definitions: definitions.into(),
-        }
+        self.extern_types = extern_types.into();
+        self
+    }
+
+    pub fn with_extern_values(
+        mut self,
+        extern_values: impl Into<Vec<(Ident, Type, Vec<Attribute>)>>,
+    ) -> Self {
+        self.extern_values = extern_values.into();
+        self
+    }
+
+    pub fn with_definitions(mut self, definitions: impl Into<Vec<ItemDefinition>>) -> Self {
+        self.definitions = definitions.into();
+        self
     }
 }

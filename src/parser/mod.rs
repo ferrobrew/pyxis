@@ -416,7 +416,12 @@ impl Parse for Module {
             }
         }
 
-        Ok(Module::new(uses, extern_types, extern_values, definitions))
+        Ok(Module {
+            uses,
+            extern_types,
+            extern_values,
+            definitions,
+        })
     }
 }
 
