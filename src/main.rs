@@ -13,6 +13,7 @@ fn main() -> anyhow::Result<()> {
     let out_dir: PathBuf = args.next().unwrap_or_else(|| String::from("out")).into();
 
     let _ = std::fs::remove_dir_all(&out_dir);
+    std::fs::create_dir(&out_dir)?;
 
     // assume hardcoded pointer size for now
     let pointer_size = 4;

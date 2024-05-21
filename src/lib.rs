@@ -6,8 +6,6 @@ pub mod parser;
 pub mod semantic_analysis;
 
 pub fn build(in_dir: &Path, out_dir: &Path, pointer_size: usize) -> anyhow::Result<()> {
-    std::fs::create_dir(&out_dir)?;
-
     let mut semantic_state = semantic_analysis::SemanticState::new(pointer_size);
 
     for path in glob::glob(&format!("{}/**/*.pyx", in_dir.display()))?.filter_map(Result::ok) {
