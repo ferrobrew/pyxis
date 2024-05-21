@@ -191,9 +191,9 @@ fn can_resolve_complex_type() {
                     ),
                 ),
             ])
-            .with_impls([(
+            .with_impls([FunctionBlock::new(
                 Ident::from("Singleton"),
-                vec![Function::new(
+                [Function::new(
                     "test_function",
                     [Attribute::address(0x800_000)],
                     [
@@ -204,6 +204,7 @@ fn can_resolve_complex_type() {
                     ],
                     Some(T::ident("TestType").mut_pointer()),
                 )],
+                [],
             )])
     };
 
@@ -439,9 +440,9 @@ fn can_generate_vftable() {
 
         Module::new()
             .with_definitions([ItemDefinition::new("TestType", TypeDefinition::new([], []))])
-            .with_vftables([(
+            .with_vftables([FunctionBlock::new(
                 Ident::from("TestType"),
-                vec![
+                [
                     Function {
                         name: "test_function0".into(),
                         attributes: vec![],
@@ -463,6 +464,7 @@ fn can_generate_vftable() {
                         return_type: None,
                     },
                 ],
+                [Attribute::size(4)],
             )])
     };
 

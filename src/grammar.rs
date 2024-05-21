@@ -353,14 +353,34 @@ impl ItemDefinition {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FunctionBlock {
+    pub name: Ident,
+    pub functions: Vec<Function>,
+    pub attributes: Vec<Attribute>,
+}
+impl FunctionBlock {
+    pub fn new(
+        name: impl Into<Ident>,
+        functions: impl Into<Vec<Function>>,
+        attributes: impl Into<Vec<Attribute>>,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            functions: functions.into(),
+            attributes: attributes.into(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Module {
     pub uses: Vec<ItemPath>,
     pub extern_types: Vec<(Ident, Vec<Attribute>)>,
     pub extern_values: Vec<(Ident, Type, Vec<Attribute>)>,
     pub definitions: Vec<ItemDefinition>,
-    pub impls: Vec<(Ident, Vec<Function>)>,
-    pub vftables: Vec<(Ident, Vec<Function>)>,
+    pub impls: Vec<FunctionBlock>,
+    pub vftables: Vec<FunctionBlock>,
 }
 impl Module {
     pub fn new() -> Self {
@@ -393,16 +413,13 @@ impl Module {
         self
     }
 
-    pub fn with_impls(mut self, impls: impl IntoIterator<Item = (Ident, Vec<Function>)>) -> Self {
-        self.impls = impls.into_iter().collect();
+    pub fn with_impls(mut self, impls: impl Into<Vec<FunctionBlock>>) -> Self {
+        self.impls = impls.into();
         self
     }
 
-    pub fn with_vftables(
-        mut self,
-        vftables: impl IntoIterator<Item = (Ident, Vec<Function>)>,
-    ) -> Self {
-        self.vftables = vftables.into_iter().collect();
+    pub fn with_vftables(mut self, vftables: impl Into<Vec<FunctionBlock>>) -> Self {
+        self.vftables = vftables.into();
         self
     }
 }

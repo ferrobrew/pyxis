@@ -365,16 +365,21 @@ fn parse_item_definition(input: ParseStream, attributes: Vec<Attribute>) -> Resu
 
 fn parse_function_block_definition<Token: Parse>(
     input: ParseStream,
-) -> Result<(Ident, Vec<Function>)> {
+    attributes: Vec<Attribute>,
+) -> Result<FunctionBlock> {
     input.parse::<Token>()?;
-    let ident: Ident = input.parse()?;
+    let name: Ident = input.parse()?;
     let content;
     braced!(content in input);
 
     let functions: Punctuated<Function, Token![;]> = content.parse_terminated(Function::parse)?;
     let functions = Vec::from_iter(functions);
 
-    Ok((ident, functions))
+    Ok(FunctionBlock {
+        name,
+        functions,
+        attributes,
+    })
 }
 
 impl Parse for Module {
@@ -418,9 +423,13 @@ impl Parse for Module {
             } else if input.peek(Token![type]) || input.peek(Token![enum]) {
                 definitions.push(parse_item_definition(input, attributes)?);
             } else if input.peek(Token![impl]) {
-                impls.push(parse_function_block_definition::<Token![impl]>(input)?);
+                impls.push(parse_function_block_definition::<Token![impl]>(
+                    input, attributes,
+                )?);
             } else if input.peek(kw::vftable) {
-                vftables.push(parse_function_block_definition::<kw::vftable>(input)?);
+                vftables.push(parse_function_block_definition::<kw::vftable>(
+                    input, attributes,
+                )?);
             } else {
                 return Err(input.error("unexpected keyword"));
             }

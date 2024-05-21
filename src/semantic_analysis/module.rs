@@ -14,8 +14,8 @@ pub struct Module {
     pub(crate) ast: grammar::Module,
     pub(crate) definition_paths: HashSet<ItemPath>,
     pub(crate) extern_values: Vec<(String, Type, usize)>,
-    pub(crate) impls: HashMap<ItemPath, Vec<grammar::Function>>,
-    pub(crate) vftables: HashMap<ItemPath, Vec<grammar::Function>>,
+    pub(crate) impls: HashMap<ItemPath, grammar::FunctionBlock>,
+    pub(crate) vftables: HashMap<ItemPath, grammar::FunctionBlock>,
 }
 
 impl Default for Module {
@@ -36,16 +36,16 @@ impl Module {
         path: ItemPath,
         ast: grammar::Module,
         extern_values: Vec<(String, Type, usize)>,
-        impls: &[(grammar::Ident, Vec<grammar::Function>)],
-        vftables: &[(grammar::Ident, Vec<grammar::Function>)],
+        impls: &[grammar::FunctionBlock],
+        vftables: &[grammar::FunctionBlock],
     ) -> Self {
         fn convert_functions(
             path: &ItemPath,
-            functions: &[(grammar::Ident, Vec<grammar::Function>)],
-        ) -> HashMap<ItemPath, Vec<grammar::Function>> {
+            functions: &[grammar::FunctionBlock],
+        ) -> HashMap<ItemPath, grammar::FunctionBlock> {
             functions
                 .iter()
-                .map(|(k, v)| (path.join(k.as_str().into()), v.clone()))
+                .map(|f| (path.join(f.name.as_str().into()), f.clone()))
                 .collect()
         }
 

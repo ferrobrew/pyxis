@@ -39,9 +39,9 @@ fn can_parse_vftable() {
 
     let ast = Module::new()
         .with_definitions([ItemDefinition::new("TestType", TypeDefinition::new([], []))])
-        .with_vftables([(
-            Ident::from("TestType"),
-            vec![Function::new(
+        .with_vftables([FunctionBlock::new(
+            "TestType",
+            [Function::new(
                 "test",
                 [],
                 [
@@ -50,6 +50,7 @@ fn can_parse_vftable() {
                 ],
                 None,
             )],
+            [],
         )]);
 
     assert_eq!(parse_str(text).unwrap(), ast);
@@ -167,9 +168,9 @@ fn can_parse_spawn_manager() {
                     [Attribute::size(0x1754), Attribute::singleton(0x1_191_918)],
                 ),
             )])
-            .with_impls([(
-                Ident::from("SpawnManager"),
-                vec![
+            .with_impls([FunctionBlock::new(
+                "SpawnManager",
+                [
                     Function::new(
                         "engine_spawn_vehicle",
                         [Attribute::address(0x84C_4C0)],
@@ -195,6 +196,7 @@ fn can_parse_spawn_manager() {
                         None,
                     ),
                 ],
+                [],
             )])
     };
 

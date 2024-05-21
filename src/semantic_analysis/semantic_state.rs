@@ -344,7 +344,7 @@ impl SemanticState {
         }
 
         if let Some(type_impl) = module.impls.get(resolvee_path) {
-            for function in type_impl {
+            for function in &type_impl.functions {
                 let function = self.build_function(&module.scope(), function)?;
                 free_functions.push(function);
             }
@@ -352,7 +352,7 @@ impl SemanticState {
 
         if let Some(vftable_block) = module.vftables.get(resolvee_path) {
             let mut new_vftable_functions = vec![];
-            for function in vftable_block {
+            for function in &vftable_block.functions {
                 let function = self.build_function(&module.scope(), function)?;
                 new_vftable_functions.push(function);
             }
