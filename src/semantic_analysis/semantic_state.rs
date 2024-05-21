@@ -336,8 +336,9 @@ impl SemanticState {
         let mut regions: Vec<(Option<usize>, Region)> = vec![];
         for statement in &definition.statements {
             let grammar::TypeStatement { field, attributes } = statement;
-            let mut address = None;
 
+            // Extract address attribute
+            let mut address = None;
             for attribute in attributes {
                 let Some((ident, exprs)) = attribute.function() else {
                     anyhow::bail!("unsupported attribute: {attribute:?}");
@@ -350,6 +351,7 @@ impl SemanticState {
                 }
             }
 
+            // Handle address
             if let Some(address) = address {
                 regions.push((
                     Some(address),
@@ -357,6 +359,7 @@ impl SemanticState {
                 ));
             }
 
+            // Push field
             let grammar::TypeField(ident, type_) = field;
             let Some(type_) = self
                 .type_registry
@@ -408,13 +411,8 @@ impl SemanticState {
             last_address: usize,
         }
         impl Regions {
-            fn push(
-                &mut self,
-                type_registry: &TypeRegistry,
-                region: Region,
-                size: Option<usize>,
-            ) -> Option<()> {
-                let size = size.or_else(|| region.size(type_registry))?;
+            fn push(&mut self, type_registry: &TypeRegistry, region: Region) -> Option<()> {
+                let size = region.size(type_registry)?;
                 if size == 0 {
                     // zero-sized regions are ignored
                     return Some(());
@@ -436,7 +434,7 @@ impl SemanticState {
                     name: Some("vftable".to_string()),
                     type_ref: Type::ConstPointer(Box::new(Type::Raw(vftable_path))),
                 };
-                if resolved.push(&self.type_registry, region, None).is_none() {
+                if resolved.push(&self.type_registry, region).is_none() {
                     return Ok(None);
                 }
             }
@@ -447,15 +445,12 @@ impl SemanticState {
             if let Some(offset) = offset {
                 let size = offset - resolved.last_address;
                 let padding_region = Region::unnamed_field(self.type_registry.padding_type(size));
-                if resolved
-                    .push(&self.type_registry, padding_region, None)
-                    .is_none()
-                {
+                if resolved.push(&self.type_registry, padding_region).is_none() {
                     return Ok(None);
                 }
             }
 
-            if resolved.push(&self.type_registry, region, None).is_none() {
+            if resolved.push(&self.type_registry, region).is_none() {
                 return Ok(None);
             }
         }
@@ -467,10 +462,7 @@ impl SemanticState {
                     self.type_registry
                         .padding_type(target_size - resolved.last_address),
                 );
-                if resolved
-                    .push(&self.type_registry, padding_region, None)
-                    .is_none()
-                {
+                if resolved.push(&self.type_registry, padding_region).is_none() {
                     return Ok(None);
                 }
             }
