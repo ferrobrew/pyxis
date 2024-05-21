@@ -297,11 +297,43 @@ impl SemanticState {
             .get_module_for_path(resolvee_path)
             .context("failed to get module for path")?;
 
+        // Handle attributes
         let mut target_size: Option<usize> = None;
         let mut singleton = None;
-        let mut regions: Vec<(Option<usize>, Region)> = vec![];
+        for attribute in &definition.attributes {
+            let grammar::Attribute::Function(ident, exprs) = attribute;
+            match (ident.as_str(), exprs.as_slice()) {
+                ("size", [grammar::Expr::IntLiteral(size)]) => {
+                    target_size = Some(*size as usize);
+                }
+                ("singleton", [grammar::Expr::IntLiteral(value)]) => {
+                    singleton = Some(*value as usize);
+                }
+                _ => anyhow::bail!("unsupported attribute: {attribute:?}"),
+            }
+        }
+
+        // Handle functions
         let mut free_functions = vec![];
+        if let Some(type_impl) = module.impls.get(resolvee_path) {
+            for function in &type_impl.functions {
+                let function = self.build_function(&module.scope(), function)?;
+                free_functions.push(function);
+            }
+        }
+
         let mut vftable_functions = None;
+        if let Some(vftable_block) = module.vftables.get(resolvee_path) {
+            let mut new_vftable_functions = vec![];
+            for function in &vftable_block.functions {
+                let function = self.build_function(&module.scope(), function)?;
+                new_vftable_functions.push(function);
+            }
+            vftable_functions = Some(new_vftable_functions);
+        }
+
+        // Handle fields
+        let mut regions: Vec<(Option<usize>, Region)> = vec![];
         for statement in &definition.statements {
             let grammar::TypeStatement { field, attributes } = statement;
             let mut address = None;
@@ -343,80 +375,110 @@ impl SemanticState {
             ));
         }
 
-        if let Some(type_impl) = module.impls.get(resolvee_path) {
-            for function in &type_impl.functions {
-                let function = self.build_function(&module.scope(), function)?;
-                free_functions.push(function);
-            }
-        }
+        let Some((resolved_regions, size)) =
+            self.resolve_regions(resolvee_path, target_size, regions, &vftable_functions)?
+        else {
+            return Ok(None);
+        };
 
-        if let Some(vftable_block) = module.vftables.get(resolvee_path) {
-            let mut new_vftable_functions = vec![];
-            for function in &vftable_block.functions {
-                let function = self.build_function(&module.scope(), function)?;
-                new_vftable_functions.push(function);
+        Ok(Some(ItemStateResolved {
+            size,
+            inner: TypeDefinition {
+                regions: resolved_regions,
+                free_functions,
+                vftable_functions,
+                singleton,
             }
-            vftable_functions = Some(new_vftable_functions);
-        }
+            .into(),
+        }))
+    }
 
-        for attribute in &definition.attributes {
-            let grammar::Attribute::Function(ident, exprs) = attribute;
-            match (ident.as_str(), exprs.as_slice()) {
-                ("size", [grammar::Expr::IntLiteral(size)]) => {
-                    target_size = Some(*size as usize);
-                }
-                ("singleton", [grammar::Expr::IntLiteral(value)]) => {
-                    singleton = Some(*value as usize);
-                }
-                _ => anyhow::bail!("unsupported attribute: {attribute:?}"),
-            }
-        }
-
+    fn resolve_regions(
+        &mut self,
+        resolvee_path: &ItemPath,
+        target_size: Option<usize>,
+        regions: Vec<(Option<usize>, Region)>,
+        vftable_functions: &Option<Vec<Function>>,
+    ) -> anyhow::Result<Option<(Vec<Region>, usize)>> {
         // this resolution algorithm is very simple and doesn't handle overlapping regions
         // or regions that are out of order
-        let mut last_address: usize = 0;
-        let mut resolved_regions = vec![];
+        #[derive(Default)]
+        struct Regions {
+            regions: Vec<Region>,
+            last_address: usize,
+        }
+        impl Regions {
+            fn push(
+                &mut self,
+                type_registry: &TypeRegistry,
+                region: Region,
+                size: Option<usize>,
+            ) -> Option<()> {
+                let size = size.or_else(|| region.size(type_registry))?;
+                if size == 0 {
+                    // zero-sized regions are ignored
+                    return Some(());
+                }
 
-        if let Some(vftable_functions) = &vftable_functions {
-            if let Some((type_definition, region, size)) =
-                self.build_vftable(resolvee_path, vftable_functions)
-            {
-                self.add_type(type_definition)?;
-                resolved_regions.push(region);
-                last_address += size;
+                self.regions.push(region);
+                self.last_address += size;
+                Some(())
+            }
+        }
+        let mut resolved = Regions::default();
+
+        // Create vftable
+        if let Some(vftable_functions) = vftable_functions {
+            if let Some(vftable) = build_vftable_item(resolvee_path, vftable_functions) {
+                let vftable_path = vftable.path.clone();
+                self.add_type(vftable)?;
+                let region = Region {
+                    name: Some("vftable".to_string()),
+                    type_ref: Type::ConstPointer(Box::new(Type::Raw(vftable_path))),
+                };
+                if resolved.push(&self.type_registry, region, None).is_none() {
+                    return Ok(None);
+                }
             }
         }
 
+        // Insert each region, including padding if necessary
         for (offset, region) in regions {
             if let Some(offset) = offset {
-                let size = offset - last_address;
-                resolved_regions.push(Region::unnamed_field(self.type_registry.padding_type(size)));
-                last_address += size;
+                let size = offset - resolved.last_address;
+                let padding_region = Region::unnamed_field(self.type_registry.padding_type(size));
+                if resolved
+                    .push(&self.type_registry, padding_region, None)
+                    .is_none()
+                {
+                    return Ok(None);
+                }
             }
 
-            let region_size = match region.size(&self.type_registry) {
-                Some(size) => size,
-                None => return Ok(None),
-            };
-
-            if region_size == 0 {
-                continue;
+            if resolved.push(&self.type_registry, region, None).is_none() {
+                return Ok(None);
             }
-
-            resolved_regions.push(region);
-            last_address += region_size;
         }
 
+        // Pad out to target size
         if let Some(target_size) = target_size {
-            if last_address < target_size {
-                resolved_regions.push(Region::unnamed_field(
-                    self.type_registry.padding_type(target_size - last_address),
-                ));
+            if resolved.last_address < target_size {
+                let padding_region = Region::unnamed_field(
+                    self.type_registry
+                        .padding_type(target_size - resolved.last_address),
+                );
+                if resolved
+                    .push(&self.type_registry, padding_region, None)
+                    .is_none()
+                {
+                    return Ok(None);
+                }
             }
         }
 
+        // Find total size, and ensure that all regions have names
         let mut size = 0;
-        for region in &mut resolved_regions {
+        for region in &mut resolved.regions {
             let Some(region_size) = region.size(&self.type_registry) else {
                 return Ok(None);
             };
@@ -435,28 +497,7 @@ impl SemanticState {
             size += region_size;
         }
 
-        for region in &resolved_regions {
-            if let Region {
-                name: None,
-                type_ref,
-            } = region
-            {
-                anyhow::bail!(
-                    "unnamed field with type {type_ref} in type definition {resolvee_path}"
-                );
-            }
-        }
-
-        Ok(Some(ItemStateResolved {
-            size,
-            inner: TypeDefinition {
-                regions: resolved_regions,
-                free_functions,
-                vftable_functions,
-                singleton,
-            }
-            .into(),
-        }))
+        Ok(Some((resolved.regions, size)))
     }
 
     fn build_enum(
@@ -515,65 +556,6 @@ impl SemanticState {
         }))
     }
 
-    fn build_vftable(
-        &self,
-        resolvee_path: &ItemPath,
-        functions: &[Function],
-    ) -> Option<(ItemDefinition, Region, usize)> {
-        let name = resolvee_path.last()?;
-
-        let resolvee_vtable_path = resolvee_path
-            .parent()?
-            .join(format!("{}Vftable", name.as_str()).into());
-
-        let function_to_field = |function: &Function| -> Region {
-            let argument_to_type = |argument: &Argument| -> (String, Box<Type>) {
-                match argument {
-                    Argument::ConstSelf => (
-                        "this".to_string(),
-                        Box::new(Type::ConstPointer(Box::new(Type::Raw(
-                            resolvee_path.clone(),
-                        )))),
-                    ),
-                    Argument::MutSelf => (
-                        "this".to_string(),
-                        Box::new(Type::MutPointer(Box::new(Type::Raw(resolvee_path.clone())))),
-                    ),
-                    Argument::Field(name, type_ref) => (name.clone(), Box::new(type_ref.clone())),
-                }
-            };
-            let arguments = function.arguments.iter().map(argument_to_type).collect();
-            let return_type = function.return_type.as_ref().map(|t| Box::new(t.clone()));
-
-            Region {
-                name: Some(function.name.clone()),
-                type_ref: Type::Function(arguments, return_type),
-            }
-        };
-
-        Some((
-            ItemDefinition {
-                path: resolvee_vtable_path.clone(),
-                state: ItemState::Resolved(ItemStateResolved {
-                    size: 0,
-                    inner: TypeDefinition {
-                        regions: functions.iter().map(function_to_field).collect(),
-                        free_functions: vec![],
-                        vftable_functions: None,
-                        singleton: None,
-                    }
-                    .into(),
-                }),
-                category: ItemCategory::Defined,
-            },
-            Region {
-                name: Some("vftable".to_string()),
-                type_ref: Type::ConstPointer(Box::new(Type::Raw(resolvee_vtable_path))),
-            },
-            self.type_registry.pointer_size(),
-        ))
-    }
-
     fn get_module_for_path(&self, path: &ItemPath) -> Option<&Module> {
         self.modules.get(&path.parent()?)
     }
@@ -592,4 +574,52 @@ impl ResolvedSemanticState {
     pub fn modules(&self) -> &HashMap<ItemPath, Module> {
         &self.modules
     }
+}
+
+fn build_vftable_item(resolvee_path: &ItemPath, functions: &[Function]) -> Option<ItemDefinition> {
+    let name = resolvee_path.last()?;
+
+    let resolvee_vtable_path = resolvee_path
+        .parent()?
+        .join(format!("{}Vftable", name.as_str()).into());
+
+    let function_to_field = |function: &Function| -> Region {
+        let argument_to_type = |argument: &Argument| -> (String, Box<Type>) {
+            match argument {
+                Argument::ConstSelf => (
+                    "this".to_string(),
+                    Box::new(Type::ConstPointer(Box::new(Type::Raw(
+                        resolvee_path.clone(),
+                    )))),
+                ),
+                Argument::MutSelf => (
+                    "this".to_string(),
+                    Box::new(Type::MutPointer(Box::new(Type::Raw(resolvee_path.clone())))),
+                ),
+                Argument::Field(name, type_ref) => (name.clone(), Box::new(type_ref.clone())),
+            }
+        };
+        let arguments = function.arguments.iter().map(argument_to_type).collect();
+        let return_type = function.return_type.as_ref().map(|t| Box::new(t.clone()));
+
+        Region {
+            name: Some(function.name.clone()),
+            type_ref: Type::Function(arguments, return_type),
+        }
+    };
+
+    Some(ItemDefinition {
+        path: resolvee_vtable_path.clone(),
+        state: ItemState::Resolved(ItemStateResolved {
+            size: 0,
+            inner: TypeDefinition {
+                regions: functions.iter().map(function_to_field).collect(),
+                free_functions: vec![],
+                vftable_functions: None,
+                singleton: None,
+            }
+            .into(),
+        }),
+        category: ItemCategory::Defined,
+    })
 }
