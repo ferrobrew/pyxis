@@ -396,6 +396,7 @@ impl SemanticState {
         module: &Module,
         vftable_block: &grammar::FunctionBlock,
     ) -> anyhow::Result<Vec<Function>> {
+        // Extract size attribute
         let mut size = None;
         for attribute in &vftable_block.attributes {
             let grammar::Attribute::Function(ident, exprs) = attribute;
@@ -407,14 +408,34 @@ impl SemanticState {
             }
         }
 
+        // Insert function, with padding if necessary
         let mut functions = vec![];
         for function in &vftable_block.functions {
+            let mut index = None;
+            for attribute in &function.attributes {
+                let grammar::Attribute::Function(ident, exprs) = attribute;
+                match (ident.as_str(), exprs.as_slice()) {
+                    ("index", [grammar::Expr::IntLiteral(index_)]) => {
+                        index = Some(*index_ as usize);
+                    }
+                    _ => anyhow::bail!("unsupported attribute: {attribute:?}"),
+                }
+            }
+
+            if let Some(index) = index {
+                make_padding_functions(&mut functions, index);
+            }
             let function = self.build_function(&module.scope(), function)?;
             functions.push(function);
         }
 
+        // Pad out to target size
         if let Some(size) = size {
-            let functions_to_add = size.checked_sub(functions.len()).unwrap_or(0);
+            make_padding_functions(&mut functions, size);
+        }
+
+        fn make_padding_functions(functions: &mut Vec<Function>, target_len: usize) {
+            let functions_to_add = target_len.checked_sub(functions.len()).unwrap_or(0);
             for _ in 0..functions_to_add {
                 functions.push(Function {
                     name: format!("_vfunc_{}", functions.len()),

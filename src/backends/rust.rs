@@ -241,6 +241,7 @@ fn build_type(
         .as_ref()
         .map(|fns| {
             fns.iter()
+                .filter(|f| !f.name.starts_with('_'))
                 .map(|f| build_function(f, true))
                 .collect::<anyhow::Result<Vec<_>>>()
         })

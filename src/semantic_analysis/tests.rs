@@ -618,6 +618,202 @@ fn can_generate_vftable() {
     );
 }
 
+#[test]
+fn can_generate_vftable_with_indices() {
+    let module = {
+        use grammar::*;
+
+        type T = Type;
+
+        Module::new()
+            .with_definitions([ItemDefinition::new("TestType", TypeDefinition::new([], []))])
+            .with_vftables([FunctionBlock::new(
+                Ident::from("TestType"),
+                [
+                    Function {
+                        name: "test_function0".into(),
+                        attributes: vec![Attribute::index(2)],
+                        arguments: vec![
+                            Argument::MutSelf,
+                            Argument::Field(TypeField("arg0".into(), T::ident("u32"))),
+                            Argument::Field(TypeField("arg1".into(), T::ident("f32"))),
+                        ],
+                        return_type: Some("i32".into()),
+                    },
+                    Function {
+                        name: "test_function1".into(),
+                        attributes: vec![Attribute::index(5)],
+                        arguments: vec![
+                            Argument::MutSelf,
+                            Argument::Field(TypeField("arg0".into(), T::ident("u32"))),
+                            Argument::Field(TypeField("arg1".into(), T::ident("f32"))),
+                        ],
+                        return_type: None,
+                    },
+                ],
+                [Attribute::size(8)],
+            )])
+    };
+
+    let type_definition = types::ItemDefinition {
+        path: ItemPath::from_colon_delimited_str("test::TestType"),
+        state: types::ItemState::Resolved(types::ItemStateResolved {
+            size: 4,
+            inner: TypeDefinition {
+                regions: vec![Region::field(
+                    "vftable",
+                    Type::ConstPointer(Box::new(Type::Raw(ItemPath::from_colon_delimited_str(
+                        "test::TestTypeVftable",
+                    )))),
+                )],
+                vftable_functions: Some(vec![
+                    make_vfunc(0),
+                    make_vfunc(1),
+                    Function {
+                        name: "test_function0".to_string(),
+                        address: None,
+                        arguments: vec![
+                            Argument::MutSelf,
+                            Argument::Field(
+                                "arg0".to_string(),
+                                Type::Raw(ItemPath::from_colon_delimited_str("u32")),
+                            ),
+                            Argument::Field(
+                                "arg1".to_string(),
+                                Type::Raw(ItemPath::from_colon_delimited_str("f32")),
+                            ),
+                        ],
+                        return_type: Some(Type::Raw(ItemPath::from_colon_delimited_str("i32"))),
+                    },
+                    make_vfunc(3),
+                    make_vfunc(4),
+                    Function {
+                        name: "test_function1".to_string(),
+                        address: None,
+                        arguments: vec![
+                            Argument::MutSelf,
+                            Argument::Field(
+                                "arg0".to_string(),
+                                Type::Raw(ItemPath::from_colon_delimited_str("u32")),
+                            ),
+                            Argument::Field(
+                                "arg1".to_string(),
+                                Type::Raw(ItemPath::from_colon_delimited_str("f32")),
+                            ),
+                        ],
+                        return_type: None,
+                    },
+                    make_vfunc(6),
+                    make_vfunc(7),
+                ]),
+                free_functions: vec![],
+                singleton: None,
+            }
+            .into(),
+        }),
+        category: types::ItemCategory::Defined,
+    };
+
+    let vftable_type_definition = types::ItemDefinition {
+        path: ItemPath::from_colon_delimited_str("test::TestTypeVftable"),
+        state: types::ItemState::Resolved(types::ItemStateResolved {
+            size: 0,
+            inner: TypeDefinition {
+                regions: vec![
+                    make_vfunc_region(0),
+                    make_vfunc_region(1),
+                    Region::field(
+                        "test_function0".to_string(),
+                        Type::Function(
+                            vec![
+                                (
+                                    "this".to_string(),
+                                    Box::new(Type::MutPointer(Box::new(Type::Raw(
+                                        ItemPath::from_colon_delimited_str("test::TestType"),
+                                    )))),
+                                ),
+                                (
+                                    "arg0".to_string(),
+                                    Box::new(Type::Raw(ItemPath::from_colon_delimited_str("u32"))),
+                                ),
+                                (
+                                    "arg1".to_string(),
+                                    Box::new(Type::Raw(ItemPath::from_colon_delimited_str("f32"))),
+                                ),
+                            ],
+                            Some(Box::new(Type::Raw(ItemPath::from_colon_delimited_str(
+                                "i32",
+                            )))),
+                        ),
+                    ),
+                    make_vfunc_region(3),
+                    make_vfunc_region(4),
+                    Region::field(
+                        "test_function1".to_string(),
+                        Type::Function(
+                            vec![
+                                (
+                                    "this".to_string(),
+                                    Box::new(Type::MutPointer(Box::new(Type::Raw(
+                                        ItemPath::from_colon_delimited_str("test::TestType"),
+                                    )))),
+                                ),
+                                (
+                                    "arg0".to_string(),
+                                    Box::new(Type::Raw(ItemPath::from_colon_delimited_str("u32"))),
+                                ),
+                                (
+                                    "arg1".to_string(),
+                                    Box::new(Type::Raw(ItemPath::from_colon_delimited_str("f32"))),
+                                ),
+                            ],
+                            None,
+                        ),
+                    ),
+                    make_vfunc_region(6),
+                    make_vfunc_region(7),
+                ],
+                free_functions: vec![],
+                vftable_functions: None,
+                singleton: None,
+            }
+            .into(),
+        }),
+        category: types::ItemCategory::Defined,
+    };
+
+    let test_type_path = ItemPath::from_colon_delimited_str("test::TestType");
+    let test_type_vftable_path = ItemPath::from_colon_delimited_str("test::TestTypeVftable");
+
+    let build_state = build_state(&module, &test_type_path).unwrap();
+    let type_registry = build_state.type_registry();
+
+    let test_module = build_state
+        .modules()
+        .get(&ItemPath::from_colon_delimited_str("test"))
+        .unwrap();
+
+    assert_eq!(
+        test_module.definition_paths(),
+        &HashSet::from_iter([test_type_path.clone(), test_type_vftable_path.clone()])
+    );
+
+    assert_eq!(
+        test_module
+            .definitions(type_registry)
+            .find(|td| td.path == test_type_path)
+            .unwrap(),
+        &type_definition
+    );
+    assert_eq!(
+        test_module
+            .definitions(type_registry)
+            .find(|td| td.path == test_type_vftable_path)
+            .unwrap(),
+        &vftable_type_definition
+    );
+}
+
 fn make_vfunc(index: usize) -> Function {
     Function {
         name: format!("_vfunc_{}", index),

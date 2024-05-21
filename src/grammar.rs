@@ -183,6 +183,10 @@ impl Attribute {
         Self::integer_fn("singleton", address as isize)
     }
 
+    pub fn index(index: usize) -> Self {
+        Self::integer_fn("index", index as isize)
+    }
+
     pub fn function(&self) -> Option<(&Ident, &Vec<Expr>)> {
         match self {
             Attribute::Function(ident, exprs) => Some((ident, exprs)),
