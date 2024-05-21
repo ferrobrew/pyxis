@@ -324,12 +324,7 @@ impl SemanticState {
 
         let mut vftable_functions = None;
         if let Some(vftable_block) = module.vftables.get(resolvee_path) {
-            let mut new_vftable_functions = vec![];
-            for function in &vftable_block.functions {
-                let function = self.build_function(&module.scope(), function)?;
-                new_vftable_functions.push(function);
-            }
-            vftable_functions = Some(new_vftable_functions);
+            vftable_functions = Some(self.build_vftable_list(&module, vftable_block)?);
         }
 
         // Handle fields
@@ -394,6 +389,43 @@ impl SemanticState {
             }
             .into(),
         }))
+    }
+
+    fn build_vftable_list(
+        &self,
+        module: &Module,
+        vftable_block: &grammar::FunctionBlock,
+    ) -> anyhow::Result<Vec<Function>> {
+        let mut size = None;
+        for attribute in &vftable_block.attributes {
+            let grammar::Attribute::Function(ident, exprs) = attribute;
+            match (ident.as_str(), exprs.as_slice()) {
+                ("size", [grammar::Expr::IntLiteral(size_)]) => {
+                    size = Some(*size_ as usize);
+                }
+                _ => anyhow::bail!("unsupported attribute: {attribute:?}"),
+            }
+        }
+
+        let mut functions = vec![];
+        for function in &vftable_block.functions {
+            let function = self.build_function(&module.scope(), function)?;
+            functions.push(function);
+        }
+
+        if let Some(size) = size {
+            let functions_to_add = size.checked_sub(functions.len()).unwrap_or(0);
+            for _ in 0..functions_to_add {
+                functions.push(Function {
+                    name: format!("_vfunc_{}", functions.len()),
+                    arguments: vec![Argument::MutSelf],
+                    return_type: None,
+                    attributes: vec![],
+                });
+            }
+        }
+
+        Ok(functions)
     }
 
     fn resolve_regions(
@@ -493,7 +525,7 @@ impl SemanticState {
     }
 
     fn build_enum(
-        &mut self,
+        &self,
         resolvee_path: &ItemPath,
         definition: &grammar::EnumDefinition,
     ) -> anyhow::Result<Option<ItemStateResolved>> {

@@ -512,6 +512,18 @@ fn can_generate_vftable() {
                         ],
                         return_type: None,
                     },
+                    Function {
+                        name: "_vfunc_2".to_string(),
+                        attributes: vec![],
+                        arguments: vec![Argument::MutSelf],
+                        return_type: None,
+                    },
+                    Function {
+                        name: "_vfunc_3".to_string(),
+                        attributes: vec![],
+                        arguments: vec![Argument::MutSelf],
+                        return_type: None,
+                    },
                 ]),
                 free_functions: vec![],
                 singleton: None,
@@ -569,6 +581,30 @@ fn can_generate_vftable() {
                                     Box::new(Type::Raw(ItemPath::from_colon_delimited_str("f32"))),
                                 ),
                             ],
+                            None,
+                        ),
+                    ),
+                    Region::field(
+                        "_vfunc_2".to_string(),
+                        Type::Function(
+                            vec![(
+                                "this".to_string(),
+                                Box::new(Type::MutPointer(Box::new(Type::Raw(
+                                    ItemPath::from_colon_delimited_str("test::TestType"),
+                                )))),
+                            )],
+                            None,
+                        ),
+                    ),
+                    Region::field(
+                        "_vfunc_3".to_string(),
+                        Type::Function(
+                            vec![(
+                                "this".to_string(),
+                                Box::new(Type::MutPointer(Box::new(Type::Raw(
+                                    ItemPath::from_colon_delimited_str("test::TestType"),
+                                )))),
+                            )],
                             None,
                         ),
                     ),
