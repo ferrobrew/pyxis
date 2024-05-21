@@ -234,7 +234,7 @@ fn can_resolve_complex_type() {
                 ],
                 free_functions: vec![Function {
                     name: "test_function".to_string(),
-                    attributes: vec![Attribute::Address(0x800_000)],
+                    address: Some(0x800_000),
                     arguments: vec![
                         Argument::MutSelf,
                         Argument::Field(
@@ -482,7 +482,7 @@ fn can_generate_vftable() {
                 vftable_functions: Some(vec![
                     Function {
                         name: "test_function0".to_string(),
-                        attributes: vec![],
+                        address: None,
                         arguments: vec![
                             Argument::MutSelf,
                             Argument::Field(
@@ -498,7 +498,7 @@ fn can_generate_vftable() {
                     },
                     Function {
                         name: "test_function1".to_string(),
-                        attributes: vec![],
+                        address: None,
                         arguments: vec![
                             Argument::MutSelf,
                             Argument::Field(
@@ -512,18 +512,8 @@ fn can_generate_vftable() {
                         ],
                         return_type: None,
                     },
-                    Function {
-                        name: "_vfunc_2".to_string(),
-                        attributes: vec![],
-                        arguments: vec![Argument::MutSelf],
-                        return_type: None,
-                    },
-                    Function {
-                        name: "_vfunc_3".to_string(),
-                        attributes: vec![],
-                        arguments: vec![Argument::MutSelf],
-                        return_type: None,
-                    },
+                    make_vfunc(2),
+                    make_vfunc(3),
                 ]),
                 free_functions: vec![],
                 singleton: None,
@@ -584,30 +574,8 @@ fn can_generate_vftable() {
                             None,
                         ),
                     ),
-                    Region::field(
-                        "_vfunc_2".to_string(),
-                        Type::Function(
-                            vec![(
-                                "this".to_string(),
-                                Box::new(Type::MutPointer(Box::new(Type::Raw(
-                                    ItemPath::from_colon_delimited_str("test::TestType"),
-                                )))),
-                            )],
-                            None,
-                        ),
-                    ),
-                    Region::field(
-                        "_vfunc_3".to_string(),
-                        Type::Function(
-                            vec![(
-                                "this".to_string(),
-                                Box::new(Type::MutPointer(Box::new(Type::Raw(
-                                    ItemPath::from_colon_delimited_str("test::TestType"),
-                                )))),
-                            )],
-                            None,
-                        ),
-                    ),
+                    make_vfunc_region(2),
+                    make_vfunc_region(3),
                 ],
                 free_functions: vec![],
                 vftable_functions: None,
@@ -648,6 +616,30 @@ fn can_generate_vftable() {
             .unwrap(),
         &vftable_type_definition
     );
+}
+
+fn make_vfunc(index: usize) -> Function {
+    Function {
+        name: format!("_vfunc_{}", index),
+        address: None,
+        arguments: vec![Argument::MutSelf],
+        return_type: None,
+    }
+}
+
+fn make_vfunc_region(index: usize) -> Region {
+    Region::field(
+        format!("_vfunc_{}", index),
+        Type::Function(
+            vec![(
+                "this".to_string(),
+                Box::new(Type::MutPointer(Box::new(Type::Raw(
+                    ItemPath::from_colon_delimited_str("test::TestType"),
+                )))),
+            )],
+            None,
+        ),
+    )
 }
 
 #[test]

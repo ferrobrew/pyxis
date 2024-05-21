@@ -147,22 +147,14 @@ fn build_function(
         Address(usize),
         Vftable,
     }
-    let mut function_getter = None;
-    if is_vftable {
-        function_getter = Some(FunctionGetter::Vftable);
+    let function_getter = if is_vftable {
+        Some(FunctionGetter::Vftable)
+    } else if let Some(address) = function.address {
+        Some(FunctionGetter::Address(address))
     } else {
-        for attribute in &function.attributes {
-            let types::Attribute::Address(address) = attribute;
-            if function_getter.is_some() {
-                return Err(anyhow::anyhow!(
-                    "function getter already set: {:?}",
-                    function_getter
-                ));
-            }
+        None
+    };
 
-            function_getter = Some(FunctionGetter::Address(*address));
-        }
-    }
     if function_getter.is_none() {
         return Err(anyhow::anyhow!("no function getter set"));
     }

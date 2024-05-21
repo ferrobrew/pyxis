@@ -11,7 +11,7 @@ use super::{
     module::Module,
     type_registry::TypeRegistry,
     types::{
-        Argument, Attribute, EnumDefinition, Function, ItemCategory, ItemDefinition, ItemState,
+        Argument, EnumDefinition, Function, ItemCategory, ItemDefinition, ItemState,
         ItemStateResolved, Region, Type, TypeDefinition,
     },
 };
@@ -227,21 +227,21 @@ impl SemanticState {
         scope: &[ItemPath],
         function: &grammar::Function,
     ) -> Result<Function, anyhow::Error> {
-        let attributes = function
-            .attributes
-            .iter()
-            .map(|a| match a {
-                grammar::Attribute::Function(ident, exprs) => match (ident.as_str(), &exprs[..]) {
-                    ("address", [grammar::Expr::IntLiteral(address)]) => {
-                        let address = Attribute::Address(*address as usize);
-                        Ok(address)
-                    }
-                    (_, _) => Err(anyhow::anyhow!(
-                        "failed to resolve function attribute, unsupported name"
-                    )),
-                },
-            })
-            .collect::<Result<Vec<_>, _>>()?;
+        let mut address = None;
+        for attribute in &function.attributes {
+            let Some((ident, exprs)) = attribute.function() else {
+                anyhow::bail!("unsupported attribute: {attribute:?}");
+            };
+            match (ident.as_str(), &exprs[..]) {
+                ("address", [grammar::Expr::IntLiteral(addr)]) => {
+                    address = Some(*addr as usize);
+                }
+                ("index", _) => {
+                    // ignore index attribute, this is handled by vftable construction
+                }
+                _ => anyhow::bail!("unsupported attribute: {attribute:?}"),
+            }
+        }
 
         let arguments = function
             .arguments
@@ -271,7 +271,7 @@ impl SemanticState {
 
         Ok(Function {
             name: function.name.0.clone(),
-            attributes,
+            address,
             arguments,
             return_type,
         })
@@ -420,7 +420,7 @@ impl SemanticState {
                     name: format!("_vfunc_{}", functions.len()),
                     arguments: vec![Argument::MutSelf],
                     return_type: None,
-                    attributes: vec![],
+                    address: None,
                 });
             }
         }

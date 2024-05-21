@@ -6,11 +6,6 @@ use crate::{
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Attribute {
-    Address(usize),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Argument {
     ConstSelf,
     MutSelf,
@@ -20,7 +15,7 @@ pub enum Argument {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Function {
     pub name: String,
-    pub attributes: Vec<Attribute>,
+    pub address: Option<usize>,
     pub arguments: Vec<Argument>,
     pub return_type: Option<Type>,
 }
