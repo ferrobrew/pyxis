@@ -136,29 +136,40 @@ impl Parse for Expr {
     }
 }
 
-impl Parse for Attribute {
-    fn parse(input: ParseStream) -> Result<Self> {
-        input.parse::<Token![#]>()?;
-
-        let content;
-        bracketed!(content in input);
-
-        let name = content.parse()?;
-
-        let content2;
-        parenthesized!(content2 in content);
-
-        let arguments: Punctuated<_, Token![,]> = content2.parse_terminated(Expr::parse)?;
-        let arguments = Vec::from_iter(arguments);
-
-        Ok(Attribute::Function(name, arguments))
-    }
-}
 impl Attribute {
+    /// also implicitly handles multiple attributes within the same brackets:
+    /// #[a(b), c(d)] -> Function(a, [b]), Function(c, [d])
     fn parse_many(input: ParseStream) -> Result<Vec<Attribute>> {
+        struct AttributePart {
+            name: Ident,
+            arguments: Vec<Expr>,
+        }
+        impl Parse for AttributePart {
+            fn parse(input: ParseStream) -> Result<Self> {
+                let name = input.parse()?;
+
+                let content2;
+                parenthesized!(content2 in input);
+
+                let arguments: Punctuated<_, Token![,]> = content2.parse_terminated(Expr::parse)?;
+                let arguments = Vec::from_iter(arguments);
+
+                Ok(AttributePart { name, arguments })
+            }
+        }
+
         let mut attributes = vec![];
         while input.peek(Token![#]) {
-            attributes.push(input.parse()?);
+            input.parse::<Token![#]>()?;
+
+            let content;
+            bracketed!(content in input);
+
+            let attribute_parts: Punctuated<_, Token![,]> =
+                content.parse_terminated(AttributePart::parse)?;
+            for part in attribute_parts {
+                attributes.push(Attribute::Function(part.name, part.arguments));
+            }
         }
         Ok(attributes)
     }

@@ -106,8 +106,7 @@ fn can_parse_vehicle_types() {
 #[test]
 fn can_parse_spawn_manager() {
     let text = r#"
-        #[size(0x1754)]
-        #[singleton(0x1_191_918)]
+        #[size(0x1754), singleton(0x1_191_918)]
         type SpawnManager {
             #[address(0x78)]
             max_num_characters: u16,
