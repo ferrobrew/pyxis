@@ -435,40 +435,35 @@ fn can_generate_vftable() {
     let module = {
         use grammar::*;
 
-        type TS = TypeStatement;
         type T = Type;
 
-        Module::new().with_definitions([ItemDefinition::new(
-            "TestType",
-            TypeDefinition::new(
-                [TS::Functions(vec![(
-                    "vftable".into(),
-                    vec![
-                        Function {
-                            name: "test_function0".into(),
-                            attributes: vec![],
-                            arguments: vec![
-                                Argument::MutSelf,
-                                Argument::Field(TypeField("arg0".into(), T::ident("u32"))),
-                                Argument::Field(TypeField("arg1".into(), T::ident("f32"))),
-                            ],
-                            return_type: Some("i32".into()),
-                        },
-                        Function {
-                            name: "test_function1".into(),
-                            attributes: vec![],
-                            arguments: vec![
-                                Argument::MutSelf,
-                                Argument::Field(TypeField("arg0".into(), T::ident("u32"))),
-                                Argument::Field(TypeField("arg1".into(), T::ident("f32"))),
-                            ],
-                            return_type: None,
-                        },
-                    ],
-                )])],
-                [],
-            ),
-        )])
+        Module::new()
+            .with_definitions([ItemDefinition::new("TestType", TypeDefinition::new([], []))])
+            .with_vftables([(
+                Ident::from("TestType"),
+                vec![
+                    Function {
+                        name: "test_function0".into(),
+                        attributes: vec![],
+                        arguments: vec![
+                            Argument::MutSelf,
+                            Argument::Field(TypeField("arg0".into(), T::ident("u32"))),
+                            Argument::Field(TypeField("arg1".into(), T::ident("f32"))),
+                        ],
+                        return_type: Some("i32".into()),
+                    },
+                    Function {
+                        name: "test_function1".into(),
+                        attributes: vec![],
+                        arguments: vec![
+                            Argument::MutSelf,
+                            Argument::Field(TypeField("arg0".into(), T::ident("u32"))),
+                            Argument::Field(TypeField("arg1".into(), T::ident("f32"))),
+                        ],
+                        return_type: None,
+                    },
+                ],
+            )])
     };
 
     let type_definition = types::ItemDefinition {

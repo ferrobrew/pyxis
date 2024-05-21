@@ -110,11 +110,8 @@ impl SemanticState {
                 path.clone(),
                 module.clone(),
                 extern_values,
-                module
-                    .impls
-                    .iter()
-                    .map(|(k, v)| (path.join(k.as_str().into()), v.clone()))
-                    .collect(),
+                &module.impls,
+                &module.vftables,
             ),
         );
 
@@ -345,20 +342,6 @@ impl SemanticState {
                         },
                     ));
                 }
-                grammar::TypeStatement::Functions(functions_by_category) => {
-                    functions = functions_by_category
-                        .iter()
-                        .map(|(category, functions)| {
-                            Ok((
-                                category.0.clone(),
-                                functions
-                                    .iter()
-                                    .map(|function| self.build_function(&module.scope(), function))
-                                    .collect::<Result<Vec<_>, _>>()?,
-                            ))
-                        })
-                        .collect::<anyhow::Result<HashMap<_, _>>>()?;
-                }
             };
         }
 
@@ -368,6 +351,15 @@ impl SemanticState {
             for function in type_impl {
                 let function = self.build_function(&module.scope(), function)?;
                 free.push(function);
+            }
+        }
+
+        if let Some(vftable_block) = module.vftables.get(resolvee_path) {
+            let vftable = functions.entry("vftable".to_string()).or_default();
+
+            for function in vftable_block {
+                let function = self.build_function(&module.scope(), function)?;
+                vftable.push(function);
             }
         }
 

@@ -29,6 +29,33 @@ fn can_parse_basic_struct() {
 }
 
 #[test]
+fn can_parse_vftable() {
+    let text = r#"
+        type TestType;
+        vftable TestType {
+            fn test(&mut self, test2: i32);
+        }
+        "#;
+
+    let ast = Module::new()
+        .with_definitions([ItemDefinition::new("TestType", TypeDefinition::new([], []))])
+        .with_vftables([(
+            Ident::from("TestType"),
+            vec![Function::new(
+                "test",
+                [],
+                [
+                    Argument::MutSelf,
+                    Argument::field("test2", Type::ident("i32")),
+                ],
+                None,
+            )],
+        )]);
+
+    assert_eq!(parse_str(text).unwrap(), ast);
+}
+
+#[test]
 fn can_parse_vehicle_types() {
     let text = r#"
         type VehicleTypes {

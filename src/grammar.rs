@@ -257,23 +257,12 @@ impl From<(Ident, Type)> for TypeField {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TypeStatement {
-    Functions(Vec<(Ident, Vec<Function>)>),
     Field {
         field: TypeField,
         attributes: Vec<Attribute>,
     },
 }
 impl TypeStatement {
-    pub fn functions<'a>(
-        functions: impl IntoIterator<Item = (&'a str, &'a [Function])>,
-    ) -> TypeStatement {
-        TypeStatement::Functions(
-            functions
-                .into_iter()
-                .map(|(i, f)| (i.into(), f.to_vec()))
-                .collect(),
-        )
-    }
     pub fn field(name: &str, type_: Type, attributes: impl Into<Vec<Attribute>>) -> TypeStatement {
         TypeStatement::Field {
             field: (name.into(), type_).into(),
@@ -373,6 +362,7 @@ pub struct Module {
     pub extern_values: Vec<(Ident, Type, Vec<Attribute>)>,
     pub definitions: Vec<ItemDefinition>,
     pub impls: Vec<(Ident, Vec<Function>)>,
+    pub vftables: Vec<(Ident, Vec<Function>)>,
 }
 impl Module {
     pub fn new() -> Self {
@@ -407,6 +397,14 @@ impl Module {
 
     pub fn with_impls(mut self, impls: impl IntoIterator<Item = (Ident, Vec<Function>)>) -> Self {
         self.impls = impls.into_iter().collect();
+        self
+    }
+
+    pub fn with_vftables(
+        mut self,
+        vftables: impl IntoIterator<Item = (Ident, Vec<Function>)>,
+    ) -> Self {
+        self.vftables = vftables.into_iter().collect();
         self
     }
 }

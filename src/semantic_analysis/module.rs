@@ -15,6 +15,7 @@ pub struct Module {
     pub(crate) definition_paths: HashSet<ItemPath>,
     pub(crate) extern_values: Vec<(String, Type, usize)>,
     pub(crate) impls: HashMap<ItemPath, Vec<grammar::Function>>,
+    pub(crate) vftables: HashMap<ItemPath, Vec<grammar::Function>>,
 }
 
 impl Default for Module {
@@ -25,6 +26,7 @@ impl Default for Module {
             definition_paths: Default::default(),
             extern_values: Default::default(),
             impls: Default::default(),
+            vftables: Default::default(),
         }
     }
 }
@@ -34,14 +36,28 @@ impl Module {
         path: ItemPath,
         ast: grammar::Module,
         extern_values: Vec<(String, Type, usize)>,
-        impls: HashMap<ItemPath, Vec<grammar::Function>>,
+        impls: &[(grammar::Ident, Vec<grammar::Function>)],
+        vftables: &[(grammar::Ident, Vec<grammar::Function>)],
     ) -> Self {
+        fn convert_functions(
+            path: &ItemPath,
+            functions: &[(grammar::Ident, Vec<grammar::Function>)],
+        ) -> HashMap<ItemPath, Vec<grammar::Function>> {
+            functions
+                .iter()
+                .map(|(k, v)| (path.join(k.as_str().into()), v.clone()))
+                .collect()
+        }
+
+        let impls = convert_functions(&path, impls);
+        let vftables = convert_functions(&path, vftables);
         Self {
             path,
             ast,
             definition_paths: HashSet::new(),
             extern_values,
             impls,
+            vftables,
         }
     }
 

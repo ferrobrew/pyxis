@@ -14,12 +14,13 @@ mod kw {
     syn::custom_keyword!(meta);
     syn::custom_keyword!(functions);
     syn::custom_keyword!(unknown);
+    syn::custom_keyword!(vftable);
 }
 
 impl Parse for Ident {
     fn parse(input: ParseStream) -> Result<Self> {
-        if input.peek(syn::Token![_]) {
-            input.parse::<syn::Token![_]>()?;
+        if input.peek(Token![_]) {
+            input.parse::<Token![_]>()?;
             Ok(Ident("_".to_string()))
         } else if input.peek(syn::Ident) {
             Ok(Ident(input.parse::<syn::Ident>()?.to_string()))
@@ -30,7 +31,7 @@ impl Parse for Ident {
 }
 impl Ident {
     fn peek(lookahead: &Lookahead1) -> bool {
-        lookahead.peek(syn::Token![_]) || lookahead.peek(syn::Ident)
+        lookahead.peek(Token![_]) || lookahead.peek(syn::Ident)
     }
 }
 
@@ -40,14 +41,14 @@ fn parse_type_ident(input: ParseStream) -> Result<String> {
     let mut name = ident.to_string();
 
     loop {
-        if input.peek(syn::Token![<]) {
-            input.parse::<syn::Token![<]>()?;
+        if input.peek(Token![<]) {
+            input.parse::<Token![<]>()?;
             name += "<";
         } else if input.peek(syn::Ident) {
             let ident: syn::Ident = input.parse()?;
             name += &ident.to_string();
-        } else if input.peek(syn::Token![>]) {
-            input.parse::<syn::Token![>]>()?;
+        } else if input.peek(Token![>]) {
+            input.parse::<Token![>]>()?;
             name += ">";
         } else {
             break Ok(name);
@@ -66,9 +67,9 @@ impl Parse for ItemPath {
             // `use lol::lol<lol>` should
             if input.peek(syn::Ident) {
                 item_path.push(parse_type_ident(input)?.into());
-            } else if input.peek(syn::Token![::]) {
-                input.parse::<syn::Token![::]>()?;
-            } else if input.peek(syn::Token![super]) {
+            } else if input.peek(Token![::]) {
+                input.parse::<Token![::]>()?;
+            } else if input.peek(Token![super]) {
                 return Err(input.error("super not supported"));
             } else {
                 break;
@@ -90,15 +91,15 @@ impl Parse for Type {
             Ok(Type::Unknown(size))
         } else if lookahead.peek(syn::Ident) {
             Ok(Type::Ident(parse_type_ident(input)?.as_str().into()))
-        } else if lookahead.peek(syn::Token![*]) {
-            input.parse::<syn::Token![*]>()?;
+        } else if lookahead.peek(Token![*]) {
+            input.parse::<Token![*]>()?;
 
             let lookahead = input.lookahead1();
-            if lookahead.peek(syn::Token![const]) {
-                input.parse::<syn::Token![const]>()?;
+            if lookahead.peek(Token![const]) {
+                input.parse::<Token![const]>()?;
                 Ok(Type::ConstPointer(Box::new(input.parse()?)))
-            } else if lookahead.peek(syn::Token![mut]) {
-                input.parse::<syn::Token![mut]>()?;
+            } else if lookahead.peek(Token![mut]) {
+                input.parse::<Token![mut]>()?;
                 Ok(Type::MutPointer(Box::new(input.parse()?)))
             } else {
                 Err(lookahead.error())
@@ -137,7 +138,7 @@ impl Parse for Expr {
 
 impl Parse for Attribute {
     fn parse(input: ParseStream) -> Result<Self> {
-        input.parse::<syn::Token![#]>()?;
+        input.parse::<Token![#]>()?;
 
         let content;
         bracketed!(content in input);
@@ -156,7 +157,7 @@ impl Parse for Attribute {
 impl Attribute {
     fn parse_many(input: ParseStream) -> Result<Vec<Attribute>> {
         let mut attributes = vec![];
-        while input.peek(syn::Token![#]) {
+        while input.peek(Token![#]) {
             attributes.push(input.parse()?);
         }
         Ok(attributes)
@@ -166,17 +167,17 @@ impl Attribute {
 impl Parse for Argument {
     fn parse(input: ParseStream) -> Result<Self> {
         let lookahead = input.lookahead1();
-        if lookahead.peek(syn::Token![&]) {
-            input.parse::<syn::Token![&]>()?;
+        if lookahead.peek(Token![&]) {
+            input.parse::<Token![&]>()?;
 
             let lookahead = input.lookahead1();
-            if lookahead.peek(syn::Token![mut]) {
-                input.parse::<syn::Token![mut]>()?;
-                input.parse::<syn::Token![self]>()?;
+            if lookahead.peek(Token![mut]) {
+                input.parse::<Token![mut]>()?;
+                input.parse::<Token![self]>()?;
 
                 Ok(Argument::MutSelf)
-            } else if lookahead.peek(syn::Token![self]) {
-                input.parse::<syn::Token![self]>()?;
+            } else if lookahead.peek(Token![self]) {
+                input.parse::<Token![self]>()?;
 
                 Ok(Argument::ConstSelf)
             } else {
@@ -194,7 +195,7 @@ impl Parse for Function {
     fn parse(input: ParseStream) -> Result<Self> {
         let attributes = Attribute::parse_many(input)?;
 
-        input.parse::<syn::Token![fn]>()?;
+        input.parse::<Token![fn]>()?;
         let name: Ident = input.parse()?;
 
         let content;
@@ -203,8 +204,8 @@ impl Parse for Function {
         let arguments: Punctuated<_, Token![,]> = content.parse_terminated(Argument::parse)?;
         let arguments = Vec::from_iter(arguments);
 
-        let return_type = if input.peek(syn::Token![->]) {
-            input.parse::<syn::Token![->]>()?;
+        let return_type = if input.peek(Token![->]) {
+            input.parse::<Token![->]>()?;
             Some(input.parse()?)
         } else {
             None
@@ -253,29 +254,7 @@ impl Parse for TypeStatement {
         }
 
         let lookahead = input.lookahead1();
-        if lookahead.peek(kw::functions) {
-            input.parse::<kw::functions>()?;
-
-            let content;
-            braced!(content in input);
-
-            let function_blocks: Punctuated<(Ident, Vec<Function>), Token![,]> = content
-                .parse_terminated(|input| {
-                    let name: Ident = input.parse()?;
-
-                    let content;
-                    braced!(content in input);
-
-                    let functions: Punctuated<_, Token![,]> =
-                        content.parse_terminated(Function::parse)?;
-                    let functions = Vec::from_iter(functions.into_iter());
-
-                    Ok((name, functions))
-                })?;
-            let function_blocks = Vec::from_iter(function_blocks);
-
-            Ok(TypeStatement::Functions(function_blocks))
-        } else if lookahead.peek(syn::Token![#]) {
+        if lookahead.peek(Token![#]) {
             let attributes = Attribute::parse_many(input)?;
             parse_field(input, input.lookahead1(), attributes)
         } else {
@@ -291,8 +270,8 @@ fn parse_type_definition(
     input.parse::<Token![type]>()?;
     let name: Ident = input.parse()?;
 
-    let statements = if input.peek(syn::Token![;]) {
-        input.parse::<syn::Token![;]>()?;
+    let statements = if input.peek(Token![;]) {
+        input.parse::<Token![;]>()?;
         vec![]
     } else {
         let content;
@@ -373,8 +352,10 @@ fn parse_item_definition(input: ParseStream, attributes: Vec<Attribute>) -> Resu
     }
 }
 
-fn parse_impl_definition(input: ParseStream) -> Result<(Ident, Vec<Function>)> {
-    input.parse::<Token![impl]>()?;
+fn parse_function_block_definition<Token: Parse>(
+    input: ParseStream,
+) -> Result<(Ident, Vec<Function>)> {
+    input.parse::<Token>()?;
     let ident: Ident = input.parse()?;
     let content;
     braced!(content in input);
@@ -392,40 +373,43 @@ impl Parse for Module {
         let mut extern_values = vec![];
         let mut definitions = vec![];
         let mut impls = vec![];
+        let mut vftables = vec![];
 
         // Exhaust all of our declarations
         while !input.is_empty() {
             let attributes = Attribute::parse_many(input)?;
 
-            if input.peek(syn::Token![use]) {
+            if input.peek(Token![use]) {
                 if !attributes.is_empty() {
                     return Err(input.error("attributes not allowed on use statements"));
                 }
 
-                input.parse::<syn::Token![use]>()?;
+                input.parse::<Token![use]>()?;
                 let item_path = input.parse()?;
-                input.parse::<syn::Token![;]>()?;
+                input.parse::<Token![;]>()?;
                 uses.push(item_path);
-            } else if input.peek(syn::Token![extern]) {
-                input.parse::<syn::Token![extern]>()?;
-                if input.peek(syn::Token![type]) {
-                    input.parse::<syn::Token![type]>()?;
+            } else if input.peek(Token![extern]) {
+                input.parse::<Token![extern]>()?;
+                if input.peek(Token![type]) {
+                    input.parse::<Token![type]>()?;
                     let ident: Ident = parse_type_ident(input)?.as_str().into();
-                    input.parse::<syn::Token![;]>()?;
+                    input.parse::<Token![;]>()?;
 
                     extern_types.push((ident, attributes));
                 } else {
                     let name: Ident = input.parse()?;
-                    input.parse::<syn::Token![:]>()?;
+                    input.parse::<Token![:]>()?;
                     let type_: Type = input.parse()?;
-                    input.parse::<syn::Token![;]>()?;
+                    input.parse::<Token![;]>()?;
 
                     extern_values.push((name, type_, attributes));
                 }
-            } else if input.peek(syn::Token![type]) || input.peek(syn::Token![enum]) {
+            } else if input.peek(Token![type]) || input.peek(Token![enum]) {
                 definitions.push(parse_item_definition(input, attributes)?);
-            } else if input.peek(syn::Token![impl]) {
-                impls.push(parse_impl_definition(input)?);
+            } else if input.peek(Token![impl]) {
+                impls.push(parse_function_block_definition::<Token![impl]>(input)?);
+            } else if input.peek(kw::vftable) {
+                vftables.push(parse_function_block_definition::<kw::vftable>(input)?);
             } else {
                 return Err(input.error("unexpected keyword"));
             }
@@ -437,6 +421,7 @@ impl Parse for Module {
             extern_values,
             definitions,
             impls,
+            vftables,
         })
     }
 }
