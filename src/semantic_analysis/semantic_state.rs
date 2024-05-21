@@ -300,7 +300,8 @@ impl SemanticState {
         let mut target_size: Option<usize> = None;
         let mut singleton = None;
         let mut regions: Vec<(Option<usize>, Region)> = vec![];
-        let mut functions: HashMap<String, Vec<Function>> = HashMap::new();
+        let mut free_functions = vec![];
+        let mut vftable_functions = None;
         for statement in &definition.statements {
             match statement {
                 grammar::TypeStatement::Field { field, attributes } => {
@@ -346,21 +347,19 @@ impl SemanticState {
         }
 
         if let Some(type_impl) = module.impls.get(resolvee_path) {
-            let free = functions.entry("free".to_string()).or_default();
-
             for function in type_impl {
                 let function = self.build_function(&module.scope(), function)?;
-                free.push(function);
+                free_functions.push(function);
             }
         }
 
         if let Some(vftable_block) = module.vftables.get(resolvee_path) {
-            let vftable = functions.entry("vftable".to_string()).or_default();
-
+            let mut new_vftable_functions = vec![];
             for function in vftable_block {
                 let function = self.build_function(&module.scope(), function)?;
-                vftable.push(function);
+                new_vftable_functions.push(function);
             }
+            vftable_functions = Some(new_vftable_functions);
         }
 
         for attribute in &definition.attributes {
@@ -381,11 +380,14 @@ impl SemanticState {
         let mut last_address: usize = 0;
         let mut resolved_regions = vec![];
 
-        if let Some((type_definition, region, size)) = self.build_vftable(resolvee_path, &functions)
-        {
-            self.add_type(type_definition)?;
-            resolved_regions.push(region);
-            last_address += size;
+        if let Some(vftable_functions) = &vftable_functions {
+            if let Some((type_definition, region, size)) =
+                self.build_vftable(resolvee_path, vftable_functions)
+            {
+                self.add_type(type_definition)?;
+                resolved_regions.push(region);
+                last_address += size;
+            }
         }
 
         for (offset, region) in regions {
@@ -452,7 +454,8 @@ impl SemanticState {
             size,
             inner: TypeDefinition {
                 regions: resolved_regions,
-                functions,
+                free_functions,
+                vftable_functions,
                 singleton,
             }
             .into(),
@@ -518,9 +521,8 @@ impl SemanticState {
     fn build_vftable(
         &self,
         resolvee_path: &ItemPath,
-        functions: &HashMap<String, Vec<Function>>,
+        functions: &[Function],
     ) -> Option<(ItemDefinition, Region, usize)> {
-        let vftable = functions.get(&"vftable".to_string())?;
         let name = resolvee_path.last()?;
 
         let resolvee_vtable_path = resolvee_path
@@ -558,8 +560,9 @@ impl SemanticState {
                 state: ItemState::Resolved(ItemStateResolved {
                     size: 0,
                     inner: TypeDefinition {
-                        regions: vftable.iter().map(function_to_field).collect(),
-                        functions: HashMap::new(),
+                        regions: functions.iter().map(function_to_field).collect(),
+                        free_functions: vec![],
+                        vftable_functions: None,
                         singleton: None,
                     }
                     .into(),

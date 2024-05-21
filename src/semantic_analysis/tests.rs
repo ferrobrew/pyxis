@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 use crate::{
     grammar::{self, ItemPath},
@@ -73,7 +73,8 @@ fn can_resolve_basic_struct() {
                         Type::Raw(ItemPath::from_colon_delimited_str("u64")),
                     ),
                 ],
-                functions: HashMap::new(),
+                free_functions: vec![],
+                vftable_functions: None,
                 singleton: None,
             }
             .into(),
@@ -140,7 +141,8 @@ fn can_resolve_pointer_to_another_struct() {
                         )))),
                     ),
                 ],
-                functions: HashMap::new(),
+                free_functions: vec![],
+                vftable_functions: None,
                 singleton: None,
             }
             .into(),
@@ -229,37 +231,33 @@ fn can_resolve_complex_type() {
                     Region::field("settings", unknown(804)),
                     Region::field("_field_D2C", unknown(0xA24)),
                 ],
-                functions: [(
-                    "free".to_string(),
-                    vec![Function {
-                        name: "test_function".to_string(),
-                        attributes: vec![Attribute::Address(0x800_000)],
-                        arguments: vec![
-                            Argument::MutSelf,
-                            Argument::Field(
-                                "arg1".to_string(),
-                                Type::MutPointer(Box::new(Type::Raw(
-                                    ItemPath::from_colon_delimited_str("test::TestType"),
-                                ))),
-                            ),
-                            Argument::Field(
-                                "arg2".to_string(),
-                                Type::Raw(ItemPath::from_colon_delimited_str("i32")),
-                            ),
-                            Argument::Field(
-                                "arg3".to_string(),
-                                Type::ConstPointer(Box::new(Type::Raw(
-                                    ItemPath::from_colon_delimited_str("u32"),
-                                ))),
-                            ),
-                        ],
-                        return_type: Some(Type::MutPointer(Box::new(Type::Raw(
-                            ItemPath::from_colon_delimited_str("test::TestType"),
-                        )))),
-                    }],
-                )]
-                .into_iter()
-                .collect(),
+                free_functions: vec![Function {
+                    name: "test_function".to_string(),
+                    attributes: vec![Attribute::Address(0x800_000)],
+                    arguments: vec![
+                        Argument::MutSelf,
+                        Argument::Field(
+                            "arg1".to_string(),
+                            Type::MutPointer(Box::new(Type::Raw(
+                                ItemPath::from_colon_delimited_str("test::TestType"),
+                            ))),
+                        ),
+                        Argument::Field(
+                            "arg2".to_string(),
+                            Type::Raw(ItemPath::from_colon_delimited_str("i32")),
+                        ),
+                        Argument::Field(
+                            "arg3".to_string(),
+                            Type::ConstPointer(Box::new(Type::Raw(
+                                ItemPath::from_colon_delimited_str("u32"),
+                            ))),
+                        ),
+                    ],
+                    return_type: Some(Type::MutPointer(Box::new(Type::Raw(
+                        ItemPath::from_colon_delimited_str("test::TestType"),
+                    )))),
+                }],
+                vftable_functions: None,
                 singleton: Some(0x1_200_000),
             }
             .into(),
@@ -324,7 +322,8 @@ fn can_use_type_from_another_module() {
         state: types::ItemState::Resolved(types::ItemStateResolved {
             size: 4,
             inner: TypeDefinition {
-                functions: HashMap::new(),
+                free_functions: vec![],
+                vftable_functions: None,
                 regions: vec![Region::field(
                     "field",
                     Type::Raw(ItemPath::from_colon_delimited_str("module2::TestType2")),
@@ -419,7 +418,8 @@ fn can_resolve_embed_of_an_extern() {
                         )))),
                     ),
                 ],
-                functions: HashMap::new(),
+                free_functions: vec![],
+                vftable_functions: None,
                 singleton: None,
             }
             .into(),
@@ -477,43 +477,41 @@ fn can_generate_vftable() {
                         "test::TestTypeVftable",
                     )))),
                 )],
-                functions: HashMap::from([(
-                    "vftable".into(),
-                    vec![
-                        Function {
-                            name: "test_function0".to_string(),
-                            attributes: vec![],
-                            arguments: vec![
-                                Argument::MutSelf,
-                                Argument::Field(
-                                    "arg0".to_string(),
-                                    Type::Raw(ItemPath::from_colon_delimited_str("u32")),
-                                ),
-                                Argument::Field(
-                                    "arg1".to_string(),
-                                    Type::Raw(ItemPath::from_colon_delimited_str("f32")),
-                                ),
-                            ],
-                            return_type: Some(Type::Raw(ItemPath::from_colon_delimited_str("i32"))),
-                        },
-                        Function {
-                            name: "test_function1".to_string(),
-                            attributes: vec![],
-                            arguments: vec![
-                                Argument::MutSelf,
-                                Argument::Field(
-                                    "arg0".to_string(),
-                                    Type::Raw(ItemPath::from_colon_delimited_str("u32")),
-                                ),
-                                Argument::Field(
-                                    "arg1".to_string(),
-                                    Type::Raw(ItemPath::from_colon_delimited_str("f32")),
-                                ),
-                            ],
-                            return_type: None,
-                        },
-                    ],
-                )]),
+                vftable_functions: Some(vec![
+                    Function {
+                        name: "test_function0".to_string(),
+                        attributes: vec![],
+                        arguments: vec![
+                            Argument::MutSelf,
+                            Argument::Field(
+                                "arg0".to_string(),
+                                Type::Raw(ItemPath::from_colon_delimited_str("u32")),
+                            ),
+                            Argument::Field(
+                                "arg1".to_string(),
+                                Type::Raw(ItemPath::from_colon_delimited_str("f32")),
+                            ),
+                        ],
+                        return_type: Some(Type::Raw(ItemPath::from_colon_delimited_str("i32"))),
+                    },
+                    Function {
+                        name: "test_function1".to_string(),
+                        attributes: vec![],
+                        arguments: vec![
+                            Argument::MutSelf,
+                            Argument::Field(
+                                "arg0".to_string(),
+                                Type::Raw(ItemPath::from_colon_delimited_str("u32")),
+                            ),
+                            Argument::Field(
+                                "arg1".to_string(),
+                                Type::Raw(ItemPath::from_colon_delimited_str("f32")),
+                            ),
+                        ],
+                        return_type: None,
+                    },
+                ]),
+                free_functions: vec![],
                 singleton: None,
             }
             .into(),
@@ -573,7 +571,8 @@ fn can_generate_vftable() {
                         ),
                     ),
                 ],
-                functions: HashMap::new(),
+                free_functions: vec![],
+                vftable_functions: None,
                 singleton: None,
             }
             .into(),

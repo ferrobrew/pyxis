@@ -191,7 +191,8 @@ fn build_type(
     let types::TypeDefinition {
         singleton,
         regions,
-        functions,
+        free_functions,
+        vftable_functions,
     } = type_definition;
 
     let fields = regions
@@ -239,21 +240,20 @@ fn build_type(
         }
     });
 
-    let free_functions_impl = functions
-        .get("free")
-        .cloned()
-        .unwrap_or_default()
+    let free_functions_impl = free_functions
         .iter()
         .map(|f| build_function(f, false))
         .collect::<anyhow::Result<Vec<_>>>()?;
 
-    let vftable_function_impl = functions
-        .get("vftable")
-        .cloned()
-        .unwrap_or_default()
-        .iter()
-        .map(|f| build_function(f, true))
-        .collect::<anyhow::Result<Vec<_>>>()?;
+    let vftable_function_impl = vftable_functions
+        .as_ref()
+        .map(|fns| {
+            fns.iter()
+                .map(|f| build_function(f, true))
+                .collect::<anyhow::Result<Vec<_>>>()
+        })
+        .transpose()?
+        .unwrap_or_default();
 
     Ok(quote! {
         #[repr(C)]

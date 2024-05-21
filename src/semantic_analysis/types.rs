@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt};
+use std::fmt;
 
 use crate::{
     grammar::{self, ItemPath},
@@ -116,7 +116,8 @@ impl Region {
 #[derive(PartialEq, Eq, Debug, Clone, Default)]
 pub struct TypeDefinition {
     pub regions: Vec<Region>,
-    pub functions: HashMap<String, Vec<Function>>,
+    pub free_functions: Vec<Function>,
+    pub vftable_functions: Option<Vec<Function>>,
     pub singleton: Option<usize>,
 }
 
