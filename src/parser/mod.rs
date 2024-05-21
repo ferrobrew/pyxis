@@ -244,7 +244,7 @@ impl Parse for TypeStatement {
             attributes: Vec<Attribute>,
         ) -> Result<TypeStatement> {
             if Ident::peek(&lookahead) {
-                Ok(TypeStatement::Field {
+                Ok(TypeStatement {
                     field: input.parse()?,
                     attributes,
                 })

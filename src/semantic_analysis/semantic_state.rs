@@ -303,47 +303,44 @@ impl SemanticState {
         let mut free_functions = vec![];
         let mut vftable_functions = None;
         for statement in &definition.statements {
-            match statement {
-                grammar::TypeStatement::Field { field, attributes } => {
-                    let mut address = None;
+            let grammar::TypeStatement { field, attributes } = statement;
+            let mut address = None;
 
-                    for attribute in attributes {
-                        let Some((ident, exprs)) = attribute.function() else {
-                            anyhow::bail!("unsupported attribute: {attribute:?}");
-                        };
-                        match (ident.as_str(), &exprs[..]) {
-                            ("address", [grammar::Expr::IntLiteral(addr)]) => {
-                                address = Some(*addr as usize);
-                            }
-                            _ => anyhow::bail!("unsupported attribute: {attribute:?}"),
-                        }
+            for attribute in attributes {
+                let Some((ident, exprs)) = attribute.function() else {
+                    anyhow::bail!("unsupported attribute: {attribute:?}");
+                };
+                match (ident.as_str(), &exprs[..]) {
+                    ("address", [grammar::Expr::IntLiteral(addr)]) => {
+                        address = Some(*addr as usize);
                     }
-
-                    if let Some(address) = address {
-                        regions.push((
-                            Some(address),
-                            Region::unnamed_field(self.type_registry.padding_type(0)),
-                        ));
-                    }
-
-                    let grammar::TypeField(ident, type_) = field;
-                    let Some(type_) = self
-                        .type_registry
-                        .resolve_grammar_type(&module.scope(), type_)
-                    else {
-                        return Ok(None);
-                    };
-
-                    let ident = (ident.0 != "_").then(|| ident.0.clone());
-                    regions.push((
-                        None,
-                        Region {
-                            name: ident,
-                            type_ref: type_,
-                        },
-                    ));
+                    _ => anyhow::bail!("unsupported attribute: {attribute:?}"),
                 }
+            }
+
+            if let Some(address) = address {
+                regions.push((
+                    Some(address),
+                    Region::unnamed_field(self.type_registry.padding_type(0)),
+                ));
+            }
+
+            let grammar::TypeField(ident, type_) = field;
+            let Some(type_) = self
+                .type_registry
+                .resolve_grammar_type(&module.scope(), type_)
+            else {
+                return Ok(None);
             };
+
+            let ident = (ident.0 != "_").then(|| ident.0.clone());
+            regions.push((
+                None,
+                Region {
+                    name: ident,
+                    type_ref: type_,
+                },
+            ));
         }
 
         if let Some(type_impl) = module.impls.get(resolvee_path) {

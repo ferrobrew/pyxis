@@ -256,15 +256,13 @@ impl From<(Ident, Type)> for TypeField {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum TypeStatement {
-    Field {
-        field: TypeField,
-        attributes: Vec<Attribute>,
-    },
+pub struct TypeStatement {
+    pub field: TypeField,
+    pub attributes: Vec<Attribute>,
 }
 impl TypeStatement {
     pub fn field(name: &str, type_: Type, attributes: impl Into<Vec<Attribute>>) -> TypeStatement {
-        TypeStatement::Field {
+        TypeStatement {
             field: (name.into(), type_).into(),
             attributes: attributes.into(),
         }
