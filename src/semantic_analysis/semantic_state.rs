@@ -427,7 +427,7 @@ impl SemanticState {
             } = region
             {
                 *region = Region {
-                    name: Some(format!("_field_{size:X}")),
+                    name: Some(format!("_field_{size:x}")),
                     type_ref: type_ref.clone(),
                 };
             }

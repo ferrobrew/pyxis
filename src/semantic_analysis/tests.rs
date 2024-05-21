@@ -223,13 +223,13 @@ fn can_resolve_complex_type() {
                         "max_num_2",
                         Type::Raw(ItemPath::from_colon_delimited_str("u16")),
                     ),
-                    Region::field("_field_7C", unknown(0x984)),
+                    Region::field("_field_7c", unknown(0x984)),
                     Region::field(
                         "test_type",
                         Type::Raw(ItemPath::from_colon_delimited_str("test::TestType")),
                     ),
                     Region::field("settings", unknown(804)),
-                    Region::field("_field_D2C", unknown(0xA24)),
+                    Region::field("_field_d2c", unknown(0xA24)),
                 ],
                 free_functions: vec![Function {
                     name: "test_function".to_string(),
