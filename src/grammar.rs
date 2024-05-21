@@ -1,6 +1,6 @@
 use std::{fmt, path::Path};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Ident(pub String);
 impl From<&str> for Ident {
     fn from(item: &str) -> Self {
@@ -18,7 +18,7 @@ impl AsRef<str> for Ident {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Type {
     ConstPointer(Box<Type>),
     MutPointer(Box<Type>),
@@ -147,7 +147,7 @@ impl FromIterator<ItemPathSegment> for ItemPath {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Expr {
     IntLiteral(isize),
     StringLiteral(String),
@@ -162,7 +162,7 @@ impl Expr {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Attribute {
     Function(Ident, Vec<Expr>),
 }
@@ -190,7 +190,7 @@ impl Attribute {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Argument {
     ConstSelf,
     MutSelf,
@@ -202,7 +202,7 @@ impl Argument {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Function {
     pub name: Ident,
     pub attributes: Vec<Attribute>,
@@ -242,7 +242,7 @@ impl From<(Ident, Expr)> for ExprField {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TypeField(pub Ident, pub Type);
 impl TypeField {
     pub fn new(name: &str, type_: Type) -> TypeField {
@@ -372,6 +372,7 @@ pub struct Module {
     pub extern_types: Vec<(Ident, Vec<Attribute>)>,
     pub extern_values: Vec<(Ident, Type, Vec<Attribute>)>,
     pub definitions: Vec<ItemDefinition>,
+    pub impls: Vec<(Ident, Vec<Function>)>,
 }
 impl Module {
     pub fn new() -> Self {
@@ -401,6 +402,11 @@ impl Module {
 
     pub fn with_definitions(mut self, definitions: impl Into<Vec<ItemDefinition>>) -> Self {
         self.definitions = definitions.into();
+        self
+    }
+
+    pub fn with_impls(mut self, impls: impl IntoIterator<Item = (Ident, Vec<Function>)>) -> Self {
+        self.impls = impls.into_iter().collect();
         self
     }
 }

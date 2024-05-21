@@ -160,49 +160,49 @@ fn can_resolve_complex_type() {
         type TS = TypeStatement;
         type A = Argument;
 
-        Module::new().with_definitions([
-            ItemDefinition::new(
-                "TestType",
-                TypeDefinition::new(
-                    [
-                        TS::field("field_1", T::ident("i32"), []),
-                        TS::field("_", T::unknown(4), []),
-                    ],
-                    [],
+        Module::new()
+            .with_definitions([
+                ItemDefinition::new(
+                    "TestType",
+                    TypeDefinition::new(
+                        [
+                            TS::field("field_1", T::ident("i32"), []),
+                            TS::field("_", T::unknown(4), []),
+                        ],
+                        [],
+                    ),
                 ),
-            ),
-            ItemDefinition::new(
-                "Singleton",
-                TypeDefinition::new(
-                    [
-                        TS::field("max_num_1", T::ident("u16"), [Attribute::address(0x78)]),
-                        TS::field("max_num_2", T::ident("u16"), []),
-                        TS::field(
-                            "test_type",
-                            T::ident("TestType"),
-                            [Attribute::address(0xA00)],
-                        ),
-                        TS::field("settings", T::unknown(804), []),
-                        TS::functions([(
-                            "free",
-                            [Function::new(
-                                "test_function",
-                                [Attribute::address(0x800_000)],
-                                [
-                                    A::MutSelf,
-                                    A::field("arg1", T::ident("TestType").mut_pointer()),
-                                    A::field("arg2", T::ident("i32")),
-                                    A::field("arg3", T::ident("u32").const_pointer()),
-                                ],
-                                Some(T::ident("TestType").mut_pointer()),
-                            )]
-                            .as_slice(),
-                        )]),
-                    ],
-                    [Attribute::size(0x1750), Attribute::singleton(0x1_200_000)],
+                ItemDefinition::new(
+                    "Singleton",
+                    TypeDefinition::new(
+                        [
+                            TS::field("max_num_1", T::ident("u16"), [Attribute::address(0x78)]),
+                            TS::field("max_num_2", T::ident("u16"), []),
+                            TS::field(
+                                "test_type",
+                                T::ident("TestType"),
+                                [Attribute::address(0xA00)],
+                            ),
+                            TS::field("settings", T::unknown(804), []),
+                        ],
+                        [Attribute::size(0x1750), Attribute::singleton(0x1_200_000)],
+                    ),
                 ),
-            ),
-        ])
+            ])
+            .with_impls([(
+                Ident::from("Singleton"),
+                vec![Function::new(
+                    "test_function",
+                    [Attribute::address(0x800_000)],
+                    [
+                        A::MutSelf,
+                        A::field("arg1", T::ident("TestType").mut_pointer()),
+                        A::field("arg2", T::ident("i32")),
+                        A::field("arg3", T::ident("u32").const_pointer()),
+                    ],
+                    Some(T::ident("TestType").mut_pointer()),
+                )],
+            )])
     };
 
     let path = ItemPath::from_colon_delimited_str("test::Singleton");

@@ -373,12 +373,25 @@ fn parse_item_definition(input: ParseStream, attributes: Vec<Attribute>) -> Resu
     }
 }
 
+fn parse_impl_definition(input: ParseStream) -> Result<(Ident, Vec<Function>)> {
+    input.parse::<Token![impl]>()?;
+    let ident: Ident = input.parse()?;
+    let content;
+    braced!(content in input);
+
+    let functions: Punctuated<Function, Token![;]> = content.parse_terminated(Function::parse)?;
+    let functions = Vec::from_iter(functions);
+
+    Ok((ident, functions))
+}
+
 impl Parse for Module {
     fn parse(input: ParseStream) -> Result<Self> {
         let mut uses = vec![];
         let mut extern_types = vec![];
         let mut extern_values = vec![];
         let mut definitions = vec![];
+        let mut impls = vec![];
 
         // Exhaust all of our declarations
         while !input.is_empty() {
@@ -411,6 +424,8 @@ impl Parse for Module {
                 }
             } else if input.peek(syn::Token![type]) || input.peek(syn::Token![enum]) {
                 definitions.push(parse_item_definition(input, attributes)?);
+            } else if input.peek(syn::Token![impl]) {
+                impls.push(parse_impl_definition(input)?);
             } else {
                 return Err(input.error("unexpected keyword"));
             }
@@ -421,6 +436,7 @@ impl Parse for Module {
             extern_types,
             extern_values,
             definitions,
+            impls,
         })
     }
 }

@@ -1,8 +1,11 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use crate::{
     grammar::{self, ItemPath},
-    semantic_analysis::{type_registry, types},
+    semantic_analysis::{
+        type_registry,
+        types::{ItemDefinition, Type},
+    },
 };
 
 #[derive(Debug)]
@@ -10,20 +13,35 @@ pub struct Module {
     pub(crate) path: ItemPath,
     pub(crate) ast: grammar::Module,
     pub(crate) definition_paths: HashSet<ItemPath>,
-    pub(crate) extern_values: Vec<(String, types::Type, usize)>,
+    pub(crate) extern_values: Vec<(String, Type, usize)>,
+    pub(crate) impls: HashMap<ItemPath, Vec<grammar::Function>>,
+}
+
+impl Default for Module {
+    fn default() -> Self {
+        Self {
+            path: ItemPath::empty(),
+            ast: Default::default(),
+            definition_paths: Default::default(),
+            extern_values: Default::default(),
+            impls: Default::default(),
+        }
+    }
 }
 
 impl Module {
     pub(crate) fn new(
         path: ItemPath,
         ast: grammar::Module,
-        extern_values: Vec<(String, types::Type, usize)>,
+        extern_values: Vec<(String, Type, usize)>,
+        impls: HashMap<ItemPath, Vec<grammar::Function>>,
     ) -> Self {
         Self {
             path,
             ast,
             definition_paths: HashSet::new(),
             extern_values,
+            impls,
         }
     }
 
@@ -38,7 +56,7 @@ impl Module {
     pub fn definitions<'a>(
         &'a self,
         type_registry: &'a type_registry::TypeRegistry,
-    ) -> impl Iterator<Item = &'a types::ItemDefinition> {
+    ) -> impl Iterator<Item = &'a ItemDefinition> {
         self.definition_paths()
             .iter()
             .filter_map(|p| type_registry.get(p))
@@ -57,7 +75,7 @@ impl Module {
         let scope = self.scope();
 
         for (name, type_, _) in &mut self.extern_values {
-            if let types::Type::Unresolved(type_ref) = type_ {
+            if let Type::Unresolved(type_ref) = type_ {
                 *type_ = type_registry
                     .resolve_grammar_type(&scope, type_ref)
                     .ok_or_else(|| anyhow::anyhow!("failed to resolve type for {}", name))?;

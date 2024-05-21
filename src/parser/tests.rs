@@ -91,28 +91,25 @@ fn can_parse_spawn_manager() {
             enemy_type_spawn_settings: unknown<804>,
             character_types: unknown<0x74>,
             vehicle_types: VehicleTypes,
+        }
+        impl SpawnManager {
+            #[address(0x84C_4C0)]
+            fn engine_spawn_vehicle(
+                &mut self,
+                vehicle: *mut SharedPtr<Vehicle>,
+                context: i32,
+                unk1: *mut StdString,
+                model_id: *const u32,
+                faction: u32,
+                unk2: *mut StdString
+            ) -> *mut SharedPtr<Vehicle>;
 
-            functions {
-                free {
-                    #[address(0x84C_4C0)]
-                    fn engine_spawn_vehicle(
-                        &mut self,
-                        vehicle: *mut SharedPtr<Vehicle>,
-                        context: i32,
-                        unk1: *mut StdString,
-                        model_id: *const u32,
-                        faction: u32,
-                        unk2: *mut StdString
-                    ) -> *mut SharedPtr<Vehicle>,
-
-                    #[address(0x73F_DB0)]
-                    fn request_vehicle_model(
-                        &mut self,
-                        model_id: *const u32,
-                        category: i32
-                    )
-                }
-            }
+            #[address(0x73F_DB0)]
+            fn request_vehicle_model(
+                &mut self,
+                model_id: *const u32,
+                category: i32
+            );
         }
         "#;
 
@@ -121,61 +118,58 @@ fn can_parse_spawn_manager() {
         type TS = TypeStatement;
         type A = Argument;
 
-        Module::new().with_definitions([ItemDefinition::new(
-            "SpawnManager",
-            TypeDefinition::new(
-                [
-                    TS::field(
-                        "max_num_characters",
-                        T::ident("u16"),
-                        [Attribute::address(0x78)],
-                    ),
-                    TS::field("max_num_vehicles", T::ident("u16"), []),
-                    TS::field(
-                        "world_sim",
-                        T::ident("WorldSim"),
-                        [Attribute::address(0xA00)],
-                    ),
-                    TS::field("enemy_type_spawn_settings", T::unknown(804), []),
-                    TS::field("character_types", T::unknown(0x74), []),
-                    TS::field("vehicle_types", T::ident("VehicleTypes"), []),
-                    TS::functions([(
-                        "free",
+        Module::new()
+            .with_definitions([ItemDefinition::new(
+                "SpawnManager",
+                TypeDefinition::new(
+                    [
+                        TS::field(
+                            "max_num_characters",
+                            T::ident("u16"),
+                            [Attribute::address(0x78)],
+                        ),
+                        TS::field("max_num_vehicles", T::ident("u16"), []),
+                        TS::field(
+                            "world_sim",
+                            T::ident("WorldSim"),
+                            [Attribute::address(0xA00)],
+                        ),
+                        TS::field("enemy_type_spawn_settings", T::unknown(804), []),
+                        TS::field("character_types", T::unknown(0x74), []),
+                        TS::field("vehicle_types", T::ident("VehicleTypes"), []),
+                    ],
+                    [Attribute::size(0x1754), Attribute::singleton(0x1_191_918)],
+                ),
+            )])
+            .with_impls([(
+                Ident::from("SpawnManager"),
+                vec![
+                    Function::new(
+                        "engine_spawn_vehicle",
+                        [Attribute::address(0x84C_4C0)],
                         [
-                            Function::new(
-                                "engine_spawn_vehicle",
-                                [Attribute::address(0x84C_4C0)],
-                                [
-                                    A::MutSelf,
-                                    A::field(
-                                        "vehicle",
-                                        T::ident("SharedPtr<Vehicle>").mut_pointer(),
-                                    ),
-                                    A::field("context", T::ident("i32")),
-                                    A::field("unk1", T::ident("StdString").mut_pointer()),
-                                    A::field("model_id", T::ident("u32").const_pointer()),
-                                    A::field("faction", T::ident("u32")),
-                                    A::field("unk2", T::ident("StdString").mut_pointer()),
-                                ],
-                                Some(Type::ident("SharedPtr<Vehicle>").mut_pointer()),
-                            ),
-                            Function::new(
-                                "request_vehicle_model",
-                                [Attribute::address(0x73F_DB0)],
-                                [
-                                    A::MutSelf,
-                                    A::field("model_id", T::ident("u32").const_pointer()),
-                                    A::field("category", T::ident("i32")),
-                                ],
-                                None,
-                            ),
-                        ]
-                        .as_slice(),
-                    )]),
+                            A::MutSelf,
+                            A::field("vehicle", T::ident("SharedPtr<Vehicle>").mut_pointer()),
+                            A::field("context", T::ident("i32")),
+                            A::field("unk1", T::ident("StdString").mut_pointer()),
+                            A::field("model_id", T::ident("u32").const_pointer()),
+                            A::field("faction", T::ident("u32")),
+                            A::field("unk2", T::ident("StdString").mut_pointer()),
+                        ],
+                        Some(Type::ident("SharedPtr<Vehicle>").mut_pointer()),
+                    ),
+                    Function::new(
+                        "request_vehicle_model",
+                        [Attribute::address(0x73F_DB0)],
+                        [
+                            A::MutSelf,
+                            A::field("model_id", T::ident("u32").const_pointer()),
+                            A::field("category", T::ident("i32")),
+                        ],
+                        None,
+                    ),
                 ],
-                [Attribute::size(0x1754), Attribute::singleton(0x1_191_918)],
-            ),
-        )])
+            )])
     };
 
     assert_eq!(parse_str(text).unwrap(), ast);
