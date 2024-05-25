@@ -32,7 +32,7 @@ fn can_parse_basic_struct() {
 fn can_parse_vftable() {
     let text = r#"
         type TestType;
-        vftable TestType {
+        impl virtual TestType {
             fn test(&mut self, test2: i32);
         }
         "#;

@@ -14,7 +14,6 @@ mod kw {
     syn::custom_keyword!(meta);
     syn::custom_keyword!(functions);
     syn::custom_keyword!(unknown);
-    syn::custom_keyword!(vftable);
 }
 
 impl Parse for Ident {
@@ -363,11 +362,17 @@ fn parse_item_definition(input: ParseStream, attributes: Vec<Attribute>) -> Resu
     }
 }
 
-fn parse_function_block_definition<Token: Parse>(
+fn parse_function_block_definition(
     input: ParseStream,
     attributes: Vec<Attribute>,
-) -> Result<FunctionBlock> {
-    input.parse::<Token>()?;
+) -> Result<(FunctionBlock, bool)> {
+    input.parse::<Token![impl]>()?;
+    let is_virtual = if input.peek(Token![virtual]) {
+        input.parse::<Token![virtual]>()?;
+        true
+    } else {
+        false
+    };
     let name: Ident = input.parse()?;
     let content;
     braced!(content in input);
@@ -375,11 +380,14 @@ fn parse_function_block_definition<Token: Parse>(
     let functions: Punctuated<Function, Token![;]> = content.parse_terminated(Function::parse)?;
     let functions = Vec::from_iter(functions);
 
-    Ok(FunctionBlock {
-        name,
-        functions,
-        attributes,
-    })
+    Ok((
+        FunctionBlock {
+            name,
+            functions,
+            attributes,
+        },
+        is_virtual,
+    ))
 }
 
 impl Parse for Module {
@@ -423,13 +431,12 @@ impl Parse for Module {
             } else if input.peek(Token![type]) || input.peek(Token![enum]) {
                 definitions.push(parse_item_definition(input, attributes)?);
             } else if input.peek(Token![impl]) {
-                impls.push(parse_function_block_definition::<Token![impl]>(
-                    input, attributes,
-                )?);
-            } else if input.peek(kw::vftable) {
-                vftables.push(parse_function_block_definition::<kw::vftable>(
-                    input, attributes,
-                )?);
+                let (block, is_virtual) = parse_function_block_definition(input, attributes)?;
+                if is_virtual {
+                    vftables.push(block);
+                } else {
+                    impls.push(block);
+                }
             } else {
                 return Err(input.error("unexpected keyword"));
             }
