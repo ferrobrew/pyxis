@@ -15,13 +15,10 @@ fn can_parse_basic_struct() {
 
         Module::new().with_definitions([ItemDefinition::new(
             "TestType",
-            TypeDefinition::new(
-                [
-                    TS::field("field_1", T::ident("i32"), []),
-                    TS::field("field_2", T::ident("i32"), []),
-                ],
-                [],
-            ),
+            TypeDefinition::new([
+                TS::field("field_1", T::ident("i32")),
+                TS::field("field_2", T::ident("i32")),
+            ]),
         )])
     };
 
@@ -38,7 +35,7 @@ fn can_parse_vftable() {
         "#;
 
     let ast = Module::new()
-        .with_definitions([ItemDefinition::new("TestType", TypeDefinition::new([], []))])
+        .with_definitions([ItemDefinition::new("TestType", TypeDefinition::new([]))])
         .with_vftables([FunctionBlock::new(
             "TestType",
             [Function::new(
@@ -83,21 +80,18 @@ fn can_parse_vehicle_types() {
 
         Module::new().with_definitions([ItemDefinition::new(
             "VehicleTypes",
-            TypeDefinition::new(
-                [
-                    TS::field("hash_edacd65b_likely_max_models", T::ident("i32"), []),
-                    TS::field("hash_2ff58884", T::ident("i32"), []),
-                    TS::field("maximum_gpu_cost", T::ident("i32"), []),
-                    TS::field("maximum_cpu_cost", T::ident("i32"), []),
-                    TS::field("field_10", T::ident("i32"), []),
-                    TS::field("accumulated_gpu_cost", T::ident("i32"), []),
-                    TS::field("accumulated_cpu_cost", T::ident("i32"), []),
-                    TS::field("field_1c", T::ident("i32"), []),
-                    TS::field("loaded_models", T::ident("LoadedModel").const_pointer(), []),
-                    TS::field("_", T::unknown(0x10), []),
-                ],
-                [],
-            ),
+            TypeDefinition::new([
+                TS::field("hash_edacd65b_likely_max_models", T::ident("i32")),
+                TS::field("hash_2ff58884", T::ident("i32")),
+                TS::field("maximum_gpu_cost", T::ident("i32")),
+                TS::field("maximum_cpu_cost", T::ident("i32")),
+                TS::field("field_10", T::ident("i32")),
+                TS::field("accumulated_gpu_cost", T::ident("i32")),
+                TS::field("accumulated_cpu_cost", T::ident("i32")),
+                TS::field("field_1c", T::ident("i32")),
+                TS::field("loaded_models", T::ident("LoadedModel").const_pointer()),
+                TS::field("_", T::unknown(0x10)),
+            ]),
         )])
     };
 
@@ -148,25 +142,17 @@ fn can_parse_spawn_manager() {
         Module::new()
             .with_definitions([ItemDefinition::new(
                 "SpawnManager",
-                TypeDefinition::new(
-                    [
-                        TS::field(
-                            "max_num_characters",
-                            T::ident("u16"),
-                            [Attribute::address(0x78)],
-                        ),
-                        TS::field("max_num_vehicles", T::ident("u16"), []),
-                        TS::field(
-                            "world_sim",
-                            T::ident("WorldSim"),
-                            [Attribute::address(0xA00)],
-                        ),
-                        TS::field("enemy_type_spawn_settings", T::unknown(804), []),
-                        TS::field("character_types", T::unknown(0x74), []),
-                        TS::field("vehicle_types", T::ident("VehicleTypes"), []),
-                    ],
-                    [Attribute::size(0x1754), Attribute::singleton(0x1_191_918)],
-                ),
+                TypeDefinition::new([
+                    TS::field("max_num_characters", T::ident("u16"))
+                        .with_attributes([Attribute::address(0x78)]),
+                    TS::field("max_num_vehicles", T::ident("u16")),
+                    TS::field("world_sim", T::ident("WorldSim"))
+                        .with_attributes([Attribute::address(0xA00)]),
+                    TS::field("enemy_type_spawn_settings", T::unknown(804)),
+                    TS::field("character_types", T::unknown(0x74)),
+                    TS::field("vehicle_types", T::ident("VehicleTypes")),
+                ])
+                .with_attributes([Attribute::size(0x1754), Attribute::singleton(0x1_191_918)]),
             )])
             .with_impls([FunctionBlock::new(
                 "SpawnManager",
@@ -213,14 +199,10 @@ fn can_parse_address_field() {
 
     let ast = Module::new().with_definitions([ItemDefinition::new(
         "Test",
-        TypeDefinition::new(
-            [TypeStatement::field(
-                "max_num_characters",
-                Type::ident("u16"),
-                [Attribute::address(0x78)],
-            )],
-            [],
-        ),
+        TypeDefinition::new([
+            TypeStatement::field("max_num_characters", Type::ident("u16"))
+                .with_attributes([Attribute::address(0x78)]),
+        ]),
     )]);
 
     assert_eq!(parse_str(text).unwrap(), ast);
@@ -239,14 +221,7 @@ fn can_parse_use() {
         .with_uses([ItemPath::from_colon_delimited_str("hello::TestType<Hey>")])
         .with_definitions([ItemDefinition::new(
             "Test",
-            TypeDefinition::new(
-                [TypeStatement::field(
-                    "test",
-                    Type::ident("TestType<Hey>"),
-                    [],
-                )],
-                [],
-            ),
+            TypeDefinition::new([TypeStatement::field("test", Type::ident("TestType<Hey>"))]),
         )]);
 
     assert_eq!(parse_str(text).unwrap(), ast);
@@ -279,14 +254,7 @@ fn can_parse_extern() {
             .with_extern_types([("TestType<Hey>".into(), vec![Attribute::size(12)])])
             .with_definitions([ItemDefinition::new(
                 "Test",
-                TypeDefinition::new(
-                    [TypeStatement::field(
-                        "test",
-                        Type::ident("TestType<Hey>"),
-                        [],
-                    )],
-                    [],
-                ),
+                TypeDefinition::new([TypeStatement::field("test", Type::ident("TestType<Hey>"))]),
             )])
     };
 
@@ -300,7 +268,7 @@ fn can_parse_an_empty_type() {
         "#;
 
     let ast =
-        Module::new().with_definitions([ItemDefinition::new("Test", TypeDefinition::new([], []))]);
+        Module::new().with_definitions([ItemDefinition::new("Test", TypeDefinition::new([]))]);
     assert_eq!(parse_str(text).unwrap(), ast);
 }
 
@@ -372,7 +340,7 @@ fn can_parse_array_field() {
 
         Module::new().with_definitions([ItemDefinition::new(
             "TestType",
-            TypeDefinition::new([TS::field("field_1", Type::ident("i32").array(4), [])], []),
+            TypeDefinition::new([TS::field("field_1", Type::ident("i32").array(4))]),
         )])
     };
 

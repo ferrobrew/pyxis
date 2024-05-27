@@ -45,14 +45,11 @@ fn can_resolve_basic_struct() {
 
         Module::new().with_definitions([ItemDefinition::new(
             "TestType",
-            TypeDefinition::new(
-                [
-                    TS::field("field_1", T::ident("i32"), []),
-                    TS::field("_", Type::unknown(4), []),
-                    TS::field("field_2", T::ident("u64"), []),
-                ],
-                [],
-            ),
+            TypeDefinition::new([
+                TS::field("field_1", T::ident("i32")),
+                TS::field("_", Type::unknown(4)),
+                TS::field("field_2", T::ident("u64")),
+            ]),
         )])
     };
 
@@ -96,19 +93,16 @@ fn can_resolve_pointer_to_another_struct() {
         Module::new().with_definitions([
             ItemDefinition::new(
                 "TestType1",
-                TypeDefinition::new([TS::field("field_1", T::ident("u64"), [])], []),
+                TypeDefinition::new([TS::field("field_1", T::ident("u64"))]),
             ),
             ItemDefinition::new(
                 "TestType2",
-                TypeDefinition::new(
-                    [
-                        TS::field("field_1", T::ident("i32"), []),
-                        TS::field("field_2", T::ident("TestType1"), []),
-                        TS::field("field_3", Type::ident("TestType1").const_pointer(), []),
-                        TS::field("field_4", Type::ident("TestType1").mut_pointer(), []),
-                    ],
-                    [],
-                ),
+                TypeDefinition::new([
+                    TS::field("field_1", T::ident("i32")),
+                    TS::field("field_2", T::ident("TestType1")),
+                    TS::field("field_3", Type::ident("TestType1").const_pointer()),
+                    TS::field("field_4", Type::ident("TestType1").mut_pointer()),
+                ]),
             ),
         ])
     };
@@ -166,29 +160,22 @@ fn can_resolve_complex_type() {
             .with_definitions([
                 ItemDefinition::new(
                     "TestType",
-                    TypeDefinition::new(
-                        [
-                            TS::field("field_1", T::ident("i32"), []),
-                            TS::field("_", T::unknown(4), []),
-                        ],
-                        [],
-                    ),
+                    TypeDefinition::new([
+                        TS::field("field_1", T::ident("i32")),
+                        TS::field("_", T::unknown(4)),
+                    ]),
                 ),
                 ItemDefinition::new(
                     "Singleton",
-                    TypeDefinition::new(
-                        [
-                            TS::field("max_num_1", T::ident("u16"), [Attribute::address(0x78)]),
-                            TS::field("max_num_2", T::ident("u16"), []),
-                            TS::field(
-                                "test_type",
-                                T::ident("TestType"),
-                                [Attribute::address(0xA00)],
-                            ),
-                            TS::field("settings", T::unknown(804), []),
-                        ],
-                        [Attribute::size(0x1750), Attribute::singleton(0x1_200_000)],
-                    ),
+                    TypeDefinition::new([
+                        TS::field("max_num_1", T::ident("u16"))
+                            .with_attributes([Attribute::address(0x78)]),
+                        TS::field("max_num_2", T::ident("u16")),
+                        TS::field("test_type", T::ident("TestType"))
+                            .with_attributes([Attribute::address(0xA00)]),
+                        TS::field("settings", T::unknown(804)),
+                    ])
+                    .with_attributes([Attribute::size(0x1750), Attribute::singleton(0x1_200_000)]),
                 ),
             ])
             .with_impls([FunctionBlock::new(
@@ -279,7 +266,7 @@ fn will_eventually_terminate_with_an_unknown_type() {
 
         Module::new().with_definitions([ItemDefinition::new(
             "TestType2",
-            TypeDefinition::new([TS::field("field_2", T::ident("TestType1"), [])], []),
+            TypeDefinition::new([TS::field("field_2", T::ident("TestType1"))]),
         )])
     };
 
@@ -302,7 +289,7 @@ fn can_use_type_from_another_module() {
             .with_uses([ItemPath::from_colon_delimited_str("module2::TestType2")])
             .with_definitions([ItemDefinition::new(
                 "TestType1",
-                TypeDefinition::new([TS::field("field", T::ident("TestType2"), [])], []),
+                TypeDefinition::new([TS::field("field", T::ident("TestType2"))]),
             )])
     };
     let module2 = {
@@ -313,7 +300,7 @@ fn can_use_type_from_another_module() {
 
         Module::new().with_definitions([ItemDefinition::new(
             "TestType2",
-            TypeDefinition::new([TS::field("field", T::ident("u32"), [])], []),
+            TypeDefinition::new([TS::field("field", T::ident("u32"))]),
         )])
     };
 
@@ -379,15 +366,12 @@ fn can_resolve_embed_of_an_extern() {
             .with_extern_types([("TestType1".into(), vec![Attribute::size(16)])])
             .with_definitions([ItemDefinition::new(
                 "TestType2",
-                TypeDefinition::new(
-                    [
-                        TS::field("field_1", T::ident("i32"), []),
-                        TS::field("field_2", T::ident("TestType1"), []),
-                        TS::field("field_3", Type::ident("TestType1").const_pointer(), []),
-                        TS::field("field_4", Type::ident("TestType1").mut_pointer(), []),
-                    ],
-                    [],
-                ),
+                TypeDefinition::new([
+                    TS::field("field_1", T::ident("i32")),
+                    TS::field("field_2", T::ident("TestType1")),
+                    TS::field("field_3", Type::ident("TestType1").const_pointer()),
+                    TS::field("field_4", Type::ident("TestType1").mut_pointer()),
+                ]),
             )])
     };
 
@@ -439,7 +423,7 @@ fn can_generate_vftable() {
         type T = Type;
 
         Module::new()
-            .with_definitions([ItemDefinition::new("TestType", TypeDefinition::new([], []))])
+            .with_definitions([ItemDefinition::new("TestType", TypeDefinition::new([]))])
             .with_vftables([FunctionBlock::new(
                 Ident::from("TestType"),
                 [
@@ -626,7 +610,7 @@ fn can_generate_vftable_with_indices() {
         type T = Type;
 
         Module::new()
-            .with_definitions([ItemDefinition::new("TestType", TypeDefinition::new([], []))])
+            .with_definitions([ItemDefinition::new("TestType", TypeDefinition::new([]))])
             .with_vftables([FunctionBlock::new(
                 Ident::from("TestType"),
                 [

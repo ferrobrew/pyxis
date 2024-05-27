@@ -265,11 +265,15 @@ pub struct TypeStatement {
     pub attributes: Vec<Attribute>,
 }
 impl TypeStatement {
-    pub fn field(name: &str, type_: Type, attributes: impl Into<Vec<Attribute>>) -> TypeStatement {
+    pub fn field(name: &str, type_: Type) -> TypeStatement {
         TypeStatement {
             field: (name.into(), type_).into(),
-            attributes: attributes.into(),
+            attributes: vec![],
         }
+    }
+    pub fn with_attributes(mut self, attributes: impl Into<Vec<Attribute>>) -> Self {
+        self.attributes = attributes.into();
+        self
     }
 }
 
@@ -279,14 +283,15 @@ pub struct TypeDefinition {
     pub attributes: Vec<Attribute>,
 }
 impl TypeDefinition {
-    pub fn new(
-        statements: impl Into<Vec<TypeStatement>>,
-        attributes: impl Into<Vec<Attribute>>,
-    ) -> Self {
+    pub fn new(statements: impl Into<Vec<TypeStatement>>) -> Self {
         Self {
             statements: statements.into(),
-            attributes: attributes.into(),
+            attributes: vec![],
         }
+    }
+    pub fn with_attributes(mut self, attributes: impl Into<Vec<Attribute>>) -> Self {
+        self.attributes = attributes.into();
+        self
     }
 }
 
