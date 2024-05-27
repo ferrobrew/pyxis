@@ -1,5 +1,22 @@
 use std::{fmt, path::Path};
 
+pub mod test_aliases {
+    pub type M = super::Module;
+    pub type ID = super::ItemDefinition;
+    pub type TS = super::TypeStatement;
+    pub type TD = super::TypeDefinition;
+    pub type ES = super::EnumStatement;
+    pub type ED = super::EnumDefinition;
+    pub type T = super::Type;
+    pub type A = super::Attribute;
+    pub type Ar = super::Argument;
+    pub type TF = super::TypeField;
+    pub type E = super::Expr;
+    pub type F = super::Function;
+    pub type FB = super::FunctionBlock;
+    pub type IP = super::ItemPath;
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Ident(pub String);
 impl From<&str> for Ident {
@@ -249,8 +266,8 @@ impl From<(Ident, Expr)> for ExprField {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TypeField(pub Ident, pub Type);
 impl TypeField {
-    pub fn new(name: &str, type_: Type) -> TypeField {
-        TypeField(name.into(), type_)
+    pub fn new(name: impl Into<Ident>, type_: impl Into<Type>) -> TypeField {
+        TypeField(name.into(), type_.into())
     }
 }
 impl From<(Ident, Type)> for TypeField {

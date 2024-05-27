@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use crate::{
-    grammar::{self, ItemPath},
+    grammar::test_aliases::*,
     semantic_analysis::{
         semantic_state::SemanticState,
         types::{ItemDefinition, *},
@@ -11,16 +11,13 @@ use crate::{
 
 use anyhow::Context;
 
-fn build_state(
-    module: &grammar::Module,
-    path: &ItemPath,
-) -> anyhow::Result<semantic_state::ResolvedSemanticState> {
+fn build_state(module: &M, path: &IP) -> anyhow::Result<semantic_state::ResolvedSemanticState> {
     let mut semantic_state = semantic_state::SemanticState::new(4);
     semantic_state.add_module(module, &path.parent().context("failed to get path parent")?)?;
     semantic_state.build()
 }
 
-fn build_type(module: &grammar::Module, path: &ItemPath) -> anyhow::Result<ItemDefinition> {
+fn build_type(module: &M, path: &IP) -> anyhow::Result<ItemDefinition> {
     build_state(module, path)?
         .type_registry()
         .get(path)
@@ -30,45 +27,32 @@ fn build_type(module: &grammar::Module, path: &ItemPath) -> anyhow::Result<ItemD
 
 fn unknown(size: usize) -> Type {
     Type::Array(
-        Box::new(Type::Raw(ItemPath::from_colon_delimited_str("u8"))),
+        Box::new(Type::Raw(IP::from_colon_delimited_str("u8"))),
         size,
     )
 }
 
 #[test]
 fn can_resolve_basic_struct() {
-    let module = {
-        use grammar::*;
+    let module = M::new().with_definitions([ID::new(
+        "TestType",
+        TD::new([
+            TS::field("field_1", T::ident("i32")),
+            TS::field("_", T::unknown(4)),
+            TS::field("field_2", T::ident("u64")),
+        ]),
+    )]);
 
-        type TS = TypeStatement;
-        type T = Type;
-
-        Module::new().with_definitions([ItemDefinition::new(
-            "TestType",
-            TypeDefinition::new([
-                TS::field("field_1", T::ident("i32")),
-                TS::field("_", Type::unknown(4)),
-                TS::field("field_2", T::ident("u64")),
-            ]),
-        )])
-    };
-
-    let path = ItemPath::from_colon_delimited_str("test::TestType");
+    let path = IP::from_colon_delimited_str("test::TestType");
     let type_definition = ItemDefinition {
         path: path.clone(),
         state: ItemState::Resolved(ItemStateResolved {
             size: 16,
             inner: TypeDefinition {
                 regions: vec![
-                    Region::field(
-                        "field_1",
-                        Type::Raw(ItemPath::from_colon_delimited_str("i32")),
-                    ),
+                    Region::field("field_1", Type::Raw(IP::from_colon_delimited_str("i32"))),
                     Region::field("_field_4", unknown(4)),
-                    Region::field(
-                        "field_2",
-                        Type::Raw(ItemPath::from_colon_delimited_str("u64")),
-                    ),
+                    Region::field("field_2", Type::Raw(IP::from_colon_delimited_str("u64"))),
                 ],
                 free_functions: vec![],
                 vftable_functions: None,
@@ -84,53 +68,43 @@ fn can_resolve_basic_struct() {
 
 #[test]
 fn can_resolve_pointer_to_another_struct() {
-    let module = {
-        use grammar::*;
+    let module = M::new().with_definitions([
+        ID::new(
+            "TestType1",
+            TD::new([TS::field("field_1", T::ident("u64"))]),
+        ),
+        ID::new(
+            "TestType2",
+            TD::new([
+                TS::field("field_1", T::ident("i32")),
+                TS::field("field_2", T::ident("TestType1")),
+                TS::field("field_3", T::ident("TestType1").const_pointer()),
+                TS::field("field_4", T::ident("TestType1").mut_pointer()),
+            ]),
+        ),
+    ]);
 
-        type TS = TypeStatement;
-        type T = Type;
-
-        Module::new().with_definitions([
-            ItemDefinition::new(
-                "TestType1",
-                TypeDefinition::new([TS::field("field_1", T::ident("u64"))]),
-            ),
-            ItemDefinition::new(
-                "TestType2",
-                TypeDefinition::new([
-                    TS::field("field_1", T::ident("i32")),
-                    TS::field("field_2", T::ident("TestType1")),
-                    TS::field("field_3", Type::ident("TestType1").const_pointer()),
-                    TS::field("field_4", Type::ident("TestType1").mut_pointer()),
-                ]),
-            ),
-        ])
-    };
-
-    let path = ItemPath::from_colon_delimited_str("test::TestType2");
+    let path = IP::from_colon_delimited_str("test::TestType2");
     let type_definition = ItemDefinition {
         path: path.clone(),
         state: ItemState::Resolved(ItemStateResolved {
             size: 20,
             inner: TypeDefinition {
                 regions: vec![
-                    Region::field(
-                        "field_1",
-                        Type::Raw(ItemPath::from_colon_delimited_str("i32")),
-                    ),
+                    Region::field("field_1", Type::Raw(IP::from_colon_delimited_str("i32"))),
                     Region::field(
                         "field_2",
-                        Type::Raw(ItemPath::from_colon_delimited_str("test::TestType1")),
+                        Type::Raw(IP::from_colon_delimited_str("test::TestType1")),
                     ),
                     Region::field(
                         "field_3",
-                        Type::ConstPointer(Box::new(Type::Raw(
-                            ItemPath::from_colon_delimited_str("test::TestType1"),
-                        ))),
+                        Type::ConstPointer(Box::new(Type::Raw(IP::from_colon_delimited_str(
+                            "test::TestType1",
+                        )))),
                     ),
                     Region::field(
                         "field_4",
-                        Type::MutPointer(Box::new(Type::Raw(ItemPath::from_colon_delimited_str(
+                        Type::MutPointer(Box::new(Type::Raw(IP::from_colon_delimited_str(
                             "test::TestType1",
                         )))),
                     ),
@@ -149,53 +123,44 @@ fn can_resolve_pointer_to_another_struct() {
 
 #[test]
 fn can_resolve_complex_type() {
-    let module = {
-        use grammar::*;
+    let module = M::new()
+        .with_definitions([
+            ID::new(
+                "TestType",
+                TD::new([
+                    TS::field("field_1", T::ident("i32")),
+                    TS::field("_", T::unknown(4)),
+                ]),
+            ),
+            ID::new(
+                "Singleton",
+                TD::new([
+                    TS::field("max_num_1", T::ident("u16")).with_attributes([A::address(0x78)]),
+                    TS::field("max_num_2", T::ident("u16")),
+                    TS::field("test_type", T::ident("TestType"))
+                        .with_attributes([A::address(0xA00)]),
+                    TS::field("settings", T::unknown(804)),
+                ])
+                .with_attributes([A::size(0x1750), A::singleton(0x1_200_000)]),
+            ),
+        ])
+        .with_impls([FB::new(
+            "Singleton",
+            [F::new(
+                "test_function",
+                [A::address(0x800_000)],
+                [
+                    Ar::MutSelf,
+                    Ar::field("arg1", T::ident("TestType").mut_pointer()),
+                    Ar::field("arg2", T::ident("i32")),
+                    Ar::field("arg3", T::ident("u32").const_pointer()),
+                ],
+                Some(T::ident("TestType").mut_pointer()),
+            )],
+            [],
+        )]);
 
-        type T = Type;
-        type TS = TypeStatement;
-        type A = Argument;
-
-        Module::new()
-            .with_definitions([
-                ItemDefinition::new(
-                    "TestType",
-                    TypeDefinition::new([
-                        TS::field("field_1", T::ident("i32")),
-                        TS::field("_", T::unknown(4)),
-                    ]),
-                ),
-                ItemDefinition::new(
-                    "Singleton",
-                    TypeDefinition::new([
-                        TS::field("max_num_1", T::ident("u16"))
-                            .with_attributes([Attribute::address(0x78)]),
-                        TS::field("max_num_2", T::ident("u16")),
-                        TS::field("test_type", T::ident("TestType"))
-                            .with_attributes([Attribute::address(0xA00)]),
-                        TS::field("settings", T::unknown(804)),
-                    ])
-                    .with_attributes([Attribute::size(0x1750), Attribute::singleton(0x1_200_000)]),
-                ),
-            ])
-            .with_impls([FunctionBlock::new(
-                Ident::from("Singleton"),
-                [Function::new(
-                    "test_function",
-                    [Attribute::address(0x800_000)],
-                    [
-                        A::MutSelf,
-                        A::field("arg1", T::ident("TestType").mut_pointer()),
-                        A::field("arg2", T::ident("i32")),
-                        A::field("arg3", T::ident("u32").const_pointer()),
-                    ],
-                    Some(T::ident("TestType").mut_pointer()),
-                )],
-                [],
-            )])
-    };
-
-    let path = ItemPath::from_colon_delimited_str("test::Singleton");
+    let path = IP::from_colon_delimited_str("test::Singleton");
     let type_definition = types::ItemDefinition {
         path: path.clone(),
         state: types::ItemState::Resolved(types::ItemStateResolved {
@@ -203,18 +168,12 @@ fn can_resolve_complex_type() {
             inner: TypeDefinition {
                 regions: vec![
                     Region::field("_field_0", unknown(0x78)),
-                    Region::field(
-                        "max_num_1",
-                        Type::Raw(ItemPath::from_colon_delimited_str("u16")),
-                    ),
-                    Region::field(
-                        "max_num_2",
-                        Type::Raw(ItemPath::from_colon_delimited_str("u16")),
-                    ),
+                    Region::field("max_num_1", Type::Raw(IP::from_colon_delimited_str("u16"))),
+                    Region::field("max_num_2", Type::Raw(IP::from_colon_delimited_str("u16"))),
                     Region::field("_field_7c", unknown(0x984)),
                     Region::field(
                         "test_type",
-                        Type::Raw(ItemPath::from_colon_delimited_str("test::TestType")),
+                        Type::Raw(IP::from_colon_delimited_str("test::TestType")),
                     ),
                     Region::field("settings", unknown(804)),
                     Region::field("_field_d2c", unknown(0xA24)),
@@ -226,23 +185,23 @@ fn can_resolve_complex_type() {
                         Argument::MutSelf,
                         Argument::Field(
                             "arg1".to_string(),
-                            Type::MutPointer(Box::new(Type::Raw(
-                                ItemPath::from_colon_delimited_str("test::TestType"),
-                            ))),
+                            Type::MutPointer(Box::new(Type::Raw(IP::from_colon_delimited_str(
+                                "test::TestType",
+                            )))),
                         ),
                         Argument::Field(
                             "arg2".to_string(),
-                            Type::Raw(ItemPath::from_colon_delimited_str("i32")),
+                            Type::Raw(IP::from_colon_delimited_str("i32")),
                         ),
                         Argument::Field(
                             "arg3".to_string(),
-                            Type::ConstPointer(Box::new(Type::Raw(
-                                ItemPath::from_colon_delimited_str("u32"),
-                            ))),
+                            Type::ConstPointer(Box::new(Type::Raw(IP::from_colon_delimited_str(
+                                "u32",
+                            )))),
                         ),
                     ],
                     return_type: Some(Type::MutPointer(Box::new(Type::Raw(
-                        ItemPath::from_colon_delimited_str("test::TestType"),
+                        IP::from_colon_delimited_str("test::TestType"),
                     )))),
                 }],
                 vftable_functions: None,
@@ -258,19 +217,12 @@ fn can_resolve_complex_type() {
 
 #[test]
 fn will_eventually_terminate_with_an_unknown_type() {
-    let module = {
-        use grammar::*;
+    let module = M::new().with_definitions([ID::new(
+        "TestType2",
+        TD::new([TS::field("field_2", T::ident("TestType1"))]),
+    )]);
 
-        type TS = TypeStatement;
-        type T = Type;
-
-        Module::new().with_definitions([ItemDefinition::new(
-            "TestType2",
-            TypeDefinition::new([TS::field("field_2", T::ident("TestType1"))]),
-        )])
-    };
-
-    let path = ItemPath::from_colon_delimited_str("test::TestType2");
+    let path = IP::from_colon_delimited_str("test::TestType2");
     assert_eq!(
         build_type(&module, &path).err().unwrap().to_string(),
         r#"type resolution will not terminate, failed on types: ["test::TestType2"] (resolved types: [])"#
@@ -279,32 +231,18 @@ fn will_eventually_terminate_with_an_unknown_type() {
 
 #[test]
 fn can_use_type_from_another_module() {
-    let module1 = {
-        use grammar::*;
+    let module1 = M::new()
+        .with_uses([IP::from_colon_delimited_str("module2::TestType2")])
+        .with_definitions([ID::new(
+            "TestType1",
+            TD::new([TS::field("field", T::ident("TestType2"))]),
+        )]);
+    let module2 = M::new().with_definitions([ID::new(
+        "TestType2",
+        TD::new([TS::field("field", T::ident("u32"))]),
+    )]);
 
-        type TS = TypeStatement;
-        type T = Type;
-
-        Module::new()
-            .with_uses([ItemPath::from_colon_delimited_str("module2::TestType2")])
-            .with_definitions([ItemDefinition::new(
-                "TestType1",
-                TypeDefinition::new([TS::field("field", T::ident("TestType2"))]),
-            )])
-    };
-    let module2 = {
-        use grammar::*;
-
-        type TS = TypeStatement;
-        type T = Type;
-
-        Module::new().with_definitions([ItemDefinition::new(
-            "TestType2",
-            TypeDefinition::new([TS::field("field", T::ident("u32"))]),
-        )])
-    };
-
-    let path = ItemPath::from_colon_delimited_str("module1::TestType1");
+    let path = IP::from_colon_delimited_str("module1::TestType1");
     let target_resolved_type = types::ItemDefinition {
         path: path.clone(),
         state: types::ItemState::Resolved(types::ItemStateResolved {
@@ -314,7 +252,7 @@ fn can_use_type_from_another_module() {
                 vftable_functions: None,
                 regions: vec![Region::field(
                     "field",
-                    Type::Raw(ItemPath::from_colon_delimited_str("module2::TestType2")),
+                    Type::Raw(IP::from_colon_delimited_str("module2::TestType2")),
                 )],
                 singleton: None,
             }
@@ -325,10 +263,10 @@ fn can_use_type_from_another_module() {
 
     let mut semantic_state = SemanticState::new(4);
     semantic_state
-        .add_module(&module1, &ItemPath::from_colon_delimited_str("module1"))
+        .add_module(&module1, &IP::from_colon_delimited_str("module1"))
         .unwrap();
     semantic_state
-        .add_module(&module2, &ItemPath::from_colon_delimited_str("module2"))
+        .add_module(&module2, &IP::from_colon_delimited_str("module2"))
         .unwrap();
     let semantic_state = semantic_state.build().unwrap();
 
@@ -343,10 +281,10 @@ fn can_use_type_from_another_module() {
 
 #[test]
 fn will_fail_on_an_extern_without_size() {
-    let module = grammar::Module::new().with_extern_types([("TestType".into(), vec![])]);
+    let module = M::new().with_extern_types([("TestType".into(), vec![])]);
 
     assert_eq!(
-        build_type(&module, &ItemPath::from_colon_delimited_str("module"))
+        build_type(&module, &IP::from_colon_delimited_str("module"))
             .err()
             .unwrap()
             .to_string(),
@@ -356,49 +294,39 @@ fn will_fail_on_an_extern_without_size() {
 
 #[test]
 fn can_resolve_embed_of_an_extern() {
-    let module = {
-        use grammar::*;
+    let module = M::new()
+        .with_extern_types([("TestType1".into(), vec![A::size(16)])])
+        .with_definitions([ID::new(
+            "TestType2",
+            TD::new([
+                TS::field("field_1", T::ident("i32")),
+                TS::field("field_2", T::ident("TestType1")),
+                TS::field("field_3", T::ident("TestType1").const_pointer()),
+                TS::field("field_4", T::ident("TestType1").mut_pointer()),
+            ]),
+        )]);
 
-        type TS = TypeStatement;
-        type T = Type;
-
-        Module::new()
-            .with_extern_types([("TestType1".into(), vec![Attribute::size(16)])])
-            .with_definitions([ItemDefinition::new(
-                "TestType2",
-                TypeDefinition::new([
-                    TS::field("field_1", T::ident("i32")),
-                    TS::field("field_2", T::ident("TestType1")),
-                    TS::field("field_3", Type::ident("TestType1").const_pointer()),
-                    TS::field("field_4", Type::ident("TestType1").mut_pointer()),
-                ]),
-            )])
-    };
-
-    let path = ItemPath::from_colon_delimited_str("test::TestType2");
+    let path = IP::from_colon_delimited_str("test::TestType2");
     let type_definition = types::ItemDefinition {
         path: path.clone(),
         state: types::ItemState::Resolved(types::ItemStateResolved {
             size: 28,
             inner: TypeDefinition {
                 regions: vec![
-                    Region::field(
-                        "field_1",
-                        Type::Raw(ItemPath::from_colon_delimited_str("i32")),
-                    ),
+                    Region::field("field_1", Type::Raw(IP::from_colon_delimited_str("i32"))),
                     Region::field(
                         "field_2",
-                        Type::Raw(ItemPath::from_colon_delimited_str("test::TestType1")),
+                        Type::Raw(IP::from_colon_delimited_str("test::TestType1")),
                     ),
                     Region::field(
                         "field_3",
-                        Type::ConstPointer(Box::new(Type::Raw(
-                            ItemPath::from_colon_delimited_str("test::TestType1"),
-                        ))),
+                        Type::ConstPointer(Box::new(Type::Raw(IP::from_colon_delimited_str(
+                            "test::TestType1",
+                        )))),
                     ),
                     Region::field(
                         "field_4",
-                        Type::MutPointer(Box::new(Type::Raw(ItemPath::from_colon_delimited_str(
+                        Type::MutPointer(Box::new(Type::Raw(IP::from_colon_delimited_str(
                             "test::TestType1",
                         )))),
                     ),
@@ -417,49 +345,43 @@ fn can_resolve_embed_of_an_extern() {
 
 #[test]
 fn can_generate_vftable() {
-    let module = {
-        use grammar::*;
-
-        type T = Type;
-
-        Module::new()
-            .with_definitions([ItemDefinition::new("TestType", TypeDefinition::new([]))])
-            .with_vftables([FunctionBlock::new(
-                Ident::from("TestType"),
-                [
-                    Function {
-                        name: "test_function0".into(),
-                        attributes: vec![],
-                        arguments: vec![
-                            Argument::MutSelf,
-                            Argument::Field(TypeField("arg0".into(), T::ident("u32"))),
-                            Argument::Field(TypeField("arg1".into(), T::ident("f32"))),
-                        ],
-                        return_type: Some("i32".into()),
-                    },
-                    Function {
-                        name: "test_function1".into(),
-                        attributes: vec![],
-                        arguments: vec![
-                            Argument::MutSelf,
-                            Argument::Field(TypeField("arg0".into(), T::ident("u32"))),
-                            Argument::Field(TypeField("arg1".into(), T::ident("f32"))),
-                        ],
-                        return_type: None,
-                    },
-                ],
-                [Attribute::size(4)],
-            )])
-    };
+    let module = M::new()
+        .with_definitions([ID::new("TestType", TD::new([]))])
+        .with_vftables([FB::new(
+            "TestType",
+            [
+                F {
+                    name: "test_function0".into(),
+                    attributes: vec![],
+                    arguments: vec![
+                        Ar::MutSelf,
+                        Ar::Field(TF::new("arg0", T::ident("u32"))),
+                        Ar::Field(TF::new("arg1", T::ident("f32"))),
+                    ],
+                    return_type: Some("i32".into()),
+                },
+                F {
+                    name: "test_function1".into(),
+                    attributes: vec![],
+                    arguments: vec![
+                        Ar::MutSelf,
+                        Ar::Field(TF::new("arg0", T::ident("u32"))),
+                        Ar::Field(TF::new("arg1", T::ident("f32"))),
+                    ],
+                    return_type: None,
+                },
+            ],
+            [A::size(4)],
+        )]);
 
     let type_definition = types::ItemDefinition {
-        path: ItemPath::from_colon_delimited_str("test::TestType"),
+        path: IP::from_colon_delimited_str("test::TestType"),
         state: types::ItemState::Resolved(types::ItemStateResolved {
             size: 4,
             inner: TypeDefinition {
                 regions: vec![Region::field(
                     "vftable",
-                    Type::ConstPointer(Box::new(Type::Raw(ItemPath::from_colon_delimited_str(
+                    Type::ConstPointer(Box::new(Type::Raw(IP::from_colon_delimited_str(
                         "test::TestTypeVftable",
                     )))),
                 )],
@@ -471,14 +393,14 @@ fn can_generate_vftable() {
                             Argument::MutSelf,
                             Argument::Field(
                                 "arg0".to_string(),
-                                Type::Raw(ItemPath::from_colon_delimited_str("u32")),
+                                Type::Raw(IP::from_colon_delimited_str("u32")),
                             ),
                             Argument::Field(
                                 "arg1".to_string(),
-                                Type::Raw(ItemPath::from_colon_delimited_str("f32")),
+                                Type::Raw(IP::from_colon_delimited_str("f32")),
                             ),
                         ],
-                        return_type: Some(Type::Raw(ItemPath::from_colon_delimited_str("i32"))),
+                        return_type: Some(Type::Raw(IP::from_colon_delimited_str("i32"))),
                     },
                     Function {
                         name: "test_function1".to_string(),
@@ -487,11 +409,11 @@ fn can_generate_vftable() {
                             Argument::MutSelf,
                             Argument::Field(
                                 "arg0".to_string(),
-                                Type::Raw(ItemPath::from_colon_delimited_str("u32")),
+                                Type::Raw(IP::from_colon_delimited_str("u32")),
                             ),
                             Argument::Field(
                                 "arg1".to_string(),
-                                Type::Raw(ItemPath::from_colon_delimited_str("f32")),
+                                Type::Raw(IP::from_colon_delimited_str("f32")),
                             ),
                         ],
                         return_type: None,
@@ -507,7 +429,7 @@ fn can_generate_vftable() {
         category: types::ItemCategory::Defined,
     };
     let vftable_type_definition = types::ItemDefinition {
-        path: ItemPath::from_colon_delimited_str("test::TestTypeVftable"),
+        path: IP::from_colon_delimited_str("test::TestTypeVftable"),
         state: types::ItemState::Resolved(types::ItemStateResolved {
             size: 0,
             inner: TypeDefinition {
@@ -519,21 +441,19 @@ fn can_generate_vftable() {
                                 (
                                     "this".to_string(),
                                     Box::new(Type::MutPointer(Box::new(Type::Raw(
-                                        ItemPath::from_colon_delimited_str("test::TestType"),
+                                        IP::from_colon_delimited_str("test::TestType"),
                                     )))),
                                 ),
                                 (
                                     "arg0".to_string(),
-                                    Box::new(Type::Raw(ItemPath::from_colon_delimited_str("u32"))),
+                                    Box::new(Type::Raw(IP::from_colon_delimited_str("u32"))),
                                 ),
                                 (
                                     "arg1".to_string(),
-                                    Box::new(Type::Raw(ItemPath::from_colon_delimited_str("f32"))),
+                                    Box::new(Type::Raw(IP::from_colon_delimited_str("f32"))),
                                 ),
                             ],
-                            Some(Box::new(Type::Raw(ItemPath::from_colon_delimited_str(
-                                "i32",
-                            )))),
+                            Some(Box::new(Type::Raw(IP::from_colon_delimited_str("i32")))),
                         ),
                     ),
                     Region::field(
@@ -543,16 +463,16 @@ fn can_generate_vftable() {
                                 (
                                     "this".to_string(),
                                     Box::new(Type::MutPointer(Box::new(Type::Raw(
-                                        ItemPath::from_colon_delimited_str("test::TestType"),
+                                        IP::from_colon_delimited_str("test::TestType"),
                                     )))),
                                 ),
                                 (
                                     "arg0".to_string(),
-                                    Box::new(Type::Raw(ItemPath::from_colon_delimited_str("u32"))),
+                                    Box::new(Type::Raw(IP::from_colon_delimited_str("u32"))),
                                 ),
                                 (
                                     "arg1".to_string(),
-                                    Box::new(Type::Raw(ItemPath::from_colon_delimited_str("f32"))),
+                                    Box::new(Type::Raw(IP::from_colon_delimited_str("f32"))),
                                 ),
                             ],
                             None,
@@ -570,15 +490,15 @@ fn can_generate_vftable() {
         category: types::ItemCategory::Defined,
     };
 
-    let test_type_path = ItemPath::from_colon_delimited_str("test::TestType");
-    let test_type_vftable_path = ItemPath::from_colon_delimited_str("test::TestTypeVftable");
+    let test_type_path = IP::from_colon_delimited_str("test::TestType");
+    let test_type_vftable_path = IP::from_colon_delimited_str("test::TestTypeVftable");
 
     let build_state = build_state(&module, &test_type_path).unwrap();
     let type_registry = build_state.type_registry();
 
     let test_module = build_state
         .modules()
-        .get(&ItemPath::from_colon_delimited_str("test"))
+        .get(&IP::from_colon_delimited_str("test"))
         .unwrap();
 
     assert_eq!(
@@ -604,49 +524,43 @@ fn can_generate_vftable() {
 
 #[test]
 fn can_generate_vftable_with_indices() {
-    let module = {
-        use grammar::*;
-
-        type T = Type;
-
-        Module::new()
-            .with_definitions([ItemDefinition::new("TestType", TypeDefinition::new([]))])
-            .with_vftables([FunctionBlock::new(
-                Ident::from("TestType"),
-                [
-                    Function {
-                        name: "test_function0".into(),
-                        attributes: vec![Attribute::index(2)],
-                        arguments: vec![
-                            Argument::MutSelf,
-                            Argument::Field(TypeField("arg0".into(), T::ident("u32"))),
-                            Argument::Field(TypeField("arg1".into(), T::ident("f32"))),
-                        ],
-                        return_type: Some("i32".into()),
-                    },
-                    Function {
-                        name: "test_function1".into(),
-                        attributes: vec![Attribute::index(5)],
-                        arguments: vec![
-                            Argument::MutSelf,
-                            Argument::Field(TypeField("arg0".into(), T::ident("u32"))),
-                            Argument::Field(TypeField("arg1".into(), T::ident("f32"))),
-                        ],
-                        return_type: None,
-                    },
-                ],
-                [Attribute::size(8)],
-            )])
-    };
+    let module = M::new()
+        .with_definitions([ID::new("TestType", TD::new([]))])
+        .with_vftables([FB::new(
+            "TestType",
+            [
+                F {
+                    name: "test_function0".into(),
+                    attributes: vec![A::index(2)],
+                    arguments: vec![
+                        Ar::MutSelf,
+                        Ar::Field(TF::new("arg0", T::ident("u32"))),
+                        Ar::Field(TF::new("arg1", T::ident("f32"))),
+                    ],
+                    return_type: Some("i32".into()),
+                },
+                F {
+                    name: "test_function1".into(),
+                    attributes: vec![A::index(5)],
+                    arguments: vec![
+                        Ar::MutSelf,
+                        Ar::Field(TF::new("arg0", T::ident("u32"))),
+                        Ar::Field(TF::new("arg1", T::ident("f32"))),
+                    ],
+                    return_type: None,
+                },
+            ],
+            [A::size(8)],
+        )]);
 
     let type_definition = types::ItemDefinition {
-        path: ItemPath::from_colon_delimited_str("test::TestType"),
+        path: IP::from_colon_delimited_str("test::TestType"),
         state: types::ItemState::Resolved(types::ItemStateResolved {
             size: 4,
             inner: TypeDefinition {
                 regions: vec![Region::field(
                     "vftable",
-                    Type::ConstPointer(Box::new(Type::Raw(ItemPath::from_colon_delimited_str(
+                    Type::ConstPointer(Box::new(Type::Raw(IP::from_colon_delimited_str(
                         "test::TestTypeVftable",
                     )))),
                 )],
@@ -660,14 +574,14 @@ fn can_generate_vftable_with_indices() {
                             Argument::MutSelf,
                             Argument::Field(
                                 "arg0".to_string(),
-                                Type::Raw(ItemPath::from_colon_delimited_str("u32")),
+                                Type::Raw(IP::from_colon_delimited_str("u32")),
                             ),
                             Argument::Field(
                                 "arg1".to_string(),
-                                Type::Raw(ItemPath::from_colon_delimited_str("f32")),
+                                Type::Raw(IP::from_colon_delimited_str("f32")),
                             ),
                         ],
-                        return_type: Some(Type::Raw(ItemPath::from_colon_delimited_str("i32"))),
+                        return_type: Some(Type::Raw(IP::from_colon_delimited_str("i32"))),
                     },
                     make_vfunc(3),
                     make_vfunc(4),
@@ -678,11 +592,11 @@ fn can_generate_vftable_with_indices() {
                             Argument::MutSelf,
                             Argument::Field(
                                 "arg0".to_string(),
-                                Type::Raw(ItemPath::from_colon_delimited_str("u32")),
+                                Type::Raw(IP::from_colon_delimited_str("u32")),
                             ),
                             Argument::Field(
                                 "arg1".to_string(),
-                                Type::Raw(ItemPath::from_colon_delimited_str("f32")),
+                                Type::Raw(IP::from_colon_delimited_str("f32")),
                             ),
                         ],
                         return_type: None,
@@ -699,7 +613,7 @@ fn can_generate_vftable_with_indices() {
     };
 
     let vftable_type_definition = types::ItemDefinition {
-        path: ItemPath::from_colon_delimited_str("test::TestTypeVftable"),
+        path: IP::from_colon_delimited_str("test::TestTypeVftable"),
         state: types::ItemState::Resolved(types::ItemStateResolved {
             size: 0,
             inner: TypeDefinition {
@@ -713,21 +627,19 @@ fn can_generate_vftable_with_indices() {
                                 (
                                     "this".to_string(),
                                     Box::new(Type::MutPointer(Box::new(Type::Raw(
-                                        ItemPath::from_colon_delimited_str("test::TestType"),
+                                        IP::from_colon_delimited_str("test::TestType"),
                                     )))),
                                 ),
                                 (
                                     "arg0".to_string(),
-                                    Box::new(Type::Raw(ItemPath::from_colon_delimited_str("u32"))),
+                                    Box::new(Type::Raw(IP::from_colon_delimited_str("u32"))),
                                 ),
                                 (
                                     "arg1".to_string(),
-                                    Box::new(Type::Raw(ItemPath::from_colon_delimited_str("f32"))),
+                                    Box::new(Type::Raw(IP::from_colon_delimited_str("f32"))),
                                 ),
                             ],
-                            Some(Box::new(Type::Raw(ItemPath::from_colon_delimited_str(
-                                "i32",
-                            )))),
+                            Some(Box::new(Type::Raw(IP::from_colon_delimited_str("i32")))),
                         ),
                     ),
                     make_vfunc_region(3),
@@ -739,16 +651,16 @@ fn can_generate_vftable_with_indices() {
                                 (
                                     "this".to_string(),
                                     Box::new(Type::MutPointer(Box::new(Type::Raw(
-                                        ItemPath::from_colon_delimited_str("test::TestType"),
+                                        IP::from_colon_delimited_str("test::TestType"),
                                     )))),
                                 ),
                                 (
                                     "arg0".to_string(),
-                                    Box::new(Type::Raw(ItemPath::from_colon_delimited_str("u32"))),
+                                    Box::new(Type::Raw(IP::from_colon_delimited_str("u32"))),
                                 ),
                                 (
                                     "arg1".to_string(),
-                                    Box::new(Type::Raw(ItemPath::from_colon_delimited_str("f32"))),
+                                    Box::new(Type::Raw(IP::from_colon_delimited_str("f32"))),
                                 ),
                             ],
                             None,
@@ -766,15 +678,15 @@ fn can_generate_vftable_with_indices() {
         category: types::ItemCategory::Defined,
     };
 
-    let test_type_path = ItemPath::from_colon_delimited_str("test::TestType");
-    let test_type_vftable_path = ItemPath::from_colon_delimited_str("test::TestTypeVftable");
+    let test_type_path = IP::from_colon_delimited_str("test::TestType");
+    let test_type_vftable_path = IP::from_colon_delimited_str("test::TestTypeVftable");
 
     let build_state = build_state(&module, &test_type_path).unwrap();
     let type_registry = build_state.type_registry();
 
     let test_module = build_state
         .modules()
-        .get(&ItemPath::from_colon_delimited_str("test"))
+        .get(&IP::from_colon_delimited_str("test"))
         .unwrap();
 
     assert_eq!(
@@ -814,7 +726,7 @@ fn make_vfunc_region(index: usize) -> Region {
             vec![(
                 "this".to_string(),
                 Box::new(Type::MutPointer(Box::new(Type::Raw(
-                    ItemPath::from_colon_delimited_str("test::TestType"),
+                    IP::from_colon_delimited_str("test::TestType"),
                 )))),
             )],
             None,
@@ -824,25 +736,21 @@ fn make_vfunc_region(index: usize) -> Region {
 
 #[test]
 fn can_define_extern_value() {
-    let module1 = {
-        use grammar::*;
-
-        Module::new().with_extern_values([(
-            "test".into(),
-            Type::Ident("u32".into()).mut_pointer(),
-            vec![grammar::Attribute::address(0x1337)],
-        )])
-    };
+    let module1 = M::new().with_extern_values([(
+        "test".into(),
+        T::ident("u32").mut_pointer(),
+        vec![A::address(0x1337)],
+    )]);
 
     let mut semantic_state = semantic_state::SemanticState::new(4);
     semantic_state
-        .add_module(&module1, &ItemPath::from_colon_delimited_str("module1"))
+        .add_module(&module1, &IP::from_colon_delimited_str("module1"))
         .unwrap();
     let semantic_state = semantic_state.build().unwrap();
 
     let extern_value = semantic_state
         .modules()
-        .get(&ItemPath::from_colon_delimited_str("module1"))
+        .get(&IP::from_colon_delimited_str("module1"))
         .unwrap()
         .extern_values
         .first()
@@ -852,9 +760,7 @@ fn can_define_extern_value() {
         extern_value,
         &(
             "test".into(),
-            Type::MutPointer(Box::new(Type::Raw(ItemPath::from_colon_delimited_str(
-                "u32"
-            )))),
+            Type::MutPointer(Box::new(Type::Raw(IP::from_colon_delimited_str("u32")))),
             0x1337
         )
     );
@@ -862,35 +768,27 @@ fn can_define_extern_value() {
 
 #[test]
 fn can_resolve_enum() {
-    let module = {
-        use grammar::*;
+    let module = M::new().with_definitions([ID::new(
+        "TestType",
+        ED::new(
+            T::ident("u32"),
+            [
+                ES::field("Item1"),
+                ES::field("Item2"),
+                ES::field_with_expr("Item3", E::IntLiteral(10)),
+                ES::field("Item4"),
+            ],
+            [A::singleton(0x1234)],
+        ),
+    )]);
 
-        type ES = EnumStatement;
-        type T = Type;
-        use Expr::IntLiteral;
-
-        Module::new().with_definitions([ItemDefinition::new(
-            "TestType",
-            EnumDefinition::new(
-                T::ident("u32"),
-                [
-                    ES::field("Item1"),
-                    ES::field("Item2"),
-                    ES::field_with_expr("Item3", IntLiteral(10)),
-                    ES::field("Item4"),
-                ],
-                [Attribute::singleton(0x1234)],
-            ),
-        )])
-    };
-
-    let path = ItemPath::from_colon_delimited_str("test::TestType");
+    let path = IP::from_colon_delimited_str("test::TestType");
     let type_definition = ItemDefinition {
         path: path.clone(),
         state: ItemState::Resolved(ItemStateResolved {
             size: 4,
             inner: EnumDefinition {
-                type_: Type::Raw(ItemPath::from_colon_delimited_str("u32")),
+                type_: Type::Raw(IP::from_colon_delimited_str("u32")),
                 fields: vec![
                     ("Item1".to_string(), 0),
                     ("Item2".to_string(), 1),
