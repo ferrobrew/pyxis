@@ -324,7 +324,7 @@ impl SemanticState {
 
         let mut vftable_functions = None;
         if let Some(vftable_block) = module.vftables.get(resolvee_path) {
-            vftable_functions = Some(self.build_vftable_list(&module, vftable_block)?);
+            vftable_functions = Some(self.build_vftable_list(module, vftable_block)?);
         }
 
         // Handle fields
@@ -435,7 +435,7 @@ impl SemanticState {
         }
 
         fn make_padding_functions(functions: &mut Vec<Function>, target_len: usize) {
-            let functions_to_add = target_len.checked_sub(functions.len()).unwrap_or(0);
+            let functions_to_add = target_len.saturating_sub(functions.len());
             for _ in 0..functions_to_add {
                 functions.push(Function {
                     name: format!("_vfunc_{}", functions.len()),

@@ -149,11 +149,7 @@ fn build_function(
     }
     let function_getter = if is_vftable {
         Some(FunctionGetter::Vftable)
-    } else if let Some(address) = function.address {
-        Some(FunctionGetter::Address(address))
-    } else {
-        None
-    };
+    } else { function.address.map(FunctionGetter::Address) };
 
     if function_getter.is_none() {
         return Err(anyhow::anyhow!("no function getter set"));
