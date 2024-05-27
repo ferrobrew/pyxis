@@ -36,11 +36,8 @@ fn can_parse_vftable() {
             "TestType",
             [F::new(
                 "test",
-                [],
                 [Ar::MutSelf, Ar::field("test2", T::ident("i32"))],
-                None,
             )],
-            [],
         )]);
 
     assert_eq!(parse_str(text).unwrap(), ast);
@@ -141,7 +138,6 @@ fn can_parse_spawn_manager() {
             [
                 F::new(
                     "engine_spawn_vehicle",
-                    [A::address(0x84C_4C0)],
                     [
                         Ar::MutSelf,
                         Ar::field("vehicle", T::ident("SharedPtr<Vehicle>").mut_pointer()),
@@ -151,20 +147,19 @@ fn can_parse_spawn_manager() {
                         Ar::field("faction", T::ident("u32")),
                         Ar::field("unk2", T::ident("StdString").mut_pointer()),
                     ],
-                    Some(T::ident("SharedPtr<Vehicle>").mut_pointer()),
-                ),
+                )
+                .with_attributes([A::address(0x84C_4C0)])
+                .with_return_type(T::ident("SharedPtr<Vehicle>").mut_pointer()),
                 F::new(
                     "request_vehicle_model",
-                    [A::address(0x73F_DB0)],
                     [
                         Ar::MutSelf,
                         Ar::field("model_id", T::ident("u32").const_pointer()),
                         Ar::field("category", T::ident("i32")),
                     ],
-                    None,
-                ),
+                )
+                .with_attributes([A::address(0x73F_DB0)]),
             ],
-            [],
         )]);
 
     assert_eq!(parse_str(text).unwrap(), ast);

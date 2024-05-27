@@ -12,7 +12,7 @@ use crate::{
 use anyhow::Context;
 
 fn build_state(module: &M, path: &IP) -> anyhow::Result<semantic_state::ResolvedSemanticState> {
-    let mut semantic_state = semantic_state::SemanticState::new(4);
+    let mut semantic_state = SemanticState::new(4);
     semantic_state.add_module(module, &path.parent().context("failed to get path parent")?)?;
     semantic_state.build()
 }
@@ -148,16 +148,15 @@ fn can_resolve_complex_type() {
             "Singleton",
             [F::new(
                 "test_function",
-                [A::address(0x800_000)],
                 [
                     Ar::MutSelf,
                     Ar::field("arg1", T::ident("TestType").mut_pointer()),
                     Ar::field("arg2", T::ident("i32")),
                     Ar::field("arg3", T::ident("u32").const_pointer()),
                 ],
-                Some(T::ident("TestType").mut_pointer()),
-            )],
-            [],
+            )
+            .with_attributes([A::address(0x800_000)])
+            .with_return_type(T::ident("TestType").mut_pointer())],
         )]);
 
     let path = IP::from_colon_delimited_str("test::Singleton");
@@ -350,29 +349,26 @@ fn can_generate_vftable() {
         .with_vftables([FB::new(
             "TestType",
             [
-                F {
-                    name: "test_function0".into(),
-                    attributes: vec![],
-                    arguments: vec![
+                F::new(
+                    "test_function0",
+                    [
                         Ar::MutSelf,
                         Ar::Field(TF::new("arg0", T::ident("u32"))),
                         Ar::Field(TF::new("arg1", T::ident("f32"))),
                     ],
-                    return_type: Some("i32".into()),
-                },
-                F {
-                    name: "test_function1".into(),
-                    attributes: vec![],
-                    arguments: vec![
+                )
+                .with_return_type("i32"),
+                F::new(
+                    "test_function1",
+                    [
                         Ar::MutSelf,
                         Ar::Field(TF::new("arg0", T::ident("u32"))),
                         Ar::Field(TF::new("arg1", T::ident("f32"))),
                     ],
-                    return_type: None,
-                },
+                ),
             ],
-            [A::size(4)],
-        )]);
+        )
+        .with_attributes([A::size(4)])]);
 
     let type_definition = types::ItemDefinition {
         path: IP::from_colon_delimited_str("test::TestType"),
@@ -529,29 +525,28 @@ fn can_generate_vftable_with_indices() {
         .with_vftables([FB::new(
             "TestType",
             [
-                F {
-                    name: "test_function0".into(),
-                    attributes: vec![A::index(2)],
-                    arguments: vec![
+                F::new(
+                    "test_function0",
+                    [
                         Ar::MutSelf,
                         Ar::Field(TF::new("arg0", T::ident("u32"))),
                         Ar::Field(TF::new("arg1", T::ident("f32"))),
                     ],
-                    return_type: Some("i32".into()),
-                },
-                F {
-                    name: "test_function1".into(),
-                    attributes: vec![A::index(5)],
-                    arguments: vec![
+                )
+                .with_attributes([A::index(2)])
+                .with_return_type("i32"),
+                F::new(
+                    "test_function1",
+                    [
                         Ar::MutSelf,
                         Ar::Field(TF::new("arg0", T::ident("u32"))),
                         Ar::Field(TF::new("arg1", T::ident("f32"))),
                     ],
-                    return_type: None,
-                },
+                )
+                .with_attributes([A::index(5)]),
             ],
-            [A::size(8)],
-        )]);
+        )
+        .with_attributes([A::size(8)])]);
 
     let type_definition = types::ItemDefinition {
         path: IP::from_colon_delimited_str("test::TestType"),
@@ -742,7 +737,7 @@ fn can_define_extern_value() {
         vec![A::address(0x1337)],
     )]);
 
-    let mut semantic_state = semantic_state::SemanticState::new(4);
+    let mut semantic_state = SemanticState::new(4);
     semantic_state
         .add_module(&module1, &IP::from_colon_delimited_str("module1"))
         .unwrap();

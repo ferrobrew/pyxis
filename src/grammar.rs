@@ -231,18 +231,21 @@ pub struct Function {
     pub return_type: Option<Type>,
 }
 impl Function {
-    pub fn new(
-        name: &str,
-        attributes: impl Into<Vec<Attribute>>,
-        arguments: impl Into<Vec<Argument>>,
-        return_type: Option<Type>,
-    ) -> Self {
+    pub fn new(name: &str, arguments: impl Into<Vec<Argument>>) -> Self {
         Self {
             name: name.into(),
-            attributes: attributes.into(),
+            attributes: vec![],
             arguments: arguments.into(),
-            return_type,
+            return_type: None,
         }
+    }
+    pub fn with_attributes(mut self, attributes: impl Into<Vec<Attribute>>) -> Self {
+        self.attributes = attributes.into();
+        self
+    }
+    pub fn with_return_type(mut self, return_type: impl Into<Type>) -> Self {
+        self.return_type = Some(return_type.into());
+        self
     }
 }
 
@@ -386,16 +389,16 @@ pub struct FunctionBlock {
     pub attributes: Vec<Attribute>,
 }
 impl FunctionBlock {
-    pub fn new(
-        name: impl Into<Ident>,
-        functions: impl Into<Vec<Function>>,
-        attributes: impl Into<Vec<Attribute>>,
-    ) -> Self {
+    pub fn new(name: impl Into<Ident>, functions: impl Into<Vec<Function>>) -> Self {
         Self {
             name: name.into(),
             functions: functions.into(),
-            attributes: attributes.into(),
+            attributes: vec![],
         }
+    }
+    pub fn with_attributes(mut self, attributes: impl Into<Vec<Attribute>>) -> Self {
+        self.attributes = attributes.into();
+        self
     }
 }
 
