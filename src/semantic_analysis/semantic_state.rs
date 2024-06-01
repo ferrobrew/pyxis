@@ -308,6 +308,7 @@ impl SemanticState {
         let mut copyable = false;
         let mut cloneable = false;
         let mut defaultable = false;
+        let mut packed = false;
         for attribute in &definition.attributes {
             if let grammar::Attribute::Function(ident, exprs) = attribute {
                 match (ident.as_str(), exprs.as_slice()) {
@@ -327,6 +328,7 @@ impl SemanticState {
                     }
                     "cloneable" => cloneable = true,
                     "defaultable" => defaultable = true,
+                    "packed" => packed = true,
                     _ => anyhow::bail!("unsupported attribute: {attribute:?}"),
                 }
             }
@@ -451,6 +453,7 @@ impl SemanticState {
                 copyable,
                 cloneable,
                 defaultable,
+                packed,
             }
             .into(),
         }))
@@ -736,6 +739,7 @@ fn build_vftable_item(resolvee_path: &ItemPath, functions: &[Function]) -> Optio
                 cloneable: false,
                 copyable: false,
                 defaultable: false,
+                packed: false,
             }
             .into(),
         }),

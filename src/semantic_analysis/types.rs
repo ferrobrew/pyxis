@@ -121,6 +121,7 @@ pub struct TypeDefinition {
     pub copyable: bool,
     pub cloneable: bool,
     pub defaultable: bool,
+    pub packed: bool,
 }
 impl TypeDefinition {
     pub fn new() -> Self {
@@ -152,6 +153,10 @@ impl TypeDefinition {
     }
     pub fn with_defaultable(mut self, defaultable: bool) -> Self {
         self.defaultable = defaultable;
+        self
+    }
+    pub fn with_packed(mut self, packed: bool) -> Self {
+        self.packed = packed;
         self
     }
 }

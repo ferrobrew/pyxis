@@ -186,6 +186,7 @@ fn build_type(
         copyable,
         cloneable,
         defaultable,
+        packed,
     } = type_definition;
 
     let fields = regions
@@ -266,9 +267,15 @@ fn build_type(
         quote! { #[derive(#(#extra_derives),*)] }
     };
 
+    let packed = if *packed {
+        quote! { , packed }
+    } else {
+        quote! {}
+    };
+
     Ok(quote! {
         #derives
-        #[repr(C)]
+        #[repr(C #packed)]
         pub struct #name_ident {
             #(#fields),*
         }
