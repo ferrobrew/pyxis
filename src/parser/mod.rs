@@ -155,7 +155,7 @@ impl Attribute {
                     parenthesized!(content2 in input);
 
                     let arguments: Punctuated<_, Token![,]> =
-                        content2.parse_terminated(Expr::parse)?;
+                        content2.parse_terminated(Expr::parse, Token![,])?;
                     let arguments = Vec::from_iter(arguments);
 
                     Ok(AttributePart::Function { name, arguments })
@@ -173,7 +173,7 @@ impl Attribute {
             bracketed!(content in input);
 
             let attribute_parts: Punctuated<_, Token![,]> =
-                content.parse_terminated(AttributePart::parse)?;
+                content.parse_terminated(AttributePart::parse, Token![,])?;
             for part in attribute_parts {
                 attributes.push(match part {
                     AttributePart::Ident(ident) => Attribute::Ident(ident),
@@ -224,7 +224,8 @@ impl Parse for Function {
         let content;
         parenthesized!(content in input);
 
-        let arguments: Punctuated<_, Token![,]> = content.parse_terminated(Argument::parse)?;
+        let arguments: Punctuated<_, Token![,]> =
+            content.parse_terminated(Argument::parse, Token![,])?;
         let arguments = Vec::from_iter(arguments);
 
         let return_type = if input.peek(Token![->]) {
@@ -301,7 +302,7 @@ fn parse_type_definition(
         braced!(content in input);
 
         let statements: Punctuated<TypeStatement, Token![,]> =
-            content.parse_terminated(TypeStatement::parse)?;
+            content.parse_terminated(TypeStatement::parse, Token![,])?;
         Vec::from_iter(statements)
     };
 
@@ -342,7 +343,7 @@ fn parse_enum_definition(
         braced!(content in input);
 
         let statements: Punctuated<EnumStatement, Token![,]> =
-            content.parse_terminated(EnumStatement::parse)?;
+            content.parse_terminated(EnumStatement::parse, Token![,])?;
         Vec::from_iter(statements)
     };
 
@@ -390,7 +391,8 @@ fn parse_function_block_definition(
     let content;
     braced!(content in input);
 
-    let functions: Punctuated<Function, Token![;]> = content.parse_terminated(Function::parse)?;
+    let functions: Punctuated<Function, Token![;]> =
+        content.parse_terminated(Function::parse, Token![;])?;
     let functions = Vec::from_iter(functions);
 
     Ok((
