@@ -189,3 +189,9 @@ impl ItemDefinition {
         self.category
     }
 }
+
+#[derive(PartialEq, Eq, Debug, Clone)]
+pub struct Backend {
+    pub prelude: Option<String>,
+    pub postlude: Option<String>,
+}

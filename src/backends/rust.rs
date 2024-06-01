@@ -149,7 +149,9 @@ fn build_function(
     }
     let function_getter = if is_vftable {
         Some(FunctionGetter::Vftable)
-    } else { function.address.map(FunctionGetter::Address) };
+    } else {
+        function.address.map(FunctionGetter::Address)
+    };
 
     if function_getter.is_none() {
         return Err(anyhow::anyhow!("no function getter set"));
@@ -378,6 +380,12 @@ pub fn write_module(
     std::fs::create_dir_all(directory_path)?;
 
     let mut file = std::fs::File::create(&path)?;
+
+    let backend = module.backends.get("rust");
+    if let Some(prelude) = backend.as_ref().and_then(|b| b.prelude.as_ref()) {
+        writeln!(file, "{}", prelude)?;
+    }
+
     for definition in module
         .definitions(semantic_state.type_registry())
         .sorted_by_key(|d| &d.path)
@@ -391,6 +399,10 @@ pub fn write_module(
         .sorted_by_key(|(name, _, _)| name)
     {
         writeln!(file, "{}", build_extern_value(name, type_, *address)?)?;
+    }
+
+    if let Some(postlude) = backend.as_ref().and_then(|b| b.postlude.as_ref()) {
+        writeln!(file, "{}", postlude)?;
     }
 
     if FORMAT_OUTPUT {

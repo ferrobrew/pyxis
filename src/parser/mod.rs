@@ -14,6 +14,9 @@ mod kw {
     syn::custom_keyword!(meta);
     syn::custom_keyword!(functions);
     syn::custom_keyword!(unknown);
+    syn::custom_keyword!(backend);
+    syn::custom_keyword!(prelude);
+    syn::custom_keyword!(postlude);
 }
 
 impl Parse for Ident {
@@ -390,6 +393,39 @@ fn parse_function_block_definition(
     ))
 }
 
+fn parse_backend(input: ParseStream) -> Result<Backend> {
+    input.parse::<kw::backend>()?;
+    let name: Ident = input.parse()?;
+
+    let content;
+    braced!(content in input);
+
+    let mut prelude = None;
+    let mut postlude = None;
+
+    while !content.is_empty() {
+        if content.peek(kw::prelude) {
+            content.parse::<kw::prelude>()?;
+            let temp: syn::LitStr = content.parse()?;
+            content.parse::<Token![;]>()?;
+            prelude = Some(temp.value().trim().to_string());
+        } else if content.peek(kw::postlude) {
+            content.parse::<kw::postlude>()?;
+            let temp: syn::LitStr = content.parse()?;
+            content.parse::<Token![;]>()?;
+            postlude = Some(temp.value().trim().to_string());
+        } else {
+            return Err(content.error("expected prelude or postlude"));
+        }
+    }
+
+    Ok(Backend {
+        name,
+        prelude,
+        postlude,
+    })
+}
+
 impl Parse for Module {
     fn parse(input: ParseStream) -> Result<Self> {
         let mut uses = vec![];
@@ -398,6 +434,7 @@ impl Parse for Module {
         let mut definitions = vec![];
         let mut impls = vec![];
         let mut vftables = vec![];
+        let mut backends = vec![];
 
         // Exhaust all of our declarations
         while !input.is_empty() {
@@ -437,6 +474,12 @@ impl Parse for Module {
                 } else {
                     impls.push(block);
                 }
+            } else if input.peek(kw::backend) {
+                if !attributes.is_empty() {
+                    return Err(input.error("attributes not allowed on backends"));
+                }
+
+                backends.push(parse_backend(input)?);
             } else {
                 return Err(input.error("unexpected keyword"));
             }
@@ -449,6 +492,7 @@ impl Parse for Module {
             definitions,
             impls,
             vftables,
+            backends,
         })
     }
 }

@@ -4,11 +4,11 @@ use crate::{
     grammar::{self, ItemPath},
     semantic_analysis::{
         type_registry,
-        types::{ItemDefinition, Type},
+        types::{Backend, ItemDefinition, Type},
     },
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Module {
     pub(crate) path: ItemPath,
     pub(crate) ast: grammar::Module,
@@ -16,6 +16,7 @@ pub struct Module {
     pub(crate) extern_values: Vec<(String, Type, usize)>,
     pub(crate) impls: HashMap<ItemPath, grammar::FunctionBlock>,
     pub(crate) vftables: HashMap<ItemPath, grammar::FunctionBlock>,
+    pub(crate) backends: HashMap<String, Backend>,
 }
 
 impl Default for Module {
@@ -27,6 +28,7 @@ impl Default for Module {
             extern_values: Default::default(),
             impls: Default::default(),
             vftables: Default::default(),
+            backends: Default::default(),
         }
     }
 }
@@ -38,7 +40,8 @@ impl Module {
         extern_values: Vec<(String, Type, usize)>,
         impls: &[grammar::FunctionBlock],
         vftables: &[grammar::FunctionBlock],
-    ) -> Self {
+        backends: &[grammar::Backend],
+    ) -> anyhow::Result<Self> {
         fn convert_functions(
             path: &ItemPath,
             functions: &[grammar::FunctionBlock],
@@ -51,14 +54,31 @@ impl Module {
 
         let impls = convert_functions(&path, impls);
         let vftables = convert_functions(&path, vftables);
-        Self {
+
+        let mut backends_map = HashMap::new();
+        for backend in backends {
+            if backends_map.contains_key(&backend.name.0) {
+                anyhow::bail!("duplicate backend: {}", backend.name.0);
+            }
+
+            backends_map.insert(
+                backend.name.0.clone(),
+                Backend {
+                    prelude: backend.prelude.clone(),
+                    postlude: backend.postlude.clone(),
+                },
+            );
+        }
+
+        Ok(Self {
             path,
             ast,
             definition_paths: HashSet::new(),
             extern_values,
             impls,
             vftables,
-        }
+            backends: backends_map,
+        })
     }
 
     pub fn uses(&self) -> &[ItemPath] {

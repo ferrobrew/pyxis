@@ -307,3 +307,40 @@ fn can_parse_array_field() {
 
     assert_eq!(parse_str(text).unwrap(), ast);
 }
+
+#[test]
+fn can_parse_backends() {
+    let text = r##"
+backend rust {
+    prelude r#"
+        use std::ffi::CString;
+        use std::os::raw::c_char;
+    "#;
+
+    postlude r#"
+        fn main() {
+            println!("Hello, world!");
+        }
+    "#;
+}
+"##;
+
+    let ast = M::new().with_backends([B::new("rust")
+        .with_prelude(
+            r#"
+        use std::ffi::CString;
+        use std::os::raw::c_char;
+    "#
+            .trim(),
+        )
+        .with_postlude(
+            r#"
+        fn main() {
+            println!("Hello, world!");
+        }
+    "#
+            .trim(),
+        )]);
+
+    assert_eq!(parse_str(text).unwrap(), ast);
+}

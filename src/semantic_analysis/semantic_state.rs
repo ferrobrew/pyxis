@@ -112,7 +112,8 @@ impl SemanticState {
                 extern_values,
                 &module.impls,
                 &module.vftables,
-            ),
+                &module.backends,
+            )?,
         );
 
         for definition in &module.definitions {

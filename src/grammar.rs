@@ -15,6 +15,7 @@ pub mod test_aliases {
     pub type F = super::Function;
     pub type FB = super::FunctionBlock;
     pub type IP = super::ItemPath;
+    pub type B = super::Backend;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -402,6 +403,30 @@ impl FunctionBlock {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Backend {
+    pub name: Ident,
+    pub prelude: Option<String>,
+    pub postlude: Option<String>,
+}
+impl Backend {
+    pub fn new(name: &str) -> Self {
+        Self {
+            name: name.into(),
+            prelude: None,
+            postlude: None,
+        }
+    }
+    pub fn with_prelude(mut self, prelude: impl Into<String>) -> Self {
+        self.prelude = Some(prelude.into());
+        self
+    }
+    pub fn with_postlude(mut self, postlude: impl Into<String>) -> Self {
+        self.postlude = Some(postlude.into());
+        self
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Module {
     pub uses: Vec<ItemPath>,
@@ -410,6 +435,7 @@ pub struct Module {
     pub definitions: Vec<ItemDefinition>,
     pub impls: Vec<FunctionBlock>,
     pub vftables: Vec<FunctionBlock>,
+    pub backends: Vec<Backend>,
 }
 impl Module {
     pub fn new() -> Self {
@@ -449,6 +475,11 @@ impl Module {
 
     pub fn with_vftables(mut self, vftables: impl Into<Vec<FunctionBlock>>) -> Self {
         self.vftables = vftables.into();
+        self
+    }
+
+    pub fn with_backends(mut self, backends: impl Into<Vec<Backend>>) -> Self {
+        self.backends = backends.into();
         self
     }
 }
