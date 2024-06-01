@@ -3,26 +3,31 @@ use std::collections::HashSet;
 use crate::{
     grammar::test_aliases::*,
     semantic_analysis::{
-        semantic_state::SemanticState,
-        types::{ItemDefinition, *},
-        *,
+        semantic_state::{ResolvedSemanticState, SemanticState},
+        types::{
+            Argument, EnumDefinition, Function, ItemCategory, ItemDefinition, ItemState,
+            ItemStateResolved, Region, Type, TypeDefinition,
+        },
     },
 };
 
 use anyhow::Context;
 
-fn build_state(module: &M, path: &IP) -> anyhow::Result<semantic_state::ResolvedSemanticState> {
+fn build_state(module: &M, module_path: &IP) -> anyhow::Result<ResolvedSemanticState> {
     let mut semantic_state = SemanticState::new(4);
-    semantic_state.add_module(module, &path.parent().context("failed to get path parent")?)?;
+    semantic_state.add_module(module, module_path)?;
     semantic_state.build()
 }
 
-fn build_type(module: &M, path: &IP) -> anyhow::Result<ItemDefinition> {
-    build_state(module, path)?
-        .type_registry()
-        .get(path)
-        .cloned()
-        .context("failed to get type")
+fn build_type(module: &M, type_path: &IP) -> anyhow::Result<ItemDefinition> {
+    build_state(
+        module,
+        &type_path.parent().context("failed to get path parent")?,
+    )?
+    .type_registry()
+    .get(type_path)
+    .cloned()
+    .context("failed to get type")
 }
 
 fn unknown(size: usize) -> Type {
@@ -160,9 +165,9 @@ fn can_resolve_complex_type() {
         )]);
 
     let path = IP::from_colon_delimited_str("test::Singleton");
-    let type_definition = types::ItemDefinition {
+    let type_definition = ItemDefinition {
         path: path.clone(),
-        state: types::ItemState::Resolved(types::ItemStateResolved {
+        state: ItemState::Resolved(ItemStateResolved {
             size: 0x1750,
             inner: TypeDefinition {
                 regions: vec![
@@ -208,7 +213,7 @@ fn can_resolve_complex_type() {
             }
             .into(),
         }),
-        category: types::ItemCategory::Defined,
+        category: ItemCategory::Defined,
     };
 
     assert_eq!(build_type(&module, &path).unwrap(), type_definition);
@@ -242,9 +247,9 @@ fn can_use_type_from_another_module() {
     )]);
 
     let path = IP::from_colon_delimited_str("module1::TestType1");
-    let target_resolved_type = types::ItemDefinition {
+    let target_resolved_type = ItemDefinition {
         path: path.clone(),
-        state: types::ItemState::Resolved(types::ItemStateResolved {
+        state: ItemState::Resolved(ItemStateResolved {
             size: 4,
             inner: TypeDefinition {
                 free_functions: vec![],
@@ -257,7 +262,7 @@ fn can_use_type_from_another_module() {
             }
             .into(),
         }),
-        category: types::ItemCategory::Defined,
+        category: ItemCategory::Defined,
     };
 
     let mut semantic_state = SemanticState::new(4);
@@ -306,9 +311,9 @@ fn can_resolve_embed_of_an_extern() {
         )]);
 
     let path = IP::from_colon_delimited_str("test::TestType2");
-    let type_definition = types::ItemDefinition {
+    let type_definition = ItemDefinition {
         path: path.clone(),
-        state: types::ItemState::Resolved(types::ItemStateResolved {
+        state: ItemState::Resolved(ItemStateResolved {
             size: 28,
             inner: TypeDefinition {
                 regions: vec![
@@ -336,7 +341,7 @@ fn can_resolve_embed_of_an_extern() {
             }
             .into(),
         }),
-        category: types::ItemCategory::Defined,
+        category: ItemCategory::Defined,
     };
 
     assert_eq!(build_type(&module, &path).unwrap(), type_definition);
@@ -370,9 +375,9 @@ fn can_generate_vftable() {
         )
         .with_attributes([A::size(4)])]);
 
-    let type_definition = types::ItemDefinition {
+    let type_definition = ItemDefinition {
         path: IP::from_colon_delimited_str("test::TestType"),
-        state: types::ItemState::Resolved(types::ItemStateResolved {
+        state: ItemState::Resolved(ItemStateResolved {
             size: 4,
             inner: TypeDefinition {
                 regions: vec![Region::field(
@@ -422,11 +427,11 @@ fn can_generate_vftable() {
             }
             .into(),
         }),
-        category: types::ItemCategory::Defined,
+        category: ItemCategory::Defined,
     };
-    let vftable_type_definition = types::ItemDefinition {
+    let vftable_type_definition = ItemDefinition {
         path: IP::from_colon_delimited_str("test::TestTypeVftable"),
-        state: types::ItemState::Resolved(types::ItemStateResolved {
+        state: ItemState::Resolved(ItemStateResolved {
             size: 0,
             inner: TypeDefinition {
                 regions: vec![
@@ -483,19 +488,16 @@ fn can_generate_vftable() {
             }
             .into(),
         }),
-        category: types::ItemCategory::Defined,
+        category: ItemCategory::Defined,
     };
 
+    let test_module_path = IP::from_colon_delimited_str("test");
     let test_type_path = IP::from_colon_delimited_str("test::TestType");
     let test_type_vftable_path = IP::from_colon_delimited_str("test::TestTypeVftable");
 
-    let build_state = build_state(&module, &test_type_path).unwrap();
-    let type_registry = build_state.type_registry();
-
-    let test_module = build_state
-        .modules()
-        .get(&IP::from_colon_delimited_str("test"))
-        .unwrap();
+    let state = build_state(&module, &test_module_path).unwrap();
+    let type_registry = state.type_registry();
+    let test_module = state.modules().get(&test_module_path).unwrap();
 
     assert_eq!(
         test_module.definition_paths(),
@@ -548,9 +550,9 @@ fn can_generate_vftable_with_indices() {
         )
         .with_attributes([A::size(8)])]);
 
-    let type_definition = types::ItemDefinition {
+    let type_definition = ItemDefinition {
         path: IP::from_colon_delimited_str("test::TestType"),
-        state: types::ItemState::Resolved(types::ItemStateResolved {
+        state: ItemState::Resolved(ItemStateResolved {
             size: 4,
             inner: TypeDefinition {
                 regions: vec![Region::field(
@@ -604,12 +606,12 @@ fn can_generate_vftable_with_indices() {
             }
             .into(),
         }),
-        category: types::ItemCategory::Defined,
+        category: ItemCategory::Defined,
     };
 
-    let vftable_type_definition = types::ItemDefinition {
+    let vftable_type_definition = ItemDefinition {
         path: IP::from_colon_delimited_str("test::TestTypeVftable"),
-        state: types::ItemState::Resolved(types::ItemStateResolved {
+        state: ItemState::Resolved(ItemStateResolved {
             size: 0,
             inner: TypeDefinition {
                 regions: vec![
@@ -670,19 +672,16 @@ fn can_generate_vftable_with_indices() {
             }
             .into(),
         }),
-        category: types::ItemCategory::Defined,
+        category: ItemCategory::Defined,
     };
 
+    let test_module_path = IP::from_colon_delimited_str("test");
     let test_type_path = IP::from_colon_delimited_str("test::TestType");
     let test_type_vftable_path = IP::from_colon_delimited_str("test::TestTypeVftable");
 
-    let build_state = build_state(&module, &test_type_path).unwrap();
-    let type_registry = build_state.type_registry();
-
-    let test_module = build_state
-        .modules()
-        .get(&IP::from_colon_delimited_str("test"))
-        .unwrap();
+    let state = build_state(&module, &test_module_path).unwrap();
+    let type_registry = state.type_registry();
+    let test_module = state.modules().get(&test_module_path).unwrap();
 
     assert_eq!(
         test_module.definition_paths(),

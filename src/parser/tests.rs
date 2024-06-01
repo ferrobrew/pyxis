@@ -1,5 +1,4 @@
-use super::*;
-use crate::grammar::test_aliases::*;
+use crate::{grammar::test_aliases::*, parser::parse_str};
 
 #[test]
 fn can_parse_basic_struct() {
@@ -283,7 +282,7 @@ fn can_parse_enum() {
             [
                 ES::field("Item1"),
                 ES::field("Item2"),
-                ES::field_with_expr("Item3", Expr::IntLiteral(10)),
+                ES::field_with_expr("Item3", E::IntLiteral(10)),
                 ES::field("Item4"),
             ],
             [A::singleton(0x1234)],
