@@ -344,3 +344,21 @@ backend rust {
 
     assert_eq!(parse_str(text).unwrap(), ast);
 }
+
+#[test]
+fn can_parse_ident_attributes() {
+    let text = r#"
+        #[copyable, cloneable]
+        type TestType {
+            field_1: i32,
+        }
+        "#;
+
+    let ast = M::new().with_definitions([ID::new(
+        "TestType",
+        TD::new([TS::field("field_1", T::ident("i32"))])
+            .with_attributes([A::copyable(), A::cloneable()]),
+    )]);
+
+    assert_eq!(parse_str(text).unwrap(), ast);
+}

@@ -114,6 +114,8 @@ pub struct TypeDefinition {
     pub free_functions: Vec<Function>,
     pub vftable_functions: Option<Vec<Function>>,
     pub singleton: Option<usize>,
+    pub copyable: bool,
+    pub cloneable: bool,
 }
 impl TypeDefinition {
     pub fn new() -> Self {
@@ -133,6 +135,14 @@ impl TypeDefinition {
     }
     pub fn with_singleton(mut self, singleton: usize) -> Self {
         self.singleton = Some(singleton);
+        self
+    }
+    pub fn with_copyable(mut self, copyable: bool) -> Self {
+        self.copyable = copyable;
+        self
+    }
+    pub fn with_cloneable(mut self, cloneable: bool) -> Self {
+        self.cloneable = cloneable;
         self
     }
 }

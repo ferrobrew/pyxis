@@ -798,3 +798,53 @@ fn can_carry_backend_across() {
         }
     );
 }
+
+#[test]
+fn can_extract_copyable_and_cloneable_correctly() {
+    let module = M::new().with_definitions([ID::new(
+        "TestType",
+        TD::new([TS::field("field_1", T::ident("i32"))]).with_attributes([A::cloneable()]),
+    )]);
+
+    let path = IP::from_colon_delimited_str("test::TestType");
+    let type_definition = ItemDefinition {
+        path: path.clone(),
+        state: ItemState::Resolved(ItemStateResolved {
+            size: 4,
+            inner: TypeDefinition::new()
+                .with_regions([Region::field(
+                    "field_1",
+                    Type::Raw(IP::from_colon_delimited_str("i32")),
+                )])
+                .with_cloneable(true)
+                .into(),
+        }),
+        category: ItemCategory::Defined,
+    };
+
+    assert_eq!(build_type(&module, &path).unwrap(), type_definition);
+
+    let module = M::new().with_definitions([ID::new(
+        "TestType",
+        TD::new([TS::field("field_1", T::ident("i32"))]).with_attributes([A::copyable()]),
+    )]);
+
+    let path = IP::from_colon_delimited_str("test::TestType");
+    let type_definition = ItemDefinition {
+        path: path.clone(),
+        state: ItemState::Resolved(ItemStateResolved {
+            size: 4,
+            inner: TypeDefinition::new()
+                .with_regions([Region::field(
+                    "field_1",
+                    Type::Raw(IP::from_colon_delimited_str("i32")),
+                )])
+                .with_copyable(true)
+                .with_cloneable(true)
+                .into(),
+        }),
+        category: ItemCategory::Defined,
+    };
+
+    assert_eq!(build_type(&module, &path).unwrap(), type_definition);
+}

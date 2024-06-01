@@ -182,6 +182,7 @@ impl Expr {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Attribute {
+    Ident(Ident),
     Function(Ident, Vec<Expr>),
 }
 impl Attribute {
@@ -207,8 +208,17 @@ impl Attribute {
 
     pub fn function(&self) -> Option<(&Ident, &Vec<Expr>)> {
         match self {
+            Attribute::Ident(_) => None,
             Attribute::Function(ident, exprs) => Some((ident, exprs)),
         }
+    }
+
+    pub fn copyable() -> Self {
+        Attribute::Ident("copyable".into())
+    }
+
+    pub fn cloneable() -> Self {
+        Attribute::Ident("cloneable".into())
     }
 }
 

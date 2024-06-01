@@ -183,6 +183,8 @@ fn build_type(
         regions,
         free_functions,
         vftable_functions,
+        copyable,
+        cloneable,
     } = type_definition;
 
     let fields = regions
@@ -246,7 +248,22 @@ fn build_type(
         .transpose()?
         .unwrap_or_default();
 
+    let mut extra_derives = vec![];
+    if *copyable {
+        extra_derives.push(quote! { Copy });
+    }
+    if *cloneable {
+        extra_derives.push(quote! { Clone });
+    }
+
+    let derives = if extra_derives.is_empty() {
+        quote! {}
+    } else {
+        quote! { #[derive(#(#extra_derives),*)] }
+    };
+
     Ok(quote! {
+        #derives
         #[repr(C)]
         pub struct #name_ident {
             #(#fields),*

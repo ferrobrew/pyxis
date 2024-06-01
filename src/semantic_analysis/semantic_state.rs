@@ -301,16 +301,28 @@ impl SemanticState {
         // Handle attributes
         let mut target_size: Option<usize> = None;
         let mut singleton = None;
+        let mut copyable = false;
+        let mut cloneable = false;
         for attribute in &definition.attributes {
-            let grammar::Attribute::Function(ident, exprs) = attribute;
-            match (ident.as_str(), exprs.as_slice()) {
-                ("size", [grammar::Expr::IntLiteral(size)]) => {
-                    target_size = Some(*size as usize);
+            if let grammar::Attribute::Function(ident, exprs) = attribute {
+                match (ident.as_str(), exprs.as_slice()) {
+                    ("size", [grammar::Expr::IntLiteral(size)]) => {
+                        target_size = Some(*size as usize);
+                    }
+                    ("singleton", [grammar::Expr::IntLiteral(value)]) => {
+                        singleton = Some(*value as usize);
+                    }
+                    _ => anyhow::bail!("unsupported attribute: {attribute:?}"),
                 }
-                ("singleton", [grammar::Expr::IntLiteral(value)]) => {
-                    singleton = Some(*value as usize);
+            } else if let grammar::Attribute::Ident(ident) = attribute {
+                match ident.as_str() {
+                    "copyable" => {
+                        copyable = true;
+                        cloneable = true;
+                    }
+                    "cloneable" => cloneable = true,
+                    _ => anyhow::bail!("unsupported attribute: {attribute:?}"),
                 }
-                _ => anyhow::bail!("unsupported attribute: {attribute:?}"),
             }
         }
 
@@ -387,6 +399,8 @@ impl SemanticState {
                 free_functions,
                 vftable_functions,
                 singleton,
+                copyable,
+                cloneable,
             }
             .into(),
         }))
@@ -400,7 +414,9 @@ impl SemanticState {
         // Extract size attribute
         let mut size = None;
         for attribute in &vftable_block.attributes {
-            let grammar::Attribute::Function(ident, exprs) = attribute;
+            let grammar::Attribute::Function(ident, exprs) = attribute else {
+                anyhow::bail!("unsupported attribute: {attribute:?}");
+            };
             match (ident.as_str(), exprs.as_slice()) {
                 ("size", [grammar::Expr::IntLiteral(size_)]) => {
                     size = Some(*size_ as usize);
@@ -414,7 +430,9 @@ impl SemanticState {
         for function in &vftable_block.functions {
             let mut index = None;
             for attribute in &function.attributes {
-                let grammar::Attribute::Function(ident, exprs) = attribute;
+                let grammar::Attribute::Function(ident, exprs) = attribute else {
+                    anyhow::bail!("unsupported attribute: {attribute:?}");
+                };
                 match (ident.as_str(), exprs.as_slice()) {
                     ("index", [grammar::Expr::IntLiteral(index_)]) => {
                         index = Some(*index_ as usize);
@@ -582,7 +600,9 @@ impl SemanticState {
         }
 
         for attribute in &definition.attributes {
-            let grammar::Attribute::Function(ident, exprs) = attribute;
+            let grammar::Attribute::Function(ident, exprs) = attribute else {
+                anyhow::bail!("unsupported attribute: {attribute:?}");
+            };
             match (ident.as_str(), exprs.as_slice()) {
                 ("singleton", [grammar::Expr::IntLiteral(value)]) => {
                     singleton = Some(*value as usize);
@@ -663,6 +683,8 @@ fn build_vftable_item(resolvee_path: &ItemPath, functions: &[Function]) -> Optio
                 free_functions: vec![],
                 vftable_functions: None,
                 singleton: None,
+                cloneable: false,
+                copyable: false,
             }
             .into(),
         }),
