@@ -848,3 +848,90 @@ fn can_extract_copyable_and_cloneable_correctly() {
 
     assert_eq!(build_type(&module, &path).unwrap(), type_definition);
 }
+
+#[test]
+fn can_handle_defaultable_on_primitive_types() {
+    let module = M::new().with_definitions([ID::new(
+        "TestType",
+        TD::new([
+            TS::field("field_1", T::ident("i32")),
+            TS::field("field_2", T::ident("f32").array(16)),
+        ])
+        .with_attributes([A::defaultable()]),
+    )]);
+
+    let path = IP::from_colon_delimited_str("test::TestType");
+    let type_definition = ItemDefinition {
+        path: path.clone(),
+        state: ItemState::Resolved(ItemStateResolved {
+            size: 68,
+            inner: TypeDefinition::new()
+                .with_regions([
+                    Region::field("field_1", Type::Raw(IP::from_colon_delimited_str("i32"))),
+                    Region::field(
+                        "field_2",
+                        Type::Array(Box::new(Type::Raw(IP::from_colon_delimited_str("f32"))), 16),
+                    ),
+                ])
+                .with_defaultable(true)
+                .into(),
+        }),
+        category: ItemCategory::Defined,
+    };
+
+    assert_eq!(build_type(&module, &path).unwrap(), type_definition);
+}
+
+#[test]
+fn will_reject_defaultable_on_pointer() {
+    let module = M::new().with_definitions([ID::new(
+        "TestType",
+        TD::new([TS::field("field_1", T::ident("i32").mut_pointer())])
+            .with_attributes([A::defaultable()]),
+    )]);
+
+    let path = IP::from_colon_delimited_str("test::TestType");
+    assert_eq!(
+        build_type(&module, &path).unwrap_err().to_string(),
+        "field field_1 of type test::TestType is not a defaultable type (pointer or function?)"
+    );
+}
+
+#[test]
+fn will_reject_defaultable_on_enum_field() {
+    let module = M::new().with_definitions([
+        ID::new(
+            "TestType",
+            TD::new([TS::field("field_1", T::ident("TestEnum"))])
+                .with_attributes([A::defaultable()]),
+        ),
+        ID::new(
+            "TestEnum",
+            ED::new(T::ident("u32"), [ES::field("Item1")], []),
+        ),
+    ]);
+
+    let path = IP::from_colon_delimited_str("test::TestType");
+    assert_eq!(
+        build_type(&module, &path).unwrap_err().to_string(),
+        "field field_1 of type test::TestType is not a defaultable type (non-type?)"
+    );
+}
+
+#[test]
+fn will_reject_defaultable_on_non_defaultable_type() {
+    let module = M::new().with_definitions([
+        ID::new(
+            "TestType",
+            TD::new([TS::field("field_1", T::ident("TestNonDefaultable"))])
+                .with_attributes([A::defaultable()]),
+        ),
+        ID::new("TestNonDefaultable", TD::new([])),
+    ]);
+
+    let path = IP::from_colon_delimited_str("test::TestType");
+    assert_eq!(
+        build_type(&module, &path).unwrap_err().to_string(),
+        "field field_1 of type test::TestType is not marked as defaultable"
+    );
+}

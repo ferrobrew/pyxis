@@ -220,6 +220,10 @@ impl Attribute {
     pub fn cloneable() -> Self {
         Attribute::Ident("cloneable".into())
     }
+
+    pub fn defaultable() -> Self {
+        Attribute::Ident("defaultable".into())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

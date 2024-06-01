@@ -11,8 +11,8 @@ use super::{
     module::Module,
     type_registry::TypeRegistry,
     types::{
-        Argument, EnumDefinition, Function, ItemCategory, ItemDefinition, ItemState,
-        ItemStateResolved, Region, Type, TypeDefinition,
+        Argument, EnumDefinition, Function, ItemCategory, ItemDefinition, ItemDefinitionInner,
+        ItemState, ItemStateResolved, Region, Type, TypeDefinition,
     },
 };
 
@@ -58,7 +58,11 @@ impl SemanticState {
                     path,
                     state: ItemState::Resolved(ItemStateResolved {
                         size,
-                        inner: TypeDefinition::default().into(),
+                        inner: TypeDefinition::default()
+                            .with_cloneable(true)
+                            .with_copyable(true)
+                            .with_defaultable(true)
+                            .into(),
                     }),
                     category: ItemCategory::Predefined,
                 })
@@ -303,6 +307,7 @@ impl SemanticState {
         let mut singleton = None;
         let mut copyable = false;
         let mut cloneable = false;
+        let mut defaultable = false;
         for attribute in &definition.attributes {
             if let grammar::Attribute::Function(ident, exprs) = attribute {
                 match (ident.as_str(), exprs.as_slice()) {
@@ -321,6 +326,7 @@ impl SemanticState {
                         cloneable = true;
                     }
                     "cloneable" => cloneable = true,
+                    "defaultable" => defaultable = true,
                     _ => anyhow::bail!("unsupported attribute: {attribute:?}"),
                 }
             }
@@ -341,7 +347,7 @@ impl SemanticState {
         }
 
         // Handle fields
-        let mut regions: Vec<(Option<usize>, Region)> = vec![];
+        let mut pending_regions: Vec<(Option<usize>, Region)> = vec![];
         for statement in &definition.statements {
             let grammar::TypeStatement { field, attributes } = statement;
 
@@ -361,7 +367,7 @@ impl SemanticState {
 
             // Handle address
             if let Some(address) = address {
-                regions.push((
+                pending_regions.push((
                     Some(address),
                     Region::unnamed_field(self.type_registry.padding_type(0)),
                 ));
@@ -377,7 +383,7 @@ impl SemanticState {
             };
 
             let ident = (ident.0 != "_").then(|| ident.0.clone());
-            regions.push((
+            pending_regions.push((
                 None,
                 Region {
                     name: ident,
@@ -386,21 +392,65 @@ impl SemanticState {
             ));
         }
 
-        let Some((resolved_regions, size)) =
-            self.resolve_regions(resolvee_path, target_size, regions, &vftable_functions)?
+        let Some((regions, size)) = self.resolve_regions(
+            resolvee_path,
+            target_size,
+            pending_regions,
+            &vftable_functions,
+        )?
         else {
             return Ok(None);
         };
 
+        // Iterate over all of the regions and ensure their types are defaultable if
+        // we have our defaultable attribute set.
+        if defaultable {
+            for region in &regions {
+                let Region { name, type_ref } = region;
+                let name = name.as_deref().unwrap_or("unnamed");
+                fn get_defaultable_type_path(type_ref: &Type) -> Option<&ItemPath> {
+                    match type_ref {
+                        Type::Raw(tp) => Some(tp),
+                        Type::Array(t, _) => get_defaultable_type_path(t),
+                        _ => None,
+                    }
+                }
+                let Some(path) = get_defaultable_type_path(type_ref) else {
+                    anyhow::bail!("field {name} of type {resolvee_path} is not a defaultable type (pointer or function?)");
+                };
+
+                let item = self
+                    .type_registry
+                    .get(path)
+                    .context("failed to get type")?
+                    .state
+                    .clone();
+
+                let ItemState::Resolved(ItemStateResolved { inner, .. }) = &item else {
+                    continue;
+                };
+                let ItemDefinitionInner::Type(TypeDefinition { defaultable, .. }) = &inner else {
+                    anyhow::bail!("field {name} of type {resolvee_path} is not a defaultable type (non-type?)");
+                };
+
+                if !defaultable {
+                    anyhow::bail!(
+                        "field {name} of type {resolvee_path} is not marked as defaultable"
+                    );
+                }
+            }
+        }
+
         Ok(Some(ItemStateResolved {
             size,
             inner: TypeDefinition {
-                regions: resolved_regions,
+                regions,
                 free_functions,
                 vftable_functions,
                 singleton,
                 copyable,
                 cloneable,
+                defaultable,
             }
             .into(),
         }))
@@ -485,8 +535,8 @@ impl SemanticState {
         impl Regions {
             fn push(&mut self, type_registry: &TypeRegistry, region: Region) -> Option<()> {
                 let size = region.size(type_registry)?;
-                if size == 0 {
-                    // zero-sized regions are ignored
+                if size == 0 && region.type_ref.is_array() {
+                    // zero-sized regions that are arrays are ignored
                     return Some(());
                 }
 
@@ -685,6 +735,7 @@ fn build_vftable_item(resolvee_path: &ItemPath, functions: &[Function]) -> Optio
                 singleton: None,
                 cloneable: false,
                 copyable: false,
+                defaultable: false,
             }
             .into(),
         }),

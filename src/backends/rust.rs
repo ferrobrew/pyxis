@@ -185,6 +185,7 @@ fn build_type(
         vftable_functions,
         copyable,
         cloneable,
+        defaultable,
     } = type_definition;
 
     let fields = regions
@@ -254,6 +255,9 @@ fn build_type(
     }
     if *cloneable {
         extra_derives.push(quote! { Clone });
+    }
+    if *defaultable {
+        extra_derives.push(quote! { Default });
     }
 
     let derives = if extra_derives.is_empty() {

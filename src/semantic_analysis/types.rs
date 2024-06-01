@@ -42,6 +42,10 @@ impl Type {
             Type::Function(_, _) => Some(type_registry.pointer_size()),
         }
     }
+
+    pub fn is_array(&self) -> bool {
+        matches!(self, Type::Array(_, _))
+    }
 }
 
 impl fmt::Display for Type {
@@ -116,6 +120,7 @@ pub struct TypeDefinition {
     pub singleton: Option<usize>,
     pub copyable: bool,
     pub cloneable: bool,
+    pub defaultable: bool,
 }
 impl TypeDefinition {
     pub fn new() -> Self {
@@ -143,6 +148,10 @@ impl TypeDefinition {
     }
     pub fn with_cloneable(mut self, cloneable: bool) -> Self {
         self.cloneable = cloneable;
+        self
+    }
+    pub fn with_defaultable(mut self, defaultable: bool) -> Self {
+        self.defaultable = defaultable;
         self
     }
 }
