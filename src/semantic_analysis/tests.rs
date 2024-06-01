@@ -53,17 +53,13 @@ fn can_resolve_basic_struct() {
         path: path.clone(),
         state: ItemState::Resolved(ItemStateResolved {
             size: 16,
-            inner: TypeDefinition {
-                regions: vec![
+            inner: TypeDefinition::new()
+                .with_regions([
                     Region::field("field_1", Type::Raw(IP::from_colon_delimited_str("i32"))),
                     Region::field("_field_4", unknown(4)),
                     Region::field("field_2", Type::Raw(IP::from_colon_delimited_str("u64"))),
-                ],
-                free_functions: vec![],
-                vftable_functions: None,
-                singleton: None,
-            }
-            .into(),
+                ])
+                .into(),
         }),
         category: ItemCategory::Defined,
     };
@@ -94,8 +90,8 @@ fn can_resolve_pointer_to_another_struct() {
         path: path.clone(),
         state: ItemState::Resolved(ItemStateResolved {
             size: 20,
-            inner: TypeDefinition {
-                regions: vec![
+            inner: TypeDefinition::new()
+                .with_regions([
                     Region::field("field_1", Type::Raw(IP::from_colon_delimited_str("i32"))),
                     Region::field(
                         "field_2",
@@ -113,12 +109,8 @@ fn can_resolve_pointer_to_another_struct() {
                             "test::TestType1",
                         )))),
                     ),
-                ],
-                free_functions: vec![],
-                vftable_functions: None,
-                singleton: None,
-            }
-            .into(),
+                ])
+                .into(),
         }),
         category: ItemCategory::Defined,
     };
@@ -169,8 +161,8 @@ fn can_resolve_complex_type() {
         path: path.clone(),
         state: ItemState::Resolved(ItemStateResolved {
             size: 0x1750,
-            inner: TypeDefinition {
-                regions: vec![
+            inner: TypeDefinition::new()
+                .with_regions([
                     Region::field("_field_0", unknown(0x78)),
                     Region::field("max_num_1", Type::Raw(IP::from_colon_delimited_str("u16"))),
                     Region::field("max_num_2", Type::Raw(IP::from_colon_delimited_str("u16"))),
@@ -181,8 +173,8 @@ fn can_resolve_complex_type() {
                     ),
                     Region::field("settings", unknown(804)),
                     Region::field("_field_d2c", unknown(0xA24)),
-                ],
-                free_functions: vec![Function {
+                ])
+                .with_free_functions([Function {
                     name: "test_function".to_string(),
                     address: Some(0x800_000),
                     arguments: vec![
@@ -207,11 +199,9 @@ fn can_resolve_complex_type() {
                     return_type: Some(Type::MutPointer(Box::new(Type::Raw(
                         IP::from_colon_delimited_str("test::TestType"),
                     )))),
-                }],
-                vftable_functions: None,
-                singleton: Some(0x1_200_000),
-            }
-            .into(),
+                }])
+                .with_singleton(0x1_200_000)
+                .into(),
         }),
         category: ItemCategory::Defined,
     };
@@ -251,16 +241,12 @@ fn can_use_type_from_another_module() {
         path: path.clone(),
         state: ItemState::Resolved(ItemStateResolved {
             size: 4,
-            inner: TypeDefinition {
-                free_functions: vec![],
-                vftable_functions: None,
-                regions: vec![Region::field(
+            inner: TypeDefinition::new()
+                .with_regions([Region::field(
                     "field",
                     Type::Raw(IP::from_colon_delimited_str("module2::TestType2")),
-                )],
-                singleton: None,
-            }
-            .into(),
+                )])
+                .into(),
         }),
         category: ItemCategory::Defined,
     };
@@ -315,8 +301,8 @@ fn can_resolve_embed_of_an_extern() {
         path: path.clone(),
         state: ItemState::Resolved(ItemStateResolved {
             size: 28,
-            inner: TypeDefinition {
-                regions: vec![
+            inner: TypeDefinition::new()
+                .with_regions([
                     Region::field("field_1", Type::Raw(IP::from_colon_delimited_str("i32"))),
                     Region::field(
                         "field_2",
@@ -334,12 +320,8 @@ fn can_resolve_embed_of_an_extern() {
                             "test::TestType1",
                         )))),
                     ),
-                ],
-                free_functions: vec![],
-                vftable_functions: None,
-                singleton: None,
-            }
-            .into(),
+                ])
+                .into(),
         }),
         category: ItemCategory::Defined,
     };
@@ -379,14 +361,14 @@ fn can_generate_vftable() {
         path: IP::from_colon_delimited_str("test::TestType"),
         state: ItemState::Resolved(ItemStateResolved {
             size: 4,
-            inner: TypeDefinition {
-                regions: vec![Region::field(
+            inner: TypeDefinition::new()
+                .with_regions([Region::field(
                     "vftable",
                     Type::ConstPointer(Box::new(Type::Raw(IP::from_colon_delimited_str(
                         "test::TestTypeVftable",
                     )))),
-                )],
-                vftable_functions: Some(vec![
+                )])
+                .with_vftable_functions([
                     Function {
                         name: "test_function0".to_string(),
                         address: None,
@@ -421,11 +403,8 @@ fn can_generate_vftable() {
                     },
                     make_vfunc(2),
                     make_vfunc(3),
-                ]),
-                free_functions: vec![],
-                singleton: None,
-            }
-            .into(),
+                ])
+                .into(),
         }),
         category: ItemCategory::Defined,
     };
@@ -433,8 +412,8 @@ fn can_generate_vftable() {
         path: IP::from_colon_delimited_str("test::TestTypeVftable"),
         state: ItemState::Resolved(ItemStateResolved {
             size: 0,
-            inner: TypeDefinition {
-                regions: vec![
+            inner: TypeDefinition::new()
+                .with_regions([
                     Region::field(
                         "test_function0".to_string(),
                         Type::Function(
@@ -481,12 +460,8 @@ fn can_generate_vftable() {
                     ),
                     make_vfunc_region(2),
                     make_vfunc_region(3),
-                ],
-                free_functions: vec![],
-                vftable_functions: None,
-                singleton: None,
-            }
-            .into(),
+                ])
+                .into(),
         }),
         category: ItemCategory::Defined,
     };
@@ -554,14 +529,14 @@ fn can_generate_vftable_with_indices() {
         path: IP::from_colon_delimited_str("test::TestType"),
         state: ItemState::Resolved(ItemStateResolved {
             size: 4,
-            inner: TypeDefinition {
-                regions: vec![Region::field(
+            inner: TypeDefinition::new()
+                .with_regions([Region::field(
                     "vftable",
                     Type::ConstPointer(Box::new(Type::Raw(IP::from_colon_delimited_str(
                         "test::TestTypeVftable",
                     )))),
-                )],
-                vftable_functions: Some(vec![
+                )])
+                .with_vftable_functions([
                     make_vfunc(0),
                     make_vfunc(1),
                     Function {
@@ -600,11 +575,8 @@ fn can_generate_vftable_with_indices() {
                     },
                     make_vfunc(6),
                     make_vfunc(7),
-                ]),
-                free_functions: vec![],
-                singleton: None,
-            }
-            .into(),
+                ])
+                .into(),
         }),
         category: ItemCategory::Defined,
     };
@@ -613,8 +585,8 @@ fn can_generate_vftable_with_indices() {
         path: IP::from_colon_delimited_str("test::TestTypeVftable"),
         state: ItemState::Resolved(ItemStateResolved {
             size: 0,
-            inner: TypeDefinition {
-                regions: vec![
+            inner: TypeDefinition::new()
+                .with_regions([
                     make_vfunc_region(0),
                     make_vfunc_region(1),
                     Region::field(
@@ -665,12 +637,8 @@ fn can_generate_vftable_with_indices() {
                     ),
                     make_vfunc_region(6),
                     make_vfunc_region(7),
-                ],
-                free_functions: vec![],
-                vftable_functions: None,
-                singleton: None,
-            }
-            .into(),
+                ])
+                .into(),
         }),
         category: ItemCategory::Defined,
     };

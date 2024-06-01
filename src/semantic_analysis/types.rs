@@ -115,6 +115,27 @@ pub struct TypeDefinition {
     pub vftable_functions: Option<Vec<Function>>,
     pub singleton: Option<usize>,
 }
+impl TypeDefinition {
+    pub fn new() -> Self {
+        Default::default()
+    }
+    pub fn with_regions(mut self, regions: impl Into<Vec<Region>>) -> Self {
+        self.regions = regions.into();
+        self
+    }
+    pub fn with_free_functions(mut self, free_functions: impl Into<Vec<Function>>) -> Self {
+        self.free_functions = free_functions.into();
+        self
+    }
+    pub fn with_vftable_functions(mut self, vftable_functions: impl Into<Vec<Function>>) -> Self {
+        self.vftable_functions = Some(vftable_functions.into());
+        self
+    }
+    pub fn with_singleton(mut self, singleton: usize) -> Self {
+        self.singleton = Some(singleton);
+        self
+    }
+}
 
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct EnumDefinition {
