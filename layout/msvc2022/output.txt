@@ -1,0 +1,203 @@
+ 
+=============================================== 
+Class layout for Derived_A0_B0_0 
+=============================================== 
+test.cpp
+
+class Derived_A0_B0_0	size(12):
+	+---
+ 0	| +--- (base class BaseA_0)
+ 0	| | field1
+	| +---
+ 4	| +--- (base class BaseB_0)
+ 4	| | field2
+	| +---
+ 8	| derivedField
+	+---
+ 
+=============================================== 
+Class layout for Derived_A0_B0_1 
+=============================================== 
+test.cpp
+
+class Derived_A0_B0_1	size(24):
+	+---
+ 0	| {vfptr}
+ 8	| +--- (base class BaseA_0)
+ 8	| | field1
+	| +---
+12	| +--- (base class BaseB_0)
+12	| | field2
+	| +---
+16	| derivedField
+  	| <alignment member> (size=4)
+	+---
+
+Derived_A0_B0_1::$vftable@:
+	| &Derived_A0_B0_1_meta
+	|  0
+ 0	| &Derived_A0_B0_1::func3 
+
+Derived_A0_B0_1::func3 this adjustor: 0
+ 
+=============================================== 
+Class layout for Derived_A0_B1_0 
+=============================================== 
+test.cpp
+
+class Derived_A0_B1_0	size(24):
+	+---
+ 0	| +--- (base class BaseB_1)
+ 0	| | {vfptr}
+ 8	| | field2
+  	| | <alignment member> (size=4)
+	| +---
+16	| +--- (base class BaseA_0)
+16	| | field1
+	| +---
+20	| derivedField
+	+---
+
+Derived_A0_B1_0::$vftable@:
+	| &Derived_A0_B1_0_meta
+	|  0
+ 0	| &BaseB_1::func2 
+ 
+=============================================== 
+Class layout for Derived_A0_B1_1 
+=============================================== 
+test.cpp
+
+class Derived_A0_B1_1	size(24):
+	+---
+ 0	| +--- (base class BaseB_1)
+ 0	| | {vfptr}
+ 8	| | field2
+  	| | <alignment member> (size=4)
+	| +---
+16	| +--- (base class BaseA_0)
+16	| | field1
+	| +---
+20	| derivedField
+	+---
+
+Derived_A0_B1_1::$vftable@:
+	| &Derived_A0_B1_1_meta
+	|  0
+ 0	| &BaseB_1::func2 
+ 1	| &Derived_A0_B1_1::func3 
+
+Derived_A0_B1_1::func3 this adjustor: 0
+ 
+=============================================== 
+Class layout for Derived_A1_B0_0 
+=============================================== 
+test.cpp
+
+class Derived_A1_B0_0	size(24):
+	+---
+ 0	| +--- (base class BaseA_1)
+ 0	| | {vfptr}
+ 8	| | field1
+  	| | <alignment member> (size=4)
+	| +---
+16	| +--- (base class BaseB_0)
+16	| | field2
+	| +---
+20	| derivedField
+	+---
+
+Derived_A1_B0_0::$vftable@:
+	| &Derived_A1_B0_0_meta
+	|  0
+ 0	| &BaseA_1::func1 
+ 
+=============================================== 
+Class layout for Derived_A1_B0_1 
+=============================================== 
+test.cpp
+
+class Derived_A1_B0_1	size(24):
+	+---
+ 0	| +--- (base class BaseA_1)
+ 0	| | {vfptr}
+ 8	| | field1
+  	| | <alignment member> (size=4)
+	| +---
+16	| +--- (base class BaseB_0)
+16	| | field2
+	| +---
+20	| derivedField
+	+---
+
+Derived_A1_B0_1::$vftable@:
+	| &Derived_A1_B0_1_meta
+	|  0
+ 0	| &BaseA_1::func1 
+ 1	| &Derived_A1_B0_1::func3 
+
+Derived_A1_B0_1::func3 this adjustor: 0
+ 
+=============================================== 
+Class layout for Derived_A1_B1_0 
+=============================================== 
+test.cpp
+
+class Derived_A1_B1_0	size(40):
+	+---
+ 0	| +--- (base class BaseA_1)
+ 0	| | {vfptr}
+ 8	| | field1
+  	| | <alignment member> (size=4)
+	| +---
+16	| +--- (base class BaseB_1)
+16	| | {vfptr}
+24	| | field2
+  	| | <alignment member> (size=4)
+	| +---
+32	| derivedField
+  	| <alignment member> (size=4)
+	+---
+
+Derived_A1_B1_0::$vftable@BaseA_1@:
+	| &Derived_A1_B1_0_meta
+	|  0
+ 0	| &BaseA_1::func1 
+
+Derived_A1_B1_0::$vftable@BaseB_1@:
+	| -16
+ 0	| &BaseB_1::func2 
+ 
+=============================================== 
+Class layout for Derived_A1_B1_1 
+=============================================== 
+test.cpp
+
+class Derived_A1_B1_1	size(40):
+	+---
+ 0	| +--- (base class BaseA_1)
+ 0	| | {vfptr}
+ 8	| | field1
+  	| | <alignment member> (size=4)
+	| +---
+16	| +--- (base class BaseB_1)
+16	| | {vfptr}
+24	| | field2
+  	| | <alignment member> (size=4)
+	| +---
+32	| derivedField
+  	| <alignment member> (size=4)
+	+---
+
+Derived_A1_B1_1::$vftable@BaseA_1@:
+	| &Derived_A1_B1_1_meta
+	|  0
+ 0	| &BaseA_1::func1 
+ 1	| &Derived_A1_B1_1::func3 
+
+Derived_A1_B1_1::$vftable@BaseB_1@:
+	| -16
+ 0	| &BaseB_1::func2 
+
+Derived_A1_B1_1::func3 this adjustor: 0
+ 
