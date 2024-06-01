@@ -312,12 +312,12 @@ fn can_parse_array_field() {
 fn can_parse_backends() {
     let text = r##"
 backend rust {
-    prelude r#"
+    prologue r#"
         use std::ffi::CString;
         use std::os::raw::c_char;
     "#;
 
-    postlude r#"
+    epilogue r#"
         fn main() {
             println!("Hello, world!");
         }
@@ -326,14 +326,14 @@ backend rust {
 "##;
 
     let ast = M::new().with_backends([B::new("rust")
-        .with_prelude(
+        .with_prologue(
             r#"
         use std::ffi::CString;
         use std::os::raw::c_char;
     "#
             .trim(),
         )
-        .with_postlude(
+        .with_epilogue(
             r#"
         fn main() {
             println!("Hello, world!");

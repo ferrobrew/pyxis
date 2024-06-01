@@ -192,6 +192,6 @@ impl ItemDefinition {
 
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct Backend {
-    pub prelude: Option<String>,
-    pub postlude: Option<String>,
+    pub prologue: Option<String>,
+    pub epilogue: Option<String>,
 }

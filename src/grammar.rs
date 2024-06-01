@@ -406,23 +406,23 @@ impl FunctionBlock {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Backend {
     pub name: Ident,
-    pub prelude: Option<String>,
-    pub postlude: Option<String>,
+    pub prologue: Option<String>,
+    pub epilogue: Option<String>,
 }
 impl Backend {
     pub fn new(name: &str) -> Self {
         Self {
             name: name.into(),
-            prelude: None,
-            postlude: None,
+            prologue: None,
+            epilogue: None,
         }
     }
-    pub fn with_prelude(mut self, prelude: impl Into<String>) -> Self {
-        self.prelude = Some(prelude.into());
+    pub fn with_prologue(mut self, prologue: impl Into<String>) -> Self {
+        self.prologue = Some(prologue.into());
         self
     }
-    pub fn with_postlude(mut self, postlude: impl Into<String>) -> Self {
-        self.postlude = Some(postlude.into());
+    pub fn with_epilogue(mut self, epilogue: impl Into<String>) -> Self {
+        self.epilogue = Some(epilogue.into());
         self
     }
 }

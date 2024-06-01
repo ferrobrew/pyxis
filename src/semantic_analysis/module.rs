@@ -64,8 +64,8 @@ impl Module {
             backends_map.insert(
                 backend.name.0.clone(),
                 Backend {
-                    prelude: backend.prelude.clone(),
-                    postlude: backend.postlude.clone(),
+                    prologue: backend.prologue.clone(),
+                    epilogue: backend.epilogue.clone(),
                 },
             );
         }

@@ -382,8 +382,8 @@ pub fn write_module(
     let mut file = std::fs::File::create(&path)?;
 
     let backend = module.backends.get("rust");
-    if let Some(prelude) = backend.as_ref().and_then(|b| b.prelude.as_ref()) {
-        writeln!(file, "{}", prelude)?;
+    if let Some(prologue) = backend.as_ref().and_then(|b| b.prologue.as_ref()) {
+        writeln!(file, "{}", prologue)?;
     }
 
     for definition in module
@@ -401,8 +401,8 @@ pub fn write_module(
         writeln!(file, "{}", build_extern_value(name, type_, *address)?)?;
     }
 
-    if let Some(postlude) = backend.as_ref().and_then(|b| b.postlude.as_ref()) {
-        writeln!(file, "{}", postlude)?;
+    if let Some(epilogue) = backend.as_ref().and_then(|b| b.epilogue.as_ref()) {
+        writeln!(file, "{}", epilogue)?;
     }
 
     if FORMAT_OUTPUT {

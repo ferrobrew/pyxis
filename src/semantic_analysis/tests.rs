@@ -801,21 +801,22 @@ fn can_resolve_enum() {
 
 #[test]
 fn can_carry_backend_across() {
-    let prelude = r#"
+    let prologue = r#"
         use std::ffi::CString;
         use std::os::raw::c_char;
     "#
     .trim();
 
-    let postlude = r#"
+    let epilogue = r#"
         fn main() {
             println!("Hello, world!");
         }
     "#
     .trim();
 
-    let ast =
-        M::new().with_backends([B::new("rust").with_prelude(prelude).with_postlude(postlude)]);
+    let ast = M::new().with_backends([B::new("rust")
+        .with_prologue(prologue)
+        .with_epilogue(epilogue)]);
     let test_path = IP::from_colon_delimited_str("test");
 
     let state = build_state(&ast, &test_path).unwrap();
@@ -824,8 +825,8 @@ fn can_carry_backend_across() {
     assert_eq!(
         module.backends.get("rust").unwrap(),
         &Backend {
-            prelude: Some(prelude.to_string()),
-            postlude: Some(postlude.to_string()),
+            prologue: Some(prologue.to_string()),
+            epilogue: Some(epilogue.to_string()),
         }
     );
 }

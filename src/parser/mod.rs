@@ -15,8 +15,8 @@ mod kw {
     syn::custom_keyword!(functions);
     syn::custom_keyword!(unknown);
     syn::custom_keyword!(backend);
-    syn::custom_keyword!(prelude);
-    syn::custom_keyword!(postlude);
+    syn::custom_keyword!(prologue);
+    syn::custom_keyword!(epilogue);
 }
 
 impl Parse for Ident {
@@ -400,29 +400,29 @@ fn parse_backend(input: ParseStream) -> Result<Backend> {
     let content;
     braced!(content in input);
 
-    let mut prelude = None;
-    let mut postlude = None;
+    let mut prologue = None;
+    let mut epilogue = None;
 
     while !content.is_empty() {
-        if content.peek(kw::prelude) {
-            content.parse::<kw::prelude>()?;
+        if content.peek(kw::prologue) {
+            content.parse::<kw::prologue>()?;
             let temp: syn::LitStr = content.parse()?;
             content.parse::<Token![;]>()?;
-            prelude = Some(temp.value().trim().to_string());
-        } else if content.peek(kw::postlude) {
-            content.parse::<kw::postlude>()?;
+            prologue = Some(temp.value().trim().to_string());
+        } else if content.peek(kw::epilogue) {
+            content.parse::<kw::epilogue>()?;
             let temp: syn::LitStr = content.parse()?;
             content.parse::<Token![;]>()?;
-            postlude = Some(temp.value().trim().to_string());
+            epilogue = Some(temp.value().trim().to_string());
         } else {
-            return Err(content.error("expected prelude or postlude"));
+            return Err(content.error("expected prologue or epilogue"));
         }
     }
 
     Ok(Backend {
         name,
-        prelude,
-        postlude,
+        prologue,
+        epilogue,
     })
 }
 
