@@ -5,7 +5,7 @@ use crate::{
     semantic_analysis::type_registry,
 };
 
-#[allow(dead_code)]
+#[allow(dead_code, clippy::upper_case_acronyms)]
 pub mod test_aliases {
     pub type SID = super::ItemDefinition;
     pub type STD = super::TypeDefinition;
