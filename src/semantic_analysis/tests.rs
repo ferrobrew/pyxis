@@ -33,6 +33,15 @@ fn assert_ast_produces_type_definitions(
     assert_eq!(created_type_definitions, expected_type_definitions);
 }
 
+fn assert_ast_produces_failure(module: M, failure: &str) {
+    assert_eq!(
+        build_state(&module, &IP::from("test"))
+            .unwrap_err()
+            .to_string(),
+        failure
+    );
+}
+
 fn unknown(size: usize) -> ST {
     ST::raw("u8").array(size)
 }
@@ -202,16 +211,12 @@ fn can_resolve_complex_type() {
 
 #[test]
 fn will_eventually_terminate_with_an_unknown_type() {
-    let module = M::new().with_definitions([ID::new(
-        "TestType2",
-        TD::new([TS::field("field_2", T::ident("TestType1"))]),
-    )]);
-
-    assert_eq!(
-        build_state(&module, &IP::from("test"))
-            .unwrap_err()
-            .to_string(),
-        r#"type resolution will not terminate, failed on types: ["test::TestType2"] (resolved types: [])"#
+    assert_ast_produces_failure(
+        M::new().with_definitions([ID::new(
+            "TestType2",
+            TD::new([TS::field("field_2", T::ident("TestType1"))]),
+        )]),
+        r#"type resolution will not terminate, failed on types: ["test::TestType2"] (resolved types: [])"#,
     );
 }
 
@@ -260,13 +265,9 @@ fn can_use_type_from_another_module() {
 
 #[test]
 fn will_fail_on_an_extern_without_size() {
-    let module = M::new().with_extern_types([("TestType".into(), vec![])]);
-
-    assert_eq!(
-        build_state(&module, &IP::from("module"))
-            .unwrap_err()
-            .to_string(),
-        "failed to find size attribute for extern type"
+    assert_ast_produces_failure(
+        M::new().with_extern_types([("TestType".into(), vec![])]),
+        "failed to find size attribute for extern type",
     );
 }
 
@@ -314,27 +315,22 @@ fn can_resolve_embed_of_an_extern() {
 
 #[test]
 fn will_fail_on_type_with_vfuncs_but_no_vftable() {
-    let module = M::new()
-        .with_definitions([ID::new("TestType", TD::new([]))])
-        .with_vftable([FB::new(
-            "TestType",
-            [F::new(
-                "test_function0",
-                [
-                    Ar::MutSelf,
-                    Ar::Field(TF::new("arg0", T::ident("u32"))),
-                    Ar::Field(TF::new("arg1", T::ident("f32"))),
-                ],
-            )
-            .with_return_type("i32")],
-        )]);
-
-    let test_module_path = IP::from("test");
-    assert_eq!(
-        build_state(&module, &test_module_path)
-            .unwrap_err()
-            .to_string(),
-        "type test::TestType has vftable functions but no vftable field"
+    assert_ast_produces_failure(
+        M::new()
+            .with_definitions([ID::new("TestType", TD::new([]))])
+            .with_vftable([FB::new(
+                "TestType",
+                [F::new(
+                    "test_function0",
+                    [
+                        Ar::MutSelf,
+                        Ar::Field(TF::new("arg0", T::ident("u32"))),
+                        Ar::Field(TF::new("arg1", T::ident("f32"))),
+                    ],
+                )
+                .with_return_type("i32")],
+            )]),
+        "type test::TestType has vftable functions but no vftable field",
     );
 }
 
@@ -719,57 +715,45 @@ fn can_handle_defaultable_on_primitive_types() {
 
 #[test]
 fn will_reject_defaultable_on_pointer() {
-    let module = M::new().with_definitions([ID::new(
-        "TestType",
-        TD::new([TS::field("field_1", T::ident("i32").mut_pointer())])
-            .with_attributes([A::defaultable()]),
-    )]);
-
-    assert_eq!(
-        build_state(&module, &IP::from("test"))
-            .unwrap_err()
-            .to_string(),
-        "field field_1 of type test::TestType is not a defaultable type (pointer or function?)"
+    assert_ast_produces_failure(
+        M::new().with_definitions([ID::new(
+            "TestType",
+            TD::new([TS::field("field_1", T::ident("i32").mut_pointer())])
+                .with_attributes([A::defaultable()]),
+        )]),
+        "field field_1 of type test::TestType is not a defaultable type (pointer or function?)",
     );
 }
 
 #[test]
 fn will_reject_defaultable_on_enum_field() {
-    let module = M::new().with_definitions([
-        ID::new(
-            "TestType",
-            TD::new([TS::field("field_1", T::ident("TestEnum"))])
-                .with_attributes([A::defaultable()]),
-        ),
-        ID::new(
-            "TestEnum",
-            ED::new(T::ident("u32"), [ES::field("Item1")], []),
-        ),
-    ]);
-
-    assert_eq!(
-        build_state(&module, &IP::from("test"))
-            .unwrap_err()
-            .to_string(),
-        "field field_1 of type test::TestType is not a defaultable type (non-type?)"
+    assert_ast_produces_failure(
+        M::new().with_definitions([
+            ID::new(
+                "TestType",
+                TD::new([TS::field("field_1", T::ident("TestEnum"))])
+                    .with_attributes([A::defaultable()]),
+            ),
+            ID::new(
+                "TestEnum",
+                ED::new(T::ident("u32"), [ES::field("Item1")], []),
+            ),
+        ]),
+        "field field_1 of type test::TestType is not a defaultable type (non-type?)",
     );
 }
 
 #[test]
 fn will_reject_defaultable_on_non_defaultable_type() {
-    let module = M::new().with_definitions([
-        ID::new(
-            "TestType",
-            TD::new([TS::field("field_1", T::ident("TestNonDefaultable"))])
-                .with_attributes([A::defaultable()]),
-        ),
-        ID::new("TestNonDefaultable", TD::new([])),
-    ]);
-
-    assert_eq!(
-        build_state(&module, &IP::from("test"))
-            .unwrap_err()
-            .to_string(),
-        "field field_1 of type test::TestType is not marked as defaultable"
+    assert_ast_produces_failure(
+        M::new().with_definitions([
+            ID::new(
+                "TestType",
+                TD::new([TS::field("field_1", T::ident("TestNonDefaultable"))])
+                    .with_attributes([A::defaultable()]),
+            ),
+            ID::new("TestNonDefaultable", TD::new([])),
+        ]),
+        "field field_1 of type test::TestType is not marked as defaultable",
     );
 }
