@@ -571,7 +571,9 @@ impl SemanticState {
 
         // Create vftable
         if let Some(vftable_functions) = vftable_functions {
-            if let Some(vftable) = build_vftable_item(resolvee_path, vftable_functions) {
+            if let Some(vftable) =
+                build_vftable_item(&self.type_registry, resolvee_path, vftable_functions)
+            {
                 let vftable_path = vftable.path.clone();
                 self.add_type(vftable)?;
                 let region = Region {
@@ -715,7 +717,11 @@ impl ResolvedSemanticState {
     }
 }
 
-fn build_vftable_item(resolvee_path: &ItemPath, functions: &[Function]) -> Option<ItemDefinition> {
+fn build_vftable_item(
+    type_registry: &TypeRegistry,
+    resolvee_path: &ItemPath,
+    functions: &[Function],
+) -> Option<ItemDefinition> {
     let name = resolvee_path.last()?;
 
     let resolvee_vtable_path = resolvee_path
@@ -747,12 +753,13 @@ fn build_vftable_item(resolvee_path: &ItemPath, functions: &[Function]) -> Optio
         }
     };
 
+    let regions: Vec<_> = functions.iter().map(function_to_field).collect();
     Some(ItemDefinition {
         path: resolvee_vtable_path.clone(),
         state: ItemState::Resolved(ItemStateResolved {
-            size: 0,
+            size: regions.iter().map(|r| r.size(type_registry).unwrap()).sum(),
             inner: TypeDefinition {
-                regions: functions.iter().map(function_to_field).collect(),
+                regions,
                 free_functions: vec![],
                 vftable_functions: None,
                 singleton: None,

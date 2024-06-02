@@ -394,7 +394,7 @@ fn can_generate_vftable() {
             SID::defined_resolved(
                 "test::TestTypeVftable",
                 SISR {
-                    size: 0,
+                    size: 16,
                     inner: STD::new()
                         .with_regions([
                             SR::field(
@@ -497,7 +497,7 @@ fn can_generate_vftable_with_indices() {
             SID::defined_resolved(
                 "test::TestTypeVftable",
                 SISR {
-                    size: 0,
+                    size: 32,
                     inner: STD::new()
                         .with_regions([
                             make_vfunc_region(0),
