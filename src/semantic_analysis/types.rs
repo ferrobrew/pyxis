@@ -5,6 +5,22 @@ use crate::{
     semantic_analysis::type_registry,
 };
 
+#[allow(dead_code)]
+pub mod test_aliases {
+    pub type SID = super::ItemDefinition;
+    pub type STD = super::TypeDefinition;
+    pub type SED = super::EnumDefinition;
+    pub type ST = super::Type;
+    pub type SAr = super::Argument;
+    pub type SF = super::Function;
+    pub type SIP = super::ItemPath;
+    pub type SB = super::Backend;
+    pub type SR = super::Region;
+    pub type SIC = super::ItemCategory;
+    pub type SIS = super::ItemState;
+    pub type SISR = super::ItemStateResolved;
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Argument {
     ConstSelf,

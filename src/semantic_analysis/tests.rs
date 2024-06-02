@@ -4,10 +4,7 @@ use crate::{
     grammar::test_aliases::*,
     semantic_analysis::{
         semantic_state::{ResolvedSemanticState, SemanticState},
-        types::{
-            Argument, Backend, EnumDefinition, Function, ItemCategory, ItemDefinition, ItemState,
-            ItemStateResolved, Region, Type, TypeDefinition,
-        },
+        types::test_aliases::*,
     },
 };
 
@@ -19,7 +16,7 @@ fn build_state(module: &M, module_path: &IP) -> anyhow::Result<ResolvedSemanticS
     semantic_state.build()
 }
 
-fn build_type(module: &M, type_path: &IP) -> anyhow::Result<ItemDefinition> {
+fn build_type(module: &M, type_path: &IP) -> anyhow::Result<SID> {
     build_state(
         module,
         &type_path.parent().context("failed to get path parent")?,
@@ -30,8 +27,8 @@ fn build_type(module: &M, type_path: &IP) -> anyhow::Result<ItemDefinition> {
     .context("failed to get type")
 }
 
-fn unknown(size: usize) -> Type {
-    Type::raw("u8").array(size)
+fn unknown(size: usize) -> ST {
+    ST::raw("u8").array(size)
 }
 
 #[test]
@@ -46,19 +43,19 @@ fn can_resolve_basic_struct() {
     )]);
 
     let path = IP::from("test::TestType");
-    let type_definition = ItemDefinition {
+    let type_definition = SID {
         path: path.clone(),
-        state: ItemState::Resolved(ItemStateResolved {
+        state: SIS::Resolved(SISR {
             size: 16,
-            inner: TypeDefinition::new()
+            inner: STD::new()
                 .with_regions([
-                    Region::field("field_1", Type::raw("i32")),
-                    Region::field("_field_4", unknown(4)),
-                    Region::field("field_2", Type::raw("u64")),
+                    SR::field("field_1", ST::raw("i32")),
+                    SR::field("_field_4", unknown(4)),
+                    SR::field("field_2", ST::raw("u64")),
                 ])
                 .into(),
         }),
-        category: ItemCategory::Defined,
+        category: SIC::Defined,
     };
 
     assert_eq!(build_type(&module, &path).unwrap(), type_definition);
@@ -83,20 +80,20 @@ fn can_resolve_pointer_to_another_struct() {
     ]);
 
     let path = IP::from("test::TestType2");
-    let type_definition = ItemDefinition {
+    let type_definition = SID {
         path: path.clone(),
-        state: ItemState::Resolved(ItemStateResolved {
+        state: SIS::Resolved(SISR {
             size: 20,
-            inner: TypeDefinition::new()
+            inner: STD::new()
                 .with_regions([
-                    Region::field("field_1", Type::raw("i32")),
-                    Region::field("field_2", Type::raw("test::TestType1")),
-                    Region::field("field_3", Type::raw("test::TestType1").const_pointer()),
-                    Region::field("field_4", Type::raw("test::TestType1").mut_pointer()),
+                    SR::field("field_1", ST::raw("i32")),
+                    SR::field("field_2", ST::raw("test::TestType1")),
+                    SR::field("field_3", ST::raw("test::TestType1").const_pointer()),
+                    SR::field("field_4", ST::raw("test::TestType1").mut_pointer()),
                 ])
                 .into(),
         }),
-        category: ItemCategory::Defined,
+        category: SIC::Defined,
     };
 
     assert_eq!(build_type(&module, &path).unwrap(), type_definition);
@@ -141,36 +138,33 @@ fn can_resolve_complex_type() {
         )]);
 
     let path = IP::from("test::Singleton");
-    let type_definition = ItemDefinition {
+    let type_definition = SID {
         path: path.clone(),
-        state: ItemState::Resolved(ItemStateResolved {
+        state: SIS::Resolved(SISR {
             size: 0x1750,
-            inner: TypeDefinition::new()
+            inner: STD::new()
                 .with_regions([
-                    Region::field("_field_0", unknown(0x78)),
-                    Region::field("max_num_1", Type::raw("u16")),
-                    Region::field("max_num_2", Type::raw("u16")),
-                    Region::field("_field_7c", unknown(0x984)),
-                    Region::field("test_type", Type::raw("test::TestType")),
-                    Region::field("settings", unknown(804)),
-                    Region::field("_field_d2c", unknown(0xA24)),
+                    SR::field("_field_0", unknown(0x78)),
+                    SR::field("max_num_1", ST::raw("u16")),
+                    SR::field("max_num_2", ST::raw("u16")),
+                    SR::field("_field_7c", unknown(0x984)),
+                    SR::field("test_type", ST::raw("test::TestType")),
+                    SR::field("settings", unknown(804)),
+                    SR::field("_field_d2c", unknown(0xA24)),
                 ])
-                .with_free_functions([Function::new("test_function")
+                .with_free_functions([SF::new("test_function")
                     .with_address(0x800_000)
                     .with_arguments([
-                        Argument::MutSelf,
-                        Argument::field(
-                            "arg1".to_string(),
-                            Type::raw("test::TestType").mut_pointer(),
-                        ),
-                        Argument::field("arg2", Type::raw("i32")),
-                        Argument::field("arg3", Type::raw("u32").const_pointer()),
+                        SAr::MutSelf,
+                        SAr::field("arg1".to_string(), ST::raw("test::TestType").mut_pointer()),
+                        SAr::field("arg2", ST::raw("i32")),
+                        SAr::field("arg3", ST::raw("u32").const_pointer()),
                     ])
-                    .with_return_type(Type::raw("test::TestType").mut_pointer())])
+                    .with_return_type(ST::raw("test::TestType").mut_pointer())])
                 .with_singleton(0x1_200_000)
                 .into(),
         }),
-        category: ItemCategory::Defined,
+        category: SIC::Defined,
     };
 
     assert_eq!(build_type(&module, &path).unwrap(), type_definition);
@@ -204,15 +198,15 @@ fn can_use_type_from_another_module() {
     )]);
 
     let path = IP::from("module1::TestType1");
-    let target_resolved_type = ItemDefinition {
+    let target_resolved_type = SID {
         path: path.clone(),
-        state: ItemState::Resolved(ItemStateResolved {
+        state: SIS::Resolved(SISR {
             size: 4,
-            inner: TypeDefinition::new()
-                .with_regions([Region::field("field", Type::raw("module2::TestType2"))])
+            inner: STD::new()
+                .with_regions([SR::field("field", ST::raw("module2::TestType2"))])
                 .into(),
         }),
-        category: ItemCategory::Defined,
+        category: SIC::Defined,
     };
 
     let mut semantic_state = SemanticState::new(4);
@@ -261,20 +255,20 @@ fn can_resolve_embed_of_an_extern() {
         )]);
 
     let path = IP::from("test::TestType2");
-    let type_definition = ItemDefinition {
+    let type_definition = SID {
         path: path.clone(),
-        state: ItemState::Resolved(ItemStateResolved {
+        state: SIS::Resolved(SISR {
             size: 28,
-            inner: TypeDefinition::new()
+            inner: STD::new()
                 .with_regions([
-                    Region::field("field_1", Type::raw("i32")),
-                    Region::field("field_2", Type::raw("test::TestType1")),
-                    Region::field("field_3", Type::raw("test::TestType1").const_pointer()),
-                    Region::field("field_4", Type::raw("test::TestType1").mut_pointer()),
+                    SR::field("field_1", ST::raw("i32")),
+                    SR::field("field_2", ST::raw("test::TestType1")),
+                    SR::field("field_3", ST::raw("test::TestType1").const_pointer()),
+                    SR::field("field_4", ST::raw("test::TestType1").mut_pointer()),
                 ])
                 .into(),
         }),
-        category: ItemCategory::Defined,
+        category: SIC::Defined,
     };
 
     assert_eq!(build_type(&module, &path).unwrap(), type_definition);
@@ -334,59 +328,59 @@ fn can_generate_vftable() {
         )
         .with_attributes([A::size(4)])]);
 
-    let type_definition = ItemDefinition {
+    let type_definition = SID {
         path: IP::from("test::TestType"),
-        state: ItemState::Resolved(ItemStateResolved {
+        state: SIS::Resolved(SISR {
             size: 4,
-            inner: TypeDefinition::new()
-                .with_regions([Region::field(
+            inner: STD::new()
+                .with_regions([SR::field(
                     "vftable",
-                    Type::raw("test::TestTypeVftable").const_pointer(),
+                    ST::raw("test::TestTypeVftable").const_pointer(),
                 )])
                 .with_vftable_functions([
-                    Function::new("test_function0")
+                    SF::new("test_function0")
                         .with_arguments([
-                            Argument::MutSelf,
-                            Argument::field("arg0", Type::raw("u32")),
-                            Argument::field("arg1", Type::raw("f32")),
+                            SAr::MutSelf,
+                            SAr::field("arg0", ST::raw("u32")),
+                            SAr::field("arg1", ST::raw("f32")),
                         ])
-                        .with_return_type(Type::raw("i32")),
-                    Function::new("test_function1").with_arguments([
-                        Argument::MutSelf,
-                        Argument::field("arg0", Type::raw("u32")),
-                        Argument::field("arg1", Type::raw("f32")),
+                        .with_return_type(ST::raw("i32")),
+                    SF::new("test_function1").with_arguments([
+                        SAr::MutSelf,
+                        SAr::field("arg0", ST::raw("u32")),
+                        SAr::field("arg1", ST::raw("f32")),
                     ]),
                     make_vfunc(2),
                     make_vfunc(3),
                 ])
                 .into(),
         }),
-        category: ItemCategory::Defined,
+        category: SIC::Defined,
     };
-    let vftable_type_definition = ItemDefinition {
+    let vftable_type_definition = SID {
         path: IP::from("test::TestTypeVftable"),
-        state: ItemState::Resolved(ItemStateResolved {
+        state: SIS::Resolved(SISR {
             size: 0,
-            inner: TypeDefinition::new()
+            inner: STD::new()
                 .with_regions([
-                    Region::field(
+                    SR::field(
                         "test_function0",
-                        Type::function(
+                        ST::function(
                             [
-                                ("this", Type::raw("test::TestType").mut_pointer()),
-                                ("arg0", Type::raw("u32")),
-                                ("arg1", Type::raw("f32")),
+                                ("this", ST::raw("test::TestType").mut_pointer()),
+                                ("arg0", ST::raw("u32")),
+                                ("arg1", ST::raw("f32")),
                             ],
-                            Type::raw("i32"),
+                            ST::raw("i32"),
                         ),
                     ),
-                    Region::field(
+                    SR::field(
                         "test_function1",
-                        Type::function(
+                        ST::function(
                             [
-                                ("this", Type::raw("test::TestType").mut_pointer()),
-                                ("arg0", Type::raw("u32")),
-                                ("arg1", Type::raw("f32")),
+                                ("this", ST::raw("test::TestType").mut_pointer()),
+                                ("arg0", ST::raw("u32")),
+                                ("arg1", ST::raw("f32")),
                             ],
                             None,
                         ),
@@ -396,7 +390,7 @@ fn can_generate_vftable() {
                 ])
                 .into(),
         }),
-        category: ItemCategory::Defined,
+        category: SIC::Defined,
     };
 
     let test_module_path = IP::from("test");
@@ -458,68 +452,68 @@ fn can_generate_vftable_with_indices() {
         )
         .with_attributes([A::size(8)])]);
 
-    let type_definition = ItemDefinition {
+    let type_definition = SID {
         path: IP::from("test::TestType"),
-        state: ItemState::Resolved(ItemStateResolved {
+        state: SIS::Resolved(SISR {
             size: 4,
-            inner: TypeDefinition::new()
-                .with_regions([Region::field(
+            inner: STD::new()
+                .with_regions([SR::field(
                     "vftable",
-                    Type::raw("test::TestTypeVftable").const_pointer(),
+                    ST::raw("test::TestTypeVftable").const_pointer(),
                 )])
                 .with_vftable_functions([
                     make_vfunc(0),
                     make_vfunc(1),
-                    Function::new("test_function0")
+                    SF::new("test_function0")
                         .with_arguments([
-                            Argument::MutSelf,
-                            Argument::field("arg0", Type::raw("u32")),
-                            Argument::field("arg1", Type::raw("f32")),
+                            SAr::MutSelf,
+                            SAr::field("arg0", ST::raw("u32")),
+                            SAr::field("arg1", ST::raw("f32")),
                         ])
-                        .with_return_type(Type::raw("i32")),
+                        .with_return_type(ST::raw("i32")),
                     make_vfunc(3),
                     make_vfunc(4),
-                    Function::new("test_function1").with_arguments([
-                        Argument::MutSelf,
-                        Argument::field("arg0", Type::raw("u32")),
-                        Argument::field("arg1", Type::raw("f32")),
+                    SF::new("test_function1").with_arguments([
+                        SAr::MutSelf,
+                        SAr::field("arg0", ST::raw("u32")),
+                        SAr::field("arg1", ST::raw("f32")),
                     ]),
                     make_vfunc(6),
                     make_vfunc(7),
                 ])
                 .into(),
         }),
-        category: ItemCategory::Defined,
+        category: SIC::Defined,
     };
 
-    let vftable_type_definition = ItemDefinition {
+    let vftable_type_definition = SID {
         path: IP::from("test::TestTypeVftable"),
-        state: ItemState::Resolved(ItemStateResolved {
+        state: SIS::Resolved(SISR {
             size: 0,
-            inner: TypeDefinition::new()
+            inner: STD::new()
                 .with_regions([
                     make_vfunc_region(0),
                     make_vfunc_region(1),
-                    Region::field(
+                    SR::field(
                         "test_function0",
-                        Type::function(
+                        ST::function(
                             [
-                                ("this", Type::raw("test::TestType").mut_pointer()),
-                                ("arg0", Type::raw("u32")),
-                                ("arg1", Type::raw("f32")),
+                                ("this", ST::raw("test::TestType").mut_pointer()),
+                                ("arg0", ST::raw("u32")),
+                                ("arg1", ST::raw("f32")),
                             ],
-                            Type::raw("i32"),
+                            ST::raw("i32"),
                         ),
                     ),
                     make_vfunc_region(3),
                     make_vfunc_region(4),
-                    Region::field(
+                    SR::field(
                         "test_function1",
-                        Type::function(
+                        ST::function(
                             [
-                                ("this", Type::raw("test::TestType").mut_pointer()),
-                                ("arg0", Type::raw("u32")),
-                                ("arg1", Type::raw("f32")),
+                                ("this", ST::raw("test::TestType").mut_pointer()),
+                                ("arg0", ST::raw("u32")),
+                                ("arg1", ST::raw("f32")),
                             ],
                             None,
                         ),
@@ -529,7 +523,7 @@ fn can_generate_vftable_with_indices() {
                 ])
                 .into(),
         }),
-        category: ItemCategory::Defined,
+        category: SIC::Defined,
     };
 
     let test_module_path = IP::from("test");
@@ -561,14 +555,14 @@ fn can_generate_vftable_with_indices() {
     );
 }
 
-fn make_vfunc(index: usize) -> Function {
-    Function::new(format!("_vfunc_{}", index)).with_arguments([Argument::MutSelf])
+fn make_vfunc(index: usize) -> SF {
+    SF::new(format!("_vfunc_{}", index)).with_arguments([SAr::MutSelf])
 }
 
-fn make_vfunc_region(index: usize) -> Region {
-    Region::field(
+fn make_vfunc_region(index: usize) -> SR {
+    SR::field(
         format!("_vfunc_{}", index),
-        Type::function([("this", Type::raw("test::TestType").mut_pointer())], None),
+        ST::function([("this", ST::raw("test::TestType").mut_pointer())], None),
     )
 }
 
@@ -596,7 +590,7 @@ fn can_define_extern_value() {
 
     assert_eq!(
         extern_value,
-        &("test".into(), Type::raw("u32").mut_pointer(), 0x1337)
+        &("test".into(), ST::raw("u32").mut_pointer(), 0x1337)
     );
 }
 
@@ -617,16 +611,16 @@ fn can_resolve_enum() {
     )]);
 
     let path = IP::from("test::TestType");
-    let type_definition = ItemDefinition {
+    let type_definition = SID {
         path: path.clone(),
-        state: ItemState::Resolved(ItemStateResolved {
+        state: SIS::Resolved(SISR {
             size: 4,
-            inner: EnumDefinition::new(Type::raw("u32"))
+            inner: SED::new(ST::raw("u32"))
                 .with_fields([("Item1", 0), ("Item2", 1), ("Item3", 10), ("Item4", 11)])
                 .with_singleton(0x1234)
                 .into(),
         }),
-        category: ItemCategory::Defined,
+        category: SIC::Defined,
     };
 
     assert_eq!(build_type(&module, &path).unwrap(), type_definition);
@@ -657,7 +651,7 @@ fn can_carry_backend_across() {
 
     assert_eq!(
         module.backends.get("rust").unwrap(),
-        &Backend {
+        &SB {
             prologue: Some(prologue.to_string()),
             epilogue: Some(epilogue.to_string()),
         }
@@ -672,16 +666,16 @@ fn can_extract_copyable_and_cloneable_correctly() {
     )]);
 
     let path = IP::from("test::TestType");
-    let type_definition = ItemDefinition {
+    let type_definition = SID {
         path: path.clone(),
-        state: ItemState::Resolved(ItemStateResolved {
+        state: SIS::Resolved(SISR {
             size: 4,
-            inner: TypeDefinition::new()
-                .with_regions([Region::field("field_1", Type::raw("i32"))])
+            inner: STD::new()
+                .with_regions([SR::field("field_1", ST::raw("i32"))])
                 .with_cloneable(true)
                 .into(),
         }),
-        category: ItemCategory::Defined,
+        category: SIC::Defined,
     };
 
     assert_eq!(build_type(&module, &path).unwrap(), type_definition);
@@ -692,17 +686,17 @@ fn can_extract_copyable_and_cloneable_correctly() {
     )]);
 
     let path = IP::from("test::TestType");
-    let type_definition = ItemDefinition {
+    let type_definition = SID {
         path: path.clone(),
-        state: ItemState::Resolved(ItemStateResolved {
+        state: SIS::Resolved(SISR {
             size: 4,
-            inner: TypeDefinition::new()
-                .with_regions([Region::field("field_1", Type::raw("i32"))])
+            inner: STD::new()
+                .with_regions([SR::field("field_1", ST::raw("i32"))])
                 .with_copyable(true)
                 .with_cloneable(true)
                 .into(),
         }),
-        category: ItemCategory::Defined,
+        category: SIC::Defined,
     };
 
     assert_eq!(build_type(&module, &path).unwrap(), type_definition);
@@ -720,19 +714,19 @@ fn can_handle_defaultable_on_primitive_types() {
     )]);
 
     let path = IP::from("test::TestType");
-    let type_definition = ItemDefinition {
+    let type_definition = SID {
         path: path.clone(),
-        state: ItemState::Resolved(ItemStateResolved {
+        state: SIS::Resolved(SISR {
             size: 68,
-            inner: TypeDefinition::new()
+            inner: STD::new()
                 .with_regions([
-                    Region::field("field_1", Type::raw("i32")),
-                    Region::field("field_2", Type::raw("f32").array(16)),
+                    SR::field("field_1", ST::raw("i32")),
+                    SR::field("field_2", ST::raw("f32").array(16)),
                 ])
                 .with_defaultable(true)
                 .into(),
         }),
-        category: ItemCategory::Defined,
+        category: SIC::Defined,
     };
 
     assert_eq!(build_type(&module, &path).unwrap(), type_definition);
