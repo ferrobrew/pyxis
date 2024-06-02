@@ -747,3 +747,167 @@ fn will_reject_defaultable_on_non_defaultable_type() {
         "field field_1 of type test::TestType is not marked as defaultable",
     );
 }
+
+pub mod inheritance {
+    use super::*;
+
+    fn grammar_base_a() -> ID {
+        ID::new(
+            "BaseA",
+            TD::new([
+                TS::field("field_1", T::ident("i32")),
+                TS::field("_", T::unknown(4)),
+                TS::field("field_2", T::ident("u64")),
+            ]),
+        )
+    }
+    fn semantic_base_a() -> SID {
+        SID::defined_resolved(
+            "test::BaseA",
+            SISR {
+                size: 16,
+                inner: STD::new()
+                    .with_regions([
+                        SR::field("field_1", ST::raw("i32")),
+                        SR::field("_field_4", unknown(4)),
+                        SR::field("field_2", ST::raw("u64")),
+                    ])
+                    .into(),
+            },
+        )
+    }
+
+    fn grammar_base_b() -> ID {
+        ID::new(
+            "BaseB",
+            TD::new([
+                TS::field("field_1", T::ident("u64")),
+                TS::field("_", T::unknown(4)),
+                TS::field("field_2", T::ident("i32")),
+            ]),
+        )
+    }
+    fn semantic_base_b() -> SID {
+        SID::defined_resolved(
+            "test::BaseB",
+            SISR {
+                size: 16,
+                inner: STD::new()
+                    .with_regions([
+                        SR::field("field_1", ST::raw("u64")),
+                        SR::field("_field_8", unknown(4)),
+                        SR::field("field_2", ST::raw("i32")),
+                    ])
+                    .into(),
+            },
+        )
+    }
+
+    fn grammar_derived(with_vftable: bool) -> ID {
+        let mut statements = vec![
+            TS::field("base_a", T::ident("BaseA")).with_attributes([A::base()]),
+            TS::field("base_b", T::ident("BaseB")).with_attributes([A::base()]),
+        ];
+        if with_vftable {
+            statements.insert(0, TF::vftable().into());
+        }
+        ID::new("Derived", TD::new(statements))
+    }
+    fn semantic_derived(with_vftable: bool) -> SID {
+        let mut regions = vec![
+            SR::field("base_a", ST::raw("test::BaseA")),
+            SR::field("base_b", ST::raw("test::BaseB")),
+        ];
+        if with_vftable {
+            regions.insert(
+                0,
+                SR::field("vftable", ST::raw("test::DerivedVftable").const_pointer()),
+            );
+        }
+        let type_definition = STD::new().with_regions(regions);
+        let type_definition = if with_vftable {
+            type_definition.with_vftable_functions([semantic_derived_vfunc_func()])
+        } else {
+            type_definition
+        };
+        SID::defined_resolved(
+            "test::Derived",
+            SISR {
+                size: 32 + if with_vftable { 4 } else { 0 },
+                inner: type_definition.into(),
+            },
+        )
+    }
+    fn semantic_derived_vftable() -> SID {
+        SID::defined_resolved(
+            "test::DerivedVftable",
+            SISR {
+                size: 4,
+                inner: STD::new()
+                    .with_regions([semantic_derived_vfunc_region()])
+                    .into(),
+            },
+        )
+    }
+
+    fn grammar_derived_vfunc_func() -> F {
+        F::new(
+            "derived_vfunc",
+            [
+                Ar::MutSelf,
+                Ar::Field(TF::new("arg0", T::ident("u32"))),
+                Ar::Field(TF::new("arg1", T::ident("f32"))),
+            ],
+        )
+        .with_return_type(T::ident("i32"))
+    }
+    fn semantic_derived_vfunc_func() -> SF {
+        SF::new("derived_vfunc")
+            .with_arguments([
+                SAr::MutSelf,
+                SAr::field("arg0", ST::raw("u32")),
+                SAr::field("arg1", ST::raw("f32")),
+            ])
+            .with_return_type(ST::raw("i32"))
+    }
+    fn semantic_derived_vfunc_region() -> SR {
+        SR::field(
+            "derived_vfunc",
+            ST::function(
+                [
+                    ("this", ST::raw("test::Derived").mut_pointer()),
+                    ("arg0", ST::raw("u32")),
+                    ("arg1", ST::raw("f32")),
+                ],
+                ST::raw("i32"),
+            ),
+        )
+    }
+
+    #[test]
+    fn base_a_vf0_base_b_vf0_derived_vf0() {
+        assert_ast_produces_type_definitions(
+            M::new().with_definitions([grammar_base_a(), grammar_base_b(), grammar_derived(false)]),
+            [
+                semantic_base_a(),
+                semantic_base_b(),
+                semantic_derived(false),
+            ],
+        );
+    }
+
+    #[test]
+    fn base_a_vf0_base_b_vf0_derived_vf1() {
+        assert_ast_produces_type_definitions(
+            M::new()
+                .with_definitions([grammar_base_a(), grammar_base_b(), grammar_derived(true)])
+                .with_vftable([FB::new("Derived", [grammar_derived_vfunc_func()])]),
+            [
+                semantic_base_a(),
+                semantic_base_b(),
+                semantic_derived(true),
+                semantic_derived_vftable(),
+            ],
+        );
+    }
+}

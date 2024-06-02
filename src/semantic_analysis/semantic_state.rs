@@ -356,15 +356,21 @@ impl SemanticState {
 
             // Extract address attribute
             let mut address = None;
+            let mut _is_base = false;
             for attribute in attributes {
-                let Some((ident, exprs)) = attribute.function() else {
-                    anyhow::bail!("unsupported attribute: {attribute:?}");
-                };
-                match (ident.as_str(), &exprs[..]) {
-                    ("address", [grammar::Expr::IntLiteral(addr)]) => {
-                        address = Some(*addr as usize);
+                match attribute {
+                    grammar::Attribute::Ident(ident) => match ident.as_str() {
+                        "base" => _is_base = true,
+                        _ => anyhow::bail!("unsupported attribute: {attribute:?}"),
+                    },
+                    grammar::Attribute::Function(ident, exprs) => {
+                        match (ident.as_str(), &exprs[..]) {
+                            ("address", [grammar::Expr::IntLiteral(addr)]) => {
+                                address = Some(*addr as usize);
+                            }
+                            _ => anyhow::bail!("unsupported attribute: {attribute:?}"),
+                        }
                     }
-                    _ => anyhow::bail!("unsupported attribute: {attribute:?}"),
                 }
             }
 

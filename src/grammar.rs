@@ -232,6 +232,10 @@ impl Attribute {
     pub fn defaultable() -> Self {
         Attribute::Ident("defaultable".into())
     }
+
+    pub fn base() -> Self {
+        Attribute::Ident("base".into())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
