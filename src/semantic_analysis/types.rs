@@ -285,6 +285,11 @@ pub struct ItemStateResolved {
     pub size: usize,
     pub inner: ItemDefinitionInner,
 }
+impl From<ItemStateResolved> for ItemState {
+    fn from(isr: ItemStateResolved) -> Self {
+        ItemState::Resolved(isr)
+    }
+}
 
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]
 pub enum ItemState {
@@ -305,8 +310,15 @@ pub struct ItemDefinition {
     pub state: ItemState,
     pub category: ItemCategory,
 }
-
 impl ItemDefinition {
+    pub fn defined_resolved(path: impl Into<ItemPath>, resolved: ItemStateResolved) -> Self {
+        ItemDefinition {
+            path: path.into(),
+            state: ItemState::Resolved(resolved),
+            category: ItemCategory::Defined,
+        }
+    }
+
     pub fn resolved(&self) -> Option<&ItemStateResolved> {
         match &self.state {
             ItemState::Resolved(tsr) => Some(tsr),

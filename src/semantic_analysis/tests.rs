@@ -57,9 +57,9 @@ fn can_resolve_basic_struct() {
                 TS::field("field_2", T::ident("u64")),
             ]),
         )]),
-        [SID {
-            path: IP::from("test::TestType"),
-            state: SIS::Resolved(SISR {
+        [SID::defined_resolved(
+            "test::TestType",
+            SISR {
                 size: 16,
                 inner: STD::new()
                     .with_regions([
@@ -68,9 +68,8 @@ fn can_resolve_basic_struct() {
                         SR::field("field_2", ST::raw("u64")),
                     ])
                     .into(),
-            }),
-            category: SIC::Defined,
-        }],
+            },
+        )],
     );
 }
 
@@ -93,19 +92,18 @@ fn can_resolve_pointer_to_another_struct() {
             ),
         ]),
         [
-            SID {
-                path: IP::from("test::TestType1"),
-                state: SIS::Resolved(SISR {
+            SID::defined_resolved(
+                "test::TestType1",
+                SISR {
                     size: 8,
                     inner: STD::new()
                         .with_regions([SR::field("field_1", ST::raw("u64"))])
                         .into(),
-                }),
-                category: SIC::Defined,
-            },
-            SID {
-                path: IP::from("test::TestType2"),
-                state: SIS::Resolved(SISR {
+                },
+            ),
+            SID::defined_resolved(
+                "test::TestType2",
+                SISR {
                     size: 20,
                     inner: STD::new()
                         .with_regions([
@@ -115,9 +113,8 @@ fn can_resolve_pointer_to_another_struct() {
                             SR::field("field_4", ST::raw("test::TestType1").mut_pointer()),
                         ])
                         .into(),
-                }),
-                category: SIC::Defined,
-            },
+                },
+            ),
         ],
     );
 }
@@ -161,9 +158,9 @@ fn can_resolve_complex_type() {
                 .with_return_type(T::ident("TestType").mut_pointer())],
             )]),
         [
-            SID {
-                path: IP::from("test::TestType"),
-                state: SIS::Resolved(SISR {
+            SID::defined_resolved(
+                "test::TestType",
+                SISR {
                     size: 8,
                     inner: STD::new()
                         .with_regions([
@@ -171,12 +168,11 @@ fn can_resolve_complex_type() {
                             SR::field("_field_4", unknown(4)),
                         ])
                         .into(),
-                }),
-                category: SIC::Defined,
-            },
-            SID {
-                path: IP::from("test::Singleton"),
-                state: SIS::Resolved(SISR {
+                },
+            ),
+            SID::defined_resolved(
+                "test::Singleton",
+                SISR {
                     size: 0x1750,
                     inner: STD::new()
                         .with_regions([
@@ -202,9 +198,8 @@ fn can_resolve_complex_type() {
                             .with_return_type(ST::raw("test::TestType").mut_pointer())])
                         .with_singleton(0x1_200_000)
                         .into(),
-                }),
-                category: SIC::Defined,
-            },
+                },
+            ),
         ],
     );
 }
@@ -233,18 +228,6 @@ fn can_use_type_from_another_module() {
         TD::new([TS::field("field", T::ident("u32"))]),
     )]);
 
-    let path = IP::from("module1::TestType1");
-    let target_resolved_type = SID {
-        path: path.clone(),
-        state: SIS::Resolved(SISR {
-            size: 4,
-            inner: STD::new()
-                .with_regions([SR::field("field", ST::raw("module2::TestType2"))])
-                .into(),
-        }),
-        category: SIC::Defined,
-    };
-
     let mut semantic_state = SemanticState::new(4);
     semantic_state
         .add_module(&module1, &IP::from("module1"))
@@ -254,13 +237,25 @@ fn can_use_type_from_another_module() {
         .unwrap();
     let semantic_state = semantic_state.build().unwrap();
 
+    let path = IP::from("module1::TestType1");
     let resolved_type = semantic_state
         .type_registry()
         .get(&path)
         .cloned()
         .context("failed to get type")
         .unwrap();
-    assert_eq!(resolved_type, target_resolved_type);
+    assert_eq!(
+        resolved_type,
+        SID::defined_resolved(
+            path.clone(),
+            SISR {
+                size: 4,
+                inner: STD::new()
+                    .with_regions([SR::field("field", ST::raw("module2::TestType2"))])
+                    .into(),
+            },
+        )
+    );
 }
 
 #[test]
@@ -286,9 +281,9 @@ fn can_resolve_embed_of_an_extern() {
                 ]),
             )]),
         [
-            SID {
-                path: IP::from("test::TestType2"),
-                state: SIS::Resolved(SISR {
+            SID::defined_resolved(
+                "test::TestType2",
+                SISR {
                     size: 28,
                     inner: STD::new()
                         .with_regions([
@@ -298,15 +293,15 @@ fn can_resolve_embed_of_an_extern() {
                             SR::field("field_4", ST::raw("test::TestType1").mut_pointer()),
                         ])
                         .into(),
-                }),
-                category: SIC::Defined,
-            },
+                },
+            ),
             SID {
-                path: IP::from("test::TestType1"),
-                state: SIS::Resolved(SISR {
+                path: "test::TestType1".into(),
+                state: SISR {
                     size: 16,
                     inner: STD::new().with_regions([]).into(),
-                }),
+                }
+                .into(),
                 category: SIC::Extern,
             },
         ],
@@ -364,9 +359,9 @@ fn can_generate_vftable() {
             .with_attributes([A::size(4)])]),
         [
             // TestType
-            SID {
-                path: IP::from("test::TestType"),
-                state: SIS::Resolved(SISR {
+            SID::defined_resolved(
+                "test::TestType",
+                SISR {
                     size: 4,
                     inner: STD::new()
                         .with_regions([SR::field(
@@ -390,13 +385,12 @@ fn can_generate_vftable() {
                             make_vfunc(3),
                         ])
                         .into(),
-                }),
-                category: SIC::Defined,
-            },
+                },
+            ),
             // TestTypeVftable
-            SID {
-                path: IP::from("test::TestTypeVftable"),
-                state: SIS::Resolved(SISR {
+            SID::defined_resolved(
+                "test::TestTypeVftable",
+                SISR {
                     size: 0,
                     inner: STD::new()
                         .with_regions([
@@ -426,9 +420,8 @@ fn can_generate_vftable() {
                             make_vfunc_region(3),
                         ])
                         .into(),
-                }),
-                category: SIC::Defined,
-            },
+                },
+            ),
         ],
     );
 }
@@ -465,9 +458,9 @@ fn can_generate_vftable_with_indices() {
             .with_attributes([A::size(8)])]),
         [
             // TestType
-            SID {
-                path: IP::from("test::TestType"),
-                state: SIS::Resolved(SISR {
+            SID::defined_resolved(
+                "test::TestType",
+                SISR {
                     size: 4,
                     inner: STD::new()
                         .with_regions([SR::field(
@@ -495,13 +488,12 @@ fn can_generate_vftable_with_indices() {
                             make_vfunc(7),
                         ])
                         .into(),
-                }),
-                category: SIC::Defined,
-            },
+                },
+            ),
             // TestTypeVftable
-            SID {
-                path: IP::from("test::TestTypeVftable"),
-                state: SIS::Resolved(SISR {
+            SID::defined_resolved(
+                "test::TestTypeVftable",
+                SISR {
                     size: 0,
                     inner: STD::new()
                         .with_regions([
@@ -535,9 +527,8 @@ fn can_generate_vftable_with_indices() {
                             make_vfunc_region(7),
                         ])
                         .into(),
-                }),
-                category: SIC::Defined,
-            },
+                },
+            ),
         ],
     );
 }
@@ -597,17 +588,16 @@ fn can_resolve_enum() {
                 [A::singleton(0x1234)],
             ),
         )]),
-        [SID {
-            path: IP::from("test::TestType"),
-            state: SIS::Resolved(SISR {
+        [SID::defined_resolved(
+            "test::TestType",
+            SISR {
                 size: 4,
                 inner: SED::new(ST::raw("u32"))
                     .with_fields([("Item1", 0), ("Item2", 1), ("Item3", 10), ("Item4", 11)])
                     .with_singleton(0x1234)
                     .into(),
-            }),
-            category: SIC::Defined,
-        }],
+            },
+        )],
     );
 }
 
@@ -651,17 +641,16 @@ fn can_extract_copyable_and_cloneable_correctly() {
             "TestType",
             TD::new([TS::field("field_1", T::ident("i32"))]).with_attributes([A::cloneable()]),
         )]),
-        [SID {
-            path: IP::from("test::TestType"),
-            state: SIS::Resolved(SISR {
+        [SID::defined_resolved(
+            "test::TestType",
+            SISR {
                 size: 4,
                 inner: STD::new()
                     .with_regions([SR::field("field_1", ST::raw("i32"))])
                     .with_cloneable(true)
                     .into(),
-            }),
-            category: SIC::Defined,
-        }],
+            },
+        )],
     );
 
     // Check copyable -> copyable + cloneable
@@ -670,18 +659,17 @@ fn can_extract_copyable_and_cloneable_correctly() {
             "TestType",
             TD::new([TS::field("field_1", T::ident("i32"))]).with_attributes([A::copyable()]),
         )]),
-        [SID {
-            path: IP::from("test::TestType"),
-            state: SIS::Resolved(SISR {
+        [SID::defined_resolved(
+            "test::TestType",
+            SISR {
                 size: 4,
                 inner: STD::new()
                     .with_regions([SR::field("field_1", ST::raw("i32"))])
                     .with_copyable(true)
                     .with_cloneable(true)
                     .into(),
-            }),
-            category: SIC::Defined,
-        }],
+            },
+        )],
     );
 }
 
@@ -696,9 +684,9 @@ fn can_handle_defaultable_on_primitive_types() {
             ])
             .with_attributes([A::defaultable()]),
         )]),
-        [SID {
-            path: IP::from("test::TestType"),
-            state: SIS::Resolved(SISR {
+        [SID::defined_resolved(
+            "test::TestType",
+            SISR {
                 size: 68,
                 inner: STD::new()
                     .with_regions([
@@ -707,9 +695,8 @@ fn can_handle_defaultable_on_primitive_types() {
                     ])
                     .with_defaultable(true)
                     .into(),
-            }),
-            category: SIC::Defined,
-        }],
+            },
+        )],
     );
 }
 
