@@ -49,6 +49,13 @@ impl Type {
         Type::Ident(ident.into())
     }
 
+    pub fn as_ident(&self) -> Option<&Ident> {
+        match self {
+            Type::Ident(ident) => Some(ident),
+            _ => None,
+        }
+    }
+
     pub fn const_pointer(self) -> Type {
         Type::ConstPointer(Box::new(self))
     }
@@ -284,8 +291,26 @@ impl From<(Ident, Expr)> for ExprField {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TypeField(pub Ident, pub Type);
 impl TypeField {
+    const VFTABLE_FIELD_NAME: &'static str = "vftable";
+    const VFTABLE_FIELD_TYPE: &'static str = "Vftable";
+
     pub fn new(name: impl Into<Ident>, type_: impl Into<Type>) -> TypeField {
         TypeField(name.into(), type_.into())
+    }
+
+    pub fn vftable() -> TypeField {
+        TypeField::new(
+            Self::VFTABLE_FIELD_NAME,
+            Type::Ident(Self::VFTABLE_FIELD_TYPE.into()),
+        )
+    }
+
+    pub fn is_vftable(&self) -> bool {
+        self.0.as_str() == Self::VFTABLE_FIELD_NAME
+            && self
+                .1
+                .as_ident()
+                .is_some_and(|i| i.as_str() == Self::VFTABLE_FIELD_TYPE)
     }
 }
 impl From<(Ident, Type)> for TypeField {
@@ -309,6 +334,14 @@ impl TypeStatement {
     pub fn with_attributes(mut self, attributes: impl Into<Vec<Attribute>>) -> Self {
         self.attributes = attributes.into();
         self
+    }
+}
+impl From<TypeField> for TypeStatement {
+    fn from(field: TypeField) -> Self {
+        TypeStatement {
+            field,
+            attributes: vec![],
+        }
     }
 }
 
@@ -487,7 +520,7 @@ impl Module {
         self
     }
 
-    pub fn with_vftables(mut self, vftables: impl Into<Vec<FunctionBlock>>) -> Self {
+    pub fn with_vftable(mut self, vftables: impl Into<Vec<FunctionBlock>>) -> Self {
         self.vftables = vftables.into();
         self
     }

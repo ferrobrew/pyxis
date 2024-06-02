@@ -5,6 +5,7 @@ use crate::{
     semantic_analysis::types::{ItemDefinition, Type},
 };
 
+#[derive(Debug)]
 pub struct TypeRegistry {
     pub(crate) types: HashMap<ItemPath, ItemDefinition>,
     pub(crate) pointer_size: usize,

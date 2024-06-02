@@ -23,15 +23,17 @@ fn can_parse_basic_struct() {
 #[test]
 fn can_parse_vftable() {
     let text = r#"
-        type TestType;
-        impl virtual TestType {
+        type TestType {
+            vftable,
+        }
+        impl vftable TestType {
             fn test(&mut self, test2: i32);
         }
         "#;
 
     let ast = M::new()
-        .with_definitions([ID::new("TestType", TD::new([]))])
-        .with_vftables([FB::new(
+        .with_definitions([ID::new("TestType", TD::new([TF::vftable().into()]))])
+        .with_vftable([FB::new(
             "TestType",
             [F::new(
                 "test",

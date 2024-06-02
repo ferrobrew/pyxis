@@ -350,6 +350,7 @@ impl SemanticState {
 
         // Handle fields
         let mut pending_regions: Vec<(Option<usize>, Region)> = vec![];
+        let mut has_vftable_field = false;
         for statement in &definition.statements {
             let grammar::TypeStatement { field, attributes } = statement;
 
@@ -365,6 +366,17 @@ impl SemanticState {
                     }
                     _ => anyhow::bail!("unsupported attribute: {attribute:?}"),
                 }
+            }
+
+            if field.is_vftable() {
+                // the vftable field is a sentinel field used to ensure that the user has
+                // thought about the presence of vftables in their type. we do not actually
+                // count it as a region; the type will be generated with a vftable field later on
+                if address.unwrap_or_default() != 0 {
+                    anyhow::bail!("vftable field of type {resolvee_path} must have address 0");
+                }
+                has_vftable_field = true;
+                continue;
             }
 
             // Handle address
@@ -392,6 +404,13 @@ impl SemanticState {
                     type_ref: type_,
                 },
             ));
+        }
+
+        // Update the vtables based on the presence of a vftable field
+        if has_vftable_field {
+            vftable_functions.get_or_insert_with(|| vec![]);
+        } else if vftable_functions.is_some() {
+            anyhow::bail!("type {resolvee_path} has vftable functions but no vftable field");
         }
 
         let Some((regions, size)) = self.resolve_regions(
@@ -680,6 +699,7 @@ impl SemanticState {
     }
 }
 
+#[derive(Debug)]
 pub struct ResolvedSemanticState {
     type_registry: TypeRegistry,
     modules: HashMap<ItemPath, Module>,

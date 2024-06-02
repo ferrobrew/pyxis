@@ -17,6 +17,7 @@ mod kw {
     syn::custom_keyword!(backend);
     syn::custom_keyword!(prologue);
     syn::custom_keyword!(epilogue);
+    syn::custom_keyword!(vftable);
 }
 
 impl Parse for Ident {
@@ -267,7 +268,13 @@ impl Parse for TypeStatement {
             lookahead: Lookahead1,
             attributes: Vec<Attribute>,
         ) -> Result<TypeStatement> {
-            if Ident::peek(&lookahead) {
+            if lookahead.peek(kw::vftable) {
+                input.parse::<kw::vftable>()?;
+                Ok(TypeStatement {
+                    field: TypeField::vftable(),
+                    attributes,
+                })
+            } else if Ident::peek(&lookahead) {
                 Ok(TypeStatement {
                     field: input.parse()?,
                     attributes,
@@ -381,8 +388,8 @@ fn parse_function_block_definition(
     attributes: Vec<Attribute>,
 ) -> Result<(FunctionBlock, bool)> {
     input.parse::<Token![impl]>()?;
-    let is_virtual = if input.peek(Token![virtual]) {
-        input.parse::<Token![virtual]>()?;
+    let is_virtual = if input.peek(kw::vftable) {
+        input.parse::<kw::vftable>()?;
         true
     } else {
         false

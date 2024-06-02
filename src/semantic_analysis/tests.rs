@@ -330,10 +330,36 @@ fn can_resolve_embed_of_an_extern() {
 }
 
 #[test]
-fn can_generate_vftable() {
+fn will_fail_on_type_with_vfuncs_but_no_vftable() {
     let module = M::new()
         .with_definitions([ID::new("TestType", TD::new([]))])
-        .with_vftables([FB::new(
+        .with_vftable([FB::new(
+            "TestType",
+            [F::new(
+                "test_function0",
+                [
+                    Ar::MutSelf,
+                    Ar::Field(TF::new("arg0", T::ident("u32"))),
+                    Ar::Field(TF::new("arg1", T::ident("f32"))),
+                ],
+            )
+            .with_return_type("i32")],
+        )]);
+
+    let test_module_path = IP::from_colon_delimited_str("test");
+    assert_eq!(
+        build_state(&module, &test_module_path)
+            .unwrap_err()
+            .to_string(),
+        "type test::TestType has vftable functions but no vftable field"
+    );
+}
+
+#[test]
+fn can_generate_vftable() {
+    let module = M::new()
+        .with_definitions([ID::new("TestType", TD::new([TF::vftable().into()]))])
+        .with_vftable([FB::new(
             "TestType",
             [
                 F::new(
@@ -498,8 +524,8 @@ fn can_generate_vftable() {
 #[test]
 fn can_generate_vftable_with_indices() {
     let module = M::new()
-        .with_definitions([ID::new("TestType", TD::new([]))])
-        .with_vftables([FB::new(
+        .with_definitions([ID::new("TestType", TD::new([TF::vftable().into()]))])
+        .with_vftable([FB::new(
             "TestType",
             [
                 F::new(
