@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 use crate::{
     grammar::test_aliases::*,
     semantic_analysis::{
@@ -7,6 +5,8 @@ use crate::{
         types::test_aliases::*,
     },
 };
+
+use pretty_assertions::assert_eq;
 
 use anyhow::Context;
 
@@ -26,9 +26,12 @@ fn assert_ast_produces_type_definitions(
     let created_module = state.modules().get(&module_path).unwrap();
     let type_registry = state.type_registry();
 
-    let expected_type_definitions: HashSet<_> = type_definitions.into_iter().collect();
-    let created_type_definitions: HashSet<_> =
+    let mut expected_type_definitions: Vec<_> = type_definitions.into_iter().collect();
+    let mut created_type_definitions: Vec<_> =
         created_module.definitions(type_registry).cloned().collect();
+
+    expected_type_definitions.sort_by_key(|t| t.path.clone());
+    created_type_definitions.sort_by_key(|t| t.path.clone());
 
     assert_eq!(created_type_definitions, expected_type_definitions);
 }
