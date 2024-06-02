@@ -749,6 +749,30 @@ fn will_reject_defaultable_on_non_defaultable_type() {
 }
 
 pub mod inheritance {
+    //! Tests for inheritance of types with optional vftables.
+    //! This is done by setting up three types: BaseA, BaseB and Derived.
+    //! Derived derives from both BaseA and BaseB.
+    //!
+    //! Each of these types can have a vftable, and we need to check that
+    //! inheritance works correctly in this case.
+    //!
+    //! However, note that [/layout/msvc2022/output.txt] demonstrates that
+    //! a compiler will rearrange structs to put an inherited-from type
+    //! with a vftable at the start of the type, which means we don't need
+    //! to test the BaseA no-vftable BaseB vftable cases, as these are isomorphic
+    //! to BaseA vftable BaseB no-vftable.
+    //!
+    //! This means that we need to test (where 'x' marks having a vftable):
+    //!
+    //! BaseA | BaseB | Drved
+    //! ----------------------
+    //!       |       |
+    //!       |       |   x
+    //!   x   |       |
+    //!   x   |       |   x
+    //!   x   |   x   |
+    //!   x   |   x   |   x
+
     use super::*;
 
     fn grammar_base_a() -> ID {
