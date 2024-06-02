@@ -108,10 +108,6 @@ impl ItemPath {
         ItemPath(vec![])
     }
 
-    pub fn from_colon_delimited_str(path: &str) -> ItemPath {
-        ItemPath(path.split("::").map(|s| s.into()).collect())
-    }
-
     pub fn from_path(path: &Path) -> ItemPath {
         // consider making this a result
         assert!(path.is_relative());
@@ -169,6 +165,11 @@ impl fmt::Display for ItemPath {
 impl FromIterator<ItemPathSegment> for ItemPath {
     fn from_iter<I: IntoIterator<Item = ItemPathSegment>>(iter: I) -> Self {
         ItemPath(Vec::from_iter(iter))
+    }
+}
+impl From<&str> for ItemPath {
+    fn from(value: &str) -> Self {
+        ItemPath(value.split("::").map(|s| s.into()).collect())
     }
 }
 

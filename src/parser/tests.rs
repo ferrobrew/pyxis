@@ -194,7 +194,7 @@ fn can_parse_use() {
         "#;
 
     let ast = M::new()
-        .with_uses([IP::from_colon_delimited_str("hello::TestType<Hey>")])
+        .with_uses([IP::from("hello::TestType<Hey>")])
         .with_definitions([ID::new(
             "Test",
             TD::new([TS::field("test", T::ident("TestType<Hey>"))]),

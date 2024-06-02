@@ -11,6 +11,11 @@ pub enum Argument {
     MutSelf,
     Field(String, Type),
 }
+impl Argument {
+    pub fn field(name: impl Into<String>, type_ref: impl Into<Type>) -> Self {
+        Argument::Field(name.into(), type_ref.into())
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Function {
@@ -18,6 +23,28 @@ pub struct Function {
     pub address: Option<usize>,
     pub arguments: Vec<Argument>,
     pub return_type: Option<Type>,
+}
+impl Function {
+    pub fn new(name: impl Into<String>) -> Self {
+        Function {
+            name: name.into(),
+            address: None,
+            arguments: Vec::new(),
+            return_type: None,
+        }
+    }
+    pub fn with_address(mut self, address: usize) -> Self {
+        self.address = Some(address);
+        self
+    }
+    pub fn with_arguments(mut self, arguments: impl Into<Vec<Argument>>) -> Self {
+        self.arguments = arguments.into();
+        self
+    }
+    pub fn with_return_type(mut self, return_type: Type) -> Self {
+        self.return_type = Some(return_type);
+        self
+    }
 }
 
 #[derive(PartialEq, Eq, Debug, Clone)]
@@ -43,8 +70,41 @@ impl Type {
         }
     }
 
+    pub fn raw(path: impl Into<ItemPath>) -> Self {
+        Type::Raw(path.into())
+    }
+
+    pub fn const_pointer(self) -> Self {
+        Type::ConstPointer(Box::new(self))
+    }
+
+    pub fn mut_pointer(self) -> Self {
+        Type::MutPointer(Box::new(self))
+    }
+
+    pub fn array(self, size: usize) -> Self {
+        Type::Array(Box::new(self), size)
+    }
+
+    pub fn function<'a>(
+        args: impl Into<Vec<(&'a str, Type)>>,
+        return_type: impl Into<Option<Type>>,
+    ) -> Self {
+        Type::Function(
+            args.into()
+                .into_iter()
+                .map(|(name, tr)| (name.to_string(), Box::new(tr)))
+                .collect(),
+            return_type.into().map(Box::new),
+        )
+    }
+
     pub fn is_array(&self) -> bool {
         matches!(self, Type::Array(_, _))
+    }
+
+    pub fn boxed(self) -> Box<Type> {
+        Box::new(self)
     }
 }
 
@@ -166,6 +226,26 @@ pub struct EnumDefinition {
     pub type_: Type,
     pub fields: Vec<(String, isize)>,
     pub singleton: Option<usize>,
+}
+impl EnumDefinition {
+    pub fn new(type_: Type) -> Self {
+        EnumDefinition {
+            type_,
+            fields: Vec::new(),
+            singleton: None,
+        }
+    }
+    pub fn with_fields<'a>(mut self, fields: impl IntoIterator<Item = (&'a str, isize)>) -> Self {
+        self.fields = fields
+            .into_iter()
+            .map(|(n, v)| (n.to_string(), v))
+            .collect();
+        self
+    }
+    pub fn with_singleton(mut self, singleton: usize) -> Self {
+        self.singleton = Some(singleton);
+        self
+    }
 }
 
 #[derive(PartialEq, Eq, Debug, Clone)]

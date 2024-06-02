@@ -52,7 +52,7 @@ impl SemanticState {
         ];
 
         for (name, size) in predefined_types {
-            let path = ItemPath::from_colon_delimited_str(name);
+            let path = ItemPath::from(name);
             semantic_state
                 .add_type(ItemDefinition {
                     path,
@@ -408,7 +408,7 @@ impl SemanticState {
 
         // Update the vtables based on the presence of a vftable field
         if has_vftable_field {
-            vftable_functions.get_or_insert_with(|| vec![]);
+            vftable_functions.get_or_insert_with(std::vec::Vec::new);
         } else if vftable_functions.is_some() {
             anyhow::bail!("type {resolvee_path} has vftable functions but no vftable field");
         }
