@@ -21,7 +21,7 @@ pub mod test_aliases {
     pub type SISR = super::ItemStateResolved;
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Argument {
     ConstSelf,
     MutSelf,
@@ -33,7 +33,7 @@ impl Argument {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Function {
     pub name: String,
     pub address: Option<usize>,
@@ -63,7 +63,7 @@ impl Function {
     }
 }
 
-#[derive(PartialEq, Eq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone, Hash)]
 pub enum Type {
     Unresolved(grammar::Type),
     Raw(ItemPath),
@@ -162,7 +162,7 @@ impl fmt::Display for Type {
     }
 }
 
-#[derive(PartialEq, Eq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone, Hash)]
 pub struct Region {
     pub name: Option<String>,
     pub type_ref: Type,
@@ -188,7 +188,7 @@ impl Region {
     }
 }
 
-#[derive(PartialEq, Eq, Debug, Clone, Default)]
+#[derive(PartialEq, Eq, Debug, Clone, Default, Hash)]
 pub struct TypeDefinition {
     pub regions: Vec<Region>,
     pub free_functions: Vec<Function>,
@@ -237,7 +237,7 @@ impl TypeDefinition {
     }
 }
 
-#[derive(PartialEq, Eq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone, Hash)]
 pub struct EnumDefinition {
     pub type_: Type,
     pub fields: Vec<(String, isize)>,
@@ -264,7 +264,7 @@ impl EnumDefinition {
     }
 }
 
-#[derive(PartialEq, Eq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone, Hash)]
 pub enum ItemDefinitionInner {
     Type(TypeDefinition),
     Enum(EnumDefinition),
@@ -280,26 +280,26 @@ impl From<EnumDefinition> for ItemDefinitionInner {
     }
 }
 
-#[derive(PartialEq, Eq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone, Hash)]
 pub struct ItemStateResolved {
     pub size: usize,
     pub inner: ItemDefinitionInner,
 }
 
-#[derive(PartialEq, Eq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone, Hash)]
 pub enum ItemState {
     Unresolved(grammar::ItemDefinition),
     Resolved(ItemStateResolved),
 }
 
-#[derive(PartialEq, Eq, Debug, Copy, Clone)]
+#[derive(PartialEq, Eq, Debug, Copy, Clone, Hash)]
 pub enum ItemCategory {
     Defined,
     Predefined,
     Extern,
 }
 
-#[derive(PartialEq, Eq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone, Hash)]
 pub struct ItemDefinition {
     pub path: ItemPath,
     pub state: ItemState,

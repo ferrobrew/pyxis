@@ -320,7 +320,7 @@ impl From<(Ident, Type)> for TypeField {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TypeStatement {
     pub field: TypeField,
     pub attributes: Vec<Attribute>,
@@ -346,7 +346,7 @@ impl From<TypeField> for TypeStatement {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TypeDefinition {
     pub statements: Vec<TypeStatement>,
     pub attributes: Vec<Attribute>,
@@ -364,7 +364,7 @@ impl TypeDefinition {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct EnumStatement {
     pub name: Ident,
     pub expr: Option<Expr>,
@@ -381,7 +381,7 @@ impl EnumStatement {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct EnumDefinition {
     pub type_: Type,
     pub statements: Vec<EnumStatement>,
@@ -401,7 +401,7 @@ impl EnumDefinition {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ItemDefinitionInner {
     Type(TypeDefinition),
     Enum(EnumDefinition),
@@ -417,7 +417,7 @@ impl From<EnumDefinition> for ItemDefinitionInner {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ItemDefinition {
     pub name: Ident,
     pub inner: ItemDefinitionInner,
