@@ -807,136 +807,348 @@ pub mod inheritance {
 
     use super::*;
 
-    fn grammar_base_a() -> ID {
-        ID::new(
+    mod dsl {
+        use super::*;
+
+        #[derive(Clone, Debug)]
+        pub enum InheritancePrimitiveType {
+            I32,
+            U32,
+            U64,
+            F32,
+            Unknown(usize),
+            Named(String, usize),
+        }
+        pub type IPT = InheritancePrimitiveType;
+        impl IPT {
+            fn size(&self) -> usize {
+                match self {
+                    IPT::I32 => 4,
+                    IPT::U32 => 4,
+                    IPT::U64 => 8,
+                    IPT::F32 => 4,
+                    IPT::Unknown(size) => *size,
+                    IPT::Named(_, size) => *size,
+                }
+            }
+
+            fn to_grammar(&self) -> T {
+                match self {
+                    IPT::I32 => T::ident("i32"),
+                    IPT::U32 => T::ident("u32"),
+                    IPT::U64 => T::ident("u64"),
+                    IPT::F32 => T::ident("f32"),
+                    IPT::Unknown(size) => T::unknown(*size),
+                    IPT::Named(name, _) => T::ident(name.as_str()),
+                }
+            }
+
+            fn to_semantic(&self) -> ST {
+                match self {
+                    IPT::I32 => ST::raw("i32"),
+                    IPT::U32 => ST::raw("u32"),
+                    IPT::U64 => ST::raw("u64"),
+                    IPT::F32 => ST::raw("f32"),
+                    IPT::Unknown(size) => unknown(*size),
+                    IPT::Named(name, _) => ST::raw(format!("test::{name}").as_str()),
+                }
+            }
+        }
+
+        pub struct InheritanceType {
+            name: String,
+            fields: Vec<(String, IPT, Vec<A>)>,
+            vftable: Option<IV>,
+        }
+        pub type IT = InheritanceType;
+        impl IT {
+            pub fn new(
+                name: impl Into<String>,
+                fields: impl IntoIterator<Item = (String, IPT, Vec<A>)>,
+            ) -> Self {
+                Self {
+                    name: name.into(),
+                    fields: fields.into_iter().collect(),
+                    vftable: None,
+                }
+            }
+
+            pub fn with_vftable(mut self, vftable: IV) -> Self {
+                self.vftable = Some(vftable);
+                self
+            }
+
+            pub fn to_grammar(&self) -> ID {
+                ID::new(
+                    &self.name,
+                    TD::new(
+                        Iterator::chain(
+                            self.vftable.as_ref().iter().map(|_| TS::vftable()),
+                            self.fields.iter().map(|(name, ty, attrs)| {
+                                TS::field(
+                                    &if name.starts_with('_') {
+                                        "_".to_string()
+                                    } else {
+                                        name.to_string()
+                                    },
+                                    ty.to_grammar(),
+                                )
+                                .with_attributes(attrs.clone())
+                            }),
+                        )
+                        .collect::<Vec<_>>(),
+                    ),
+                )
+            }
+
+            pub fn to_semantic(&self) -> SID {
+                let f = &self.fields;
+                let size: usize = f.iter().map(|(_, ty, _)| ty.size()).sum::<usize>()
+                    + self.vftable.as_ref().map(|_| 4).unwrap_or(0);
+
+                let mut regions = f
+                    .iter()
+                    .map(|(name, ty, _)| SR::field(name.clone(), ty.to_semantic()))
+                    .collect::<Vec<_>>();
+
+                if let Some(vftable) = &self.vftable {
+                    regions.insert(
+                        0,
+                        SR::field(
+                            "vftable",
+                            ST::raw(format!("test::{}", vftable.name_vftable).as_str())
+                                .const_pointer(),
+                        ),
+                    );
+                }
+
+                let type_definition = STD::new().with_regions(regions);
+                let type_definition = if let Some(vftable) = &self.vftable {
+                    type_definition.with_vftable_functions(
+                        vftable
+                            .functions
+                            .iter()
+                            .map(|func| func.to_semantic())
+                            .collect::<Vec<_>>(),
+                    )
+                } else {
+                    type_definition
+                };
+
+                SID::defined_resolved(
+                    format!("test::{}", self.name).as_str(),
+                    SISR {
+                        size,
+                        inner: type_definition.into(),
+                    },
+                )
+            }
+        }
+
+        pub struct InheritanceVftable {
+            name: String,
+            name_vftable: String,
+            functions: Vec<IF>,
+        }
+        pub type IV = InheritanceVftable;
+        impl IV {
+            pub fn new(
+                name: impl Into<String>,
+                name_vftable: impl Into<String>,
+                functions: impl IntoIterator<Item = IF>,
+            ) -> Self {
+                Self {
+                    name: name.into(),
+                    name_vftable: name_vftable.into(),
+                    functions: functions.into_iter().collect(),
+                }
+            }
+
+            pub fn to_grammar(&self) -> FB {
+                FB::new(
+                    self.name.as_str(),
+                    self.functions
+                        .iter()
+                        .map(|func| func.to_grammar())
+                        .collect::<Vec<_>>(),
+                )
+            }
+
+            pub fn to_semantic(&self) -> SID {
+                SID::defined_resolved(
+                    format!("test::{}", self.name_vftable).as_str(),
+                    SISR {
+                        size: self.functions.len() * 4,
+                        inner: STD::new()
+                            .with_regions(
+                                self.functions
+                                    .iter()
+                                    .map(|func| func.to_semantic_region(self.name.as_str()))
+                                    .collect::<Vec<_>>(),
+                            )
+                            .into(),
+                    },
+                )
+            }
+        }
+
+        pub struct InheritanceFunction {
+            name: String,
+            arguments: Vec<IFA>,
+            return_type: IPT,
+        }
+        pub type IF = InheritanceFunction;
+        pub enum InheritanceFunctionArgument {
+            MutSelf,
+            Field(String, IPT),
+        }
+        pub type IFA = InheritanceFunctionArgument;
+        impl IFA {
+            pub fn field(name: impl Into<String>, ty: IPT) -> Self {
+                Self::Field(name.into(), ty)
+            }
+        }
+        impl IF {
+            pub fn new(
+                name: impl Into<String>,
+                arguments: impl IntoIterator<Item = IFA>,
+                return_type: IPT,
+            ) -> Self {
+                Self {
+                    name: name.into(),
+                    arguments: arguments.into_iter().collect(),
+                    return_type,
+                }
+            }
+
+            fn to_grammar(&self) -> F {
+                F::new(
+                    &self.name,
+                    self.arguments
+                        .iter()
+                        .map(|arg| match arg {
+                            IFA::MutSelf => Ar::MutSelf,
+                            IFA::Field(name, ty) => {
+                                Ar::Field(TF::new(name.as_str(), ty.to_grammar()))
+                            }
+                        })
+                        .collect::<Vec<_>>(),
+                )
+                .with_return_type(self.return_type.to_grammar())
+            }
+
+            fn to_semantic(&self) -> SF {
+                SF::new(&self.name)
+                    .with_arguments(
+                        self.arguments
+                            .iter()
+                            .map(|arg| match arg {
+                                IFA::MutSelf => SAr::MutSelf,
+                                IFA::Field(name, ty) => SAr::field(name.clone(), ty.to_semantic()),
+                            })
+                            .collect::<Vec<_>>(),
+                    )
+                    .with_return_type(self.return_type.to_semantic())
+            }
+
+            fn to_semantic_region(&self, type_name: &str) -> SR {
+                SR::field(
+                    &self.name,
+                    ST::function(
+                        self.arguments
+                            .iter()
+                            .map(|arg| match arg {
+                                IFA::MutSelf => (
+                                    "this",
+                                    ST::raw(format!("test::{type_name}").as_str()).mut_pointer(),
+                                ),
+                                IFA::Field(name, ty) => (name.as_str(), ty.to_semantic()),
+                            })
+                            .collect::<Vec<_>>(),
+                        self.return_type.to_semantic(),
+                    ),
+                )
+            }
+        }
+    }
+    use dsl::*;
+
+    fn base_a() -> IT {
+        IT::new(
             "BaseA",
-            TD::new([
-                TS::field("field_1", T::ident("i32")),
-                TS::field("_", T::unknown(4)),
-                TS::field("field_2", T::ident("u64")),
-            ]),
-        )
-    }
-    fn semantic_base_a() -> SID {
-        SID::defined_resolved(
-            "test::BaseA",
-            SISR {
-                size: 16,
-                inner: STD::new()
-                    .with_regions([
-                        SR::field("field_1", ST::raw("i32")),
-                        SR::field("_field_4", unknown(4)),
-                        SR::field("field_2", ST::raw("u64")),
-                    ])
-                    .into(),
-            },
-        )
-    }
-
-    fn grammar_base_b() -> ID {
-        ID::new(
-            "BaseB",
-            TD::new([
-                TS::field("field_1", T::ident("u64")),
-                TS::field("_", T::unknown(4)),
-                TS::field("field_2", T::ident("i32")),
-            ]),
-        )
-    }
-    fn semantic_base_b() -> SID {
-        SID::defined_resolved(
-            "test::BaseB",
-            SISR {
-                size: 16,
-                inner: STD::new()
-                    .with_regions([
-                        SR::field("field_1", ST::raw("u64")),
-                        SR::field("_field_8", unknown(4)),
-                        SR::field("field_2", ST::raw("i32")),
-                    ])
-                    .into(),
-            },
-        )
-    }
-
-    fn grammar_derived(with_vftable: bool) -> ID {
-        let mut statements = vec![
-            TS::field("base_a", T::ident("BaseA")).with_attributes([A::base()]),
-            TS::field("base_b", T::ident("BaseB")).with_attributes([A::base()]),
-        ];
-        if with_vftable {
-            statements.insert(0, TF::vftable().into());
-        }
-        ID::new("Derived", TD::new(statements))
-    }
-    fn semantic_derived(with_vftable: bool) -> SID {
-        let mut regions = vec![
-            SR::field("base_a", ST::raw("test::BaseA")),
-            SR::field("base_b", ST::raw("test::BaseB")),
-        ];
-        if with_vftable {
-            regions.insert(
-                0,
-                SR::field("vftable", ST::raw("test::DerivedVftable").const_pointer()),
-            );
-        }
-        let type_definition = STD::new().with_regions(regions);
-        let type_definition = if with_vftable {
-            type_definition.with_vftable_functions([semantic_derived_vfunc_func()])
-        } else {
-            type_definition
-        };
-        SID::defined_resolved(
-            "test::Derived",
-            SISR {
-                size: 32 + if with_vftable { 4 } else { 0 },
-                inner: type_definition.into(),
-            },
-        )
-    }
-    fn semantic_derived_vftable() -> SID {
-        SID::defined_resolved(
-            "test::DerivedVftable",
-            SISR {
-                size: 4,
-                inner: STD::new()
-                    .with_regions([semantic_derived_vfunc_region()])
-                    .into(),
-            },
-        )
-    }
-
-    fn grammar_derived_vfunc_func() -> F {
-        F::new(
-            "derived_vfunc",
             [
-                Ar::MutSelf,
-                Ar::Field(TF::new("arg0", T::ident("u32"))),
-                Ar::Field(TF::new("arg1", T::ident("f32"))),
+                ("field_1".to_string(), IPT::I32, vec![]),
+                ("_field_4".to_string(), IPT::Unknown(4), vec![]),
+                ("field_2".to_string(), IPT::U64, vec![]),
             ],
         )
-        .with_return_type(T::ident("i32"))
     }
-    fn semantic_derived_vfunc_func() -> SF {
-        SF::new("derived_vfunc")
-            .with_arguments([
-                SAr::MutSelf,
-                SAr::field("arg0", ST::raw("u32")),
-                SAr::field("arg1", ST::raw("f32")),
-            ])
-            .with_return_type(ST::raw("i32"))
+    fn grammar_base_a() -> ID {
+        base_a().to_grammar()
     }
-    fn semantic_derived_vfunc_region() -> SR {
-        SR::field(
+    fn semantic_base_a() -> SID {
+        base_a().to_semantic()
+    }
+
+    fn base_b() -> IT {
+        IT::new(
+            "BaseB",
+            [
+                ("field_1".to_string(), IPT::U64, vec![]),
+                ("_field_8".to_string(), IPT::Unknown(4), vec![]),
+                ("field_2".to_string(), IPT::I32, vec![]),
+            ],
+        )
+    }
+    fn grammar_base_b() -> ID {
+        base_b().to_grammar()
+    }
+    fn semantic_base_b() -> SID {
+        base_b().to_semantic()
+    }
+
+    fn derived(with_vftable: bool) -> IT {
+        let it = IT::new(
+            "Derived",
+            [
+                (
+                    "base_a".to_string(),
+                    IPT::Named("BaseA".to_string(), 16),
+                    vec![A::base()],
+                ),
+                (
+                    "base_b".to_string(),
+                    IPT::Named("BaseB".to_string(), 16),
+                    vec![A::base()],
+                ),
+            ],
+        );
+        if with_vftable {
+            it.with_vftable(derived_vftable())
+        } else {
+            it
+        }
+    }
+    fn grammar_derived(with_vftable: bool) -> ID {
+        derived(with_vftable).to_grammar()
+    }
+    fn semantic_derived(with_vftable: bool) -> SID {
+        derived(with_vftable).to_semantic()
+    }
+
+    fn derived_vftable() -> IV {
+        IV::new("Derived", "DerivedVftable", [derived_vfunc()])
+    }
+
+    fn derived_vfunc() -> IF {
+        IF::new(
             "derived_vfunc",
-            ST::function(
-                [
-                    ("this", ST::raw("test::Derived").mut_pointer()),
-                    ("arg0", ST::raw("u32")),
-                    ("arg1", ST::raw("f32")),
-                ],
-                ST::raw("i32"),
-            ),
+            [
+                IFA::MutSelf,
+                IFA::field("arg0", IPT::U32),
+                IFA::field("arg1", IPT::F32),
+            ],
+            IPT::I32,
         )
     }
 
@@ -957,12 +1169,12 @@ pub mod inheritance {
         assert_ast_produces_type_definitions(
             M::new()
                 .with_definitions([grammar_base_a(), grammar_base_b(), grammar_derived(true)])
-                .with_vftable([FB::new("Derived", [grammar_derived_vfunc_func()])]),
+                .with_vftable([derived_vftable().to_grammar()]),
             [
                 semantic_base_a(),
                 semantic_base_b(),
                 semantic_derived(true),
-                semantic_derived_vftable(),
+                derived_vftable().to_semantic(),
             ],
         );
     }

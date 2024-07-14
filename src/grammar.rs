@@ -336,6 +336,12 @@ impl TypeStatement {
             attributes: vec![],
         }
     }
+    pub fn vftable() -> TypeStatement {
+        TypeStatement {
+            field: TypeField::vftable(),
+            attributes: vec![],
+        }
+    }
     pub fn with_attributes(mut self, attributes: impl Into<Vec<Attribute>>) -> Self {
         self.attributes = attributes.into();
         self
