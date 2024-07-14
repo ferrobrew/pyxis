@@ -945,6 +945,7 @@ pub mod inheritance {
             }
         }
 
+        #[derive(Clone, Debug)]
         pub struct InheritanceVftable {
             name: String,
             name_vftable: String,
@@ -992,12 +993,14 @@ pub mod inheritance {
             }
         }
 
+        #[derive(Clone, Debug)]
         pub struct InheritanceFunction {
             name: String,
             arguments: Vec<IFA>,
             return_type: IPT,
         }
         pub type IF = InheritanceFunction;
+        #[derive(Clone, Debug)]
         pub enum InheritanceFunctionArgument {
             MutSelf,
             Field(String, IPT),
@@ -1073,73 +1076,6 @@ pub mod inheritance {
     }
     use dsl::*;
 
-    fn base_a() -> IT {
-        IT::new(
-            "BaseA",
-            [
-                ("field_1".to_string(), IPT::I32, vec![]),
-                ("_field_4".to_string(), IPT::Unknown(4), vec![]),
-                ("field_2".to_string(), IPT::U64, vec![]),
-            ],
-        )
-    }
-    fn grammar_base_a() -> ID {
-        base_a().to_grammar()
-    }
-    fn semantic_base_a() -> SID {
-        base_a().to_semantic()
-    }
-
-    fn base_b() -> IT {
-        IT::new(
-            "BaseB",
-            [
-                ("field_1".to_string(), IPT::U64, vec![]),
-                ("_field_8".to_string(), IPT::Unknown(4), vec![]),
-                ("field_2".to_string(), IPT::I32, vec![]),
-            ],
-        )
-    }
-    fn grammar_base_b() -> ID {
-        base_b().to_grammar()
-    }
-    fn semantic_base_b() -> SID {
-        base_b().to_semantic()
-    }
-
-    fn derived(with_vftable: bool) -> IT {
-        let it = IT::new(
-            "Derived",
-            [
-                (
-                    "base_a".to_string(),
-                    IPT::Named("BaseA".to_string(), 16),
-                    vec![A::base()],
-                ),
-                (
-                    "base_b".to_string(),
-                    IPT::Named("BaseB".to_string(), 16),
-                    vec![A::base()],
-                ),
-            ],
-        );
-        if with_vftable {
-            it.with_vftable(derived_vftable())
-        } else {
-            it
-        }
-    }
-    fn grammar_derived(with_vftable: bool) -> ID {
-        derived(with_vftable).to_grammar()
-    }
-    fn semantic_derived(with_vftable: bool) -> SID {
-        derived(with_vftable).to_semantic()
-    }
-
-    fn derived_vftable() -> IV {
-        IV::new("Derived", "DerivedVftable", [derived_vfunc()])
-    }
-
     fn derived_vfunc() -> IF {
         IF::new(
             "derived_vfunc",
@@ -1154,27 +1090,105 @@ pub mod inheritance {
 
     #[test]
     fn base_a_vf0_base_b_vf0_derived_vf0() {
-        assert_ast_produces_type_definitions(
-            M::new().with_definitions([grammar_base_a(), grammar_base_b(), grammar_derived(false)]),
+        let base_a = IT::new(
+            "BaseA",
             [
-                semantic_base_a(),
-                semantic_base_b(),
-                semantic_derived(false),
+                ("field_1".to_string(), IPT::I32, vec![]),
+                ("_field_4".to_string(), IPT::Unknown(4), vec![]),
+                ("field_2".to_string(), IPT::U64, vec![]),
+            ],
+        );
+
+        let base_b = IT::new(
+            "BaseB",
+            [
+                ("field_1".to_string(), IPT::U64, vec![]),
+                ("_field_8".to_string(), IPT::Unknown(4), vec![]),
+                ("field_2".to_string(), IPT::I32, vec![]),
+            ],
+        );
+
+        let derived = IT::new(
+            "Derived",
+            [
+                (
+                    "base_a".to_string(),
+                    IPT::Named("BaseA".to_string(), 16),
+                    vec![A::base()],
+                ),
+                (
+                    "base_b".to_string(),
+                    IPT::Named("BaseB".to_string(), 16),
+                    vec![A::base()],
+                ),
+            ],
+        );
+
+        assert_ast_produces_type_definitions(
+            M::new().with_definitions([
+                base_a.to_grammar(),
+                base_b.to_grammar(),
+                derived.to_grammar(),
+            ]),
+            [
+                base_a.to_semantic(),
+                base_b.to_semantic(),
+                derived.to_semantic(),
             ],
         );
     }
 
     #[test]
     fn base_a_vf0_base_b_vf0_derived_vf1() {
+        let base_a = IT::new(
+            "BaseA",
+            [
+                ("field_1".to_string(), IPT::I32, vec![]),
+                ("_field_4".to_string(), IPT::Unknown(4), vec![]),
+                ("field_2".to_string(), IPT::U64, vec![]),
+            ],
+        );
+
+        let base_b = IT::new(
+            "BaseB",
+            [
+                ("field_1".to_string(), IPT::U64, vec![]),
+                ("_field_8".to_string(), IPT::Unknown(4), vec![]),
+                ("field_2".to_string(), IPT::I32, vec![]),
+            ],
+        );
+
+        let derived_vftable = IV::new("Derived", "DerivedVftable", [derived_vfunc()]);
+        let derived = IT::new(
+            "Derived",
+            [
+                (
+                    "base_a".to_string(),
+                    IPT::Named("BaseA".to_string(), 16),
+                    vec![A::base()],
+                ),
+                (
+                    "base_b".to_string(),
+                    IPT::Named("BaseB".to_string(), 16),
+                    vec![A::base()],
+                ),
+            ],
+        )
+        .with_vftable(derived_vftable.clone());
+
         assert_ast_produces_type_definitions(
             M::new()
-                .with_definitions([grammar_base_a(), grammar_base_b(), grammar_derived(true)])
-                .with_vftable([derived_vftable().to_grammar()]),
+                .with_definitions([
+                    base_a.to_grammar(),
+                    base_b.to_grammar(),
+                    derived.to_grammar(),
+                ])
+                .with_vftable([derived_vftable.to_grammar()]),
             [
-                semantic_base_a(),
-                semantic_base_b(),
-                semantic_derived(true),
-                derived_vftable().to_semantic(),
+                base_a.to_semantic(),
+                base_b.to_semantic(),
+                derived.to_semantic(),
+                derived_vftable.to_semantic(),
             ],
         );
     }
