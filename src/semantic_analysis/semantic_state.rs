@@ -419,12 +419,14 @@ impl SemanticState {
             anyhow::bail!("type {resolvee_path} has vftable functions but no vftable field");
         }
 
-        let Some((regions, size)) = self.resolve_regions(
-            resolvee_path,
-            target_size,
-            pending_regions,
-            &vftable_functions,
-        )?
+        let Some((regions, size)) = self
+            .resolve_regions(
+                resolvee_path,
+                target_size,
+                pending_regions,
+                &vftable_functions,
+            )
+            .with_context(|| format!("while processing {resolvee_path}"))?
         else {
             return Ok(None);
         };
@@ -595,7 +597,18 @@ impl SemanticState {
         // Insert each region, including padding if necessary
         for (offset, region) in regions {
             if let Some(offset) = offset {
-                let size = offset - resolved.last_address;
+                let Some(size) = offset.checked_sub(resolved.last_address) else {
+                    let existing_region = resolved
+                        .regions
+                        .last()
+                        .unwrap()
+                        .name
+                        .as_deref()
+                        .unwrap_or_default();
+                    anyhow::bail!(
+                        "attempted to insert padding at 0x{offset:X}, but overlapped with existing region `{existing_region}`"
+                    );
+                };
                 let padding_region = Region::unnamed_field(self.type_registry.padding_type(size));
                 if resolved.push(&self.type_registry, padding_region).is_none() {
                     return Ok(None);
