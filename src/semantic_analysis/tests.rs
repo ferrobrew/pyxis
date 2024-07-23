@@ -807,6 +807,7 @@ pub mod inheritance {
 
     use super::*;
 
+    #[allow(clippy::upper_case_acronyms)]
     mod dsl {
         use super::*;
 
