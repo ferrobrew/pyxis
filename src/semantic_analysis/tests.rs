@@ -1075,122 +1075,215 @@ pub mod inheritance {
             }
         }
     }
-    use dsl::*;
 
-    fn derived_vfunc() -> IF {
-        IF::new(
-            "derived_vfunc",
-            [
-                IFA::MutSelf,
-                IFA::field("arg0", IPT::U32),
-                IFA::field("arg1", IPT::F32),
-            ],
-            IPT::I32,
-        )
+    mod one_base_class {
+        use super::*;
+        use dsl::*;
+
+        fn vfunc(name: impl Into<String>) -> IF {
+            IF::new(
+                name,
+                [
+                    IFA::MutSelf,
+                    IFA::field("arg0", IPT::U32),
+                    IFA::field("arg1", IPT::F32),
+                ],
+                IPT::I32,
+            )
+        }
+
+        #[test]
+        fn b0_d0() {
+            let base = IT::new(
+                "Base",
+                [
+                    ("field_1".to_string(), IPT::I32, vec![]),
+                    ("_field_4".to_string(), IPT::Unknown(4), vec![]),
+                    ("field_2".to_string(), IPT::U64, vec![]),
+                ],
+            );
+
+            let derived = IT::new(
+                "Derived",
+                [(
+                    "base".to_string(),
+                    IPT::Named("Base".to_string(), 16),
+                    vec![A::base()],
+                )],
+            );
+
+            assert_ast_produces_type_definitions(
+                M::new().with_definitions([base.to_grammar(), derived.to_grammar()]),
+                [base.to_semantic(), derived.to_semantic()],
+            );
+        }
+
+        #[test]
+        fn b0_d1() {
+            let base = IT::new(
+                "Base",
+                [
+                    ("field_1".to_string(), IPT::I32, vec![]),
+                    ("_field_4".to_string(), IPT::Unknown(4), vec![]),
+                    ("field_2".to_string(), IPT::U64, vec![]),
+                ],
+            );
+
+            let derived_vftable = IV::new("Derived", "DerivedVftable", [vfunc("derived_vfunc")]);
+            let derived = IT::new(
+                "Derived",
+                [(
+                    "base".to_string(),
+                    IPT::Named("Base".to_string(), 16),
+                    vec![A::base()],
+                )],
+            )
+            .with_vftable(derived_vftable.clone());
+
+            assert_ast_produces_type_definitions(
+                M::new()
+                    .with_definitions([base.to_grammar(), derived.to_grammar()])
+                    .with_vftable([derived_vftable.to_grammar()]),
+                [
+                    base.to_semantic(),
+                    derived.to_semantic(),
+                    derived_vftable.to_semantic(),
+                ],
+            );
+        }
+
+        #[test]
+        #[ignore]
+        fn b1_d0() {
+            todo!();
+        }
+
+        #[test]
+        #[ignore]
+        fn b1_d1() {
+            todo!();
+        }
     }
 
-    #[test]
-    fn base_a_vf0_base_b_vf0_derived_vf0() {
-        let base_a = IT::new(
-            "BaseA",
-            [
-                ("field_1".to_string(), IPT::I32, vec![]),
-                ("_field_4".to_string(), IPT::Unknown(4), vec![]),
-                ("field_2".to_string(), IPT::U64, vec![]),
-            ],
-        );
+    mod two_base_classes {
+        use super::*;
+        use dsl::*;
 
-        let base_b = IT::new(
-            "BaseB",
-            [
-                ("field_1".to_string(), IPT::U64, vec![]),
-                ("_field_8".to_string(), IPT::Unknown(4), vec![]),
-                ("field_2".to_string(), IPT::I32, vec![]),
-            ],
-        );
+        fn derived_vfunc() -> IF {
+            IF::new(
+                "derived_vfunc",
+                [
+                    IFA::MutSelf,
+                    IFA::field("arg0", IPT::U32),
+                    IFA::field("arg1", IPT::F32),
+                ],
+                IPT::I32,
+            )
+        }
 
-        let derived = IT::new(
-            "Derived",
-            [
-                (
-                    "base_a".to_string(),
-                    IPT::Named("BaseA".to_string(), 16),
-                    vec![A::base()],
-                ),
-                (
-                    "base_b".to_string(),
-                    IPT::Named("BaseB".to_string(), 16),
-                    vec![A::base()],
-                ),
-            ],
-        );
+        #[test]
+        fn a0_b0_d0() {
+            let base_a = IT::new(
+                "BaseA",
+                [
+                    ("field_1".to_string(), IPT::I32, vec![]),
+                    ("_field_4".to_string(), IPT::Unknown(4), vec![]),
+                    ("field_2".to_string(), IPT::U64, vec![]),
+                ],
+            );
 
-        assert_ast_produces_type_definitions(
-            M::new().with_definitions([
-                base_a.to_grammar(),
-                base_b.to_grammar(),
-                derived.to_grammar(),
-            ]),
-            [
-                base_a.to_semantic(),
-                base_b.to_semantic(),
-                derived.to_semantic(),
-            ],
-        );
-    }
+            let base_b = IT::new(
+                "BaseB",
+                [
+                    ("field_1".to_string(), IPT::U64, vec![]),
+                    ("_field_8".to_string(), IPT::Unknown(4), vec![]),
+                    ("field_2".to_string(), IPT::I32, vec![]),
+                ],
+            );
 
-    #[test]
-    fn base_a_vf0_base_b_vf0_derived_vf1() {
-        let base_a = IT::new(
-            "BaseA",
-            [
-                ("field_1".to_string(), IPT::I32, vec![]),
-                ("_field_4".to_string(), IPT::Unknown(4), vec![]),
-                ("field_2".to_string(), IPT::U64, vec![]),
-            ],
-        );
+            let derived = IT::new(
+                "Derived",
+                [
+                    (
+                        "base_a".to_string(),
+                        IPT::Named("BaseA".to_string(), 16),
+                        vec![A::base()],
+                    ),
+                    (
+                        "base_b".to_string(),
+                        IPT::Named("BaseB".to_string(), 16),
+                        vec![A::base()],
+                    ),
+                ],
+            );
 
-        let base_b = IT::new(
-            "BaseB",
-            [
-                ("field_1".to_string(), IPT::U64, vec![]),
-                ("_field_8".to_string(), IPT::Unknown(4), vec![]),
-                ("field_2".to_string(), IPT::I32, vec![]),
-            ],
-        );
-
-        let derived_vftable = IV::new("Derived", "DerivedVftable", [derived_vfunc()]);
-        let derived = IT::new(
-            "Derived",
-            [
-                (
-                    "base_a".to_string(),
-                    IPT::Named("BaseA".to_string(), 16),
-                    vec![A::base()],
-                ),
-                (
-                    "base_b".to_string(),
-                    IPT::Named("BaseB".to_string(), 16),
-                    vec![A::base()],
-                ),
-            ],
-        )
-        .with_vftable(derived_vftable.clone());
-
-        assert_ast_produces_type_definitions(
-            M::new()
-                .with_definitions([
+            assert_ast_produces_type_definitions(
+                M::new().with_definitions([
                     base_a.to_grammar(),
                     base_b.to_grammar(),
                     derived.to_grammar(),
-                ])
-                .with_vftable([derived_vftable.to_grammar()]),
-            [
-                base_a.to_semantic(),
-                base_b.to_semantic(),
-                derived.to_semantic(),
-                derived_vftable.to_semantic(),
-            ],
-        );
+                ]),
+                [
+                    base_a.to_semantic(),
+                    base_b.to_semantic(),
+                    derived.to_semantic(),
+                ],
+            );
+        }
+
+        #[test]
+        fn a0_b0_d1() {
+            let base_a = IT::new(
+                "BaseA",
+                [
+                    ("field_1".to_string(), IPT::I32, vec![]),
+                    ("_field_4".to_string(), IPT::Unknown(4), vec![]),
+                    ("field_2".to_string(), IPT::U64, vec![]),
+                ],
+            );
+
+            let base_b = IT::new(
+                "BaseB",
+                [
+                    ("field_1".to_string(), IPT::U64, vec![]),
+                    ("_field_8".to_string(), IPT::Unknown(4), vec![]),
+                    ("field_2".to_string(), IPT::I32, vec![]),
+                ],
+            );
+
+            let derived_vftable = IV::new("Derived", "DerivedVftable", [derived_vfunc()]);
+            let derived = IT::new(
+                "Derived",
+                [
+                    (
+                        "base_a".to_string(),
+                        IPT::Named("BaseA".to_string(), 16),
+                        vec![A::base()],
+                    ),
+                    (
+                        "base_b".to_string(),
+                        IPT::Named("BaseB".to_string(), 16),
+                        vec![A::base()],
+                    ),
+                ],
+            )
+            .with_vftable(derived_vftable.clone());
+
+            assert_ast_produces_type_definitions(
+                M::new()
+                    .with_definitions([
+                        base_a.to_grammar(),
+                        base_b.to_grammar(),
+                        derived.to_grammar(),
+                    ])
+                    .with_vftable([derived_vftable.to_grammar()]),
+                [
+                    base_a.to_semantic(),
+                    base_b.to_semantic(),
+                    derived.to_semantic(),
+                    derived_vftable.to_semantic(),
+                ],
+            );
+        }
     }
 }
