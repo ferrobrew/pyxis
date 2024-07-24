@@ -536,6 +536,80 @@ fn can_generate_vftable_with_indices() {
     );
 }
 
+// <https://github.com/philpax/pyxis/issues/13>
+#[test]
+fn can_generate_vftable_without_vftable() {
+    assert_ast_produces_type_definitions(
+        M::new()
+            .with_definitions([ID::new(
+                "TestType",
+                TD::new([TF::vftable().into()]).with_attributes([A::hack_skip_vftable()]),
+            )])
+            .with_vftable([FB::new(
+                "TestType",
+                [F::new(
+                    "test_function0",
+                    [
+                        Ar::MutSelf,
+                        Ar::Field(TF::new("arg0", T::ident("u32"))),
+                        Ar::Field(TF::new("arg1", T::ident("f32"))),
+                    ],
+                )
+                .with_return_type("i32")],
+            )]),
+        [
+            // TestType
+            SID::defined_resolved(
+                "test::TestType",
+                SISR {
+                    size: 4,
+                    inner: STD::new()
+                        .with_regions([SR::field(
+                            "vftable",
+                            ST::raw("test::TestTypeVftable").const_pointer(),
+                        )])
+                        .with_vftable_functions([SF::new("test_function0")
+                            .with_arguments([
+                                SAr::MutSelf,
+                                SAr::field("arg0", ST::raw("u32")),
+                                SAr::field("arg1", ST::raw("f32")),
+                            ])
+                            .with_return_type(ST::raw("i32"))])
+                        .into(),
+                },
+            ),
+            // TestTypeWithoutVftable
+            SID::defined_resolved(
+                "test::TestTypeWithoutVftable",
+                SISR {
+                    size: 0,
+                    inner: STD::new().into(),
+                },
+            ),
+            // TestTypeVftable
+            SID::defined_resolved(
+                "test::TestTypeVftable",
+                SISR {
+                    size: 4,
+                    inner: STD::new()
+                        .with_regions([SR::field(
+                            "test_function0",
+                            ST::function(
+                                [
+                                    ("this", ST::raw("test::TestType").mut_pointer()),
+                                    ("arg0", ST::raw("u32")),
+                                    ("arg1", ST::raw("f32")),
+                                ],
+                                ST::raw("i32"),
+                            ),
+                        )])
+                        .into(),
+                },
+            ),
+        ],
+    );
+}
+
 fn make_vfunc(index: usize) -> SF {
     SF::new(format!("_vfunc_{}", index)).with_arguments([SAr::MutSelf])
 }

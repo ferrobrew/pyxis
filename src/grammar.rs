@@ -236,6 +236,11 @@ impl Attribute {
     pub fn base() -> Self {
         Attribute::Ident("base".into())
     }
+
+    // <https://github.com/philpax/pyxis/issues/13>
+    pub fn hack_skip_vftable() -> Self {
+        Attribute::Ident("hack_skip_vftable".into())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

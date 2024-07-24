@@ -121,12 +121,44 @@ impl SemanticState {
         );
 
         for definition in &module.definitions {
-            let path = path.join(definition.name.as_str().into());
+            let new_path = path.join(definition.name.as_str().into());
             self.add_type(ItemDefinition {
-                path: path.clone(),
+                path: new_path,
                 state: ItemState::Unresolved(definition.clone()),
                 category: ItemCategory::Defined,
             })?;
+
+            // HACK: As we're still working on inheritance support, we need a way to have types without vftables.
+            // If we detect a type with a vftable, generate another one without it.
+            // <https://github.com/philpax/pyxis/issues/13>
+            if let grammar::ItemDefinitionInner::Type(ty) = &definition.inner {
+                if ty
+                    .attributes
+                    .iter()
+                    .any(|a| *a == grammar::Attribute::hack_skip_vftable())
+                {
+                    let new_name = format!("{}WithoutVftable", definition.name.as_str());
+                    let path = path.join(new_name.clone().into());
+                    self.add_type(ItemDefinition {
+                        path,
+                        state: ItemState::Unresolved(grammar::ItemDefinition {
+                            name: new_name.as_str().into(),
+                            inner: grammar::ItemDefinitionInner::Type(grammar::TypeDefinition {
+                                attributes: ty.attributes.clone(),
+                                statements: ty
+                                    .statements
+                                    .iter()
+                                    .filter(|grammar::TypeStatement { field, .. }| {
+                                        !field.is_vftable()
+                                    })
+                                    .cloned()
+                                    .collect(),
+                            }),
+                        }),
+                        category: ItemCategory::Defined,
+                    })?;
+                }
+            }
         }
 
         for (extern_path, attributes) in &module.extern_types {
@@ -329,6 +361,8 @@ impl SemanticState {
                     "cloneable" => cloneable = true,
                     "defaultable" => defaultable = true,
                     "packed" => packed = true,
+                    // <https://github.com/philpax/pyxis/issues/13>
+                    "hack_skip_vftable" => {}
                     _ => anyhow::bail!("unsupported attribute: {attribute:?}"),
                 }
             }
