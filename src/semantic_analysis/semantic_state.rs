@@ -128,9 +128,10 @@ impl SemanticState {
                 category: ItemCategory::Defined,
             })?;
 
-            // HACK: As we're still working on inheritance support, we need a way to have types without vftables.
-            // If we detect a type with a vftable, generate another one without it.
-            // <https://github.com/philpax/pyxis/issues/13>
+            // HACK_SKIP_VFTABLE: <https://github.com/philpax/pyxis/issues/13>
+            // As we're still working on inheritance support, we need a way to have types without vftables.
+            // If we detect a type with a vftable, generate a copy of it with a suffix that the semantic
+            // analysis will use to generate a type without a vftable.
             if let grammar::ItemDefinitionInner::Type(ty) = &definition.inner {
                 if ty
                     .attributes
@@ -141,20 +142,7 @@ impl SemanticState {
                     let path = path.join(new_name.clone().into());
                     self.add_type(ItemDefinition {
                         path,
-                        state: ItemState::Unresolved(grammar::ItemDefinition {
-                            name: new_name.as_str().into(),
-                            inner: grammar::ItemDefinitionInner::Type(grammar::TypeDefinition {
-                                attributes: ty.attributes.clone(),
-                                statements: ty
-                                    .statements
-                                    .iter()
-                                    .filter(|grammar::TypeStatement { field, .. }| {
-                                        !field.is_vftable()
-                                    })
-                                    .cloned()
-                                    .collect(),
-                            }),
-                        }),
+                        state: ItemState::Unresolved(definition.clone()),
                         category: ItemCategory::Defined,
                     })?;
                 }
@@ -341,6 +329,8 @@ impl SemanticState {
         let mut cloneable = false;
         let mut defaultable = false;
         let mut packed = false;
+        // HACK_SKIP_VFTABLE: <https://github.com/philpax/pyxis/issues/13>
+        let mut hack_skip_vftable = false;
         for attribute in &definition.attributes {
             if let grammar::Attribute::Function(ident, exprs) = attribute {
                 match (ident.as_str(), exprs.as_slice()) {
@@ -361,11 +351,18 @@ impl SemanticState {
                     "cloneable" => cloneable = true,
                     "defaultable" => defaultable = true,
                     "packed" => packed = true,
-                    // <https://github.com/philpax/pyxis/issues/13>
-                    "hack_skip_vftable" => {}
+                    // HACK_SKIP_VFTABLE: <https://github.com/philpax/pyxis/issues/13>
+                    "hack_skip_vftable" => hack_skip_vftable = true,
                     _ => anyhow::bail!("unsupported attribute: {attribute:?}"),
                 }
             }
+        }
+        // HACK_SKIP_VFTABLE: <https://github.com/philpax/pyxis/issues/13>
+        hack_skip_vftable &= resolvee_path
+            .last()
+            .is_some_and(|s| s.as_str().ends_with("WithoutVftable"));
+        if let Some(target_size) = target_size.as_mut().filter(|_| hack_skip_vftable) {
+            *target_size = target_size.saturating_sub(self.type_registry.pointer_size());
         }
 
         // Handle functions
@@ -405,6 +402,17 @@ impl SemanticState {
                             _ => anyhow::bail!("unsupported attribute: {attribute:?}"),
                         }
                     }
+                }
+            }
+
+            // HACK_SKIP_VFTABLE: <https://github.com/philpax/pyxis/issues/13>
+            if hack_skip_vftable {
+                if let Some(address) = address.as_mut() {
+                    *address = address.saturating_sub(self.type_registry.pointer_size());
+                }
+                if field.is_vftable() {
+                    has_vftable_field = false;
+                    continue;
                 }
             }
 

@@ -536,14 +536,18 @@ fn can_generate_vftable_with_indices() {
     );
 }
 
-// <https://github.com/philpax/pyxis/issues/13>
+// HACK_SKIP_VFTABLE: <https://github.com/philpax/pyxis/issues/13>
 #[test]
 fn can_generate_vftable_without_vftable() {
     assert_ast_produces_type_definitions(
         M::new()
             .with_definitions([ID::new(
                 "TestType",
-                TD::new([TF::vftable().into()]).with_attributes([A::hack_skip_vftable()]),
+                TD::new([
+                    TF::vftable().into(),
+                    TS::field("test", T::ident("u32")).with_attributes([A::address(8)]),
+                ])
+                .with_attributes([A::hack_skip_vftable(), A::size(16)]),
             )])
             .with_vftable([FB::new(
                 "TestType",
@@ -562,12 +566,14 @@ fn can_generate_vftable_without_vftable() {
             SID::defined_resolved(
                 "test::TestType",
                 SISR {
-                    size: 4,
+                    size: 16,
                     inner: STD::new()
-                        .with_regions([SR::field(
-                            "vftable",
-                            ST::raw("test::TestTypeVftable").const_pointer(),
-                        )])
+                        .with_regions([
+                            SR::field("vftable", ST::raw("test::TestTypeVftable").const_pointer()),
+                            SR::field("_field_4", unknown(4)),
+                            SR::field("test", ST::raw("u32")),
+                            SR::field("_field_c", unknown(4)),
+                        ])
                         .with_vftable_functions([SF::new("test_function0")
                             .with_arguments([
                                 SAr::MutSelf,
@@ -582,8 +588,14 @@ fn can_generate_vftable_without_vftable() {
             SID::defined_resolved(
                 "test::TestTypeWithoutVftable",
                 SISR {
-                    size: 0,
-                    inner: STD::new().into(),
+                    size: 12,
+                    inner: STD::new()
+                        .with_regions([
+                            SR::field("_field_0", unknown(4)),
+                            SR::field("test", ST::raw("u32")),
+                            SR::field("_field_8", unknown(4)),
+                        ])
+                        .into(),
                 },
             ),
             // TestTypeVftable
