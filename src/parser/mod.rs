@@ -285,13 +285,7 @@ impl Parse for TypeStatement {
     }
 }
 
-fn parse_type_definition(
-    input: ParseStream,
-    attributes: Vec<Attribute>,
-) -> Result<(Ident, TypeDefinition)> {
-    input.parse::<Token![type]>()?;
-    let name: Ident = input.parse()?;
-
+fn parse_type_definition(input: ParseStream, attributes: Vec<Attribute>) -> Result<TypeDefinition> {
     let statements = if input.peek(Token![;]) {
         input.parse::<Token![;]>()?;
         vec![]
@@ -304,13 +298,10 @@ fn parse_type_definition(
         Vec::from_iter(statements)
     };
 
-    Ok((
-        name,
-        TypeDefinition {
-            statements,
-            attributes,
-        },
-    ))
+    Ok(TypeDefinition {
+        statements,
+        attributes,
+    })
 }
 
 impl Parse for EnumStatement {
@@ -327,12 +318,7 @@ impl Parse for EnumStatement {
     }
 }
 
-fn parse_enum_definition(
-    input: ParseStream,
-    attributes: Vec<Attribute>,
-) -> Result<(Ident, EnumDefinition)> {
-    input.parse::<Token![enum]>()?;
-    let name: Ident = input.parse()?;
+fn parse_enum_definition(input: ParseStream, attributes: Vec<Attribute>) -> Result<EnumDefinition> {
     input.parse::<Token![:]>()?;
     let type_: Type = input.parse()?;
 
@@ -345,35 +331,37 @@ fn parse_enum_definition(
         Vec::from_iter(statements)
     };
 
-    Ok((
-        name,
-        EnumDefinition {
-            type_,
-            statements,
-            attributes,
-        },
-    ))
+    Ok(EnumDefinition {
+        type_,
+        statements,
+        attributes,
+    })
 }
 
 fn parse_item_definition(input: ParseStream, attributes: Vec<Attribute>) -> Result<ItemDefinition> {
     let lookahead = input.lookahead1();
-    if lookahead.peek(Token![type]) {
-        let (name, inner) = parse_type_definition(input, attributes)?;
-        Ok(ItemDefinition {
+    // We return a Result for the inner so that we can annotate it with the name
+    let (name, inner) = if lookahead.peek(Token![type]) {
+        input.parse::<Token![type]>()?;
+        let name = input.parse()?;
+        (
             name,
-            inner: inner.into(),
-        })
+            parse_type_definition(input, attributes).map(ItemDefinitionInner::from),
+        )
     } else if lookahead.peek(Token![enum]) {
-        let (name, inner) = parse_enum_definition(input, attributes)?;
-        Ok(ItemDefinition {
+        input.parse::<Token![enum]>()?;
+        let name = input.parse()?;
+        (
             name,
-            inner: inner.into(),
-        })
+            parse_enum_definition(input, attributes).map(ItemDefinitionInner::from),
+        )
     } else {
-        Err(lookahead.error())
-    }
-}
+        return Err(lookahead.error());
+    };
 
+    let inner = inner.map_err(|e| input.error(format!("failed to parse type {name}: {e}")))?;
+    Ok(ItemDefinition { name, inner })
+}
 
 fn parse_backend(input: ParseStream) -> Result<Backend> {
     input.parse::<kw::backend>()?;
