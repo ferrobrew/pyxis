@@ -1,6 +1,6 @@
 use syn::{
     braced, bracketed, parenthesized,
-    parse::{Lookahead1, Parse, ParseStream, Result},
+    parse::{Parse, ParseStream, Result},
     punctuated::Punctuated,
     Token,
 };
@@ -30,11 +30,6 @@ impl Parse for Ident {
         } else {
             Err(input.error("expected identifier"))
         }
-    }
-}
-impl Ident {
-    fn peek(lookahead: &Lookahead1) -> bool {
-        lookahead.peek(Token![_]) || lookahead.peek(syn::Ident)
     }
 }
 
@@ -208,7 +203,9 @@ impl Parse for Argument {
                 Err(lookahead.error())
             }
         } else if lookahead.peek(syn::Ident) {
-            Ok(Argument::Field(input.parse()?))
+            let name: Ident = input.parse()?;
+            input.parse::<Token![:]>()?;
+            Ok(Argument::Named(name, input.parse()?))
         } else {
             Err(lookahead.error())
         }
@@ -255,42 +252,36 @@ impl Parse for ExprField {
 
 impl Parse for TypeField {
     fn parse(input: ParseStream) -> Result<Self> {
-        let name: Ident = input.parse()?;
-        input.parse::<Token![:]>()?;
-        Ok(TypeField(name, input.parse()?))
+        if input.peek(kw::vftable) {
+            input.parse::<kw::vftable>()?;
+
+            let content;
+            braced!(content in input);
+
+            let functions: Punctuated<Function, Token![;]> =
+                content.parse_terminated(Function::parse, Token![;])?;
+            let functions = Vec::from_iter(functions);
+
+            Ok(TypeField::Vftable(functions))
+        } else {
+            let name: Ident = input.parse()?;
+            input.parse::<Token![:]>()?;
+            Ok(TypeField::Field(name, input.parse()?))
+        }
     }
 }
 
 impl Parse for TypeStatement {
     fn parse(input: ParseStream) -> Result<Self> {
-        fn parse_field(
-            input: ParseStream,
-            lookahead: Lookahead1,
-            attributes: Vec<Attribute>,
-        ) -> Result<TypeStatement> {
-            if lookahead.peek(kw::vftable) {
-                input.parse::<kw::vftable>()?;
-                Ok(TypeStatement {
-                    field: TypeField::vftable(),
-                    attributes,
-                })
-            } else if Ident::peek(&lookahead) {
-                Ok(TypeStatement {
-                    field: input.parse()?,
-                    attributes,
-                })
-            } else {
-                Err(lookahead.error())
-            }
-        }
-
-        let lookahead = input.lookahead1();
-        if lookahead.peek(Token![#]) {
-            let attributes = Attribute::parse_many(input)?;
-            parse_field(input, input.lookahead1(), attributes)
+        let attributes = if input.peek(Token![#]) {
+            Attribute::parse_many(input)?
         } else {
-            parse_field(input, lookahead, vec![])
-        }
+            vec![]
+        };
+        Ok(TypeStatement {
+            field: input.parse()?,
+            attributes,
+        })
     }
 }
 
@@ -383,34 +374,6 @@ fn parse_item_definition(input: ParseStream, attributes: Vec<Attribute>) -> Resu
     }
 }
 
-fn parse_function_block_definition(
-    input: ParseStream,
-    attributes: Vec<Attribute>,
-) -> Result<(FunctionBlock, bool)> {
-    input.parse::<Token![impl]>()?;
-    let is_virtual = if input.peek(kw::vftable) {
-        input.parse::<kw::vftable>()?;
-        true
-    } else {
-        false
-    };
-    let name: Ident = input.parse()?;
-    let content;
-    braced!(content in input);
-
-    let functions: Punctuated<Function, Token![;]> =
-        content.parse_terminated(Function::parse, Token![;])?;
-    let functions = Vec::from_iter(functions);
-
-    Ok((
-        FunctionBlock {
-            name,
-            functions,
-            attributes,
-        },
-        is_virtual,
-    ))
-}
 
 fn parse_backend(input: ParseStream) -> Result<Backend> {
     input.parse::<kw::backend>()?;
@@ -452,7 +415,6 @@ impl Parse for Module {
         let mut extern_values = vec![];
         let mut definitions = vec![];
         let mut impls = vec![];
-        let mut vftables = vec![];
         let mut backends = vec![];
 
         // Exhaust all of our declarations
@@ -487,12 +449,20 @@ impl Parse for Module {
             } else if input.peek(Token![type]) || input.peek(Token![enum]) {
                 definitions.push(parse_item_definition(input, attributes)?);
             } else if input.peek(Token![impl]) {
-                let (block, is_virtual) = parse_function_block_definition(input, attributes)?;
-                if is_virtual {
-                    vftables.push(block);
-                } else {
-                    impls.push(block);
-                }
+                input.parse::<Token![impl]>()?;
+                let name: Ident = input.parse()?;
+
+                let content;
+                braced!(content in input);
+                let functions: Punctuated<Function, Token![;]> =
+                    content.parse_terminated(Function::parse, Token![;])?;
+                let functions = Vec::from_iter(functions);
+
+                impls.push(FunctionBlock {
+                    name,
+                    functions,
+                    attributes,
+                });
             } else if input.peek(kw::backend) {
                 if !attributes.is_empty() {
                     return Err(input.error("attributes not allowed on backends"));
@@ -510,7 +480,6 @@ impl Parse for Module {
             extern_values,
             definitions,
             impls,
-            vftables,
             backends,
         })
     }

@@ -115,7 +115,6 @@ impl SemanticState {
                 module.clone(),
                 extern_values,
                 &module.impls,
-                &module.vftables,
                 &module.backends,
             )?,
         );
@@ -274,7 +273,7 @@ impl SemanticState {
             .map(|a| match a {
                 grammar::Argument::ConstSelf => Ok(Argument::ConstSelf),
                 grammar::Argument::MutSelf => Ok(Argument::MutSelf),
-                grammar::Argument::Field(grammar::TypeField(name, type_)) => Ok(Argument::Field(
+                grammar::Argument::Named(name, type_) => Ok(Argument::Field(
                     name.0.clone(),
                     self.type_registry
                         .resolve_grammar_type(scope, type_)
@@ -374,91 +373,98 @@ impl SemanticState {
             }
         }
 
-        let mut vftable_functions = None;
-        if let Some(vftable_block) = module.vftables.get(resolvee_path) {
-            vftable_functions = Some(self.build_vftable_list(module, vftable_block)?);
-        }
-
         // Handle fields
         let mut pending_regions: Vec<(Option<usize>, Region)> = vec![];
-        let mut has_vftable_field = false;
-        for statement in &definition.statements {
+        let mut vftable_functions = None;
+        for (idx, statement) in definition.statements.iter().enumerate() {
             let grammar::TypeStatement { field, attributes } = statement;
 
-            // Extract address attribute
-            let mut address = None;
-            let mut _is_base = false;
-            for attribute in attributes {
-                match attribute {
-                    grammar::Attribute::Ident(ident) => match ident.as_str() {
-                        "base" => _is_base = true,
-                        _ => anyhow::bail!("unsupported attribute: {attribute:?}"),
-                    },
-                    grammar::Attribute::Function(ident, exprs) => {
-                        match (ident.as_str(), &exprs[..]) {
-                            ("address", [grammar::Expr::IntLiteral(addr)]) => {
-                                address = Some(*addr as usize);
+            match field {
+                grammar::TypeField::Field(ident, type_) => {
+                    // Extract address attribute
+                    let mut address = None;
+                    let mut _is_base = false;
+                    for attribute in attributes {
+                        match attribute {
+                            grammar::Attribute::Ident(ident) => match ident.as_str() {
+                                "base" => _is_base = true,
+                                _ => anyhow::bail!("unsupported attribute: {attribute:?}"),
+                            },
+                            grammar::Attribute::Function(ident, exprs) => {
+                                match (ident.as_str(), &exprs[..]) {
+                                    ("address", [grammar::Expr::IntLiteral(addr)]) => {
+                                        address = Some(*addr as usize);
+                                    }
+                                    _ => anyhow::bail!("unsupported attribute: {attribute:?}"),
+                                }
+                            }
+                        }
+                    }
+
+                    // HACK_SKIP_VFTABLE: <https://github.com/philpax/pyxis/issues/13>
+                    if hack_skip_vftable {
+                        if let Some(address) = address.as_mut() {
+                            *address = address.saturating_sub(self.type_registry.pointer_size());
+                        }
+                    }
+
+                    // Handle address
+                    if let Some(address) = address {
+                        pending_regions.push((
+                            Some(address),
+                            Region::unnamed_field(self.type_registry.padding_type(0)),
+                        ));
+                    }
+
+                    // Push field
+                    let Some(type_) = self
+                        .type_registry
+                        .resolve_grammar_type(&module.scope(), type_)
+                    else {
+                        return Ok(None);
+                    };
+
+                    let ident = (ident.0 != "_").then(|| ident.0.clone());
+                    pending_regions.push((
+                        None,
+                        Region {
+                            name: ident,
+                            type_ref: type_,
+                        },
+                    ));
+                }
+                grammar::TypeField::Vftable(functions) => {
+                    // HACK_SKIP_VFTABLE: <https://github.com/philpax/pyxis/issues/13>
+                    if hack_skip_vftable {
+                        continue;
+                    }
+
+                    // the vftable field is a sentinel field used to ensure that the user has
+                    // thought about the presence of vftables in their type. we do not actually
+                    // count it as a region; the type will be generated with a vftable field later on
+                    if idx != 0 {
+                        anyhow::bail!(
+                            "vftable field of type {resolvee_path} must be the first field"
+                        );
+                    }
+
+                    // Extract size attribute
+                    let mut size = None;
+                    for attribute in attributes {
+                        let grammar::Attribute::Function(ident, exprs) = attribute else {
+                            anyhow::bail!("unsupported attribute: {attribute:?}");
+                        };
+                        match (ident.as_str(), exprs.as_slice()) {
+                            ("size", [grammar::Expr::IntLiteral(size_)]) => {
+                                size = Some(*size_ as usize);
                             }
                             _ => anyhow::bail!("unsupported attribute: {attribute:?}"),
                         }
                     }
+
+                    vftable_functions = Some(self.build_vftable_list(module, size, functions)?);
                 }
             }
-
-            // HACK_SKIP_VFTABLE: <https://github.com/philpax/pyxis/issues/13>
-            if hack_skip_vftable {
-                if let Some(address) = address.as_mut() {
-                    *address = address.saturating_sub(self.type_registry.pointer_size());
-                }
-                if field.is_vftable() {
-                    has_vftable_field = false;
-                    continue;
-                }
-            }
-
-            if field.is_vftable() {
-                // the vftable field is a sentinel field used to ensure that the user has
-                // thought about the presence of vftables in their type. we do not actually
-                // count it as a region; the type will be generated with a vftable field later on
-                if address.unwrap_or_default() != 0 {
-                    anyhow::bail!("vftable field of type {resolvee_path} must have address 0");
-                }
-                has_vftable_field = true;
-                continue;
-            }
-
-            // Handle address
-            if let Some(address) = address {
-                pending_regions.push((
-                    Some(address),
-                    Region::unnamed_field(self.type_registry.padding_type(0)),
-                ));
-            }
-
-            // Push field
-            let grammar::TypeField(ident, type_) = field;
-            let Some(type_) = self
-                .type_registry
-                .resolve_grammar_type(&module.scope(), type_)
-            else {
-                return Ok(None);
-            };
-
-            let ident = (ident.0 != "_").then(|| ident.0.clone());
-            pending_regions.push((
-                None,
-                Region {
-                    name: ident,
-                    type_ref: type_,
-                },
-            ));
-        }
-
-        // Update the vtables based on the presence of a vftable field
-        if has_vftable_field {
-            vftable_functions.get_or_insert_with(std::vec::Vec::new);
-        } else if vftable_functions.is_some() {
-            anyhow::bail!("type {resolvee_path} has vftable functions but no vftable field");
         }
 
         let Some((regions, size)) = self
@@ -531,25 +537,12 @@ impl SemanticState {
     fn build_vftable_list(
         &self,
         module: &Module,
-        vftable_block: &grammar::FunctionBlock,
+        size: Option<usize>,
+        functions: &[grammar::Function],
     ) -> anyhow::Result<Vec<Function>> {
-        // Extract size attribute
-        let mut size = None;
-        for attribute in &vftable_block.attributes {
-            let grammar::Attribute::Function(ident, exprs) = attribute else {
-                anyhow::bail!("unsupported attribute: {attribute:?}");
-            };
-            match (ident.as_str(), exprs.as_slice()) {
-                ("size", [grammar::Expr::IntLiteral(size_)]) => {
-                    size = Some(*size_ as usize);
-                }
-                _ => anyhow::bail!("unsupported attribute: {attribute:?}"),
-            }
-        }
-
         // Insert function, with padding if necessary
-        let mut functions = vec![];
-        for function in &vftable_block.functions {
+        let mut output = vec![];
+        for function in functions {
             let mut index = None;
             for attribute in &function.attributes {
                 let grammar::Attribute::Function(ident, exprs) = attribute else {
@@ -564,22 +557,22 @@ impl SemanticState {
             }
 
             if let Some(index) = index {
-                make_padding_functions(&mut functions, index);
+                make_padding_functions(&mut output, index);
             }
             let function = self.build_function(&module.scope(), function)?;
-            functions.push(function);
+            output.push(function);
         }
 
         // Pad out to target size
         if let Some(size) = size {
-            make_padding_functions(&mut functions, size);
+            make_padding_functions(&mut output, size);
         }
 
-        fn make_padding_functions(functions: &mut Vec<Function>, target_len: usize) {
-            let functions_to_add = target_len.saturating_sub(functions.len());
+        fn make_padding_functions(output: &mut Vec<Function>, target_len: usize) {
+            let functions_to_add = target_len.saturating_sub(output.len());
             for _ in 0..functions_to_add {
-                functions.push(Function {
-                    name: format!("_vfunc_{}", functions.len()),
+                output.push(Function {
+                    name: format!("_vfunc_{}", output.len()),
                     arguments: vec![Argument::MutSelf],
                     return_type: None,
                     address: None,
@@ -587,7 +580,7 @@ impl SemanticState {
             }
         }
 
-        Ok(functions)
+        Ok(output)
     }
 
     fn resolve_regions(

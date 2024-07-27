@@ -247,11 +247,11 @@ impl Attribute {
 pub enum Argument {
     ConstSelf,
     MutSelf,
-    Field(TypeField),
+    Named(Ident, Type),
 }
 impl Argument {
-    pub fn field(ident: &str, type_: Type) -> Argument {
-        Argument::Field(TypeField::new(ident, type_))
+    pub fn named(ident: impl Into<Ident>, type_: impl Into<Type>) -> Argument {
+        Argument::Named(ident.into(), type_.into())
     }
 }
 
@@ -299,33 +299,26 @@ impl From<(Ident, Expr)> for ExprField {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct TypeField(pub Ident, pub Type);
+pub enum TypeField {
+    Field(Ident, Type),
+    Vftable(Vec<Function>),
+}
 impl TypeField {
-    const VFTABLE_FIELD_NAME: &'static str = "vftable";
-    const VFTABLE_FIELD_TYPE: &'static str = "Vftable";
-
-    pub fn new(name: impl Into<Ident>, type_: impl Into<Type>) -> TypeField {
-        TypeField(name.into(), type_.into())
+    pub fn field(name: impl Into<Ident>, type_: impl Into<Type>) -> TypeField {
+        TypeField::Field(name.into(), type_.into())
     }
 
-    pub fn vftable() -> TypeField {
-        TypeField::new(
-            Self::VFTABLE_FIELD_NAME,
-            Type::Ident(Self::VFTABLE_FIELD_TYPE.into()),
-        )
+    pub fn vftable(functions: impl IntoIterator<Item = Function>) -> TypeField {
+        TypeField::Vftable(functions.into_iter().collect())
     }
 
     pub fn is_vftable(&self) -> bool {
-        self.0.as_str() == Self::VFTABLE_FIELD_NAME
-            && self
-                .1
-                .as_ident()
-                .is_some_and(|i| i.as_str() == Self::VFTABLE_FIELD_TYPE)
+        matches!(self, TypeField::Vftable(_))
     }
 }
 impl From<(Ident, Type)> for TypeField {
     fn from(item: (Ident, Type)) -> Self {
-        TypeField(item.0, item.1)
+        TypeField::Field(item.0, item.1)
     }
 }
 
@@ -341,10 +334,13 @@ impl TypeStatement {
             attributes: vec![],
         }
     }
-    pub fn vftable() -> TypeStatement {
+    pub fn vftable(
+        functions: impl IntoIterator<Item = Function>,
+        attributes: impl Into<Vec<Attribute>>,
+    ) -> TypeStatement {
         TypeStatement {
-            field: TypeField::vftable(),
-            attributes: vec![],
+            field: TypeField::vftable(functions),
+            attributes: attributes.into(),
         }
     }
     pub fn with_attributes(mut self, attributes: impl Into<Vec<Attribute>>) -> Self {
@@ -497,7 +493,6 @@ pub struct Module {
     pub extern_values: Vec<(Ident, Type, Vec<Attribute>)>,
     pub definitions: Vec<ItemDefinition>,
     pub impls: Vec<FunctionBlock>,
-    pub vftables: Vec<FunctionBlock>,
     pub backends: Vec<Backend>,
 }
 impl Module {
@@ -533,11 +528,6 @@ impl Module {
 
     pub fn with_impls(mut self, impls: impl Into<Vec<FunctionBlock>>) -> Self {
         self.impls = impls.into();
-        self
-    }
-
-    pub fn with_vftable(mut self, vftables: impl Into<Vec<FunctionBlock>>) -> Self {
-        self.vftables = vftables.into();
         self
     }
 

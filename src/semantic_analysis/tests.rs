@@ -152,9 +152,9 @@ fn can_resolve_complex_type() {
                     "test_function",
                     [
                         Ar::MutSelf,
-                        Ar::field("arg1", T::ident("TestType").mut_pointer()),
-                        Ar::field("arg2", T::ident("i32")),
-                        Ar::field("arg3", T::ident("u32").const_pointer()),
+                        Ar::named("arg1", T::ident("TestType").mut_pointer()),
+                        Ar::named("arg2", T::ident("i32")),
+                        Ar::named("arg3", T::ident("u32").const_pointer()),
                     ],
                 )
                 .with_attributes([A::address(0x800_000)])
@@ -312,40 +312,18 @@ fn can_resolve_embed_of_an_extern() {
 }
 
 #[test]
-fn will_fail_on_type_with_vfuncs_but_no_vftable() {
-    assert_ast_produces_failure(
-        M::new()
-            .with_definitions([ID::new("TestType", TD::new([]))])
-            .with_vftable([FB::new(
-                "TestType",
-                [F::new(
-                    "test_function0",
-                    [
-                        Ar::MutSelf,
-                        Ar::Field(TF::new("arg0", T::ident("u32"))),
-                        Ar::Field(TF::new("arg1", T::ident("f32"))),
-                    ],
-                )
-                .with_return_type("i32")],
-            )]),
-        "type test::TestType has vftable functions but no vftable field",
-    );
-}
-
-#[test]
 fn can_generate_vftable() {
     assert_ast_produces_type_definitions(
-        M::new()
-            .with_definitions([ID::new("TestType", TD::new([TF::vftable().into()]))])
-            .with_vftable([FB::new(
-                "TestType",
+        M::new().with_definitions([ID::new(
+            "TestType",
+            TD::new([TS::vftable(
                 [
                     F::new(
                         "test_function0",
                         [
                             Ar::MutSelf,
-                            Ar::Field(TF::new("arg0", T::ident("u32"))),
-                            Ar::Field(TF::new("arg1", T::ident("f32"))),
+                            Ar::named("arg0", T::ident("u32")),
+                            Ar::named("arg1", T::ident("f32")),
                         ],
                     )
                     .with_return_type("i32"),
@@ -353,13 +331,14 @@ fn can_generate_vftable() {
                         "test_function1",
                         [
                             Ar::MutSelf,
-                            Ar::Field(TF::new("arg0", T::ident("u32"))),
-                            Ar::Field(TF::new("arg1", T::ident("f32"))),
+                            Ar::named("arg0", T::ident("u32")),
+                            Ar::named("arg1", T::ident("f32")),
                         ],
                     ),
                 ],
-            )
-            .with_attributes([A::size(4)])]),
+                [A::size(4)],
+            )]),
+        )]),
         [
             // TestType
             SID::defined_resolved(
@@ -432,17 +411,16 @@ fn can_generate_vftable() {
 #[test]
 fn can_generate_vftable_with_indices() {
     assert_ast_produces_type_definitions(
-        M::new()
-            .with_definitions([ID::new("TestType", TD::new([TF::vftable().into()]))])
-            .with_vftable([FB::new(
-                "TestType",
+        M::new().with_definitions([ID::new(
+            "TestType",
+            TD::new([TS::vftable(
                 [
                     F::new(
                         "test_function0",
                         [
                             Ar::MutSelf,
-                            Ar::Field(TF::new("arg0", T::ident("u32"))),
-                            Ar::Field(TF::new("arg1", T::ident("f32"))),
+                            Ar::named("arg0", T::ident("u32")),
+                            Ar::named("arg1", T::ident("f32")),
                         ],
                     )
                     .with_attributes([A::index(2)])
@@ -451,14 +429,15 @@ fn can_generate_vftable_with_indices() {
                         "test_function1",
                         [
                             Ar::MutSelf,
-                            Ar::Field(TF::new("arg0", T::ident("u32"))),
-                            Ar::Field(TF::new("arg1", T::ident("f32"))),
+                            Ar::named("arg0", T::ident("u32")),
+                            Ar::named("arg1", T::ident("f32")),
                         ],
                     )
                     .with_attributes([A::index(5)]),
                 ],
-            )
-            .with_attributes([A::size(8)])]),
+                [A::size(8)],
+            )]),
+        )]),
         [
             // TestType
             SID::defined_resolved(
@@ -540,27 +519,25 @@ fn can_generate_vftable_with_indices() {
 #[test]
 fn can_generate_vftable_without_vftable() {
     assert_ast_produces_type_definitions(
-        M::new()
-            .with_definitions([ID::new(
-                "TestType",
-                TD::new([
-                    TF::vftable().into(),
-                    TS::field("test", T::ident("u32")).with_attributes([A::address(8)]),
-                ])
-                .with_attributes([A::hack_skip_vftable(), A::size(16)]),
-            )])
-            .with_vftable([FB::new(
-                "TestType",
-                [F::new(
-                    "test_function0",
-                    [
-                        Ar::MutSelf,
-                        Ar::Field(TF::new("arg0", T::ident("u32"))),
-                        Ar::Field(TF::new("arg1", T::ident("f32"))),
-                    ],
-                )
-                .with_return_type("i32")],
-            )]),
+        M::new().with_definitions([ID::new(
+            "TestType",
+            TD::new([
+                TS::vftable(
+                    [F::new(
+                        "test_function0",
+                        [
+                            Ar::MutSelf,
+                            Ar::named("arg0", T::ident("u32")),
+                            Ar::named("arg1", T::ident("f32")),
+                        ],
+                    )
+                    .with_return_type("i32")],
+                    [],
+                ),
+                TS::field("test", T::ident("u32")).with_attributes([A::address(8)]),
+            ])
+            .with_attributes([A::hack_skip_vftable(), A::size(16)]),
+        )]),
         [
             // TestType
             SID::defined_resolved(
@@ -970,7 +947,15 @@ pub mod inheritance {
                     &self.name,
                     TD::new(
                         Iterator::chain(
-                            self.vftable.as_ref().iter().map(|_| TS::vftable()),
+                            self.vftable.as_ref().iter().map(|v| {
+                                TS::vftable(
+                                    v.functions
+                                        .iter()
+                                        .map(|func| func.to_grammar())
+                                        .collect::<Vec<_>>(),
+                                    [],
+                                )
+                            }),
                             self.fields.iter().map(|(name, ty, attrs)| {
                                 TS::field(
                                     &if name.starts_with('_') {
@@ -1052,16 +1037,6 @@ pub mod inheritance {
                 }
             }
 
-            pub fn to_grammar(&self) -> FB {
-                FB::new(
-                    self.name.as_str(),
-                    self.functions
-                        .iter()
-                        .map(|func| func.to_grammar())
-                        .collect::<Vec<_>>(),
-                )
-            }
-
             pub fn to_semantic(&self) -> SID {
                 SID::defined_resolved(
                     format!("test::{}", self.name_vftable).as_str(),
@@ -1118,9 +1093,7 @@ pub mod inheritance {
                         .iter()
                         .map(|arg| match arg {
                             IFA::MutSelf => Ar::MutSelf,
-                            IFA::Field(name, ty) => {
-                                Ar::Field(TF::new(name.as_str(), ty.to_grammar()))
-                            }
+                            IFA::Field(name, ty) => Ar::named(name.as_str(), ty.to_grammar()),
                         })
                         .collect::<Vec<_>>(),
                 )
@@ -1227,9 +1200,7 @@ pub mod inheritance {
             .with_vftable(derived_vftable.clone());
 
             assert_ast_produces_type_definitions(
-                M::new()
-                    .with_definitions([base.to_grammar(), derived.to_grammar()])
-                    .with_vftable([derived_vftable.to_grammar()]),
+                M::new().with_definitions([base.to_grammar(), derived.to_grammar()]),
                 [
                     base.to_semantic(),
                     derived.to_semantic(),
@@ -1356,13 +1327,11 @@ pub mod inheritance {
             .with_vftable(derived_vftable.clone());
 
             assert_ast_produces_type_definitions(
-                M::new()
-                    .with_definitions([
-                        base_a.to_grammar(),
-                        base_b.to_grammar(),
-                        derived.to_grammar(),
-                    ])
-                    .with_vftable([derived_vftable.to_grammar()]),
+                M::new().with_definitions([
+                    base_a.to_grammar(),
+                    base_b.to_grammar(),
+                    derived.to_grammar(),
+                ]),
                 [
                     base_a.to_semantic(),
                     base_b.to_semantic(),

@@ -24,22 +24,20 @@ fn can_parse_basic_struct() {
 fn can_parse_vftable() {
     let text = r#"
         type TestType {
-            vftable,
-        }
-        impl vftable TestType {
-            fn test(&mut self, test2: i32);
+            vftable {
+                fn test(&mut self, test2: i32);
+            }
         }
         "#;
 
-    let ast = M::new()
-        .with_definitions([ID::new("TestType", TD::new([TF::vftable().into()]))])
-        .with_vftable([FB::new(
-            "TestType",
-            [F::new(
-                "test",
-                [Ar::MutSelf, Ar::field("test2", T::ident("i32"))],
-            )],
-        )]);
+    let ast = M::new().with_definitions([ID::new(
+        "TestType",
+        TD::new([TF::vftable([F::new(
+            "test",
+            [Ar::MutSelf, Ar::named("test2", T::ident("i32"))],
+        )])
+        .into()]),
+    )]);
 
     assert_eq!(parse_str(text).unwrap(), ast);
 }
@@ -141,12 +139,12 @@ fn can_parse_spawn_manager() {
                     "engine_spawn_vehicle",
                     [
                         Ar::MutSelf,
-                        Ar::field("vehicle", T::ident("SharedPtr<Vehicle>").mut_pointer()),
-                        Ar::field("context", T::ident("i32")),
-                        Ar::field("unk1", T::ident("StdString").mut_pointer()),
-                        Ar::field("model_id", T::ident("u32").const_pointer()),
-                        Ar::field("faction", T::ident("u32")),
-                        Ar::field("unk2", T::ident("StdString").mut_pointer()),
+                        Ar::named("vehicle", T::ident("SharedPtr<Vehicle>").mut_pointer()),
+                        Ar::named("context", T::ident("i32")),
+                        Ar::named("unk1", T::ident("StdString").mut_pointer()),
+                        Ar::named("model_id", T::ident("u32").const_pointer()),
+                        Ar::named("faction", T::ident("u32")),
+                        Ar::named("unk2", T::ident("StdString").mut_pointer()),
                     ],
                 )
                 .with_attributes([A::address(0x84C_4C0)])
@@ -155,8 +153,8 @@ fn can_parse_spawn_manager() {
                     "request_vehicle_model",
                     [
                         Ar::MutSelf,
-                        Ar::field("model_id", T::ident("u32").const_pointer()),
-                        Ar::field("category", T::ident("i32")),
+                        Ar::named("model_id", T::ident("u32").const_pointer()),
+                        Ar::named("category", T::ident("i32")),
                     ],
                 )
                 .with_attributes([A::address(0x73F_DB0)]),

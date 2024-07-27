@@ -15,7 +15,6 @@ pub struct Module {
     pub(crate) definition_paths: HashSet<ItemPath>,
     pub(crate) extern_values: Vec<(String, Type, usize)>,
     pub(crate) impls: HashMap<ItemPath, grammar::FunctionBlock>,
-    pub(crate) vftables: HashMap<ItemPath, grammar::FunctionBlock>,
     pub(crate) backends: HashMap<String, Backend>,
 }
 
@@ -27,7 +26,6 @@ impl Default for Module {
             definition_paths: Default::default(),
             extern_values: Default::default(),
             impls: Default::default(),
-            vftables: Default::default(),
             backends: Default::default(),
         }
     }
@@ -39,21 +37,12 @@ impl Module {
         ast: grammar::Module,
         extern_values: Vec<(String, Type, usize)>,
         impls: &[grammar::FunctionBlock],
-        vftables: &[grammar::FunctionBlock],
         backends: &[grammar::Backend],
     ) -> anyhow::Result<Self> {
-        fn convert_functions(
-            path: &ItemPath,
-            functions: &[grammar::FunctionBlock],
-        ) -> HashMap<ItemPath, grammar::FunctionBlock> {
-            functions
-                .iter()
-                .map(|f| (path.join(f.name.as_str().into()), f.clone()))
-                .collect()
-        }
-
-        let impls = convert_functions(&path, impls);
-        let vftables = convert_functions(&path, vftables);
+        let impls = impls
+            .iter()
+            .map(|f| (path.join(f.name.as_str().into()), f.clone()))
+            .collect();
 
         let mut backends_map = HashMap::new();
         for backend in backends {
@@ -76,7 +65,6 @@ impl Module {
             definition_paths: HashSet::new(),
             extern_values,
             impls,
-            vftables,
             backends: backends_map,
         })
     }
