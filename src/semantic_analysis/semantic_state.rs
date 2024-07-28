@@ -75,7 +75,15 @@ impl SemanticState {
     // todo: define an actual error type
     pub fn add_file(&mut self, base_path: &Path, path: &Path) -> anyhow::Result<()> {
         self.add_module(
-            &parser::parse_str(&std::fs::read_to_string(path)?).context(format!("{:?}", path))?,
+            &parser::parse_str(&std::fs::read_to_string(path)?).map_err(|e| {
+                let proc_macro2::LineColumn { line, column } = e.span().start();
+                anyhow::Error::new(e).context(format!(
+                    "failed to parse {}:{}:{}",
+                    path.display(),
+                    line,
+                    column + 1
+                ))
+            })?,
             &ItemPath::from_path(path.strip_prefix(base_path).unwrap_or(path)),
         )
     }

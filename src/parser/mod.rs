@@ -359,7 +359,8 @@ fn parse_item_definition(input: ParseStream, attributes: Vec<Attribute>) -> Resu
         return Err(lookahead.error());
     };
 
-    let inner = inner.map_err(|e| input.error(format!("failed to parse type {name}: {e}")))?;
+    let inner = inner
+        .map_err(|e| syn::Error::new(e.span(), format!("failed to parse type {name}: {e}")))?;
     Ok(ItemDefinition { name, inner })
 }
 
