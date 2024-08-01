@@ -238,6 +238,11 @@ impl Attribute {
         Attribute::Ident("defaultable".into())
     }
 
+    #[allow(clippy::should_implement_trait)]
+    pub fn default() -> Self {
+        Attribute::Ident("default".into())
+    }
+
     pub fn base() -> Self {
         Attribute::Ident("base".into())
     }
@@ -384,16 +389,25 @@ impl TypeDefinition {
 pub struct EnumStatement {
     pub name: Ident,
     pub expr: Option<Expr>,
+    pub attributes: Vec<Attribute>,
 }
 impl EnumStatement {
     pub fn new(name: Ident, expr: Option<Expr>) -> EnumStatement {
-        EnumStatement { name, expr }
+        EnumStatement {
+            name,
+            expr,
+            attributes: vec![],
+        }
     }
     pub fn field(name: &str) -> EnumStatement {
         Self::new(name.into(), None)
     }
     pub fn field_with_expr(name: &str, expr: Expr) -> EnumStatement {
         Self::new(name.into(), Some(expr))
+    }
+    pub fn with_attributes(mut self, attributes: impl Into<Vec<Attribute>>) -> Self {
+        self.attributes = attributes.into();
+        self
     }
 }
 

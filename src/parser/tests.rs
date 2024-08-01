@@ -269,6 +269,7 @@ fn can_parse_enum() {
         #[singleton(0x1234)]
         enum TestType: u32 {
             Item0 = -5,
+            #[default]
             Item1,
             Item2,
             Item3 = 10,
@@ -282,7 +283,7 @@ fn can_parse_enum() {
             T::ident("u32"),
             [
                 ES::field_with_expr("Item0", E::IntLiteral(-5)),
-                ES::field("Item1"),
+                ES::field("Item1").with_attributes([A::default()]),
                 ES::field("Item2"),
                 ES::field_with_expr("Item3", E::IntLiteral(10)),
                 ES::field("Item4"),

@@ -11,8 +11,8 @@ use super::{
     module::Module,
     type_registry::TypeRegistry,
     types::{
-        Argument, EnumDefinition, Function, ItemCategory, ItemDefinition, ItemDefinitionInner,
-        ItemState, ItemStateResolved, Region, Type, TypeDefinition,
+        Argument, EnumDefinition, Function, ItemCategory, ItemDefinition, ItemState,
+        ItemStateResolved, Region, Type, TypeDefinition,
     },
 };
 
@@ -514,14 +514,9 @@ impl SemanticState {
                 let ItemState::Resolved(ItemStateResolved { inner, .. }) = &item else {
                     continue;
                 };
-                let ItemDefinitionInner::Type(TypeDefinition { defaultable, .. }) = &inner else {
-                    anyhow::bail!("field {name} of type {resolvee_path} is not a defaultable type (non-type?)");
-                };
 
-                if !defaultable {
-                    anyhow::bail!(
-                        "field {name} of type {resolvee_path} is not marked as defaultable"
-                    );
+                if !inner.defaultable() {
+                    anyhow::bail!("field {name} of type {resolvee_path} is not a defaultable type");
                 }
             }
         }
@@ -723,20 +718,44 @@ impl SemanticState {
 
         let mut fields: Vec<(String, isize)> = vec![];
         let mut last_field = 0;
+        let mut default_index = None;
         for statement in &definition.statements {
-            let grammar::EnumStatement { name, expr } = statement;
+            let grammar::EnumStatement {
+                name,
+                expr,
+                attributes,
+            } = statement;
             let value = match expr {
                 Some(grammar::Expr::IntLiteral(value)) => *value,
                 Some(_) => anyhow::bail!("unsupported enum field value {expr:?}"),
                 None => last_field,
             };
             fields.push((name.0.clone(), value));
+
+            for attribute in attributes {
+                match attribute {
+                    grammar::Attribute::Ident(ident) => match ident.as_str() {
+                        "default" => {
+                            if default_index.is_some() {
+                                anyhow::bail!("enum {resolvee_path} has multiple default variants");
+                            }
+                            default_index = Some(fields.len() - 1);
+                        }
+                        _ => anyhow::bail!("unsupported attribute: {attribute:?}"),
+                    },
+                    grammar::Attribute::Function(_ident, _exprs) => {
+                        anyhow::bail!("unsupported attribute: {attribute:?}")
+                    }
+                }
+            }
+
             last_field = value + 1;
         }
 
         let mut singleton = None;
         let mut copyable = false;
         let mut cloneable = false;
+        let mut defaultable = false;
         for attribute in &definition.attributes {
             match attribute {
                 grammar::Attribute::Ident(ident) => match ident.as_str() {
@@ -745,6 +764,7 @@ impl SemanticState {
                         cloneable = true;
                     }
                     "cloneable" => cloneable = true,
+                    "defaultable" => defaultable = true,
                     _ => anyhow::bail!("unsupported attribute: {attribute:?}"),
                 },
                 grammar::Attribute::Function(ident, exprs) => {
@@ -758,6 +778,18 @@ impl SemanticState {
             }
         }
 
+        if defaultable && default_index.is_none() {
+            anyhow::bail!(
+                "enum {resolvee_path} is marked as defaultable but has no default variant set"
+            );
+        }
+
+        if !defaultable && default_index.is_some() {
+            anyhow::bail!(
+                "enum {resolvee_path} has a default variant set but is not marked as defaultable"
+            );
+        }
+
         Ok(Some(ItemStateResolved {
             size,
             inner: EnumDefinition {
@@ -766,6 +798,8 @@ impl SemanticState {
                 singleton,
                 copyable,
                 cloneable,
+                defaultable,
+                default_index,
             }
             .into(),
         }))

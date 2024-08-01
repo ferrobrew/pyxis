@@ -847,7 +847,65 @@ fn will_reject_defaultable_on_enum_field() {
                 ED::new(T::ident("u32"), [ES::field("Item1")], []),
             ),
         ]),
-        "field field_1 of type test::TestType is not a defaultable type (non-type?)",
+        "field field_1 of type test::TestType is not a defaultable type",
+    );
+}
+
+#[test]
+fn can_handle_defaultable_on_enum_with_default_field() {
+    assert_ast_produces_failure(
+        M::new().with_definitions([ID::new(
+            "TestType",
+            ED::new(
+                T::ident("u32"),
+                [ES::field("Item1"), ES::field("Item2")],
+                [],
+            )
+            .with_attributes([A::defaultable()]),
+        )]),
+        "enum test::TestType is marked as defaultable but has no default variant set",
+    );
+
+    assert_ast_produces_failure(
+        M::new().with_definitions([ID::new(
+            "TestType",
+            ED::new(
+                T::ident("u32"),
+                [
+                    ES::field("Item1"),
+                    ES::field("Item2").with_attributes([A::default()]),
+                ],
+                [],
+            )
+            .with_attributes([]),
+        )]),
+        "enum test::TestType has a default variant set but is not marked as defaultable",
+    );
+
+    assert_ast_produces_type_definitions(
+        M::new().with_definitions([ID::new(
+            "TestType",
+            ED::new(
+                T::ident("u32"),
+                [
+                    ES::field("Item1"),
+                    ES::field("Item2").with_attributes([A::default()]),
+                ],
+                [],
+            )
+            .with_attributes([A::defaultable()]),
+        )]),
+        [SID::defined_resolved(
+            "test::TestType",
+            SISR {
+                size: 4,
+                inner: SED::new(ST::raw("u32"))
+                    .with_fields([("Item1", 0), ("Item2", 1)])
+                    .with_defaultable(true)
+                    .with_default_index(1)
+                    .into(),
+            },
+        )],
     );
 }
 
@@ -862,7 +920,7 @@ fn will_reject_defaultable_on_non_defaultable_type() {
             ),
             ID::new("TestNonDefaultable", TD::new([])),
         ]),
-        "field field_1 of type test::TestType is not marked as defaultable",
+        "field field_1 of type test::TestType is not a defaultable type",
     );
 }
 

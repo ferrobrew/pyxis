@@ -244,6 +244,8 @@ pub struct EnumDefinition {
     pub singleton: Option<usize>,
     pub copyable: bool,
     pub cloneable: bool,
+    pub defaultable: bool,
+    pub default_index: Option<usize>,
 }
 impl EnumDefinition {
     pub fn new(type_: Type) -> Self {
@@ -253,6 +255,8 @@ impl EnumDefinition {
             singleton: None,
             copyable: false,
             cloneable: false,
+            defaultable: false,
+            default_index: None,
         }
     }
     pub fn with_fields<'a>(mut self, fields: impl IntoIterator<Item = (&'a str, isize)>) -> Self {
@@ -274,6 +278,14 @@ impl EnumDefinition {
         self.cloneable = cloneable;
         self
     }
+    pub fn with_defaultable(mut self, defaultable: bool) -> Self {
+        self.defaultable = defaultable;
+        self
+    }
+    pub fn with_default_index(mut self, default_index: usize) -> Self {
+        self.default_index = Some(default_index);
+        self
+    }
 }
 
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]
@@ -289,6 +301,14 @@ impl From<TypeDefinition> for ItemDefinitionInner {
 impl From<EnumDefinition> for ItemDefinitionInner {
     fn from(ed: EnumDefinition) -> Self {
         ItemDefinitionInner::Enum(ed)
+    }
+}
+impl ItemDefinitionInner {
+    pub fn defaultable(&self) -> bool {
+        match self {
+            ItemDefinitionInner::Type(td) => td.defaultable,
+            ItemDefinitionInner::Enum(ed) => ed.defaultable && ed.default_index.is_some(),
+        }
     }
 }
 

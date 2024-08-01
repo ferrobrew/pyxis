@@ -306,6 +306,12 @@ fn parse_type_definition(input: ParseStream, attributes: Vec<Attribute>) -> Resu
 
 impl Parse for EnumStatement {
     fn parse(input: ParseStream) -> Result<Self> {
+        let attributes = if input.peek(Token![#]) {
+            Attribute::parse_many(input)?
+        } else {
+            vec![]
+        };
+
         let name: Ident = input.parse()?;
         let expr = if input.peek(Token![=]) {
             input.parse::<Token![=]>()?;
@@ -314,7 +320,7 @@ impl Parse for EnumStatement {
             None
         };
 
-        Ok(EnumStatement::new(name, expr))
+        Ok(EnumStatement::new(name, expr).with_attributes(attributes))
     }
 }
 

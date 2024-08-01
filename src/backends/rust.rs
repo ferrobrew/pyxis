@@ -301,15 +301,26 @@ fn build_enum(
         type_,
         copyable,
         cloneable,
+        defaultable,
+        default_index,
     } = enum_definition;
 
     let syn_type = sa_type_to_syn_type(type_)?;
     let name_ident = str_to_ident(name.as_str());
 
-    let syn_fields = fields.iter().map(|(name, value)| {
+    let syn_fields = fields.iter().enumerate().map(|(idx, (name, value))| {
         let name_ident = str_to_ident(name);
-        quote! {
+        let field = quote! {
             #name_ident = #value as _
+        };
+
+        if default_index.is_some_and(|i| i == idx) {
+            quote! {
+                #[default]
+                #field
+            }
+        } else {
+            field
         }
     });
 
@@ -346,6 +357,9 @@ fn build_enum(
     }
     if *cloneable {
         extra_derives.push(quote! { Clone });
+    }
+    if *defaultable {
+        extra_derives.push(quote! { Default });
     }
 
     Ok(quote! {
