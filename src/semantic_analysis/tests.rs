@@ -646,6 +646,7 @@ fn can_resolve_enum() {
             ED::new(
                 T::ident("u32"),
                 [
+                    ES::field_with_expr("Item0", E::IntLiteral(-2)),
                     ES::field("Item1"),
                     ES::field("Item2"),
                     ES::field_with_expr("Item3", E::IntLiteral(10)),
@@ -659,7 +660,13 @@ fn can_resolve_enum() {
             SISR {
                 size: 4,
                 inner: SED::new(ST::raw("u32"))
-                    .with_fields([("Item1", 0), ("Item2", 1), ("Item3", 10), ("Item4", 11)])
+                    .with_fields([
+                        ("Item0", -2),
+                        ("Item1", -1),
+                        ("Item2", 0),
+                        ("Item3", 10),
+                        ("Item4", 11),
+                    ])
                     .with_singleton(0x1234)
                     .into(),
             },
