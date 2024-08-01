@@ -307,8 +307,8 @@ fn parse_type_definition(input: ParseStream, attributes: Vec<Attribute>) -> Resu
 impl Parse for EnumStatement {
     fn parse(input: ParseStream) -> Result<Self> {
         let name: Ident = input.parse()?;
-        let expr = if input.peek(Token![:]) {
-            input.parse::<Token![:]>()?;
+        let expr = if input.peek(Token![=]) {
+            input.parse::<Token![=]>()?;
             Some(input.parse()?)
         } else {
             None

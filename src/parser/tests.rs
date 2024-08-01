@@ -268,9 +268,10 @@ fn can_parse_enum() {
     let text = r#"
         #[singleton(0x1234)]
         enum TestType: u32 {
+            Item0 = -5,
             Item1,
             Item2,
-            Item3: 10,
+            Item3 = 10,
             Item4
         }
         "#;
@@ -280,6 +281,7 @@ fn can_parse_enum() {
         ED::new(
             T::ident("u32"),
             [
+                ES::field_with_expr("Item0", E::IntLiteral(-5)),
                 ES::field("Item1"),
                 ES::field("Item2"),
                 ES::field_with_expr("Item3", E::IntLiteral(10)),
