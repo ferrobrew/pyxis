@@ -15,7 +15,7 @@ pub struct Module {
     pub(crate) definition_paths: HashSet<ItemPath>,
     pub(crate) extern_values: Vec<(String, Type, usize)>,
     pub(crate) impls: HashMap<ItemPath, grammar::FunctionBlock>,
-    pub(crate) backends: HashMap<String, Backend>,
+    pub(crate) backends: HashMap<String, Vec<Backend>>,
 }
 
 impl Default for Module {
@@ -44,19 +44,15 @@ impl Module {
             .map(|f| (path.join(f.name.as_str().into()), f.clone()))
             .collect();
 
-        let mut backends_map = HashMap::new();
+        let mut backends_map: HashMap<String, Vec<Backend>> = HashMap::new();
         for backend in backends {
-            if backends_map.contains_key(&backend.name.0) {
-                anyhow::bail!("duplicate backend: {}", backend.name.0);
-            }
-
-            backends_map.insert(
-                backend.name.0.clone(),
-                Backend {
+            backends_map
+                .entry(backend.name.0.clone())
+                .or_default()
+                .push(Backend {
                     prologue: backend.prologue.clone(),
                     epilogue: backend.epilogue.clone(),
-                },
-            );
+                });
         }
 
         Ok(Self {

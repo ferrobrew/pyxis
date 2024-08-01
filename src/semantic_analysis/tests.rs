@@ -689,9 +689,13 @@ fn can_carry_backend_across() {
     "#
     .trim();
 
-    let ast = M::new().with_backends([B::new("rust")
-        .with_prologue(prologue)
-        .with_epilogue(epilogue)]);
+    // Intentionally double-include the epilogue to test if it's correctly carried across
+    let ast = M::new().with_backends([
+        B::new("rust")
+            .with_prologue(prologue)
+            .with_epilogue(epilogue),
+        B::new("rust").with_epilogue(epilogue),
+    ]);
     let test_path = IP::from("test");
 
     let state = build_state(&ast, &test_path).unwrap();
@@ -699,10 +703,16 @@ fn can_carry_backend_across() {
 
     assert_eq!(
         module.backends.get("rust").unwrap(),
-        &SB {
-            prologue: Some(prologue.to_string()),
-            epilogue: Some(epilogue.to_string()),
-        }
+        &vec![
+            SB {
+                prologue: Some(prologue.to_string()),
+                epilogue: Some(epilogue.to_string()),
+            },
+            SB {
+                prologue: None,
+                epilogue: Some(epilogue.to_string()),
+            }
+        ]
     );
 }
 

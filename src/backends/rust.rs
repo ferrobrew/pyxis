@@ -433,10 +433,17 @@ pub fn write_module(
 
     let mut file = std::fs::File::create(&path)?;
 
-    let backend = module.backends.get("rust");
-    if let Some(prologue) = backend.as_ref().and_then(|b| b.prologue.as_ref()) {
-        writeln!(file, "{}", prologue)?;
-    }
+    let backends = module.backends.get("rust");
+    let prologues = backends
+        .iter()
+        .flat_map(|bs| bs.iter().flat_map(|b| &b.prologue))
+        .join("\n");
+    let epilogues = backends
+        .iter()
+        .flat_map(|bs| bs.iter().flat_map(|b| &b.epilogue))
+        .join("\n");
+
+    writeln!(file, "{prologues}")?;
 
     for definition in module
         .definitions(semantic_state.type_registry())
@@ -453,9 +460,7 @@ pub fn write_module(
         writeln!(file, "{}", build_extern_value(name, type_, *address)?)?;
     }
 
-    if let Some(epilogue) = backend.as_ref().and_then(|b| b.epilogue.as_ref()) {
-        writeln!(file, "{}", epilogue)?;
-    }
+    writeln!(file, "{epilogues}")?;
 
     if FORMAT_OUTPUT {
         Command::new("rustfmt").args([&path]).output()?;
