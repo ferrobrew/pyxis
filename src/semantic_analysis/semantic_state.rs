@@ -649,7 +649,7 @@ impl SemanticState {
                         .as_deref()
                         .unwrap_or_default();
                     anyhow::bail!(
-                        "attempted to insert padding at 0x{offset:X}, but overlapped with existing region `{existing_region}`"
+                        "attempted to insert padding at 0x{offset:X}, but overlapped with existing region `{existing_region}` that ends at 0x{:X}", resolved.last_address
                     );
                 };
                 let padding_region = Region::unnamed_field(self.type_registry.padding_type(size));
