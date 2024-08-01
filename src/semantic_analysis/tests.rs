@@ -747,6 +747,54 @@ fn can_extract_copyable_and_cloneable_correctly() {
 }
 
 #[test]
+fn can_extract_copyable_and_cloneable_for_enum_correctly() {
+    assert_ast_produces_type_definitions(
+        M::new().with_definitions([ID::new(
+            "TestType",
+            ED::new(
+                T::ident("u32"),
+                [ES::field("Item1"), ES::field("Item2")],
+                [],
+            )
+            .with_attributes([A::cloneable()]),
+        )]),
+        [SID::defined_resolved(
+            "test::TestType",
+            SISR {
+                size: 4,
+                inner: SED::new(ST::raw("u32"))
+                    .with_fields([("Item1", 0), ("Item2", 1)])
+                    .with_cloneable(true)
+                    .into(),
+            },
+        )],
+    );
+
+    assert_ast_produces_type_definitions(
+        M::new().with_definitions([ID::new(
+            "TestType",
+            ED::new(
+                T::ident("u32"),
+                [ES::field("Item1"), ES::field("Item2")],
+                [],
+            )
+            .with_attributes([A::copyable()]),
+        )]),
+        [SID::defined_resolved(
+            "test::TestType",
+            SISR {
+                size: 4,
+                inner: SED::new(ST::raw("u32"))
+                    .with_fields([("Item1", 0), ("Item2", 1)])
+                    .with_copyable(true)
+                    .with_cloneable(true)
+                    .into(),
+            },
+        )],
+    );
+}
+
+#[test]
 fn can_handle_defaultable_on_primitive_types() {
     assert_ast_produces_type_definitions(
         M::new().with_definitions([ID::new(

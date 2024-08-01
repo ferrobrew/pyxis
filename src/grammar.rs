@@ -415,6 +415,10 @@ impl EnumDefinition {
             attributes: attributes.into(),
         }
     }
+    pub fn with_attributes(mut self, attributes: impl Into<Vec<Attribute>>) -> Self {
+        self.attributes = attributes.into();
+        self
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

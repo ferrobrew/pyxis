@@ -242,6 +242,8 @@ pub struct EnumDefinition {
     pub type_: Type,
     pub fields: Vec<(String, isize)>,
     pub singleton: Option<usize>,
+    pub copyable: bool,
+    pub cloneable: bool,
 }
 impl EnumDefinition {
     pub fn new(type_: Type) -> Self {
@@ -249,6 +251,8 @@ impl EnumDefinition {
             type_,
             fields: Vec::new(),
             singleton: None,
+            copyable: false,
+            cloneable: false,
         }
     }
     pub fn with_fields<'a>(mut self, fields: impl IntoIterator<Item = (&'a str, isize)>) -> Self {
@@ -260,6 +264,14 @@ impl EnumDefinition {
     }
     pub fn with_singleton(mut self, singleton: usize) -> Self {
         self.singleton = Some(singleton);
+        self
+    }
+    pub fn with_copyable(mut self, copyable: bool) -> Self {
+        self.copyable = copyable;
+        self
+    }
+    pub fn with_cloneable(mut self, cloneable: bool) -> Self {
+        self.cloneable = cloneable;
         self
     }
 }

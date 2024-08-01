@@ -299,6 +299,8 @@ fn build_enum(
         singleton,
         fields,
         type_,
+        copyable,
+        cloneable,
     } = enum_definition;
 
     let syn_type = sa_type_to_syn_type(type_)?;
@@ -338,9 +340,17 @@ fn build_enum(
         }
     });
 
+    let mut extra_derives = vec![];
+    if *copyable {
+        extra_derives.push(quote! { Copy });
+    }
+    if *cloneable {
+        extra_derives.push(quote! { Clone });
+    }
+
     Ok(quote! {
         #[repr(#syn_type)]
-        #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
+        #[derive(PartialEq, Eq, PartialOrd, Ord, Debug, #(#extra_derives),*)]
         pub enum #name_ident {
             #(#syn_fields),*
         }

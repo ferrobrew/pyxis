@@ -721,7 +721,6 @@ impl SemanticState {
             return Ok(None);
         };
 
-        let mut singleton = None;
         let mut fields: Vec<(String, isize)> = vec![];
         let mut last_field = 0;
         for statement in &definition.statements {
@@ -735,15 +734,27 @@ impl SemanticState {
             last_field = value + 1;
         }
 
+        let mut singleton = None;
+        let mut copyable = false;
+        let mut cloneable = false;
         for attribute in &definition.attributes {
-            let grammar::Attribute::Function(ident, exprs) = attribute else {
-                anyhow::bail!("unsupported attribute: {attribute:?}");
-            };
-            match (ident.as_str(), exprs.as_slice()) {
-                ("singleton", [grammar::Expr::IntLiteral(value)]) => {
-                    singleton = Some(*value as usize);
+            match attribute {
+                grammar::Attribute::Ident(ident) => match ident.as_str() {
+                    "copyable" => {
+                        copyable = true;
+                        cloneable = true;
+                    }
+                    "cloneable" => cloneable = true,
+                    _ => anyhow::bail!("unsupported attribute: {attribute:?}"),
+                },
+                grammar::Attribute::Function(ident, exprs) => {
+                    match (ident.as_str(), exprs.as_slice()) {
+                        ("singleton", [grammar::Expr::IntLiteral(value)]) => {
+                            singleton = Some(*value as usize);
+                        }
+                        _ => anyhow::bail!("unsupported attribute: {attribute:?}"),
+                    }
                 }
-                _ => anyhow::bail!("unsupported attribute: {attribute:?}"),
             }
         }
 
@@ -753,6 +764,8 @@ impl SemanticState {
                 type_: ty,
                 fields,
                 singleton,
+                copyable,
+                cloneable,
             }
             .into(),
         }))
