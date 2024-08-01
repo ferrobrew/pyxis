@@ -1,4 +1,4 @@
-use std::{io::Write, path::Path, process::Command};
+use std::{fmt::Write as _, path::Path};
 
 use crate::{
     grammar::{ItemPath, ItemPathSegment},
@@ -431,7 +431,7 @@ pub fn write_module(
     let directory_path = path.parent().map(|p| p.to_path_buf()).unwrap_or_default();
     std::fs::create_dir_all(directory_path)?;
 
-    let mut file = std::fs::File::create(&path)?;
+    let mut raw_output = String::new();
 
     let backends = module.backends.get("rust");
     let prologues = backends
@@ -443,13 +443,13 @@ pub fn write_module(
         .flat_map(|bs| bs.iter().flat_map(|b| &b.epilogue))
         .join("\n");
 
-    writeln!(file, "{prologues}")?;
+    writeln!(raw_output, "{prologues}")?;
 
     for definition in module
         .definitions(semantic_state.type_registry())
         .sorted_by_key(|d| &d.path)
     {
-        writeln!(file, "{}", build_item(definition)?)?;
+        writeln!(raw_output, "{}", build_item(definition)?)?;
     }
 
     for (name, type_, address) in module
@@ -457,14 +457,20 @@ pub fn write_module(
         .iter()
         .sorted_by_key(|(name, _, _)| name)
     {
-        writeln!(file, "{}", build_extern_value(name, type_, *address)?)?;
+        writeln!(raw_output, "{}", build_extern_value(name, type_, *address)?)?;
     }
 
-    writeln!(file, "{epilogues}")?;
+    writeln!(raw_output, "{epilogues}")?;
 
-    if FORMAT_OUTPUT {
-        Command::new("rustfmt").args([&path]).output()?;
-    }
+    let output = if FORMAT_OUTPUT {
+        // You may think that this is inefficient. It probably is.
+        // It's still probably faster than running `rustfmt`.
+        prettyplease::unparse(&syn::parse_file(&raw_output)?)
+    } else {
+        raw_output
+    };
+
+    std::fs::write(&path, output).context("failed to write file")?;
 
     Ok(())
 }
