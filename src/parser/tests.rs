@@ -326,24 +326,53 @@ backend rust {
         }
     "#;
 }
+
+
+backend rust prologue r#"
+    use std::ffi::CString;
+    use std::os::raw::c_char;
+"#;
+
+backend rust epilogue r#"
+    fn main() {
+        println!("Hello, world!");
+    }
+"#;
 "##;
 
-    let ast = M::new().with_backends([B::new("rust")
-        .with_prologue(
-            r#"
+    let ast = M::new().with_backends([
+        B::new("rust")
+            .with_prologue(
+                r#"
         use std::ffi::CString;
         use std::os::raw::c_char;
     "#
-            .trim(),
-        )
-        .with_epilogue(
-            r#"
+                .trim(),
+            )
+            .with_epilogue(
+                r#"
         fn main() {
             println!("Hello, world!");
         }
     "#
+                .trim(),
+            ),
+        B::new("rust").with_prologue(
+            r#"
+    use std::ffi::CString;
+    use std::os::raw::c_char;
+"#
             .trim(),
-        )]);
+        ),
+        B::new("rust").with_epilogue(
+            r#"
+    fn main() {
+        println!("Hello, world!");
+    }
+"#
+            .trim(),
+        ),
+    ]);
 
     assert_eq!(parse_str(text).unwrap(), ast);
 }

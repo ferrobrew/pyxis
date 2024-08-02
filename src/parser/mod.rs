@@ -374,6 +374,20 @@ fn parse_backend(input: ParseStream) -> Result<Backend> {
     input.parse::<kw::backend>()?;
     let name: Ident = input.parse()?;
 
+    if let Some(new_prologue) = parse_block::<kw::prologue>(input, kw::prologue)? {
+        return Ok(Backend {
+            name,
+            prologue: Some(new_prologue),
+            epilogue: None,
+        });
+    } else if let Some(new_epilogue) = parse_block::<kw::epilogue>(input, kw::epilogue)? {
+        return Ok(Backend {
+            name,
+            prologue: None,
+            epilogue: Some(new_epilogue),
+        });
+    }
+
     let content;
     braced!(content in input);
 
@@ -381,19 +395,27 @@ fn parse_backend(input: ParseStream) -> Result<Backend> {
     let mut epilogue = None;
 
     while !content.is_empty() {
-        if content.peek(kw::prologue) {
-            content.parse::<kw::prologue>()?;
-            let temp: syn::LitStr = content.parse()?;
-            content.parse::<Token![;]>()?;
-            prologue = Some(temp.value().trim().to_string());
-        } else if content.peek(kw::epilogue) {
-            content.parse::<kw::epilogue>()?;
-            let temp: syn::LitStr = content.parse()?;
-            content.parse::<Token![;]>()?;
-            epilogue = Some(temp.value().trim().to_string());
+        if let Some(new_prologue) = parse_block::<kw::prologue>(&content, kw::prologue)? {
+            prologue = Some(new_prologue);
+        } else if let Some(new_epilogue) = parse_block::<kw::epilogue>(&content, kw::epilogue)? {
+            epilogue = Some(new_epilogue);
         } else {
             return Err(content.error("expected prologue or epilogue"));
         }
+    }
+
+    fn parse_block<T: syn::parse::Parse>(
+        input: ParseStream,
+        token: impl syn::parse::Peek,
+    ) -> Result<Option<String>> {
+        if !input.peek(token) {
+            return Ok(None);
+        }
+
+        input.parse::<T>()?;
+        let temp: syn::LitStr = input.parse()?;
+        input.parse::<Token![;]>()?;
+        Ok(Some(temp.value().trim().to_string()))
     }
 
     Ok(Backend {
