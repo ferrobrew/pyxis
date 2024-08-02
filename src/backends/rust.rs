@@ -123,7 +123,7 @@ fn build_function(
         .iter()
         .map(|a| {
             Ok(match a {
-                Argument::ConstSelf => quote! { self as *const Self},
+                Argument::ConstSelf => quote! { self as *const Self },
                 Argument::MutSelf => quote! { self as *mut Self },
                 Argument::Field(name, _) => {
                     let name = str_to_ident(name);
@@ -165,9 +165,19 @@ fn build_function(
         },
     });
 
+    // Assume that if a `self` is present, it's `thiscall`, otherwise it's `system`.
+    // This isn't strictly speaking correct and will break on other architectures and under
+    // other calling conventions. This is a convenience hack to unblock development; in future,
+    // we should probably have 1) freestanding functions and 2) a way to specify calling conventions.
+    let has_self = function
+        .arguments
+        .iter()
+        .any(|a| matches!(a, Argument::ConstSelf | Argument::MutSelf));
+    let calling_convention = if has_self { "thiscall" } else { "system" };
+
     Ok(quote! {
         pub unsafe fn #name(#(#arguments),*) #return_type {
-            let f: unsafe extern "thiscall" fn(#(#lambda_arguments),*) #return_type = #function_getter_impl;
+            let f: unsafe extern #calling_convention fn(#(#lambda_arguments),*) #return_type = #function_getter_impl;
             f(#(#call_arguments),*)
         }
     })
