@@ -260,6 +260,7 @@ impl SemanticState {
         function: &grammar::Function,
     ) -> Result<Function, anyhow::Error> {
         let mut address = None;
+        let mut calling_convention = None;
         for attribute in &function.attributes {
             let Some((ident, exprs)) = attribute.function() else {
                 anyhow::bail!("unsupported attribute: {attribute:?}");
@@ -270,6 +271,12 @@ impl SemanticState {
                 }
                 ("index", _) => {
                     // ignore index attribute, this is handled by vftable construction
+                }
+                ("calling_convention", [grammar::Expr::StringLiteral(cc)]) => {
+                    calling_convention = Some(
+                        cc.parse()
+                            .map_err(|_| anyhow::anyhow!("invalid calling convention: {cc}"))?,
+                    );
                 }
                 _ => anyhow::bail!("unsupported attribute: {attribute:?}"),
             }
@@ -306,6 +313,7 @@ impl SemanticState {
             address,
             arguments,
             return_type,
+            calling_convention,
         })
     }
 
@@ -376,7 +384,9 @@ impl SemanticState {
         let mut free_functions = vec![];
         if let Some(type_impl) = module.impls.get(resolvee_path) {
             for function in &type_impl.functions {
-                let function = self.build_function(&module.scope(), function)?;
+                let function = self
+                    .build_function(&module.scope(), function)
+                    .with_context(|| format!("while building impl function {}", function.name))?;
                 free_functions.push(function);
             }
         }
@@ -579,6 +589,7 @@ impl SemanticState {
                     arguments: vec![Argument::MutSelf],
                     return_type: None,
                     address: None,
+                    calling_convention: None,
                 });
             }
         }

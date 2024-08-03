@@ -208,6 +208,39 @@ fn can_resolve_complex_type() {
 }
 
 #[test]
+fn will_propagate_calling_convention() {
+    assert_ast_produces_type_definitions(
+        M::new()
+            .with_definitions([ID::new(
+                "TestType",
+                TD::new([TS::field("test", T::ident("u32"))]),
+            )])
+            .with_impls([FB::new(
+                "TestType",
+                [
+                    F::new("test_function", [Ar::named("arg1", T::ident("i32"))])
+                        .with_attributes([A::address(0x800_000), A::calling_convention("cdecl")])
+                        .with_return_type(T::ident("i32")),
+                ],
+            )]),
+        [SID::defined_resolved(
+            "test::TestType",
+            SISR {
+                size: 4,
+                inner: STD::new()
+                    .with_regions([SR::field("test", ST::raw("u32"))])
+                    .with_free_functions([SF::new("test_function")
+                        .with_address(0x800_000)
+                        .with_calling_convention(CC::Cdecl)
+                        .with_arguments([SAr::field("arg1", ST::raw("i32"))])
+                        .with_return_type(ST::raw("i32"))])
+                    .into(),
+            },
+        )],
+    );
+}
+
+#[test]
 fn will_eventually_terminate_with_an_unknown_type() {
     assert_ast_produces_failure(
         M::new().with_definitions([ID::new(

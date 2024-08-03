@@ -165,15 +165,22 @@ fn build_function(
         },
     });
 
-    // Assume that if a `self` is present, it's `thiscall`, otherwise it's `system`.
-    // This isn't strictly speaking correct and will break on other architectures and under
-    // other calling conventions. This is a convenience hack to unblock development; in future,
-    // we should probably have 1) freestanding functions and 2) a way to specify calling conventions.
-    let has_self = function
-        .arguments
-        .iter()
-        .any(|a| matches!(a, Argument::ConstSelf | Argument::MutSelf));
-    let calling_convention = if has_self { "thiscall" } else { "system" };
+    let calling_convention = if let Some(cc) = function.calling_convention {
+        cc.as_str()
+    } else {
+        // Assume that if the function has a self argument, it's a thiscall function, otherwise it's "system"
+        // for interoperating with system libraries: <https://doc.rust-lang.org/nomicon/ffi.html#foreign-calling-conventions>
+        // Bit sus honestly, maybe we should enforce a calling convention for all non-self functions?
+        let has_self = function
+            .arguments
+            .iter()
+            .any(|a| matches!(a, Argument::ConstSelf | Argument::MutSelf));
+        if has_self {
+            "thiscall"
+        } else {
+            "system"
+        }
+    };
 
     Ok(quote! {
         pub unsafe fn #name(#(#arguments),*) #return_type {

@@ -1,4 +1,4 @@
-use std::fmt;
+use std::{fmt, str::FromStr};
 
 use crate::{
     grammar::{self, ItemPath},
@@ -19,6 +19,7 @@ pub mod test_aliases {
     pub type SIC = super::ItemCategory;
     pub type SIS = super::ItemState;
     pub type SISR = super::ItemStateResolved;
+    pub type CC = super::CallingConvention;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -33,12 +34,54 @@ impl Argument {
     }
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum CallingConvention {
+    C,
+    Cdecl,
+    Stdcall,
+    Fastcall,
+    Thiscall,
+    Vectorcall,
+}
+impl CallingConvention {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            CallingConvention::C => "C",
+            CallingConvention::Cdecl => "cdecl",
+            CallingConvention::Stdcall => "stdcall",
+            CallingConvention::Fastcall => "fastcall",
+            CallingConvention::Thiscall => "thiscall",
+            CallingConvention::Vectorcall => "vectorcall",
+        }
+    }
+}
+impl fmt::Display for CallingConvention {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+impl FromStr for CallingConvention {
+    type Err = ();
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "C" => Ok(CallingConvention::C),
+            "cdecl" => Ok(CallingConvention::Cdecl),
+            "stdcall" => Ok(CallingConvention::Stdcall),
+            "fastcall" => Ok(CallingConvention::Fastcall),
+            "thiscall" => Ok(CallingConvention::Thiscall),
+            "vectorcall" => Ok(CallingConvention::Vectorcall),
+            _ => Err(()),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Function {
     pub name: String,
     pub address: Option<usize>,
     pub arguments: Vec<Argument>,
     pub return_type: Option<Type>,
+    pub calling_convention: Option<CallingConvention>,
 }
 impl Function {
     pub fn new(name: impl Into<String>) -> Self {
@@ -47,6 +90,7 @@ impl Function {
             address: None,
             arguments: Vec::new(),
             return_type: None,
+            calling_convention: None,
         }
     }
     pub fn with_address(mut self, address: usize) -> Self {
@@ -59,6 +103,10 @@ impl Function {
     }
     pub fn with_return_type(mut self, return_type: Type) -> Self {
         self.return_type = Some(return_type);
+        self
+    }
+    pub fn with_calling_convention(mut self, calling_convention: CallingConvention) -> Self {
+        self.calling_convention = Some(calling_convention);
         self
     }
 }

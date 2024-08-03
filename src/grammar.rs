@@ -199,6 +199,13 @@ pub enum Attribute {
     Function(Ident, Vec<Expr>),
 }
 impl Attribute {
+    pub fn function(&self) -> Option<(&Ident, &Vec<Expr>)> {
+        match self {
+            Attribute::Ident(_) => None,
+            Attribute::Function(ident, exprs) => Some((ident, exprs)),
+        }
+    }
+
     pub fn integer_fn(name: &str, value: isize) -> Self {
         Attribute::Function(name.into(), vec![Expr::IntLiteral(value)])
     }
@@ -219,11 +226,11 @@ impl Attribute {
         Self::integer_fn("index", index as isize)
     }
 
-    pub fn function(&self) -> Option<(&Ident, &Vec<Expr>)> {
-        match self {
-            Attribute::Ident(_) => None,
-            Attribute::Function(ident, exprs) => Some((ident, exprs)),
-        }
+    pub fn calling_convention(name: &str) -> Self {
+        Attribute::Function(
+            "calling_convention".into(),
+            vec![Expr::StringLiteral(name.into())],
+        )
     }
 
     pub fn copyable() -> Self {
