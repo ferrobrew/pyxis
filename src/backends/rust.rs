@@ -226,9 +226,14 @@ fn build_type(
         quote! {
             #[allow(dead_code)]
             impl #name_ident {
-                pub unsafe fn get() -> &'static mut Self {
+                pub unsafe fn get() -> Option<&'static mut Self> {
                     unsafe {
-                        &mut **(#address as *mut *mut Self)
+                        let ptr: *mut Self = *(#address as *mut *mut Self);
+                        if ptr.is_null() {
+                            None
+                        } else {
+                            Some(&mut *ptr)
+                        }
                     }
                 }
             }
