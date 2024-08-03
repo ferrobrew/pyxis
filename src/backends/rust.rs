@@ -46,9 +46,8 @@ fn fully_qualified_type_ref_impl(
             fully_qualified_type_ref_impl(out, tr.as_ref())?;
             write!(out, "; {}]", size)
         }
-        Type::Function(args, return_type) => {
-            // todo: revisit the thiscall here when we have non-thiscall functions
-            write!(out, r#"unsafe extern "thiscall" fn ("#)?;
+        Type::Function(calling_convention, args, return_type) => {
+            write!(out, r#"unsafe extern "{calling_convention}" fn ("#)?;
             for (field, type_ref) in args.iter() {
                 write!(out, "{field}: ")?;
                 fully_qualified_type_ref_impl(out, type_ref)?;
@@ -165,22 +164,7 @@ fn build_function(
         },
     });
 
-    let calling_convention = if let Some(cc) = function.calling_convention {
-        cc.as_str()
-    } else {
-        // Assume that if the function has a self argument, it's a thiscall function, otherwise it's "system"
-        // for interoperating with system libraries: <https://doc.rust-lang.org/nomicon/ffi.html#foreign-calling-conventions>
-        // Bit sus honestly, maybe we should enforce a calling convention for all non-self functions?
-        let has_self = function
-            .arguments
-            .iter()
-            .any(|a| matches!(a, Argument::ConstSelf | Argument::MutSelf));
-        if has_self {
-            "thiscall"
-        } else {
-            "system"
-        }
-    };
+    let calling_convention = function.calling_convention.as_str();
 
     Ok(quote! {
         pub unsafe fn #name(#(#arguments),*) #return_type {

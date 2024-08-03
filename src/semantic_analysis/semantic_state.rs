@@ -11,8 +11,8 @@ use super::{
     module::Module,
     type_registry::TypeRegistry,
     types::{
-        Argument, EnumDefinition, Function, ItemCategory, ItemDefinition, ItemState,
-        ItemStateResolved, Region, Type, TypeDefinition,
+        Argument, CallingConvention, EnumDefinition, Function, ItemCategory, ItemDefinition,
+        ItemState, ItemStateResolved, Region, Type, TypeDefinition,
     },
 };
 
@@ -308,6 +308,20 @@ impl SemanticState {
             .as_ref()
             .and_then(|t| self.type_registry.resolve_grammar_type(scope, t));
 
+        let calling_convention = calling_convention.unwrap_or_else(|| {
+            // Assume that if the function has a self argument, it's a thiscall function, otherwise it's "system"
+            // for interoperating with system libraries: <https://doc.rust-lang.org/nomicon/ffi.html#foreign-calling-conventions>
+            // Bit sus honestly, maybe we should enforce a calling convention for all non-self functions?
+            let has_self = arguments
+                .iter()
+                .any(|a| matches!(a, Argument::ConstSelf | Argument::MutSelf));
+            if has_self {
+                CallingConvention::Thiscall
+            } else {
+                CallingConvention::System
+            }
+        });
+
         Ok(Function {
             name: function.name.0.clone(),
             address,
@@ -565,6 +579,9 @@ impl SemanticState {
                     ("index", [grammar::Expr::IntLiteral(index_)]) => {
                         index = Some(*index_ as usize);
                     }
+                    ("calling_convention", _) => {
+                        // ignore calling convention attribute, handled by build_function
+                    }
                     _ => anyhow::bail!("unsupported attribute: {attribute:?}"),
                 }
             }
@@ -589,7 +606,7 @@ impl SemanticState {
                     arguments: vec![Argument::MutSelf],
                     return_type: None,
                     address: None,
-                    calling_convention: None,
+                    calling_convention: CallingConvention::Thiscall,
                 });
             }
         }
@@ -869,7 +886,7 @@ fn build_vftable_item(
 
         Region {
             name: Some(function.name.clone()),
-            type_ref: Type::Function(arguments, return_type),
+            type_ref: Type::Function(function.calling_convention, arguments, return_type),
         }
     };
 

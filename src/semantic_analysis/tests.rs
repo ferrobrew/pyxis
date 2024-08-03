@@ -208,39 +208,6 @@ fn can_resolve_complex_type() {
 }
 
 #[test]
-fn will_propagate_calling_convention() {
-    assert_ast_produces_type_definitions(
-        M::new()
-            .with_definitions([ID::new(
-                "TestType",
-                TD::new([TS::field("test", T::ident("u32"))]),
-            )])
-            .with_impls([FB::new(
-                "TestType",
-                [
-                    F::new("test_function", [Ar::named("arg1", T::ident("i32"))])
-                        .with_attributes([A::address(0x800_000), A::calling_convention("cdecl")])
-                        .with_return_type(T::ident("i32")),
-                ],
-            )]),
-        [SID::defined_resolved(
-            "test::TestType",
-            SISR {
-                size: 4,
-                inner: STD::new()
-                    .with_regions([SR::field("test", ST::raw("u32"))])
-                    .with_free_functions([SF::new("test_function")
-                        .with_address(0x800_000)
-                        .with_calling_convention(CC::Cdecl)
-                        .with_arguments([SAr::field("arg1", ST::raw("i32"))])
-                        .with_return_type(ST::raw("i32"))])
-                    .into(),
-            },
-        )],
-    );
-}
-
-#[test]
 fn will_eventually_terminate_with_an_unknown_type() {
     assert_ast_produces_failure(
         M::new().with_definitions([ID::new(
@@ -412,6 +379,7 @@ fn can_generate_vftable() {
                             SR::field(
                                 "test_function0",
                                 ST::function(
+                                    CC::Thiscall,
                                     [
                                         ("this", ST::raw("test::TestType").mut_pointer()),
                                         ("arg0", ST::raw("u32")),
@@ -423,6 +391,7 @@ fn can_generate_vftable() {
                             SR::field(
                                 "test_function1",
                                 ST::function(
+                                    CC::Thiscall,
                                     [
                                         ("this", ST::raw("test::TestType").mut_pointer()),
                                         ("arg0", ST::raw("u32")),
@@ -517,6 +486,7 @@ fn can_generate_vftable_with_indices() {
                             SR::field(
                                 "test_function0",
                                 ST::function(
+                                    CC::Thiscall,
                                     [
                                         ("this", ST::raw("test::TestType").mut_pointer()),
                                         ("arg0", ST::raw("u32")),
@@ -530,6 +500,7 @@ fn can_generate_vftable_with_indices() {
                             SR::field(
                                 "test_function1",
                                 ST::function(
+                                    CC::Thiscall,
                                     [
                                         ("this", ST::raw("test::TestType").mut_pointer()),
                                         ("arg0", ST::raw("u32")),
@@ -541,6 +512,86 @@ fn can_generate_vftable_with_indices() {
                             make_vfunc_region(6),
                             make_vfunc_region(7),
                         ])
+                        .into(),
+                },
+            ),
+        ],
+    );
+}
+
+#[test]
+fn will_propagate_calling_convention_for_impl_and_vftable() {
+    assert_ast_produces_type_definitions(
+        M::new()
+            .with_definitions([ID::new(
+                "TestType",
+                TD::new([TS::vftable(
+                    [F::new(
+                        "test_function0",
+                        [
+                            Ar::MutSelf,
+                            Ar::named("arg0", T::ident("u32")),
+                            Ar::named("arg1", T::ident("f32")),
+                        ],
+                    )
+                    .with_return_type("i32")
+                    .with_attributes([A::calling_convention("cdecl")])],
+                    [],
+                )]),
+            )])
+            .with_impls([FB::new(
+                "TestType",
+                [
+                    F::new("test_function", [Ar::named("arg1", T::ident("i32"))])
+                        .with_attributes([A::address(0x800_000), A::calling_convention("cdecl")])
+                        .with_return_type(T::ident("i32")),
+                ],
+            )]),
+        [
+            // TestType
+            SID::defined_resolved(
+                "test::TestType",
+                SISR {
+                    size: 4,
+                    inner: STD::new()
+                        .with_regions([SR::field(
+                            "vftable",
+                            ST::raw("test::TestTypeVftable").const_pointer(),
+                        )])
+                        .with_vftable_functions([SF::new("test_function0")
+                            .with_arguments([
+                                SAr::MutSelf,
+                                SAr::field("arg0", ST::raw("u32")),
+                                SAr::field("arg1", ST::raw("f32")),
+                            ])
+                            .with_calling_convention(CC::Cdecl)
+                            .with_return_type(ST::raw("i32"))])
+                        .with_free_functions([SF::new("test_function")
+                            .with_address(0x800_000)
+                            .with_calling_convention(CC::Cdecl)
+                            .with_arguments([SAr::field("arg1", ST::raw("i32"))])
+                            .with_return_type(ST::raw("i32"))])
+                        .into(),
+                },
+            ),
+            // TestTypeVftable
+            SID::defined_resolved(
+                "test::TestTypeVftable",
+                SISR {
+                    size: 4,
+                    inner: STD::new()
+                        .with_regions([SR::field(
+                            "test_function0",
+                            ST::function(
+                                CC::Cdecl,
+                                [
+                                    ("this", ST::raw("test::TestType").mut_pointer()),
+                                    ("arg0", ST::raw("u32")),
+                                    ("arg1", ST::raw("f32")),
+                                ],
+                                ST::raw("i32"),
+                            ),
+                        )])
                         .into(),
                 },
             ),
@@ -617,6 +668,7 @@ fn can_generate_vftable_without_vftable() {
                         .with_regions([SR::field(
                             "test_function0",
                             ST::function(
+                                CC::Thiscall,
                                 [
                                     ("this", ST::raw("test::TestType").mut_pointer()),
                                     ("arg0", ST::raw("u32")),
@@ -639,7 +691,11 @@ fn make_vfunc(index: usize) -> SF {
 fn make_vfunc_region(index: usize) -> SR {
     SR::field(
         format!("_vfunc_{}", index),
-        ST::function([("this", ST::raw("test::TestType").mut_pointer())], None),
+        ST::function(
+            CC::Thiscall,
+            [("this", ST::raw("test::TestType").mut_pointer())],
+            None,
+        ),
     )
 }
 
@@ -1274,6 +1330,7 @@ pub mod inheritance {
                 SR::field(
                     &self.name,
                     ST::function(
+                        CC::Thiscall,
                         self.arguments
                             .iter()
                             .map(|arg| match arg {

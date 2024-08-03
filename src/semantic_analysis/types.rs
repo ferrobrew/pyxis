@@ -42,6 +42,7 @@ pub enum CallingConvention {
     Fastcall,
     Thiscall,
     Vectorcall,
+    System,
 }
 impl CallingConvention {
     pub fn as_str(&self) -> &'static str {
@@ -52,6 +53,7 @@ impl CallingConvention {
             CallingConvention::Fastcall => "fastcall",
             CallingConvention::Thiscall => "thiscall",
             CallingConvention::Vectorcall => "vectorcall",
+            CallingConvention::System => "system",
         }
     }
 }
@@ -70,6 +72,7 @@ impl FromStr for CallingConvention {
             "fastcall" => Ok(CallingConvention::Fastcall),
             "thiscall" => Ok(CallingConvention::Thiscall),
             "vectorcall" => Ok(CallingConvention::Vectorcall),
+            "system" => Ok(CallingConvention::System),
             _ => Err(()),
         }
     }
@@ -81,7 +84,7 @@ pub struct Function {
     pub address: Option<usize>,
     pub arguments: Vec<Argument>,
     pub return_type: Option<Type>,
-    pub calling_convention: Option<CallingConvention>,
+    pub calling_convention: CallingConvention,
 }
 impl Function {
     pub fn new(name: impl Into<String>) -> Self {
@@ -90,7 +93,9 @@ impl Function {
             address: None,
             arguments: Vec::new(),
             return_type: None,
-            calling_convention: None,
+            // ehh. This is not really always going to be true,
+            // but I also don't want to specify it in all of the tests
+            calling_convention: CallingConvention::Thiscall,
         }
     }
     pub fn with_address(mut self, address: usize) -> Self {
@@ -106,7 +111,7 @@ impl Function {
         self
     }
     pub fn with_calling_convention(mut self, calling_convention: CallingConvention) -> Self {
-        self.calling_convention = Some(calling_convention);
+        self.calling_convention = calling_convention;
         self
     }
 }
@@ -118,7 +123,11 @@ pub enum Type {
     ConstPointer(Box<Type>),
     MutPointer(Box<Type>),
     Array(Box<Type>, usize),
-    Function(Vec<(String, Box<Type>)>, Option<Box<Type>>),
+    Function(
+        CallingConvention,
+        Vec<(String, Box<Type>)>,
+        Option<Box<Type>>,
+    ),
 }
 
 impl Type {
@@ -130,7 +139,7 @@ impl Type {
             Type::ConstPointer(_) => Some(type_registry.pointer_size()),
             Type::MutPointer(_) => Some(type_registry.pointer_size()),
             Type::Array(tr, count) => tr.size(type_registry).map(|s| s * count),
-            Type::Function(_, _) => Some(type_registry.pointer_size()),
+            Type::Function(_, _, _) => Some(type_registry.pointer_size()),
         }
     }
 
@@ -151,10 +160,12 @@ impl Type {
     }
 
     pub fn function<'a>(
+        calling_convention: CallingConvention,
         args: impl Into<Vec<(&'a str, Type)>>,
         return_type: impl Into<Option<Type>>,
     ) -> Self {
         Type::Function(
+            calling_convention,
             args.into()
                 .into_iter()
                 .map(|(name, tr)| (name.to_string(), Box::new(tr)))
@@ -190,8 +201,8 @@ impl fmt::Display for Type {
                 tr.fmt(f)?;
                 write!(f, "; {}]", size)
             }
-            Type::Function(args, return_type) => {
-                write!(f, "fn (")?;
+            Type::Function(calling_convention, args, return_type) => {
+                write!(f, "extern \"{calling_convention}\" fn (")?;
                 for (index, (field, type_ref)) in args.iter().enumerate() {
                     write!(f, "{field}: ")?;
                     type_ref.fmt(f)?;
