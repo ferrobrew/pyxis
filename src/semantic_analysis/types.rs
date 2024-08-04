@@ -19,7 +19,8 @@ pub mod test_aliases {
     pub type SIC = super::ItemCategory;
     pub type SIS = super::ItemState;
     pub type SISR = super::ItemStateResolved;
-    pub type CC = super::CallingConvention;
+    pub type SCC = super::CallingConvention;
+    pub type SV = super::Visibility;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -78,8 +79,23 @@ impl FromStr for CallingConvention {
     }
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum Visibility {
+    Public,
+    Private,
+}
+impl From<grammar::Visibility> for Visibility {
+    fn from(v: grammar::Visibility) -> Self {
+        match v {
+            grammar::Visibility::Public => Visibility::Public,
+            grammar::Visibility::Private => Visibility::Private,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Function {
+    pub visibility: Visibility,
     pub name: String,
     pub address: Option<usize>,
     pub arguments: Vec<Argument>,
@@ -87,8 +103,9 @@ pub struct Function {
     pub calling_convention: CallingConvention,
 }
 impl Function {
-    pub fn new(name: impl Into<String>) -> Self {
+    pub fn new(visibility: Visibility, name: impl Into<String>) -> Self {
         Function {
+            visibility,
             name: name.into(),
             address: None,
             arguments: Vec::new(),
@@ -223,13 +240,15 @@ impl fmt::Display for Type {
 
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]
 pub struct Region {
+    pub visibility: Visibility,
     pub name: Option<String>,
     pub type_ref: Type,
 }
 
 impl Region {
-    pub fn field(name: impl Into<String>, type_ref: Type) -> Self {
+    pub fn field(visibility: Visibility, name: impl Into<String>, type_ref: Type) -> Self {
         Region {
+            visibility,
             name: Some(name.into()),
             type_ref,
         }
@@ -237,6 +256,7 @@ impl Region {
 
     pub fn unnamed_field(type_ref: Type) -> Self {
         Region {
+            visibility: Visibility::Private,
             name: None,
             type_ref,
         }
@@ -397,13 +417,19 @@ pub enum ItemCategory {
 
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]
 pub struct ItemDefinition {
+    pub visibility: Visibility,
     pub path: ItemPath,
     pub state: ItemState,
     pub category: ItemCategory,
 }
 impl ItemDefinition {
-    pub fn defined_resolved(path: impl Into<ItemPath>, resolved: ItemStateResolved) -> Self {
+    pub fn defined_resolved(
+        visibility: Visibility,
+        path: impl Into<ItemPath>,
+        resolved: ItemStateResolved,
+    ) -> Self {
         ItemDefinition {
+            visibility,
             path: path.into(),
             state: ItemState::Resolved(resolved),
             category: ItemCategory::Defined,

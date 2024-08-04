@@ -183,6 +183,17 @@ impl Attribute {
     }
 }
 
+impl Parse for Visibility {
+    fn parse(input: ParseStream) -> Result<Self> {
+        if input.peek(Token![pub]) {
+            input.parse::<Token![pub]>()?;
+            Ok(Visibility::Public)
+        } else {
+            Ok(Visibility::Private)
+        }
+    }
+}
+
 impl Parse for Argument {
     fn parse(input: ParseStream) -> Result<Self> {
         let lookahead = input.lookahead1();
@@ -216,6 +227,8 @@ impl Parse for Function {
     fn parse(input: ParseStream) -> Result<Self> {
         let attributes = Attribute::parse_many(input)?;
 
+        let visibility: Visibility = input.parse()?;
+
         input.parse::<Token![fn]>()?;
         let name: Ident = input.parse()?;
 
@@ -234,6 +247,7 @@ impl Parse for Function {
         };
 
         Ok(Function {
+            visibility,
             name,
             attributes,
             arguments,
@@ -264,9 +278,10 @@ impl Parse for TypeField {
 
             Ok(TypeField::Vftable(functions))
         } else {
+            let visibility: Visibility = input.parse()?;
             let name: Ident = input.parse()?;
             input.parse::<Token![:]>()?;
-            Ok(TypeField::Field(name, input.parse()?))
+            Ok(TypeField::Field(visibility, name, input.parse()?))
         }
     }
 }
@@ -344,7 +359,11 @@ fn parse_enum_definition(input: ParseStream, attributes: Vec<Attribute>) -> Resu
     })
 }
 
-fn parse_item_definition(input: ParseStream, attributes: Vec<Attribute>) -> Result<ItemDefinition> {
+fn parse_item_definition(
+    input: ParseStream,
+    visibility: Visibility,
+    attributes: Vec<Attribute>,
+) -> Result<ItemDefinition> {
     let lookahead = input.lookahead1();
     // We return a Result for the inner so that we can annotate it with the name
     let (name, inner) = if lookahead.peek(Token![type]) {
@@ -367,7 +386,11 @@ fn parse_item_definition(input: ParseStream, attributes: Vec<Attribute>) -> Resu
 
     let inner = inner
         .map_err(|e| syn::Error::new(e.span(), format!("failed to parse type {name}: {e}")))?;
-    Ok(ItemDefinition { name, inner })
+    Ok(ItemDefinition {
+        name,
+        visibility,
+        inner,
+    })
 }
 
 fn parse_backend(input: ParseStream) -> Result<Backend> {
@@ -436,18 +459,21 @@ impl Parse for Module {
 
         // Exhaust all of our declarations
         while !input.is_empty() {
-            let attributes = Attribute::parse_many(input)?;
-
+            // Attribute-less statements
             if input.peek(Token![use]) {
-                if !attributes.is_empty() {
-                    return Err(input.error("attributes not allowed on use statements"));
-                }
-
                 input.parse::<Token![use]>()?;
                 let item_path = input.parse()?;
                 input.parse::<Token![;]>()?;
                 uses.push(item_path);
-            } else if input.peek(Token![extern]) {
+                continue;
+            } else if input.peek(kw::backend) {
+                backends.push(parse_backend(input)?);
+                continue;
+            }
+
+            // Attributed statements
+            let attributes = Attribute::parse_many(input)?;
+            if input.peek(Token![extern]) {
                 input.parse::<Token![extern]>()?;
                 if input.peek(Token![type]) {
                     input.parse::<Token![type]>()?;
@@ -463,8 +489,7 @@ impl Parse for Module {
 
                     extern_values.push((name, type_, attributes));
                 }
-            } else if input.peek(Token![type]) || input.peek(Token![enum]) {
-                definitions.push(parse_item_definition(input, attributes)?);
+                continue;
             } else if input.peek(Token![impl]) {
                 input.parse::<Token![impl]>()?;
                 let name: Ident = input.parse()?;
@@ -480,15 +505,17 @@ impl Parse for Module {
                     functions,
                     attributes,
                 });
-            } else if input.peek(kw::backend) {
-                if !attributes.is_empty() {
-                    return Err(input.error("attributes not allowed on backends"));
-                }
-
-                backends.push(parse_backend(input)?);
-            } else {
-                return Err(input.error("unexpected keyword"));
+                continue;
             }
+
+            // Attributed statements with visibility
+            let visibility: Visibility = input.parse()?;
+            if input.peek(Token![type]) || input.peek(Token![enum]) {
+                definitions.push(parse_item_definition(input, visibility, attributes)?);
+                continue;
+            }
+
+            return Err(input.error("unexpected keyword"));
         }
 
         Ok(Module {

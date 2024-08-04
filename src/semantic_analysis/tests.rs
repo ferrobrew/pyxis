@@ -53,22 +53,24 @@ fn unknown(size: usize) -> ST {
 fn can_resolve_basic_struct() {
     assert_ast_produces_type_definitions(
         M::new().with_definitions([ID::new(
+            V::Public,
             "TestType",
             TD::new([
-                TS::field("field_1", T::ident("i32")),
-                TS::field("_", T::unknown(4)),
-                TS::field("field_2", T::ident("u64")),
+                TS::field(V::Public, "field_1", T::ident("i32")),
+                TS::field(V::Private, "_", T::unknown(4)),
+                TS::field(V::Public, "field_2", T::ident("u64")),
             ]),
         )]),
         [SID::defined_resolved(
+            SV::Public,
             "test::TestType",
             SISR {
                 size: 16,
                 inner: STD::new()
                     .with_regions([
-                        SR::field("field_1", ST::raw("i32")),
-                        SR::field("_field_4", unknown(4)),
-                        SR::field("field_2", ST::raw("u64")),
+                        SR::field(SV::Public, "field_1", ST::raw("i32")),
+                        SR::field(SV::Private, "_field_4", unknown(4)),
+                        SR::field(SV::Public, "field_2", ST::raw("u64")),
                     ])
                     .into(),
             },
@@ -81,39 +83,51 @@ fn can_resolve_pointer_to_another_struct() {
     assert_ast_produces_type_definitions(
         M::new().with_definitions([
             ID::new(
+                V::Public,
                 "TestType1",
-                TD::new([TS::field("field_1", T::ident("u64"))]),
+                TD::new([TS::field(V::Public, "field_1", T::ident("u64"))]),
             ),
             ID::new(
+                V::Public,
                 "TestType2",
                 TD::new([
-                    TS::field("field_1", T::ident("i32")),
-                    TS::field("field_2", T::ident("TestType1")),
-                    TS::field("field_3", T::ident("TestType1").const_pointer()),
-                    TS::field("field_4", T::ident("TestType1").mut_pointer()),
+                    TS::field(V::Public, "field_1", T::ident("i32")),
+                    TS::field(V::Public, "field_2", T::ident("TestType1")),
+                    TS::field(V::Public, "field_3", T::ident("TestType1").const_pointer()),
+                    TS::field(V::Public, "field_4", T::ident("TestType1").mut_pointer()),
                 ]),
             ),
         ]),
         [
             SID::defined_resolved(
+                SV::Public,
                 "test::TestType1",
                 SISR {
                     size: 8,
                     inner: STD::new()
-                        .with_regions([SR::field("field_1", ST::raw("u64"))])
+                        .with_regions([SR::field(SV::Public, "field_1", ST::raw("u64"))])
                         .into(),
                 },
             ),
             SID::defined_resolved(
+                SV::Public,
                 "test::TestType2",
                 SISR {
                     size: 20,
                     inner: STD::new()
                         .with_regions([
-                            SR::field("field_1", ST::raw("i32")),
-                            SR::field("field_2", ST::raw("test::TestType1")),
-                            SR::field("field_3", ST::raw("test::TestType1").const_pointer()),
-                            SR::field("field_4", ST::raw("test::TestType1").mut_pointer()),
+                            SR::field(SV::Public, "field_1", ST::raw("i32")),
+                            SR::field(SV::Public, "field_2", ST::raw("test::TestType1")),
+                            SR::field(
+                                SV::Public,
+                                "field_3",
+                                ST::raw("test::TestType1").const_pointer(),
+                            ),
+                            SR::field(
+                                SV::Public,
+                                "field_4",
+                                ST::raw("test::TestType1").mut_pointer(),
+                            ),
                         ])
                         .into(),
                 },
@@ -128,20 +142,23 @@ fn can_resolve_complex_type() {
         M::new()
             .with_definitions([
                 ID::new(
+                    V::Public,
                     "TestType",
                     TD::new([
-                        TS::field("field_1", T::ident("i32")),
-                        TS::field("_", T::unknown(4)),
+                        TS::field(V::Public, "field_1", T::ident("i32")),
+                        TS::field(V::Private, "_", T::unknown(4)),
                     ]),
                 ),
                 ID::new(
+                    V::Public,
                     "Singleton",
                     TD::new([
-                        TS::field("max_num_1", T::ident("u16")).with_attributes([A::address(0x78)]),
-                        TS::field("max_num_2", T::ident("u16")),
-                        TS::field("test_type", T::ident("TestType"))
+                        TS::field(V::Public, "max_num_1", T::ident("u16"))
+                            .with_attributes([A::address(0x78)]),
+                        TS::field(V::Public, "max_num_2", T::ident("u16")),
+                        TS::field(V::Public, "test_type", T::ident("TestType"))
                             .with_attributes([A::address(0xA00)]),
-                        TS::field("settings", T::unknown(804)),
+                        TS::field(V::Public, "settings", T::unknown(804)),
                     ])
                     .with_attributes([A::size(0x1750), A::singleton(0x1_200_000)]),
                 ),
@@ -149,6 +166,7 @@ fn can_resolve_complex_type() {
             .with_impls([FB::new(
                 "Singleton",
                 [F::new(
+                    V::Public,
                     "test_function",
                     [
                         Ar::MutSelf,
@@ -162,32 +180,34 @@ fn can_resolve_complex_type() {
             )]),
         [
             SID::defined_resolved(
+                SV::Public,
                 "test::TestType",
                 SISR {
                     size: 8,
                     inner: STD::new()
                         .with_regions([
-                            SR::field("field_1", ST::raw("i32")),
-                            SR::field("_field_4", unknown(4)),
+                            SR::field(SV::Public, "field_1", ST::raw("i32")),
+                            SR::field(SV::Private, "_field_4", unknown(4)),
                         ])
                         .into(),
                 },
             ),
             SID::defined_resolved(
+                SV::Public,
                 "test::Singleton",
                 SISR {
                     size: 0x1750,
                     inner: STD::new()
                         .with_regions([
-                            SR::field("_field_0", unknown(0x78)),
-                            SR::field("max_num_1", ST::raw("u16")),
-                            SR::field("max_num_2", ST::raw("u16")),
-                            SR::field("_field_7c", unknown(0x984)),
-                            SR::field("test_type", ST::raw("test::TestType")),
-                            SR::field("settings", unknown(804)),
-                            SR::field("_field_d2c", unknown(0xA24)),
+                            SR::field(SV::Private, "_field_0", unknown(0x78)),
+                            SR::field(SV::Public, "max_num_1", ST::raw("u16")),
+                            SR::field(SV::Public, "max_num_2", ST::raw("u16")),
+                            SR::field(SV::Private, "_field_7c", unknown(0x984)),
+                            SR::field(SV::Public, "test_type", ST::raw("test::TestType")),
+                            SR::field(SV::Public, "settings", unknown(804)),
+                            SR::field(SV::Private, "_field_d2c", unknown(0xA24)),
                         ])
-                        .with_free_functions([SF::new("test_function")
+                        .with_free_functions([SF::new(SV::Public, "test_function")
                             .with_address(0x800_000)
                             .with_arguments([
                                 SAr::MutSelf,
@@ -211,8 +231,9 @@ fn can_resolve_complex_type() {
 fn will_eventually_terminate_with_an_unknown_type() {
     assert_ast_produces_failure(
         M::new().with_definitions([ID::new(
+            V::Public,
             "TestType2",
-            TD::new([TS::field("field_2", T::ident("TestType1"))]),
+            TD::new([TS::field(V::Private, "field_2", T::ident("TestType1"))]),
         )]),
         r#"type resolution will not terminate, failed on types: ["test::TestType2"] (resolved types: [])"#,
     );
@@ -223,12 +244,14 @@ fn can_use_type_from_another_module() {
     let module1 = M::new()
         .with_uses([IP::from("module2::TestType2")])
         .with_definitions([ID::new(
+            V::Public,
             "TestType1",
-            TD::new([TS::field("field", T::ident("TestType2"))]),
+            TD::new([TS::field(V::Private, "field", T::ident("TestType2"))]),
         )]);
     let module2 = M::new().with_definitions([ID::new(
+        V::Public,
         "TestType2",
-        TD::new([TS::field("field", T::ident("u32"))]),
+        TD::new([TS::field(V::Private, "field", T::ident("u32"))]),
     )]);
 
     let mut semantic_state = SemanticState::new(4);
@@ -250,11 +273,16 @@ fn can_use_type_from_another_module() {
     assert_eq!(
         resolved_type,
         SID::defined_resolved(
+            SV::Public,
             path.clone(),
             SISR {
                 size: 4,
                 inner: STD::new()
-                    .with_regions([SR::field("field", ST::raw("module2::TestType2"))])
+                    .with_regions([SR::field(
+                        SV::Private,
+                        "field",
+                        ST::raw("module2::TestType2")
+                    )])
                     .into(),
             },
         )
@@ -275,30 +303,41 @@ fn can_resolve_embed_of_an_extern() {
         M::new()
             .with_extern_types([("TestType1".into(), vec![A::size(16)])])
             .with_definitions([ID::new(
+                V::Public,
                 "TestType2",
                 TD::new([
-                    TS::field("field_1", T::ident("i32")),
-                    TS::field("field_2", T::ident("TestType1")),
-                    TS::field("field_3", T::ident("TestType1").const_pointer()),
-                    TS::field("field_4", T::ident("TestType1").mut_pointer()),
+                    TS::field(V::Public, "field_1", T::ident("i32")),
+                    TS::field(V::Public, "field_2", T::ident("TestType1")),
+                    TS::field(V::Public, "field_3", T::ident("TestType1").const_pointer()),
+                    TS::field(V::Public, "field_4", T::ident("TestType1").mut_pointer()),
                 ]),
             )]),
         [
             SID::defined_resolved(
+                SV::Public,
                 "test::TestType2",
                 SISR {
                     size: 28,
                     inner: STD::new()
                         .with_regions([
-                            SR::field("field_1", ST::raw("i32")),
-                            SR::field("field_2", ST::raw("test::TestType1")),
-                            SR::field("field_3", ST::raw("test::TestType1").const_pointer()),
-                            SR::field("field_4", ST::raw("test::TestType1").mut_pointer()),
+                            SR::field(SV::Public, "field_1", ST::raw("i32")),
+                            SR::field(SV::Public, "field_2", ST::raw("test::TestType1")),
+                            SR::field(
+                                SV::Public,
+                                "field_3",
+                                ST::raw("test::TestType1").const_pointer(),
+                            ),
+                            SR::field(
+                                SV::Public,
+                                "field_4",
+                                ST::raw("test::TestType1").mut_pointer(),
+                            ),
                         ])
                         .into(),
                 },
             ),
             SID {
+                visibility: SV::Public,
                 path: "test::TestType1".into(),
                 state: SISR {
                     size: 16,
@@ -315,10 +354,12 @@ fn can_resolve_embed_of_an_extern() {
 fn can_generate_vftable() {
     assert_ast_produces_type_definitions(
         M::new().with_definitions([ID::new(
+            V::Public,
             "TestType",
             TD::new([TS::vftable(
                 [
                     F::new(
+                        V::Public,
                         "test_function0",
                         [
                             Ar::MutSelf,
@@ -328,6 +369,7 @@ fn can_generate_vftable() {
                     )
                     .with_return_type("i32"),
                     F::new(
+                        V::Public,
                         "test_function1",
                         [
                             Ar::MutSelf,
@@ -342,23 +384,25 @@ fn can_generate_vftable() {
         [
             // TestType
             SID::defined_resolved(
+                SV::Public,
                 "test::TestType",
                 SISR {
                     size: 4,
                     inner: STD::new()
                         .with_regions([SR::field(
+                            SV::Public,
                             "vftable",
                             ST::raw("test::TestTypeVftable").const_pointer(),
                         )])
                         .with_vftable_functions([
-                            SF::new("test_function0")
+                            SF::new(SV::Public, "test_function0")
                                 .with_arguments([
                                     SAr::MutSelf,
                                     SAr::field("arg0", ST::raw("u32")),
                                     SAr::field("arg1", ST::raw("f32")),
                                 ])
                                 .with_return_type(ST::raw("i32")),
-                            SF::new("test_function1").with_arguments([
+                            SF::new(SV::Public, "test_function1").with_arguments([
                                 SAr::MutSelf,
                                 SAr::field("arg0", ST::raw("u32")),
                                 SAr::field("arg1", ST::raw("f32")),
@@ -371,15 +415,17 @@ fn can_generate_vftable() {
             ),
             // TestTypeVftable
             SID::defined_resolved(
+                SV::Public,
                 "test::TestTypeVftable",
                 SISR {
                     size: 16,
                     inner: STD::new()
                         .with_regions([
                             SR::field(
+                                SV::Public,
                                 "test_function0",
                                 ST::function(
-                                    CC::Thiscall,
+                                    SCC::Thiscall,
                                     [
                                         ("this", ST::raw("test::TestType").mut_pointer()),
                                         ("arg0", ST::raw("u32")),
@@ -389,9 +435,10 @@ fn can_generate_vftable() {
                                 ),
                             ),
                             SR::field(
+                                SV::Public,
                                 "test_function1",
                                 ST::function(
-                                    CC::Thiscall,
+                                    SCC::Thiscall,
                                     [
                                         ("this", ST::raw("test::TestType").mut_pointer()),
                                         ("arg0", ST::raw("u32")),
@@ -414,10 +461,12 @@ fn can_generate_vftable() {
 fn can_generate_vftable_with_indices() {
     assert_ast_produces_type_definitions(
         M::new().with_definitions([ID::new(
+            V::Public,
             "TestType",
             TD::new([TS::vftable(
                 [
                     F::new(
+                        V::Public,
                         "test_function0",
                         [
                             Ar::MutSelf,
@@ -428,6 +477,7 @@ fn can_generate_vftable_with_indices() {
                     .with_attributes([A::index(2)])
                     .with_return_type("i32"),
                     F::new(
+                        V::Public,
                         "test_function1",
                         [
                             Ar::MutSelf,
@@ -443,18 +493,20 @@ fn can_generate_vftable_with_indices() {
         [
             // TestType
             SID::defined_resolved(
+                SV::Public,
                 "test::TestType",
                 SISR {
                     size: 4,
                     inner: STD::new()
                         .with_regions([SR::field(
+                            SV::Public,
                             "vftable",
                             ST::raw("test::TestTypeVftable").const_pointer(),
                         )])
                         .with_vftable_functions([
                             make_vfunc(0),
                             make_vfunc(1),
-                            SF::new("test_function0")
+                            SF::new(SV::Public, "test_function0")
                                 .with_arguments([
                                     SAr::MutSelf,
                                     SAr::field("arg0", ST::raw("u32")),
@@ -463,7 +515,7 @@ fn can_generate_vftable_with_indices() {
                                 .with_return_type(ST::raw("i32")),
                             make_vfunc(3),
                             make_vfunc(4),
-                            SF::new("test_function1").with_arguments([
+                            SF::new(SV::Public, "test_function1").with_arguments([
                                 SAr::MutSelf,
                                 SAr::field("arg0", ST::raw("u32")),
                                 SAr::field("arg1", ST::raw("f32")),
@@ -476,6 +528,7 @@ fn can_generate_vftable_with_indices() {
             ),
             // TestTypeVftable
             SID::defined_resolved(
+                SV::Public,
                 "test::TestTypeVftable",
                 SISR {
                     size: 32,
@@ -484,9 +537,10 @@ fn can_generate_vftable_with_indices() {
                             make_vfunc_region(0),
                             make_vfunc_region(1),
                             SR::field(
+                                SV::Public,
                                 "test_function0",
                                 ST::function(
-                                    CC::Thiscall,
+                                    SCC::Thiscall,
                                     [
                                         ("this", ST::raw("test::TestType").mut_pointer()),
                                         ("arg0", ST::raw("u32")),
@@ -498,9 +552,10 @@ fn can_generate_vftable_with_indices() {
                             make_vfunc_region(3),
                             make_vfunc_region(4),
                             SR::field(
+                                SV::Public,
                                 "test_function1",
                                 ST::function(
-                                    CC::Thiscall,
+                                    SCC::Thiscall,
                                     [
                                         ("this", ST::raw("test::TestType").mut_pointer()),
                                         ("arg0", ST::raw("u32")),
@@ -524,9 +579,11 @@ fn will_propagate_calling_convention_for_impl_and_vftable() {
     assert_ast_produces_type_definitions(
         M::new()
             .with_definitions([ID::new(
+                V::Public,
                 "TestType",
                 TD::new([TS::vftable(
                     [F::new(
+                        V::Public,
                         "test_function0",
                         [
                             Ar::MutSelf,
@@ -541,34 +598,38 @@ fn will_propagate_calling_convention_for_impl_and_vftable() {
             )])
             .with_impls([FB::new(
                 "TestType",
-                [
-                    F::new("test_function", [Ar::named("arg1", T::ident("i32"))])
-                        .with_attributes([A::address(0x800_000), A::calling_convention("cdecl")])
-                        .with_return_type(T::ident("i32")),
-                ],
+                [F::new(
+                    V::Public,
+                    "test_function",
+                    [Ar::named("arg1", T::ident("i32"))],
+                )
+                .with_attributes([A::address(0x800_000), A::calling_convention("cdecl")])
+                .with_return_type(T::ident("i32"))],
             )]),
         [
             // TestType
             SID::defined_resolved(
+                SV::Public,
                 "test::TestType",
                 SISR {
                     size: 4,
                     inner: STD::new()
                         .with_regions([SR::field(
+                            SV::Public,
                             "vftable",
                             ST::raw("test::TestTypeVftable").const_pointer(),
                         )])
-                        .with_vftable_functions([SF::new("test_function0")
+                        .with_vftable_functions([SF::new(SV::Public, "test_function0")
                             .with_arguments([
                                 SAr::MutSelf,
                                 SAr::field("arg0", ST::raw("u32")),
                                 SAr::field("arg1", ST::raw("f32")),
                             ])
-                            .with_calling_convention(CC::Cdecl)
+                            .with_calling_convention(SCC::Cdecl)
                             .with_return_type(ST::raw("i32"))])
-                        .with_free_functions([SF::new("test_function")
+                        .with_free_functions([SF::new(SV::Public, "test_function")
                             .with_address(0x800_000)
-                            .with_calling_convention(CC::Cdecl)
+                            .with_calling_convention(SCC::Cdecl)
                             .with_arguments([SAr::field("arg1", ST::raw("i32"))])
                             .with_return_type(ST::raw("i32"))])
                         .into(),
@@ -576,14 +637,16 @@ fn will_propagate_calling_convention_for_impl_and_vftable() {
             ),
             // TestTypeVftable
             SID::defined_resolved(
+                SV::Public,
                 "test::TestTypeVftable",
                 SISR {
                     size: 4,
                     inner: STD::new()
                         .with_regions([SR::field(
+                            SV::Public,
                             "test_function0",
                             ST::function(
-                                CC::Cdecl,
+                                SCC::Cdecl,
                                 [
                                     ("this", ST::raw("test::TestType").mut_pointer()),
                                     ("arg0", ST::raw("u32")),
@@ -604,10 +667,12 @@ fn will_propagate_calling_convention_for_impl_and_vftable() {
 fn can_generate_vftable_without_vftable() {
     assert_ast_produces_type_definitions(
         M::new().with_definitions([ID::new(
+            V::Public,
             "TestType",
             TD::new([
                 TS::vftable(
                     [F::new(
+                        V::Public,
                         "test_function0",
                         [
                             Ar::MutSelf,
@@ -618,24 +683,29 @@ fn can_generate_vftable_without_vftable() {
                     .with_return_type("i32")],
                     [],
                 ),
-                TS::field("test", T::ident("u32")).with_attributes([A::address(8)]),
+                TS::field(V::Private, "test", T::ident("u32")).with_attributes([A::address(8)]),
             ])
             .with_attributes([A::hack_skip_vftable(), A::size(16)]),
         )]),
         [
             // TestType
             SID::defined_resolved(
+                SV::Public,
                 "test::TestType",
                 SISR {
                     size: 16,
                     inner: STD::new()
                         .with_regions([
-                            SR::field("vftable", ST::raw("test::TestTypeVftable").const_pointer()),
-                            SR::field("_field_4", unknown(4)),
-                            SR::field("test", ST::raw("u32")),
-                            SR::field("_field_c", unknown(4)),
+                            SR::field(
+                                SV::Public,
+                                "vftable",
+                                ST::raw("test::TestTypeVftable").const_pointer(),
+                            ),
+                            SR::field(SV::Private, "_field_4", unknown(4)),
+                            SR::field(SV::Private, "test", ST::raw("u32")),
+                            SR::field(SV::Private, "_field_c", unknown(4)),
                         ])
-                        .with_vftable_functions([SF::new("test_function0")
+                        .with_vftable_functions([SF::new(SV::Public, "test_function0")
                             .with_arguments([
                                 SAr::MutSelf,
                                 SAr::field("arg0", ST::raw("u32")),
@@ -647,28 +717,31 @@ fn can_generate_vftable_without_vftable() {
             ),
             // TestTypeWithoutVftable
             SID::defined_resolved(
+                SV::Public,
                 "test::TestTypeWithoutVftable",
                 SISR {
                     size: 12,
                     inner: STD::new()
                         .with_regions([
-                            SR::field("_field_0", unknown(4)),
-                            SR::field("test", ST::raw("u32")),
-                            SR::field("_field_8", unknown(4)),
+                            SR::field(SV::Private, "_field_0", unknown(4)),
+                            SR::field(SV::Private, "test", ST::raw("u32")),
+                            SR::field(SV::Private, "_field_8", unknown(4)),
                         ])
                         .into(),
                 },
             ),
             // TestTypeVftable
             SID::defined_resolved(
+                SV::Public,
                 "test::TestTypeVftable",
                 SISR {
                     size: 4,
                     inner: STD::new()
                         .with_regions([SR::field(
+                            SV::Public,
                             "test_function0",
                             ST::function(
-                                CC::Thiscall,
+                                SCC::Thiscall,
                                 [
                                     ("this", ST::raw("test::TestType").mut_pointer()),
                                     ("arg0", ST::raw("u32")),
@@ -685,14 +758,15 @@ fn can_generate_vftable_without_vftable() {
 }
 
 fn make_vfunc(index: usize) -> SF {
-    SF::new(format!("_vfunc_{}", index)).with_arguments([SAr::MutSelf])
+    SF::new(SV::Private, format!("_vfunc_{}", index)).with_arguments([SAr::MutSelf])
 }
 
 fn make_vfunc_region(index: usize) -> SR {
     SR::field(
+        SV::Private,
         format!("_vfunc_{}", index),
         ST::function(
-            CC::Thiscall,
+            SCC::Thiscall,
             [("this", ST::raw("test::TestType").mut_pointer())],
             None,
         ),
@@ -731,6 +805,7 @@ fn can_define_extern_value() {
 fn can_resolve_enum() {
     assert_ast_produces_type_definitions(
         M::new().with_definitions([ID::new(
+            V::Public,
             "TestType",
             ED::new(
                 T::ident("u32"),
@@ -745,6 +820,7 @@ fn can_resolve_enum() {
             ),
         )]),
         [SID::defined_resolved(
+            SV::Public,
             "test::TestType",
             SISR {
                 size: 4,
@@ -810,15 +886,18 @@ fn can_extract_copyable_and_cloneable_correctly() {
     // Check cloneable
     assert_ast_produces_type_definitions(
         M::new().with_definitions([ID::new(
+            V::Public,
             "TestType",
-            TD::new([TS::field("field_1", T::ident("i32"))]).with_attributes([A::cloneable()]),
+            TD::new([TS::field(V::Private, "field_1", T::ident("i32"))])
+                .with_attributes([A::cloneable()]),
         )]),
         [SID::defined_resolved(
+            SV::Public,
             "test::TestType",
             SISR {
                 size: 4,
                 inner: STD::new()
-                    .with_regions([SR::field("field_1", ST::raw("i32"))])
+                    .with_regions([SR::field(SV::Private, "field_1", ST::raw("i32"))])
                     .with_cloneable(true)
                     .into(),
             },
@@ -828,15 +907,18 @@ fn can_extract_copyable_and_cloneable_correctly() {
     // Check copyable -> copyable + cloneable
     assert_ast_produces_type_definitions(
         M::new().with_definitions([ID::new(
+            V::Public,
             "TestType",
-            TD::new([TS::field("field_1", T::ident("i32"))]).with_attributes([A::copyable()]),
+            TD::new([TS::field(V::Private, "field_1", T::ident("i32"))])
+                .with_attributes([A::copyable()]),
         )]),
         [SID::defined_resolved(
+            SV::Public,
             "test::TestType",
             SISR {
                 size: 4,
                 inner: STD::new()
-                    .with_regions([SR::field("field_1", ST::raw("i32"))])
+                    .with_regions([SR::field(SV::Private, "field_1", ST::raw("i32"))])
                     .with_copyable(true)
                     .with_cloneable(true)
                     .into(),
@@ -849,6 +931,7 @@ fn can_extract_copyable_and_cloneable_correctly() {
 fn can_extract_copyable_and_cloneable_for_enum_correctly() {
     assert_ast_produces_type_definitions(
         M::new().with_definitions([ID::new(
+            V::Public,
             "TestType",
             ED::new(
                 T::ident("u32"),
@@ -858,6 +941,7 @@ fn can_extract_copyable_and_cloneable_for_enum_correctly() {
             .with_attributes([A::cloneable()]),
         )]),
         [SID::defined_resolved(
+            SV::Public,
             "test::TestType",
             SISR {
                 size: 4,
@@ -871,6 +955,7 @@ fn can_extract_copyable_and_cloneable_for_enum_correctly() {
 
     assert_ast_produces_type_definitions(
         M::new().with_definitions([ID::new(
+            V::Public,
             "TestType",
             ED::new(
                 T::ident("u32"),
@@ -880,6 +965,7 @@ fn can_extract_copyable_and_cloneable_for_enum_correctly() {
             .with_attributes([A::copyable()]),
         )]),
         [SID::defined_resolved(
+            SV::Public,
             "test::TestType",
             SISR {
                 size: 4,
@@ -897,21 +983,23 @@ fn can_extract_copyable_and_cloneable_for_enum_correctly() {
 fn can_handle_defaultable_on_primitive_types() {
     assert_ast_produces_type_definitions(
         M::new().with_definitions([ID::new(
+            V::Public,
             "TestType",
             TD::new([
-                TS::field("field_1", T::ident("i32")),
-                TS::field("field_2", T::ident("f32").array(16)),
+                TS::field(V::Private, "field_1", T::ident("i32")),
+                TS::field(V::Private, "field_2", T::ident("f32").array(16)),
             ])
             .with_attributes([A::defaultable()]),
         )]),
         [SID::defined_resolved(
+            SV::Public,
             "test::TestType",
             SISR {
                 size: 68,
                 inner: STD::new()
                     .with_regions([
-                        SR::field("field_1", ST::raw("i32")),
-                        SR::field("field_2", ST::raw("f32").array(16)),
+                        SR::field(SV::Private, "field_1", ST::raw("i32")),
+                        SR::field(SV::Private, "field_2", ST::raw("f32").array(16)),
                     ])
                     .with_defaultable(true)
                     .into(),
@@ -924,9 +1012,14 @@ fn can_handle_defaultable_on_primitive_types() {
 fn will_reject_defaultable_on_pointer() {
     assert_ast_produces_failure(
         M::new().with_definitions([ID::new(
+            V::Public,
             "TestType",
-            TD::new([TS::field("field_1", T::ident("i32").mut_pointer())])
-                .with_attributes([A::defaultable()]),
+            TD::new([TS::field(
+                V::Private,
+                "field_1",
+                T::ident("i32").mut_pointer(),
+            )])
+            .with_attributes([A::defaultable()]),
         )]),
         "field field_1 of type test::TestType is not a defaultable type (pointer or function?)",
     );
@@ -937,11 +1030,13 @@ fn will_reject_defaultable_on_enum_field() {
     assert_ast_produces_failure(
         M::new().with_definitions([
             ID::new(
+                V::Public,
                 "TestType",
-                TD::new([TS::field("field_1", T::ident("TestEnum"))])
+                TD::new([TS::field(V::Private, "field_1", T::ident("TestEnum"))])
                     .with_attributes([A::defaultable()]),
             ),
             ID::new(
+                V::Public,
                 "TestEnum",
                 ED::new(T::ident("u32"), [ES::field("Item1")], []),
             ),
@@ -954,6 +1049,7 @@ fn will_reject_defaultable_on_enum_field() {
 fn can_handle_defaultable_on_enum_with_default_field() {
     assert_ast_produces_failure(
         M::new().with_definitions([ID::new(
+            V::Public,
             "TestType",
             ED::new(
                 T::ident("u32"),
@@ -967,6 +1063,7 @@ fn can_handle_defaultable_on_enum_with_default_field() {
 
     assert_ast_produces_failure(
         M::new().with_definitions([ID::new(
+            V::Public,
             "TestType",
             ED::new(
                 T::ident("u32"),
@@ -983,6 +1080,7 @@ fn can_handle_defaultable_on_enum_with_default_field() {
 
     assert_ast_produces_type_definitions(
         M::new().with_definitions([ID::new(
+            V::Public,
             "TestType",
             ED::new(
                 T::ident("u32"),
@@ -995,6 +1093,7 @@ fn can_handle_defaultable_on_enum_with_default_field() {
             .with_attributes([A::defaultable()]),
         )]),
         [SID::defined_resolved(
+            SV::Public,
             "test::TestType",
             SISR {
                 size: 4,
@@ -1013,11 +1112,16 @@ fn will_reject_defaultable_on_non_defaultable_type() {
     assert_ast_produces_failure(
         M::new().with_definitions([
             ID::new(
+                V::Public,
                 "TestType",
-                TD::new([TS::field("field_1", T::ident("TestNonDefaultable"))])
-                    .with_attributes([A::defaultable()]),
+                TD::new([TS::field(
+                    V::Private,
+                    "field_1",
+                    T::ident("TestNonDefaultable"),
+                )])
+                .with_attributes([A::defaultable()]),
             ),
-            ID::new("TestNonDefaultable", TD::new([])),
+            ID::new(V::Public, "TestNonDefaultable", TD::new([])),
         ]),
         "field field_1 of type test::TestType is not a defaultable type",
     );
@@ -1156,6 +1260,7 @@ pub mod inheritance {
 
             pub fn to_grammar(&self) -> ID {
                 ID::new(
+                    V::Public,
                     &self.name,
                     TD::new(
                         Iterator::chain(
@@ -1169,8 +1274,14 @@ pub mod inheritance {
                                 )
                             }),
                             self.fields.iter().map(|(name, ty, attrs)| {
+                                let underscore_start = name.starts_with('_');
                                 TS::field(
-                                    &if name.starts_with('_') {
+                                    if underscore_start {
+                                        V::Private
+                                    } else {
+                                        V::Public
+                                    },
+                                    &if underscore_start {
                                         "_".to_string()
                                     } else {
                                         name.to_string()
@@ -1192,13 +1303,21 @@ pub mod inheritance {
 
                 let mut regions = f
                     .iter()
-                    .map(|(name, ty, _)| SR::field(name.clone(), ty.to_semantic()))
+                    .map(|(name, ty, _)| {
+                        let visibility = if name.starts_with('_') {
+                            SV::Private
+                        } else {
+                            SV::Public
+                        };
+                        SR::field(visibility, name.clone(), ty.to_semantic())
+                    })
                     .collect::<Vec<_>>();
 
                 if let Some(vftable) = &self.vftable {
                     regions.insert(
                         0,
                         SR::field(
+                            SV::Public,
                             "vftable",
                             ST::raw(format!("test::{}", vftable.name_vftable).as_str())
                                 .const_pointer(),
@@ -1220,6 +1339,7 @@ pub mod inheritance {
                 };
 
                 SID::defined_resolved(
+                    SV::Public,
                     format!("test::{}", self.name).as_str(),
                     SISR {
                         size,
@@ -1251,6 +1371,7 @@ pub mod inheritance {
 
             pub fn to_semantic(&self) -> SID {
                 SID::defined_resolved(
+                    SV::Public,
                     format!("test::{}", self.name_vftable).as_str(),
                     SISR {
                         size: self.functions.len() * 4,
@@ -1300,6 +1421,7 @@ pub mod inheritance {
 
             fn to_grammar(&self) -> F {
                 F::new(
+                    V::Public,
                     &self.name,
                     self.arguments
                         .iter()
@@ -1313,7 +1435,7 @@ pub mod inheritance {
             }
 
             fn to_semantic(&self) -> SF {
-                SF::new(&self.name)
+                SF::new(SV::Public, &self.name)
                     .with_arguments(
                         self.arguments
                             .iter()
@@ -1328,9 +1450,10 @@ pub mod inheritance {
 
             fn to_semantic_region(&self, type_name: &str) -> SR {
                 SR::field(
+                    SV::Public,
                     &self.name,
                     ST::function(
-                        CC::Thiscall,
+                        SCC::Thiscall,
                         self.arguments
                             .iter()
                             .map(|arg| match arg {

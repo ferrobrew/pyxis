@@ -16,6 +16,7 @@ pub mod test_aliases {
     pub type FB = super::FunctionBlock;
     pub type IP = super::ItemPath;
     pub type B = super::Backend;
+    pub type V = super::Visibility;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -260,6 +261,12 @@ impl Attribute {
     }
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum Visibility {
+    Public,
+    Private,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Argument {
     ConstSelf,
@@ -274,14 +281,16 @@ impl Argument {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Function {
+    pub visibility: Visibility,
     pub name: Ident,
     pub attributes: Vec<Attribute>,
     pub arguments: Vec<Argument>,
     pub return_type: Option<Type>,
 }
 impl Function {
-    pub fn new(name: &str, arguments: impl Into<Vec<Argument>>) -> Self {
+    pub fn new(visibility: Visibility, name: &str, arguments: impl Into<Vec<Argument>>) -> Self {
         Self {
+            visibility,
             name: name.into(),
             attributes: vec![],
             arguments: arguments.into(),
@@ -317,12 +326,16 @@ impl From<(Ident, Expr)> for ExprField {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TypeField {
-    Field(Ident, Type),
+    Field(Visibility, Ident, Type),
     Vftable(Vec<Function>),
 }
 impl TypeField {
-    pub fn field(name: impl Into<Ident>, type_: impl Into<Type>) -> TypeField {
-        TypeField::Field(name.into(), type_.into())
+    pub fn field(
+        visibility: Visibility,
+        name: impl Into<Ident>,
+        type_: impl Into<Type>,
+    ) -> TypeField {
+        TypeField::Field(visibility, name.into(), type_.into())
     }
 
     pub fn vftable(functions: impl IntoIterator<Item = Function>) -> TypeField {
@@ -333,11 +346,6 @@ impl TypeField {
         matches!(self, TypeField::Vftable(_))
     }
 }
-impl From<(Ident, Type)> for TypeField {
-    fn from(item: (Ident, Type)) -> Self {
-        TypeField::Field(item.0, item.1)
-    }
-}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TypeStatement {
@@ -345,9 +353,9 @@ pub struct TypeStatement {
     pub attributes: Vec<Attribute>,
 }
 impl TypeStatement {
-    pub fn field(name: &str, type_: Type) -> TypeStatement {
+    pub fn field(visibility: Visibility, name: &str, type_: Type) -> TypeStatement {
         TypeStatement {
-            field: (name.into(), type_).into(),
+            field: TypeField::Field(visibility, name.into(), type_),
             attributes: vec![],
         }
     }
@@ -363,14 +371,6 @@ impl TypeStatement {
     pub fn with_attributes(mut self, attributes: impl Into<Vec<Attribute>>) -> Self {
         self.attributes = attributes.into();
         self
-    }
-}
-impl From<TypeField> for TypeStatement {
-    fn from(field: TypeField) -> Self {
-        TypeStatement {
-            field,
-            attributes: vec![],
-        }
     }
 }
 
@@ -460,12 +460,14 @@ impl From<EnumDefinition> for ItemDefinitionInner {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ItemDefinition {
+    pub visibility: Visibility,
     pub name: Ident,
     pub inner: ItemDefinitionInner,
 }
 impl ItemDefinition {
-    pub fn new(name: &str, inner: impl Into<ItemDefinitionInner>) -> Self {
+    pub fn new(visibility: Visibility, name: &str, inner: impl Into<ItemDefinitionInner>) -> Self {
         Self {
+            visibility,
             name: name.into(),
             inner: inner.into(),
         }

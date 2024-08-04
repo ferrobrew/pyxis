@@ -3,17 +3,18 @@ use crate::{grammar::test_aliases::*, parser::parse_str};
 #[test]
 fn can_parse_basic_struct() {
     let text = r#"
-        type TestType {
+        pub type TestType {
             field_1: i32,
             field_2: i32,
         }
         "#;
 
     let ast = M::new().with_definitions([ID::new(
+        V::Public,
         "TestType",
         TD::new([
-            TS::field("field_1", T::ident("i32")),
-            TS::field("field_2", T::ident("i32")),
+            TS::field(V::Private, "field_1", T::ident("i32")),
+            TS::field(V::Private, "field_2", T::ident("i32")),
         ]),
     )]);
 
@@ -25,18 +26,22 @@ fn can_parse_vftable() {
     let text = r#"
         type TestType {
             vftable {
-                fn test(&mut self, test2: i32);
+                pub fn test(&mut self, test2: i32);
             }
         }
         "#;
 
     let ast = M::new().with_definitions([ID::new(
+        V::Private,
         "TestType",
-        TD::new([TF::vftable([F::new(
-            "test",
-            [Ar::MutSelf, Ar::named("test2", T::ident("i32"))],
-        )])
-        .into()]),
+        TD::new([TS::vftable(
+            [F::new(
+                V::Public,
+                "test",
+                [Ar::MutSelf, Ar::named("test2", T::ident("i32"))],
+            )],
+            [],
+        )]),
     )]);
 
     assert_eq!(parse_str(text).unwrap(), ast);
@@ -49,13 +54,13 @@ fn can_parse_vehicle_types() {
             hash_edacd65b_likely_max_models: i32,
             hash_2ff58884: i32,
 
-            maximum_gpu_cost: i32,
-            maximum_cpu_cost: i32,
+            pub maximum_gpu_cost: i32,
+            pub maximum_cpu_cost: i32,
 
             field_10: i32,
 
-            accumulated_gpu_cost: i32,
-            accumulated_cpu_cost: i32,
+            pub accumulated_gpu_cost: i32,
+            pub accumulated_cpu_cost: i32,
 
             field_1c: i32,
             loaded_models: *const LoadedModel,
@@ -64,18 +69,27 @@ fn can_parse_vehicle_types() {
         "#;
 
     let ast = M::new().with_definitions([ID::new(
+        V::Private,
         "VehicleTypes",
         TD::new([
-            TS::field("hash_edacd65b_likely_max_models", T::ident("i32")),
-            TS::field("hash_2ff58884", T::ident("i32")),
-            TS::field("maximum_gpu_cost", T::ident("i32")),
-            TS::field("maximum_cpu_cost", T::ident("i32")),
-            TS::field("field_10", T::ident("i32")),
-            TS::field("accumulated_gpu_cost", T::ident("i32")),
-            TS::field("accumulated_cpu_cost", T::ident("i32")),
-            TS::field("field_1c", T::ident("i32")),
-            TS::field("loaded_models", T::ident("LoadedModel").const_pointer()),
-            TS::field("_", T::unknown(0x10)),
+            TS::field(
+                V::Private,
+                "hash_edacd65b_likely_max_models",
+                T::ident("i32"),
+            ),
+            TS::field(V::Private, "hash_2ff58884", T::ident("i32")),
+            TS::field(V::Public, "maximum_gpu_cost", T::ident("i32")),
+            TS::field(V::Public, "maximum_cpu_cost", T::ident("i32")),
+            TS::field(V::Private, "field_10", T::ident("i32")),
+            TS::field(V::Public, "accumulated_gpu_cost", T::ident("i32")),
+            TS::field(V::Public, "accumulated_cpu_cost", T::ident("i32")),
+            TS::field(V::Private, "field_1c", T::ident("i32")),
+            TS::field(
+                V::Private,
+                "loaded_models",
+                T::ident("LoadedModel").const_pointer(),
+            ),
+            TS::field(V::Private, "_", T::unknown(0x10)),
         ]),
     )]);
 
@@ -88,18 +102,18 @@ fn can_parse_spawn_manager() {
         #[size(0x1754), singleton(0x1_191_918)]
         type SpawnManager {
             #[address(0x78)]
-            max_num_characters: u16,
-            max_num_vehicles: u16,
+            pub max_num_characters: u16,
+            pub max_num_vehicles: u16,
 
             #[address(0xA00)]
-            world_sim: WorldSim,
-            enemy_type_spawn_settings: unknown<804>,
-            character_types: unknown<0x74>,
-            vehicle_types: VehicleTypes,
+            pub world_sim: WorldSim,
+            pub enemy_type_spawn_settings: unknown<804>,
+            pub character_types: unknown<0x74>,
+            pub vehicle_types: VehicleTypes,
         }
         impl SpawnManager {
             #[address(0x84C_4C0)]
-            fn engine_spawn_vehicle(
+            pub fn engine_spawn_vehicle(
                 &mut self,
                 vehicle: *mut SharedPtr<Vehicle>,
                 context: i32,
@@ -110,7 +124,7 @@ fn can_parse_spawn_manager() {
             ) -> *mut SharedPtr<Vehicle>;
 
             #[address(0x73F_DB0)]
-            fn request_vehicle_model(
+            pub fn request_vehicle_model(
                 &mut self,
                 model_id: *const u32,
                 category: i32
@@ -120,15 +134,17 @@ fn can_parse_spawn_manager() {
 
     let ast = M::new()
         .with_definitions([ID::new(
+            V::Private,
             "SpawnManager",
             TD::new([
-                TS::field("max_num_characters", T::ident("u16"))
+                TS::field(V::Public, "max_num_characters", T::ident("u16"))
                     .with_attributes([A::address(0x78)]),
-                TS::field("max_num_vehicles", T::ident("u16")),
-                TS::field("world_sim", T::ident("WorldSim")).with_attributes([A::address(0xA00)]),
-                TS::field("enemy_type_spawn_settings", T::unknown(804)),
-                TS::field("character_types", T::unknown(0x74)),
-                TS::field("vehicle_types", T::ident("VehicleTypes")),
+                TS::field(V::Public, "max_num_vehicles", T::ident("u16")),
+                TS::field(V::Public, "world_sim", T::ident("WorldSim"))
+                    .with_attributes([A::address(0xA00)]),
+                TS::field(V::Public, "enemy_type_spawn_settings", T::unknown(804)),
+                TS::field(V::Public, "character_types", T::unknown(0x74)),
+                TS::field(V::Public, "vehicle_types", T::ident("VehicleTypes")),
             ])
             .with_attributes([A::size(0x1754), A::singleton(0x1_191_918)]),
         )])
@@ -136,6 +152,7 @@ fn can_parse_spawn_manager() {
             "SpawnManager",
             [
                 F::new(
+                    V::Public,
                     "engine_spawn_vehicle",
                     [
                         Ar::MutSelf,
@@ -150,6 +167,7 @@ fn can_parse_spawn_manager() {
                 .with_attributes([A::address(0x84C_4C0)])
                 .with_return_type(T::ident("SharedPtr<Vehicle>").mut_pointer()),
                 F::new(
+                    V::Public,
                     "request_vehicle_model",
                     [
                         Ar::MutSelf,
@@ -168,15 +186,16 @@ fn can_parse_spawn_manager() {
 fn can_parse_address_field() {
     let text = r#"
         type Test {
-            #[address(0x78)] max_num_characters: u16,
+            #[address(0x78)] 
+            pub max_num_characters: u16,
         }
         "#;
 
     let ast = M::new().with_definitions([ID::new(
+        V::Private,
         "Test",
-        TD::new([
-            TS::field("max_num_characters", T::ident("u16")).with_attributes([A::address(0x78)])
-        ]),
+        TD::new([TS::field(V::Public, "max_num_characters", T::ident("u16"))
+            .with_attributes([A::address(0x78)])]),
     )]);
 
     assert_eq!(parse_str(text).unwrap(), ast);
@@ -194,8 +213,9 @@ fn can_parse_use() {
     let ast = M::new()
         .with_uses([IP::from("hello::TestType<Hey>")])
         .with_definitions([ID::new(
+            V::Private,
             "Test",
-            TD::new([TS::field("test", T::ident("TestType<Hey>"))]),
+            TD::new([TS::field(V::Private, "test", T::ident("TestType<Hey>"))]),
         )]);
 
     assert_eq!(parse_str(text).unwrap(), ast);
@@ -226,8 +246,9 @@ fn can_parse_extern() {
     let ast = M::new()
         .with_extern_types([("TestType<Hey>".into(), vec![A::size(12)])])
         .with_definitions([ID::new(
+            V::Private,
             "Test",
-            TD::new([TS::field("test", T::ident("TestType<Hey>"))]),
+            TD::new([TS::field(V::Private, "test", T::ident("TestType<Hey>"))]),
         )]);
 
     assert_eq!(parse_str(text).unwrap(), ast);
@@ -239,7 +260,7 @@ fn can_parse_an_empty_type() {
         type Test;
         "#;
 
-    let ast = M::new().with_definitions([ID::new("Test", TD::new([]))]);
+    let ast = M::new().with_definitions([ID::new(V::Private, "Test", TD::new([]))]);
     assert_eq!(parse_str(text).unwrap(), ast);
 }
 
@@ -267,7 +288,7 @@ fn can_parse_extern_value() {
 fn can_parse_enum() {
     let text = r#"
         #[singleton(0x1234)]
-        enum TestType: u32 {
+        pub enum TestType: u32 {
             Item0 = -5,
             #[default]
             Item1,
@@ -278,6 +299,7 @@ fn can_parse_enum() {
         "#;
 
     let ast = M::new().with_definitions([ID::new(
+        V::Public,
         "TestType",
         ED::new(
             T::ident("u32"),
@@ -298,14 +320,15 @@ fn can_parse_enum() {
 #[test]
 fn can_parse_array_field() {
     let text = r#"
-        type TestType {
+        pub type TestType {
             field_1: [i32; 4],
         }
         "#;
 
     let ast = M::new().with_definitions([ID::new(
+        V::Public,
         "TestType",
-        TD::new([TS::field("field_1", T::ident("i32").array(4))]),
+        TD::new([TS::field(V::Private, "field_1", T::ident("i32").array(4))]),
     )]);
 
     assert_eq!(parse_str(text).unwrap(), ast);
@@ -387,8 +410,9 @@ fn can_parse_ident_attributes() {
         "#;
 
     let ast = M::new().with_definitions([ID::new(
+        V::Private,
         "TestType",
-        TD::new([TS::field("field_1", T::ident("i32"))])
+        TD::new([TS::field(V::Private, "field_1", T::ident("i32"))])
             .with_attributes([A::copyable(), A::cloneable()]),
     )]);
 

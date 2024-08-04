@@ -73,6 +73,13 @@ fn sa_type_to_syn_type(type_ref: &types::Type) -> anyhow::Result<syn::Type> {
     Ok(syn::parse_str(&fully_qualified_type_ref(type_ref)?)?)
 }
 
+fn visibility_to_tokens(visibility: types::Visibility) -> proc_macro2::TokenStream {
+    match visibility {
+        types::Visibility::Public => quote! { pub },
+        types::Visibility::Private => quote! {},
+    }
+}
+
 fn build_function(
     function: &types::Function,
     is_vftable: bool,
@@ -165,9 +172,10 @@ fn build_function(
     });
 
     let calling_convention = function.calling_convention.as_str();
+    let visibility = visibility_to_tokens(function.visibility);
 
     Ok(quote! {
-        pub unsafe fn #name(#(#arguments),*) #return_type {
+        #visibility unsafe fn #name(#(#arguments),*) #return_type {
             let f: unsafe extern #calling_convention fn(#(#lambda_arguments),*) #return_type = #function_getter_impl;
             f(#(#call_arguments),*)
         }
@@ -177,6 +185,7 @@ fn build_function(
 fn build_type(
     name: &ItemPathSegment,
     size: usize,
+    visibility: types::Visibility,
     type_definition: &types::TypeDefinition,
 ) -> anyhow::Result<proc_macro2::TokenStream> {
     let types::TypeDefinition {
@@ -190,16 +199,19 @@ fn build_type(
         packed,
     } = type_definition;
 
+    let visibility = visibility_to_tokens(visibility);
+
     let fields = regions
         .iter()
         .map(|r| {
             let types::Region {
+                visibility,
                 name: field,
                 type_ref,
             } = r;
             let field_name = field.as_deref().context("field name not present")?;
             let field_ident = str_to_ident(field_name);
-            let visibility = (!field_name.starts_with('_')).then(|| quote! { pub });
+            let visibility = visibility_to_tokens(*visibility);
             let syn_type = sa_type_to_syn_type(type_ref)?;
             Ok(quote! {
                 #visibility #field_ident: #syn_type
@@ -226,7 +238,7 @@ fn build_type(
         quote! {
             #[allow(dead_code)]
             impl #name_ident {
-                pub unsafe fn get() -> Option<&'static mut Self> {
+                #visibility unsafe fn get() -> Option<&'static mut Self> {
                     unsafe {
                         let ptr: *mut Self = *(#address as *mut *mut Self);
                         if ptr.is_null() {
@@ -282,7 +294,7 @@ fn build_type(
     Ok(quote! {
         #derives
         #[repr(C #packed)]
-        pub struct #name_ident {
+        #visibility struct #name_ident {
             #(#fields),*
         }
         #size_check_impl
@@ -299,6 +311,7 @@ fn build_type(
 fn build_enum(
     name: &ItemPathSegment,
     size: usize,
+    visibility: types::Visibility,
     enum_definition: &types::EnumDefinition,
 ) -> anyhow::Result<proc_macro2::TokenStream> {
     let types::EnumDefinition {
@@ -313,6 +326,8 @@ fn build_enum(
 
     let syn_type = sa_type_to_syn_type(type_)?;
     let name_ident = str_to_ident(name.as_str());
+
+    let visibility = visibility_to_tokens(visibility);
 
     let syn_fields = fields.iter().enumerate().map(|(idx, (name, value))| {
         let name_ident = str_to_ident(name);
@@ -348,7 +363,7 @@ fn build_enum(
         quote! {
             #[allow(dead_code)]
             impl #name_ident {
-                pub unsafe fn get() -> Self {
+                #visibility unsafe fn get() -> Self {
                     unsafe {
                         *(#address as *const Self)
                     }
@@ -371,7 +386,7 @@ fn build_enum(
     Ok(quote! {
         #[repr(#syn_type)]
         #[derive(PartialEq, Eq, PartialOrd, Ord, Debug, #(#extra_derives),*)]
-        pub enum #name_ident {
+        #visibility enum #name_ident {
             #(#syn_fields),*
         }
         #size_check_impl
@@ -390,10 +405,12 @@ fn build_item(definition: &types::ItemDefinition) -> anyhow::Result<proc_macro2:
     let types::ItemStateResolved { size, inner } =
         &definition.resolved().context("type was not resolved")?;
 
+    let visibility = definition.visibility;
+
     match definition.category() {
         ItemCategory::Defined => match inner {
-            types::ItemDefinitionInner::Type(td) => build_type(name, *size, td),
-            types::ItemDefinitionInner::Enum(ed) => build_enum(name, *size, ed),
+            types::ItemDefinitionInner::Type(td) => build_type(name, *size, visibility, td),
+            types::ItemDefinitionInner::Enum(ed) => build_enum(name, *size, visibility, ed),
         },
         ItemCategory::Predefined => Ok(quote! {}),
         ItemCategory::Extern => Ok(quote! {}),

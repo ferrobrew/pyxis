@@ -12,7 +12,7 @@ use super::{
     type_registry::TypeRegistry,
     types::{
         Argument, CallingConvention, EnumDefinition, Function, ItemCategory, ItemDefinition,
-        ItemState, ItemStateResolved, Region, Type, TypeDefinition,
+        ItemState, ItemStateResolved, Region, Type, TypeDefinition, Visibility,
     },
 };
 
@@ -55,6 +55,7 @@ impl SemanticState {
             let path = ItemPath::from(name);
             semantic_state
                 .add_type(ItemDefinition {
+                    visibility: Visibility::Public,
                     path,
                     state: ItemState::Resolved(ItemStateResolved {
                         size,
@@ -130,6 +131,7 @@ impl SemanticState {
         for definition in &module.definitions {
             let new_path = path.join(definition.name.as_str().into());
             self.add_type(ItemDefinition {
+                visibility: definition.visibility.into(),
                 path: new_path,
                 state: ItemState::Unresolved(definition.clone()),
                 category: ItemCategory::Defined,
@@ -148,6 +150,7 @@ impl SemanticState {
                     let new_name = format!("{}WithoutVftable", definition.name.as_str());
                     let path = path.join(new_name.clone().into());
                     self.add_type(ItemDefinition {
+                        visibility: definition.visibility.into(),
                         path,
                         state: ItemState::Unresolved(definition.clone()),
                         category: ItemCategory::Defined,
@@ -178,6 +181,7 @@ impl SemanticState {
             let extern_path = path.join(extern_path.as_str().into());
 
             self.add_type(ItemDefinition {
+                visibility: Visibility::Public,
                 path: extern_path.clone(),
                 state: ItemState::Resolved(ItemStateResolved {
                     size,
@@ -323,6 +327,7 @@ impl SemanticState {
         });
 
         Ok(Function {
+            visibility: function.visibility.into(),
             name: function.name.0.clone(),
             address,
             arguments,
@@ -336,8 +341,12 @@ impl SemanticState {
         resolvee_path: &ItemPath,
         definition: &grammar::ItemDefinition,
     ) -> anyhow::Result<Option<ItemStateResolved>> {
+        let visibility: Visibility = definition.visibility.into();
+
         match &definition.inner {
-            grammar::ItemDefinitionInner::Type(ty) => self.build_type(resolvee_path, ty),
+            grammar::ItemDefinitionInner::Type(ty) => {
+                self.build_type(resolvee_path, visibility, ty)
+            }
             grammar::ItemDefinitionInner::Enum(e) => self.build_enum(resolvee_path, e),
         }
     }
@@ -345,6 +354,7 @@ impl SemanticState {
     fn build_type(
         &mut self,
         resolvee_path: &ItemPath,
+        visibility: Visibility,
         definition: &grammar::TypeDefinition,
     ) -> anyhow::Result<Option<ItemStateResolved>> {
         let module = self
@@ -412,7 +422,7 @@ impl SemanticState {
             let grammar::TypeStatement { field, attributes } = statement;
 
             match field {
-                grammar::TypeField::Field(ident, type_) => {
+                grammar::TypeField::Field(visibility, ident, type_) => {
                     // Extract address attribute
                     let mut address = None;
                     let mut _is_base = false;
@@ -460,6 +470,7 @@ impl SemanticState {
                     pending_regions.push((
                         None,
                         Region {
+                            visibility: (*visibility).into(),
                             name: ident,
                             type_ref: type_,
                         },
@@ -502,6 +513,7 @@ impl SemanticState {
         let Some((regions, size)) = self
             .resolve_regions(
                 resolvee_path,
+                visibility,
                 target_size,
                 pending_regions,
                 &vftable_functions,
@@ -515,7 +527,11 @@ impl SemanticState {
         // we have our defaultable attribute set.
         if defaultable {
             for region in &regions {
-                let Region { name, type_ref } = region;
+                let Region {
+                    visibility: _,
+                    name,
+                    type_ref,
+                } = region;
                 let name = name.as_deref().unwrap_or("unnamed");
                 fn get_defaultable_type_path(type_ref: &Type) -> Option<&ItemPath> {
                     match type_ref {
@@ -602,6 +618,7 @@ impl SemanticState {
             let functions_to_add = target_len.saturating_sub(output.len());
             for _ in 0..functions_to_add {
                 output.push(Function {
+                    visibility: Visibility::Private,
                     name: format!("_vfunc_{}", output.len()),
                     arguments: vec![Argument::MutSelf],
                     return_type: None,
@@ -617,6 +634,7 @@ impl SemanticState {
     fn resolve_regions(
         &mut self,
         resolvee_path: &ItemPath,
+        visibility: Visibility,
         target_size: Option<usize>,
         regions: Vec<(Option<usize>, Region)>,
         vftable_functions: &Option<Vec<Function>>,
@@ -645,12 +663,16 @@ impl SemanticState {
 
         // Create vftable
         if let Some(vftable_functions) = vftable_functions {
-            if let Some(vftable) =
-                build_vftable_item(&self.type_registry, resolvee_path, vftable_functions)
-            {
+            if let Some(vftable) = build_vftable_item(
+                &self.type_registry,
+                resolvee_path,
+                visibility,
+                vftable_functions,
+            ) {
                 let vftable_path = vftable.path.clone();
                 self.add_type(vftable)?;
                 let region = Region {
+                    visibility,
                     name: Some("vftable".to_string()),
                     type_ref: Type::ConstPointer(Box::new(Type::Raw(vftable_path))),
                 };
@@ -707,11 +729,13 @@ impl SemanticState {
             };
 
             if let Region {
+                visibility: _,
                 name: None,
                 type_ref,
             } = region
             {
                 *region = Region {
+                    visibility: Visibility::Private,
                     name: Some(format!("_field_{size:x}")),
                     type_ref: type_ref.clone(),
                 };
@@ -857,6 +881,7 @@ impl ResolvedSemanticState {
 fn build_vftable_item(
     type_registry: &TypeRegistry,
     resolvee_path: &ItemPath,
+    visibility: Visibility,
     functions: &[Function],
 ) -> Option<ItemDefinition> {
     let name = resolvee_path.last()?;
@@ -885,6 +910,7 @@ fn build_vftable_item(
         let return_type = function.return_type.as_ref().map(|t| Box::new(t.clone()));
 
         Region {
+            visibility: function.visibility.into(),
             name: Some(function.name.clone()),
             type_ref: Type::Function(function.calling_convention, arguments, return_type),
         }
@@ -892,6 +918,7 @@ fn build_vftable_item(
 
     let regions: Vec<_> = functions.iter().map(function_to_field).collect();
     Some(ItemDefinition {
+        visibility,
         path: resolvee_vtable_path.clone(),
         state: ItemState::Resolved(ItemStateResolved {
             size: regions.iter().map(|r| r.size(type_registry).unwrap()).sum(),
