@@ -910,7 +910,7 @@ fn build_vftable_item(
         let return_type = function.return_type.as_ref().map(|t| Box::new(t.clone()));
 
         Region {
-            visibility: function.visibility.into(),
+            visibility: function.visibility,
             name: Some(function.name.clone()),
             type_ref: Type::Function(function.calling_convention, arguments, return_type),
         }
