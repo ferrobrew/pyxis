@@ -271,7 +271,11 @@ impl SemanticState {
             };
             match (ident.as_str(), &exprs[..]) {
                 ("address", [grammar::Expr::IntLiteral(addr)]) => {
-                    address = Some(*addr as usize);
+                    address = Some(
+                        (*addr)
+                            .try_into()
+                            .context("failed to convert address into usize")?,
+                    );
                 }
                 ("index", _) => {
                     // ignore index attribute, this is handled by vftable construction
@@ -373,11 +377,19 @@ impl SemanticState {
         for attribute in &definition.attributes {
             if let grammar::Attribute::Function(ident, exprs) = attribute {
                 match (ident.as_str(), exprs.as_slice()) {
-                    ("size", [grammar::Expr::IntLiteral(size)]) => {
-                        target_size = Some(*size as usize);
+                    ("size", [grammar::Expr::IntLiteral(value)]) => {
+                        target_size = Some(
+                            (*value)
+                                .try_into()
+                                .context("failed to convert size into usize")?,
+                        );
                     }
                     ("singleton", [grammar::Expr::IntLiteral(value)]) => {
-                        singleton = Some(*value as usize);
+                        singleton = Some(
+                            (*value)
+                                .try_into()
+                                .context("failed to convert singleton into usize")?,
+                        );
                     }
                     _ => anyhow::bail!("unsupported attribute: {attribute:?}"),
                 }
@@ -424,7 +436,7 @@ impl SemanticState {
             match field {
                 grammar::TypeField::Field(visibility, ident, type_) => {
                     // Extract address attribute
-                    let mut address = None;
+                    let mut address: Option<usize> = None;
                     let mut _is_base = false;
                     for attribute in attributes {
                         match attribute {
@@ -435,7 +447,11 @@ impl SemanticState {
                             grammar::Attribute::Function(ident, exprs) => {
                                 match (ident.as_str(), &exprs[..]) {
                                     ("address", [grammar::Expr::IntLiteral(addr)]) => {
-                                        address = Some(*addr as usize);
+                                        address = Some(
+                                            (*addr)
+                                                .try_into()
+                                                .context("failed to convert address into usize")?,
+                                        );
                                     }
                                     _ => anyhow::bail!("unsupported attribute: {attribute:?}"),
                                 }
