@@ -7,8 +7,8 @@ use crate::{
 
 #[derive(Debug)]
 pub struct TypeRegistry {
-    pub(crate) types: HashMap<ItemPath, ItemDefinition>,
-    pub(crate) pointer_size: usize,
+    types: HashMap<ItemPath, ItemDefinition>,
+    pointer_size: usize,
 }
 
 impl TypeRegistry {

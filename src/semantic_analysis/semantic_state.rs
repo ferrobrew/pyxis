@@ -2,7 +2,7 @@ use std::{collections::HashMap, path::Path};
 
 use crate::{
     grammar::{self, ItemPath},
-    parser,
+    parser, util,
 };
 
 use anyhow::Context;
@@ -53,12 +53,14 @@ impl SemanticState {
 
         for (name, size) in predefined_types {
             let path = ItemPath::from(name);
+            let alignment = size.max(1);
             semantic_state
                 .add_type(ItemDefinition {
                     visibility: Visibility::Public,
                     path,
                     state: ItemState::Resolved(ItemStateResolved {
                         size,
+                        alignment,
                         inner: TypeDefinition::default()
                             .with_cloneable(true)
                             .with_copyable(true)
@@ -161,6 +163,7 @@ impl SemanticState {
 
         for (extern_path, attributes) in &module.extern_types {
             let mut size = None;
+            let mut alignment = None;
             for attribute in attributes {
                 let Some((ident, exprs)) = attribute.function() else {
                     anyhow::bail!("unsupported attribute: {attribute:?}");
@@ -173,10 +176,19 @@ impl SemanticState {
                                 .context("failed to convert size into usize")?,
                         );
                     }
+                    ("align", [grammar::Expr::IntLiteral(alignment_)]) => {
+                        alignment = Some(
+                            (*alignment_)
+                                .try_into()
+                                .context("failed to convert alignment into usize")?,
+                        );
+                    }
                     _ => anyhow::bail!("unsupported attribute: {attribute:?}"),
                 }
             }
             let size = size.context("failed to find size attribute for extern type")?;
+            let alignment =
+                alignment.context("failed to find alignment attribute for extern type")?;
 
             let extern_path = path.join(extern_path.as_str().into());
 
@@ -185,6 +197,7 @@ impl SemanticState {
                 path: extern_path.clone(),
                 state: ItemState::Resolved(ItemStateResolved {
                     size,
+                    alignment,
                     inner: TypeDefinition::default().into(),
                 }),
                 category: ItemCategory::Extern,
@@ -372,6 +385,7 @@ impl SemanticState {
         let mut cloneable = false;
         let mut defaultable = false;
         let mut packed = false;
+        let mut align = None;
         // HACK_SKIP_VFTABLE: <https://github.com/philpax/pyxis/issues/13>
         let mut hack_skip_vftable = false;
         for attribute in &definition.attributes {
@@ -389,6 +403,13 @@ impl SemanticState {
                             (*value)
                                 .try_into()
                                 .context("failed to convert singleton into usize")?,
+                        );
+                    }
+                    ("align", [grammar::Expr::IntLiteral(value)]) => {
+                        align = Some(
+                            (*value)
+                                .try_into()
+                                .context("failed to convert alignment into usize")?,
                         );
                     }
                     _ => anyhow::bail!("unsupported attribute: {attribute:?}"),
@@ -577,8 +598,61 @@ impl SemanticState {
             }
         }
 
+        let alignment = if packed {
+            if align.is_some() {
+                anyhow::bail!("cannot specify both packed and align attributes");
+            }
+
+            1
+        } else {
+            // Determine the final requested alignment.
+            // The requested alignment, the alignment of a single-region type, or the pointer size.
+            let alignment = align
+                .or((regions.len() == 1)
+                    .then(|| regions[0].type_ref.alignment(&self.type_registry))
+                    .flatten())
+                .unwrap_or(self.type_registry.pointer_size());
+
+            // Calculate the minimum required alignment.
+            let required_alignment = util::lcm(
+                regions
+                    .iter()
+                    .flat_map(|r| r.type_ref.alignment(&self.type_registry)),
+            );
+
+            // Ensure that the alignment is at least the minimum required alignment.
+            if required_alignment > alignment {
+                anyhow::bail!(
+                    "alignment {alignment} is less than minimum required alignment {required_alignment}"
+                );
+            }
+
+            // Ensure that all fields are aligned.
+            {
+                let mut last_address = 0;
+                for region in &regions {
+                    let name = &region.name.as_deref().unwrap_or("unnamed");
+                    let alignment = region.type_ref.alignment(&self.type_registry).unwrap();
+                    if last_address % alignment != 0 {
+                        anyhow::bail!(
+                            "field {name} (at 0x{last_address:X}) is not aligned to {alignment}"
+                        );
+                    }
+                    last_address += region.size(&self.type_registry).unwrap();
+                }
+            }
+
+            // Ensure that the size is a multiple of the alignment.
+            if size % alignment != 0 {
+                anyhow::bail!("size {size} is not a multiple of alignment {alignment}");
+            }
+
+            alignment
+        };
+
         Ok(Some(ItemStateResolved {
             size,
+            alignment,
             inner: TypeDefinition {
                 regions,
                 free_functions,
@@ -860,6 +934,9 @@ impl SemanticState {
 
         Ok(Some(ItemStateResolved {
             size,
+            alignment: ty
+                .alignment(&self.type_registry)
+                .context("failed to get alignment for base type of enum")?,
             inner: EnumDefinition {
                 type_: ty,
                 fields,
@@ -933,11 +1010,13 @@ fn build_vftable_item(
     };
 
     let regions: Vec<_> = functions.iter().map(function_to_field).collect();
+    let alignment = type_registry.pointer_size();
     Some(ItemDefinition {
         visibility,
         path: resolvee_vtable_path.clone(),
         state: ItemState::Resolved(ItemStateResolved {
             size: regions.iter().map(|r| r.size(type_registry).unwrap()).sum(),
+            alignment,
             inner: TypeDefinition {
                 regions,
                 free_functions: vec![],
