@@ -427,8 +427,8 @@ fn build_extern_value(
 
     Ok(quote! {
         #[allow(dead_code)]
-        pub unsafe fn #function_ident() -> Option<::std::ptr::NonNull<#type_>> {
-            unsafe { ::std::ptr::NonNull::new(::std::mem::transmute::<_, *mut _>(#address)) }
+        pub unsafe fn #function_ident() -> &'static mut #type_ {
+            unsafe { &mut *::std::mem::transmute::<_, *mut _>(#address) }
         }
     })
 }
