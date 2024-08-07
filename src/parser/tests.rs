@@ -186,7 +186,7 @@ fn can_parse_spawn_manager() {
 fn can_parse_address_field() {
     let text = r#"
         type Test {
-            #[address(0x78)] 
+            #[address(0x78)]
             pub max_num_characters: u16,
         }
         "#;
@@ -270,16 +270,27 @@ fn can_parse_extern_value() {
         #[size(4)]
         extern type SomeType;
         #[address(0x1337)]
-        extern some_value: *mut SomeType;
+        pub extern some_value: *mut SomeType;
+        #[address(0x1338)]
+        extern some_private_value: *mut SomeType;
         "#;
 
     let ast = M::new()
         .with_extern_types([("SomeType".into(), vec![A::size(4)])])
-        .with_extern_values([(
-            "some_value".into(),
-            T::ident("SomeType").mut_pointer(),
-            vec![A::address(0x1337)],
-        )]);
+        .with_extern_values([
+            (
+                V::Public,
+                "some_value".into(),
+                T::ident("SomeType").mut_pointer(),
+                vec![A::address(0x1337)],
+            ),
+            (
+                V::Private,
+                "some_private_value".into(),
+                T::ident("SomeType").mut_pointer(),
+                vec![A::address(0x1338)],
+            ),
+        ]);
 
     assert_eq!(parse_str(text).unwrap(), ast);
 }

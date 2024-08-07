@@ -473,22 +473,13 @@ impl Parse for Module {
 
             // Attributed statements
             let attributes = Attribute::parse_many(input)?;
-            if input.peek(Token![extern]) {
+            if input.peek(Token![extern]) && input.peek2(Token![type]) {
                 input.parse::<Token![extern]>()?;
-                if input.peek(Token![type]) {
-                    input.parse::<Token![type]>()?;
-                    let ident: Ident = parse_type_ident(input)?.as_str().into();
-                    input.parse::<Token![;]>()?;
+                input.parse::<Token![type]>()?;
+                let ident: Ident = parse_type_ident(input)?.as_str().into();
+                input.parse::<Token![;]>()?;
 
-                    extern_types.push((ident, attributes));
-                } else {
-                    let name: Ident = input.parse()?;
-                    input.parse::<Token![:]>()?;
-                    let type_: Type = input.parse()?;
-                    input.parse::<Token![;]>()?;
-
-                    extern_values.push((name, type_, attributes));
-                }
+                extern_types.push((ident, attributes));
                 continue;
             } else if input.peek(Token![impl]) {
                 input.parse::<Token![impl]>()?;
@@ -510,7 +501,16 @@ impl Parse for Module {
 
             // Attributed statements with visibility
             let visibility: Visibility = input.parse()?;
-            if input.peek(Token![type]) || input.peek(Token![enum]) {
+            if input.peek(Token![extern]) {
+                input.parse::<Token![extern]>()?;
+                let name: Ident = input.parse()?;
+                input.parse::<Token![:]>()?;
+                let type_: Type = input.parse()?;
+                input.parse::<Token![;]>()?;
+
+                extern_values.push((visibility, name, type_, attributes));
+                continue;
+            } else if input.peek(Token![type]) || input.peek(Token![enum]) {
                 definitions.push(parse_item_definition(input, visibility, attributes)?);
                 continue;
             }

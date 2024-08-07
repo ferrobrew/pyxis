@@ -530,7 +530,7 @@ impl Backend {
 pub struct Module {
     pub uses: Vec<ItemPath>,
     pub extern_types: Vec<(Ident, Vec<Attribute>)>,
-    pub extern_values: Vec<(Ident, Type, Vec<Attribute>)>,
+    pub extern_values: Vec<(Visibility, Ident, Type, Vec<Attribute>)>,
     pub definitions: Vec<ItemDefinition>,
     pub impls: Vec<FunctionBlock>,
     pub backends: Vec<Backend>,
@@ -555,7 +555,7 @@ impl Module {
 
     pub fn with_extern_values(
         mut self,
-        extern_values: impl Into<Vec<(Ident, Type, Vec<Attribute>)>>,
+        extern_values: impl Into<Vec<(Visibility, Ident, Type, Vec<Attribute>)>>,
     ) -> Self {
         self.extern_values = extern_values.into();
         self

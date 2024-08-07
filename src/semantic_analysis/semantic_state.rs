@@ -95,7 +95,7 @@ impl SemanticState {
         let extern_values = module
             .extern_values
             .iter()
-            .map(|(name, type_, attributes)| {
+            .map(|(visibility, name, type_, attributes)| {
                 let mut address = None;
                 for attribute in attributes {
                     let Some((ident, exprs)) = attribute.function() else {
@@ -113,6 +113,7 @@ impl SemanticState {
                     format!("failed to find `address` attribute for extern value `{name}` in module `{path}`")
                 })?;
                 Ok((
+                    Visibility::from(*visibility),
                     name.as_str().to_owned(),
                     Type::Unresolved(type_.clone()),
                     address,

@@ -799,6 +799,7 @@ fn make_vfunc_region(index: usize) -> SR {
 #[test]
 fn can_define_extern_value() {
     let module1 = M::new().with_extern_values([(
+        V::Public,
         "test".into(),
         T::ident("u32").mut_pointer(),
         vec![A::address(0x1337)],
@@ -820,7 +821,12 @@ fn can_define_extern_value() {
 
     assert_eq!(
         extern_value,
-        &("test".into(), ST::raw("u32").mut_pointer(), 0x1337)
+        &(
+            SV::Public,
+            "test".into(),
+            ST::raw("u32").mut_pointer(),
+            0x1337
+        )
     );
 }
 

@@ -4,7 +4,7 @@ use crate::{
     grammar::{self, ItemPath},
     semantic_analysis::{
         type_registry,
-        types::{Backend, ItemDefinition, Type},
+        types::{Backend, ItemDefinition, Type, Visibility},
     },
 };
 
@@ -13,7 +13,7 @@ pub struct Module {
     pub(crate) path: ItemPath,
     pub(crate) ast: grammar::Module,
     pub(crate) definition_paths: HashSet<ItemPath>,
-    pub(crate) extern_values: Vec<(String, Type, usize)>,
+    pub(crate) extern_values: Vec<(Visibility, String, Type, usize)>,
     pub(crate) impls: HashMap<ItemPath, grammar::FunctionBlock>,
     pub(crate) backends: HashMap<String, Vec<Backend>>,
 }
@@ -35,7 +35,7 @@ impl Module {
     pub(crate) fn new(
         path: ItemPath,
         ast: grammar::Module,
-        extern_values: Vec<(String, Type, usize)>,
+        extern_values: Vec<(Visibility, String, Type, usize)>,
         impls: &[grammar::FunctionBlock],
         backends: &[grammar::Backend],
     ) -> anyhow::Result<Self> {
@@ -94,7 +94,7 @@ impl Module {
     ) -> anyhow::Result<()> {
         let scope = self.scope();
 
-        for (name, type_, _) in &mut self.extern_values {
+        for (_visibility, name, type_, _address) in &mut self.extern_values {
             if let Type::Unresolved(type_ref) = type_ {
                 *type_ = type_registry
                     .resolve_grammar_type(&scope, type_ref)
