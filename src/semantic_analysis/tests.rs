@@ -1266,7 +1266,7 @@ pub mod inheritance {
         pub struct InheritanceType {
             name: String,
             alignment: usize,
-            fields: Vec<(String, IPT, Vec<A>)>,
+            fields: Vec<(Option<usize>, String, IPT, Vec<A>)>,
             vftable: Option<IV>,
         }
         pub type IT = InheritanceType;
@@ -1274,7 +1274,7 @@ pub mod inheritance {
             pub fn new(
                 name: impl Into<String>,
                 alignment: usize,
-                fields: impl IntoIterator<Item = (String, IPT, Vec<A>)>,
+                fields: impl IntoIterator<Item = (Option<usize>, String, IPT, Vec<A>)>,
             ) -> Self {
                 Self {
                     name: name.into(),
@@ -1304,8 +1304,12 @@ pub mod inheritance {
                                     [],
                                 )
                             }),
-                            self.fields.iter().map(|(name, ty, attrs)| {
+                            self.fields.iter().map(|(address, name, ty, attrs)| {
                                 let underscore_start = name.starts_with('_');
+                                let mut attrs = attrs.clone();
+                                if let Some(address) = address {
+                                    attrs.push(A::address(*address));
+                                }
                                 TS::field(
                                     if underscore_start {
                                         V::Private
@@ -1319,7 +1323,7 @@ pub mod inheritance {
                                     },
                                     ty.to_grammar(),
                                 )
-                                .with_attributes(attrs.clone())
+                                .with_attributes(attrs)
                             }),
                         )
                         .collect::<Vec<_>>(),
@@ -1330,21 +1334,15 @@ pub mod inheritance {
 
             pub fn to_semantic(&self) -> SID {
                 let f = &self.fields;
-                let size: usize = f.iter().map(|(_, ty, _)| ty.size()).sum::<usize>()
-                    + self.vftable.as_ref().map(|_| 4).unwrap_or(0);
+                let mut size: usize = self.vftable.as_ref().map(|_| 4).unwrap_or(0);
+                for (address, _, ty, _) in f {
+                    if let Some(address) = address {
+                        size = *address;
+                    }
+                    size += ty.size();
+                }
 
-                let mut regions = f
-                    .iter()
-                    .map(|(name, ty, _)| {
-                        let visibility = if name.starts_with('_') {
-                            SV::Private
-                        } else {
-                            SV::Public
-                        };
-                        SR::field(visibility, name.clone(), ty.to_semantic())
-                    })
-                    .collect::<Vec<_>>();
-
+                let mut regions = vec![];
                 if let Some(vftable) = &self.vftable {
                     regions.insert(
                         0,
@@ -1355,6 +1353,24 @@ pub mod inheritance {
                                 .const_pointer(),
                         ),
                     );
+                }
+                let mut last_address = self.vftable.as_ref().map(|_| 4).unwrap_or(0);
+                for (address, name, ty, _) in f {
+                    let visibility = if name.starts_with('_') {
+                        SV::Private
+                    } else {
+                        SV::Public
+                    };
+                    if let Some(address) = address {
+                        regions.push(SR::field(
+                            SV::Private,
+                            format!("_field_{:x}", last_address),
+                            IPT::Unknown(address - last_address).to_semantic(),
+                        ));
+                    }
+
+                    regions.push(SR::field(visibility, name.clone(), ty.to_semantic()));
+                    last_address += ty.size();
                 }
 
                 let type_definition = STD::new().with_regions(regions);
@@ -1375,7 +1391,7 @@ pub mod inheritance {
                     format!("test::{}", self.name).as_str(),
                     SISR {
                         size,
-                        alignment: 4,
+                        alignment: self.alignment,
                         inner: type_definition.into(),
                     },
                 )
@@ -1527,9 +1543,9 @@ pub mod inheritance {
                 "Base",
                 8,
                 [
-                    ("field_1".to_string(), IPT::I32, vec![]),
-                    ("_field_4".to_string(), IPT::Unknown(4), vec![]),
-                    ("field_2".to_string(), IPT::U64, vec![]),
+                    (None, "field_1".to_string(), IPT::I32, vec![]),
+                    (None, "_field_4".to_string(), IPT::Unknown(4), vec![]),
+                    (None, "field_2".to_string(), IPT::U64, vec![]),
                 ],
             );
 
@@ -1537,6 +1553,7 @@ pub mod inheritance {
                 "Derived",
                 8,
                 [(
+                    None,
                     "base".to_string(),
                     IPT::Named("Base".to_string(), 16),
                     vec![A::base()],
@@ -1555,17 +1572,18 @@ pub mod inheritance {
                 "Base",
                 8,
                 [
-                    ("field_1".to_string(), IPT::I32, vec![]),
-                    ("_field_4".to_string(), IPT::Unknown(4), vec![]),
-                    ("field_2".to_string(), IPT::U64, vec![]),
+                    (None, "field_1".to_string(), IPT::I32, vec![]),
+                    (None, "_field_4".to_string(), IPT::Unknown(4), vec![]),
+                    (None, "field_2".to_string(), IPT::U64, vec![]),
                 ],
             );
 
             let derived_vftable = IV::new("Derived", "DerivedVftable", [vfunc("derived_vfunc")]);
             let derived = IT::new(
                 "Derived",
-                8,
+                12,
                 [(
+                    Some(8),
                     "base".to_string(),
                     IPT::Named("Base".to_string(), 16),
                     vec![A::base()],
@@ -1618,9 +1636,9 @@ pub mod inheritance {
                 "BaseA",
                 8,
                 [
-                    ("field_1".to_string(), IPT::I32, vec![]),
-                    ("_field_4".to_string(), IPT::Unknown(4), vec![]),
-                    ("field_2".to_string(), IPT::U64, vec![]),
+                    (None, "field_1".to_string(), IPT::I32, vec![]),
+                    (None, "_field_4".to_string(), IPT::Unknown(4), vec![]),
+                    (None, "field_2".to_string(), IPT::U64, vec![]),
                 ],
             );
 
@@ -1628,9 +1646,9 @@ pub mod inheritance {
                 "BaseB",
                 8,
                 [
-                    ("field_1".to_string(), IPT::U64, vec![]),
-                    ("_field_8".to_string(), IPT::Unknown(4), vec![]),
-                    ("field_2".to_string(), IPT::I32, vec![]),
+                    (None, "field_1".to_string(), IPT::U64, vec![]),
+                    (None, "_field_8".to_string(), IPT::Unknown(4), vec![]),
+                    (None, "field_2".to_string(), IPT::I32, vec![]),
                 ],
             );
 
@@ -1639,11 +1657,13 @@ pub mod inheritance {
                 8,
                 [
                     (
+                        None,
                         "base_a".to_string(),
                         IPT::Named("BaseA".to_string(), 16),
                         vec![A::base()],
                     ),
                     (
+                        None,
                         "base_b".to_string(),
                         IPT::Named("BaseB".to_string(), 16),
                         vec![A::base()],
@@ -1671,9 +1691,9 @@ pub mod inheritance {
                 "BaseA",
                 8,
                 [
-                    ("field_1".to_string(), IPT::I32, vec![]),
-                    ("_field_4".to_string(), IPT::Unknown(4), vec![]),
-                    ("field_2".to_string(), IPT::U64, vec![]),
+                    (None, "field_1".to_string(), IPT::I32, vec![]),
+                    (None, "_field_4".to_string(), IPT::Unknown(4), vec![]),
+                    (None, "field_2".to_string(), IPT::U64, vec![]),
                 ],
             );
 
@@ -1681,9 +1701,9 @@ pub mod inheritance {
                 "BaseB",
                 8,
                 [
-                    ("field_1".to_string(), IPT::U64, vec![]),
-                    ("_field_8".to_string(), IPT::Unknown(4), vec![]),
-                    ("field_2".to_string(), IPT::I32, vec![]),
+                    (None, "field_1".to_string(), IPT::U64, vec![]),
+                    (None, "_field_8".to_string(), IPT::Unknown(4), vec![]),
+                    (None, "field_2".to_string(), IPT::I32, vec![]),
                 ],
             );
 
@@ -1693,11 +1713,13 @@ pub mod inheritance {
                 8,
                 [
                     (
+                        Some(8),
                         "base_a".to_string(),
                         IPT::Named("BaseA".to_string(), 16),
                         vec![A::base()],
                     ),
                     (
+                        None,
                         "base_b".to_string(),
                         IPT::Named("BaseB".to_string(), 16),
                         vec![A::base()],
