@@ -489,15 +489,43 @@ pub fn write_module(
 
     writeln!(raw_output, "{epilogues}")?;
 
+    let mut error = None;
     let output = if FORMAT_OUTPUT {
         // You may think that this is inefficient. It probably is.
         // It's still probably faster than running `rustfmt`.
-        prettyplease::unparse(&syn::parse_file(&raw_output)?)
+        match syn::parse_file(&raw_output) {
+            Ok(parsed_file) => prettyplease::unparse(&parsed_file),
+            Err(err) => {
+                let lc = err.span().start();
+                error = Some(format!(
+                    concat!(
+                        "Could not parse generated Rust code to pretty-print. The code has been emitted as-is.\n",
+                        "This may be due to a bug in Pyxis or an issue with one of your backend definitions.\n",
+                        "\n",
+                        "Error: {}\n",
+                        "  --> {}:{}:{}\n",
+                        "   | {}\n",
+                        "   | {}"
+                    ),
+                    err,
+                    path.display(),
+                    lc.line,
+                    lc.column,
+                    raw_output.lines().nth(lc.line - 1).unwrap(),
+                    format!("{}^", " ".repeat(lc.column))
+                ));
+                raw_output
+            }
+        }
     } else {
         raw_output
     };
 
     std::fs::write(&path, output).context("failed to write file")?;
+
+    if let Some(error) = error {
+        anyhow::bail!("{error}");
+    }
 
     Ok(())
 }
