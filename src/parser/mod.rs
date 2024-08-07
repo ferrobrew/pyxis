@@ -508,7 +508,12 @@ impl Parse for Module {
                 let type_: Type = input.parse()?;
                 input.parse::<Token![;]>()?;
 
-                extern_values.push((visibility, name, type_, attributes));
+                extern_values.push(ExternValue {
+                    visibility,
+                    name,
+                    type_,
+                    attributes,
+                });
                 continue;
             } else if input.peek(Token![type]) || input.peek(Token![enum]) {
                 definitions.push(parse_item_definition(input, visibility, attributes)?);

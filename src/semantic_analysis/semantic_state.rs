@@ -11,8 +11,8 @@ use super::{
     module::Module,
     type_registry::TypeRegistry,
     types::{
-        Argument, CallingConvention, EnumDefinition, Function, ItemCategory, ItemDefinition,
-        ItemState, ItemStateResolved, Region, Type, TypeDefinition, Visibility,
+        Argument, CallingConvention, EnumDefinition, ExternValue, Function, ItemCategory,
+        ItemDefinition, ItemState, ItemStateResolved, Region, Type, TypeDefinition, Visibility,
     },
 };
 
@@ -95,29 +95,44 @@ impl SemanticState {
         let extern_values = module
             .extern_values
             .iter()
-            .map(|(visibility, name, type_, attributes)| {
+            .map(|ev| {
+                let name = &ev.name;
                 let mut address = None;
-                for attribute in attributes {
+                for attribute in &ev.attributes {
                     let Some((ident, exprs)) = attribute.function() else {
-                        anyhow::bail!("unsupported attribute for extern value `{name}` in module `{path}`: {attribute:?}");
+                        anyhow::bail!(
+                            "unsupported attribute for extern value `{}` in module `{}`: {:?}",
+                            name,
+                            path,
+                            attribute
+                        );
                     };
                     match (ident.as_str(), &exprs[..]) {
                         ("address", [grammar::Expr::IntLiteral(addr)]) => {
                             address = Some(*addr as usize);
                         }
-                        _ => anyhow::bail!("unsupported attribute for extern value `{name}` in module `{path}`: {attribute:?}"),
+                        _ => anyhow::bail!(
+                            "unsupported attribute for extern value `{}` in module `{}`: {:?}",
+                            name,
+                            path,
+                            attribute
+                        ),
                     }
                 }
 
                 let address = address.with_context(|| {
-                    format!("failed to find `address` attribute for extern value `{name}` in module `{path}`")
+                    format!(
+                        "failed to find `address` attribute for extern value `{}` in module `{}`",
+                        name, path
+                    )
                 })?;
-                Ok((
-                    Visibility::from(*visibility),
-                    name.as_str().to_owned(),
-                    Type::Unresolved(type_.clone()),
+
+                Ok(ExternValue {
+                    visibility: Visibility::from(ev.visibility),
+                    name: name.as_str().to_owned(),
+                    type_: Type::Unresolved(ev.type_.clone()),
                     address,
-                ))
+                })
             })
             .collect::<anyhow::Result<Vec<_>>>()?;
 

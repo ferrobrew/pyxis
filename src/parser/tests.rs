@@ -278,17 +278,17 @@ fn can_parse_extern_value() {
     let ast = M::new()
         .with_extern_types([("SomeType".into(), vec![A::size(4)])])
         .with_extern_values([
-            (
+            EV::new(
                 V::Public,
-                "some_value".into(),
+                "some_value",
                 T::ident("SomeType").mut_pointer(),
-                vec![A::address(0x1337)],
+                [A::address(0x1337)],
             ),
-            (
+            EV::new(
                 V::Private,
-                "some_private_value".into(),
+                "some_private_value",
                 T::ident("SomeType").mut_pointer(),
-                vec![A::address(0x1338)],
+                [A::address(0x1338)],
             ),
         ]);
 

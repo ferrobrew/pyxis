@@ -21,6 +21,7 @@ pub mod test_aliases {
     pub type SISR = super::ItemStateResolved;
     pub type SCC = super::CallingConvention;
     pub type SV = super::Visibility;
+    pub type SEV = super::ExternValue;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -146,7 +147,6 @@ pub enum Type {
         Option<Box<Type>>,
     ),
 }
-
 impl Type {
     /// Returns `None` if this type is unresolved
     pub(crate) fn size(&self, type_registry: &type_registry::TypeRegistry) -> Option<usize> {
@@ -210,7 +210,6 @@ impl Type {
         Box::new(self)
     }
 }
-
 impl fmt::Display for Type {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -255,7 +254,6 @@ pub struct Region {
     pub name: Option<String>,
     pub type_ref: Type,
 }
-
 impl Region {
     pub fn field(visibility: Visibility, name: impl Into<String>, type_ref: Type) -> Self {
         Region {
@@ -480,4 +478,12 @@ impl ItemDefinition {
 pub struct Backend {
     pub prologue: Option<String>,
     pub epilogue: Option<String>,
+}
+
+#[derive(PartialEq, Eq, Debug, Clone)]
+pub struct ExternValue {
+    pub visibility: Visibility,
+    pub name: String,
+    pub type_: Type,
+    pub address: usize,
 }

@@ -418,15 +418,11 @@ fn build_item(definition: &types::ItemDefinition) -> anyhow::Result<proc_macro2:
     }
 }
 
-fn build_extern_value(
-    visibility: types::Visibility,
-    name: &str,
-    type_: &types::Type,
-    address: usize,
-) -> anyhow::Result<proc_macro2::TokenStream> {
-    let visibility = visibility_to_tokens(visibility);
-    let function_ident = quote::format_ident!("get_{name}");
-    let type_ = sa_type_to_syn_type(type_)?;
+fn build_extern_value(ev: &types::ExternValue) -> anyhow::Result<proc_macro2::TokenStream> {
+    let visibility = visibility_to_tokens(ev.visibility);
+    let function_ident = quote::format_ident!("get_{}", ev.name);
+    let type_ = sa_type_to_syn_type(&ev.type_)?;
+    let address = ev.address;
 
     Ok(quote! {
         #visibility unsafe fn #function_ident() -> &'static mut #type_ {
@@ -482,16 +478,8 @@ pub fn write_module(
         writeln!(raw_output, "{}", build_item(definition)?)?;
     }
 
-    for (visibility, name, type_, address) in module
-        .extern_values
-        .iter()
-        .sorted_by_key(|(_, name, _, _)| name)
-    {
-        writeln!(
-            raw_output,
-            "{}",
-            build_extern_value(*visibility, name, type_, *address)?
-        )?;
+    for ev in module.extern_values.iter().sorted_by_key(|ev| &ev.name) {
+        writeln!(raw_output, "{}", build_extern_value(ev)?)?;
     }
 
     writeln!(raw_output, "{epilogues}")?;

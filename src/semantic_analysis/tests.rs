@@ -798,11 +798,11 @@ fn make_vfunc_region(index: usize) -> SR {
 
 #[test]
 fn can_define_extern_value() {
-    let module1 = M::new().with_extern_values([(
+    let module1 = M::new().with_extern_values([EV::new(
         V::Public,
-        "test".into(),
+        "test",
         T::ident("u32").mut_pointer(),
-        vec![A::address(0x1337)],
+        [A::address(0x1337)],
     )]);
 
     let mut semantic_state = SemanticState::new(4);
@@ -821,12 +821,12 @@ fn can_define_extern_value() {
 
     assert_eq!(
         extern_value,
-        &(
-            SV::Public,
-            "test".into(),
-            ST::raw("u32").mut_pointer(),
-            0x1337
-        )
+        &SEV {
+            visibility: SV::Public,
+            name: "test".into(),
+            type_: ST::raw("u32").mut_pointer(),
+            address: 0x1337
+        }
     );
 }
 

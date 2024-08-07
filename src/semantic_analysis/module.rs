@@ -4,7 +4,7 @@ use crate::{
     grammar::{self, ItemPath},
     semantic_analysis::{
         type_registry,
-        types::{Backend, ItemDefinition, Type, Visibility},
+        types::{Backend, ExternValue, ItemDefinition, Type},
     },
 };
 
@@ -13,7 +13,7 @@ pub struct Module {
     pub(crate) path: ItemPath,
     pub(crate) ast: grammar::Module,
     pub(crate) definition_paths: HashSet<ItemPath>,
-    pub(crate) extern_values: Vec<(Visibility, String, Type, usize)>,
+    pub(crate) extern_values: Vec<ExternValue>,
     pub(crate) impls: HashMap<ItemPath, grammar::FunctionBlock>,
     pub(crate) backends: HashMap<String, Vec<Backend>>,
 }
@@ -35,7 +35,7 @@ impl Module {
     pub(crate) fn new(
         path: ItemPath,
         ast: grammar::Module,
-        extern_values: Vec<(Visibility, String, Type, usize)>,
+        extern_values: Vec<ExternValue>,
         impls: &[grammar::FunctionBlock],
         backends: &[grammar::Backend],
     ) -> anyhow::Result<Self> {
@@ -94,11 +94,11 @@ impl Module {
     ) -> anyhow::Result<()> {
         let scope = self.scope();
 
-        for (_visibility, name, type_, _address) in &mut self.extern_values {
-            if let Type::Unresolved(type_ref) = type_ {
-                *type_ = type_registry
+        for ev in &mut self.extern_values {
+            if let Type::Unresolved(type_ref) = &ev.type_ {
+                ev.type_ = type_registry
                     .resolve_grammar_type(&scope, type_ref)
-                    .ok_or_else(|| anyhow::anyhow!("failed to resolve type for {}", name))?;
+                    .ok_or_else(|| anyhow::anyhow!("failed to resolve type for {}", ev.name))?;
             }
         }
 

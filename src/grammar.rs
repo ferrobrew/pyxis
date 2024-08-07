@@ -17,6 +17,7 @@ pub mod test_aliases {
     pub type IP = super::ItemPath;
     pub type B = super::Backend;
     pub type V = super::Visibility;
+    pub type EV = super::ExternValue;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -526,11 +527,34 @@ impl Backend {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExternValue {
+    pub visibility: Visibility,
+    pub name: Ident,
+    pub type_: Type,
+    pub attributes: Vec<Attribute>,
+}
+impl ExternValue {
+    pub fn new(
+        visibility: Visibility,
+        name: &str,
+        type_: Type,
+        attributes: impl Into<Vec<Attribute>>,
+    ) -> Self {
+        Self {
+            visibility,
+            name: name.into(),
+            type_,
+            attributes: attributes.into(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Module {
     pub uses: Vec<ItemPath>,
     pub extern_types: Vec<(Ident, Vec<Attribute>)>,
-    pub extern_values: Vec<(Visibility, Ident, Type, Vec<Attribute>)>,
+    pub extern_values: Vec<ExternValue>,
     pub definitions: Vec<ItemDefinition>,
     pub impls: Vec<FunctionBlock>,
     pub backends: Vec<Backend>,
@@ -553,10 +577,7 @@ impl Module {
         self
     }
 
-    pub fn with_extern_values(
-        mut self,
-        extern_values: impl Into<Vec<(Visibility, Ident, Type, Vec<Attribute>)>>,
-    ) -> Self {
+    pub fn with_extern_values(mut self, extern_values: impl Into<Vec<ExternValue>>) -> Self {
         self.extern_values = extern_values.into();
         self
     }
