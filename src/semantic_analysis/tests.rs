@@ -16,6 +16,7 @@ fn build_state(module: &M, module_path: &IP) -> anyhow::Result<ResolvedSemanticS
     semantic_state.build()
 }
 
+#[track_caller]
 fn assert_ast_produces_type_definitions(
     module: M,
     type_definitions: impl IntoIterator<Item = SID>,
@@ -36,6 +37,7 @@ fn assert_ast_produces_type_definitions(
     assert_eq!(created_type_definitions, expected_type_definitions);
 }
 
+#[track_caller]
 fn assert_ast_produces_failure(module: M, failure: &str) {
     assert_eq!(
         build_state(&module, &IP::from("test"))
@@ -59,13 +61,15 @@ fn can_resolve_basic_struct() {
                 TS::field(V::Public, "field_1", T::ident("i32")),
                 TS::field(V::Private, "_", T::unknown(4)),
                 TS::field(V::Public, "field_2", T::ident("u64")),
-            ]),
+            ])
+            .with_attributes([A::align(8)]),
         )]),
         [SID::defined_resolved(
             SV::Public,
             "test::TestType",
             SISR {
                 size: 16,
+                alignment: 8,
                 inner: STD::new()
                     .with_regions([
                         SR::field(SV::Public, "field_1", ST::raw("i32")),
@@ -92,10 +96,12 @@ fn can_resolve_pointer_to_another_struct() {
                 "TestType2",
                 TD::new([
                     TS::field(V::Public, "field_1", T::ident("i32")),
-                    TS::field(V::Public, "field_2", T::ident("TestType1")),
+                    TS::field(V::Public, "field_2", T::ident("TestType1"))
+                        .with_attributes([A::address(8)]),
                     TS::field(V::Public, "field_3", T::ident("TestType1").const_pointer()),
                     TS::field(V::Public, "field_4", T::ident("TestType1").mut_pointer()),
-                ]),
+                ])
+                .with_attributes([A::align(8)]),
             ),
         ]),
         [
@@ -104,6 +110,7 @@ fn can_resolve_pointer_to_another_struct() {
                 "test::TestType1",
                 SISR {
                     size: 8,
+                    alignment: 8,
                     inner: STD::new()
                         .with_regions([SR::field(SV::Public, "field_1", ST::raw("u64"))])
                         .into(),
@@ -113,10 +120,12 @@ fn can_resolve_pointer_to_another_struct() {
                 SV::Public,
                 "test::TestType2",
                 SISR {
-                    size: 20,
+                    size: 24,
+                    alignment: 8,
                     inner: STD::new()
                         .with_regions([
                             SR::field(SV::Public, "field_1", ST::raw("i32")),
+                            SR::field(SV::Private, "_field_4", unknown(4)),
                             SR::field(SV::Public, "field_2", ST::raw("test::TestType1")),
                             SR::field(
                                 SV::Public,
@@ -184,6 +193,7 @@ fn can_resolve_complex_type() {
                 "test::TestType",
                 SISR {
                     size: 8,
+                    alignment: 4,
                     inner: STD::new()
                         .with_regions([
                             SR::field(SV::Public, "field_1", ST::raw("i32")),
@@ -197,6 +207,7 @@ fn can_resolve_complex_type() {
                 "test::Singleton",
                 SISR {
                     size: 0x1750,
+                    alignment: 4,
                     inner: STD::new()
                         .with_regions([
                             SR::field(SV::Private, "_field_0", unknown(0x78)),
@@ -277,6 +288,7 @@ fn can_use_type_from_another_module() {
             path.clone(),
             SISR {
                 size: 4,
+                alignment: 4,
                 inner: STD::new()
                     .with_regions([SR::field(
                         SV::Private,
@@ -293,7 +305,7 @@ fn can_use_type_from_another_module() {
 fn will_fail_on_an_extern_without_size() {
     assert_ast_produces_failure(
         M::new().with_extern_types([("TestType".into(), vec![])]),
-        "failed to find size attribute for extern type",
+        "failed to find `size` attribute for extern type `TestType` in module `test`",
     );
 }
 
@@ -301,7 +313,7 @@ fn will_fail_on_an_extern_without_size() {
 fn can_resolve_embed_of_an_extern() {
     assert_ast_produces_type_definitions(
         M::new()
-            .with_extern_types([("TestType1".into(), vec![A::size(16)])])
+            .with_extern_types([("TestType1".into(), vec![A::size(16), A::align(4)])])
             .with_definitions([ID::new(
                 V::Public,
                 "TestType2",
@@ -318,6 +330,7 @@ fn can_resolve_embed_of_an_extern() {
                 "test::TestType2",
                 SISR {
                     size: 28,
+                    alignment: 4,
                     inner: STD::new()
                         .with_regions([
                             SR::field(SV::Public, "field_1", ST::raw("i32")),
@@ -341,6 +354,7 @@ fn can_resolve_embed_of_an_extern() {
                 path: "test::TestType1".into(),
                 state: SISR {
                     size: 16,
+                    alignment: 4,
                     inner: STD::new().with_regions([]).into(),
                 }
                 .into(),
@@ -388,6 +402,7 @@ fn can_generate_vftable() {
                 "test::TestType",
                 SISR {
                     size: 4,
+                    alignment: 4,
                     inner: STD::new()
                         .with_regions([SR::field(
                             SV::Public,
@@ -419,6 +434,7 @@ fn can_generate_vftable() {
                 "test::TestTypeVftable",
                 SISR {
                     size: 16,
+                    alignment: 4,
                     inner: STD::new()
                         .with_regions([
                             SR::field(
@@ -497,6 +513,7 @@ fn can_generate_vftable_with_indices() {
                 "test::TestType",
                 SISR {
                     size: 4,
+                    alignment: 4,
                     inner: STD::new()
                         .with_regions([SR::field(
                             SV::Public,
@@ -532,6 +549,7 @@ fn can_generate_vftable_with_indices() {
                 "test::TestTypeVftable",
                 SISR {
                     size: 32,
+                    alignment: 4,
                     inner: STD::new()
                         .with_regions([
                             make_vfunc_region(0),
@@ -613,6 +631,7 @@ fn will_propagate_calling_convention_for_impl_and_vftable() {
                 "test::TestType",
                 SISR {
                     size: 4,
+                    alignment: 4,
                     inner: STD::new()
                         .with_regions([SR::field(
                             SV::Public,
@@ -641,6 +660,7 @@ fn will_propagate_calling_convention_for_impl_and_vftable() {
                 "test::TestTypeVftable",
                 SISR {
                     size: 4,
+                    alignment: 4,
                     inner: STD::new()
                         .with_regions([SR::field(
                             SV::Public,
@@ -694,6 +714,7 @@ fn can_generate_vftable_without_vftable() {
                 "test::TestType",
                 SISR {
                     size: 16,
+                    alignment: 4,
                     inner: STD::new()
                         .with_regions([
                             SR::field(
@@ -721,6 +742,7 @@ fn can_generate_vftable_without_vftable() {
                 "test::TestTypeWithoutVftable",
                 SISR {
                     size: 12,
+                    alignment: 4,
                     inner: STD::new()
                         .with_regions([
                             SR::field(SV::Private, "_field_0", unknown(4)),
@@ -736,6 +758,7 @@ fn can_generate_vftable_without_vftable() {
                 "test::TestTypeVftable",
                 SISR {
                     size: 4,
+                    alignment: 4,
                     inner: STD::new()
                         .with_regions([SR::field(
                             SV::Public,
@@ -824,6 +847,7 @@ fn can_resolve_enum() {
             "test::TestType",
             SISR {
                 size: 4,
+                alignment: 4,
                 inner: SED::new(ST::raw("u32"))
                     .with_fields([
                         ("Item0", -2),
@@ -896,6 +920,7 @@ fn can_extract_copyable_and_cloneable_correctly() {
             "test::TestType",
             SISR {
                 size: 4,
+                alignment: 4,
                 inner: STD::new()
                     .with_regions([SR::field(SV::Private, "field_1", ST::raw("i32"))])
                     .with_cloneable(true)
@@ -917,6 +942,7 @@ fn can_extract_copyable_and_cloneable_correctly() {
             "test::TestType",
             SISR {
                 size: 4,
+                alignment: 4,
                 inner: STD::new()
                     .with_regions([SR::field(SV::Private, "field_1", ST::raw("i32"))])
                     .with_copyable(true)
@@ -945,6 +971,7 @@ fn can_extract_copyable_and_cloneable_for_enum_correctly() {
             "test::TestType",
             SISR {
                 size: 4,
+                alignment: 4,
                 inner: SED::new(ST::raw("u32"))
                     .with_fields([("Item1", 0), ("Item2", 1)])
                     .with_cloneable(true)
@@ -969,6 +996,7 @@ fn can_extract_copyable_and_cloneable_for_enum_correctly() {
             "test::TestType",
             SISR {
                 size: 4,
+                alignment: 4,
                 inner: SED::new(ST::raw("u32"))
                     .with_fields([("Item1", 0), ("Item2", 1)])
                     .with_copyable(true)
@@ -996,6 +1024,7 @@ fn can_handle_defaultable_on_primitive_types() {
             "test::TestType",
             SISR {
                 size: 68,
+                alignment: 4,
                 inner: STD::new()
                     .with_regions([
                         SR::field(SV::Private, "field_1", ST::raw("i32")),
@@ -1021,7 +1050,7 @@ fn will_reject_defaultable_on_pointer() {
             )])
             .with_attributes([A::defaultable()]),
         )]),
-        "field field_1 of type test::TestType is not a defaultable type (pointer or function?)",
+        "field `field_1` of type `test::TestType` is not a defaultable type (pointer or function?)",
     );
 }
 
@@ -1041,7 +1070,7 @@ fn will_reject_defaultable_on_enum_field() {
                 ED::new(T::ident("u32"), [ES::field("Item1")], []),
             ),
         ]),
-        "field field_1 of type test::TestType is not a defaultable type",
+        "field `field_1` of type `test::TestType` is not a defaultable type",
     );
 }
 
@@ -1058,7 +1087,7 @@ fn can_handle_defaultable_on_enum_with_default_field() {
             )
             .with_attributes([A::defaultable()]),
         )]),
-        "enum test::TestType is marked as defaultable but has no default variant set",
+        "enum `test::TestType` is marked as defaultable but has no default variant set",
     );
 
     assert_ast_produces_failure(
@@ -1075,7 +1104,7 @@ fn can_handle_defaultable_on_enum_with_default_field() {
             )
             .with_attributes([]),
         )]),
-        "enum test::TestType has a default variant set but is not marked as defaultable",
+        "enum `test::TestType` has a default variant set but is not marked as defaultable",
     );
 
     assert_ast_produces_type_definitions(
@@ -1097,6 +1126,7 @@ fn can_handle_defaultable_on_enum_with_default_field() {
             "test::TestType",
             SISR {
                 size: 4,
+                alignment: 4,
                 inner: SED::new(ST::raw("u32"))
                     .with_fields([("Item1", 0), ("Item2", 1)])
                     .with_defaultable(true)
@@ -1123,8 +1153,109 @@ fn will_reject_defaultable_on_non_defaultable_type() {
             ),
             ID::new(V::Public, "TestNonDefaultable", TD::new([])),
         ]),
-        "field field_1 of type test::TestType is not a defaultable type",
+        "field `field_1` of type `test::TestType` is not a defaultable type",
     );
+}
+
+pub mod alignment {
+    use super::*;
+
+    #[test]
+    fn size_not_multiple_of_alignment_should_be_rejected() {
+        assert_ast_produces_failure(
+            M::new().with_definitions([ID::new(
+                V::Public,
+                "TestType",
+                TD::new([
+                    TS::field(V::Public, "field_1", T::ident("i32")),
+                    TS::field(V::Private, "_", T::unknown(3)),
+                ])
+                .with_attributes([A::align(4)]),
+            )]),
+            "the type `test::TestType` has a size of 7, which is not a multiple of its alignment 4",
+        );
+    }
+
+    #[test]
+    fn unaligned_field_should_be_rejected() {
+        assert_ast_produces_failure(
+            M::new().with_definitions([ID::new(
+                V::Public,
+                "TestType",
+                TD::new([TS::field(V::Public, "field_1", T::ident("i32"))
+                    .with_attributes([A::address(1)])]),
+            )]),
+            "field `field_1` of type `test::TestType` is located at 0x1, which is not divisible by 4 (the alignment of the type of the field)",
+        );
+    }
+
+    #[test]
+    fn align_incongruent_with_fields_should_be_rejected() {
+        assert_ast_produces_failure(
+            M::new().with_definitions([ID::new(
+                V::Public,
+                "TestType",
+                TD::new([
+                    TS::field(V::Public, "field_1", T::ident("i32")),
+                    TS::field(V::Public, "field_2", T::ident("i32")),
+                    TS::field(V::Public, "field_3", T::ident("u64")),
+                ])
+                .with_attributes([A::align(4)]),
+            )]),
+            "alignment 4 is less than minimum required alignment 8 for type `test::TestType`",
+        );
+    }
+
+    #[test]
+    fn both_align_and_packed_should_be_rejected() {
+        assert_ast_produces_failure(
+            M::new().with_definitions([ID::new(
+                V::Public,
+                "TestType",
+                TD::new([TS::field(V::Public, "field_1", T::ident("i32"))])
+                    .with_attributes([A::align(4), A::packed()]),
+            )]),
+            "cannot specify both `packed` and `align` attributes for type `test::TestType`",
+        );
+    }
+
+    #[test]
+    fn type_with_bool_at_end_should_be_rejected_due_to_alignment() {
+        assert_ast_produces_failure(
+            M::new().with_definitions([ID::new(
+                V::Public,
+                "TestType",
+                TD::new([TS::field(V::Public, "field_1", T::ident("bool"))
+                    .with_attributes([A::address(0xEC4)])]),
+            )]),
+            "the type `test::TestType` has a size of 3781, which is not a multiple of its alignment 4",
+        );
+
+        assert_ast_produces_type_definitions(
+            M::new().with_definitions([ID::new(
+                V::Public,
+                "TestType",
+                TD::new([TS::field(V::Public, "field_1", T::ident("bool"))
+                    .with_attributes([A::address(0xEC4)])])
+                .with_attributes([A::size(0xEC8)]),
+            )]),
+            [SID::defined_resolved(
+                SV::Public,
+                "test::TestType",
+                SISR {
+                    size: 0xEC8,
+                    alignment: 4,
+                    inner: STD::new()
+                        .with_regions([
+                            SR::field(SV::Private, "_field_0", unknown(0xEC4)),
+                            SR::field(SV::Public, "field_1", ST::raw("bool")),
+                            SR::field(SV::Private, "_field_ec5", unknown(3)),
+                        ])
+                        .into(),
+                },
+            )],
+        );
+    }
 }
 
 pub mod inheritance {
@@ -1237,17 +1368,20 @@ pub mod inheritance {
 
         pub struct InheritanceType {
             name: String,
-            fields: Vec<(String, IPT, Vec<A>)>,
+            alignment: usize,
+            fields: Vec<(Option<usize>, String, IPT, Vec<A>)>,
             vftable: Option<IV>,
         }
         pub type IT = InheritanceType;
         impl IT {
             pub fn new(
                 name: impl Into<String>,
-                fields: impl IntoIterator<Item = (String, IPT, Vec<A>)>,
+                alignment: usize,
+                fields: impl IntoIterator<Item = (Option<usize>, String, IPT, Vec<A>)>,
             ) -> Self {
                 Self {
                     name: name.into(),
+                    alignment,
                     fields: fields.into_iter().collect(),
                     vftable: None,
                 }
@@ -1273,8 +1407,12 @@ pub mod inheritance {
                                     [],
                                 )
                             }),
-                            self.fields.iter().map(|(name, ty, attrs)| {
+                            self.fields.iter().map(|(address, name, ty, attrs)| {
                                 let underscore_start = name.starts_with('_');
+                                let mut attrs = attrs.clone();
+                                if let Some(address) = address {
+                                    attrs.push(A::address(*address));
+                                }
                                 TS::field(
                                     if underscore_start {
                                         V::Private
@@ -1288,31 +1426,26 @@ pub mod inheritance {
                                     },
                                     ty.to_grammar(),
                                 )
-                                .with_attributes(attrs.clone())
+                                .with_attributes(attrs)
                             }),
                         )
                         .collect::<Vec<_>>(),
-                    ),
+                    )
+                    .with_attributes([A::align(self.alignment)]),
                 )
             }
 
             pub fn to_semantic(&self) -> SID {
                 let f = &self.fields;
-                let size: usize = f.iter().map(|(_, ty, _)| ty.size()).sum::<usize>()
-                    + self.vftable.as_ref().map(|_| 4).unwrap_or(0);
+                let mut size: usize = self.vftable.as_ref().map(|_| 4).unwrap_or(0);
+                for (address, _, ty, _) in f {
+                    if let Some(address) = address {
+                        size = *address;
+                    }
+                    size += ty.size();
+                }
 
-                let mut regions = f
-                    .iter()
-                    .map(|(name, ty, _)| {
-                        let visibility = if name.starts_with('_') {
-                            SV::Private
-                        } else {
-                            SV::Public
-                        };
-                        SR::field(visibility, name.clone(), ty.to_semantic())
-                    })
-                    .collect::<Vec<_>>();
-
+                let mut regions = vec![];
                 if let Some(vftable) = &self.vftable {
                     regions.insert(
                         0,
@@ -1323,6 +1456,24 @@ pub mod inheritance {
                                 .const_pointer(),
                         ),
                     );
+                }
+                let mut last_address = self.vftable.as_ref().map(|_| 4).unwrap_or(0);
+                for (address, name, ty, _) in f {
+                    let visibility = if name.starts_with('_') {
+                        SV::Private
+                    } else {
+                        SV::Public
+                    };
+                    if let Some(address) = address {
+                        regions.push(SR::field(
+                            SV::Private,
+                            format!("_field_{:x}", last_address),
+                            IPT::Unknown(address - last_address).to_semantic(),
+                        ));
+                    }
+
+                    regions.push(SR::field(visibility, name.clone(), ty.to_semantic()));
+                    last_address += ty.size();
                 }
 
                 let type_definition = STD::new().with_regions(regions);
@@ -1343,6 +1494,7 @@ pub mod inheritance {
                     format!("test::{}", self.name).as_str(),
                     SISR {
                         size,
+                        alignment: self.alignment,
                         inner: type_definition.into(),
                     },
                 )
@@ -1375,6 +1527,7 @@ pub mod inheritance {
                     format!("test::{}", self.name_vftable).as_str(),
                     SISR {
                         size: self.functions.len() * 4,
+                        alignment: 4,
                         inner: STD::new()
                             .with_regions(
                                 self.functions
@@ -1491,16 +1644,19 @@ pub mod inheritance {
         fn b0_d0() {
             let base = IT::new(
                 "Base",
+                8,
                 [
-                    ("field_1".to_string(), IPT::I32, vec![]),
-                    ("_field_4".to_string(), IPT::Unknown(4), vec![]),
-                    ("field_2".to_string(), IPT::U64, vec![]),
+                    (None, "field_1".to_string(), IPT::I32, vec![]),
+                    (None, "_field_4".to_string(), IPT::Unknown(4), vec![]),
+                    (None, "field_2".to_string(), IPT::U64, vec![]),
                 ],
             );
 
             let derived = IT::new(
                 "Derived",
+                8,
                 [(
+                    None,
                     "base".to_string(),
                     IPT::Named("Base".to_string(), 16),
                     vec![A::base()],
@@ -1517,17 +1673,20 @@ pub mod inheritance {
         fn b0_d1() {
             let base = IT::new(
                 "Base",
+                8,
                 [
-                    ("field_1".to_string(), IPT::I32, vec![]),
-                    ("_field_4".to_string(), IPT::Unknown(4), vec![]),
-                    ("field_2".to_string(), IPT::U64, vec![]),
+                    (None, "field_1".to_string(), IPT::I32, vec![]),
+                    (None, "_field_4".to_string(), IPT::Unknown(4), vec![]),
+                    (None, "field_2".to_string(), IPT::U64, vec![]),
                 ],
             );
 
             let derived_vftable = IV::new("Derived", "DerivedVftable", [vfunc("derived_vfunc")]);
             let derived = IT::new(
                 "Derived",
+                12,
                 [(
+                    Some(8),
                     "base".to_string(),
                     IPT::Named("Base".to_string(), 16),
                     vec![A::base()],
@@ -1578,31 +1737,36 @@ pub mod inheritance {
         fn a0_b0_d0() {
             let base_a = IT::new(
                 "BaseA",
+                8,
                 [
-                    ("field_1".to_string(), IPT::I32, vec![]),
-                    ("_field_4".to_string(), IPT::Unknown(4), vec![]),
-                    ("field_2".to_string(), IPT::U64, vec![]),
+                    (None, "field_1".to_string(), IPT::I32, vec![]),
+                    (None, "_field_4".to_string(), IPT::Unknown(4), vec![]),
+                    (None, "field_2".to_string(), IPT::U64, vec![]),
                 ],
             );
 
             let base_b = IT::new(
                 "BaseB",
+                8,
                 [
-                    ("field_1".to_string(), IPT::U64, vec![]),
-                    ("_field_8".to_string(), IPT::Unknown(4), vec![]),
-                    ("field_2".to_string(), IPT::I32, vec![]),
+                    (None, "field_1".to_string(), IPT::U64, vec![]),
+                    (None, "_field_8".to_string(), IPT::Unknown(4), vec![]),
+                    (None, "field_2".to_string(), IPT::I32, vec![]),
                 ],
             );
 
             let derived = IT::new(
                 "Derived",
+                8,
                 [
                     (
+                        None,
                         "base_a".to_string(),
                         IPT::Named("BaseA".to_string(), 16),
                         vec![A::base()],
                     ),
                     (
+                        None,
                         "base_b".to_string(),
                         IPT::Named("BaseB".to_string(), 16),
                         vec![A::base()],
@@ -1628,32 +1792,37 @@ pub mod inheritance {
         fn a0_b0_d1() {
             let base_a = IT::new(
                 "BaseA",
+                8,
                 [
-                    ("field_1".to_string(), IPT::I32, vec![]),
-                    ("_field_4".to_string(), IPT::Unknown(4), vec![]),
-                    ("field_2".to_string(), IPT::U64, vec![]),
+                    (None, "field_1".to_string(), IPT::I32, vec![]),
+                    (None, "_field_4".to_string(), IPT::Unknown(4), vec![]),
+                    (None, "field_2".to_string(), IPT::U64, vec![]),
                 ],
             );
 
             let base_b = IT::new(
                 "BaseB",
+                8,
                 [
-                    ("field_1".to_string(), IPT::U64, vec![]),
-                    ("_field_8".to_string(), IPT::Unknown(4), vec![]),
-                    ("field_2".to_string(), IPT::I32, vec![]),
+                    (None, "field_1".to_string(), IPT::U64, vec![]),
+                    (None, "_field_8".to_string(), IPT::Unknown(4), vec![]),
+                    (None, "field_2".to_string(), IPT::I32, vec![]),
                 ],
             );
 
             let derived_vftable = IV::new("Derived", "DerivedVftable", [derived_vfunc()]);
             let derived = IT::new(
                 "Derived",
+                8,
                 [
                     (
+                        Some(8),
                         "base_a".to_string(),
                         IPT::Named("BaseA".to_string(), 16),
                         vec![A::base()],
                     ),
                     (
+                        None,
                         "base_b".to_string(),
                         IPT::Named("BaseB".to_string(), 16),
                         vec![A::base()],

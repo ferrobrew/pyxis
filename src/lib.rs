@@ -5,6 +5,8 @@ pub mod grammar;
 pub mod parser;
 pub mod semantic_analysis;
 
+pub(crate) mod util;
+
 pub fn build(in_dir: &Path, out_dir: &Path, pointer_size: usize) -> anyhow::Result<()> {
     let mut semantic_state = semantic_analysis::SemanticState::new(pointer_size);
 

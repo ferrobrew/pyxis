@@ -185,6 +185,7 @@ fn build_function(
 fn build_type(
     name: &ItemPathSegment,
     size: usize,
+    alignment: usize,
     visibility: types::Visibility,
     type_definition: &types::TypeDefinition,
 ) -> anyhow::Result<proc_macro2::TokenStream> {
@@ -283,15 +284,17 @@ fn build_type(
         quote! { #[derive(#(#extra_derives),*)] }
     };
 
-    let packed = if *packed {
-        quote! { , packed }
+    // Packing and alignment are mutually exclusive
+    let (packed, alignment) = if *packed {
+        (quote! { , packed }, quote! {})
     } else {
-        quote! {}
+        let alignment: syn::Index = alignment.into();
+        (quote! {}, quote! { , align(#alignment) })
     };
 
     Ok(quote! {
         #derives
-        #[repr(C #packed)]
+        #[repr(C #packed #alignment)]
         #visibility struct #name_ident {
             #(#fields),*
         }
@@ -397,14 +400,19 @@ fn build_item(definition: &types::ItemDefinition) -> anyhow::Result<proc_macro2:
         .last()
         .context("failed to get last of item path")?;
 
-    let types::ItemStateResolved { size, inner } =
-        &definition.resolved().context("type was not resolved")?;
+    let types::ItemStateResolved {
+        size,
+        inner,
+        alignment,
+    } = &definition.resolved().context("type was not resolved")?;
 
     let visibility = definition.visibility;
 
     match definition.category() {
         ItemCategory::Defined => match inner {
-            types::ItemDefinitionInner::Type(td) => build_type(name, *size, visibility, td),
+            types::ItemDefinitionInner::Type(td) => {
+                build_type(name, *size, *alignment, visibility, td)
+            }
             types::ItemDefinitionInner::Enum(ed) => build_enum(name, *size, visibility, ed),
         },
         ItemCategory::Predefined => Ok(quote! {}),

@@ -219,6 +219,10 @@ impl Attribute {
         Self::integer_fn("size", size as isize)
     }
 
+    pub fn align(align: usize) -> Self {
+        Self::integer_fn("align", align as isize)
+    }
+
     pub fn singleton(address: usize) -> Self {
         Self::integer_fn("singleton", address as isize)
     }
@@ -253,6 +257,10 @@ impl Attribute {
 
     pub fn base() -> Self {
         Attribute::Ident("base".into())
+    }
+
+    pub fn packed() -> Self {
+        Attribute::Ident("packed".into())
     }
 
     // HACK_SKIP_VFTABLE: <https://github.com/philpax/pyxis/issues/13>

@@ -160,6 +160,17 @@ impl Type {
         }
     }
 
+    pub(crate) fn alignment(&self, type_registry: &type_registry::TypeRegistry) -> Option<usize> {
+        match self {
+            Type::Unresolved(_) => None,
+            Type::Raw(path) => type_registry.get(path).and_then(|t| t.alignment()),
+            Type::ConstPointer(_) => Some(type_registry.pointer_size()),
+            Type::MutPointer(_) => Some(type_registry.pointer_size()),
+            Type::Array(tr, _) => Some(tr.alignment(type_registry)?),
+            Type::Function(_, _, _) => Some(type_registry.pointer_size()),
+        }
+    }
+
     pub fn raw(path: impl Into<ItemPath>) -> Self {
         Type::Raw(path.into())
     }
@@ -394,6 +405,7 @@ impl ItemDefinitionInner {
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]
 pub struct ItemStateResolved {
     pub size: usize,
+    pub alignment: usize,
     pub inner: ItemDefinitionInner,
 }
 impl From<ItemStateResolved> for ItemState {
@@ -445,6 +457,10 @@ impl ItemDefinition {
 
     pub fn size(&self) -> Option<usize> {
         self.resolved().map(|r| r.size)
+    }
+
+    pub fn alignment(&self) -> Option<usize> {
+        self.resolved().map(|r| r.alignment)
     }
 
     pub fn is_resolved(&self) -> bool {
