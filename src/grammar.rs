@@ -259,6 +259,10 @@ impl Attribute {
         Attribute::Ident("base".into())
     }
 
+    pub fn packed() -> Self {
+        Attribute::Ident("packed".into())
+    }
+
     // HACK_SKIP_VFTABLE: <https://github.com/philpax/pyxis/issues/13>
     pub fn hack_skip_vftable() -> Self {
         Attribute::Ident("hack_skip_vftable".into())

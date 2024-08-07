@@ -635,7 +635,7 @@ impl SemanticState {
                     let alignment = region.type_ref.alignment(&self.type_registry).unwrap();
                     if last_address % alignment != 0 {
                         anyhow::bail!(
-                            "field {name} (at 0x{last_address:X}) is not aligned to {alignment}"
+                            "field {name} (at 0x{last_address:X}) is not aligned to {alignment}, which is the alignment of its type"
                         );
                     }
                     last_address += region.size(&self.type_registry).unwrap();

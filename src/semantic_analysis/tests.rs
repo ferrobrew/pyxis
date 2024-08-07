@@ -16,6 +16,7 @@ fn build_state(module: &M, module_path: &IP) -> anyhow::Result<ResolvedSemanticS
     semantic_state.build()
 }
 
+#[track_caller]
 fn assert_ast_produces_type_definitions(
     module: M,
     type_definitions: impl IntoIterator<Item = SID>,
@@ -36,6 +37,7 @@ fn assert_ast_produces_type_definitions(
     assert_eq!(created_type_definitions, expected_type_definitions);
 }
 
+#[track_caller]
 fn assert_ast_produces_failure(module: M, failure: &str) {
     assert_eq!(
         build_state(&module, &IP::from("test"))
@@ -1153,6 +1155,107 @@ fn will_reject_defaultable_on_non_defaultable_type() {
         ]),
         "field field_1 of type test::TestType is not a defaultable type",
     );
+}
+
+pub mod alignment {
+    use super::*;
+
+    #[test]
+    fn size_not_multiple_of_alignment_should_be_rejected() {
+        assert_ast_produces_failure(
+            M::new().with_definitions([ID::new(
+                V::Public,
+                "TestType",
+                TD::new([
+                    TS::field(V::Public, "field_1", T::ident("i32")),
+                    TS::field(V::Private, "_", T::unknown(3)),
+                ])
+                .with_attributes([A::align(4)]),
+            )]),
+            "size 7 is not a multiple of alignment 4",
+        );
+    }
+
+    #[test]
+    fn unaligned_field_should_be_rejected() {
+        assert_ast_produces_failure(
+            M::new().with_definitions([ID::new(
+                V::Public,
+                "TestType",
+                TD::new([TS::field(V::Public, "field_1", T::ident("i32"))
+                    .with_attributes([A::address(1)])]),
+            )]),
+            "field field_1 (at 0x1) is not aligned to 4, which is the alignment of its type",
+        );
+    }
+
+    #[test]
+    fn align_incongruent_with_fields_should_be_rejected() {
+        assert_ast_produces_failure(
+            M::new().with_definitions([ID::new(
+                V::Public,
+                "TestType",
+                TD::new([
+                    TS::field(V::Public, "field_1", T::ident("i32")),
+                    TS::field(V::Public, "field_2", T::ident("i32")),
+                    TS::field(V::Public, "field_3", T::ident("u64")),
+                ])
+                .with_attributes([A::align(4)]),
+            )]),
+            "alignment 4 is less than minimum required alignment 8",
+        );
+    }
+
+    #[test]
+    fn both_align_and_packed_should_be_rejected() {
+        assert_ast_produces_failure(
+            M::new().with_definitions([ID::new(
+                V::Public,
+                "TestType",
+                TD::new([TS::field(V::Public, "field_1", T::ident("i32"))])
+                    .with_attributes([A::align(4), A::packed()]),
+            )]),
+            "cannot specify both packed and align attributes",
+        );
+    }
+
+    #[test]
+    fn type_with_bool_at_end_should_be_rejected_due_to_alignment() {
+        assert_ast_produces_failure(
+            M::new().with_definitions([ID::new(
+                V::Public,
+                "TestType",
+                TD::new([TS::field(V::Public, "field_1", T::ident("bool"))
+                    .with_attributes([A::address(0xEC4)])]),
+            )]),
+            "size 3781 is not a multiple of alignment 4",
+        );
+
+        assert_ast_produces_type_definitions(
+            M::new().with_definitions([ID::new(
+                V::Public,
+                "TestType",
+                TD::new([TS::field(V::Public, "field_1", T::ident("bool"))
+                    .with_attributes([A::address(0xEC4)])])
+                .with_attributes([A::size(0xEC8)]),
+            )]),
+            [SID::defined_resolved(
+                SV::Public,
+                "test::TestType",
+                SISR {
+                    size: 0xEC8,
+                    alignment: 4,
+                    inner: STD::new()
+                        .with_regions([
+                            SR::field(SV::Private, "_field_0", unknown(0xEC4)),
+                            SR::field(SV::Public, "field_1", ST::raw("bool")),
+                            SR::field(SV::Private, "_field_ec5", unknown(3)),
+                        ])
+                        .into(),
+                },
+            )],
+        );
+    }
 }
 
 pub mod inheritance {
