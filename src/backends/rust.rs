@@ -284,14 +284,13 @@ fn build_type(
         quote! { #[derive(#(#extra_derives),*)] }
     };
 
-    let packed = if *packed {
-        quote! { , packed }
+    // Packing and alignment are mutually exclusive
+    let (packed, alignment) = if *packed {
+        (quote! { , packed }, quote! {})
     } else {
-        quote! {}
+        let alignment: syn::Index = alignment.into();
+        (quote! {}, quote! { , align(#alignment) })
     };
-
-    let alignment: syn::Index = alignment.into();
-    let alignment = quote! { , align(#alignment) };
 
     Ok(quote! {
         #derives
