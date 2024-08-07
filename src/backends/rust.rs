@@ -224,7 +224,6 @@ fn build_type(
     let size_check_impl = (size > 0).then(|| {
         quote! {
             #[allow(non_snake_case)]
-            #[allow(dead_code)]
             fn #size_check_ident() {
                 unsafe {
                     ::std::mem::transmute::<_, #name_ident>([0u8; #size]);
@@ -236,7 +235,6 @@ fn build_type(
 
     let singleton_impl = singleton.map(|address| {
         quote! {
-            #[allow(dead_code)]
             impl #name_ident {
                 #visibility unsafe fn get() -> Option<&'static mut Self> {
                     unsafe {
@@ -300,7 +298,6 @@ fn build_type(
         #size_check_impl
         #singleton_impl
 
-        #[allow(dead_code)]
         impl #name_ident {
             #(#free_functions_impl)*
             #(#vftable_function_impl)*
@@ -349,7 +346,6 @@ fn build_enum(
     let size_check_impl = (size > 0).then(|| {
         quote! {
             #[allow(non_snake_case)]
-            #[allow(dead_code)]
             fn #size_check_ident() {
                 unsafe {
                     ::std::mem::transmute::<_, #name_ident>([0u8; #size]);
@@ -361,7 +357,6 @@ fn build_enum(
 
     let singleton_impl = singleton.map(|address| {
         quote! {
-            #[allow(dead_code)]
             impl #name_ident {
                 #visibility unsafe fn get() -> Self {
                     unsafe {
@@ -426,7 +421,6 @@ fn build_extern_value(
     let type_ = sa_type_to_syn_type(type_)?;
 
     Ok(quote! {
-        #[allow(dead_code)]
         pub unsafe fn #function_ident() -> &'static mut #type_ {
             unsafe { &mut *::std::mem::transmute::<_, *mut _>(#address) }
         }
@@ -455,6 +449,8 @@ pub fn write_module(
     std::fs::create_dir_all(directory_path)?;
 
     let mut raw_output = String::new();
+
+    writeln!(raw_output, "#![allow(dead_code)]")?;
 
     let backends = module.backends.get("rust");
     let prologues = backends
