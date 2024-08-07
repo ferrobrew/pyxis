@@ -99,18 +99,19 @@ impl SemanticState {
                 let mut address = None;
                 for attribute in attributes {
                     let Some((ident, exprs)) = attribute.function() else {
-                        anyhow::bail!("unsupported attribute: {attribute:?}");
+                        anyhow::bail!("unsupported attribute for extern value `{name}` in module `{path}`: {attribute:?}");
                     };
                     match (ident.as_str(), &exprs[..]) {
                         ("address", [grammar::Expr::IntLiteral(addr)]) => {
                             address = Some(*addr as usize);
                         }
-                        _ => anyhow::bail!("unsupported attribute: {attribute:?}"),
+                        _ => anyhow::bail!("unsupported attribute for extern value `{name}` in module `{path}`: {attribute:?}"),
                     }
                 }
 
-                let address =
-                    address.context("failed to find address attribute for extern value")?;
+                let address = address.with_context(|| {
+                    format!("failed to find `address` attribute for extern value `{name}` in module `{path}`")
+                })?;
                 Ok((
                     name.as_str().to_owned(),
                     Type::Unresolved(type_.clone()),
@@ -166,29 +167,34 @@ impl SemanticState {
             let mut alignment = None;
             for attribute in attributes {
                 let Some((ident, exprs)) = attribute.function() else {
-                    anyhow::bail!("unsupported attribute: {attribute:?}");
+                    anyhow::bail!("unsupported attribute for extern type `{extern_path}` in module `{path}`: {attribute:?}");
                 };
                 match (ident.as_str(), &exprs[..]) {
                     ("size", [grammar::Expr::IntLiteral(size_)]) => {
                         size = Some(
                             (*size_)
                                 .try_into()
-                                .context("failed to convert size into usize")?,
+                                .with_context(|| format!("failed to convert `size` attribute into usize for extern type `{extern_path}` in module `{path}`"))?,
                         );
                     }
                     ("align", [grammar::Expr::IntLiteral(alignment_)]) => {
                         alignment = Some(
                             (*alignment_)
                                 .try_into()
-                                .context("failed to convert alignment into usize")?,
+                                .with_context(|| format!("failed to convert `align` attribute into usize for extern type `{extern_path}` in module `{path}`"))?,
                         );
                     }
-                    _ => anyhow::bail!("unsupported attribute: {attribute:?}"),
+                    _ => anyhow::bail!(
+                        "unsupported attribute for extern type `{extern_path}` in module `{path}`: {attribute:?}"
+                    ),
                 }
             }
-            let size = size.context("failed to find size attribute for extern type")?;
-            let alignment =
-                alignment.context("failed to find alignment attribute for extern type")?;
+            let size = size.with_context(|| {
+                format!("failed to find `size` attribute for extern type `{extern_path}` in module `{path}`")
+            })?;
+            let alignment = alignment.with_context(|| {
+                format!("failed to find `align` attribute for extern type `{extern_path}` in module `{path}`")
+            })?;
 
             let extern_path = path.join(extern_path.as_str().into());
 
@@ -208,13 +214,15 @@ impl SemanticState {
     }
 
     pub fn add_type(&mut self, type_definition: ItemDefinition) -> anyhow::Result<()> {
-        let parent_path = &type_definition
-            .path
-            .parent()
-            .context("failed to get parent type")?;
+        let parent_path = &type_definition.path.parent().with_context(|| {
+            format!(
+                "failed to get parent path for type `{}`",
+                type_definition.path
+            )
+        })?;
         self.modules
             .get_mut(parent_path)
-            .context("failed to get module")?
+            .with_context(|| format!("failed to get module for path `{parent_path}`"))?
             .definition_paths
             .insert(type_definition.path.clone());
         self.type_registry.add(type_definition);
@@ -232,7 +240,7 @@ impl SemanticState {
                 let ItemState::Unresolved(definition) = self
                     .type_registry
                     .get(resolvee_path)
-                    .context("failed to get type")?
+                    .with_context(|| format!("failed to get type `{resolvee_path}`"))?
                     .state
                     .clone()
                 else {
@@ -280,26 +288,35 @@ impl SemanticState {
         let mut calling_convention = None;
         for attribute in &function.attributes {
             let Some((ident, exprs)) = attribute.function() else {
-                anyhow::bail!("unsupported attribute: {attribute:?}");
+                anyhow::bail!(
+                    "unsupported attribute for function `{}`: {attribute:?}",
+                    function.name
+                );
             };
             match (ident.as_str(), &exprs[..]) {
                 ("address", [grammar::Expr::IntLiteral(addr)]) => {
-                    address = Some(
-                        (*addr)
-                            .try_into()
-                            .context("failed to convert address into usize")?,
-                    );
+                    address = Some((*addr).try_into().with_context(|| {
+                        format!(
+                            "failed to convert `address` attribute into usize for function `{}`",
+                            function.name
+                        )
+                    })?);
                 }
                 ("index", _) => {
                     // ignore index attribute, this is handled by vftable construction
                 }
                 ("calling_convention", [grammar::Expr::StringLiteral(cc)]) => {
-                    calling_convention = Some(
-                        cc.parse()
-                            .map_err(|_| anyhow::anyhow!("invalid calling convention: {cc}"))?,
-                    );
+                    calling_convention = Some(cc.parse().map_err(|_| {
+                        anyhow::anyhow!(
+                            "invalid calling convention for function `{}`: {cc}",
+                            function.name
+                        )
+                    })?);
                 }
-                _ => anyhow::bail!("unsupported attribute: {attribute:?}"),
+                _ => anyhow::bail!(
+                    "unsupported attribute for function `{}`: {attribute:?}",
+                    function.name
+                ),
             }
         }
 
@@ -315,7 +332,7 @@ impl SemanticState {
                         .resolve_grammar_type(scope, type_)
                         .ok_or_else(|| {
                             anyhow::anyhow!(
-                                "failed to resolve type of field {:?} ({:?}",
+                                "failed to resolve type of field `{:?}` ({:?})",
                                 name,
                                 type_
                             )
@@ -376,8 +393,7 @@ impl SemanticState {
     ) -> anyhow::Result<Option<ItemStateResolved>> {
         let module = self
             .get_module_for_path(resolvee_path)
-            .context("failed to get module for path")?;
-
+            .with_context(|| format!("failed to get module for path `{resolvee_path}`"))?;
         // Handle attributes
         let mut target_size: Option<usize> = None;
         let mut singleton = None;
@@ -395,24 +411,24 @@ impl SemanticState {
                         target_size = Some(
                             (*value)
                                 .try_into()
-                                .context("failed to convert size into usize")?,
+                                .with_context(|| format!("failed to convert `size` attribute into usize for type `{resolvee_path}`"))?,
                         );
                     }
                     ("singleton", [grammar::Expr::IntLiteral(value)]) => {
-                        singleton = Some(
-                            (*value)
-                                .try_into()
-                                .context("failed to convert singleton into usize")?,
-                        );
+                        singleton = Some((*value).try_into().with_context(|| {
+                            format!(
+                                "failed to convert `singleton` attribute into usize for type `{resolvee_path}`"
+                            )
+                        })?);
                     }
                     ("align", [grammar::Expr::IntLiteral(value)]) => {
-                        align = Some(
-                            (*value)
-                                .try_into()
-                                .context("failed to convert alignment into usize")?,
-                        );
+                        align = Some((*value).try_into().with_context(|| {
+                            format!("failed to convert `align` attribute into usize for type `{resolvee_path}`")
+                        })?);
                     }
-                    _ => anyhow::bail!("unsupported attribute: {attribute:?}"),
+                    _ => anyhow::bail!(
+                        "unsupported attribute for type `{resolvee_path}`: {attribute:?}"
+                    ),
                 }
             } else if let grammar::Attribute::Ident(ident) = attribute {
                 match ident.as_str() {
@@ -425,7 +441,9 @@ impl SemanticState {
                     "packed" => packed = true,
                     // HACK_SKIP_VFTABLE: <https://github.com/philpax/pyxis/issues/13>
                     "hack_skip_vftable" => hack_skip_vftable = true,
-                    _ => anyhow::bail!("unsupported attribute: {attribute:?}"),
+                    _ => anyhow::bail!(
+                        "unsupported attribute for type `{resolvee_path}`: {attribute:?}"
+                    ),
                 }
             }
         }
@@ -443,7 +461,12 @@ impl SemanticState {
             for function in &type_impl.functions {
                 let function = self
                     .build_function(&module.scope(), function)
-                    .with_context(|| format!("while building impl function {}", function.name))?;
+                    .with_context(|| {
+                        format!(
+                            "while building impl function `{}` for type `{resolvee_path}`",
+                            function.name
+                        )
+                    })?;
                 free_functions.push(function);
             }
         }
@@ -463,7 +486,9 @@ impl SemanticState {
                         match attribute {
                             grammar::Attribute::Ident(ident) => match ident.as_str() {
                                 "base" => _is_base = true,
-                                _ => anyhow::bail!("unsupported attribute: {attribute:?}"),
+                                _ => anyhow::bail!(
+                                    "unsupported attribute for type `{resolvee_path}`: {attribute:?}"
+                                ),
                             },
                             grammar::Attribute::Function(ident, exprs) => {
                                 match (ident.as_str(), &exprs[..]) {
@@ -471,10 +496,10 @@ impl SemanticState {
                                         address = Some(
                                             (*addr)
                                                 .try_into()
-                                                .context("failed to convert address into usize")?,
+                                                .with_context(|| format!("failed to convert `address` attribute into usize for field `{ident}` of type `{resolvee_path}`"))?,
                                         );
                                     }
-                                    _ => anyhow::bail!("unsupported attribute: {attribute:?}"),
+                                    _ => anyhow::bail!("unsupported attribute for type `{resolvee_path}`: {attribute:?}"),
                                 }
                             }
                         }
@@ -524,7 +549,7 @@ impl SemanticState {
                     // count it as a region; the type will be generated with a vftable field later on
                     if idx != 0 {
                         anyhow::bail!(
-                            "vftable field of type {resolvee_path} must be the first field"
+                            "vftable field of type `{resolvee_path}` must be the first field"
                         );
                     }
 
@@ -532,17 +557,26 @@ impl SemanticState {
                     let mut size = None;
                     for attribute in attributes {
                         let grammar::Attribute::Function(ident, exprs) = attribute else {
-                            anyhow::bail!("unsupported attribute: {attribute:?}");
+                            anyhow::bail!(
+                                "unsupported attribute for type `{resolvee_path}`: {attribute:?}"
+                            );
                         };
                         match (ident.as_str(), exprs.as_slice()) {
                             ("size", [grammar::Expr::IntLiteral(size_)]) => {
                                 size = Some(*size_ as usize);
                             }
-                            _ => anyhow::bail!("unsupported attribute: {attribute:?}"),
+                            _ => anyhow::bail!(
+                                "unsupported attribute for type `{resolvee_path}`: {attribute:?}"
+                            ),
                         }
                     }
 
-                    vftable_functions = Some(self.build_vftable_list(module, size, functions)?);
+                    vftable_functions = Some(
+                        self.build_vftable_list(module, size, functions)
+                            .with_context(|| {
+                                format!("while building vftable for type `{resolvee_path}`")
+                            })?,
+                    );
                 }
             }
         }
@@ -555,7 +589,7 @@ impl SemanticState {
                 pending_regions,
                 &vftable_functions,
             )
-            .with_context(|| format!("while processing {resolvee_path}"))?
+            .with_context(|| format!("while processing `{resolvee_path}`"))?
         else {
             return Ok(None);
         };
@@ -578,13 +612,17 @@ impl SemanticState {
                     }
                 }
                 let Some(path) = get_defaultable_type_path(type_ref) else {
-                    anyhow::bail!("field {name} of type {resolvee_path} is not a defaultable type (pointer or function?)");
+                    anyhow::bail!("field `{name}` of type `{resolvee_path}` is not a defaultable type (pointer or function?)");
                 };
 
                 let item = self
                     .type_registry
                     .get(path)
-                    .context("failed to get type")?
+                    .with_context(|| {
+                        format!(
+                            "failed to get type `{path}` for field `{name}` of type `{resolvee_path}`"
+                        )
+                    })?
                     .state
                     .clone();
 
@@ -593,14 +631,18 @@ impl SemanticState {
                 };
 
                 if !inner.defaultable() {
-                    anyhow::bail!("field {name} of type {resolvee_path} is not a defaultable type");
+                    anyhow::bail!(
+                        "field `{name}` of type `{resolvee_path}` is not a defaultable type"
+                    );
                 }
             }
         }
 
         let alignment = if packed {
             if align.is_some() {
-                anyhow::bail!("cannot specify both packed and align attributes");
+                anyhow::bail!(
+                    "cannot specify both `packed` and `align` attributes for type `{resolvee_path}`"
+                );
             }
 
             1
@@ -623,7 +665,7 @@ impl SemanticState {
             // Ensure that the alignment is at least the minimum required alignment.
             if required_alignment > alignment {
                 anyhow::bail!(
-                    "alignment {alignment} is less than minimum required alignment {required_alignment}"
+                    "alignment {alignment} is less than minimum required alignment {required_alignment} for type `{resolvee_path}`"
                 );
             }
 
@@ -635,7 +677,7 @@ impl SemanticState {
                     let alignment = region.type_ref.alignment(&self.type_registry).unwrap();
                     if last_address % alignment != 0 {
                         anyhow::bail!(
-                            "field {name} (at 0x{last_address:X}) is not aligned to {alignment}, which is the alignment of its type"
+                            "field `{name}` of type `{resolvee_path}` is located at 0x{last_address:X}, which is not divisible by {alignment} (the alignment of the type of the field)"
                         );
                     }
                     last_address += region.size(&self.type_registry).unwrap();
@@ -644,7 +686,7 @@ impl SemanticState {
 
             // Ensure that the size is a multiple of the alignment.
             if size % alignment != 0 {
-                anyhow::bail!("size {size} is not a multiple of alignment {alignment}");
+                anyhow::bail!("the type `{resolvee_path}` has a size of {size}, which is not a multiple of its alignment {alignment}");
             }
 
             alignment
@@ -679,7 +721,10 @@ impl SemanticState {
             let mut index = None;
             for attribute in &function.attributes {
                 let grammar::Attribute::Function(ident, exprs) = attribute else {
-                    anyhow::bail!("unsupported attribute: {attribute:?}");
+                    anyhow::bail!(
+                        "unsupported attribute for function `{}`: {attribute:?}",
+                        function.name
+                    );
                 };
                 match (ident.as_str(), exprs.as_slice()) {
                     ("index", [grammar::Expr::IntLiteral(index_)]) => {
@@ -688,14 +733,19 @@ impl SemanticState {
                     ("calling_convention", _) => {
                         // ignore calling convention attribute, handled by build_function
                     }
-                    _ => anyhow::bail!("unsupported attribute: {attribute:?}"),
+                    _ => anyhow::bail!(
+                        "unsupported attribute for function `{}`: {attribute:?}",
+                        function.name
+                    ),
                 }
             }
 
             if let Some(index) = index {
                 make_padding_functions(&mut output, index);
             }
-            let function = self.build_function(&module.scope(), function)?;
+            let function = self
+                .build_function(&module.scope(), function)
+                .with_context(|| format!("while building vftable function `{}`", function.name))?;
             output.push(function);
         }
 
@@ -844,7 +894,7 @@ impl SemanticState {
     ) -> anyhow::Result<Option<ItemStateResolved>> {
         let module = self
             .get_module_for_path(resolvee_path)
-            .context("failed to get module for path")?;
+            .with_context(|| format!("failed to get module for path `{resolvee_path}`"))?;
 
         let Some(ty) = self
             .type_registry
@@ -869,7 +919,9 @@ impl SemanticState {
             } = statement;
             let value = match expr {
                 Some(grammar::Expr::IntLiteral(value)) => *value,
-                Some(_) => anyhow::bail!("unsupported enum field value {expr:?}"),
+                Some(_) => anyhow::bail!(
+                    "unsupported enum value for case `{name}` of enum `{resolvee_path}`: {expr:?}"
+                ),
                 None => last_field,
             };
             fields.push((name.0.clone(), value));
@@ -883,10 +935,10 @@ impl SemanticState {
                             }
                             default_index = Some(fields.len() - 1);
                         }
-                        _ => anyhow::bail!("unsupported attribute: {attribute:?}"),
+                        _ => anyhow::bail!("unsupported attribute for case `{name}` of enum `{resolvee_path}`: {attribute:?}"),
                     },
                     grammar::Attribute::Function(_ident, _exprs) => {
-                        anyhow::bail!("unsupported attribute: {attribute:?}")
+                        anyhow::bail!("unsupported attribute for case `{name}` of enum `{resolvee_path}`: {attribute:?}");
                     }
                 }
             }
@@ -907,14 +959,18 @@ impl SemanticState {
                     }
                     "cloneable" => cloneable = true,
                     "defaultable" => defaultable = true,
-                    _ => anyhow::bail!("unsupported attribute: {attribute:?}"),
+                    _ => anyhow::bail!(
+                        "unsupported attribute for enum `{resolvee_path}`: {attribute:?}"
+                    ),
                 },
                 grammar::Attribute::Function(ident, exprs) => {
                     match (ident.as_str(), exprs.as_slice()) {
                         ("singleton", [grammar::Expr::IntLiteral(value)]) => {
                             singleton = Some(*value as usize);
                         }
-                        _ => anyhow::bail!("unsupported attribute: {attribute:?}"),
+                        _ => anyhow::bail!(
+                            "unsupported attribute for enum `{resolvee_path}`: {attribute:?}"
+                        ),
                     }
                 }
             }
@@ -922,21 +978,21 @@ impl SemanticState {
 
         if defaultable && default_index.is_none() {
             anyhow::bail!(
-                "enum {resolvee_path} is marked as defaultable but has no default variant set"
+                "enum `{resolvee_path}` is marked as defaultable but has no default variant set"
             );
         }
 
         if !defaultable && default_index.is_some() {
             anyhow::bail!(
-                "enum {resolvee_path} has a default variant set but is not marked as defaultable"
+                "enum `{resolvee_path}` has a default variant set but is not marked as defaultable"
             );
         }
 
         Ok(Some(ItemStateResolved {
             size,
-            alignment: ty
-                .alignment(&self.type_registry)
-                .context("failed to get alignment for base type of enum")?,
+            alignment: ty.alignment(&self.type_registry).with_context(|| {
+                format!("failed to get alignment for base type of enum `{resolvee_path}`")
+            })?,
             inner: EnumDefinition {
                 type_: ty,
                 fields,

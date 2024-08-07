@@ -305,7 +305,7 @@ fn can_use_type_from_another_module() {
 fn will_fail_on_an_extern_without_size() {
     assert_ast_produces_failure(
         M::new().with_extern_types([("TestType".into(), vec![])]),
-        "failed to find size attribute for extern type",
+        "failed to find `size` attribute for extern type `TestType` in module `test`",
     );
 }
 
@@ -1050,7 +1050,7 @@ fn will_reject_defaultable_on_pointer() {
             )])
             .with_attributes([A::defaultable()]),
         )]),
-        "field field_1 of type test::TestType is not a defaultable type (pointer or function?)",
+        "field `field_1` of type `test::TestType` is not a defaultable type (pointer or function?)",
     );
 }
 
@@ -1070,7 +1070,7 @@ fn will_reject_defaultable_on_enum_field() {
                 ED::new(T::ident("u32"), [ES::field("Item1")], []),
             ),
         ]),
-        "field field_1 of type test::TestType is not a defaultable type",
+        "field `field_1` of type `test::TestType` is not a defaultable type",
     );
 }
 
@@ -1087,7 +1087,7 @@ fn can_handle_defaultable_on_enum_with_default_field() {
             )
             .with_attributes([A::defaultable()]),
         )]),
-        "enum test::TestType is marked as defaultable but has no default variant set",
+        "enum `test::TestType` is marked as defaultable but has no default variant set",
     );
 
     assert_ast_produces_failure(
@@ -1104,7 +1104,7 @@ fn can_handle_defaultable_on_enum_with_default_field() {
             )
             .with_attributes([]),
         )]),
-        "enum test::TestType has a default variant set but is not marked as defaultable",
+        "enum `test::TestType` has a default variant set but is not marked as defaultable",
     );
 
     assert_ast_produces_type_definitions(
@@ -1153,7 +1153,7 @@ fn will_reject_defaultable_on_non_defaultable_type() {
             ),
             ID::new(V::Public, "TestNonDefaultable", TD::new([])),
         ]),
-        "field field_1 of type test::TestType is not a defaultable type",
+        "field `field_1` of type `test::TestType` is not a defaultable type",
     );
 }
 
@@ -1172,7 +1172,7 @@ pub mod alignment {
                 ])
                 .with_attributes([A::align(4)]),
             )]),
-            "size 7 is not a multiple of alignment 4",
+            "the type `test::TestType` has a size of 7, which is not a multiple of its alignment 4",
         );
     }
 
@@ -1185,7 +1185,7 @@ pub mod alignment {
                 TD::new([TS::field(V::Public, "field_1", T::ident("i32"))
                     .with_attributes([A::address(1)])]),
             )]),
-            "field field_1 (at 0x1) is not aligned to 4, which is the alignment of its type",
+            "field `field_1` of type `test::TestType` is located at 0x1, which is not divisible by 4 (the alignment of the type of the field)",
         );
     }
 
@@ -1202,7 +1202,7 @@ pub mod alignment {
                 ])
                 .with_attributes([A::align(4)]),
             )]),
-            "alignment 4 is less than minimum required alignment 8",
+            "alignment 4 is less than minimum required alignment 8 for type `test::TestType`",
         );
     }
 
@@ -1215,7 +1215,7 @@ pub mod alignment {
                 TD::new([TS::field(V::Public, "field_1", T::ident("i32"))])
                     .with_attributes([A::align(4), A::packed()]),
             )]),
-            "cannot specify both packed and align attributes",
+            "cannot specify both `packed` and `align` attributes for type `test::TestType`",
         );
     }
 
@@ -1228,7 +1228,7 @@ pub mod alignment {
                 TD::new([TS::field(V::Public, "field_1", T::ident("bool"))
                     .with_attributes([A::address(0xEC4)])]),
             )]),
-            "size 3781 is not a multiple of alignment 4",
+            "the type `test::TestType` has a size of 3781, which is not a multiple of its alignment 4",
         );
 
         assert_ast_produces_type_definitions(
