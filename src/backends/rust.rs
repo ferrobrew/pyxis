@@ -290,6 +290,7 @@ fn build_type(
         quote! {}
     };
 
+    let alignment: syn::Index = alignment.into();
     let alignment = quote! { , align(#alignment) };
 
     Ok(quote! {
