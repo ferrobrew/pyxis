@@ -224,10 +224,9 @@ fn build_type(
     let size_check_ident = quote::format_ident!("_{}_size_check", name.as_str());
     let size_check_impl = (size > 0).then(|| {
         quote! {
-            #[allow(non_snake_case)]
             fn #size_check_ident() {
                 unsafe {
-                    ::std::mem::transmute::<_, #name_ident>([0u8; #size]);
+                    ::std::mem::transmute::<[u8; #size], #name_ident>([0u8; #size]);
                 }
                 unreachable!()
             }
@@ -348,7 +347,6 @@ fn build_enum(
     let size_check_ident = quote::format_ident!("_{}_size_check", name.as_str());
     let size_check_impl = (size > 0).then(|| {
         quote! {
-            #[allow(non_snake_case)]
             fn #size_check_ident() {
                 unsafe {
                     ::std::mem::transmute::<_, #name_ident>([0u8; #size]);
@@ -430,7 +428,7 @@ fn build_extern_value(
 
     Ok(quote! {
         pub unsafe fn #function_ident() -> &'static mut #type_ {
-            unsafe { &mut *::std::mem::transmute::<_, *mut _>(#address) }
+            unsafe { &mut *(#address as *mut #type_) }
         }
     })
 }
@@ -458,7 +456,10 @@ pub fn write_module(
 
     let mut raw_output = String::new();
 
-    writeln!(raw_output, "#![allow(dead_code)]")?;
+    writeln!(
+        raw_output,
+        "#![allow(dead_code, non_snake_case, clippy::missing_safety_doc)]"
+    )?;
 
     let backends = module.backends.get("rust");
     let prologues = backends
