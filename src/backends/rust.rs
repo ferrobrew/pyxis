@@ -6,7 +6,6 @@ use crate::{
 };
 
 use anyhow::Context;
-use itertools::Itertools;
 use quote::quote;
 
 fn str_to_ident(s: &str) -> syn::Ident {
@@ -481,22 +480,29 @@ pub fn write_module(
     let prologues = backends
         .iter()
         .flat_map(|bs| bs.iter().flat_map(|b| &b.prologue))
+        .map(|s| s.as_str())
+        .collect::<Vec<_>>()
         .join("\n");
     let epilogues = backends
         .iter()
         .flat_map(|bs| bs.iter().flat_map(|b| &b.epilogue))
+        .map(|s| s.as_str())
+        .collect::<Vec<_>>()
         .join("\n");
 
     writeln!(raw_output, "{prologues}")?;
 
-    for definition in module
+    let mut definitions = module
         .definitions(semantic_state.type_registry())
-        .sorted_by_key(|d| &d.path)
-    {
+        .collect::<Vec<_>>();
+    definitions.sort_by_key(|d| &d.path);
+    for definition in definitions {
         writeln!(raw_output, "{}", build_item(definition)?)?;
     }
 
-    for ev in module.extern_values.iter().sorted_by_key(|ev| &ev.name) {
+    let mut extern_values = module.extern_values.clone();
+    extern_values.sort_by_key(|ev| ev.name.clone());
+    for ev in &extern_values {
         writeln!(raw_output, "{}", build_extern_value(ev)?)?;
     }
 

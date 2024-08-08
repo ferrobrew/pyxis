@@ -5,7 +5,6 @@ edition = "2021"
 
 [dependencies]
 glob = { version = "0.3.0" }
-itertools = { version = "0.10.3" }
 
 anyhow = "1.0"
 quote = "1.0"
