@@ -738,6 +738,7 @@ impl SemanticState {
         Ok(output)
     }
 
+    #[allow(clippy::type_complexity)]
     fn resolve_regions(
         &mut self,
         resolvee_path: &ItemPath,
@@ -809,7 +810,7 @@ impl SemanticState {
                         first_base.type_ref.human_friendly_type()
                     );
                 };
-                let base_type = self.type_registry.get(&path).with_context(|| {
+                let base_type = self.type_registry.get(path).with_context(|| {
                     format!("failed to get base type `{path}` for type `{resolvee_path}`",)
                 })?;
                 let Some(base_type) = base_type.resolved() else {
