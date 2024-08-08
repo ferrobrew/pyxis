@@ -209,6 +209,7 @@ fn build_type(
                 visibility,
                 name: field,
                 type_ref,
+                is_base: _,
             } = r;
             let field_name = field.as_deref().context("field name not present")?;
             let field_ident = str_to_ident(field_name);

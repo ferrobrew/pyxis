@@ -466,11 +466,11 @@ impl SemanticState {
                 grammar::TypeField::Field(visibility, ident, type_) => {
                     // Extract address attribute
                     let mut address: Option<usize> = None;
-                    let mut _is_base = false;
+                    let mut is_base = false;
                     for attribute in attributes {
                         match attribute {
                             grammar::Attribute::Ident(ident) => match ident.as_str() {
-                                "base" => _is_base = true,
+                                "base" => is_base = true,
                                 _ => anyhow::bail!(
                                     "unsupported attribute for type `{resolvee_path}`: {attribute:?}"
                                 ),
@@ -568,6 +568,7 @@ impl SemanticState {
                     visibility: _,
                     name,
                     type_ref,
+                    is_base: _,
                 } = region;
                 let name = name.as_deref().unwrap_or("unnamed");
                 fn get_defaultable_type_path(type_ref: &Type) -> Option<&ItemPath> {
@@ -784,6 +785,7 @@ impl SemanticState {
                     visibility: Visibility::Private,
                     name: Some("vftable".to_string()),
                     type_ref: vftable_pointer_type.clone(),
+                    is_base: false,
                 };
                 if resolved.push(&self.type_registry, region).is_none() {
                     return Ok(None);
@@ -794,6 +796,47 @@ impl SemanticState {
                     field_path: vec!["vftable".to_string()],
                     type_: vftable_pointer_type,
                 });
+            }
+        } else {
+            // If there is no vftable specified, and there is a base field,
+            // attempt to use its vftable if available
+            if let Some(first_base) = regions.iter().map(|t| &t.1).find(|r| r.is_base) {
+                let Type::Raw(path) = &first_base.type_ref else {
+                    anyhow::bail!(
+                        "expected base field `{}` of type `{}` to be a raw type, but it was a {}",
+                        first_base.name.as_deref().unwrap_or("unnamed"),
+                        resolvee_path,
+                        first_base.type_ref.human_friendly_type()
+                    );
+                };
+                let base_type = self.type_registry.get(&path).with_context(|| {
+                    format!("failed to get base type `{path}` for type `{resolvee_path}`",)
+                })?;
+                let Some(base_type) = base_type.resolved() else {
+                    return Ok(None);
+                };
+                let Some(base_type) = base_type.inner.as_type() else {
+                    anyhow::bail!(
+                        "expected base field `{}` of type `{}` to be a type, but it was a {}",
+                        first_base.name.as_deref().unwrap_or("unnamed"),
+                        resolvee_path,
+                        base_type.inner.human_friendly_type()
+                    );
+                };
+                if let Some(base_vftable) = &base_type.vftable {
+                    vftable = Some(TypeVftable {
+                        functions: base_vftable.functions.clone(),
+                        field_path: std::iter::once(
+                            first_base
+                                .name
+                                .clone()
+                                .expect("first base had no name, this shouldn't be possible"),
+                        )
+                        .chain(base_vftable.field_path.clone())
+                        .collect(),
+                        type_: base_vftable.type_.clone(),
+                    });
+                }
             }
         }
 
@@ -847,12 +890,14 @@ impl SemanticState {
                 visibility: _,
                 name: None,
                 type_ref,
+                is_base: _,
             } = region
             {
                 *region = Region {
                     visibility: Visibility::Private,
                     name: Some(format!("_field_{size:x}")),
                     type_ref: type_ref.clone(),
+                    is_base: false,
                 };
             }
 
@@ -1037,6 +1082,7 @@ fn build_vftable_item(
             visibility: function.visibility,
             name: Some(function.name.clone()),
             type_ref: Type::Function(function.calling_convention, arguments, return_type),
+            is_base: false,
         }
     };
 

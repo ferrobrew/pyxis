@@ -1250,7 +1250,6 @@ pub mod inheritance {
                     IPT::Named(_, size) => *size,
                 }
             }
-
             fn to_grammar(&self) -> T {
                 match self {
                     IPT::I32 => T::ident("i32"),
@@ -1261,7 +1260,6 @@ pub mod inheritance {
                     IPT::Named(name, _) => T::ident(name.as_str()),
                 }
             }
-
             fn to_semantic(&self) -> ST {
                 match self {
                     IPT::I32 => ST::raw("i32"),
@@ -1294,12 +1292,10 @@ pub mod inheritance {
                     vftable: None,
                 }
             }
-
             pub fn with_vftable(mut self, vftable: IV) -> Self {
                 self.vftable = Some(vftable);
                 self
             }
-
             pub fn to_grammar(&self) -> ID {
                 ID::new(
                     V::Public,
@@ -1342,8 +1338,7 @@ pub mod inheritance {
                     .with_attributes([A::align(self.alignment)]),
                 )
             }
-
-            pub fn to_semantic(&self) -> SID {
+            pub fn to_semantic(&self, vftable: Option<STV>) -> SID {
                 let f = &self.fields;
                 let mut size: usize = self.vftable.as_ref().map(|_| 4).unwrap_or(0);
                 for (address, _, ty, _) in f {
@@ -1354,14 +1349,15 @@ pub mod inheritance {
                 }
 
                 let mut regions = vec![];
-                let vftable_type = self.vftable.as_ref().map(|vftable| {
-                    let vftable_type =
-                        ST::raw(format!("test::{}", vftable.name_vftable).as_str()).const_pointer();
+                let vftable_type = self
+                    .vftable
+                    .as_ref()
+                    .map(|vftable| vftable.to_semantic_pointer_type());
+                if let Some(vftable_type) = &vftable_type {
                     regions.insert(0, SR::field(SV::Private, "vftable", vftable_type.clone()));
-                    vftable_type
-                });
+                }
                 let mut last_address = self.vftable.as_ref().map(|_| 4).unwrap_or(0);
-                for (address, name, ty, _) in f {
+                for (address, name, ty, attrs) in f {
                     let visibility = if name.starts_with('_') {
                         SV::Private
                     } else {
@@ -1375,22 +1371,20 @@ pub mod inheritance {
                         ));
                     }
 
-                    regions.push(SR::field(visibility, name.clone(), ty.to_semantic()));
+                    let mut region = SR::field(visibility, name.clone(), ty.to_semantic());
+                    region.is_base = attrs.iter().any(|attr| *attr == A::base());
+                    regions.push(region);
                     last_address += ty.size();
                 }
 
                 let type_definition = STD::new().with_regions(regions);
-                let type_definition = if let Some((vftable, vftable_type)) =
+                let type_definition = if let Some(vftable) = vftable {
+                    type_definition.with_vftable(vftable)
+                } else if let Some((vftable, vftable_type)) =
                     self.vftable.as_ref().zip(vftable_type)
                 {
-                    type_definition.with_vftable_functions(
-                        vftable_type,
-                        vftable
-                            .functions
-                            .iter()
-                            .map(|func| func.to_semantic())
-                            .collect::<Vec<_>>(),
-                    )
+                    type_definition
+                        .with_vftable_functions(vftable_type, vftable.to_semantic_functions())
                 } else {
                     type_definition
                 };
@@ -1426,7 +1420,6 @@ pub mod inheritance {
                     functions: functions.into_iter().collect(),
                 }
             }
-
             pub fn to_semantic(&self) -> SID {
                 SID::defined_resolved(
                     SV::Public,
@@ -1444,6 +1437,15 @@ pub mod inheritance {
                             .into(),
                     },
                 )
+            }
+            pub fn to_semantic_functions(&self) -> Vec<SF> {
+                self.functions
+                    .iter()
+                    .map(|func| func.to_semantic())
+                    .collect::<Vec<_>>()
+            }
+            pub fn to_semantic_pointer_type(&self) -> ST {
+                ST::raw(format!("test::{}", self.name_vftable).as_str()).const_pointer()
             }
         }
 
@@ -1571,7 +1573,7 @@ pub mod inheritance {
 
             assert_ast_produces_type_definitions(
                 M::new().with_definitions([base.to_grammar(), derived.to_grammar()]),
-                [base.to_semantic(), derived.to_semantic()],
+                [base.to_semantic(None), derived.to_semantic(None)],
             );
         }
 
@@ -1590,7 +1592,7 @@ pub mod inheritance {
             let derived_vftable = IV::new("Derived", "DerivedVftable", [vfunc("derived_vfunc")]);
             let derived = IT::new(
                 "Derived",
-                12,
+                8,
                 [(
                     Some(8),
                     "base".to_string(),
@@ -1603,17 +1605,50 @@ pub mod inheritance {
             assert_ast_produces_type_definitions(
                 M::new().with_definitions([base.to_grammar(), derived.to_grammar()]),
                 [
-                    base.to_semantic(),
-                    derived.to_semantic(),
+                    base.to_semantic(None),
+                    derived.to_semantic(None),
                     derived_vftable.to_semantic(),
                 ],
             );
         }
 
         #[test]
-        #[ignore]
         fn b1_d0() {
-            todo!();
+            let base_vftable = IV::new("Base", "BaseVftable", [vfunc("base_vfunc")]);
+            let base = IT::new(
+                "Base",
+                8,
+                [
+                    (Some(8), "field_1".to_string(), IPT::I32, vec![]),
+                    (None, "_field_c".to_string(), IPT::Unknown(4), vec![]),
+                    (None, "field_2".to_string(), IPT::U64, vec![]),
+                ],
+            )
+            .with_vftable(base_vftable.clone());
+
+            let derived = IT::new(
+                "Derived",
+                8,
+                [(
+                    None,
+                    "base".to_string(),
+                    IPT::Named("Base".to_string(), 24),
+                    vec![A::base()],
+                )],
+            );
+
+            assert_ast_produces_type_definitions(
+                M::new().with_definitions([base.to_grammar(), derived.to_grammar()]),
+                [
+                    base.to_semantic(None),
+                    derived.to_semantic(Some(STV {
+                        functions: base_vftable.to_semantic_functions(),
+                        field_path: vec!["base".to_string(), "vftable".to_string()],
+                        type_: base_vftable.to_semantic_pointer_type(),
+                    })),
+                    base_vftable.to_semantic(),
+                ],
+            );
         }
 
         #[test]
@@ -1687,9 +1722,9 @@ pub mod inheritance {
                     derived.to_grammar(),
                 ]),
                 [
-                    base_a.to_semantic(),
-                    base_b.to_semantic(),
-                    derived.to_semantic(),
+                    base_a.to_semantic(None),
+                    base_b.to_semantic(None),
+                    derived.to_semantic(None),
                 ],
             );
         }
@@ -1744,9 +1779,9 @@ pub mod inheritance {
                     derived.to_grammar(),
                 ]),
                 [
-                    base_a.to_semantic(),
-                    base_b.to_semantic(),
-                    derived.to_semantic(),
+                    base_a.to_semantic(None),
+                    base_b.to_semantic(None),
+                    derived.to_semantic(None),
                     derived_vftable.to_semantic(),
                 ],
             );

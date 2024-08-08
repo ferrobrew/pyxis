@@ -22,6 +22,7 @@ pub mod test_aliases {
     pub type SCC = super::CallingConvention;
     pub type SV = super::Visibility;
     pub type SEV = super::ExternValue;
+    pub type STV = super::TypeVftable;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -159,7 +160,6 @@ impl Type {
             Type::Function(_, _, _) => Some(type_registry.pointer_size()),
         }
     }
-
     pub(crate) fn alignment(&self, type_registry: &type_registry::TypeRegistry) -> Option<usize> {
         match self {
             Type::Unresolved(_) => None,
@@ -170,23 +170,18 @@ impl Type {
             Type::Function(_, _, _) => Some(type_registry.pointer_size()),
         }
     }
-
     pub fn raw(path: impl Into<ItemPath>) -> Self {
         Type::Raw(path.into())
     }
-
     pub fn const_pointer(self) -> Self {
         Type::ConstPointer(Box::new(self))
     }
-
     pub fn mut_pointer(self) -> Self {
         Type::MutPointer(Box::new(self))
     }
-
     pub fn array(self, size: usize) -> Self {
         Type::Array(Box::new(self), size)
     }
-
     pub fn function<'a>(
         calling_convention: CallingConvention,
         args: impl Into<Vec<(&'a str, Type)>>,
@@ -201,13 +196,21 @@ impl Type {
             return_type.into().map(Box::new),
         )
     }
-
     pub fn is_array(&self) -> bool {
         matches!(self, Type::Array(_, _))
     }
-
     pub fn boxed(self) -> Box<Type> {
         Box::new(self)
+    }
+    pub fn human_friendly_type(&self) -> &'static str {
+        match self {
+            Type::Unresolved(_) => "an unresolved type",
+            Type::Raw(_) => "a type",
+            Type::ConstPointer(_) => "a const pointer",
+            Type::MutPointer(_) => "a mut pointer",
+            Type::Array(_, _) => "an array",
+            Type::Function(_, _, _) => "a function",
+        }
     }
 }
 impl fmt::Display for Type {
@@ -253,6 +256,7 @@ pub struct Region {
     pub visibility: Visibility,
     pub name: Option<String>,
     pub type_ref: Type,
+    pub is_base: bool,
 }
 impl Region {
     pub fn field(visibility: Visibility, name: impl Into<String>, type_ref: Type) -> Self {
@@ -260,17 +264,21 @@ impl Region {
             visibility,
             name: Some(name.into()),
             type_ref,
+            is_base: false,
         }
     }
-
     pub fn unnamed_field(type_ref: Type) -> Self {
         Region {
             visibility: Visibility::Private,
             name: None,
             type_ref,
+            is_base: false,
         }
     }
-
+    pub fn mark_as_base(mut self) -> Self {
+        self.is_base = true;
+        self
+    }
     pub fn size(&self, type_registry: &type_registry::TypeRegistry) -> Option<usize> {
         self.type_ref.size(type_registry)
     }
@@ -414,6 +422,24 @@ impl ItemDefinitionInner {
         match self {
             ItemDefinitionInner::Type(td) => td.defaultable,
             ItemDefinitionInner::Enum(ed) => ed.defaultable && ed.default_index.is_some(),
+        }
+    }
+    pub fn as_type(&self) -> Option<&TypeDefinition> {
+        match self {
+            Self::Type(v) => Some(v),
+            _ => None,
+        }
+    }
+    pub fn as_enum(&self) -> Option<&EnumDefinition> {
+        match self {
+            Self::Enum(v) => Some(v),
+            _ => None,
+        }
+    }
+    pub fn human_friendly_type(&self) -> &'static str {
+        match self {
+            ItemDefinitionInner::Type(_) => "a type",
+            ItemDefinitionInner::Enum(_) => "an enum",
         }
     }
 }
