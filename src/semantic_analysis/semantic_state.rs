@@ -490,14 +490,6 @@ impl SemanticState {
                         }
                     }
 
-                    // Handle address
-                    if let Some(address) = address {
-                        pending_regions.push((
-                            Some(address),
-                            Region::unnamed_field(self.type_registry.padding_type(0)),
-                        ));
-                    }
-
                     // Push field
                     let Some(type_) = self
                         .type_registry
@@ -508,11 +500,12 @@ impl SemanticState {
 
                     let ident = (ident.0 != "_").then(|| ident.0.clone());
                     pending_regions.push((
-                        None,
+                        address,
                         Region {
                             visibility: (*visibility).into(),
                             name: ident,
                             type_ref: type_,
+                            is_base,
                         },
                     ));
                 }
