@@ -10,8 +10,21 @@ use pretty_assertions::assert_eq;
 
 use anyhow::Context;
 
+fn pointer_size() -> usize {
+    static POINTER_SIZE: std::sync::OnceLock<usize> = std::sync::OnceLock::new();
+    *POINTER_SIZE.get_or_init(|| {
+        std::env::var("PYXIS_TEST_POINTER_SIZE")
+            .ok()
+            .map(|s| {
+                s.parse()
+                    .expect("PYXIS_TEST_POINTER_SIZE must be a valid number")
+            })
+            .unwrap_or_else(|| 4)
+    })
+}
+
 fn build_state(module: &M, module_path: &IP) -> anyhow::Result<ResolvedSemanticState> {
-    let mut semantic_state = SemanticState::new(4);
+    let mut semantic_state = SemanticState::new(pointer_size());
     semantic_state.add_module(module, module_path)?;
     semantic_state.build()
 }
@@ -120,7 +133,7 @@ fn can_resolve_pointer_to_another_struct() {
                 SV::Public,
                 "test::TestType2",
                 SISR {
-                    size: 24,
+                    size: 16 + 2 * pointer_size(),
                     alignment: 8,
                     inner: STD::new()
                         .with_regions([
@@ -193,7 +206,7 @@ fn can_resolve_complex_type() {
                 "test::TestType",
                 SISR {
                     size: 8,
-                    alignment: 4,
+                    alignment: pointer_size(),
                     inner: STD::new()
                         .with_regions([
                             SR::field(SV::Public, "field_1", ST::raw("i32")),
@@ -207,7 +220,7 @@ fn can_resolve_complex_type() {
                 "test::Singleton",
                 SISR {
                     size: 0x1750,
-                    alignment: 4,
+                    alignment: pointer_size(),
                     inner: STD::new()
                         .with_regions([
                             SR::field(SV::Private, "_field_0", unknown(0x78)),
@@ -318,22 +331,23 @@ fn can_resolve_embed_of_an_extern() {
                 V::Public,
                 "TestType2",
                 TD::new([
-                    TS::field(V::Public, "field_1", T::ident("i32")),
+                    TS::field(V::Public, "field_1", T::ident("u64")),
                     TS::field(V::Public, "field_2", T::ident("TestType1")),
                     TS::field(V::Public, "field_3", T::ident("TestType1").const_pointer()),
                     TS::field(V::Public, "field_4", T::ident("TestType1").mut_pointer()),
-                ]),
+                ])
+                .with_attributes([A::align(8)]),
             )]),
         [
             SID::defined_resolved(
                 SV::Public,
                 "test::TestType2",
                 SISR {
-                    size: 28,
-                    alignment: 4,
+                    size: 24 + 2 * pointer_size(),
+                    alignment: 8,
                     inner: STD::new()
                         .with_regions([
-                            SR::field(SV::Public, "field_1", ST::raw("i32")),
+                            SR::field(SV::Public, "field_1", ST::raw("u64")),
                             SR::field(SV::Public, "field_2", ST::raw("test::TestType1")),
                             SR::field(
                                 SV::Public,
@@ -402,8 +416,8 @@ fn can_generate_vftable() {
                 SV::Public,
                 "test::TestType",
                 SISR {
-                    size: 4,
-                    alignment: 4,
+                    size: pointer_size(),
+                    alignment: pointer_size(),
                     inner: STD::new()
                         .with_regions([SR::field(SV::Private, "vftable", vftable_type.clone())])
                         .with_vftable_functions(
@@ -433,8 +447,8 @@ fn can_generate_vftable() {
                 SV::Public,
                 "test::TestTypeVftable",
                 SISR {
-                    size: 16,
-                    alignment: 4,
+                    size: 4 * pointer_size(),
+                    alignment: pointer_size(),
                     inner: STD::new()
                         .with_regions([
                             SR::field(
@@ -513,8 +527,8 @@ fn can_generate_vftable_with_indices() {
                 SV::Public,
                 "test::TestType",
                 SISR {
-                    size: 4,
-                    alignment: 4,
+                    size: pointer_size(),
+                    alignment: pointer_size(),
                     inner: STD::new()
                         .with_regions([SR::field(SV::Private, "vftable", vftable_type.clone())])
                         .with_vftable_functions(
@@ -548,8 +562,8 @@ fn can_generate_vftable_with_indices() {
                 SV::Public,
                 "test::TestTypeVftable",
                 SISR {
-                    size: 32,
-                    alignment: 4,
+                    size: 8 * pointer_size(),
+                    alignment: pointer_size(),
                     inner: STD::new()
                         .with_regions([
                             make_vfunc_region(0),
@@ -631,8 +645,8 @@ fn will_propagate_calling_convention_for_impl_and_vftable() {
                 SV::Public,
                 "test::TestType",
                 SISR {
-                    size: 4,
-                    alignment: 4,
+                    size: pointer_size(),
+                    alignment: pointer_size(),
                     inner: STD::new()
                         .with_regions([SR::field(SV::Private, "vftable", vftable_type.clone())])
                         .with_vftable_functions(
@@ -659,8 +673,8 @@ fn will_propagate_calling_convention_for_impl_and_vftable() {
                 SV::Public,
                 "test::TestTypeVftable",
                 SISR {
-                    size: 4,
-                    alignment: 4,
+                    size: pointer_size(),
+                    alignment: pointer_size(),
                     inner: STD::new()
                         .with_regions([SR::field(
                             SV::Public,
@@ -922,20 +936,20 @@ fn can_handle_defaultable_on_primitive_types() {
             V::Public,
             "TestType",
             TD::new([
-                TS::field(V::Private, "field_1", T::ident("i32")),
+                TS::field(V::Private, "field_1", T::ident("u64")),
                 TS::field(V::Private, "field_2", T::ident("f32").array(16)),
             ])
-            .with_attributes([A::defaultable()]),
+            .with_attributes([A::defaultable(), A::align(8)]),
         )]),
         [SID::defined_resolved(
             SV::Public,
             "test::TestType",
             SISR {
-                size: 68,
-                alignment: 4,
+                size: 72,
+                alignment: 8,
                 inner: STD::new()
                     .with_regions([
-                        SR::field(SV::Private, "field_1", ST::raw("i32")),
+                        SR::field(SV::Private, "field_1", ST::raw("u64")),
                         SR::field(SV::Private, "field_2", ST::raw("f32").array(16)),
                     ])
                     .with_defaultable(true)
@@ -1136,7 +1150,13 @@ pub mod alignment {
                 TD::new([TS::field(V::Public, "field_1", T::ident("bool"))
                     .with_attributes([A::address(0xEC4)])]),
             )]),
-            "the type `test::TestType` has a size of 3781, which is not a multiple of its alignment 4",
+            &format!(
+                concat!(
+                    "the type `test::TestType` has a size of 3781, ",
+                    "which is not a multiple of its alignment {}",
+                ),
+                pointer_size()
+            ),
         );
 
         assert_ast_produces_type_definitions(
@@ -1152,7 +1172,7 @@ pub mod alignment {
                 "test::TestType",
                 SISR {
                     size: 0xEC8,
-                    alignment: 4,
+                    alignment: pointer_size(),
                     inner: STD::new()
                         .with_regions([
                             SR::field(SV::Private, "_field_0", unknown(0xEC4)),
@@ -1356,7 +1376,7 @@ pub mod inheritance {
                 if let Some(vftable_type) = &vftable_type {
                     regions.insert(0, SR::field(SV::Private, "vftable", vftable_type.clone()));
                 }
-                let mut last_address = self.vftable.as_ref().map(|_| 4).unwrap_or(0);
+                let mut last_address = self.vftable.as_ref().map(|_| pointer_size()).unwrap_or(0);
                 for (address, name, ty, attrs) in f {
                     let visibility = if name.starts_with('_') {
                         SV::Private
@@ -1364,11 +1384,14 @@ pub mod inheritance {
                         SV::Public
                     };
                     if let Some(address) = address {
-                        regions.push(SR::field(
-                            SV::Private,
-                            format!("_field_{:x}", last_address),
-                            IPT::Unknown(address - last_address).to_semantic(),
-                        ));
+                        let delta = address - last_address;
+                        if delta > 0 {
+                            regions.push(SR::field(
+                                SV::Private,
+                                format!("_field_{:x}", last_address),
+                                IPT::Unknown(delta).to_semantic(),
+                            ));
+                        }
                     }
 
                     let mut region = SR::field(visibility, name.clone(), ty.to_semantic());
@@ -1425,8 +1448,8 @@ pub mod inheritance {
                     SV::Public,
                     format!("test::{}", self.name_vftable).as_str(),
                     SISR {
-                        size: self.functions.len() * 4,
-                        alignment: 4,
+                        size: self.functions.len() * pointer_size(),
+                        alignment: pointer_size(),
                         inner: STD::new()
                             .with_regions(
                                 self.functions
