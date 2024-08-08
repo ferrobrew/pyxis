@@ -129,8 +129,8 @@ fn build_function(
         .iter()
         .map(|a| {
             Ok(match a {
-                Argument::ConstSelf => quote! { self as *const Self },
-                Argument::MutSelf => quote! { self as *mut Self },
+                Argument::ConstSelf => quote! { self as *const Self as _ },
+                Argument::MutSelf => quote! { self as *mut Self as _ },
                 Argument::Field(name, _) => {
                     let name = str_to_ident(name);
                     quote! { #name }
@@ -162,21 +162,23 @@ fn build_function(
     if function_getter.is_none() {
         return Err(anyhow::anyhow!("no function getter set"));
     }
+    let calling_convention = function.calling_convention.as_str();
     let function_getter_impl = function_getter.map(|fg| match fg {
         FunctionGetter::Address(address) => quote! {
-            ::std::mem::transmute(#address)
+            let f:
+                unsafe extern #calling_convention
+                fn(#(#lambda_arguments),*) #return_type
+            = ::std::mem::transmute(#address)
         },
         FunctionGetter::Vftable => quote! {
-            std::ptr::addr_of!((*self.vftable()).#name).read()
+            let f = std::ptr::addr_of!((*self.vftable()).#name).read()
         },
     });
 
-    let calling_convention = function.calling_convention.as_str();
     let visibility = visibility_to_tokens(function.visibility);
-
     Ok(quote! {
         #visibility unsafe fn #name(#(#arguments),*) #return_type {
-            let f: unsafe extern #calling_convention fn(#(#lambda_arguments),*) #return_type = #function_getter_impl;
+            #function_getter_impl;
             f(#(#call_arguments),*)
         }
     })
