@@ -167,7 +167,7 @@ fn build_function(
             ::std::mem::transmute(#address)
         },
         FunctionGetter::Vftable => quote! {
-            std::ptr::addr_of!((*self.vftable).#name).read()
+            std::ptr::addr_of!((*self.vftable()).#name).read()
         },
     });
 
@@ -193,7 +193,7 @@ fn build_type(
         singleton,
         regions,
         free_functions,
-        vftable_functions,
+        vftable,
         copyable,
         cloneable,
         defaultable,
@@ -250,15 +250,29 @@ fn build_type(
         }
     });
 
+    let vftable_fn_impl = vftable
+        .as_ref()
+        .map(|v| {
+            let path = v.field_path.iter().map(|f| str_to_ident(f));
+            let vftable_type = sa_type_to_syn_type(&v.type_)?;
+            anyhow::Ok(quote! {
+                pub fn vftable(&self) -> #vftable_type {
+                    self #(.#path)* as #vftable_type
+                }
+            })
+        })
+        .transpose()?;
+
     let free_functions_impl = free_functions
         .iter()
         .map(|f| build_function(f, false))
         .collect::<anyhow::Result<Vec<_>>>()?;
 
-    let vftable_function_impl = vftable_functions
+    let vftable_function_impl = vftable
         .as_ref()
-        .map(|fns| {
-            fns.iter()
+        .map(|v| {
+            v.functions
+                .iter()
                 .filter(|f| !f.name.starts_with('_'))
                 .map(|f| build_function(f, true))
                 .collect::<anyhow::Result<Vec<_>>>()
@@ -301,6 +315,7 @@ fn build_type(
         #singleton_impl
 
         impl #name_ident {
+            #vftable_fn_impl
             #(#free_functions_impl)*
             #(#vftable_function_impl)*
         }

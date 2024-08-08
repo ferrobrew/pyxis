@@ -366,6 +366,7 @@ fn can_resolve_embed_of_an_extern() {
 
 #[test]
 fn can_generate_vftable() {
+    let vftable_type = ST::raw("test::TestTypeVftable").const_pointer();
     assert_ast_produces_type_definitions(
         M::new().with_definitions([ID::new(
             V::Public,
@@ -404,27 +405,26 @@ fn can_generate_vftable() {
                     size: 4,
                     alignment: 4,
                     inner: STD::new()
-                        .with_regions([SR::field(
-                            SV::Public,
-                            "vftable",
-                            ST::raw("test::TestTypeVftable").const_pointer(),
-                        )])
-                        .with_vftable_functions([
-                            SF::new(SV::Public, "test_function0")
-                                .with_arguments([
+                        .with_regions([SR::field(SV::Private, "vftable", vftable_type.clone())])
+                        .with_vftable_functions(
+                            vftable_type,
+                            [
+                                SF::new(SV::Public, "test_function0")
+                                    .with_arguments([
+                                        SAr::MutSelf,
+                                        SAr::field("arg0", ST::raw("u32")),
+                                        SAr::field("arg1", ST::raw("f32")),
+                                    ])
+                                    .with_return_type(ST::raw("i32")),
+                                SF::new(SV::Public, "test_function1").with_arguments([
                                     SAr::MutSelf,
                                     SAr::field("arg0", ST::raw("u32")),
                                     SAr::field("arg1", ST::raw("f32")),
-                                ])
-                                .with_return_type(ST::raw("i32")),
-                            SF::new(SV::Public, "test_function1").with_arguments([
-                                SAr::MutSelf,
-                                SAr::field("arg0", ST::raw("u32")),
-                                SAr::field("arg1", ST::raw("f32")),
-                            ]),
-                            make_vfunc(2),
-                            make_vfunc(3),
-                        ])
+                                ]),
+                                make_vfunc(2),
+                                make_vfunc(3),
+                            ],
+                        )
                         .into(),
                 },
             ),
@@ -475,6 +475,7 @@ fn can_generate_vftable() {
 
 #[test]
 fn can_generate_vftable_with_indices() {
+    let vftable_type = ST::raw("test::TestTypeVftable").const_pointer();
     assert_ast_produces_type_definitions(
         M::new().with_definitions([ID::new(
             V::Public,
@@ -515,31 +516,30 @@ fn can_generate_vftable_with_indices() {
                     size: 4,
                     alignment: 4,
                     inner: STD::new()
-                        .with_regions([SR::field(
-                            SV::Public,
-                            "vftable",
-                            ST::raw("test::TestTypeVftable").const_pointer(),
-                        )])
-                        .with_vftable_functions([
-                            make_vfunc(0),
-                            make_vfunc(1),
-                            SF::new(SV::Public, "test_function0")
-                                .with_arguments([
+                        .with_regions([SR::field(SV::Private, "vftable", vftable_type.clone())])
+                        .with_vftable_functions(
+                            vftable_type,
+                            [
+                                make_vfunc(0),
+                                make_vfunc(1),
+                                SF::new(SV::Public, "test_function0")
+                                    .with_arguments([
+                                        SAr::MutSelf,
+                                        SAr::field("arg0", ST::raw("u32")),
+                                        SAr::field("arg1", ST::raw("f32")),
+                                    ])
+                                    .with_return_type(ST::raw("i32")),
+                                make_vfunc(3),
+                                make_vfunc(4),
+                                SF::new(SV::Public, "test_function1").with_arguments([
                                     SAr::MutSelf,
                                     SAr::field("arg0", ST::raw("u32")),
                                     SAr::field("arg1", ST::raw("f32")),
-                                ])
-                                .with_return_type(ST::raw("i32")),
-                            make_vfunc(3),
-                            make_vfunc(4),
-                            SF::new(SV::Public, "test_function1").with_arguments([
-                                SAr::MutSelf,
-                                SAr::field("arg0", ST::raw("u32")),
-                                SAr::field("arg1", ST::raw("f32")),
-                            ]),
-                            make_vfunc(6),
-                            make_vfunc(7),
-                        ])
+                                ]),
+                                make_vfunc(6),
+                                make_vfunc(7),
+                            ],
+                        )
                         .into(),
                 },
             ),
@@ -594,6 +594,7 @@ fn can_generate_vftable_with_indices() {
 
 #[test]
 fn will_propagate_calling_convention_for_impl_and_vftable() {
+    let vftable_type = ST::raw("test::TestTypeVftable").const_pointer();
     assert_ast_produces_type_definitions(
         M::new()
             .with_definitions([ID::new(
@@ -633,19 +634,18 @@ fn will_propagate_calling_convention_for_impl_and_vftable() {
                     size: 4,
                     alignment: 4,
                     inner: STD::new()
-                        .with_regions([SR::field(
-                            SV::Public,
-                            "vftable",
-                            ST::raw("test::TestTypeVftable").const_pointer(),
-                        )])
-                        .with_vftable_functions([SF::new(SV::Public, "test_function0")
-                            .with_arguments([
-                                SAr::MutSelf,
-                                SAr::field("arg0", ST::raw("u32")),
-                                SAr::field("arg1", ST::raw("f32")),
-                            ])
-                            .with_calling_convention(SCC::Cdecl)
-                            .with_return_type(ST::raw("i32"))])
+                        .with_regions([SR::field(SV::Private, "vftable", vftable_type.clone())])
+                        .with_vftable_functions(
+                            vftable_type,
+                            [SF::new(SV::Public, "test_function0")
+                                .with_arguments([
+                                    SAr::MutSelf,
+                                    SAr::field("arg0", ST::raw("u32")),
+                                    SAr::field("arg1", ST::raw("f32")),
+                                ])
+                                .with_calling_convention(SCC::Cdecl)
+                                .with_return_type(ST::raw("i32"))],
+                        )
                         .with_free_functions([SF::new(SV::Public, "test_function")
                             .with_address(0x800_000)
                             .with_calling_convention(SCC::Cdecl)
@@ -1354,17 +1354,12 @@ pub mod inheritance {
                 }
 
                 let mut regions = vec![];
-                if let Some(vftable) = &self.vftable {
-                    regions.insert(
-                        0,
-                        SR::field(
-                            SV::Public,
-                            "vftable",
-                            ST::raw(format!("test::{}", vftable.name_vftable).as_str())
-                                .const_pointer(),
-                        ),
-                    );
-                }
+                let vftable_type = self.vftable.as_ref().map(|vftable| {
+                    let vftable_type =
+                        ST::raw(format!("test::{}", vftable.name_vftable).as_str()).const_pointer();
+                    regions.insert(0, SR::field(SV::Private, "vftable", vftable_type.clone()));
+                    vftable_type
+                });
                 let mut last_address = self.vftable.as_ref().map(|_| 4).unwrap_or(0);
                 for (address, name, ty, _) in f {
                     let visibility = if name.starts_with('_') {
@@ -1385,8 +1380,11 @@ pub mod inheritance {
                 }
 
                 let type_definition = STD::new().with_regions(regions);
-                let type_definition = if let Some(vftable) = &self.vftable {
+                let type_definition = if let Some((vftable, vftable_type)) =
+                    self.vftable.as_ref().zip(vftable_type)
+                {
                     type_definition.with_vftable_functions(
+                        vftable_type,
                         vftable
                             .functions
                             .iter()

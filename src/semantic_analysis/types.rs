@@ -276,11 +276,18 @@ impl Region {
     }
 }
 
+#[derive(PartialEq, Eq, Debug, Clone, Hash)]
+pub struct TypeVftable {
+    pub functions: Vec<Function>,
+    pub field_path: Vec<String>,
+    pub type_: Type,
+}
+
 #[derive(PartialEq, Eq, Debug, Clone, Default, Hash)]
 pub struct TypeDefinition {
     pub regions: Vec<Region>,
     pub free_functions: Vec<Function>,
-    pub vftable_functions: Option<Vec<Function>>,
+    pub vftable: Option<TypeVftable>,
     pub singleton: Option<usize>,
     pub copyable: bool,
     pub cloneable: bool,
@@ -299,9 +306,20 @@ impl TypeDefinition {
         self.free_functions = free_functions.into();
         self
     }
-    pub fn with_vftable_functions(mut self, vftable_functions: impl Into<Vec<Function>>) -> Self {
-        self.vftable_functions = Some(vftable_functions.into());
+    pub fn with_vftable(mut self, vftable: TypeVftable) -> Self {
+        self.vftable = Some(vftable);
         self
+    }
+    pub fn with_vftable_functions(
+        self,
+        vftable_type: Type,
+        vftable_functions: impl Into<Vec<Function>>,
+    ) -> Self {
+        self.with_vftable(TypeVftable {
+            functions: vftable_functions.into(),
+            field_path: vec!["vftable".into()],
+            type_: vftable_type,
+        })
     }
     pub fn with_singleton(mut self, singleton: usize) -> Self {
         self.singleton = Some(singleton);

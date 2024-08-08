@@ -12,7 +12,8 @@ use super::{
     type_registry::TypeRegistry,
     types::{
         Argument, CallingConvention, EnumDefinition, ExternValue, Function, ItemCategory,
-        ItemDefinition, ItemState, ItemStateResolved, Region, Type, TypeDefinition, Visibility,
+        ItemDefinition, ItemState, ItemStateResolved, Region, Type, TypeDefinition, TypeVftable,
+        Visibility,
     },
 };
 
@@ -553,13 +554,13 @@ impl SemanticState {
             }
         }
 
-        let Some((regions, size)) = self
+        let Some((regions, vftable, size)) = self
             .resolve_regions(
                 resolvee_path,
                 visibility,
                 target_size,
                 pending_regions,
-                &vftable_functions,
+                vftable_functions,
             )
             .with_context(|| format!("while processing `{resolvee_path}`"))?
         else {
@@ -670,7 +671,7 @@ impl SemanticState {
             inner: TypeDefinition {
                 regions,
                 free_functions,
-                vftable_functions,
+                vftable,
                 singleton,
                 copyable,
                 cloneable,
@@ -749,8 +750,8 @@ impl SemanticState {
         visibility: Visibility,
         target_size: Option<usize>,
         regions: Vec<(Option<usize>, Region)>,
-        vftable_functions: &Option<Vec<Function>>,
-    ) -> anyhow::Result<Option<(Vec<Region>, usize)>> {
+        vftable_functions: Option<Vec<Function>>,
+    ) -> anyhow::Result<Option<(Vec<Region>, Option<TypeVftable>, usize)>> {
         // this resolution algorithm is very simple and doesn't handle overlapping regions
         // or regions that are out of order
         #[derive(Default)]
@@ -774,23 +775,32 @@ impl SemanticState {
         let mut resolved = Regions::default();
 
         // Create vftable
+        let mut vftable = None;
         if let Some(vftable_functions) = vftable_functions {
-            if let Some(vftable) = build_vftable_item(
+            if let Some(vftable_type) = build_vftable_item(
                 &self.type_registry,
                 resolvee_path,
                 visibility,
-                vftable_functions,
+                &vftable_functions,
             ) {
-                let vftable_path = vftable.path.clone();
-                self.add_type(vftable)?;
+                let vftable_path = vftable_type.path.clone();
+                let vftable_pointer_type = Type::ConstPointer(Box::new(Type::Raw(vftable_path)));
+                self.add_type(vftable_type)?;
+
                 let region = Region {
-                    visibility,
+                    visibility: Visibility::Private,
                     name: Some("vftable".to_string()),
-                    type_ref: Type::ConstPointer(Box::new(Type::Raw(vftable_path))),
+                    type_ref: vftable_pointer_type.clone(),
                 };
                 if resolved.push(&self.type_registry, region).is_none() {
                     return Ok(None);
                 }
+
+                vftable = Some(TypeVftable {
+                    functions: vftable_functions,
+                    field_path: vec!["vftable".to_string()],
+                    type_: vftable_pointer_type,
+                });
             }
         }
 
@@ -856,7 +866,7 @@ impl SemanticState {
             size += region_size;
         }
 
-        Ok(Some((resolved.regions, size)))
+        Ok(Some((resolved.regions, vftable, size)))
     }
 
     fn build_enum(
@@ -1048,7 +1058,7 @@ fn build_vftable_item(
             inner: TypeDefinition {
                 regions,
                 free_functions: vec![],
-                vftable_functions: None,
+                vftable: None,
                 singleton: None,
                 cloneable: false,
                 copyable: false,
