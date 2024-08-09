@@ -771,7 +771,9 @@ impl SemanticState {
 
         // Create vftable
         let mut vftable = None;
+        let first_base = regions.iter().map(|t| &t.1).find(|r| r.is_base);
         if let Some(vftable_functions) = vftable_functions {
+            // There are functions defined for this vftable.
             if let Some(vftable_type) = build_vftable_item(
                 &self.type_registry,
                 resolvee_path,
@@ -782,63 +784,52 @@ impl SemanticState {
                 let vftable_pointer_type = Type::ConstPointer(Box::new(Type::Raw(vftable_path)));
                 self.add_type(vftable_type)?;
 
-                let region = Region {
-                    visibility: Visibility::Private,
-                    name: Some("vftable".to_string()),
-                    type_ref: vftable_pointer_type.clone(),
-                    is_base: false,
-                };
-                if resolved.push(&self.type_registry, region).is_none() {
-                    return Ok(None);
-                }
-
-                vftable = Some(TypeVftable {
-                    functions: vftable_functions,
-                    field_path: vec!["vftable".to_string()],
-                    type_: vftable_pointer_type,
-                });
-            }
-        } else {
-            // If there is no vftable specified, and there is a base field,
-            // attempt to use its vftable if available
-            if let Some(first_base) = regions.iter().map(|t| &t.1).find(|r| r.is_base) {
-                let Type::Raw(path) = &first_base.type_ref else {
-                    anyhow::bail!(
-                        "expected base field `{}` of type `{}` to be a raw type, but it was a {}",
-                        first_base.name.as_deref().unwrap_or("unnamed"),
-                        resolvee_path,
-                        first_base.type_ref.human_friendly_type()
-                    );
-                };
-                let base_type = self.type_registry.get(path).with_context(|| {
-                    format!("failed to get base type `{path}` for type `{resolvee_path}`",)
-                })?;
-                let Some(base_type) = base_type.resolved() else {
-                    return Ok(None);
-                };
-                let Some(base_type) = base_type.inner.as_type() else {
-                    anyhow::bail!(
-                        "expected base field `{}` of type `{}` to be a type, but it was a {}",
-                        first_base.name.as_deref().unwrap_or("unnamed"),
-                        resolvee_path,
-                        base_type.inner.human_friendly_type()
-                    );
-                };
-                if let Some(base_vftable) = &base_type.vftable {
+                if let Some((base_name, base_vftable)) = first_base
+                    .map(|b| get_base_vftable(&self.type_registry, resolvee_path, b))
+                    .transpose()?
+                    .flatten()
+                {
+                    // There is a base class with a vftable. Let's use its field.
                     vftable = Some(TypeVftable {
-                        functions: base_vftable.functions.clone(),
-                        field_path: std::iter::once(
-                            first_base
-                                .name
-                                .clone()
-                                .expect("first base had no name, this shouldn't be possible"),
-                        )
-                        .chain(base_vftable.field_path.clone())
-                        .collect(),
-                        type_: base_vftable.type_.clone(),
+                        functions: vftable_functions,
+                        field_path: std::iter::once(base_name)
+                            .chain(base_vftable.field_path.clone())
+                            .collect(),
+                        type_: vftable_pointer_type,
+                    });
+                } else {
+                    // There is no base class with a vftable. Let's create a new field.
+                    let region = Region {
+                        visibility: Visibility::Private,
+                        name: Some("vftable".to_string()),
+                        type_ref: vftable_pointer_type.clone(),
+                        is_base: false,
+                    };
+                    if resolved.push(&self.type_registry, region).is_none() {
+                        return Ok(None);
+                    }
+
+                    vftable = Some(TypeVftable {
+                        functions: vftable_functions,
+                        field_path: vec!["vftable".to_string()],
+                        type_: vftable_pointer_type,
                     });
                 }
             }
+        } else if let Some((base_name, base_vftable)) = first_base
+            .map(|b| get_base_vftable(&self.type_registry, resolvee_path, b))
+            .transpose()?
+            .flatten()
+        {
+            // There are no functions defined for this vftable, but there is a base class with a vftable.
+            // Let's use its field.
+            vftable = Some(TypeVftable {
+                functions: base_vftable.functions.clone(),
+                field_path: std::iter::once(base_name)
+                    .chain(base_vftable.field_path.clone())
+                    .collect(),
+                type_: base_vftable.type_.clone(),
+            });
         }
 
         // Insert each region, including padding if necessary
@@ -1109,4 +1100,43 @@ fn build_vftable_item(
         }),
         category: ItemCategory::Defined,
     })
+}
+
+fn get_base_vftable<'a>(
+    type_registry: &'a TypeRegistry,
+    resolvee_path: &ItemPath,
+    base: &Region,
+) -> anyhow::Result<Option<(String, &'a TypeVftable)>> {
+    // If there is no vftable specified, and there is a base field,
+    // attempt to use its vftable if available
+    let base_name = base
+        .name
+        .clone()
+        .expect("first base had no name, this shouldn't be possible");
+    let Type::Raw(path) = &base.type_ref else {
+        anyhow::bail!(
+            "expected base field `{}` of type `{}` to be a raw type, but it was a {}",
+            base_name,
+            resolvee_path,
+            base.type_ref.human_friendly_type()
+        );
+    };
+    let base_type = type_registry
+        .get(path)
+        .with_context(|| format!("failed to get base type `{path}` for type `{resolvee_path}`",))?;
+    let Some(base_type) = base_type.resolved() else {
+        return Ok(None);
+    };
+    let Some(base_type) = base_type.inner.as_type() else {
+        anyhow::bail!(
+            "expected base field `{}` of type `{}` to be a type, but it was a {}",
+            base_name,
+            resolvee_path,
+            base_type.inner.human_friendly_type()
+        );
+    };
+    Ok(base_type
+        .vftable
+        .as_ref()
+        .map(|vftable| (base_name, vftable)))
 }

@@ -61,9 +61,9 @@ fn a0_b0_d0() {
             derived.to_grammar(),
         ]),
         [
-            base_a.to_semantic(None),
-            base_b.to_semantic(None),
-            derived.to_semantic(None),
+            base_a.to_semantic(None, true),
+            base_b.to_semantic(None, true),
+            derived.to_semantic(None, true),
         ],
     );
 }
@@ -118,9 +118,9 @@ fn a0_b0_d1() {
             derived.to_grammar(),
         ]),
         [
-            base_a.to_semantic(None),
-            base_b.to_semantic(None),
-            derived.to_semantic(None),
+            base_a.to_semantic(None, true),
+            base_b.to_semantic(None, true),
+            derived.to_semantic(None, true),
             derived_vftable.to_semantic(),
         ],
     );

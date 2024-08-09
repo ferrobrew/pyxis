@@ -110,25 +110,21 @@ impl IT {
             .with_attributes([A::align(self.alignment)]),
         )
     }
-    pub fn to_semantic(&self, vftable: Option<STV>) -> SID {
+    pub fn to_semantic(&self, vftable: Option<STV>, include_vftable_field: bool) -> SID {
         let f = &self.fields;
-        let mut size: usize = self.vftable.as_ref().map(|_| 4).unwrap_or(0);
-        for (address, _, ty, _) in f {
-            if let Some(address) = address {
-                size = *address;
-            }
-            size += ty.size();
-        }
 
         let mut regions = vec![];
+        let mut last_address = 0;
+
         let vftable_type = self
             .vftable
             .as_ref()
             .map(|vftable| vftable.to_semantic_pointer_type());
-        if let Some(vftable_type) = &vftable_type {
+        if let Some(vftable_type) = vftable_type.as_ref().filter(|_| include_vftable_field) {
             regions.insert(0, SR::field(SV::Private, "vftable", vftable_type.clone()));
+            last_address += pointer_size();
         }
-        let mut last_address = self.vftable.as_ref().map(|_| pointer_size()).unwrap_or(0);
+
         for (address, name, ty, attrs) in f {
             let visibility = if name.starts_with('_') {
                 SV::Private
@@ -144,6 +140,7 @@ impl IT {
                         IPT::Unknown(delta).to_semantic(),
                     ));
                 }
+                last_address = *address;
             }
 
             let mut region = SR::field(visibility, name.clone(), ty.to_semantic());
@@ -165,7 +162,7 @@ impl IT {
             SV::Public,
             format!("test::{}", self.name).as_str(),
             SISR {
-                size,
+                size: last_address,
                 alignment: self.alignment,
                 inner: type_definition.into(),
             },
