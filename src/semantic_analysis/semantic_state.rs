@@ -1,20 +1,21 @@
 use std::{collections::HashMap, path::Path};
 
-use crate::{
-    grammar::{self, ItemPath},
-    parser, util,
-};
-
 use anyhow::Context;
 
-use super::{
-    module::Module,
-    type_registry::TypeRegistry,
-    types::{
-        Argument, CallingConvention, EnumDefinition, ExternValue, Function, ItemCategory,
-        ItemDefinition, ItemState, ItemStateResolved, Region, Type, TypeDefinition, TypeVftable,
-        Visibility,
+use crate::{
+    grammar::{self, ItemPath},
+    parser,
+    semantic_analysis::{
+        function,
+        module::Module,
+        type_registry::TypeRegistry,
+        types::{
+            EnumDefinition, ExternValue, Function, ItemCategory, ItemDefinition, ItemState,
+            ItemStateResolved, Region, Type, TypeDefinition, TypeVftable, Visibility,
+        },
+        vftable,
     },
+    util,
 };
 
 pub struct SemanticState {
@@ -275,97 +276,6 @@ impl SemanticState {
 }
 
 impl SemanticState {
-    fn build_function(
-        &self,
-        scope: &[ItemPath],
-        function: &grammar::Function,
-    ) -> Result<Function, anyhow::Error> {
-        let mut address = None;
-        let mut calling_convention = None;
-        for attribute in &function.attributes {
-            let Some((ident, exprs)) = attribute.function() else {
-                anyhow::bail!(
-                    "unsupported attribute for function `{}`: {attribute:?}",
-                    function.name
-                );
-            };
-            match (ident.as_str(), &exprs[..]) {
-                ("address", [grammar::Expr::IntLiteral(addr)]) => {
-                    address = Some((*addr).try_into().with_context(|| {
-                        format!(
-                            "failed to convert `address` attribute into usize for function `{}`",
-                            function.name
-                        )
-                    })?);
-                }
-                ("index", _) => {
-                    // ignore index attribute, this is handled by vftable construction
-                }
-                ("calling_convention", [grammar::Expr::StringLiteral(cc)]) => {
-                    calling_convention = Some(cc.parse().map_err(|_| {
-                        anyhow::anyhow!(
-                            "invalid calling convention for function `{}`: {cc}",
-                            function.name
-                        )
-                    })?);
-                }
-                _ => anyhow::bail!(
-                    "unsupported attribute for function `{}`: {attribute:?}",
-                    function.name
-                ),
-            }
-        }
-
-        let arguments = function
-            .arguments
-            .iter()
-            .map(|a| match a {
-                grammar::Argument::ConstSelf => Ok(Argument::ConstSelf),
-                grammar::Argument::MutSelf => Ok(Argument::MutSelf),
-                grammar::Argument::Named(name, type_) => Ok(Argument::Field(
-                    name.0.clone(),
-                    self.type_registry
-                        .resolve_grammar_type(scope, type_)
-                        .ok_or_else(|| {
-                            anyhow::anyhow!(
-                                "failed to resolve type of field `{:?}` ({:?})",
-                                name,
-                                type_
-                            )
-                        })?,
-                )),
-            })
-            .collect::<anyhow::Result<Vec<_>>>()?;
-
-        let return_type = function
-            .return_type
-            .as_ref()
-            .and_then(|t| self.type_registry.resolve_grammar_type(scope, t));
-
-        let calling_convention = calling_convention.unwrap_or_else(|| {
-            // Assume that if the function has a self argument, it's a thiscall function, otherwise it's "system"
-            // for interoperating with system libraries: <https://doc.rust-lang.org/nomicon/ffi.html#foreign-calling-conventions>
-            // Bit sus honestly, maybe we should enforce a calling convention for all non-self functions?
-            let has_self = arguments
-                .iter()
-                .any(|a| matches!(a, Argument::ConstSelf | Argument::MutSelf));
-            if has_self {
-                CallingConvention::Thiscall
-            } else {
-                CallingConvention::System
-            }
-        });
-
-        Ok(Function {
-            visibility: function.visibility.into(),
-            name: function.name.0.clone(),
-            address,
-            arguments,
-            return_type,
-            calling_convention,
-        })
-    }
-
     fn build_item(
         &mut self,
         resolvee_path: &ItemPath,
@@ -444,8 +354,7 @@ impl SemanticState {
         let mut free_functions = vec![];
         if let Some(type_impl) = module.impls.get(resolvee_path) {
             for function in &type_impl.functions {
-                let function = self
-                    .build_function(&module.scope(), function)
+                let function = function::build(&self.type_registry, &module.scope(), function)
                     .with_context(|| {
                         format!(
                             "while building impl function `{}` for type `{resolvee_path}`",
@@ -538,10 +447,15 @@ impl SemanticState {
                     }
 
                     vftable_functions = Some(
-                        self.build_vftable_list(module, size, functions)
-                            .with_context(|| {
-                                format!("while building vftable for type `{resolvee_path}`")
-                            })?,
+                        vftable::convert_grammar_functions_to_semantic_functions(
+                            &self.type_registry,
+                            module,
+                            size,
+                            functions,
+                        )
+                        .with_context(|| {
+                            format!("while building vftable for type `{resolvee_path}`")
+                        })?,
                     );
                 }
             }
@@ -676,68 +590,6 @@ impl SemanticState {
         }))
     }
 
-    fn build_vftable_list(
-        &self,
-        module: &Module,
-        size: Option<usize>,
-        functions: &[grammar::Function],
-    ) -> anyhow::Result<Vec<Function>> {
-        // Insert function, with padding if necessary
-        let mut output = vec![];
-        for function in functions {
-            let mut index = None;
-            for attribute in &function.attributes {
-                let grammar::Attribute::Function(ident, exprs) = attribute else {
-                    anyhow::bail!(
-                        "unsupported attribute for function `{}`: {attribute:?}",
-                        function.name
-                    );
-                };
-                match (ident.as_str(), exprs.as_slice()) {
-                    ("index", [grammar::Expr::IntLiteral(index_)]) => {
-                        index = Some(*index_ as usize);
-                    }
-                    ("calling_convention", _) => {
-                        // ignore calling convention attribute, handled by build_function
-                    }
-                    _ => anyhow::bail!(
-                        "unsupported attribute for function `{}`: {attribute:?}",
-                        function.name
-                    ),
-                }
-            }
-
-            if let Some(index) = index {
-                make_padding_functions(&mut output, index);
-            }
-            let function = self
-                .build_function(&module.scope(), function)
-                .with_context(|| format!("while building vftable function `{}`", function.name))?;
-            output.push(function);
-        }
-
-        // Pad out to target size
-        if let Some(size) = size {
-            make_padding_functions(&mut output, size);
-        }
-
-        fn make_padding_functions(output: &mut Vec<Function>, target_len: usize) {
-            let functions_to_add = target_len.saturating_sub(output.len());
-            for _ in 0..functions_to_add {
-                output.push(Function {
-                    visibility: Visibility::Private,
-                    name: format!("_vfunc_{}", output.len()),
-                    arguments: vec![Argument::MutSelf],
-                    return_type: None,
-                    address: None,
-                    calling_convention: CallingConvention::Thiscall,
-                });
-            }
-        }
-
-        Ok(output)
-    }
-
     #[allow(clippy::type_complexity)]
     fn resolve_regions(
         &mut self,
@@ -770,66 +622,18 @@ impl SemanticState {
         let mut resolved = Regions::default();
 
         // Create vftable
-        let mut vftable = None;
         let first_base = regions.iter().map(|t| &t.1).find(|r| r.is_base);
-        if let Some(vftable_functions) = vftable_functions {
-            // There are functions defined for this vftable.
-            if let Some(vftable_type) = build_vftable_item(
-                &self.type_registry,
-                resolvee_path,
-                visibility,
-                &vftable_functions,
-            ) {
-                let vftable_path = vftable_type.path.clone();
-                let vftable_pointer_type = Type::ConstPointer(Box::new(Type::Raw(vftable_path)));
-                self.add_type(vftable_type)?;
-
-                if let Some((base_name, base_vftable)) = first_base
-                    .map(|b| get_base_vftable(&self.type_registry, resolvee_path, b))
-                    .transpose()?
-                    .flatten()
-                {
-                    // There is a base class with a vftable. Let's use its field.
-                    vftable = Some(TypeVftable {
-                        functions: vftable_functions,
-                        field_path: std::iter::once(base_name)
-                            .chain(base_vftable.field_path.clone())
-                            .collect(),
-                        type_: vftable_pointer_type,
-                    });
-                } else {
-                    // There is no base class with a vftable. Let's create a new field.
-                    let region = Region {
-                        visibility: Visibility::Private,
-                        name: Some("vftable".to_string()),
-                        type_ref: vftable_pointer_type.clone(),
-                        is_base: false,
-                    };
-                    if resolved.push(&self.type_registry, region).is_none() {
-                        return Ok(None);
-                    }
-
-                    vftable = Some(TypeVftable {
-                        functions: vftable_functions,
-                        field_path: vec!["vftable".to_string()],
-                        type_: vftable_pointer_type,
-                    });
-                }
+        let (vftable, vftable_region) = vftable::build(
+            self,
+            resolvee_path,
+            visibility,
+            first_base,
+            vftable_functions,
+        )?;
+        if let Some(vftable_region) = vftable_region {
+            if resolved.push(&self.type_registry, vftable_region).is_none() {
+                return Ok(None);
             }
-        } else if let Some((base_name, base_vftable)) = first_base
-            .map(|b| get_base_vftable(&self.type_registry, resolvee_path, b))
-            .transpose()?
-            .flatten()
-        {
-            // There are no functions defined for this vftable, but there is a base class with a vftable.
-            // Let's use its field.
-            vftable = Some(TypeVftable {
-                functions: base_vftable.functions.clone(),
-                field_path: std::iter::once(base_name)
-                    .chain(base_vftable.field_path.clone())
-                    .collect(),
-                type_: base_vftable.type_.clone(),
-            });
         }
 
         // Insert each region, including padding if necessary
@@ -1037,106 +841,4 @@ impl ResolvedSemanticState {
     pub fn modules(&self) -> &HashMap<ItemPath, Module> {
         &self.modules
     }
-}
-
-fn build_vftable_item(
-    type_registry: &TypeRegistry,
-    resolvee_path: &ItemPath,
-    visibility: Visibility,
-    functions: &[Function],
-) -> Option<ItemDefinition> {
-    let name = resolvee_path.last()?;
-
-    let resolvee_vtable_path = resolvee_path
-        .parent()?
-        .join(format!("{}Vftable", name.as_str()).into());
-
-    let function_to_field = |function: &Function| -> Region {
-        let argument_to_type = |argument: &Argument| -> (String, Box<Type>) {
-            match argument {
-                Argument::ConstSelf => (
-                    "this".to_string(),
-                    Box::new(Type::ConstPointer(Box::new(Type::Raw(
-                        resolvee_path.clone(),
-                    )))),
-                ),
-                Argument::MutSelf => (
-                    "this".to_string(),
-                    Box::new(Type::MutPointer(Box::new(Type::Raw(resolvee_path.clone())))),
-                ),
-                Argument::Field(name, type_ref) => (name.clone(), Box::new(type_ref.clone())),
-            }
-        };
-        let arguments = function.arguments.iter().map(argument_to_type).collect();
-        let return_type = function.return_type.as_ref().map(|t| Box::new(t.clone()));
-
-        Region {
-            visibility: function.visibility,
-            name: Some(function.name.clone()),
-            type_ref: Type::Function(function.calling_convention, arguments, return_type),
-            is_base: false,
-        }
-    };
-
-    let regions: Vec<_> = functions.iter().map(function_to_field).collect();
-    let alignment = type_registry.pointer_size();
-    Some(ItemDefinition {
-        visibility,
-        path: resolvee_vtable_path.clone(),
-        state: ItemState::Resolved(ItemStateResolved {
-            size: regions.iter().map(|r| r.size(type_registry).unwrap()).sum(),
-            alignment,
-            inner: TypeDefinition {
-                regions,
-                free_functions: vec![],
-                vftable: None,
-                singleton: None,
-                cloneable: false,
-                copyable: false,
-                defaultable: false,
-                packed: false,
-            }
-            .into(),
-        }),
-        category: ItemCategory::Defined,
-    })
-}
-
-fn get_base_vftable<'a>(
-    type_registry: &'a TypeRegistry,
-    resolvee_path: &ItemPath,
-    base: &Region,
-) -> anyhow::Result<Option<(String, &'a TypeVftable)>> {
-    // If there is no vftable specified, and there is a base field,
-    // attempt to use its vftable if available
-    let base_name = base
-        .name
-        .clone()
-        .expect("first base had no name, this shouldn't be possible");
-    let Type::Raw(path) = &base.type_ref else {
-        anyhow::bail!(
-            "expected base field `{}` of type `{}` to be a raw type, but it was a {}",
-            base_name,
-            resolvee_path,
-            base.type_ref.human_friendly_type()
-        );
-    };
-    let base_type = type_registry
-        .get(path)
-        .with_context(|| format!("failed to get base type `{path}` for type `{resolvee_path}`",))?;
-    let Some(base_type) = base_type.resolved() else {
-        return Ok(None);
-    };
-    let Some(base_type) = base_type.inner.as_type() else {
-        anyhow::bail!(
-            "expected base field `{}` of type `{}` to be a type, but it was a {}",
-            base_name,
-            resolvee_path,
-            base_type.inner.human_friendly_type()
-        );
-    };
-    Ok(base_type
-        .vftable
-        .as_ref()
-        .map(|vftable| (base_name, vftable)))
 }
