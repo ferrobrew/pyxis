@@ -6,6 +6,7 @@ use crate::{
 };
 
 pub use crate::semantic_analysis::{
+    enum_definition::EnumDefinition,
     function::{Argument, CallingConvention, Function},
     type_definition::{Region, TypeDefinition, TypeVftable},
 };
@@ -161,57 +162,6 @@ impl fmt::Display for Type {
 }
 
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]
-pub struct EnumDefinition {
-    pub type_: Type,
-    pub fields: Vec<(String, isize)>,
-    pub singleton: Option<usize>,
-    pub copyable: bool,
-    pub cloneable: bool,
-    pub defaultable: bool,
-    pub default_index: Option<usize>,
-}
-impl EnumDefinition {
-    pub fn new(type_: Type) -> Self {
-        EnumDefinition {
-            type_,
-            fields: Vec::new(),
-            singleton: None,
-            copyable: false,
-            cloneable: false,
-            defaultable: false,
-            default_index: None,
-        }
-    }
-    pub fn with_fields<'a>(mut self, fields: impl IntoIterator<Item = (&'a str, isize)>) -> Self {
-        self.fields = fields
-            .into_iter()
-            .map(|(n, v)| (n.to_string(), v))
-            .collect();
-        self
-    }
-    pub fn with_singleton(mut self, singleton: usize) -> Self {
-        self.singleton = Some(singleton);
-        self
-    }
-    pub fn with_copyable(mut self, copyable: bool) -> Self {
-        self.copyable = copyable;
-        self
-    }
-    pub fn with_cloneable(mut self, cloneable: bool) -> Self {
-        self.cloneable = cloneable;
-        self
-    }
-    pub fn with_defaultable(mut self, defaultable: bool) -> Self {
-        self.defaultable = defaultable;
-        self
-    }
-    pub fn with_default_index(mut self, default_index: usize) -> Self {
-        self.default_index = Some(default_index);
-        self
-    }
-}
-
-#[derive(PartialEq, Eq, Debug, Clone, Hash)]
 pub enum ItemDefinitionInner {
     Type(TypeDefinition),
     Enum(EnumDefinition),
@@ -298,30 +248,24 @@ impl ItemDefinition {
             category: ItemCategory::Defined,
         }
     }
-
     pub fn resolved(&self) -> Option<&ItemStateResolved> {
         match &self.state {
             ItemState::Resolved(tsr) => Some(tsr),
             _ => None,
         }
     }
-
     pub fn size(&self) -> Option<usize> {
         self.resolved().map(|r| r.size)
     }
-
     pub fn alignment(&self) -> Option<usize> {
         self.resolved().map(|r| r.alignment)
     }
-
     pub fn is_resolved(&self) -> bool {
         self.resolved().is_some()
     }
-
     pub fn is_predefined(&self) -> bool {
         self.category == ItemCategory::Predefined
     }
-
     pub fn category(&self) -> ItemCategory {
         self.category
     }

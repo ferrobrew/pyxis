@@ -115,6 +115,7 @@ pub fn build(
     let module = semantic
         .get_module_for_path(resolvee_path)
         .with_context(|| format!("failed to get module for path `{resolvee_path}`"))?;
+
     // Handle attributes
     let mut target_size: Option<usize> = None;
     let mut singleton = None;

@@ -6,12 +6,13 @@ use crate::{
     grammar::{self, ItemPath},
     parser,
     semantic_analysis::{
+        enum_definition,
         module::Module,
         type_definition,
         type_registry::TypeRegistry,
         types::{
-            EnumDefinition, ExternValue, ItemCategory, ItemDefinition, ItemState,
-            ItemStateResolved, Type, TypeDefinition, Visibility,
+            ExternValue, ItemCategory, ItemDefinition, ItemState, ItemStateResolved, Type,
+            TypeDefinition, Visibility,
         },
     },
 };
@@ -242,11 +243,20 @@ impl SemanticState {
                     continue;
                 };
 
-                let item = self.build_item(resolvee_path, &definition)?;
-                if let Some(item) = item {
-                    self.type_registry.get_mut(resolvee_path).unwrap().state =
-                        ItemState::Resolved(item);
-                }
+                let visibility: Visibility = definition.visibility.into();
+
+                let item = match &definition.inner {
+                    grammar::ItemDefinitionInner::Type(ty) => {
+                        type_definition::build(&mut self, resolvee_path, visibility, ty)?
+                    }
+                    grammar::ItemDefinitionInner::Enum(e) => {
+                        enum_definition::build(&self, resolvee_path, e)?
+                    }
+                };
+
+                let Some(item) = item else { continue };
+                self.type_registry.get_mut(resolvee_path).unwrap().state =
+                    ItemState::Resolved(item);
             }
 
             if to_resolve == self.type_registry.unresolved() {
@@ -274,140 +284,6 @@ impl SemanticState {
 }
 
 impl SemanticState {
-    fn build_item(
-        &mut self,
-        resolvee_path: &ItemPath,
-        definition: &grammar::ItemDefinition,
-    ) -> anyhow::Result<Option<ItemStateResolved>> {
-        let visibility: Visibility = definition.visibility.into();
-
-        match &definition.inner {
-            grammar::ItemDefinitionInner::Type(ty) => {
-                type_definition::build(self, resolvee_path, visibility, ty)
-            }
-            grammar::ItemDefinitionInner::Enum(e) => self.build_enum(resolvee_path, e),
-        }
-    }
-
-    fn build_enum(
-        &self,
-        resolvee_path: &ItemPath,
-        definition: &grammar::EnumDefinition,
-    ) -> anyhow::Result<Option<ItemStateResolved>> {
-        let module = self
-            .get_module_for_path(resolvee_path)
-            .with_context(|| format!("failed to get module for path `{resolvee_path}`"))?;
-
-        let Some(ty) = self
-            .type_registry
-            .resolve_grammar_type(&module.scope(), &definition.type_)
-        else {
-            return Ok(None);
-        };
-
-        // TODO: verify that `ty` actually makes sense for an enum
-        let Some(size) = ty.size(&self.type_registry) else {
-            return Ok(None);
-        };
-
-        let mut fields: Vec<(String, isize)> = vec![];
-        let mut last_field = 0;
-        let mut default_index = None;
-        for statement in &definition.statements {
-            let grammar::EnumStatement {
-                name,
-                expr,
-                attributes,
-            } = statement;
-            let value = match expr {
-                Some(grammar::Expr::IntLiteral(value)) => *value,
-                Some(_) => anyhow::bail!(
-                    "unsupported enum value for case `{name}` of enum `{resolvee_path}`: {expr:?}"
-                ),
-                None => last_field,
-            };
-            fields.push((name.0.clone(), value));
-
-            for attribute in attributes {
-                match attribute {
-                    grammar::Attribute::Ident(ident) => match ident.as_str() {
-                        "default" => {
-                            if default_index.is_some() {
-                                anyhow::bail!("enum {resolvee_path} has multiple default variants");
-                            }
-                            default_index = Some(fields.len() - 1);
-                        }
-                        _ => anyhow::bail!("unsupported attribute for case `{name}` of enum `{resolvee_path}`: {attribute:?}"),
-                    },
-                    grammar::Attribute::Function(_ident, _exprs) => {
-                        anyhow::bail!("unsupported attribute for case `{name}` of enum `{resolvee_path}`: {attribute:?}");
-                    }
-                }
-            }
-
-            last_field = value + 1;
-        }
-
-        let mut singleton = None;
-        let mut copyable = false;
-        let mut cloneable = false;
-        let mut defaultable = false;
-        for attribute in &definition.attributes {
-            match attribute {
-                grammar::Attribute::Ident(ident) => match ident.as_str() {
-                    "copyable" => {
-                        copyable = true;
-                        cloneable = true;
-                    }
-                    "cloneable" => cloneable = true,
-                    "defaultable" => defaultable = true,
-                    _ => anyhow::bail!(
-                        "unsupported attribute for enum `{resolvee_path}`: {attribute:?}"
-                    ),
-                },
-                grammar::Attribute::Function(ident, exprs) => {
-                    match (ident.as_str(), exprs.as_slice()) {
-                        ("singleton", [grammar::Expr::IntLiteral(value)]) => {
-                            singleton = Some(*value as usize);
-                        }
-                        _ => anyhow::bail!(
-                            "unsupported attribute for enum `{resolvee_path}`: {attribute:?}"
-                        ),
-                    }
-                }
-            }
-        }
-
-        if defaultable && default_index.is_none() {
-            anyhow::bail!(
-                "enum `{resolvee_path}` is marked as defaultable but has no default variant set"
-            );
-        }
-
-        if !defaultable && default_index.is_some() {
-            anyhow::bail!(
-                "enum `{resolvee_path}` has a default variant set but is not marked as defaultable"
-            );
-        }
-
-        Ok(Some(ItemStateResolved {
-            size,
-            alignment: ty.alignment(&self.type_registry).with_context(|| {
-                format!("failed to get alignment for base type of enum `{resolvee_path}`")
-            })?,
-            inner: EnumDefinition {
-                type_: ty,
-                fields,
-                singleton,
-                copyable,
-                cloneable,
-                defaultable,
-                default_index,
-            }
-            .into(),
-        }))
-    }
-
     pub(super) fn get_module_for_path(&self, path: &ItemPath) -> Option<&Module> {
         self.modules.get(&path.parent()?)
     }
