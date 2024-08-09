@@ -7,6 +7,6 @@ pub(crate) mod type_registry;
 pub(crate) mod types;
 
 mod function;
-mod vftable;
+mod type_definition;
 
 pub use semantic_state::SemanticState;

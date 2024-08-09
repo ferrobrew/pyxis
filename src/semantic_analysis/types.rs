@@ -1,8 +1,13 @@
-use std::{fmt, str::FromStr};
+use std::fmt;
 
 use crate::{
     grammar::{self, ItemPath},
     semantic_analysis::type_registry,
+};
+
+pub use crate::semantic_analysis::{
+    function::{Argument, CallingConvention, Function},
+    type_definition::{Region, TypeDefinition, TypeVftable},
 };
 
 #[allow(dead_code, clippy::upper_case_acronyms)]
@@ -25,62 +30,6 @@ pub mod test_aliases {
     pub type STV = super::TypeVftable;
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum Argument {
-    ConstSelf,
-    MutSelf,
-    Field(String, Type),
-}
-impl Argument {
-    pub fn field(name: impl Into<String>, type_ref: impl Into<Type>) -> Self {
-        Argument::Field(name.into(), type_ref.into())
-    }
-}
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-pub enum CallingConvention {
-    C,
-    Cdecl,
-    Stdcall,
-    Fastcall,
-    Thiscall,
-    Vectorcall,
-    System,
-}
-impl CallingConvention {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            CallingConvention::C => "C",
-            CallingConvention::Cdecl => "cdecl",
-            CallingConvention::Stdcall => "stdcall",
-            CallingConvention::Fastcall => "fastcall",
-            CallingConvention::Thiscall => "thiscall",
-            CallingConvention::Vectorcall => "vectorcall",
-            CallingConvention::System => "system",
-        }
-    }
-}
-impl fmt::Display for CallingConvention {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.as_str())
-    }
-}
-impl FromStr for CallingConvention {
-    type Err = ();
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "C" => Ok(CallingConvention::C),
-            "cdecl" => Ok(CallingConvention::Cdecl),
-            "stdcall" => Ok(CallingConvention::Stdcall),
-            "fastcall" => Ok(CallingConvention::Fastcall),
-            "thiscall" => Ok(CallingConvention::Thiscall),
-            "vectorcall" => Ok(CallingConvention::Vectorcall),
-            "system" => Ok(CallingConvention::System),
-            _ => Err(()),
-        }
-    }
-}
-
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum Visibility {
     Public,
@@ -92,46 +41,6 @@ impl From<grammar::Visibility> for Visibility {
             grammar::Visibility::Public => Visibility::Public,
             grammar::Visibility::Private => Visibility::Private,
         }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Function {
-    pub visibility: Visibility,
-    pub name: String,
-    pub address: Option<usize>,
-    pub arguments: Vec<Argument>,
-    pub return_type: Option<Type>,
-    pub calling_convention: CallingConvention,
-}
-impl Function {
-    pub fn new(visibility: Visibility, name: impl Into<String>) -> Self {
-        Function {
-            visibility,
-            name: name.into(),
-            address: None,
-            arguments: Vec::new(),
-            return_type: None,
-            // ehh. This is not really always going to be true,
-            // but I also don't want to specify it in all of the tests
-            calling_convention: CallingConvention::Thiscall,
-        }
-    }
-    pub fn with_address(mut self, address: usize) -> Self {
-        self.address = Some(address);
-        self
-    }
-    pub fn with_arguments(mut self, arguments: impl Into<Vec<Argument>>) -> Self {
-        self.arguments = arguments.into();
-        self
-    }
-    pub fn with_return_type(mut self, return_type: Type) -> Self {
-        self.return_type = Some(return_type);
-        self
-    }
-    pub fn with_calling_convention(mut self, calling_convention: CallingConvention) -> Self {
-        self.calling_convention = calling_convention;
-        self
     }
 }
 
@@ -248,106 +157,6 @@ impl fmt::Display for Type {
                 Ok(())
             }
         }
-    }
-}
-
-#[derive(PartialEq, Eq, Debug, Clone, Hash)]
-pub struct Region {
-    pub visibility: Visibility,
-    pub name: Option<String>,
-    pub type_ref: Type,
-    pub is_base: bool,
-}
-impl Region {
-    pub fn field(visibility: Visibility, name: impl Into<String>, type_ref: Type) -> Self {
-        Region {
-            visibility,
-            name: Some(name.into()),
-            type_ref,
-            is_base: false,
-        }
-    }
-    pub fn unnamed_field(type_ref: Type) -> Self {
-        Region {
-            visibility: Visibility::Private,
-            name: None,
-            type_ref,
-            is_base: false,
-        }
-    }
-    pub fn mark_as_base(mut self) -> Self {
-        self.is_base = true;
-        self
-    }
-    pub fn size(&self, type_registry: &type_registry::TypeRegistry) -> Option<usize> {
-        self.type_ref.size(type_registry)
-    }
-}
-
-#[derive(PartialEq, Eq, Debug, Clone, Hash)]
-pub struct TypeVftable {
-    pub functions: Vec<Function>,
-    pub field_path: Vec<String>,
-    pub type_: Type,
-}
-
-#[derive(PartialEq, Eq, Debug, Clone, Default, Hash)]
-pub struct TypeDefinition {
-    pub regions: Vec<Region>,
-    pub free_functions: Vec<Function>,
-    pub vftable: Option<TypeVftable>,
-    pub singleton: Option<usize>,
-    pub copyable: bool,
-    pub cloneable: bool,
-    pub defaultable: bool,
-    pub packed: bool,
-}
-impl TypeDefinition {
-    pub fn new() -> Self {
-        Default::default()
-    }
-    pub fn with_regions(mut self, regions: impl Into<Vec<Region>>) -> Self {
-        self.regions = regions.into();
-        self
-    }
-    pub fn with_free_functions(mut self, free_functions: impl Into<Vec<Function>>) -> Self {
-        self.free_functions = free_functions.into();
-        self
-    }
-    pub fn with_vftable(mut self, vftable: TypeVftable) -> Self {
-        self.vftable = Some(vftable);
-        self
-    }
-    pub fn with_vftable_functions(
-        self,
-        vftable_type: Type,
-        vftable_functions: impl Into<Vec<Function>>,
-    ) -> Self {
-        self.with_vftable(TypeVftable {
-            functions: vftable_functions.into(),
-            field_path: vec!["vftable".into()],
-            type_: vftable_type,
-        })
-    }
-    pub fn with_singleton(mut self, singleton: usize) -> Self {
-        self.singleton = Some(singleton);
-        self
-    }
-    pub fn with_copyable(mut self, copyable: bool) -> Self {
-        self.copyable = copyable;
-        self
-    }
-    pub fn with_cloneable(mut self, cloneable: bool) -> Self {
-        self.cloneable = cloneable;
-        self
-    }
-    pub fn with_defaultable(mut self, defaultable: bool) -> Self {
-        self.defaultable = defaultable;
-        self
-    }
-    pub fn with_packed(mut self, packed: bool) -> Self {
-        self.packed = packed;
-        self
     }
 }
 

@@ -8,11 +8,18 @@ use crate::{
         type_registry::TypeRegistry,
         types::{
             Argument, CallingConvention, Function, ItemCategory, ItemDefinition, ItemState,
-            ItemStateResolved, Region, Type, TypeDefinition, TypeVftable, Visibility,
+            ItemStateResolved, Region, Type, TypeDefinition, Visibility,
         },
         SemanticState,
     },
 };
+
+#[derive(PartialEq, Eq, Debug, Clone, Hash)]
+pub struct TypeVftable {
+    pub functions: Vec<Function>,
+    pub field_path: Vec<String>,
+    pub type_: Type,
+}
 
 /// Given a parsed size/list of functions, construct the list of semantic functions
 pub fn convert_grammar_functions_to_semantic_functions(
@@ -98,7 +105,7 @@ pub fn build(
 
         let vftable_path = vftable_type.path.clone();
         let vftable_pointer_type = Type::ConstPointer(Box::new(Type::Raw(vftable_path)));
-        semantic.add_type(vftable_type)?;
+        semantic.add_item(vftable_type)?;
 
         if let Some((base_name, base_vftable)) = first_base
             .map(|b| get_region_name_and_vftable(&semantic.type_registry, resolvee_path, b))
