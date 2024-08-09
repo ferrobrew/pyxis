@@ -6,6 +6,8 @@ use crate::{
     },
 };
 
+use pretty_assertions::assert_eq;
+
 pub fn pointer_size() -> usize {
     static POINTER_SIZE: std::sync::OnceLock<usize> = std::sync::OnceLock::new();
     *POINTER_SIZE.get_or_init(|| {
