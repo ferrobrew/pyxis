@@ -2,7 +2,13 @@ use std::{fmt::Write as _, path::Path};
 
 use crate::{
     grammar::{ItemPath, ItemPathSegment},
-    semantic_analysis::{module, semantic_state, types},
+    semantic_analysis::{
+        types::{
+            Argument, EnumDefinition, ExternValue, Function, ItemCategory, ItemDefinition,
+            ItemDefinitionInner, ItemStateResolved, Type, TypeDefinition, Visibility,
+        },
+        Module, ResolvedSemanticState,
+    },
 };
 
 use anyhow::Context;

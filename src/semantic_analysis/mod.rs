@@ -1,13 +1,14 @@
-#[cfg(test)]
-mod tests;
-
-pub(crate) mod module;
-pub(crate) mod semantic_state;
-pub(crate) mod type_registry;
-pub(crate) mod types;
+pub mod types;
 
 mod enum_definition;
 mod function;
+mod module;
+mod semantic_state;
 mod type_definition;
+mod type_registry;
 
-pub use semantic_state::SemanticState;
+#[cfg(test)]
+mod tests;
+
+pub use module::Module;
+pub use semantic_state::{ResolvedSemanticState, SemanticState};
