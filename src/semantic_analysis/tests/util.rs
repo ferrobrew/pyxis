@@ -50,12 +50,15 @@ pub fn assert_ast_produces_type_definitions(
 
 #[track_caller]
 pub fn assert_ast_produces_failure(module: M, failure: &str) {
-    assert_eq!(
-        build_state(&module, &IP::from("test"))
-            .unwrap_err()
-            .to_string(),
-        failure
-    );
+    let err = build_state(&module, &IP::from("test")).unwrap_err();
+    let mut msg = err.to_string();
+    let mut next_err = err.source();
+    while let Some(next) = next_err {
+        msg.push('\n');
+        msg.push_str(&next.to_string());
+        next_err = next.source();
+    }
+    assert_eq!(msg, failure);
 }
 
 pub fn unknown(size: usize) -> ST {
