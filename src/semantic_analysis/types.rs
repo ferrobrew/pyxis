@@ -7,7 +7,7 @@ use crate::{
 
 pub use crate::semantic_analysis::{
     enum_definition::EnumDefinition,
-    function::{Argument, CallingConvention, Function},
+    function::{Argument, CallingConvention, Function, FunctionGetter},
     type_definition::{Region, TypeDefinition, TypeVftable},
 };
 
@@ -29,6 +29,7 @@ pub mod test_aliases {
     pub type SV = super::Visibility;
     pub type SEV = super::ExternValue;
     pub type STV = super::TypeVftable;
+    pub type SFG = super::FunctionGetter;
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]

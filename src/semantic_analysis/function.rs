@@ -76,18 +76,31 @@ impl FromStr for CallingConvention {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum FunctionGetter {
+    Free { address: usize },
+    Vftable,
+}
+
+impl FunctionGetter {
+    pub fn free(address: usize) -> Self {
+        FunctionGetter::Free { address }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Function {
     pub visibility: Visibility,
     pub name: String,
-    pub address: Option<usize>,
+    pub getter: FunctionGetter,
     pub arguments: Vec<Argument>,
     pub return_type: Option<Type>,
     pub calling_convention: CallingConvention,
 }
 impl fmt::Display for Function {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if let Some(address) = self.address {
-            write!(f, "#[address(0x{address:X}) ")?;
+        match self.getter {
+            FunctionGetter::Free { address } => write!(f, "#[address(0x{address:X})] ")?,
+            FunctionGetter::Vftable => {}
         }
         match self.visibility {
             Visibility::Public => write!(f, "pub "),
@@ -109,21 +122,17 @@ impl fmt::Display for Function {
     }
 }
 impl Function {
-    pub fn new(visibility: Visibility, name: impl Into<String>) -> Self {
+    pub fn new(visibility: Visibility, name: impl Into<String>, getter: FunctionGetter) -> Self {
         Function {
             visibility,
             name: name.into(),
-            address: None,
+            getter,
             arguments: Vec::new(),
             return_type: None,
             // ehh. This is not really always going to be true,
             // but I also don't want to specify it in all of the tests
             calling_convention: CallingConvention::Thiscall,
         }
-    }
-    pub fn with_address(mut self, address: usize) -> Self {
-        self.address = Some(address);
-        self
     }
     pub fn with_arguments(mut self, arguments: impl Into<Vec<Argument>>) -> Self {
         self.arguments = arguments.into();
@@ -142,9 +151,10 @@ impl Function {
 pub fn build(
     type_registry: &TypeRegistry,
     scope: &[ItemPath],
+    is_vfunc: bool,
     function: &grammar::Function,
 ) -> Result<Function, anyhow::Error> {
-    let mut address = None;
+    let mut getter = is_vfunc.then_some(FunctionGetter::Vftable);
     let mut calling_convention = None;
     for attribute in &function.attributes {
         let Some((ident, exprs)) = attribute.function() else {
@@ -155,15 +165,30 @@ pub fn build(
         };
         match (ident.as_str(), &exprs[..]) {
             ("address", [grammar::Expr::IntLiteral(addr)]) => {
-                address = Some((*addr).try_into().with_context(|| {
-                    format!(
-                        "failed to convert `address` attribute into usize for function `{}`",
+                if is_vfunc {
+                    anyhow::bail!(
+                        "address attribute is not supported for virtual function `{}`",
                         function.name
-                    )
-                })?);
+                    );
+                }
+
+                getter = Some(FunctionGetter::Free {
+                    address: (*addr).try_into().with_context(|| {
+                        format!(
+                            "failed to convert `address` attribute into usize for function `{}`",
+                            function.name
+                        )
+                    })?,
+                });
             }
             ("index", _) => {
                 // ignore index attribute, this is handled by vftable construction
+                if !is_vfunc {
+                    anyhow::bail!(
+                        "index attribute is only supported for virtual functions, not `{}`",
+                        function.name
+                    );
+                }
             }
             ("calling_convention", [grammar::Expr::StringLiteral(cc)]) => {
                 calling_convention = Some(cc.parse().map_err(|_| {
@@ -179,6 +204,20 @@ pub fn build(
             ),
         }
     }
+
+    if !is_vfunc && getter.is_none() {
+        anyhow::bail!(
+            "function `{}` has no implementation available; did you forget to assign an `address` attribute?",
+            function.name,
+        );
+    }
+
+    let Some(getter) = getter else {
+        panic!(
+            "function `{}` had no getter assigned: {:?}",
+            function.name, function
+        );
+    };
 
     let arguments = function
         .arguments
@@ -223,7 +262,7 @@ pub fn build(
     Ok(Function {
         visibility: function.visibility.into(),
         name: function.name.0.clone(),
-        address,
+        getter,
         arguments,
         return_type,
         calling_convention,

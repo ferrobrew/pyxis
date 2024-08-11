@@ -69,7 +69,7 @@ pub fn convert_grammar_functions_to_semantic_functions(
         if let Some(index) = index {
             make_padding_functions(&mut output, index);
         }
-        let function = function::build(type_registry, &module.scope(), function)
+        let function = function::build(type_registry, &module.scope(), true, function)
             .with_context(|| format!("while building vftable function `{}`", function.name))?;
         output.push(function);
     }
@@ -87,7 +87,7 @@ pub fn convert_grammar_functions_to_semantic_functions(
                 name: format!("_vfunc_{}", output.len()),
                 arguments: vec![Argument::MutSelf],
                 return_type: None,
-                address: None,
+                getter: function::FunctionGetter::Vftable,
                 calling_convention: CallingConvention::Thiscall,
             });
         }

@@ -170,13 +170,14 @@ pub fn build(
     let mut free_functions = vec![];
     if let Some(type_impl) = module.impls.get(resolvee_path) {
         for function in &type_impl.functions {
-            let function = function::build(&semantic.type_registry, &module.scope(), function)
-                .with_context(|| {
-                    format!(
-                        "while building impl function `{}` for type `{resolvee_path}`",
-                        function.name
-                    )
-                })?;
+            let function =
+                function::build(&semantic.type_registry, &module.scope(), false, function)
+                    .with_context(|| {
+                        format!(
+                            "while building impl function `{}` for type `{resolvee_path}`",
+                            function.name
+                        )
+                    })?;
             free_functions.push(function);
         }
     }

@@ -4,8 +4,9 @@ use crate::{
     grammar::{ItemPath, ItemPathSegment},
     semantic_analysis::{
         types::{
-            Argument, EnumDefinition, ExternValue, Function, ItemCategory, ItemDefinition,
-            ItemDefinitionInner, ItemStateResolved, Type, TypeDefinition, Visibility,
+            Argument, EnumDefinition, ExternValue, Function, FunctionGetter, ItemCategory,
+            ItemDefinition, ItemDefinitionInner, ItemStateResolved, Type, TypeDefinition,
+            Visibility,
         },
         Module, ResolvedSemanticState,
     },
@@ -223,7 +224,7 @@ fn build_type(
 
     let free_functions_impl = free_functions
         .iter()
-        .map(|f| build_function(f, false))
+        .map(build_function)
         .collect::<anyhow::Result<Vec<_>>>()?;
 
     let vftable_function_impl = vftable
@@ -232,7 +233,7 @@ fn build_type(
             v.functions
                 .iter()
                 .filter(|f| !f.name.starts_with('_'))
-                .map(|f| build_function(f, true))
+                .map(build_function)
                 .collect::<anyhow::Result<Vec<_>>>()
         })
         .transpose()?
@@ -363,10 +364,7 @@ fn build_enum(
     })
 }
 
-fn build_function(
-    function: &Function,
-    is_vftable: bool,
-) -> Result<proc_macro2::TokenStream, anyhow::Error> {
+fn build_function(function: &Function) -> Result<proc_macro2::TokenStream, anyhow::Error> {
     let name = str_to_ident(&function.name);
 
     let arguments = function
@@ -429,23 +427,9 @@ fn build_function(
         })
         .transpose()?;
 
-    #[derive(Debug)]
-    enum FunctionGetter {
-        Address(usize),
-        Vftable,
-    }
-    let function_getter = if is_vftable {
-        Some(FunctionGetter::Vftable)
-    } else {
-        function.address.map(FunctionGetter::Address)
-    };
-
-    if function_getter.is_none() {
-        return Err(anyhow::anyhow!("no function getter set"));
-    }
     let calling_convention = function.calling_convention.as_str();
-    let function_getter_impl = function_getter.map(|fg| match fg {
-        FunctionGetter::Address(address) => quote! {
+    let function_getter_impl = match &function.getter {
+        FunctionGetter::Free { address } => quote! {
             let f:
                 unsafe extern #calling_convention
                 fn(#(#lambda_arguments),*) #return_type
@@ -454,7 +438,7 @@ fn build_function(
         FunctionGetter::Vftable => quote! {
             let f = std::ptr::addr_of!((*self.vftable()).#name).read()
         },
-    });
+    };
 
     let visibility = visibility_to_tokens(function.visibility);
     Ok(quote! {
