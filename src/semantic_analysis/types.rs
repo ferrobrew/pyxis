@@ -246,17 +246,25 @@ pub struct ItemDefinition {
     pub category: ItemCategory,
 }
 impl ItemDefinition {
-    pub fn defined_resolved(
+    pub fn category_resolved(
         visibility: Visibility,
         path: impl Into<ItemPath>,
         resolved: ItemStateResolved,
+        category: ItemCategory,
     ) -> Self {
         ItemDefinition {
             visibility,
             path: path.into(),
             state: ItemState::Resolved(resolved),
-            category: ItemCategory::Defined,
+            category,
         }
+    }
+    pub fn defined_resolved(
+        visibility: Visibility,
+        path: impl Into<ItemPath>,
+        resolved: ItemStateResolved,
+    ) -> Self {
+        Self::category_resolved(visibility, path, resolved, ItemCategory::Defined)
     }
     pub fn resolved(&self) -> Option<&ItemStateResolved> {
         match &self.state {
@@ -285,6 +293,14 @@ impl ItemDefinition {
 pub struct Backend {
     pub prologue: Option<String>,
     pub epilogue: Option<String>,
+}
+impl Backend {
+    pub fn new(prologue: impl Into<Option<String>>, epilogue: impl Into<Option<String>>) -> Self {
+        Backend {
+            prologue: prologue.into(),
+            epilogue: epilogue.into(),
+        }
+    }
 }
 
 #[derive(PartialEq, Eq, Debug, Clone)]

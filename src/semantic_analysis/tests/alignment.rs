@@ -88,17 +88,15 @@ fn type_with_bool_at_end_should_be_rejected_due_to_alignment() {
         [SID::defined_resolved(
             SV::Public,
             "test::TestType",
-            SISR {
-                size: 0xEC8,
-                alignment: pointer_size(),
-                inner: STD::new()
-                    .with_regions([
-                        SR::field(SV::Private, "_field_0", unknown(0xEC4)),
-                        SR::field(SV::Public, "field_1", ST::raw("bool")),
-                        SR::field(SV::Private, "_field_ec5", unknown(3)),
-                    ])
-                    .into(),
-            },
+            SISR::new(
+                0xEC8,
+                pointer_size(),
+                STD::new().with_regions([
+                    SR::field(SV::Private, "_field_0", unknown(0xEC4)),
+                    SR::field(SV::Public, "field_1", ST::raw("bool")),
+                    SR::field(SV::Private, "_field_ec5", unknown(3)),
+                ]),
+            ),
         )],
     );
 }

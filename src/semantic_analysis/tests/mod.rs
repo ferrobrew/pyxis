@@ -27,17 +27,15 @@ fn can_resolve_basic_struct() {
         [SID::defined_resolved(
             SV::Public,
             "test::TestType",
-            SISR {
-                size: 16,
-                alignment: 8,
-                inner: STD::new()
-                    .with_regions([
-                        SR::field(SV::Public, "field_1", ST::raw("i32")),
-                        SR::field(SV::Private, "_field_4", unknown(4)),
-                        SR::field(SV::Public, "field_2", ST::raw("u64")),
-                    ])
-                    .into(),
-            },
+            SISR::new(
+                16,
+                8,
+                STD::new().with_regions([
+                    SR::field(SV::Public, "field_1", ST::raw("i32")),
+                    SR::field(SV::Private, "_field_4", unknown(4)),
+                    SR::field(SV::Public, "field_2", ST::raw("u64")),
+                ]),
+            ),
         )],
     );
 }
@@ -68,38 +66,34 @@ fn can_resolve_pointer_to_another_struct() {
             SID::defined_resolved(
                 SV::Public,
                 "test::TestType1",
-                SISR {
-                    size: 8,
-                    alignment: 8,
-                    inner: STD::new()
-                        .with_regions([SR::field(SV::Public, "field_1", ST::raw("u64"))])
-                        .into(),
-                },
+                SISR::new(
+                    8,
+                    8,
+                    STD::new().with_regions([SR::field(SV::Public, "field_1", ST::raw("u64"))]),
+                ),
             ),
             SID::defined_resolved(
                 SV::Public,
                 "test::TestType2",
-                SISR {
-                    size: 16 + 2 * pointer_size(),
-                    alignment: 8,
-                    inner: STD::new()
-                        .with_regions([
-                            SR::field(SV::Public, "field_1", ST::raw("i32")),
-                            SR::field(SV::Private, "_field_4", unknown(4)),
-                            SR::field(SV::Public, "field_2", ST::raw("test::TestType1")),
-                            SR::field(
-                                SV::Public,
-                                "field_3",
-                                ST::raw("test::TestType1").const_pointer(),
-                            ),
-                            SR::field(
-                                SV::Public,
-                                "field_4",
-                                ST::raw("test::TestType1").mut_pointer(),
-                            ),
-                        ])
-                        .into(),
-                },
+                SISR::new(
+                    16 + 2 * pointer_size(),
+                    8,
+                    STD::new().with_regions([
+                        SR::field(SV::Public, "field_1", ST::raw("i32")),
+                        SR::field(SV::Private, "_field_4", unknown(4)),
+                        SR::field(SV::Public, "field_2", ST::raw("test::TestType1")),
+                        SR::field(
+                            SV::Public,
+                            "field_3",
+                            ST::raw("test::TestType1").const_pointer(),
+                        ),
+                        SR::field(
+                            SV::Public,
+                            "field_4",
+                            ST::raw("test::TestType1").mut_pointer(),
+                        ),
+                    ]),
+                ),
             ),
         ],
     );
@@ -151,24 +145,22 @@ fn can_resolve_complex_type() {
             SID::defined_resolved(
                 SV::Public,
                 "test::TestType",
-                SISR {
-                    size: 8,
-                    alignment: pointer_size(),
-                    inner: STD::new()
-                        .with_regions([
-                            SR::field(SV::Public, "field_1", ST::raw("i32")),
-                            SR::field(SV::Private, "_field_4", unknown(4)),
-                        ])
-                        .into(),
-                },
+                SISR::new(
+                    8,
+                    pointer_size(),
+                    STD::new().with_regions([
+                        SR::field(SV::Public, "field_1", ST::raw("i32")),
+                        SR::field(SV::Private, "_field_4", unknown(4)),
+                    ]),
+                ),
             ),
             SID::defined_resolved(
                 SV::Public,
                 "test::Singleton",
-                SISR {
-                    size: 0x1750,
-                    alignment: pointer_size(),
-                    inner: STD::new()
+                SISR::new(
+                    0x1750,
+                    pointer_size(),
+                    STD::new()
                         .with_regions([
                             SR::field(SV::Private, "_field_0", unknown(0x78)),
                             SR::field(SV::Public, "max_num_1", ST::raw("u16")),
@@ -190,9 +182,8 @@ fn can_resolve_complex_type() {
                             SAr::field("arg3", ST::raw("u32").const_pointer()),
                         ])
                         .with_return_type(ST::raw("test::TestType").mut_pointer())])
-                        .with_singleton(0x1_200_000)
-                        .into(),
-                },
+                        .with_singleton(0x1_200_000),
+                ),
             ),
         ],
     );
@@ -246,17 +237,15 @@ fn can_use_type_from_another_module() {
         SID::defined_resolved(
             SV::Public,
             path.clone(),
-            SISR {
-                size: 4,
-                alignment: 4,
-                inner: STD::new()
-                    .with_regions([SR::field(
-                        SV::Private,
-                        "field",
-                        ST::raw("module2::TestType2")
-                    )])
-                    .into(),
-            },
+            SISR::new(
+                4,
+                4,
+                STD::new().with_regions([SR::field(
+                    SV::Private,
+                    "field",
+                    ST::raw("module2::TestType2")
+                )])
+            )
         )
     );
 }
@@ -289,38 +278,31 @@ fn can_resolve_embed_of_an_extern() {
             SID::defined_resolved(
                 SV::Public,
                 "test::TestType2",
-                SISR {
-                    size: 24 + 2 * pointer_size(),
-                    alignment: 8,
-                    inner: STD::new()
-                        .with_regions([
-                            SR::field(SV::Public, "field_1", ST::raw("u64")),
-                            SR::field(SV::Public, "field_2", ST::raw("test::TestType1")),
-                            SR::field(
-                                SV::Public,
-                                "field_3",
-                                ST::raw("test::TestType1").const_pointer(),
-                            ),
-                            SR::field(
-                                SV::Public,
-                                "field_4",
-                                ST::raw("test::TestType1").mut_pointer(),
-                            ),
-                        ])
-                        .into(),
-                },
+                SISR::new(
+                    24 + 2 * pointer_size(),
+                    8,
+                    STD::new().with_regions([
+                        SR::field(SV::Public, "field_1", ST::raw("u64")),
+                        SR::field(SV::Public, "field_2", ST::raw("test::TestType1")),
+                        SR::field(
+                            SV::Public,
+                            "field_3",
+                            ST::raw("test::TestType1").const_pointer(),
+                        ),
+                        SR::field(
+                            SV::Public,
+                            "field_4",
+                            ST::raw("test::TestType1").mut_pointer(),
+                        ),
+                    ]),
+                ),
             ),
-            SID {
-                visibility: SV::Public,
-                path: "test::TestType1".into(),
-                state: SISR {
-                    size: 16,
-                    alignment: 4,
-                    inner: STD::new().with_regions([]).into(),
-                }
-                .into(),
-                category: SIC::Extern,
-            },
+            SID::category_resolved(
+                SV::Public,
+                "test::TestType1",
+                SISR::new(16, 4, STD::new().with_regions([])),
+                SIC::Extern,
+            ),
         ],
     );
 }
@@ -362,10 +344,10 @@ fn can_generate_vftable() {
             SID::defined_resolved(
                 SV::Public,
                 "test::TestType",
-                SISR {
-                    size: pointer_size(),
-                    alignment: pointer_size(),
-                    inner: STD::new()
+                SISR::new(
+                    pointer_size(),
+                    pointer_size(),
+                    STD::new()
                         .with_regions([SR::field(SV::Private, "vftable", vftable_type.clone())])
                         .with_vftable_functions(
                             vftable_type,
@@ -387,50 +369,47 @@ fn can_generate_vftable() {
                                 make_vfunc(2),
                                 make_vfunc(3),
                             ],
-                        )
-                        .into(),
-                },
+                        ),
+                ),
             ),
             // TestTypeVftable
             SID::defined_resolved(
                 SV::Public,
                 "test::TestTypeVftable",
-                SISR {
-                    size: 4 * pointer_size(),
-                    alignment: pointer_size(),
-                    inner: STD::new()
-                        .with_regions([
-                            SR::field(
-                                SV::Public,
-                                "test_function0",
-                                ST::function(
-                                    SCC::Thiscall,
-                                    [
-                                        ("this", ST::raw("test::TestType").mut_pointer()),
-                                        ("arg0", ST::raw("u32")),
-                                        ("arg1", ST::raw("f32")),
-                                    ],
-                                    ST::raw("i32"),
-                                ),
+                SISR::new(
+                    4 * pointer_size(),
+                    pointer_size(),
+                    STD::new().with_regions([
+                        SR::field(
+                            SV::Public,
+                            "test_function0",
+                            ST::function(
+                                SCC::Thiscall,
+                                [
+                                    ("this", ST::raw("test::TestType").mut_pointer()),
+                                    ("arg0", ST::raw("u32")),
+                                    ("arg1", ST::raw("f32")),
+                                ],
+                                ST::raw("i32"),
                             ),
-                            SR::field(
-                                SV::Public,
-                                "test_function1",
-                                ST::function(
-                                    SCC::Thiscall,
-                                    [
-                                        ("this", ST::raw("test::TestType").mut_pointer()),
-                                        ("arg0", ST::raw("u32")),
-                                        ("arg1", ST::raw("f32")),
-                                    ],
-                                    None,
-                                ),
+                        ),
+                        SR::field(
+                            SV::Public,
+                            "test_function1",
+                            ST::function(
+                                SCC::Thiscall,
+                                [
+                                    ("this", ST::raw("test::TestType").mut_pointer()),
+                                    ("arg0", ST::raw("u32")),
+                                    ("arg1", ST::raw("f32")),
+                                ],
+                                None,
                             ),
-                            make_vfunc_region(2),
-                            make_vfunc_region(3),
-                        ])
-                        .into(),
-                },
+                        ),
+                        make_vfunc_region(2),
+                        make_vfunc_region(3),
+                    ]),
+                ),
             ),
         ],
     );
@@ -475,10 +454,10 @@ fn can_generate_vftable_with_indices() {
             SID::defined_resolved(
                 SV::Public,
                 "test::TestType",
-                SISR {
-                    size: pointer_size(),
-                    alignment: pointer_size(),
-                    inner: STD::new()
+                SISR::new(
+                    pointer_size(),
+                    pointer_size(),
+                    STD::new()
                         .with_regions([SR::field(SV::Private, "vftable", vftable_type.clone())])
                         .with_vftable_functions(
                             vftable_type,
@@ -504,54 +483,51 @@ fn can_generate_vftable_with_indices() {
                                 make_vfunc(6),
                                 make_vfunc(7),
                             ],
-                        )
-                        .into(),
-                },
+                        ),
+                ),
             ),
             // TestTypeVftable
             SID::defined_resolved(
                 SV::Public,
                 "test::TestTypeVftable",
-                SISR {
-                    size: 8 * pointer_size(),
-                    alignment: pointer_size(),
-                    inner: STD::new()
-                        .with_regions([
-                            make_vfunc_region(0),
-                            make_vfunc_region(1),
-                            SR::field(
-                                SV::Public,
-                                "test_function0",
-                                ST::function(
-                                    SCC::Thiscall,
-                                    [
-                                        ("this", ST::raw("test::TestType").mut_pointer()),
-                                        ("arg0", ST::raw("u32")),
-                                        ("arg1", ST::raw("f32")),
-                                    ],
-                                    ST::raw("i32"),
-                                ),
+                SISR::new(
+                    8 * pointer_size(),
+                    pointer_size(),
+                    STD::new().with_regions([
+                        make_vfunc_region(0),
+                        make_vfunc_region(1),
+                        SR::field(
+                            SV::Public,
+                            "test_function0",
+                            ST::function(
+                                SCC::Thiscall,
+                                [
+                                    ("this", ST::raw("test::TestType").mut_pointer()),
+                                    ("arg0", ST::raw("u32")),
+                                    ("arg1", ST::raw("f32")),
+                                ],
+                                ST::raw("i32"),
                             ),
-                            make_vfunc_region(3),
-                            make_vfunc_region(4),
-                            SR::field(
-                                SV::Public,
-                                "test_function1",
-                                ST::function(
-                                    SCC::Thiscall,
-                                    [
-                                        ("this", ST::raw("test::TestType").mut_pointer()),
-                                        ("arg0", ST::raw("u32")),
-                                        ("arg1", ST::raw("f32")),
-                                    ],
-                                    None,
-                                ),
+                        ),
+                        make_vfunc_region(3),
+                        make_vfunc_region(4),
+                        SR::field(
+                            SV::Public,
+                            "test_function1",
+                            ST::function(
+                                SCC::Thiscall,
+                                [
+                                    ("this", ST::raw("test::TestType").mut_pointer()),
+                                    ("arg0", ST::raw("u32")),
+                                    ("arg1", ST::raw("f32")),
+                                ],
+                                None,
                             ),
-                            make_vfunc_region(6),
-                            make_vfunc_region(7),
-                        ])
-                        .into(),
-                },
+                        ),
+                        make_vfunc_region(6),
+                        make_vfunc_region(7),
+                    ]),
+                ),
             ),
         ],
     );
@@ -595,10 +571,10 @@ fn will_propagate_calling_convention_for_impl_and_vftable() {
             SID::defined_resolved(
                 SV::Public,
                 "test::TestType",
-                SISR {
-                    size: pointer_size(),
-                    alignment: pointer_size(),
-                    inner: STD::new()
+                SISR::new(
+                    pointer_size(),
+                    pointer_size(),
+                    STD::new()
                         .with_regions([SR::field(SV::Private, "vftable", vftable_type.clone())])
                         .with_vftable_functions(
                             vftable_type,
@@ -618,33 +594,30 @@ fn will_propagate_calling_convention_for_impl_and_vftable() {
                         )
                         .with_calling_convention(SCC::Cdecl)
                         .with_arguments([SAr::field("arg1", ST::raw("i32"))])
-                        .with_return_type(ST::raw("i32"))])
-                        .into(),
-                },
+                        .with_return_type(ST::raw("i32"))]),
+                ),
             ),
             // TestTypeVftable
             SID::defined_resolved(
                 SV::Public,
                 "test::TestTypeVftable",
-                SISR {
-                    size: pointer_size(),
-                    alignment: pointer_size(),
-                    inner: STD::new()
-                        .with_regions([SR::field(
-                            SV::Public,
-                            "test_function0",
-                            ST::function(
-                                SCC::Cdecl,
-                                [
-                                    ("this", ST::raw("test::TestType").mut_pointer()),
-                                    ("arg0", ST::raw("u32")),
-                                    ("arg1", ST::raw("f32")),
-                                ],
-                                ST::raw("i32"),
-                            ),
-                        )])
-                        .into(),
-                },
+                SISR::new(
+                    pointer_size(),
+                    pointer_size(),
+                    STD::new().with_regions([SR::field(
+                        SV::Public,
+                        "test_function0",
+                        ST::function(
+                            SCC::Cdecl,
+                            [
+                                ("this", ST::raw("test::TestType").mut_pointer()),
+                                ("arg0", ST::raw("u32")),
+                                ("arg1", ST::raw("f32")),
+                            ],
+                            ST::raw("i32"),
+                        ),
+                    )]),
+                ),
             ),
         ],
     );
@@ -721,10 +694,10 @@ fn can_resolve_enum() {
         [SID::defined_resolved(
             SV::Public,
             "test::TestType",
-            SISR {
-                size: 4,
-                alignment: 4,
-                inner: SED::new(ST::raw("u32"))
+            SISR::new(
+                4,
+                4,
+                SED::new(ST::raw("u32"))
                     .with_fields([
                         ("Item0", -2),
                         ("Item1", -1),
@@ -732,9 +705,8 @@ fn can_resolve_enum() {
                         ("Item3", 10),
                         ("Item4", 11),
                     ])
-                    .with_singleton(0x1234)
-                    .into(),
-            },
+                    .with_singleton(0x1234),
+            ),
         )],
     );
 }
@@ -768,15 +740,9 @@ fn can_carry_backend_across() {
 
     assert_eq!(
         module.backends.get("rust").unwrap(),
-        &vec![
-            SB {
-                prologue: Some(prologue.to_string()),
-                epilogue: Some(epilogue.to_string()),
-            },
-            SB {
-                prologue: None,
-                epilogue: Some(epilogue.to_string()),
-            }
+        &[
+            SB::new(prologue.to_string(), epilogue.to_string()),
+            SB::new(None, epilogue.to_string()),
         ]
     );
 }
@@ -794,14 +760,13 @@ fn can_extract_copyable_and_cloneable_correctly() {
         [SID::defined_resolved(
             SV::Public,
             "test::TestType",
-            SISR {
-                size: 4,
-                alignment: 4,
-                inner: STD::new()
+            SISR::new(
+                4,
+                4,
+                STD::new()
                     .with_regions([SR::field(SV::Private, "field_1", ST::raw("i32"))])
-                    .with_cloneable(true)
-                    .into(),
-            },
+                    .with_cloneable(true),
+            ),
         )],
     );
 
@@ -816,15 +781,14 @@ fn can_extract_copyable_and_cloneable_correctly() {
         [SID::defined_resolved(
             SV::Public,
             "test::TestType",
-            SISR {
-                size: 4,
-                alignment: 4,
-                inner: STD::new()
+            SISR::new(
+                4,
+                4,
+                STD::new()
                     .with_regions([SR::field(SV::Private, "field_1", ST::raw("i32"))])
                     .with_copyable(true)
-                    .with_cloneable(true)
-                    .into(),
-            },
+                    .with_cloneable(true),
+            ),
         )],
     );
 }
@@ -845,14 +809,13 @@ fn can_extract_copyable_and_cloneable_for_enum_correctly() {
         [SID::defined_resolved(
             SV::Public,
             "test::TestType",
-            SISR {
-                size: 4,
-                alignment: 4,
-                inner: SED::new(ST::raw("u32"))
+            SISR::new(
+                4,
+                4,
+                SED::new(ST::raw("u32"))
                     .with_fields([("Item1", 0), ("Item2", 1)])
-                    .with_cloneable(true)
-                    .into(),
-            },
+                    .with_cloneable(true),
+            ),
         )],
     );
 
@@ -870,15 +833,14 @@ fn can_extract_copyable_and_cloneable_for_enum_correctly() {
         [SID::defined_resolved(
             SV::Public,
             "test::TestType",
-            SISR {
-                size: 4,
-                alignment: 4,
-                inner: SED::new(ST::raw("u32"))
+            SISR::new(
+                4,
+                4,
+                SED::new(ST::raw("u32"))
                     .with_fields([("Item1", 0), ("Item2", 1)])
                     .with_copyable(true)
-                    .with_cloneable(true)
-                    .into(),
-            },
+                    .with_cloneable(true),
+            ),
         )],
     );
 }
@@ -898,17 +860,16 @@ fn can_handle_defaultable_on_primitive_types() {
         [SID::defined_resolved(
             SV::Public,
             "test::TestType",
-            SISR {
-                size: 72,
-                alignment: 8,
-                inner: STD::new()
+            SISR::new(
+                72,
+                8,
+                STD::new()
                     .with_regions([
                         SR::field(SV::Private, "field_1", ST::raw("u64")),
                         SR::field(SV::Private, "field_2", ST::raw("f32").array(16)),
                     ])
-                    .with_defaultable(true)
-                    .into(),
-            },
+                    .with_defaultable(true),
+            ),
         )],
     );
 }
@@ -1000,15 +961,14 @@ fn can_handle_defaultable_on_enum_with_default_field() {
         [SID::defined_resolved(
             SV::Public,
             "test::TestType",
-            SISR {
-                size: 4,
-                alignment: 4,
-                inner: SED::new(ST::raw("u32"))
+            SISR::new(
+                4,
+                4,
+                SED::new(ST::raw("u32"))
                     .with_fields([("Item1", 0), ("Item2", 1)])
                     .with_defaultable(true)
-                    .with_default_index(1)
-                    .into(),
-            },
+                    .with_default_index(1),
+            ),
         )],
     );
 }
