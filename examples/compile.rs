@@ -9,10 +9,10 @@ use clap::Parser;
 #[derive(Parser)]
 struct Args {
     /// The directory containing the Pyxis source files
-    in_dir: PathBuf,
-    #[clap(default_value = "out")]
+    in_dir: Option<PathBuf>,
+    #[clap(requires = "in_dir")]
     /// The directory to write the generated Rust files to
-    out_dir: PathBuf,
+    out_dir: Option<PathBuf>,
     #[clap(long, default_value = "4")]
     /// The size of a pointer in bytes
     pointer_size: usize,
@@ -20,6 +20,14 @@ struct Args {
 
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
-    std::fs::create_dir_all(&args.out_dir)?;
-    pyxis::build(&args.in_dir, &args.out_dir, args.pointer_size)
+
+    let in_dir = args
+        .in_dir
+        .unwrap_or_else(|| PathBuf::from("codegen_tests/input"));
+    let out_dir = args
+        .out_dir
+        .unwrap_or_else(|| PathBuf::from("codegen_tests/output"));
+
+    std::fs::create_dir_all(&out_dir)?;
+    pyxis::build(&in_dir, &out_dir, args.pointer_size)
 }
