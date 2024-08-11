@@ -29,6 +29,9 @@ impl Argument {
     pub fn field(name: impl Into<String>, type_ref: impl Into<Type>) -> Self {
         Argument::Field(name.into(), type_ref.into())
     }
+    pub fn is_self(&self) -> bool {
+        matches!(self, Argument::ConstSelf | Argument::MutSelf)
+    }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -78,12 +81,21 @@ impl FromStr for CallingConvention {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum FunctionGetter {
     Free { address: usize },
+    Base { field: String },
     Vftable,
 }
 
 impl FunctionGetter {
     pub fn free(address: usize) -> Self {
         FunctionGetter::Free { address }
+    }
+    pub fn base(field: impl Into<String>) -> Self {
+        FunctionGetter::Base {
+            field: field.into(),
+        }
+    }
+    pub fn is_base(&self) -> bool {
+        matches!(self, FunctionGetter::Base { .. })
     }
 }
 
@@ -98,8 +110,9 @@ pub struct Function {
 }
 impl fmt::Display for Function {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self.getter {
+        match &self.getter {
             FunctionGetter::Free { address } => write!(f, "#[address(0x{address:X})] ")?,
+            FunctionGetter::Base { field } => write!(f, "#[base({field:?})] ")?,
             FunctionGetter::Vftable => {}
         }
         match self.visibility {

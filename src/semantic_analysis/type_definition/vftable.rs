@@ -5,6 +5,7 @@ use crate::{
     semantic_analysis::{
         function,
         module::Module,
+        type_definition::get_region_name_and_type_definition,
         type_registry::TypeRegistry,
         types::{
             Argument, CallingConvention, Function, ItemCategory, ItemDefinition, ItemState,
@@ -270,59 +271,26 @@ fn function_to_region(resolvee_path: &ItemPath, function: &Function) -> Region {
     }
 }
 
-/// Given an optional region, attempt to get its' type's name and vftable if available
+/// Given an optional region, attempt to get the region's name and its type's vftable if available
 fn get_optional_region_name_and_vftable<'a>(
     type_registry: &'a TypeRegistry,
     resolvee_path: &ItemPath,
-    base: Option<&Region>,
+    region: Option<&Region>,
 ) -> anyhow::Result<Option<(String, &'a TypeVftable)>> {
-    Ok(base
+    Ok(region
         .map(|b| get_region_name_and_vftable(type_registry, resolvee_path, b))
         .transpose()?
         .flatten())
 }
 
-/// Given a region, attempt to get its' type's name and vftable if available
+/// Given a region, attempt to get the region's name and its type's vftable if available
 fn get_region_name_and_vftable<'a>(
     type_registry: &'a TypeRegistry,
     resolvee_path: &ItemPath,
-    base: &Region,
+    region: &Region,
 ) -> anyhow::Result<Option<(String, &'a TypeVftable)>> {
-    // If there is no vftable specified, and there is a base field,
-    // attempt to use its vftable if available
-    let base_name = base
-        .name
-        .clone()
-        .expect("first base had no name, this shouldn't be possible");
-
-    let Type::Raw(path) = &base.type_ref else {
-        anyhow::bail!(
-            "expected base field `{}` of type `{}` to be a raw type, but it was a {}",
-            base_name,
-            resolvee_path,
-            base.type_ref.human_friendly_type()
-        );
-    };
-
-    let base_type = type_registry
-        .get(path)
-        .with_context(|| format!("failed to get base type `{path}` for type `{resolvee_path}`",))?;
-
-    let Some(base_type) = base_type.resolved() else {
-        return Ok(None);
-    };
-
-    let Some(base_type) = base_type.inner.as_type() else {
-        anyhow::bail!(
-            "expected base field `{}` of type `{}` to be a type, but it was a {}",
-            base_name,
-            resolvee_path,
-            base_type.inner.human_friendly_type()
-        );
-    };
-
-    Ok(base_type
-        .vftable
-        .as_ref()
-        .map(|vftable| (base_name, vftable)))
+    Ok(
+        get_region_name_and_type_definition(type_registry, resolvee_path, region)?
+            .and_then(|(name, td)| td.vftable.as_ref().map(|vftable| (name, vftable))),
+    )
 }

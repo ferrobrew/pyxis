@@ -403,20 +403,21 @@ fn build_function(function: &Function) -> Result<proc_macro2::TokenStream, anyho
         })
         .collect::<anyhow::Result<Vec<_>>>()?;
 
+    let is_base_function = function.getter.is_base();
     let call_arguments = function
         .arguments
         .iter()
-        .map(|a| {
-            Ok(match a {
-                Argument::ConstSelf => quote! { self as *const Self as _ },
-                Argument::MutSelf => quote! { self as *mut Self as _ },
-                Argument::Field(name, _) => {
-                    let name = str_to_ident(name);
-                    quote! { #name }
-                }
-            })
+        // Only pass `self` to the function if it's not a base function
+        .filter(|a| !is_base_function || !a.is_self())
+        .map(|a| match a {
+            Argument::ConstSelf => quote! { self as *const Self as _ },
+            Argument::MutSelf => quote! { self as *mut Self as _ },
+            Argument::Field(name, _) => {
+                let name = str_to_ident(name);
+                quote! { #name }
+            }
         })
-        .collect::<anyhow::Result<Vec<_>>>()?;
+        .collect::<Vec<_>>();
 
     let return_type = function
         .return_type
@@ -433,18 +434,25 @@ fn build_function(function: &Function) -> Result<proc_macro2::TokenStream, anyho
             let f:
                 unsafe extern #calling_convention
                 fn(#(#lambda_arguments),*) #return_type
-            = ::std::mem::transmute(#address)
+            = ::std::mem::transmute(#address);
+            f(#(#call_arguments),*)
         },
+        FunctionGetter::Base { field } => {
+            let field_ident = str_to_ident(field);
+            quote! {
+                self.#field_ident.#name(#(#call_arguments),*)
+            }
+        }
         FunctionGetter::Vftable => quote! {
-            let f = std::ptr::addr_of!((*self.vftable()).#name).read()
+            let f = std::ptr::addr_of!((*self.vftable()).#name).read();
+            f(#(#call_arguments),*)
         },
     };
 
     let visibility = visibility_to_tokens(function.visibility);
     Ok(quote! {
         #visibility unsafe fn #name(#(#arguments),*) #return_type {
-            #function_getter_impl;
-            f(#(#call_arguments),*)
+            #function_getter_impl
         }
     })
 }

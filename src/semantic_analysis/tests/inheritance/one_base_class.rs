@@ -202,32 +202,46 @@ fn b1_d0() {
 }
 
 #[test]
-fn b1_d1() {
+fn b1_d1_with_free_functions() {
     assert_ast_produces_type_definitions(
-        M::new().with_definitions([
-            ID::new(
-                (V::Public, "Base"),
-                TD::new([
-                    TS::vftable([vfunc_grammar("base_vfunc")], []),
-                    TS::field((V::Public, "field_1"), T::ident("i32"))
-                        .with_attributes([A::address(8)]),
-                    TS::field((V::Public, "field_2"), T::ident("u64"))
-                        .with_attributes([A::address(16)]),
-                ])
-                .with_attributes([A::align(8)]),
-            ),
-            ID::new(
-                (V::Public, "Derived"),
-                TD::new([
-                    TS::vftable(
-                        [vfunc_grammar("base_vfunc"), vfunc_grammar("derived_vfunc")],
-                        [],
-                    ),
-                    TS::field((V::Public, "base"), T::ident("Base")).with_attributes([A::base()]),
-                ])
-                .with_attributes([A::align(8)]),
-            ),
-        ]),
+        M::new()
+            .with_definitions([
+                ID::new(
+                    (V::Public, "Base"),
+                    TD::new([
+                        TS::vftable([vfunc_grammar("base_vfunc")], []),
+                        TS::field((V::Public, "field_1"), T::ident("i32"))
+                            .with_attributes([A::address(8)]),
+                        TS::field((V::Public, "field_2"), T::ident("u64"))
+                            .with_attributes([A::address(16)]),
+                    ])
+                    .with_attributes([A::align(8)]),
+                ),
+                ID::new(
+                    (V::Public, "Derived"),
+                    TD::new([
+                        TS::vftable(
+                            [vfunc_grammar("base_vfunc"), vfunc_grammar("derived_vfunc")],
+                            [],
+                        ),
+                        TS::field((V::Public, "base"), T::ident("Base"))
+                            .with_attributes([A::base()]),
+                    ])
+                    .with_attributes([A::align(8)]),
+                ),
+            ])
+            .with_impls([
+                FB::new(
+                    "Base",
+                    [F::new((V::Public, "base_free"), [Ar::MutSelf])
+                        .with_attributes([A::address(0x123)])],
+                ),
+                FB::new(
+                    "Derived",
+                    [F::new((V::Public, "derived_free"), [Ar::MutSelf])
+                        .with_attributes([A::address(0x456)])],
+                ),
+            ]),
         [
             SID::defined_resolved(
                 (SV::Public, "test::Base"),
@@ -248,7 +262,12 @@ fn b1_d1() {
                             [vfunc_semantic("base_vfunc")],
                             ["vftable"],
                             ST::raw("test::BaseVftable").const_pointer(),
-                        )),
+                        ))
+                        .with_free_functions([SF::new(
+                            (SV::Public, "base_free"),
+                            SFG::free(0x123),
+                        )
+                        .with_arguments([SAr::MutSelf])]),
                 ),
             ),
             SID::defined_resolved(
@@ -273,7 +292,13 @@ fn b1_d1() {
                             ],
                             ["base", "vftable"],
                             ST::raw("test::DerivedVftable").const_pointer(),
-                        )),
+                        ))
+                        .with_free_functions([
+                            SF::new((SV::Public, "base_free"), SFG::base("base"))
+                                .with_arguments([SAr::MutSelf]),
+                            SF::new((SV::Public, "derived_free"), SFG::free(0x456))
+                                .with_arguments([SAr::MutSelf]),
+                        ]),
                 ),
             ),
             SID::defined_resolved(

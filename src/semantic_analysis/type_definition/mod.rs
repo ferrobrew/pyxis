@@ -3,7 +3,7 @@ use crate::{
     semantic_analysis::{
         function,
         type_registry::TypeRegistry,
-        types::{Function, ItemState, ItemStateResolved, Type, Visibility},
+        types::{Function, FunctionGetter, ItemState, ItemStateResolved, Type, Visibility},
         SemanticState,
     },
     util,
@@ -166,22 +166,6 @@ pub fn build(
         }
     }
 
-    // Handle functions
-    let mut free_functions = vec![];
-    if let Some(type_impl) = module.impls.get(resolvee_path) {
-        for function in &type_impl.functions {
-            let function =
-                function::build(&semantic.type_registry, &module.scope(), false, function)
-                    .with_context(|| {
-                        format!(
-                            "while building impl function `{}` for type `{resolvee_path}`",
-                            function.name
-                        )
-                    })?;
-            free_functions.push(function);
-        }
-    }
-
     // Handle fields
     let mut pending_regions: Vec<(Option<usize>, Region)> = vec![];
     let mut vftable_functions = None;
@@ -290,6 +274,42 @@ pub fn build(
     else {
         return Ok(None);
     };
+
+    // Reborrow the module after resolving regions
+    let module = semantic.get_module_for_path(resolvee_path).unwrap();
+
+    // Handle functions
+    let mut free_functions = vec![];
+    for region in &regions {
+        // Inject all base free functions into the type
+        if !region.is_base {
+            continue;
+        }
+
+        let Some((base_name, base_type)) =
+            get_region_name_and_type_definition(&semantic.type_registry, resolvee_path, region)?
+        else {
+            continue;
+        };
+
+        free_functions.extend(base_type.free_functions.iter().cloned().map(|f| Function {
+            getter: FunctionGetter::base(base_name.clone()),
+            ..f
+        }));
+    }
+    if let Some(type_impl) = module.impls.get(resolvee_path) {
+        for function in &type_impl.functions {
+            let function =
+                function::build(&semantic.type_registry, &module.scope(), false, function)
+                    .with_context(|| {
+                        format!(
+                            "while building impl function `{}` for type `{resolvee_path}`",
+                            function.name
+                        )
+                    })?;
+            free_functions.push(function);
+        }
+    }
 
     // Iterate over all of the regions and ensure their types are defaultable if
     // we have our defaultable attribute set.
@@ -526,4 +546,46 @@ fn resolve_regions(
     }
 
     Ok(Some((resolved.regions, vftable, size)))
+}
+
+/// Given a region, attempt to get the region's name and its type definition if available
+fn get_region_name_and_type_definition<'a>(
+    type_registry: &'a TypeRegistry,
+    resolvee_path: &ItemPath,
+    region: &Region,
+) -> anyhow::Result<Option<(String, &'a TypeDefinition)>> {
+    // If there is no vftable specified, and there is a base field,
+    // attempt to use its vftable if available
+    let base_name = region
+        .name
+        .clone()
+        .expect("first base had no name, this shouldn't be possible");
+
+    let Type::Raw(path) = &region.type_ref else {
+        anyhow::bail!(
+            "expected base field `{}` of type `{}` to be a raw type, but it was a {}",
+            base_name,
+            resolvee_path,
+            region.type_ref.human_friendly_type()
+        );
+    };
+
+    let base_type = type_registry
+        .get(path)
+        .with_context(|| format!("failed to get base type `{path}` for type `{resolvee_path}`",))?;
+
+    let Some(base_type) = base_type.resolved() else {
+        return Ok(None);
+    };
+
+    let Some(base_type) = base_type.inner.as_type() else {
+        anyhow::bail!(
+            "expected base field `{}` of type `{}` to be a type, but it was a {}",
+            base_name,
+            resolvee_path,
+            base_type.inner.human_friendly_type()
+        );
+    };
+
+    Ok(Some((base_name, base_type)))
 }
