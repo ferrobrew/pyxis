@@ -18,7 +18,7 @@ use crate::{
 };
 
 pub struct SemanticState {
-    pub(crate) modules: HashMap<ItemPath, Module>,
+    modules: HashMap<ItemPath, Module>,
     pub(crate) type_registry: TypeRegistry,
 }
 
