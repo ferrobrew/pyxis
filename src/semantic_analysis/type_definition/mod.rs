@@ -21,7 +21,7 @@ pub struct Region {
     pub is_base: bool,
 }
 impl Region {
-    pub fn field(visibility: Visibility, name: impl Into<String>, type_ref: Type) -> Self {
+    pub fn field((visibility, name): (Visibility, impl Into<String>), type_ref: Type) -> Self {
         Region {
             visibility,
             name: Some(name.into()),

@@ -122,7 +122,10 @@ impl fmt::Display for Function {
     }
 }
 impl Function {
-    pub fn new(visibility: Visibility, name: impl Into<String>, getter: FunctionGetter) -> Self {
+    pub fn new(
+        (visibility, name): (Visibility, impl Into<String>),
+        getter: FunctionGetter,
+    ) -> Self {
         Function {
             visibility,
             name: name.into(),

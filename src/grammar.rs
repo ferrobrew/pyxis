@@ -292,7 +292,10 @@ pub struct Function {
     pub return_type: Option<Type>,
 }
 impl Function {
-    pub fn new(visibility: Visibility, name: &str, arguments: impl Into<Vec<Argument>>) -> Self {
+    pub fn new(
+        (visibility, name): (Visibility, &str),
+        arguments: impl Into<Vec<Argument>>,
+    ) -> Self {
         Self {
             visibility,
             name: name.into(),
@@ -357,7 +360,7 @@ pub struct TypeStatement {
     pub attributes: Vec<Attribute>,
 }
 impl TypeStatement {
-    pub fn field(visibility: Visibility, name: &str, type_: Type) -> TypeStatement {
+    pub fn field((visibility, name): (Visibility, &str), type_: Type) -> TypeStatement {
         TypeStatement {
             field: TypeField::Field(visibility, name.into(), type_),
             attributes: vec![],
@@ -469,7 +472,10 @@ pub struct ItemDefinition {
     pub inner: ItemDefinitionInner,
 }
 impl ItemDefinition {
-    pub fn new(visibility: Visibility, name: &str, inner: impl Into<ItemDefinitionInner>) -> Self {
+    pub fn new(
+        (visibility, name): (Visibility, &str),
+        inner: impl Into<ItemDefinitionInner>,
+    ) -> Self {
         Self {
             visibility,
             name: name.into(),

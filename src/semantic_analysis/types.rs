@@ -216,7 +216,7 @@ impl From<ItemStateResolved> for ItemState {
     }
 }
 impl ItemStateResolved {
-    pub fn new(size: usize, alignment: usize, inner: impl Into<ItemDefinitionInner>) -> Self {
+    pub fn new((size, alignment): (usize, usize), inner: impl Into<ItemDefinitionInner>) -> Self {
         Self {
             size,
             alignment,
@@ -247,8 +247,7 @@ pub struct ItemDefinition {
 }
 impl ItemDefinition {
     pub fn category_resolved(
-        visibility: Visibility,
-        path: impl Into<ItemPath>,
+        (visibility, path): (Visibility, impl Into<ItemPath>),
         resolved: ItemStateResolved,
         category: ItemCategory,
     ) -> Self {
@@ -260,11 +259,10 @@ impl ItemDefinition {
         }
     }
     pub fn defined_resolved(
-        visibility: Visibility,
-        path: impl Into<ItemPath>,
+        (visibility, path): (Visibility, impl Into<ItemPath>),
         resolved: ItemStateResolved,
     ) -> Self {
-        Self::category_resolved(visibility, path, resolved, ItemCategory::Defined)
+        Self::category_resolved((visibility, path), resolved, ItemCategory::Defined)
     }
     pub fn resolved(&self) -> Option<&ItemStateResolved> {
         match &self.state {

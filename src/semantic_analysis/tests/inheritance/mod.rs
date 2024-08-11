@@ -8,8 +8,7 @@ mod two_base_classes;
 
 fn vfunc_grammar(name: &str) -> F {
     F::new(
-        V::Public,
-        name,
+        (V::Public, name),
         [
             Ar::MutSelf,
             Ar::named("arg0", T::ident("u32")),
@@ -21,8 +20,7 @@ fn vfunc_grammar(name: &str) -> F {
 
 fn vfunc_region(name: &str, self_type: &str) -> SR {
     SR::field(
-        SV::Public,
-        name,
+        (SV::Public, name),
         ST::function(
             SCC::Thiscall,
             vec![
@@ -36,7 +34,7 @@ fn vfunc_region(name: &str, self_type: &str) -> SR {
 }
 
 fn vfunc_semantic(name: &str) -> SF {
-    SF::new(SV::Public, name, SFG::Vftable)
+    SF::new((SV::Public, name), SFG::Vftable)
         .with_arguments([
             SAr::MutSelf,
             SAr::field("arg0", ST::raw("u32")),
@@ -47,8 +45,7 @@ fn vfunc_semantic(name: &str) -> SF {
 
 fn pad_up_to_8_region() -> SR {
     SR::field(
-        SV::Private,
-        format!("_field_{}", pointer_size()),
+        (SV::Private, format!("_field_{}", pointer_size())),
         ST::array(ST::raw("u8"), 8 - pointer_size()),
     )
 }
