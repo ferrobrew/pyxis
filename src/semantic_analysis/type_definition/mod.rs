@@ -37,7 +37,7 @@ impl Region {
             is_base: false,
         }
     }
-    pub fn mark_as_base(mut self) -> Self {
+    pub fn marked_as_base(mut self) -> Self {
         self.is_base = true;
         self
     }

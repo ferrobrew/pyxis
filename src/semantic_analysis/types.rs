@@ -214,6 +214,15 @@ impl From<ItemStateResolved> for ItemState {
         ItemState::Resolved(isr)
     }
 }
+impl ItemStateResolved {
+    pub fn new(size: usize, alignment: usize, inner: impl Into<ItemDefinitionInner>) -> Self {
+        Self {
+            size,
+            alignment,
+            inner: inner.into(),
+        }
+    }
+}
 
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]
 pub enum ItemState {

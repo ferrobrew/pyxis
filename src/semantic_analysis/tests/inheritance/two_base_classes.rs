@@ -1,127 +1,200 @@
-use super::*;
-use dsl::*;
+//! Two base classes
+//! ----------------
+//! We set up three types: BaseA, BaseB and Derived.
+//! Derived derives from both BaseA and BaseB.
+//!
+//! However, note that [/layout/msvc2022/output.txt] demonstrates that
+//! a compiler will rearrange structs to put an inherited-from type
+//! with a vftable at the start of the type, which means we don't need
+//! to test the BaseA no-vftable BaseB vftable cases, as these are isomorphic
+//! to BaseA vftable BaseB no-vftable.
+//!
+//! We need to test, where 'x' marks the presence of a vftable:
+//!
+//! BaseA | BaseB | Drved
+//! ----------------------
+//!       |       |
+//!       |       |   x
+//!   x   |       |
+//!   x   |       |   x
+//!   x   |   x   |
+//!   x   |   x   |   x
 
-fn derived_vfunc() -> IF {
-    IF::new(
-        "derived_vfunc",
-        [
-            IFA::MutSelf,
-            IFA::field("arg0", IPT::U32),
-            IFA::field("arg1", IPT::F32),
-        ],
-        IPT::I32,
-    )
-}
+use super::*;
 
 #[test]
 fn a0_b0_d0() {
-    let base_a = IT::new(
-        "BaseA",
-        8,
-        [
-            (None, "field_1".to_string(), IPT::I32, vec![]),
-            (None, "_field_4".to_string(), IPT::Unknown(4), vec![]),
-            (None, "field_2".to_string(), IPT::U64, vec![]),
-        ],
-    );
-
-    let base_b = IT::new(
-        "BaseB",
-        8,
-        [
-            (None, "field_1".to_string(), IPT::U64, vec![]),
-            (None, "_field_8".to_string(), IPT::Unknown(4), vec![]),
-            (None, "field_2".to_string(), IPT::I32, vec![]),
-        ],
-    );
-
-    let derived = IT::new(
-        "Derived",
-        8,
-        [
-            (
-                None,
-                "base_a".to_string(),
-                IPT::Named("BaseA".to_string(), 16),
-                vec![A::base()],
-            ),
-            (
-                None,
-                "base_b".to_string(),
-                IPT::Named("BaseB".to_string(), 16),
-                vec![A::base()],
-            ),
-        ],
-    );
-
     assert_ast_produces_type_definitions(
         M::new().with_definitions([
-            base_a.to_grammar(),
-            base_b.to_grammar(),
-            derived.to_grammar(),
+            ID::new(
+                V::Public,
+                "BaseA",
+                TD::new([
+                    TS::field(V::Public, "field_1", T::ident("i32")),
+                    TS::field(V::Public, "field_2", T::ident("u64"))
+                        .with_attributes([A::address(8)]),
+                ])
+                .with_attributes([A::align(8), A::size(16)]),
+            ),
+            ID::new(
+                V::Public,
+                "BaseB",
+                TD::new([
+                    TS::field(V::Public, "field_1", T::ident("u64")),
+                    TS::field(V::Public, "field_2", T::ident("i32")),
+                ])
+                .with_attributes([A::align(8), A::size(16)]),
+            ),
+            ID::new(
+                V::Public,
+                "Derived",
+                TD::new([
+                    TS::field(V::Public, "base_a", T::ident("BaseA")).with_attributes([A::base()]),
+                    TS::field(V::Public, "base_b", T::ident("BaseB")).with_attributes([A::base()]),
+                ])
+                .with_attributes([A::align(8)]),
+            ),
         ]),
         [
-            base_a.to_semantic(None, true),
-            base_b.to_semantic(None, true),
-            derived.to_semantic(None, true),
+            SID::defined_resolved(
+                SV::Public,
+                "test::BaseA",
+                SISR::new(
+                    16,
+                    8,
+                    STD::new().with_regions([
+                        SR::field(SV::Public, "field_1", ST::raw("i32")),
+                        SR::field(SV::Private, "_field_4", ST::array(ST::raw("u8"), 4)),
+                        SR::field(SV::Public, "field_2", ST::raw("u64")),
+                    ]),
+                ),
+            ),
+            SID::defined_resolved(
+                SV::Public,
+                "test::BaseB",
+                SISR::new(
+                    16,
+                    8,
+                    STD::new().with_regions([
+                        SR::field(SV::Public, "field_1", ST::raw("u64")),
+                        SR::field(SV::Public, "field_2", ST::raw("i32")),
+                        SR::field(SV::Private, "_field_c", ST::array(ST::raw("u8"), 4)),
+                    ]),
+                ),
+            ),
+            SID::defined_resolved(
+                SV::Public,
+                "test::Derived",
+                SISR::new(
+                    32,
+                    8,
+                    STD::new().with_regions([
+                        SR::field(SV::Public, "base_a", ST::raw("test::BaseA")).marked_as_base(),
+                        SR::field(SV::Public, "base_b", ST::raw("test::BaseB")).marked_as_base(),
+                    ]),
+                ),
+            ),
         ],
     );
 }
 
 #[test]
 fn a0_b0_d1() {
-    let base_a = IT::new(
-        "BaseA",
-        8,
-        [
-            (None, "field_1".to_string(), IPT::I32, vec![]),
-            (None, "_field_4".to_string(), IPT::Unknown(4), vec![]),
-            (None, "field_2".to_string(), IPT::U64, vec![]),
-        ],
-    );
-
-    let base_b = IT::new(
-        "BaseB",
-        8,
-        [
-            (None, "field_1".to_string(), IPT::U64, vec![]),
-            (None, "_field_8".to_string(), IPT::Unknown(4), vec![]),
-            (None, "field_2".to_string(), IPT::I32, vec![]),
-        ],
-    );
-
-    let derived_vftable = IV::new("Derived", "DerivedVftable", [derived_vfunc()]);
-    let derived = IT::new(
-        "Derived",
-        8,
-        [
-            (
-                Some(8),
-                "base_a".to_string(),
-                IPT::Named("BaseA".to_string(), 16),
-                vec![A::base()],
-            ),
-            (
-                None,
-                "base_b".to_string(),
-                IPT::Named("BaseB".to_string(), 16),
-                vec![A::base()],
-            ),
-        ],
-    )
-    .with_vftable(derived_vftable.clone());
-
     assert_ast_produces_type_definitions(
         M::new().with_definitions([
-            base_a.to_grammar(),
-            base_b.to_grammar(),
-            derived.to_grammar(),
+            ID::new(
+                V::Public,
+                "BaseA",
+                TD::new([
+                    TS::field(V::Public, "field_1", T::ident("i32")),
+                    TS::field(V::Public, "field_2", T::ident("u64"))
+                        .with_attributes([A::address(8)]),
+                ])
+                .with_attributes([A::align(8), A::size(16)]),
+            ),
+            ID::new(
+                V::Public,
+                "BaseB",
+                TD::new([
+                    TS::field(V::Public, "field_1", T::ident("u64")),
+                    TS::field(V::Public, "field_2", T::ident("i32")),
+                ])
+                .with_attributes([A::align(8), A::size(16)]),
+            ),
+            ID::new(
+                V::Public,
+                "Derived",
+                TD::new([
+                    TS::vftable([vfunc_grammar("derived_vfunc")], []),
+                    TS::field(V::Public, "base_a", T::ident("BaseA"))
+                        .with_attributes([A::base(), A::address(8)]),
+                    TS::field(V::Public, "base_b", T::ident("BaseB")).with_attributes([A::base()]),
+                ])
+                .with_attributes([A::align(8)]),
+            ),
         ]),
         [
-            base_a.to_semantic(None, true),
-            base_b.to_semantic(None, true),
-            derived.to_semantic(None, true),
-            derived_vftable.to_semantic(),
+            SID::defined_resolved(
+                SV::Public,
+                "test::BaseA",
+                SISR::new(
+                    16,
+                    8,
+                    STD::new().with_regions([
+                        SR::field(SV::Public, "field_1", ST::raw("i32")),
+                        SR::field(SV::Private, "_field_4", ST::array(ST::raw("u8"), 4)),
+                        SR::field(SV::Public, "field_2", ST::raw("u64")),
+                    ]),
+                ),
+            ),
+            SID::defined_resolved(
+                SV::Public,
+                "test::BaseB",
+                SISR::new(
+                    16,
+                    8,
+                    STD::new().with_regions([
+                        SR::field(SV::Public, "field_1", ST::raw("u64")),
+                        SR::field(SV::Public, "field_2", ST::raw("i32")),
+                        SR::field(SV::Private, "_field_c", ST::array(ST::raw("u8"), 4)),
+                    ]),
+                ),
+            ),
+            SID::defined_resolved(
+                SV::Public,
+                "test::Derived",
+                SISR::new(
+                    40,
+                    8,
+                    STD::new()
+                        .with_regions(filter_out_empty_regions([
+                            SR::field(
+                                SV::Private,
+                                "vftable",
+                                ST::raw("test::DerivedVftable").const_pointer(),
+                            ),
+                            pad_up_to_8_region(),
+                            SR::field(SV::Public, "base_a", ST::raw("test::BaseA"))
+                                .marked_as_base(),
+                            SR::field(SV::Public, "base_b", ST::raw("test::BaseB"))
+                                .marked_as_base(),
+                        ]))
+                        .with_vftable(STV::new(
+                            [vfunc_semantic("derived_vfunc")],
+                            ["vftable"],
+                            ST::raw("test::DerivedVftable").const_pointer(),
+                        )),
+                ),
+            ),
+            SID::defined_resolved(
+                SV::Public,
+                "test::DerivedVftable",
+                SISR::new(
+                    pointer_size(),
+                    pointer_size(),
+                    STD::new().with_regions([vfunc_region("derived_vfunc", "test::Derived")]),
+                ),
+            ),
         ],
     );
 }

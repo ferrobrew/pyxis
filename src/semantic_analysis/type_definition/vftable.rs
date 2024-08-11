@@ -20,6 +20,19 @@ pub struct TypeVftable {
     pub field_path: Vec<String>,
     pub type_: Type,
 }
+impl TypeVftable {
+    pub fn new<'a>(
+        functions: impl Into<Vec<Function>>,
+        field_path: impl IntoIterator<Item = &'a str>,
+        type_: Type,
+    ) -> Self {
+        Self {
+            functions: functions.into(),
+            field_path: field_path.into_iter().map(|s| s.to_string()).collect(),
+            type_,
+        }
+    }
+}
 
 /// Given a parsed size/list of functions, construct the list of semantic functions
 pub fn convert_grammar_functions_to_semantic_functions(
