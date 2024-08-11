@@ -16,6 +16,15 @@ pub enum Argument {
     MutSelf,
     Field(String, Type),
 }
+impl fmt::Display for Argument {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Argument::ConstSelf => write!(f, "&self"),
+            Argument::MutSelf => write!(f, "&mut self"),
+            Argument::Field(name, ty) => write!(f, "{name}: {ty}"),
+        }
+    }
+}
 impl Argument {
     pub fn field(name: impl Into<String>, type_ref: impl Into<Type>) -> Self {
         Argument::Field(name.into(), type_ref.into())
@@ -74,6 +83,30 @@ pub struct Function {
     pub arguments: Vec<Argument>,
     pub return_type: Option<Type>,
     pub calling_convention: CallingConvention,
+}
+impl fmt::Display for Function {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let Some(address) = self.address {
+            write!(f, "#[address(0x{address:X}) ")?;
+        }
+        match self.visibility {
+            Visibility::Public => write!(f, "pub "),
+            Visibility::Private => Ok(()),
+        }?;
+        write!(f, "extern \"{}\" ", self.calling_convention)?;
+        write!(f, "fn {}(", self.name)?;
+        for (i, arg) in self.arguments.iter().enumerate() {
+            if i != 0 {
+                write!(f, ", ")?;
+            }
+            write!(f, "{arg}")?;
+        }
+        write!(f, ")")?;
+        if let Some(ty) = &self.return_type {
+            write!(f, " -> {}", ty)?;
+        }
+        Ok(())
+    }
 }
 impl Function {
     pub fn new(visibility: Visibility, name: impl Into<String>) -> Self {

@@ -120,12 +120,39 @@ pub fn build(
         let vftable_pointer_type = Type::ConstPointer(Box::new(Type::Raw(vftable_path)));
         semantic.add_item(vftable_type)?;
 
-        if let Some((base_name, base_vftable)) = first_base
-            .map(|b| get_region_name_and_vftable(&semantic.type_registry, resolvee_path, b))
-            .transpose()?
-            .flatten()
-        {
+        if let Some((base_name, base_vftable)) = get_optional_region_name_and_vftable(
+            &semantic.type_registry,
+            resolvee_path,
+            first_base,
+        )? {
             // There is a base class with a vftable. Let's use its field.
+
+            // Ensure that all of the base classes's vfuncs are included in the derived class's vftable
+            if vftable_functions.len() < base_vftable.functions.len() {
+                anyhow::bail!(
+                    "vftable for `{}` is missing functions from base class `{}`",
+                    resolvee_path,
+                    base_name
+                );
+            }
+            for (idx, (base_vfunc, derived_vfunc)) in base_vftable
+                .functions
+                .iter()
+                .zip(vftable_functions.iter())
+                .enumerate()
+            {
+                if base_vfunc != derived_vfunc {
+                    anyhow::bail!(
+                        "vftable for `{}` has function `{}` at index {} but base class `{}` has function `{}`",
+                        resolvee_path,
+                        derived_vfunc,
+                        idx,
+                        base_name,
+                        base_vfunc
+                    );
+                }
+            }
+
             Ok((
                 Some(TypeVftable {
                     functions: vftable_functions,
@@ -154,10 +181,8 @@ pub fn build(
                 Some(region),
             ))
         }
-    } else if let Some((base_name, base_vftable)) = first_base
-        .map(|b| get_region_name_and_vftable(&semantic.type_registry, resolvee_path, b))
-        .transpose()?
-        .flatten()
+    } else if let Some((base_name, base_vftable)) =
+        get_optional_region_name_and_vftable(&semantic.type_registry, resolvee_path, first_base)?
     {
         // There are no functions defined for this vftable, but there is a base class with a vftable.
         // Let's use its field.
@@ -243,6 +268,18 @@ fn function_to_region(resolvee_path: &ItemPath, function: &Function) -> Region {
         type_ref: Type::Function(function.calling_convention, arguments, return_type),
         is_base: false,
     }
+}
+
+/// Given an optional region, attempt to get its' type's name and vftable if available
+fn get_optional_region_name_and_vftable<'a>(
+    type_registry: &'a TypeRegistry,
+    resolvee_path: &ItemPath,
+    base: Option<&Region>,
+) -> anyhow::Result<Option<(String, &'a TypeVftable)>> {
+    Ok(base
+        .map(|b| get_region_name_and_vftable(type_registry, resolvee_path, b))
+        .transpose()?
+        .flatten())
 }
 
 /// Given a region, attempt to get its' type's name and vftable if available

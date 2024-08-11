@@ -323,4 +323,48 @@ fn b1_d1() {
     );
 }
 
-// TODO: add test for un-overlapping vftables
+#[test]
+fn b1_d1_without_overlapping_vfuncs_will_fail() {
+    assert_ast_produces_failure(
+        M::new().with_definitions([
+            ID::new(
+                V::Public,
+                "Base",
+                TD::new([
+                    TS::vftable(
+                        [vfunc_grammar("base_vfunc1"), vfunc_grammar("base_vfunc2")],
+                        [],
+                    ),
+                    TS::field(V::Public, "field_1", T::ident("i32"))
+                        .with_attributes([A::address(8)]),
+                    TS::field(V::Public, "field_2", T::ident("u64"))
+                        .with_attributes([A::address(16)]),
+                ])
+                .with_attributes([A::align(8)]),
+            ),
+            ID::new(
+                V::Public,
+                "Derived",
+                TD::new([
+                    TS::vftable(
+                        [
+                            vfunc_grammar("base_vfunc1"),
+                            vfunc_grammar("not_base_vfunc2"),
+                            vfunc_grammar("derived_vfunc"),
+                        ],
+                        [],
+                    ),
+                    TS::field(V::Public, "base", T::ident("Base")).with_attributes([A::base()]),
+                ])
+                .with_attributes([A::align(8)]),
+            ),
+        ]),
+        concat!(
+            "while processing `test::Derived`\n",
+            "vftable for `test::Derived` has function ",
+            r#"`pub extern "thiscall" fn not_base_vfunc2(&mut self, arg0: u32, arg1: f32) -> i32` "#,
+            "at index 1 but base class `base` has function ",
+            r#"`pub extern "thiscall" fn base_vfunc2(&mut self, arg0: u32, arg1: f32) -> i32`"#
+        ),
+    );
+}
