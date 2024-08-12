@@ -24,6 +24,7 @@ fn can_parse_basic_struct() {
 fn can_parse_vftable() {
     let text = r#"
         type TestType {
+            #[size(4)]
             vftable {
                 pub fn test(&mut self, test2: i32);
             }
@@ -32,13 +33,11 @@ fn can_parse_vftable() {
 
     let ast = M::new().with_definitions([ID::new(
         (V::Private, "TestType"),
-        TD::new([TS::vftable(
-            [F::new(
-                (V::Public, "test"),
-                [Ar::MutSelf, Ar::named("test2", T::ident("i32"))],
-            )],
-            [],
-        )]),
+        TD::new([TS::vftable([F::new(
+            (V::Public, "test"),
+            [Ar::MutSelf, Ar::named("test2", T::ident("i32"))],
+        )])
+        .with_attributes([A::size(4)])]),
     )]);
 
     assert_eq!(parse_str(text).unwrap(), ast);

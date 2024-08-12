@@ -366,13 +366,10 @@ impl TypeStatement {
             attributes: vec![],
         }
     }
-    pub fn vftable(
-        functions: impl IntoIterator<Item = Function>,
-        attributes: impl Into<Vec<Attribute>>,
-    ) -> TypeStatement {
+    pub fn vftable(functions: impl IntoIterator<Item = Function>) -> TypeStatement {
         TypeStatement {
             field: TypeField::vftable(functions),
-            attributes: attributes.into(),
+            attributes: vec![],
         }
     }
     pub fn with_attributes(mut self, attributes: impl Into<Vec<Attribute>>) -> Self {

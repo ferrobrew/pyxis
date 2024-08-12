@@ -288,28 +288,26 @@ fn can_generate_vftable() {
     assert_ast_produces_type_definitions(
         M::new().with_definitions([ID::new(
             (V::Public, "TestType"),
-            TD::new([TS::vftable(
-                [
-                    F::new(
-                        (V::Public, "test_function0"),
-                        [
-                            Ar::MutSelf,
-                            Ar::named("arg0", T::ident("u32")),
-                            Ar::named("arg1", T::ident("f32")),
-                        ],
-                    )
-                    .with_return_type("i32"),
-                    F::new(
-                        (V::Public, "test_function1"),
-                        [
-                            Ar::MutSelf,
-                            Ar::named("arg0", T::ident("u32")),
-                            Ar::named("arg1", T::ident("f32")),
-                        ],
-                    ),
-                ],
-                [A::size(4)],
-            )]),
+            TD::new([TS::vftable([
+                F::new(
+                    (V::Public, "test_function0"),
+                    [
+                        Ar::MutSelf,
+                        Ar::named("arg0", T::ident("u32")),
+                        Ar::named("arg1", T::ident("f32")),
+                    ],
+                )
+                .with_return_type("i32"),
+                F::new(
+                    (V::Public, "test_function1"),
+                    [
+                        Ar::MutSelf,
+                        Ar::named("arg0", T::ident("u32")),
+                        Ar::named("arg1", T::ident("f32")),
+                    ],
+                ),
+            ])
+            .with_attributes([A::size(4)])]),
         )]),
         [
             // TestType
@@ -386,30 +384,28 @@ fn can_generate_vftable_with_indices() {
     assert_ast_produces_type_definitions(
         M::new().with_definitions([ID::new(
             (V::Public, "TestType"),
-            TD::new([TS::vftable(
-                [
-                    F::new(
-                        (V::Public, "test_function0"),
-                        [
-                            Ar::MutSelf,
-                            Ar::named("arg0", T::ident("u32")),
-                            Ar::named("arg1", T::ident("f32")),
-                        ],
-                    )
-                    .with_attributes([A::index(2)])
-                    .with_return_type("i32"),
-                    F::new(
-                        (V::Public, "test_function1"),
-                        [
-                            Ar::MutSelf,
-                            Ar::named("arg0", T::ident("u32")),
-                            Ar::named("arg1", T::ident("f32")),
-                        ],
-                    )
-                    .with_attributes([A::index(5)]),
-                ],
-                [A::size(8)],
-            )]),
+            TD::new([TS::vftable([
+                F::new(
+                    (V::Public, "test_function0"),
+                    [
+                        Ar::MutSelf,
+                        Ar::named("arg0", T::ident("u32")),
+                        Ar::named("arg1", T::ident("f32")),
+                    ],
+                )
+                .with_attributes([A::index(2)])
+                .with_return_type("i32"),
+                F::new(
+                    (V::Public, "test_function1"),
+                    [
+                        Ar::MutSelf,
+                        Ar::named("arg0", T::ident("u32")),
+                        Ar::named("arg1", T::ident("f32")),
+                    ],
+                )
+                .with_attributes([A::index(5)]),
+            ])
+            .with_attributes([A::size(8)])]),
         )]),
         [
             // TestType
@@ -495,19 +491,16 @@ fn will_propagate_calling_convention_for_impl_and_vftable() {
         M::new()
             .with_definitions([ID::new(
                 (V::Public, "TestType"),
-                TD::new([TS::vftable(
-                    [F::new(
-                        (V::Public, "test_function0"),
-                        [
-                            Ar::MutSelf,
-                            Ar::named("arg0", T::ident("u32")),
-                            Ar::named("arg1", T::ident("f32")),
-                        ],
-                    )
-                    .with_return_type("i32")
-                    .with_attributes([A::calling_convention("cdecl")])],
-                    [],
-                )]),
+                TD::new([TS::vftable([F::new(
+                    (V::Public, "test_function0"),
+                    [
+                        Ar::MutSelf,
+                        Ar::named("arg0", T::ident("u32")),
+                        Ar::named("arg1", T::ident("f32")),
+                    ],
+                )
+                .with_return_type("i32")
+                .with_attributes([A::calling_convention("cdecl")])])]),
             )])
             .with_impls([FB::new(
                 "TestType",

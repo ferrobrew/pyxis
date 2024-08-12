@@ -106,7 +106,7 @@ fn b0_d0_dd1() {
             ID::new(
                 (V::Public, "DerivedDerived"),
                 TD::new([
-                    TS::vftable([vfunc_grammar("derived_derived_vfunc")], []),
+                    TS::vftable([vfunc_grammar("derived_derived_vfunc")]),
                     TS::field((V::Public, "derived"), T::ident("Derived"))
                         .with_attributes([A::base(), A::address(8)]),
                 ])
@@ -187,7 +187,7 @@ fn b0_d1_dd0() {
             ID::new(
                 (V::Public, "Derived"),
                 TD::new([
-                    TS::vftable([vfunc_grammar("derived_vfunc")], []),
+                    TS::vftable([vfunc_grammar("derived_vfunc")]),
                     TS::field((V::Public, "base"), T::ident("Base"))
                         .with_attributes([A::base(), A::address(8)]),
                 ])
@@ -276,7 +276,7 @@ fn b0_d1_dd1() {
             ID::new(
                 (V::Public, "Derived"),
                 TD::new([
-                    TS::vftable([vfunc_grammar("derived_vfunc")], []),
+                    TS::vftable([vfunc_grammar("derived_vfunc")]),
                     TS::field((V::Public, "base"), T::ident("Base"))
                         .with_attributes([A::base(), A::address(8)]),
                 ])
@@ -285,13 +285,10 @@ fn b0_d1_dd1() {
             ID::new(
                 (V::Public, "DerivedDerived"),
                 TD::new([
-                    TS::vftable(
-                        [
-                            vfunc_grammar("derived_vfunc"),
-                            vfunc_grammar("derived_derived_vfunc"),
-                        ],
-                        [],
-                    ),
+                    TS::vftable([
+                        vfunc_grammar("derived_vfunc"),
+                        vfunc_grammar("derived_derived_vfunc"),
+                    ]),
                     TS::field((V::Public, "derived"), T::ident("Derived"))
                         .with_attributes([A::base()]),
                 ])

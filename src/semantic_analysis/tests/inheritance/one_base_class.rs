@@ -79,7 +79,7 @@ fn b0_d1() {
             ID::new(
                 (V::Public, "Derived"),
                 TD::new([
-                    TS::vftable([vfunc_grammar("derived_vfunc")], []),
+                    TS::vftable([vfunc_grammar("derived_vfunc")]),
                     TS::field((V::Public, "base"), T::ident("Base"))
                         .with_attributes([A::base(), A::address(8)]),
                 ])
@@ -136,7 +136,7 @@ fn b1_d0() {
             ID::new(
                 (V::Public, "Base"),
                 TD::new([
-                    TS::vftable([vfunc_grammar("base_vfunc")], []),
+                    TS::vftable([vfunc_grammar("base_vfunc")]),
                     TS::field((V::Public, "field_1"), T::ident("i32"))
                         .with_attributes([A::address(8)]),
                     TS::field((V::Public, "field_2"), T::ident("u64"))
@@ -209,7 +209,7 @@ fn b1_d1_with_associated_functions() {
                 ID::new(
                     (V::Public, "Base"),
                     TD::new([
-                        TS::vftable([vfunc_grammar("base_vfunc")], []),
+                        TS::vftable([vfunc_grammar("base_vfunc")]),
                         TS::field((V::Public, "field_1"), T::ident("i32"))
                             .with_attributes([A::address(8)]),
                         TS::field((V::Public, "field_2"), T::ident("u64"))
@@ -220,10 +220,7 @@ fn b1_d1_with_associated_functions() {
                 ID::new(
                     (V::Public, "Derived"),
                     TD::new([
-                        TS::vftable(
-                            [vfunc_grammar("base_vfunc"), vfunc_grammar("derived_vfunc")],
-                            [],
-                        ),
+                        TS::vftable([vfunc_grammar("base_vfunc"), vfunc_grammar("derived_vfunc")]),
                         TS::field((V::Public, "base"), T::ident("Base"))
                             .with_attributes([A::base()]),
                     ])
@@ -322,10 +319,7 @@ fn b1_d1_without_overlapping_vfuncs_will_fail() {
             ID::new(
                 (V::Public, "Base"),
                 TD::new([
-                    TS::vftable(
-                        [vfunc_grammar("base_vfunc1"), vfunc_grammar("base_vfunc2")],
-                        [],
-                    ),
+                    TS::vftable([vfunc_grammar("base_vfunc1"), vfunc_grammar("base_vfunc2")]),
                     TS::field((V::Public, "field_1"), T::ident("i32"))
                         .with_attributes([A::address(8)]),
                     TS::field((V::Public, "field_2"), T::ident("u64"))
@@ -336,14 +330,11 @@ fn b1_d1_without_overlapping_vfuncs_will_fail() {
             ID::new(
                 (V::Public, "Derived"),
                 TD::new([
-                    TS::vftable(
-                        [
-                            vfunc_grammar("base_vfunc1"),
-                            vfunc_grammar("not_base_vfunc2"),
-                            vfunc_grammar("derived_vfunc"),
-                        ],
-                        [],
-                    ),
+                    TS::vftable([
+                        vfunc_grammar("base_vfunc1"),
+                        vfunc_grammar("not_base_vfunc2"),
+                        vfunc_grammar("derived_vfunc"),
+                    ]),
                     TS::field((V::Public, "base"), T::ident("Base")).with_attributes([A::base()]),
                 ])
                 .with_attributes([A::align(8)]),

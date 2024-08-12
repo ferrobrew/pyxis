@@ -115,7 +115,7 @@ fn a0_b0_d1() {
             ID::new(
                 (V::Public, "Derived"),
                 TD::new([
-                    TS::vftable([vfunc_grammar("derived_vfunc")], []),
+                    TS::vftable([vfunc_grammar("derived_vfunc")]),
                     TS::field((V::Public, "base_a"), T::ident("BaseA"))
                         .with_attributes([A::base(), A::address(8)]),
                     TS::field((V::Public, "base_b"), T::ident("BaseB"))
@@ -188,7 +188,7 @@ fn a1_b0_d0() {
             ID::new(
                 (V::Public, "BaseA"),
                 TD::new([
-                    TS::vftable([vfunc_grammar("base_a_vfunc")], []),
+                    TS::vftable([vfunc_grammar("base_a_vfunc")]),
                     TS::field((V::Public, "field_1"), T::ident("i32"))
                         .with_attributes([A::address(8)]),
                     TS::field((V::Public, "field_2"), T::ident("u64"))
@@ -285,7 +285,7 @@ fn a1_b0_d1() {
             ID::new(
                 (V::Public, "BaseA"),
                 TD::new([
-                    TS::vftable([vfunc_grammar("base_a_vfunc")], []),
+                    TS::vftable([vfunc_grammar("base_a_vfunc")]),
                     TS::field((V::Public, "field_1"), T::ident("i32"))
                         .with_attributes([A::address(8)]),
                     TS::field((V::Public, "field_2"), T::ident("u64"))
@@ -304,13 +304,10 @@ fn a1_b0_d1() {
             ID::new(
                 (V::Public, "Derived"),
                 TD::new([
-                    TS::vftable(
-                        [
-                            vfunc_grammar("base_a_vfunc"),
-                            vfunc_grammar("derived_vfunc"),
-                        ],
-                        [],
-                    ),
+                    TS::vftable([
+                        vfunc_grammar("base_a_vfunc"),
+                        vfunc_grammar("derived_vfunc"),
+                    ]),
                     TS::field((V::Public, "base_a"), T::ident("BaseA"))
                         .with_attributes([A::base()]),
                     TS::field((V::Public, "base_b"), T::ident("BaseB"))
@@ -402,7 +399,7 @@ fn a1_b1_d0() {
             ID::new(
                 (V::Public, "BaseA"),
                 TD::new([
-                    TS::vftable([vfunc_grammar("base_a_vfunc")], []),
+                    TS::vftable([vfunc_grammar("base_a_vfunc")]),
                     TS::field((V::Public, "field_1"), T::ident("i32"))
                         .with_attributes([A::address(8)]),
                     TS::field((V::Public, "field_2"), T::ident("u64"))
@@ -413,7 +410,7 @@ fn a1_b1_d0() {
             ID::new(
                 (V::Public, "BaseB"),
                 TD::new([
-                    TS::vftable([vfunc_grammar("base_b_vfunc")], []),
+                    TS::vftable([vfunc_grammar("base_b_vfunc")]),
                     TS::field((V::Public, "field_1"), T::ident("u64"))
                         .with_attributes([A::address(8)]),
                     TS::field((V::Public, "field_2"), T::ident("i32")),
@@ -523,7 +520,7 @@ fn a1_b1_d1_with_associated_functions() {
                 ID::new(
                     (V::Public, "BaseA"),
                     TD::new([
-                        TS::vftable([vfunc_grammar("base_a_vfunc")], []),
+                        TS::vftable([vfunc_grammar("base_a_vfunc")]),
                         TS::field((V::Public, "field_1"), T::ident("i32"))
                             .with_attributes([A::address(8)]),
                         TS::field((V::Public, "field_2"), T::ident("u64"))
@@ -534,7 +531,7 @@ fn a1_b1_d1_with_associated_functions() {
                 ID::new(
                     (V::Public, "BaseB"),
                     TD::new([
-                        TS::vftable([vfunc_grammar("base_b_vfunc")], []),
+                        TS::vftable([vfunc_grammar("base_b_vfunc")]),
                         TS::field((V::Public, "field_1"), T::ident("u64"))
                             .with_attributes([A::address(8)]),
                         TS::field((V::Public, "field_2"), T::ident("i32")),
@@ -544,13 +541,10 @@ fn a1_b1_d1_with_associated_functions() {
                 ID::new(
                     (V::Public, "Derived"),
                     TD::new([
-                        TS::vftable(
-                            [
-                                vfunc_grammar("base_a_vfunc"),
-                                vfunc_grammar("derived_vfunc"),
-                            ],
-                            [],
-                        ),
+                        TS::vftable([
+                            vfunc_grammar("base_a_vfunc"),
+                            vfunc_grammar("derived_vfunc"),
+                        ]),
                         TS::field((V::Public, "base_a"), T::ident("BaseA"))
                             .with_attributes([A::base()]),
                         TS::field((V::Public, "base_b"), T::ident("BaseB"))
