@@ -283,14 +283,13 @@ pub fn build(
 
     // Handle functions
     let mut associated_functions = vec![];
-    for region in &regions {
+    for (i, base_region) in regions.iter().filter(|r| r.is_base).enumerate() {
         // Inject all base associated functions into the type
-        if !region.is_base {
-            continue;
-        }
-
-        let Some((base_name, base_type)) =
-            get_region_name_and_type_definition(&semantic.type_registry, resolvee_path, region)?
+        let Some((base_name, base_type)) = get_region_name_and_type_definition(
+            &semantic.type_registry,
+            resolvee_path,
+            base_region,
+        )?
         else {
             continue;
         };
@@ -301,6 +300,16 @@ pub fn build(
                 ..f
             }
         }));
+
+        if i > 0 {
+            // Inject all non-first-base vfuncs into the type
+            if let Some(vftable) = &base_type.vftable {
+                associated_functions.extend(vftable.functions.iter().cloned().map(|f| Function {
+                    getter: FunctionGetter::field(base_name.clone()),
+                    ..f
+                }));
+            }
+        }
     }
     if let Some(type_impl) = module.impls.get(resolvee_path) {
         for function in &type_impl.functions {

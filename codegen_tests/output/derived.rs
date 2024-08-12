@@ -100,6 +100,9 @@ impl Derived {
     pub unsafe fn base_b_associated(&self, a: i32) -> i32 {
         self.base_b.base_b_associated(a)
     }
+    pub unsafe fn base_b_vfunc(&self, a: i32) -> i32 {
+        self.base_b.base_b_vfunc(a)
+    }
     pub unsafe fn derived_associated(&self, a: i32) -> i32 {
         let f: unsafe extern "thiscall" fn(this: *const Self, a: i32) -> i32 = ::std::mem::transmute(
             1929usize,
