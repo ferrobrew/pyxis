@@ -1,9 +1,6 @@
 use std::path::Path;
 
 fn main() -> anyhow::Result<()> {
-    pyxis::build(
-        &Path::new("codegen_tests/input"),
-        &Path::new("codegen_tests/output"),
-        8,
-    )
+    let root = Path::new("codegen_tests");
+    pyxis::build(&root.join("input"), &root.join("output"), 8)
 }
