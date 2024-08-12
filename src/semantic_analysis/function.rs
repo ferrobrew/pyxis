@@ -163,6 +163,9 @@ impl Function {
         self.body = body;
         self
     }
+    pub fn is_internal(&self) -> bool {
+        self.name.starts_with("_")
+    }
 }
 
 pub fn build(

@@ -227,8 +227,11 @@ fn build_type(
         })
         .transpose()?;
 
+    // Not sure about filtering out internal functions at this level,
+    // might be better to do it in semantic?
     let associated_functions_impl = associated_functions
         .iter()
+        .filter(|f| !f.is_internal())
         .map(build_function)
         .collect::<anyhow::Result<Vec<_>>>()?;
 
@@ -237,7 +240,7 @@ fn build_type(
         .map(|v| {
             v.functions
                 .iter()
-                .filter(|f| !f.name.starts_with('_'))
+                .filter(|f| !f.is_internal())
                 .map(build_function)
                 .collect::<anyhow::Result<Vec<_>>>()
         })
