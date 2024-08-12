@@ -113,7 +113,7 @@ fn b0_d1() {
                         ]))
                         .with_vftable(STV::new(
                             [vfunc_semantic("derived_vfunc")],
-                            ["vftable"],
+                            None,
                             ST::raw("test::DerivedVftable").const_pointer(),
                         )),
                 ),
@@ -170,7 +170,7 @@ fn b1_d0() {
                         ]))
                         .with_vftable(STV::new(
                             [vfunc_semantic("base_vfunc")],
-                            ["vftable"],
+                            None,
                             ST::raw("test::BaseVftable").const_pointer(),
                         )),
                 ),
@@ -192,7 +192,7 @@ fn b1_d0() {
                         ])
                         .with_vftable(STV::new(
                             [vfunc_semantic("base_vfunc")],
-                            ["base", "vftable"],
+                            "base".to_string(),
                             ST::raw("test::BaseVftable").const_pointer(),
                         )),
                 ),
@@ -260,7 +260,7 @@ fn b1_d1_with_associated_functions() {
                         ]))
                         .with_vftable(STV::new(
                             [vfunc_semantic("base_vfunc")],
-                            ["vftable"],
+                            None,
                             ST::raw("test::BaseVftable").const_pointer(),
                         ))
                         .with_associated_functions([SF::new(
@@ -290,7 +290,7 @@ fn b1_d1_with_associated_functions() {
                                 vfunc_semantic("base_vfunc"),
                                 vfunc_semantic("derived_vfunc"),
                             ],
-                            ["base", "vftable"],
+                            "base".to_string(),
                             ST::raw("test::DerivedVftable").const_pointer(),
                         ))
                         .with_associated_functions([

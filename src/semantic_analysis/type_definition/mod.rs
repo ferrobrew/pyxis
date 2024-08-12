@@ -83,7 +83,7 @@ impl TypeDefinition {
     ) -> Self {
         self.with_vftable(TypeVftable {
             functions: vftable_functions.into(),
-            field_path: vec!["vftable".into()],
+            base_field: None,
             type_: vftable_type,
         })
     }

@@ -165,7 +165,7 @@ fn a0_b0_d1() {
                         ]))
                         .with_vftable(STV::new(
                             [vfunc_semantic("derived_vfunc")],
-                            ["vftable"],
+                            None,
                             ST::raw("test::DerivedVftable").const_pointer(),
                         )),
                 ),

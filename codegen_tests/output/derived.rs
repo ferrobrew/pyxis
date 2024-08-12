@@ -92,7 +92,7 @@ fn _Derived_size_check() {
 }
 impl Derived {
     pub fn vftable(&self) -> *const crate::derived::DerivedVftable {
-        self.base_a.vftable as *const crate::derived::DerivedVftable
+        self.base_a.vftable() as *const crate::derived::DerivedVftable
     }
     pub unsafe fn base_a_associated(&self, a: i32) -> i32 {
         self.base_a.base_a_associated(a)

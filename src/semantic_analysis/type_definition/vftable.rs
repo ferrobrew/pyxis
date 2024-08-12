@@ -18,18 +18,18 @@ use crate::{
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]
 pub struct TypeVftable {
     pub functions: Vec<Function>,
-    pub field_path: Vec<String>,
+    pub base_field: Option<String>,
     pub type_: Type,
 }
 impl TypeVftable {
     pub fn new<'a>(
         functions: impl Into<Vec<Function>>,
-        field_path: impl IntoIterator<Item = &'a str>,
+        base_field: impl Into<Option<String>>,
         type_: Type,
     ) -> Self {
         Self {
             functions: functions.into(),
-            field_path: field_path.into_iter().map(|s| s.to_string()).collect(),
+            base_field: base_field.into(),
             type_,
         }
     }
@@ -157,9 +157,7 @@ pub fn build(
             Ok((
                 Some(TypeVftable {
                     functions: vftable_functions,
-                    field_path: std::iter::once(base_name)
-                        .chain(base_vftable.field_path.clone())
-                        .collect(),
+                    base_field: Some(base_name),
                     type_: vftable_pointer_type,
                 }),
                 None,
@@ -176,7 +174,7 @@ pub fn build(
             Ok((
                 Some(TypeVftable {
                     functions: vftable_functions,
-                    field_path: vec!["vftable".to_string()],
+                    base_field: None,
                     type_: vftable_pointer_type,
                 }),
                 Some(region),
@@ -190,9 +188,7 @@ pub fn build(
         Ok((
             Some(TypeVftable {
                 functions: base_vftable.functions.clone(),
-                field_path: std::iter::once(base_name)
-                    .chain(base_vftable.field_path.clone())
-                    .collect(),
+                base_field: Some(base_name),
                 type_: base_vftable.type_.clone(),
             }),
             None,

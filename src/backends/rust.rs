@@ -212,11 +212,16 @@ fn build_type(
     let vftable_fn_impl = vftable
         .as_ref()
         .map(|v| {
-            let path = v.field_path.iter().map(|f| str_to_ident(f));
+            let accessor = if let Some(field) = &v.base_field {
+                let field = str_to_ident(field);
+                quote! { #field . vftable() }
+            } else {
+                quote! { vftable }
+            };
             let vftable_type = sa_type_to_syn_type(&v.type_)?;
             anyhow::Ok(quote! {
                 pub fn vftable(&self) -> #vftable_type {
-                    self #(.#path)* as #vftable_type
+                    self. #accessor as #vftable_type
                 }
             })
         })
