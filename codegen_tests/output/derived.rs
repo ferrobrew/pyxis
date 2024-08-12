@@ -118,6 +118,26 @@ impl Derived {
         f(self as *const Self as _, a)
     }
 }
+impl std::convert::AsRef<crate::derived::BaseA> for Derived {
+    fn as_ref(&self) -> &crate::derived::BaseA {
+        &self.base_a
+    }
+}
+impl std::convert::AsMut<crate::derived::BaseA> for Derived {
+    fn as_mut(&mut self) -> &mut crate::derived::BaseA {
+        &mut self.base_a
+    }
+}
+impl std::convert::AsRef<crate::derived::BaseB> for Derived {
+    fn as_ref(&self) -> &crate::derived::BaseB {
+        &self.base_b
+    }
+}
+impl std::convert::AsMut<crate::derived::BaseB> for Derived {
+    fn as_mut(&mut self) -> &mut crate::derived::BaseB {
+        &mut self.base_b
+    }
+}
 #[repr(C, align(8))]
 struct DerivedVftable {
     pub base_a_vfunc: unsafe extern "thiscall" fn(

@@ -269,6 +269,28 @@ fn build_type(
         (quote! {}, quote! { , align(#alignment) })
     };
 
+    let as_ref_conversions = regions
+        .iter()
+        .filter(|r| r.is_base)
+        .map(|r| {
+            let type_ = sa_type_to_syn_type(&r.type_ref)?;
+            let field_name = str_to_ident(r.name.as_deref().unwrap());
+
+            Ok(quote! {
+                impl std::convert::AsRef<#type_> for #name_ident {
+                    fn as_ref(&self) -> & #type_ {
+                        &self. #field_name
+                    }
+                }
+                impl std::convert::AsMut<#type_> for #name_ident {
+                    fn as_mut(&mut self) -> &mut #type_ {
+                        &mut self. #field_name
+                    }
+                }
+            })
+        })
+        .collect::<anyhow::Result<Vec<_>>>()?;
+
     Ok(quote! {
         #derives
         #[repr(C #packed #alignment)]
@@ -277,12 +299,12 @@ fn build_type(
         }
         #size_check_impl
         #singleton_impl
-
         impl #name_ident {
             #vftable_fn_impl
             #(#associated_functions_impl)*
             #(#vftable_function_impl)*
         }
+        #(#as_ref_conversions)*
     })
 }
 
