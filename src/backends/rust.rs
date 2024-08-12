@@ -279,7 +279,7 @@ fn build_type(
     };
 
     let as_ref_conversions = type_definition
-        .dfs_hierarchy(type_registry, path, None)?
+        .dfs_hierarchy(type_registry, path, &[])?
         .into_iter()
         .map(|(field_path, type_)| {
             let field_path = field_path

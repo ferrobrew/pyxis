@@ -112,7 +112,7 @@ impl TypeDefinition {
         &self,
         type_registry: &TypeRegistry,
         type_path: &ItemPath,
-        root_field: Option<String>,
+        fields: &[&str],
     ) -> anyhow::Result<Vec<(Vec<String>, Type)>> {
         let mut output = vec![];
         for region in &self.regions {
@@ -125,17 +125,16 @@ impl TypeDefinition {
             else {
                 continue;
             };
-            let field_path = root_field
+            let field_path = fields
                 .iter()
-                .cloned()
-                .chain(Some(field_name.clone()))
-                .collect();
-            output.push((field_path, region.type_ref.clone()));
-            output.extend(type_definition.dfs_hierarchy(
-                type_registry,
-                type_path,
-                Some(field_name),
-            )?);
+                .copied()
+                .chain(Some(field_name.as_str()))
+                .collect::<Vec<_>>();
+            output.push((
+                field_path.iter().map(|s| s.to_string()).collect(),
+                region.type_ref.clone(),
+            ));
+            output.extend(type_definition.dfs_hierarchy(type_registry, type_path, &field_path)?);
         }
 
         Ok(output)

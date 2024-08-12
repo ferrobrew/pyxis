@@ -148,6 +148,118 @@ impl std::convert::AsMut<crate::multiple_levels::Base> for DerivedDerived {
     }
 }
 #[repr(C, align(8))]
+struct DerivedDerivedDerived {
+    pub derived_derived: crate::multiple_levels::DerivedDerived,
+    pub derived_derived_derived_field: u64,
+}
+fn _DerivedDerivedDerived_size_check() {
+    unsafe {
+        ::std::mem::transmute::<[u8; 40usize], DerivedDerivedDerived>([0u8; 40usize]);
+    }
+    unreachable!()
+}
+impl DerivedDerivedDerived {
+    pub fn vftable(
+        &self,
+    ) -> *const crate::multiple_levels::DerivedDerivedDerivedVftable {
+        self.derived_derived.vftable()
+            as *const crate::multiple_levels::DerivedDerivedDerivedVftable
+    }
+    pub unsafe fn base_associated(&self, a: i32) -> i32 {
+        self.derived_derived.base_associated(a)
+    }
+    pub unsafe fn derived_associated(&self, a: i32) -> i32 {
+        self.derived_derived.derived_associated(a)
+    }
+    pub unsafe fn derived_derived_associated(&self, a: i32) -> i32 {
+        self.derived_derived.derived_derived_associated(a)
+    }
+    pub unsafe fn derived_derived_derived_associated(&self, a: i32) -> i32 {
+        let f: unsafe extern "thiscall" fn(this: *const Self, a: i32) -> i32 = ::std::mem::transmute(
+            2748usize,
+        );
+        f(self as *const Self as _, a)
+    }
+    pub unsafe fn base_vfunc(&self, a: i32) -> i32 {
+        let f = std::ptr::addr_of!((* self.vftable()).base_vfunc).read();
+        f(self as *const Self as _, a)
+    }
+    pub unsafe fn derived_vfunc(&self, a: i32) -> i32 {
+        let f = std::ptr::addr_of!((* self.vftable()).derived_vfunc).read();
+        f(self as *const Self as _, a)
+    }
+    pub unsafe fn derived_derived_vfunc(&self, a: i32) -> i32 {
+        let f = std::ptr::addr_of!((* self.vftable()).derived_derived_vfunc).read();
+        f(self as *const Self as _, a)
+    }
+    pub unsafe fn derived_derived_derived_vfunc(&self, a: i32) -> i32 {
+        let f = std::ptr::addr_of!((* self.vftable()).derived_derived_derived_vfunc)
+            .read();
+        f(self as *const Self as _, a)
+    }
+}
+impl std::convert::AsRef<crate::multiple_levels::DerivedDerived>
+for DerivedDerivedDerived {
+    fn as_ref(&self) -> &crate::multiple_levels::DerivedDerived {
+        &self.derived_derived
+    }
+}
+impl std::convert::AsMut<crate::multiple_levels::DerivedDerived>
+for DerivedDerivedDerived {
+    fn as_mut(&mut self) -> &mut crate::multiple_levels::DerivedDerived {
+        &mut self.derived_derived
+    }
+}
+impl std::convert::AsRef<crate::multiple_levels::Derived> for DerivedDerivedDerived {
+    fn as_ref(&self) -> &crate::multiple_levels::Derived {
+        &self.derived_derived.derived
+    }
+}
+impl std::convert::AsMut<crate::multiple_levels::Derived> for DerivedDerivedDerived {
+    fn as_mut(&mut self) -> &mut crate::multiple_levels::Derived {
+        &mut self.derived_derived.derived
+    }
+}
+impl std::convert::AsRef<crate::multiple_levels::Base> for DerivedDerivedDerived {
+    fn as_ref(&self) -> &crate::multiple_levels::Base {
+        &self.derived_derived.derived.base
+    }
+}
+impl std::convert::AsMut<crate::multiple_levels::Base> for DerivedDerivedDerived {
+    fn as_mut(&mut self) -> &mut crate::multiple_levels::Base {
+        &mut self.derived_derived.derived.base
+    }
+}
+#[repr(C, align(8))]
+struct DerivedDerivedDerivedVftable {
+    pub base_vfunc: unsafe extern "thiscall" fn(
+        this: *const crate::multiple_levels::DerivedDerivedDerived,
+        a: i32,
+    ) -> i32,
+    pub derived_vfunc: unsafe extern "thiscall" fn(
+        this: *const crate::multiple_levels::DerivedDerivedDerived,
+        a: i32,
+    ) -> i32,
+    pub derived_derived_vfunc: unsafe extern "thiscall" fn(
+        this: *const crate::multiple_levels::DerivedDerivedDerived,
+        a: i32,
+    ) -> i32,
+    pub derived_derived_derived_vfunc: unsafe extern "thiscall" fn(
+        this: *const crate::multiple_levels::DerivedDerivedDerived,
+        a: i32,
+    ) -> i32,
+}
+fn _DerivedDerivedDerivedVftable_size_check() {
+    unsafe {
+        ::std::mem::transmute::<
+            [u8; 32usize],
+            DerivedDerivedDerivedVftable,
+        >([0u8; 32usize]);
+    }
+    unreachable!()
+}
+impl DerivedDerivedDerivedVftable {}
+#[repr(C, align(8))]
 struct DerivedDerivedVftable {
     pub base_vfunc: unsafe extern "thiscall" fn(
         this: *const crate::multiple_levels::DerivedDerived,

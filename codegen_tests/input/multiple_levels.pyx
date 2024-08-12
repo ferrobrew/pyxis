@@ -41,3 +41,20 @@ impl DerivedDerived {
     #[address(0x789)]
     pub fn derived_derived_associated(&self, a: i32) -> i32;
 }
+
+#[align(8)]
+type DerivedDerivedDerived {
+    vftable {
+        pub fn base_vfunc(&self, a: i32) -> i32;
+        pub fn derived_vfunc(&self, a: i32) -> i32;
+        pub fn derived_derived_vfunc(&self, a: i32) -> i32;
+        pub fn derived_derived_derived_vfunc(&self, a: i32) -> i32;
+    },
+    #[base]
+    pub derived_derived: DerivedDerived,
+    pub derived_derived_derived_field: u64,
+}
+impl DerivedDerivedDerived {
+    #[address(0xabc)]
+    pub fn derived_derived_derived_associated(&self, a: i32) -> i32;
+}
