@@ -159,6 +159,10 @@ impl Function {
         self.calling_convention = calling_convention;
         self
     }
+    pub fn with_body(mut self, body: FunctionBody) -> Self {
+        self.body = body;
+        self
+    }
 }
 
 pub fn build(
