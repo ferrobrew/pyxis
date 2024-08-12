@@ -228,7 +228,7 @@ fn build_type(
             alignment: type_registry.pointer_size(),
             inner: TypeDefinition {
                 regions,
-                free_functions: vec![],
+                associated_functions: vec![],
                 vftable: None,
                 singleton: None,
                 cloneable: false,

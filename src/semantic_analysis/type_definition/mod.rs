@@ -49,7 +49,7 @@ impl Region {
 #[derive(PartialEq, Eq, Debug, Clone, Default, Hash)]
 pub struct TypeDefinition {
     pub regions: Vec<Region>,
-    pub free_functions: Vec<Function>,
+    pub associated_functions: Vec<Function>,
     pub vftable: Option<TypeVftable>,
     pub singleton: Option<usize>,
     pub copyable: bool,
@@ -65,8 +65,11 @@ impl TypeDefinition {
         self.regions = regions.into();
         self
     }
-    pub fn with_free_functions(mut self, free_functions: impl Into<Vec<Function>>) -> Self {
-        self.free_functions = free_functions.into();
+    pub fn with_associated_functions(
+        mut self,
+        associated_functions: impl Into<Vec<Function>>,
+    ) -> Self {
+        self.associated_functions = associated_functions.into();
         self
     }
     pub fn with_vftable(mut self, vftable: TypeVftable) -> Self {
@@ -279,9 +282,9 @@ pub fn build(
     let module = semantic.get_module_for_path(resolvee_path).unwrap();
 
     // Handle functions
-    let mut free_functions = vec![];
+    let mut associated_functions = vec![];
     for region in &regions {
-        // Inject all base free functions into the type
+        // Inject all base associated functions into the type
         if !region.is_base {
             continue;
         }
@@ -292,9 +295,11 @@ pub fn build(
             continue;
         };
 
-        free_functions.extend(base_type.free_functions.iter().cloned().map(|f| Function {
-            getter: FunctionGetter::base(base_name.clone()),
-            ..f
+        associated_functions.extend(base_type.associated_functions.iter().cloned().map(|f| {
+            Function {
+                getter: FunctionGetter::base(base_name.clone()),
+                ..f
+            }
         }));
     }
     if let Some(type_impl) = module.impls.get(resolvee_path) {
@@ -307,7 +312,7 @@ pub fn build(
                             function.name
                         )
                     })?;
-            free_functions.push(function);
+            associated_functions.push(function);
         }
     }
 
@@ -413,7 +418,7 @@ pub fn build(
         alignment,
         inner: TypeDefinition {
             regions,
-            free_functions,
+            associated_functions,
             vftable,
             singleton,
             copyable,

@@ -14,7 +14,7 @@ impl BaseA {
     pub fn vftable(&self) -> *const crate::derived::BaseAVftable {
         self.vftable as *const crate::derived::BaseAVftable
     }
-    pub unsafe fn base_a_free(&self, a: i32) -> i32 {
+    pub unsafe fn base_a_associated(&self, a: i32) -> i32 {
         let f: unsafe extern "thiscall" fn(this: *const Self, a: i32) -> i32 = ::std::mem::transmute(
             291usize,
         );
@@ -54,7 +54,7 @@ impl BaseB {
     pub fn vftable(&self) -> *const crate::derived::BaseBVftable {
         self.vftable as *const crate::derived::BaseBVftable
     }
-    pub unsafe fn base_b_free(&self, a: i32) -> i32 {
+    pub unsafe fn base_b_associated(&self, a: i32) -> i32 {
         let f: unsafe extern "thiscall" fn(this: *const Self, a: i32) -> i32 = ::std::mem::transmute(
             1110usize,
         );
@@ -94,13 +94,13 @@ impl Derived {
     pub fn vftable(&self) -> *const crate::derived::DerivedVftable {
         self.base_a.vftable as *const crate::derived::DerivedVftable
     }
-    pub unsafe fn base_a_free(&self, a: i32) -> i32 {
-        self.base_a.base_a_free(a)
+    pub unsafe fn base_a_associated(&self, a: i32) -> i32 {
+        self.base_a.base_a_associated(a)
     }
-    pub unsafe fn base_b_free(&self, a: i32) -> i32 {
-        self.base_b.base_b_free(a)
+    pub unsafe fn base_b_associated(&self, a: i32) -> i32 {
+        self.base_b.base_b_associated(a)
     }
-    pub unsafe fn derived_free(&self, a: i32) -> i32 {
+    pub unsafe fn derived_associated(&self, a: i32) -> i32 {
         let f: unsafe extern "thiscall" fn(this: *const Self, a: i32) -> i32 = ::std::mem::transmute(
             1929usize,
         );

@@ -202,7 +202,7 @@ fn b1_d0() {
 }
 
 #[test]
-fn b1_d1_with_free_functions() {
+fn b1_d1_with_associated_functions() {
     assert_ast_produces_type_definitions(
         M::new()
             .with_definitions([
@@ -233,12 +233,12 @@ fn b1_d1_with_free_functions() {
             .with_impls([
                 FB::new(
                     "Base",
-                    [F::new((V::Public, "base_free"), [Ar::MutSelf])
+                    [F::new((V::Public, "base_associated"), [Ar::MutSelf])
                         .with_attributes([A::address(0x123)])],
                 ),
                 FB::new(
                     "Derived",
-                    [F::new((V::Public, "derived_free"), [Ar::MutSelf])
+                    [F::new((V::Public, "derived_associated"), [Ar::MutSelf])
                         .with_attributes([A::address(0x456)])],
                 ),
             ]),
@@ -263,9 +263,9 @@ fn b1_d1_with_free_functions() {
                             ["vftable"],
                             ST::raw("test::BaseVftable").const_pointer(),
                         ))
-                        .with_free_functions([SF::new(
-                            (SV::Public, "base_free"),
-                            SFG::free(0x123),
+                        .with_associated_functions([SF::new(
+                            (SV::Public, "base_associated"),
+                            SFG::address(0x123),
                         )
                         .with_arguments([SAr::MutSelf])]),
                 ),
@@ -293,10 +293,10 @@ fn b1_d1_with_free_functions() {
                             ["base", "vftable"],
                             ST::raw("test::DerivedVftable").const_pointer(),
                         ))
-                        .with_free_functions([
-                            SF::new((SV::Public, "base_free"), SFG::base("base"))
+                        .with_associated_functions([
+                            SF::new((SV::Public, "base_associated"), SFG::base("base"))
                                 .with_arguments([SAr::MutSelf]),
-                            SF::new((SV::Public, "derived_free"), SFG::free(0x456))
+                            SF::new((SV::Public, "derived_associated"), SFG::address(0x456))
                                 .with_arguments([SAr::MutSelf]),
                         ]),
                 ),

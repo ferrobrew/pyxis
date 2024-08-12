@@ -155,9 +155,9 @@ fn can_resolve_complex_type() {
                             SR::field((SV::Public, "settings"), unknown(804)),
                             SR::field((SV::Private, "_field_d2c"), unknown(0xA24)),
                         ])
-                        .with_free_functions([SF::new(
+                        .with_associated_functions([SF::new(
                             (SV::Public, "test_function"),
-                            SFG::free(0x800_000),
+                            SFG::address(0x800_000),
                         )
                         .with_arguments([
                             SAr::MutSelf,
@@ -537,9 +537,9 @@ fn will_propagate_calling_convention_for_impl_and_vftable() {
                                 .with_calling_convention(SCC::Cdecl)
                                 .with_return_type(ST::raw("i32"))],
                         )
-                        .with_free_functions([SF::new(
+                        .with_associated_functions([SF::new(
                             (SV::Public, "test_function"),
-                            SFG::free(0x800_000),
+                            SFG::address(0x800_000),
                         )
                         .with_calling_convention(SCC::Cdecl)
                         .with_arguments([SAr::field("arg1", ST::raw("i32"))])

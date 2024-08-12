@@ -8,7 +8,7 @@ type BaseA {
 }
 impl BaseA {
     #[address(0x123)]
-    pub fn base_a_free(&self, a: i32) -> i32;
+    pub fn base_a_associated(&self, a: i32) -> i32;
 }
 
 #[align(8)]
@@ -21,7 +21,7 @@ type BaseB {
 }
 impl BaseB {
     #[address(0x456)]
-    pub fn base_b_free(&self, a: i32) -> i32;
+    pub fn base_b_associated(&self, a: i32) -> i32;
 }
 
 #[align(8)]
@@ -37,5 +37,5 @@ type Derived {
 }
 impl Derived {
     #[address(0x789)]
-    pub fn derived_free(&self, a: i32) -> i32;
+    pub fn derived_associated(&self, a: i32) -> i32;
 }

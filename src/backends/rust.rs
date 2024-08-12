@@ -150,7 +150,7 @@ fn build_type(
     let TypeDefinition {
         singleton,
         regions,
-        free_functions,
+        associated_functions,
         vftable,
         copyable,
         cloneable,
@@ -222,7 +222,7 @@ fn build_type(
         })
         .transpose()?;
 
-    let free_functions_impl = free_functions
+    let associated_functions_impl = associated_functions
         .iter()
         .map(build_function)
         .collect::<anyhow::Result<Vec<_>>>()?;
@@ -275,7 +275,7 @@ fn build_type(
 
         impl #name_ident {
             #vftable_fn_impl
-            #(#free_functions_impl)*
+            #(#associated_functions_impl)*
             #(#vftable_function_impl)*
         }
     })
@@ -430,7 +430,7 @@ fn build_function(function: &Function) -> Result<proc_macro2::TokenStream, anyho
 
     let calling_convention = function.calling_convention.as_str();
     let function_getter_impl = match &function.getter {
-        FunctionGetter::Free { address } => quote! {
+        FunctionGetter::Address { address } => quote! {
             let f:
                 unsafe extern #calling_convention
                 fn(#(#lambda_arguments),*) #return_type
