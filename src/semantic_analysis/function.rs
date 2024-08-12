@@ -81,7 +81,7 @@ impl FromStr for CallingConvention {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum FunctionGetter {
     Address { address: usize },
-    Base { field: String },
+    Field { field: String },
     Vftable,
 }
 
@@ -89,13 +89,13 @@ impl FunctionGetter {
     pub fn address(address: usize) -> Self {
         FunctionGetter::Address { address }
     }
-    pub fn base(field: impl Into<String>) -> Self {
-        FunctionGetter::Base {
+    pub fn field(field: impl Into<String>) -> Self {
+        FunctionGetter::Field {
             field: field.into(),
         }
     }
-    pub fn is_base(&self) -> bool {
-        matches!(self, FunctionGetter::Base { .. })
+    pub fn is_field(&self) -> bool {
+        matches!(self, FunctionGetter::Field { .. })
     }
 }
 
@@ -112,7 +112,7 @@ impl fmt::Display for Function {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.getter {
             FunctionGetter::Address { address } => write!(f, "#[address(0x{address:X})] ")?,
-            FunctionGetter::Base { field } => write!(f, "#[base({field:?})] ")?,
+            FunctionGetter::Field { field } => write!(f, "#[field({field:?})] ")?,
             FunctionGetter::Vftable => {}
         }
         match self.visibility {

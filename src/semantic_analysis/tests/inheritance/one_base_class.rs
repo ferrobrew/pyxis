@@ -294,7 +294,7 @@ fn b1_d1_with_associated_functions() {
                             ST::raw("test::DerivedVftable").const_pointer(),
                         ))
                         .with_associated_functions([
-                            SF::new((SV::Public, "base_associated"), SFG::base("base"))
+                            SF::new((SV::Public, "base_associated"), SFG::field("base"))
                                 .with_arguments([SAr::MutSelf]),
                             SF::new((SV::Public, "derived_associated"), SFG::address(0x456))
                                 .with_arguments([SAr::MutSelf]),

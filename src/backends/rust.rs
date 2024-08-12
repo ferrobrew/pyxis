@@ -403,12 +403,12 @@ fn build_function(function: &Function) -> Result<proc_macro2::TokenStream, anyho
         })
         .collect::<anyhow::Result<Vec<_>>>()?;
 
-    let is_base_function = function.getter.is_base();
+    let is_field_function = function.getter.is_field();
     let call_arguments = function
         .arguments
         .iter()
-        // Only pass `self` to the function if it's not a base function
-        .filter(|a| !is_base_function || !a.is_self())
+        // Only pass `self` to the function if it's not a field function
+        .filter(|a| !is_field_function || !a.is_self())
         .map(|a| match a {
             Argument::ConstSelf => quote! { self as *const Self as _ },
             Argument::MutSelf => quote! { self as *mut Self as _ },
@@ -437,7 +437,7 @@ fn build_function(function: &Function) -> Result<proc_macro2::TokenStream, anyho
             = ::std::mem::transmute(#address);
             f(#(#call_arguments),*)
         },
-        FunctionGetter::Base { field } => {
+        FunctionGetter::Field { field } => {
             let field_ident = str_to_ident(field);
             quote! {
                 self.#field_ident.#name(#(#call_arguments),*)

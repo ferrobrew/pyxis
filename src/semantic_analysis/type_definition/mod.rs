@@ -297,7 +297,7 @@ pub fn build(
 
         associated_functions.extend(base_type.associated_functions.iter().cloned().map(|f| {
             Function {
-                getter: FunctionGetter::base(base_name.clone()),
+                getter: FunctionGetter::field(base_name.clone()),
                 ..f
             }
         }));
