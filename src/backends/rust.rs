@@ -4,7 +4,7 @@ use crate::{
     grammar::{ItemPath, ItemPathSegment},
     semantic_analysis::{
         types::{
-            Argument, EnumDefinition, ExternValue, Function, FunctionGetter, ItemCategory,
+            Argument, EnumDefinition, ExternValue, Function, FunctionBody, ItemCategory,
             ItemDefinition, ItemDefinitionInner, ItemStateResolved, Type, TypeDefinition,
             Visibility,
         },
@@ -408,7 +408,7 @@ fn build_function(function: &Function) -> Result<proc_macro2::TokenStream, anyho
         })
         .collect::<anyhow::Result<Vec<_>>>()?;
 
-    let is_field_function = function.getter.is_field();
+    let is_field_function = function.body.is_field();
     let call_arguments = function
         .arguments
         .iter()
@@ -434,21 +434,21 @@ fn build_function(function: &Function) -> Result<proc_macro2::TokenStream, anyho
         .transpose()?;
 
     let calling_convention = function.calling_convention.as_str();
-    let function_getter_impl = match &function.getter {
-        FunctionGetter::Address { address } => quote! {
+    let function_body = match &function.body {
+        FunctionBody::Address { address } => quote! {
             let f:
                 unsafe extern #calling_convention
                 fn(#(#lambda_arguments),*) #return_type
             = ::std::mem::transmute(#address);
             f(#(#call_arguments),*)
         },
-        FunctionGetter::Field { field } => {
+        FunctionBody::Field { field } => {
             let field_ident = str_to_ident(field);
             quote! {
                 self.#field_ident.#name(#(#call_arguments),*)
             }
         }
-        FunctionGetter::Vftable => quote! {
+        FunctionBody::Vftable => quote! {
             let f = std::ptr::addr_of!((*self.vftable()).#name).read();
             f(#(#call_arguments),*)
         },
@@ -457,7 +457,7 @@ fn build_function(function: &Function) -> Result<proc_macro2::TokenStream, anyho
     let visibility = visibility_to_tokens(function.visibility);
     Ok(quote! {
         #visibility unsafe fn #name(#(#arguments),*) #return_type {
-            #function_getter_impl
+            #function_body
         }
     })
 }

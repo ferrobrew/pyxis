@@ -157,7 +157,7 @@ fn can_resolve_complex_type() {
                         ])
                         .with_associated_functions([SF::new(
                             (SV::Public, "test_function"),
-                            SFG::address(0x800_000),
+                            SFB::address(0x800_000),
                         )
                         .with_arguments([
                             SAr::MutSelf,
@@ -322,14 +322,14 @@ fn can_generate_vftable() {
                         .with_vftable_functions(
                             vftable_type,
                             [
-                                SF::new((SV::Public, "test_function0"), SFG::Vftable)
+                                SF::new((SV::Public, "test_function0"), SFB::Vftable)
                                     .with_arguments([
                                         SAr::MutSelf,
                                         SAr::field("arg0", ST::raw("u32")),
                                         SAr::field("arg1", ST::raw("f32")),
                                     ])
                                     .with_return_type(ST::raw("i32")),
-                                SF::new((SV::Public, "test_function1"), SFG::Vftable)
+                                SF::new((SV::Public, "test_function1"), SFB::Vftable)
                                     .with_arguments([
                                         SAr::MutSelf,
                                         SAr::field("arg0", ST::raw("u32")),
@@ -424,7 +424,7 @@ fn can_generate_vftable_with_indices() {
                             [
                                 make_vfunc(0),
                                 make_vfunc(1),
-                                SF::new((SV::Public, "test_function0"), SFG::Vftable)
+                                SF::new((SV::Public, "test_function0"), SFB::Vftable)
                                     .with_arguments([
                                         SAr::MutSelf,
                                         SAr::field("arg0", ST::raw("u32")),
@@ -433,7 +433,7 @@ fn can_generate_vftable_with_indices() {
                                     .with_return_type(ST::raw("i32")),
                                 make_vfunc(3),
                                 make_vfunc(4),
-                                SF::new((SV::Public, "test_function1"), SFG::Vftable)
+                                SF::new((SV::Public, "test_function1"), SFB::Vftable)
                                     .with_arguments([
                                         SAr::MutSelf,
                                         SAr::field("arg0", ST::raw("u32")),
@@ -528,7 +528,7 @@ fn will_propagate_calling_convention_for_impl_and_vftable() {
                         .with_regions([SR::field((SV::Private, "vftable"), vftable_type.clone())])
                         .with_vftable_functions(
                             vftable_type,
-                            [SF::new((SV::Public, "test_function0"), SFG::Vftable)
+                            [SF::new((SV::Public, "test_function0"), SFB::Vftable)
                                 .with_arguments([
                                     SAr::MutSelf,
                                     SAr::field("arg0", ST::raw("u32")),
@@ -539,7 +539,7 @@ fn will_propagate_calling_convention_for_impl_and_vftable() {
                         )
                         .with_associated_functions([SF::new(
                             (SV::Public, "test_function"),
-                            SFG::address(0x800_000),
+                            SFB::address(0x800_000),
                         )
                         .with_calling_convention(SCC::Cdecl)
                         .with_arguments([SAr::field("arg1", ST::raw("i32"))])
@@ -570,7 +570,7 @@ fn will_propagate_calling_convention_for_impl_and_vftable() {
 }
 
 fn make_vfunc(index: usize) -> SF {
-    SF::new((SV::Private, format!("_vfunc_{index}")), SFG::Vftable).with_arguments([SAr::MutSelf])
+    SF::new((SV::Private, format!("_vfunc_{index}")), SFB::Vftable).with_arguments([SAr::MutSelf])
 }
 
 fn make_vfunc_region(index: usize) -> SR {

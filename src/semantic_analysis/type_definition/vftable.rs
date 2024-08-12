@@ -8,8 +8,8 @@ use crate::{
         type_definition::get_region_name_and_type_definition,
         type_registry::TypeRegistry,
         types::{
-            Argument, CallingConvention, Function, ItemCategory, ItemDefinition, ItemState,
-            ItemStateResolved, Region, Type, TypeDefinition, Visibility,
+            Argument, CallingConvention, Function, FunctionBody, ItemCategory, ItemDefinition,
+            ItemState, ItemStateResolved, Region, Type, TypeDefinition, Visibility,
         },
         SemanticState,
     },
@@ -22,7 +22,7 @@ pub struct TypeVftable {
     pub type_: Type,
 }
 impl TypeVftable {
-    pub fn new<'a>(
+    pub fn new(
         functions: impl Into<Vec<Function>>,
         base_field: impl Into<Option<String>>,
         type_: Type,
@@ -88,7 +88,7 @@ pub fn convert_grammar_functions_to_semantic_functions(
                 name: format!("_vfunc_{}", output.len()),
                 arguments: vec![Argument::MutSelf],
                 return_type: None,
-                getter: function::FunctionGetter::Vftable,
+                body: FunctionBody::Vftable,
                 calling_convention: CallingConvention::Thiscall,
             });
         }

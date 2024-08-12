@@ -79,23 +79,23 @@ impl FromStr for CallingConvention {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum FunctionGetter {
+pub enum FunctionBody {
     Address { address: usize },
     Field { field: String },
     Vftable,
 }
 
-impl FunctionGetter {
+impl FunctionBody {
     pub fn address(address: usize) -> Self {
-        FunctionGetter::Address { address }
+        FunctionBody::Address { address }
     }
     pub fn field(field: impl Into<String>) -> Self {
-        FunctionGetter::Field {
+        FunctionBody::Field {
             field: field.into(),
         }
     }
     pub fn is_field(&self) -> bool {
-        matches!(self, FunctionGetter::Field { .. })
+        matches!(self, FunctionBody::Field { .. })
     }
 }
 
@@ -103,17 +103,17 @@ impl FunctionGetter {
 pub struct Function {
     pub visibility: Visibility,
     pub name: String,
-    pub getter: FunctionGetter,
+    pub body: FunctionBody,
     pub arguments: Vec<Argument>,
     pub return_type: Option<Type>,
     pub calling_convention: CallingConvention,
 }
 impl fmt::Display for Function {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match &self.getter {
-            FunctionGetter::Address { address } => write!(f, "#[address(0x{address:X})] ")?,
-            FunctionGetter::Field { field } => write!(f, "#[field({field:?})] ")?,
-            FunctionGetter::Vftable => {}
+        match &self.body {
+            FunctionBody::Address { address } => write!(f, "#[address(0x{address:X})] ")?,
+            FunctionBody::Field { field } => write!(f, "#[field({field:?})] ")?,
+            FunctionBody::Vftable => {}
         }
         match self.visibility {
             Visibility::Public => write!(f, "pub "),
@@ -135,14 +135,11 @@ impl fmt::Display for Function {
     }
 }
 impl Function {
-    pub fn new(
-        (visibility, name): (Visibility, impl Into<String>),
-        getter: FunctionGetter,
-    ) -> Self {
+    pub fn new((visibility, name): (Visibility, impl Into<String>), body: FunctionBody) -> Self {
         Function {
             visibility,
             name: name.into(),
-            getter,
+            body,
             arguments: Vec::new(),
             return_type: None,
             // ehh. This is not really always going to be true,
@@ -170,7 +167,7 @@ pub fn build(
     is_vfunc: bool,
     function: &grammar::Function,
 ) -> Result<Function, anyhow::Error> {
-    let mut getter = is_vfunc.then_some(FunctionGetter::Vftable);
+    let mut body = is_vfunc.then_some(FunctionBody::Vftable);
     let mut calling_convention = None;
     for attribute in &function.attributes {
         let Some((ident, exprs)) = attribute.function() else {
@@ -188,7 +185,7 @@ pub fn build(
                     );
                 }
 
-                getter = Some(FunctionGetter::Address {
+                body = Some(FunctionBody::Address {
                     address: (*addr).try_into().with_context(|| {
                         format!(
                             "failed to convert `address` attribute into usize for function `{}`",
@@ -221,16 +218,16 @@ pub fn build(
         }
     }
 
-    if !is_vfunc && getter.is_none() {
+    if !is_vfunc && body.is_none() {
         anyhow::bail!(
             "function `{}` has no implementation available; did you forget to assign an `address` attribute?",
             function.name,
         );
     }
 
-    let Some(getter) = getter else {
+    let Some(body) = body else {
         panic!(
-            "function `{}` had no getter assigned: {:?}",
+            "function `{}` had no body assigned: {:?}",
             function.name, function
         );
     };
@@ -278,7 +275,7 @@ pub fn build(
     Ok(Function {
         visibility: function.visibility.into(),
         name: function.name.0.clone(),
-        getter,
+        body,
         arguments,
         return_type,
         calling_convention,

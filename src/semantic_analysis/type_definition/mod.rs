@@ -3,7 +3,7 @@ use crate::{
     semantic_analysis::{
         function,
         type_registry::TypeRegistry,
-        types::{Function, FunctionGetter, ItemState, ItemStateResolved, Type, Visibility},
+        types::{Function, FunctionBody, ItemState, ItemStateResolved, Type, Visibility},
         SemanticState,
     },
     util,
@@ -296,7 +296,7 @@ pub fn build(
 
         associated_functions.extend(base_type.associated_functions.iter().cloned().map(|f| {
             Function {
-                getter: FunctionGetter::field(base_name.clone()),
+                body: FunctionBody::field(base_name.clone()),
                 ..f
             }
         }));
@@ -305,7 +305,7 @@ pub fn build(
             // Inject all non-first-base vfuncs into the type
             if let Some(vftable) = &base_type.vftable {
                 associated_functions.extend(vftable.functions.iter().cloned().map(|f| Function {
-                    getter: FunctionGetter::field(base_name.clone()),
+                    body: FunctionBody::field(base_name.clone()),
                     ..f
                 }));
             }
