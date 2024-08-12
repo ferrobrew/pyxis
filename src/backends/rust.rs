@@ -40,7 +40,7 @@ pub fn write_module(
 
     writeln!(
         raw_output,
-        "#![allow(dead_code, non_snake_case, clippy::missing_safety_doc)]"
+        "#![allow(dead_code, non_snake_case, clippy::missing_safety_doc, clippy::unnecessary_cast)]"
     )?;
 
     let backends = module.backends.get("rust");

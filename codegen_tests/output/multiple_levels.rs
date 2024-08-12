@@ -1,4 +1,9 @@
-#![allow(dead_code, non_snake_case, clippy::missing_safety_doc)]
+#![allow(
+    dead_code,
+    non_snake_case,
+    clippy::missing_safety_doc,
+    clippy::unnecessary_cast
+)]
 #[repr(C, align(8))]
 struct Base {
     vftable: *const crate::multiple_levels::BaseVftable,
