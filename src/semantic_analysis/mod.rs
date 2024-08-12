@@ -12,3 +12,4 @@ mod tests;
 
 pub use module::Module;
 pub use semantic_state::{ResolvedSemanticState, SemanticState};
+pub use type_registry::TypeRegistry;

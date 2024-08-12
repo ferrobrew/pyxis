@@ -107,6 +107,39 @@ impl TypeDefinition {
         self.packed = packed;
         self
     }
+    /// Returns the fields and types of everything in this type's hierarchy, starting from the top
+    pub fn dfs_hierarchy(
+        &self,
+        type_registry: &TypeRegistry,
+        type_path: &ItemPath,
+        root_field: Option<String>,
+    ) -> anyhow::Result<Vec<(Vec<String>, Type)>> {
+        let mut output = vec![];
+        for region in &self.regions {
+            if !region.is_base {
+                continue;
+            }
+
+            let Some((field_name, type_definition)) =
+                get_region_name_and_type_definition(type_registry, type_path, region)?
+            else {
+                continue;
+            };
+            let field_path = root_field
+                .iter()
+                .cloned()
+                .chain(Some(field_name.clone()))
+                .collect();
+            output.push((field_path, region.type_ref.clone()));
+            output.extend(type_definition.dfs_hierarchy(
+                type_registry,
+                type_path,
+                Some(field_name),
+            )?);
+        }
+
+        Ok(output)
+    }
 }
 
 pub fn build(
@@ -565,41 +598,39 @@ fn resolve_regions(
 /// Given a region, attempt to get the region's name and its type definition if available
 fn get_region_name_and_type_definition<'a>(
     type_registry: &'a TypeRegistry,
-    resolvee_path: &ItemPath,
+    type_path: &ItemPath,
     region: &Region,
 ) -> anyhow::Result<Option<(String, &'a TypeDefinition)>> {
-    // If there is no vftable specified, and there is a base field,
-    // attempt to use its vftable if available
-    let base_name = region
+    let region_name = region
         .name
         .clone()
-        .expect("first base had no name, this shouldn't be possible");
+        .expect("region had no name, this shouldn't be possible");
 
     let Type::Raw(path) = &region.type_ref else {
         anyhow::bail!(
-            "expected base field `{}` of type `{}` to be a raw type, but it was a {}",
-            base_name,
-            resolvee_path,
+            "expected region field `{}` of type `{}` to be a raw type, but it was a {}",
+            region_name,
+            type_path,
             region.type_ref.human_friendly_type()
         );
     };
 
-    let base_type = type_registry
+    let region_type = type_registry
         .get(path)
-        .with_context(|| format!("failed to get base type `{path}` for type `{resolvee_path}`",))?;
+        .with_context(|| format!("failed to get region type `{path}` for type `{type_path}`"))?;
 
-    let Some(base_type) = base_type.resolved() else {
+    let Some(region_type) = region_type.resolved() else {
         return Ok(None);
     };
 
-    let Some(base_type) = base_type.inner.as_type() else {
+    let Some(region_type) = region_type.inner.as_type() else {
         anyhow::bail!(
-            "expected base field `{}` of type `{}` to be a type, but it was a {}",
-            base_name,
-            resolvee_path,
-            base_type.inner.human_friendly_type()
+            "expected region field `{}` of type `{}` to be a type, but it was a {}",
+            region_name,
+            type_path,
+            region_type.inner.human_friendly_type()
         );
     };
 
-    Ok(Some((base_name, base_type)))
+    Ok(Some((region_name, region_type)))
 }

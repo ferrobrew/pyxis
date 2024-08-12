@@ -137,6 +137,16 @@ impl std::convert::AsMut<crate::multiple_levels::Derived> for DerivedDerived {
         &mut self.derived
     }
 }
+impl std::convert::AsRef<crate::multiple_levels::Base> for DerivedDerived {
+    fn as_ref(&self) -> &crate::multiple_levels::Base {
+        &self.derived.base
+    }
+}
+impl std::convert::AsMut<crate::multiple_levels::Base> for DerivedDerived {
+    fn as_mut(&mut self) -> &mut crate::multiple_levels::Base {
+        &mut self.derived.base
+    }
+}
 #[repr(C, align(8))]
 struct DerivedDerivedVftable {
     pub base_vfunc: unsafe extern "thiscall" fn(

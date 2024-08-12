@@ -1,14 +1,14 @@
 use std::{fmt::Write as _, path::Path};
 
 use crate::{
-    grammar::{ItemPath, ItemPathSegment},
+    grammar::ItemPath,
     semantic_analysis::{
         types::{
             Argument, EnumDefinition, ExternValue, Function, FunctionBody, ItemCategory,
             ItemDefinition, ItemDefinitionInner, ItemStateResolved, Type, TypeDefinition,
             Visibility,
         },
-        Module, ResolvedSemanticState,
+        Module, ResolvedSemanticState, TypeRegistry,
     },
 };
 
@@ -64,7 +64,11 @@ pub fn write_module(
         .collect::<Vec<_>>();
     definitions.sort_by_key(|d| &d.path);
     for definition in definitions {
-        writeln!(raw_output, "{}", build_item(definition)?)?;
+        writeln!(
+            raw_output,
+            "{}",
+            build_item(semantic_state.type_registry(), definition)?
+        )?;
     }
 
     let mut extern_values = module.extern_values.clone();
@@ -116,24 +120,23 @@ pub fn write_module(
     Ok(())
 }
 
-fn build_item(definition: &ItemDefinition) -> anyhow::Result<proc_macro2::TokenStream> {
-    let name = definition
-        .path
-        .last()
-        .context("failed to get last of item path")?;
-
+fn build_item(
+    type_registry: &TypeRegistry,
+    definition: &ItemDefinition,
+) -> anyhow::Result<proc_macro2::TokenStream> {
     let ItemStateResolved {
         size,
         inner,
         alignment,
     } = &definition.resolved().context("type was not resolved")?;
-
     let visibility = definition.visibility;
+    let path = &definition.path;
 
+    use ItemDefinitionInner as IDI;
     match definition.category() {
         ItemCategory::Defined => match inner {
-            ItemDefinitionInner::Type(td) => build_type(name, *size, *alignment, visibility, td),
-            ItemDefinitionInner::Enum(ed) => build_enum(name, *size, visibility, ed),
+            IDI::Type(td) => build_type(type_registry, path, *size, *alignment, visibility, td),
+            IDI::Enum(ed) => build_enum(path, *size, visibility, ed),
         },
         ItemCategory::Predefined => Ok(quote! {}),
         ItemCategory::Extern => Ok(quote! {}),
@@ -141,12 +144,15 @@ fn build_item(definition: &ItemDefinition) -> anyhow::Result<proc_macro2::TokenS
 }
 
 fn build_type(
-    name: &ItemPathSegment,
+    type_registry: &TypeRegistry,
+    path: &ItemPath,
     size: usize,
     alignment: usize,
     visibility: Visibility,
     type_definition: &TypeDefinition,
 ) -> anyhow::Result<proc_macro2::TokenStream> {
+    let name = path.last().context("failed to get last of item path")?;
+
     let TypeDefinition {
         singleton,
         regions,
@@ -272,22 +278,25 @@ fn build_type(
         (quote! {}, quote! { , align(#alignment) })
     };
 
-    let as_ref_conversions = regions
-        .iter()
-        .filter(|r| r.is_base)
-        .map(|r| {
-            let type_ = sa_type_to_syn_type(&r.type_ref)?;
-            let field_name = str_to_ident(r.name.as_deref().unwrap());
+    let as_ref_conversions = type_definition
+        .dfs_hierarchy(type_registry, path, None)?
+        .into_iter()
+        .map(|(field_path, type_)| {
+            let field_path = field_path
+                .into_iter()
+                .map(|s| str_to_ident(&s))
+                .collect::<Vec<_>>();
+            let type_ = sa_type_to_syn_type(&type_)?;
 
             Ok(quote! {
                 impl std::convert::AsRef<#type_> for #name_ident {
                     fn as_ref(&self) -> & #type_ {
-                        &self. #field_name
+                        &self #(. #field_path)*
                     }
                 }
                 impl std::convert::AsMut<#type_> for #name_ident {
                     fn as_mut(&mut self) -> &mut #type_ {
-                        &mut self. #field_name
+                        &mut self #(. #field_path)*
                     }
                 }
             })
@@ -312,11 +321,13 @@ fn build_type(
 }
 
 fn build_enum(
-    name: &ItemPathSegment,
+    path: &ItemPath,
     size: usize,
     visibility: Visibility,
     enum_definition: &EnumDefinition,
 ) -> anyhow::Result<proc_macro2::TokenStream> {
+    let name = path.last().context("failed to get last of item path")?;
+
     let EnumDefinition {
         singleton,
         fields,
