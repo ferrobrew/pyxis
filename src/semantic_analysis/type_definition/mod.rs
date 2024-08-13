@@ -591,6 +591,15 @@ fn resolve_regions(
         size += region_size;
     }
 
+    // Check that the final size is equal to the target size
+    if let Some(target_size) = target_size {
+        if size != target_size {
+            anyhow::bail!(
+                "calculated size {size} for type `{resolvee_path}` does not match target size {target_size}; is your target size correct?"
+            );
+        }
+    }
+
     Ok(Some((resolved.regions, vftable, size)))
 }
 

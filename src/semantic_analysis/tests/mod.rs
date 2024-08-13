@@ -901,3 +901,28 @@ fn will_reject_defaultable_on_non_defaultable_type() {
         "field `field_1` of type `test::TestType` is not a defaultable type",
     );
 }
+
+#[test]
+fn will_reject_types_that_are_larger_than_their_specified_size() {
+    assert_ast_produces_failure(
+        M::new().with_definitions([
+            ID::new(
+                (V::Public, "Matrix4"),
+                TD::new([TS::field((V::Public, "data"), T::ident("f32").array(16))]),
+            ),
+            ID::new(
+                (V::Public, "TestType"),
+                TD::new([TS::field(
+                    (V::Public, "matrices"),
+                    T::ident("Matrix4").array(8),
+                )])
+                .with_attributes([A::size(0x100)]),
+            ),
+        ]),
+        concat!(
+            "while processing `test::TestType`\n",
+            "calculated size 512 for type `test::TestType` does not match target size 256; ",
+            "is your target size correct?"
+        ),
+    );
+}
