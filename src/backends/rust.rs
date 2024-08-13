@@ -364,7 +364,7 @@ fn build_enum(
         quote! {
             fn #size_check_ident() {
                 unsafe {
-                    ::std::mem::transmute::<_, #name_ident>([0u8; #size]);
+                    ::std::mem::transmute::<[u8; #size], #name_ident>([0u8; #size]);
                 }
                 unreachable!()
             }
