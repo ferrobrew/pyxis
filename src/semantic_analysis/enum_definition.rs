@@ -112,6 +112,11 @@ pub fn build(
                 grammar::Attribute::Function(_ident, _exprs) => {
                     anyhow::bail!("unsupported attribute for case `{name}` of enum `{resolvee_path}`: {attribute:?}");
                 }
+                grammar::Attribute::Assign(_ident, _expr) => {
+                    anyhow::bail!(
+                        "unsupported attribute for enum `{resolvee_path}`: {attribute:?}"
+                    );
+                }
             }
         }
 
@@ -144,6 +149,9 @@ pub fn build(
                         "unsupported attribute for enum `{resolvee_path}`: {attribute:?}"
                     ),
                 }
+            }
+            grammar::Attribute::Assign(_ident, _expr) => {
+                anyhow::bail!("unsupported attribute for enum `{resolvee_path}`: {attribute:?}");
             }
         }
     }

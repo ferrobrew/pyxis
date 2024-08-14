@@ -199,39 +199,57 @@ impl Expr {
 pub enum Attribute {
     Ident(Ident),
     Function(Ident, Vec<Expr>),
+    Assign(Ident, Expr),
 }
 impl Attribute {
     pub fn function(&self) -> Option<(&Ident, &Vec<Expr>)> {
         match self {
             Attribute::Ident(_) => None,
             Attribute::Function(ident, exprs) => Some((ident, exprs)),
+            Attribute::Assign(_, _) => None,
         }
     }
 
+    // Ident attributes
+    pub fn copyable() -> Self {
+        Attribute::Ident("copyable".into())
+    }
+    pub fn cloneable() -> Self {
+        Attribute::Ident("cloneable".into())
+    }
+    pub fn defaultable() -> Self {
+        Attribute::Ident("defaultable".into())
+    }
+    #[allow(clippy::should_implement_trait)]
+    pub fn default() -> Self {
+        Attribute::Ident("default".into())
+    }
+    pub fn base() -> Self {
+        Attribute::Ident("base".into())
+    }
+    pub fn packed() -> Self {
+        Attribute::Ident("packed".into())
+    }
+
+    // Function attributes
     pub fn integer_fn(name: &str, value: isize) -> Self {
         Attribute::Function(name.into(), vec![Expr::IntLiteral(value)])
     }
-
     pub fn address(address: usize) -> Self {
         Self::integer_fn("address", address as isize)
     }
-
     pub fn size(size: usize) -> Self {
         Self::integer_fn("size", size as isize)
     }
-
     pub fn align(align: usize) -> Self {
         Self::integer_fn("align", align as isize)
     }
-
     pub fn singleton(address: usize) -> Self {
         Self::integer_fn("singleton", address as isize)
     }
-
     pub fn index(index: usize) -> Self {
         Self::integer_fn("index", index as isize)
     }
-
     pub fn calling_convention(name: &str) -> Self {
         Attribute::Function(
             "calling_convention".into(),
@@ -239,29 +257,9 @@ impl Attribute {
         )
     }
 
-    pub fn copyable() -> Self {
-        Attribute::Ident("copyable".into())
-    }
-
-    pub fn cloneable() -> Self {
-        Attribute::Ident("cloneable".into())
-    }
-
-    pub fn defaultable() -> Self {
-        Attribute::Ident("defaultable".into())
-    }
-
-    #[allow(clippy::should_implement_trait)]
-    pub fn default() -> Self {
-        Attribute::Ident("default".into())
-    }
-
-    pub fn base() -> Self {
-        Attribute::Ident("base".into())
-    }
-
-    pub fn packed() -> Self {
-        Attribute::Ident("packed".into())
+    // Assign attributes
+    pub fn doc(doc: &str) -> Self {
+        Attribute::Assign("doc".into(), Expr::StringLiteral(doc.into()))
     }
 }
 
@@ -556,6 +554,7 @@ pub struct Module {
     pub definitions: Vec<ItemDefinition>,
     pub impls: Vec<FunctionBlock>,
     pub backends: Vec<Backend>,
+    pub attributes: Vec<Attribute>,
 }
 impl Module {
     pub fn new() -> Self {
@@ -566,7 +565,6 @@ impl Module {
         self.uses = uses.into();
         self
     }
-
     pub fn with_extern_types(
         mut self,
         extern_types: impl Into<Vec<(Ident, Vec<Attribute>)>>,
@@ -574,24 +572,24 @@ impl Module {
         self.extern_types = extern_types.into();
         self
     }
-
     pub fn with_extern_values(mut self, extern_values: impl Into<Vec<ExternValue>>) -> Self {
         self.extern_values = extern_values.into();
         self
     }
-
     pub fn with_definitions(mut self, definitions: impl Into<Vec<ItemDefinition>>) -> Self {
         self.definitions = definitions.into();
         self
     }
-
     pub fn with_impls(mut self, impls: impl Into<Vec<FunctionBlock>>) -> Self {
         self.impls = impls.into();
         self
     }
-
     pub fn with_backends(mut self, backends: impl Into<Vec<Backend>>) -> Self {
         self.backends = backends.into();
+        self
+    }
+    pub fn with_attributes(mut self, attributes: impl Into<Vec<Attribute>>) -> Self {
+        self.attributes = attributes.into();
         self
     }
 }

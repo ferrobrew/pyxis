@@ -137,10 +137,11 @@ impl Parse for Expr {
 impl Attribute {
     /// also implicitly handles multiple attributes within the same brackets:
     /// #[a(b), c(d)] -> Function(a, [b]), Function(c, [d])
-    fn parse_many(input: ParseStream) -> Result<Vec<Attribute>> {
+    fn parse_many(input: ParseStream, expect_module_attributes: bool) -> Result<Vec<Attribute>> {
         enum AttributePart {
             Ident(Ident),
             Function { name: Ident, arguments: Vec<Expr> },
+            Assign { name: Ident, value: Expr },
         }
         impl Parse for AttributePart {
             fn parse(input: ParseStream) -> Result<Self> {
@@ -155,6 +156,12 @@ impl Attribute {
                     let arguments = Vec::from_iter(arguments);
 
                     Ok(AttributePart::Function { name, arguments })
+                } else if input.peek(Token![=]) {
+                    input.parse::<Token![=]>()?;
+                    Ok(AttributePart::Assign {
+                        name,
+                        value: input.parse()?,
+                    })
                 } else {
                     Ok(AttributePart::Ident(name))
                 }
@@ -162,23 +169,41 @@ impl Attribute {
         }
 
         let mut attributes = vec![];
-        while input.peek(Token![#]) {
-            input.parse::<Token![#]>()?;
+        if expect_module_attributes {
+            while input.peek(Token![#]) && input.peek2(Token![!]) {
+                input.parse::<Token![#]>()?;
+                input.parse::<Token![!]>()?;
+                parse_attribute_body(input, &mut attributes)?;
+            }
+        } else {
+            while input.peek(Token![#]) {
+                input.parse::<Token![#]>()?;
+                parse_attribute_body(input, &mut attributes)?;
+            }
+        }
 
+        fn parse_attribute_body(
+            input: &syn::parse::ParseBuffer,
+            attributes: &mut Vec<Attribute>,
+        ) -> Result<()> {
             let content;
             bracketed!(content in input);
-
             let attribute_parts: Punctuated<_, Token![,]> =
                 content.parse_terminated(AttributePart::parse, Token![,])?;
+
             for part in attribute_parts {
                 attributes.push(match part {
                     AttributePart::Ident(ident) => Attribute::Ident(ident),
                     AttributePart::Function { name, arguments } => {
                         Attribute::Function(name, arguments)
                     }
+                    AttributePart::Assign { name, value } => Attribute::Assign(name, value),
                 });
             }
+
+            Ok(())
         }
+
         Ok(attributes)
     }
 }
@@ -225,7 +250,7 @@ impl Parse for Argument {
 
 impl Parse for Function {
     fn parse(input: ParseStream) -> Result<Self> {
-        let attributes = Attribute::parse_many(input)?;
+        let attributes = Attribute::parse_many(input, false)?;
 
         let visibility: Visibility = input.parse()?;
 
@@ -289,7 +314,7 @@ impl Parse for TypeField {
 impl Parse for TypeStatement {
     fn parse(input: ParseStream) -> Result<Self> {
         let attributes = if input.peek(Token![#]) {
-            Attribute::parse_many(input)?
+            Attribute::parse_many(input, false)?
         } else {
             vec![]
         };
@@ -322,7 +347,7 @@ fn parse_type_definition(input: ParseStream, attributes: Vec<Attribute>) -> Resu
 impl Parse for EnumStatement {
     fn parse(input: ParseStream) -> Result<Self> {
         let attributes = if input.peek(Token![#]) {
-            Attribute::parse_many(input)?
+            Attribute::parse_many(input, false)?
         } else {
             vec![]
         };
@@ -457,6 +482,9 @@ impl Parse for Module {
         let mut impls = vec![];
         let mut backends = vec![];
 
+        // Parse all module attributes before parsing any other statements
+        let module_attributes = Attribute::parse_many(input, true)?;
+
         // Exhaust all of our declarations
         while !input.is_empty() {
             // Attribute-less statements
@@ -472,7 +500,7 @@ impl Parse for Module {
             }
 
             // Attributed statements
-            let attributes = Attribute::parse_many(input)?;
+            let attributes = Attribute::parse_many(input, false)?;
             if input.peek(Token![extern]) && input.peek2(Token![type]) {
                 input.parse::<Token![extern]>()?;
                 input.parse::<Token![type]>()?;
@@ -530,6 +558,7 @@ impl Parse for Module {
             definitions,
             impls,
             backends,
+            attributes: module_attributes,
         })
     }
 }

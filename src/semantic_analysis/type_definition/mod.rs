@@ -232,6 +232,11 @@ pub fn build(
                                 _ => anyhow::bail!("unsupported attribute for type `{resolvee_path}`: {attribute:?}"),
                             }
                         }
+                        grammar::Attribute::Assign(_ident, _expr) => {
+                            anyhow::bail!(
+                                "unsupported attribute for type `{resolvee_path}`: {attribute:?}"
+                            );
+                        }
                     }
                 }
 

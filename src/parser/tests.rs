@@ -1,5 +1,7 @@
 use crate::{grammar::test_aliases::*, parser::parse_str};
 
+use pretty_assertions::assert_eq;
+
 #[test]
 fn can_parse_basic_struct() {
     let text = r#"
@@ -412,6 +414,34 @@ fn can_parse_ident_attributes() {
         TD::new([TS::field((V::Private, "field_1"), T::ident("i32"))])
             .with_attributes([A::copyable(), A::cloneable()]),
     )]);
+
+    assert_eq!(parse_str(text).unwrap(), ast);
+}
+
+#[test]
+fn can_parse_doc_comments() {
+    let text = r#"
+        //! This is a module doc comment
+        //! The best of its kind
+
+        /// This is a doc comment
+        type TestType {
+            /// This is a field doc comment
+            field_1: i32,
+        }
+        "#;
+
+    let ast = M::new()
+        .with_definitions([ID::new(
+            (V::Private, "TestType"),
+            TD::new([TS::field((V::Private, "field_1"), T::ident("i32"))
+                .with_attributes([A::doc(" This is a field doc comment")])])
+            .with_attributes([A::doc(" This is a doc comment")]),
+        )])
+        .with_attributes([
+            A::doc(" This is a module doc comment"),
+            A::doc(" The best of its kind"),
+        ]);
 
     assert_eq!(parse_str(text).unwrap(), ast);
 }
