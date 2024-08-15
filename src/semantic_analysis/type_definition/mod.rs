@@ -76,17 +76,6 @@ impl TypeDefinition {
         self.vftable = Some(vftable);
         self
     }
-    pub fn with_vftable_functions(
-        self,
-        vftable_type: Type,
-        vftable_functions: impl Into<Vec<Function>>,
-    ) -> Self {
-        self.with_vftable(TypeVftable {
-            functions: vftable_functions.into(),
-            base_field: None,
-            type_: vftable_type,
-        })
-    }
     pub fn with_singleton(mut self, singleton: usize) -> Self {
         self.singleton = Some(singleton);
         self

@@ -316,12 +316,10 @@ fn can_generate_vftable() {
             // TestType
             SID::defined_resolved(
                 (SV::Public, "test::TestType"),
-                SISR::new(
-                    (pointer_size(), pointer_size()),
+                SISR::new((pointer_size(), pointer_size()), {
                     STD::new()
                         .with_regions([SR::field((SV::Private, "vftable"), vftable_type.clone())])
-                        .with_vftable_functions(
-                            vftable_type,
+                        .with_vftable(STV::new(
                             [
                                 SF::new((SV::Public, "test_function0"), SFB::Vftable)
                                     .with_arguments([
@@ -339,8 +337,10 @@ fn can_generate_vftable() {
                                 make_vfunc(2),
                                 make_vfunc(3),
                             ],
-                        ),
-                ),
+                            None,
+                            vftable_type,
+                        ))
+                }),
             ),
             // TestTypeVftable
             SID::defined_resolved(
@@ -418,8 +418,7 @@ fn can_generate_vftable_with_indices() {
                     (pointer_size(), pointer_size()),
                     STD::new()
                         .with_regions([SR::field((SV::Private, "vftable"), vftable_type.clone())])
-                        .with_vftable_functions(
-                            vftable_type,
+                        .with_vftable(STV::new(
                             [
                                 make_vfunc(0),
                                 make_vfunc(1),
@@ -441,7 +440,9 @@ fn can_generate_vftable_with_indices() {
                                 make_vfunc(6),
                                 make_vfunc(7),
                             ],
-                        ),
+                            None,
+                            vftable_type,
+                        )),
                 ),
             ),
             // TestTypeVftable
@@ -520,26 +521,32 @@ fn will_propagate_calling_convention_for_impl_and_vftable() {
                 (SV::Public, "test::TestType"),
                 SISR::new(
                     (pointer_size(), pointer_size()),
-                    STD::new()
-                        .with_regions([SR::field((SV::Private, "vftable"), vftable_type.clone())])
-                        .with_vftable_functions(
-                            vftable_type,
-                            [SF::new((SV::Public, "test_function0"), SFB::Vftable)
-                                .with_arguments([
-                                    SAr::MutSelf,
-                                    SAr::field("arg0", ST::raw("u32")),
-                                    SAr::field("arg1", ST::raw("f32")),
-                                ])
-                                .with_calling_convention(SCC::Cdecl)
-                                .with_return_type(ST::raw("i32"))],
-                        )
-                        .with_associated_functions([SF::new(
-                            (SV::Public, "test_function"),
-                            SFB::address(0x800_000),
-                        )
-                        .with_calling_convention(SCC::Cdecl)
-                        .with_arguments([SAr::field("arg1", ST::raw("i32"))])
-                        .with_return_type(ST::raw("i32"))]),
+                    {
+                        STD::new()
+                            .with_regions([SR::field(
+                                (SV::Private, "vftable"),
+                                vftable_type.clone(),
+                            )])
+                            .with_vftable(STV::new(
+                                [SF::new((SV::Public, "test_function0"), SFB::Vftable)
+                                    .with_arguments([
+                                        SAr::MutSelf,
+                                        SAr::field("arg0", ST::raw("u32")),
+                                        SAr::field("arg1", ST::raw("f32")),
+                                    ])
+                                    .with_calling_convention(SCC::Cdecl)
+                                    .with_return_type(ST::raw("i32"))],
+                                None,
+                                vftable_type,
+                            ))
+                    }
+                    .with_associated_functions([SF::new(
+                        (SV::Public, "test_function"),
+                        SFB::address(0x800_000),
+                    )
+                    .with_calling_convention(SCC::Cdecl)
+                    .with_arguments([SAr::field("arg1", ST::raw("i32"))])
+                    .with_return_type(ST::raw("i32"))]),
                 ),
             ),
             // TestTypeVftable
