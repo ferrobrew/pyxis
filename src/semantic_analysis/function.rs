@@ -103,6 +103,7 @@ impl FunctionBody {
 pub struct Function {
     pub visibility: Visibility,
     pub name: String,
+    pub doc: Option<String>,
     pub body: FunctionBody,
     pub arguments: Vec<Argument>,
     pub return_type: Option<Type>,
@@ -110,6 +111,9 @@ pub struct Function {
 }
 impl fmt::Display for Function {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let Some(doc) = &self.doc {
+            write!(f, "#[doc = r#{doc:?}#] ")?;
+        }
         match &self.body {
             FunctionBody::Address { address } => write!(f, "#[address(0x{address:X})] ")?,
             FunctionBody::Field { field } => write!(f, "#[field({field:?})] ")?,
@@ -139,6 +143,7 @@ impl Function {
         Function {
             visibility,
             name: name.into(),
+            doc: None,
             body,
             arguments: Vec::new(),
             return_type: None,
@@ -163,6 +168,10 @@ impl Function {
         self.body = body;
         self
     }
+    pub fn with_doc(mut self, doc: impl Into<String>) -> Self {
+        self.doc = Some(doc.into());
+        self
+    }
     pub fn is_internal(&self) -> bool {
         self.name.starts_with("_")
     }
@@ -175,6 +184,11 @@ pub fn build(
     function: &grammar::Function,
 ) -> Result<Function, anyhow::Error> {
     let mut body = is_vfunc.then_some(FunctionBody::Vftable);
+    // TODO: This ItemPath is not correct, but this should be fixed another time - preferabl
+    // once error handling is improved
+    let doc = function
+        .attributes
+        .doc(&ItemPath::from_iter([function.name.0.clone().into()]))?;
     let mut calling_convention = None;
     for attribute in &function.attributes {
         let Some((ident, exprs)) = attribute.function() else {
@@ -276,6 +290,7 @@ pub fn build(
     Ok(Function {
         visibility: function.visibility.into(),
         name: function.name.0.clone(),
+        doc,
         body,
         arguments,
         return_type,

@@ -426,17 +426,35 @@ fn can_parse_doc_comments() {
 
         /// This is a doc comment
         type TestType {
+            vftable {
+                /// My test vfunc!
+                fn test_vfunc(&self);
+            },
             /// This is a field doc comment
             field_1: i32,
+        }
+        impl TestType {
+            /// My test func!
+            #[address(0x123)]
+            fn test_func(&self);
         }
         "#;
 
     let ast = M::new()
         .with_definitions([ID::new(
             (V::Private, "TestType"),
-            TD::new([TS::field((V::Private, "field_1"), T::ident("i32"))
-                .with_attributes([A::doc(" This is a field doc comment")])])
+            TD::new([
+                TS::vftable([F::new((V::Private, "test_vfunc"), [Ar::ConstSelf])
+                    .with_attributes([A::doc(" My test vfunc!")])]),
+                TS::field((V::Private, "field_1"), T::ident("i32"))
+                    .with_attributes([A::doc(" This is a field doc comment")]),
+            ])
             .with_attributes([A::doc(" This is a doc comment")]),
+        )])
+        .with_impls([FB::new(
+            "TestType",
+            [F::new((V::Private, "test_func"), [Ar::ConstSelf])
+                .with_attributes([A::doc(" My test func!"), A::address(0x123)])],
         )])
         .with_attributes([
             A::doc(" This is a module doc comment"),

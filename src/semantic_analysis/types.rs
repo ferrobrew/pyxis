@@ -202,6 +202,12 @@ impl ItemDefinitionInner {
             ItemDefinitionInner::Enum(_) => "an enum",
         }
     }
+    pub fn doc(&self) -> Option<&str> {
+        match self {
+            ItemDefinitionInner::Type(t) => t.doc(),
+            ItemDefinitionInner::Enum(e) => e.doc(),
+        }
+    }
 }
 
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]

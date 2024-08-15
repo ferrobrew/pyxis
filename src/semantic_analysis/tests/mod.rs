@@ -936,3 +936,81 @@ fn will_reject_types_that_are_larger_than_their_specified_size() {
         ),
     );
 }
+
+#[test]
+fn can_propagate_doc_comments() {
+    let created_module = assert_ast_produces_type_definitions(
+        M::new()
+            .with_definitions([ID::new(
+                (V::Private, "TestType"),
+                TD::new([
+                    TS::vftable([F::new((V::Private, "test_vfunc"), [Ar::ConstSelf])
+                        .with_attributes([A::doc(" My test vfunc!")])]),
+                    TS::field((V::Private, "field_1"), T::ident("u64"))
+                        .with_attributes([A::doc(" This is a field doc comment"), A::address(8)]),
+                ])
+                .with_attributes([A::doc(" This is a doc comment"), A::align(8)]),
+            )])
+            .with_impls([FB::new(
+                "TestType",
+                [F::new((V::Private, "test_func"), [Ar::ConstSelf])
+                    .with_attributes([A::doc(" My test func!"), A::address(0x123)])],
+            )])
+            .with_attributes([
+                A::doc(" This is a module doc comment"),
+                A::doc(" The best of its kind"),
+            ]),
+        [
+            SID::defined_resolved(
+                (SV::Private, "test::TestType"),
+                SISR::new(
+                    (16, 8),
+                    STD::new()
+                        .with_regions(filter_out_empty_regions([
+                            SR::field(
+                                (SV::Private, "vftable"),
+                                ST::raw("test::TestTypeVftable").const_pointer(),
+                            ),
+                            pad_up_to_8_region(),
+                            SR::field((SV::Private, "field_1"), ST::raw("u64"))
+                                .with_doc(" This is a field doc comment"),
+                        ]))
+                        .with_doc(" This is a doc comment")
+                        .with_vftable(STV::new(
+                            [SF::new((SV::Private, "test_vfunc"), SFB::Vftable)
+                                .with_arguments([SAr::ConstSelf])
+                                .with_doc(" My test vfunc!")],
+                            None,
+                            ST::raw("test::TestTypeVftable").const_pointer(),
+                        ))
+                        .with_associated_functions([SF::new(
+                            (SV::Private, "test_func"),
+                            SFB::address(0x123),
+                        )
+                        .with_arguments([SAr::ConstSelf])
+                        .with_doc(" My test func!")]),
+                ),
+            ),
+            SID::defined_resolved(
+                (SV::Private, "test::TestTypeVftable"),
+                SISR::new(
+                    (pointer_size(), pointer_size()),
+                    STD::new().with_regions([SR::field(
+                        (SV::Private, "test_vfunc"),
+                        ST::function(
+                            SCC::Thiscall,
+                            [("this", ST::raw("test::TestType").const_pointer())],
+                            None,
+                        ),
+                    )
+                    .with_doc(" My test vfunc!")]),
+                ),
+            ),
+        ],
+    );
+
+    assert_eq!(
+        created_module.doc,
+        Some(" This is a module doc comment\n The best of its kind".to_string())
+    );
+}

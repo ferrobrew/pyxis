@@ -194,6 +194,12 @@ impl Expr {
             _ => None,
         }
     }
+    pub fn string_literal(&self) -> Option<&str> {
+        match self {
+            Expr::StringLiteral(value) => Some(value.as_str()),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -203,14 +209,6 @@ pub enum Attribute {
     Assign(Ident, Expr),
 }
 impl Attribute {
-    pub fn function(&self) -> Option<(&Ident, &Vec<Expr>)> {
-        match self {
-            Attribute::Ident(_) => None,
-            Attribute::Function(ident, exprs) => Some((ident, exprs)),
-            Attribute::Assign(_, _) => None,
-        }
-    }
-
     // Ident attributes
     pub fn copyable() -> Self {
         Attribute::Ident("copyable".into())
@@ -233,6 +231,12 @@ impl Attribute {
     }
 
     // Function attributes
+    pub fn function(&self) -> Option<(&Ident, &Vec<Expr>)> {
+        match self {
+            Attribute::Function(ident, exprs) => Some((ident, exprs)),
+            _ => None,
+        }
+    }
     pub fn integer_fn(name: &str, value: isize) -> Self {
         Attribute::Function(name.into(), vec![Expr::IntLiteral(value)])
     }
@@ -259,6 +263,12 @@ impl Attribute {
     }
 
     // Assign attributes
+    pub fn assign(&self) -> Option<(&Ident, &Expr)> {
+        match self {
+            Attribute::Assign(ident, expr) => Some((ident, expr)),
+            _ => None,
+        }
+    }
     pub fn doc(doc: &str) -> Self {
         Attribute::Assign("doc".into(), Expr::StringLiteral(doc.into()))
     }
@@ -294,6 +304,30 @@ impl<'a> IntoIterator for &'a Attributes {
 impl FromIterator<Attribute> for Attributes {
     fn from_iter<I: IntoIterator<Item = Attribute>>(iter: I) -> Self {
         Attributes(iter.into_iter().collect())
+    }
+}
+impl Attributes {
+    pub fn doc(&self, path: &ItemPath) -> anyhow::Result<Option<String>> {
+        let mut doc = None;
+        for attr in &self.0 {
+            let Some((key, value)) = attr.assign() else {
+                continue;
+            };
+            if key.as_str() != "doc" {
+                continue;
+            }
+
+            let Some(value) = value.string_literal() else {
+                anyhow::bail!("doc attribute for `{path}` must be a string literal");
+            };
+
+            let doc = doc.get_or_insert_with(String::new);
+            if !doc.is_empty() {
+                doc.push('\n');
+            }
+            doc.push_str(value);
+        }
+        Ok(doc)
     }
 }
 

@@ -3,6 +3,7 @@ use crate::{
     semantic_analysis::{
         semantic_state::{ResolvedSemanticState, SemanticState},
         types::test_aliases::*,
+        Module,
     },
 };
 
@@ -31,7 +32,7 @@ pub fn build_state(module: &M, module_path: &IP) -> anyhow::Result<ResolvedSeman
 pub fn assert_ast_produces_type_definitions(
     module: M,
     type_definitions: impl IntoIterator<Item = SID>,
-) {
+) -> Module {
     let module_path = IP::from("test");
 
     let state = build_state(&module, &module_path).unwrap();
@@ -46,6 +47,8 @@ pub fn assert_ast_produces_type_definitions(
     created_type_definitions.sort_by_key(|t| t.path.clone());
 
     assert_eq!(created_type_definitions, expected_type_definitions);
+
+    created_module.clone()
 }
 
 #[track_caller]
@@ -63,4 +66,18 @@ pub fn assert_ast_produces_failure(module: M, failure: &str) {
 
 pub fn unknown(size: usize) -> ST {
     ST::raw("u8").array(size)
+}
+
+pub fn pad_up_to_8_region() -> SR {
+    SR::field(
+        (SV::Private, format!("_field_{}", pointer_size())),
+        ST::array(ST::raw("u8"), 8 - pointer_size()),
+    )
+}
+
+pub fn filter_out_empty_regions(regions: impl IntoIterator<Item = SR>) -> Vec<SR> {
+    regions
+        .into_iter()
+        .filter(|r| !matches!(&r.type_ref, ST::Array(_, 0)))
+        .collect()
 }

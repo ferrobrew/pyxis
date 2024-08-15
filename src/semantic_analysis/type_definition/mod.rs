@@ -17,6 +17,7 @@ pub use vftable::TypeVftable;
 pub struct Region {
     pub visibility: Visibility,
     pub name: Option<String>,
+    pub doc: Option<String>,
     pub type_ref: Type,
     pub is_base: bool,
 }
@@ -25,6 +26,7 @@ impl Region {
         Region {
             visibility,
             name: Some(name.into()),
+            doc: None,
             type_ref,
             is_base: false,
         }
@@ -33,12 +35,17 @@ impl Region {
         Region {
             visibility: Visibility::Private,
             name: None,
+            doc: None,
             type_ref,
             is_base: false,
         }
     }
     pub fn marked_as_base(mut self) -> Self {
         self.is_base = true;
+        self
+    }
+    pub fn with_doc(mut self, doc: impl Into<String>) -> Self {
+        self.doc = Some(doc.into());
         self
     }
     pub fn size(&self, type_registry: &TypeRegistry) -> Option<usize> {
@@ -49,6 +56,7 @@ impl Region {
 #[derive(PartialEq, Eq, Debug, Clone, Default, Hash)]
 pub struct TypeDefinition {
     pub regions: Vec<Region>,
+    pub doc: Option<String>,
     pub associated_functions: Vec<Function>,
     pub vftable: Option<TypeVftable>,
     pub singleton: Option<usize>,
@@ -63,6 +71,10 @@ impl TypeDefinition {
     }
     pub fn with_regions(mut self, regions: impl Into<Vec<Region>>) -> Self {
         self.regions = regions.into();
+        self
+    }
+    pub fn with_doc(mut self, doc: impl Into<String>) -> Self {
+        self.doc = Some(doc.into());
         self
     }
     pub fn with_associated_functions(
@@ -128,6 +140,9 @@ impl TypeDefinition {
 
         Ok(output)
     }
+    pub fn doc(&self) -> Option<&str> {
+        self.doc.as_deref()
+    }
 }
 
 pub fn build(
@@ -148,6 +163,7 @@ pub fn build(
     let mut defaultable = false;
     let mut packed = false;
     let mut align = None;
+    let doc = definition.attributes.doc(resolvee_path)?;
     for attribute in &definition.attributes {
         match attribute {
             grammar::Attribute::Function(ident, exprs) => {
@@ -199,6 +215,7 @@ pub fn build(
                 // Extract address attribute
                 let mut address: Option<usize> = None;
                 let mut is_base = false;
+                let doc: Option<String> = attributes.doc(resolvee_path)?;
                 for attribute in attributes {
                     match attribute {
                         grammar::Attribute::Ident(ident) => match ident.as_str() {
@@ -235,6 +252,7 @@ pub fn build(
                     Region {
                         visibility: (*visibility).into(),
                         name: ident,
+                        doc,
                         type_ref: type_,
                         is_base,
                     },
@@ -346,6 +364,7 @@ pub fn build(
             let Region {
                 visibility: _,
                 name,
+                doc: _,
                 type_ref,
                 is_base: _,
             } = region;
@@ -441,6 +460,7 @@ pub fn build(
         alignment,
         inner: TypeDefinition {
             regions,
+            doc,
             associated_functions,
             vftable,
             singleton,
@@ -558,6 +578,7 @@ fn resolve_regions(
         if let Region {
             visibility: _,
             name: None,
+            doc: _,
             type_ref,
             is_base: _,
         } = region
@@ -565,6 +586,7 @@ fn resolve_regions(
             *region = Region {
                 visibility: Visibility::Private,
                 name: Some(format!("_field_{size:x}")),
+                doc: None,
                 type_ref: type_ref.clone(),
                 is_base: false,
             };

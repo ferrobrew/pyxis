@@ -11,6 +11,7 @@ use crate::{
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]
 pub struct EnumDefinition {
     pub type_: Type,
+    pub doc: Option<String>,
     pub fields: Vec<(String, isize)>,
     pub singleton: Option<usize>,
     pub copyable: bool,
@@ -22,6 +23,7 @@ impl EnumDefinition {
     pub fn new(type_: Type) -> Self {
         EnumDefinition {
             type_,
+            doc: None,
             fields: Vec::new(),
             singleton: None,
             copyable: false,
@@ -29,6 +31,10 @@ impl EnumDefinition {
             defaultable: false,
             default_index: None,
         }
+    }
+    pub fn with_doc(mut self, doc: impl Into<String>) -> Self {
+        self.doc = Some(doc.into());
+        self
     }
     pub fn with_fields<'a>(mut self, fields: impl IntoIterator<Item = (&'a str, isize)>) -> Self {
         self.fields = fields
@@ -56,6 +62,9 @@ impl EnumDefinition {
     pub fn with_default_index(mut self, default_index: usize) -> Self {
         self.default_index = Some(default_index);
         self
+    }
+    pub fn doc(&self) -> Option<&str> {
+        self.doc.as_deref()
     }
 }
 
@@ -121,6 +130,7 @@ pub fn build(
     let mut copyable = false;
     let mut cloneable = false;
     let mut defaultable = false;
+    let doc = definition.attributes.doc(resolvee_path)?;
     for attribute in &definition.attributes {
         match attribute {
             grammar::Attribute::Ident(ident) => match ident.as_str() {
@@ -163,6 +173,7 @@ pub fn build(
         })?,
         inner: EnumDefinition {
             type_: ty,
+            doc,
             fields,
             singleton,
             copyable,

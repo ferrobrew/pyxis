@@ -42,17 +42,3 @@ fn vfunc_semantic(name: &str) -> SF {
         ])
         .with_return_type(ST::raw("i32"))
 }
-
-fn pad_up_to_8_region() -> SR {
-    SR::field(
-        (SV::Private, format!("_field_{}", pointer_size())),
-        ST::array(ST::raw("u8"), 8 - pointer_size()),
-    )
-}
-
-fn filter_out_empty_regions(regions: impl IntoIterator<Item = SR>) -> Vec<SR> {
-    regions
-        .into_iter()
-        .filter(|r| !matches!(&r.type_ref, ST::Array(_, 0)))
-        .collect()
-}

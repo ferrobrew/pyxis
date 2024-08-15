@@ -16,6 +16,7 @@ pub struct Module {
     pub(crate) extern_values: Vec<ExternValue>,
     pub(crate) impls: HashMap<ItemPath, grammar::FunctionBlock>,
     pub(crate) backends: HashMap<String, Vec<Backend>>,
+    pub(crate) doc: Option<String>,
 }
 
 impl Default for Module {
@@ -27,6 +28,7 @@ impl Default for Module {
             extern_values: Default::default(),
             impls: Default::default(),
             backends: Default::default(),
+            doc: Default::default(),
         }
     }
 }
@@ -55,6 +57,7 @@ impl Module {
                 });
         }
 
+        let doc = ast.attributes.doc(&path)?;
         Ok(Self {
             path,
             ast,
@@ -62,6 +65,7 @@ impl Module {
             extern_values,
             impls,
             backends: backends_map,
+            doc,
         })
     }
 
@@ -103,5 +107,9 @@ impl Module {
         }
 
         Ok(())
+    }
+
+    pub fn doc(&self) -> Option<&str> {
+        self.doc.as_deref()
     }
 }

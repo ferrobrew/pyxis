@@ -42,6 +42,7 @@ pub fn write_module(
         raw_output,
         "#![allow(dead_code, non_snake_case, clippy::missing_safety_doc, clippy::unnecessary_cast)]"
     )?;
+    writeln!(raw_output, "{}", doc_to_tokens(true, module.doc()))?;
 
     let backends = module.backends.get("rust");
     let prologues = backends
@@ -156,6 +157,7 @@ fn build_type(
     let TypeDefinition {
         singleton,
         regions,
+        doc,
         associated_functions,
         vftable,
         copyable,
@@ -165,13 +167,14 @@ fn build_type(
     } = type_definition;
 
     let visibility = visibility_to_tokens(visibility);
-
+    let doc = doc_to_tokens(false, doc.as_deref());
     let fields = regions
         .iter()
         .map(|r| {
             let crate::semantic_analysis::types::Region {
                 visibility,
                 name: field,
+                doc,
                 type_ref,
                 is_base: _,
             } = r;
@@ -179,7 +182,9 @@ fn build_type(
             let field_ident = str_to_ident(field_name);
             let visibility = visibility_to_tokens(*visibility);
             let syn_type = sa_type_to_syn_type(type_ref)?;
+            let doc = doc_to_tokens(false, doc.as_deref());
             Ok(quote! {
+                #doc
                 #visibility #field_ident: #syn_type
             })
         })
@@ -306,6 +311,7 @@ fn build_type(
     Ok(quote! {
         #derives
         #[repr(C #packed #alignment)]
+        #doc
         #visibility struct #name_ident {
             #(#fields),*
         }
@@ -331,6 +337,7 @@ fn build_enum(
     let EnumDefinition {
         singleton,
         fields,
+        doc,
         type_,
         copyable,
         cloneable,
@@ -342,6 +349,7 @@ fn build_enum(
     let name_ident = str_to_ident(name.as_str());
 
     let visibility = visibility_to_tokens(visibility);
+    let doc = doc_to_tokens(false, doc.as_deref());
 
     let syn_fields = fields.iter().enumerate().map(|(idx, (name, value))| {
         let name_ident = str_to_ident(name);
@@ -397,6 +405,7 @@ fn build_enum(
     Ok(quote! {
         #[repr(#syn_type)]
         #[derive(PartialEq, Eq, PartialOrd, Ord, Debug, #(#extra_derives),*)]
+        #doc
         #visibility enum #name_ident {
             #(#syn_fields),*
         }
@@ -407,6 +416,7 @@ fn build_enum(
 
 fn build_function(function: &Function) -> Result<proc_macro2::TokenStream, anyhow::Error> {
     let name = str_to_ident(&function.name);
+    let doc = doc_to_tokens(false, function.doc.as_deref());
 
     let arguments = function
         .arguments
@@ -492,6 +502,7 @@ fn build_function(function: &Function) -> Result<proc_macro2::TokenStream, anyho
 
     let visibility = visibility_to_tokens(function.visibility);
     Ok(quote! {
+        #doc
         #visibility unsafe fn #name(#(#arguments),*) #return_type {
             #function_body
         }
@@ -575,5 +586,21 @@ fn visibility_to_tokens(visibility: Visibility) -> proc_macro2::TokenStream {
     match visibility {
         Visibility::Public => quote! { pub },
         Visibility::Private => quote! {},
+    }
+}
+
+fn doc_to_tokens(is_module_doc: bool, doc: Option<&str>) -> proc_macro2::TokenStream {
+    let Some(doc) = doc else {
+        return proc_macro2::TokenStream::new();
+    };
+    let doc_attrs = doc.lines().map(|line| {
+        if is_module_doc {
+            quote! { #![doc = #line] }
+        } else {
+            quote! { #[doc = #line] }
+        }
+    });
+    quote! {
+        #(#doc_attrs)*
     }
 }
