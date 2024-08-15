@@ -9,6 +9,7 @@ pub mod test_aliases {
     pub type ED = super::EnumDefinition;
     pub type T = super::Type;
     pub type A = super::Attribute;
+    pub type As = super::Attributes;
     pub type Ar = super::Argument;
     pub type TF = super::TypeField;
     pub type E = super::Expr;
@@ -262,6 +263,39 @@ impl Attribute {
         Attribute::Assign("doc".into(), Expr::StringLiteral(doc.into()))
     }
 }
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+pub struct Attributes(pub Vec<Attribute>);
+impl<const N: usize> From<[Attribute; N]> for Attributes {
+    fn from(s: [Attribute; N]) -> Self {
+        Attributes(s.to_vec())
+    }
+}
+impl From<Vec<Attribute>> for Attributes {
+    fn from(s: Vec<Attribute>) -> Self {
+        Attributes(s)
+    }
+}
+impl IntoIterator for Attributes {
+    type Item = Attribute;
+    type IntoIter = std::vec::IntoIter<Attribute>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+impl<'a> IntoIterator for &'a Attributes {
+    type Item = &'a Attribute;
+    type IntoIter = std::slice::Iter<'a, Attribute>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter()
+    }
+}
+impl FromIterator<Attribute> for Attributes {
+    fn from_iter<I: IntoIterator<Item = Attribute>>(iter: I) -> Self {
+        Attributes(iter.into_iter().collect())
+    }
+}
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum Visibility {
@@ -285,7 +319,7 @@ impl Argument {
 pub struct Function {
     pub visibility: Visibility,
     pub name: Ident,
-    pub attributes: Vec<Attribute>,
+    pub attributes: Attributes,
     pub arguments: Vec<Argument>,
     pub return_type: Option<Type>,
 }
@@ -297,12 +331,12 @@ impl Function {
         Self {
             visibility,
             name: name.into(),
-            attributes: vec![],
+            attributes: Default::default(),
             arguments: arguments.into(),
             return_type: None,
         }
     }
-    pub fn with_attributes(mut self, attributes: impl Into<Vec<Attribute>>) -> Self {
+    pub fn with_attributes(mut self, attributes: impl Into<Attributes>) -> Self {
         self.attributes = attributes.into();
         self
     }
@@ -355,22 +389,22 @@ impl TypeField {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TypeStatement {
     pub field: TypeField,
-    pub attributes: Vec<Attribute>,
+    pub attributes: Attributes,
 }
 impl TypeStatement {
     pub fn field((visibility, name): (Visibility, &str), type_: Type) -> TypeStatement {
         TypeStatement {
             field: TypeField::Field(visibility, name.into(), type_),
-            attributes: vec![],
+            attributes: Default::default(),
         }
     }
     pub fn vftable(functions: impl IntoIterator<Item = Function>) -> TypeStatement {
         TypeStatement {
             field: TypeField::vftable(functions),
-            attributes: vec![],
+            attributes: Default::default(),
         }
     }
-    pub fn with_attributes(mut self, attributes: impl Into<Vec<Attribute>>) -> Self {
+    pub fn with_attributes(mut self, attributes: impl Into<Attributes>) -> Self {
         self.attributes = attributes.into();
         self
     }
@@ -379,16 +413,16 @@ impl TypeStatement {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TypeDefinition {
     pub statements: Vec<TypeStatement>,
-    pub attributes: Vec<Attribute>,
+    pub attributes: Attributes,
 }
 impl TypeDefinition {
     pub fn new(statements: impl Into<Vec<TypeStatement>>) -> Self {
         Self {
             statements: statements.into(),
-            attributes: vec![],
+            attributes: Default::default(),
         }
     }
-    pub fn with_attributes(mut self, attributes: impl Into<Vec<Attribute>>) -> Self {
+    pub fn with_attributes(mut self, attributes: impl Into<Attributes>) -> Self {
         self.attributes = attributes.into();
         self
     }
@@ -398,14 +432,14 @@ impl TypeDefinition {
 pub struct EnumStatement {
     pub name: Ident,
     pub expr: Option<Expr>,
-    pub attributes: Vec<Attribute>,
+    pub attributes: Attributes,
 }
 impl EnumStatement {
     pub fn new(name: Ident, expr: Option<Expr>) -> EnumStatement {
         EnumStatement {
             name,
             expr,
-            attributes: vec![],
+            attributes: Default::default(),
         }
     }
     pub fn field(name: &str) -> EnumStatement {
@@ -414,7 +448,7 @@ impl EnumStatement {
     pub fn field_with_expr(name: &str, expr: Expr) -> EnumStatement {
         Self::new(name.into(), Some(expr))
     }
-    pub fn with_attributes(mut self, attributes: impl Into<Vec<Attribute>>) -> Self {
+    pub fn with_attributes(mut self, attributes: impl Into<Attributes>) -> Self {
         self.attributes = attributes.into();
         self
     }
@@ -424,13 +458,13 @@ impl EnumStatement {
 pub struct EnumDefinition {
     pub type_: Type,
     pub statements: Vec<EnumStatement>,
-    pub attributes: Vec<Attribute>,
+    pub attributes: Attributes,
 }
 impl EnumDefinition {
     pub fn new(
         type_: Type,
         statements: impl Into<Vec<EnumStatement>>,
-        attributes: impl Into<Vec<Attribute>>,
+        attributes: impl Into<Attributes>,
     ) -> Self {
         Self {
             type_,
@@ -438,7 +472,7 @@ impl EnumDefinition {
             attributes: attributes.into(),
         }
     }
-    pub fn with_attributes(mut self, attributes: impl Into<Vec<Attribute>>) -> Self {
+    pub fn with_attributes(mut self, attributes: impl Into<Attributes>) -> Self {
         self.attributes = attributes.into();
         self
     }
@@ -483,17 +517,17 @@ impl ItemDefinition {
 pub struct FunctionBlock {
     pub name: Ident,
     pub functions: Vec<Function>,
-    pub attributes: Vec<Attribute>,
+    pub attributes: Attributes,
 }
 impl FunctionBlock {
     pub fn new(name: impl Into<Ident>, functions: impl Into<Vec<Function>>) -> Self {
         Self {
             name: name.into(),
             functions: functions.into(),
-            attributes: vec![],
+            attributes: Default::default(),
         }
     }
-    pub fn with_attributes(mut self, attributes: impl Into<Vec<Attribute>>) -> Self {
+    pub fn with_attributes(mut self, attributes: impl Into<Attributes>) -> Self {
         self.attributes = attributes.into();
         self
     }
@@ -528,14 +562,14 @@ pub struct ExternValue {
     pub visibility: Visibility,
     pub name: Ident,
     pub type_: Type,
-    pub attributes: Vec<Attribute>,
+    pub attributes: Attributes,
 }
 impl ExternValue {
     pub fn new(
         visibility: Visibility,
         name: &str,
         type_: Type,
-        attributes: impl Into<Vec<Attribute>>,
+        attributes: impl Into<Attributes>,
     ) -> Self {
         Self {
             visibility,
@@ -549,12 +583,12 @@ impl ExternValue {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Module {
     pub uses: Vec<ItemPath>,
-    pub extern_types: Vec<(Ident, Vec<Attribute>)>,
+    pub extern_types: Vec<(Ident, Attributes)>,
     pub extern_values: Vec<ExternValue>,
     pub definitions: Vec<ItemDefinition>,
     pub impls: Vec<FunctionBlock>,
     pub backends: Vec<Backend>,
-    pub attributes: Vec<Attribute>,
+    pub attributes: Attributes,
 }
 impl Module {
     pub fn new() -> Self {
@@ -565,10 +599,7 @@ impl Module {
         self.uses = uses.into();
         self
     }
-    pub fn with_extern_types(
-        mut self,
-        extern_types: impl Into<Vec<(Ident, Vec<Attribute>)>>,
-    ) -> Self {
+    pub fn with_extern_types(mut self, extern_types: impl Into<Vec<(Ident, Attributes)>>) -> Self {
         self.extern_types = extern_types.into();
         self
     }
@@ -588,7 +619,7 @@ impl Module {
         self.backends = backends.into();
         self
     }
-    pub fn with_attributes(mut self, attributes: impl Into<Vec<Attribute>>) -> Self {
+    pub fn with_attributes(mut self, attributes: impl Into<Attributes>) -> Self {
         self.attributes = attributes.into();
         self
     }

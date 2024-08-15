@@ -137,7 +137,7 @@ impl Parse for Expr {
 impl Attribute {
     /// also implicitly handles multiple attributes within the same brackets:
     /// #[a(b), c(d)] -> Function(a, [b]), Function(c, [d])
-    fn parse_many(input: ParseStream, expect_module_attributes: bool) -> Result<Vec<Attribute>> {
+    fn parse_many(input: ParseStream, expect_module_attributes: bool) -> Result<Attributes> {
         enum AttributePart {
             Ident(Ident),
             Function { name: Ident, arguments: Vec<Expr> },
@@ -204,7 +204,7 @@ impl Attribute {
             Ok(())
         }
 
-        Ok(attributes)
+        Ok(attributes.into())
     }
 }
 
@@ -313,11 +313,7 @@ impl Parse for TypeField {
 
 impl Parse for TypeStatement {
     fn parse(input: ParseStream) -> Result<Self> {
-        let attributes = if input.peek(Token![#]) {
-            Attribute::parse_many(input, false)?
-        } else {
-            vec![]
-        };
+        let attributes = Attribute::parse_many(input, false)?;
         Ok(TypeStatement {
             field: input.parse()?,
             attributes,
@@ -325,7 +321,7 @@ impl Parse for TypeStatement {
     }
 }
 
-fn parse_type_definition(input: ParseStream, attributes: Vec<Attribute>) -> Result<TypeDefinition> {
+fn parse_type_definition(input: ParseStream, attributes: Attributes) -> Result<TypeDefinition> {
     let statements = if input.peek(Token![;]) {
         input.parse::<Token![;]>()?;
         vec![]
@@ -346,11 +342,7 @@ fn parse_type_definition(input: ParseStream, attributes: Vec<Attribute>) -> Resu
 
 impl Parse for EnumStatement {
     fn parse(input: ParseStream) -> Result<Self> {
-        let attributes = if input.peek(Token![#]) {
-            Attribute::parse_many(input, false)?
-        } else {
-            vec![]
-        };
+        let attributes = Attribute::parse_many(input, false)?;
 
         let name: Ident = input.parse()?;
         let expr = if input.peek(Token![=]) {
@@ -364,7 +356,7 @@ impl Parse for EnumStatement {
     }
 }
 
-fn parse_enum_definition(input: ParseStream, attributes: Vec<Attribute>) -> Result<EnumDefinition> {
+fn parse_enum_definition(input: ParseStream, attributes: Attributes) -> Result<EnumDefinition> {
     input.parse::<Token![:]>()?;
     let type_: Type = input.parse()?;
 
@@ -387,7 +379,7 @@ fn parse_enum_definition(input: ParseStream, attributes: Vec<Attribute>) -> Resu
 fn parse_item_definition(
     input: ParseStream,
     visibility: Visibility,
-    attributes: Vec<Attribute>,
+    attributes: Attributes,
 ) -> Result<ItemDefinition> {
     let lookahead = input.lookahead1();
     // We return a Result for the inner so that we can annotate it with the name
@@ -558,7 +550,7 @@ impl Parse for Module {
             definitions,
             impls,
             backends,
-            attributes: module_attributes,
+            attributes: module_attributes.into(),
         })
     }
 }

@@ -236,7 +236,7 @@ fn can_parse_extern() {
         "#;
 
     let ast = M::new()
-        .with_extern_types([("TestType<Hey>".into(), vec![A::size(12)])])
+        .with_extern_types([("TestType<Hey>".into(), As::from_iter([A::size(12)]))])
         .with_definitions([ID::new(
             (V::Private, "Test"),
             TD::new([TS::field((V::Private, "test"), T::ident("TestType<Hey>"))]),
@@ -267,7 +267,7 @@ fn can_parse_extern_value() {
         "#;
 
     let ast = M::new()
-        .with_extern_types([("SomeType".into(), vec![A::size(4)])])
+        .with_extern_types([("SomeType".into(), As::from_iter([A::size(4)]))])
         .with_extern_values([
             EV::new(
                 V::Public,

@@ -231,7 +231,7 @@ fn can_use_type_from_another_module() {
 #[test]
 fn will_fail_on_an_extern_without_size() {
     assert_ast_produces_failure(
-        M::new().with_extern_types([("TestType".into(), vec![])]),
+        M::new().with_extern_types([("TestType".into(), As::default())]),
         "failed to find `size` attribute for extern type `TestType` in module `test`",
     );
 }
@@ -240,7 +240,10 @@ fn will_fail_on_an_extern_without_size() {
 fn can_resolve_embed_of_an_extern() {
     assert_ast_produces_type_definitions(
         M::new()
-            .with_extern_types([("TestType1".into(), vec![A::size(16), A::align(4)])])
+            .with_extern_types([(
+                "TestType1".into(),
+                As::from_iter([A::size(16), A::align(4)]),
+            )])
             .with_definitions([ID::new(
                 (V::Public, "TestType2"),
                 TD::new([
