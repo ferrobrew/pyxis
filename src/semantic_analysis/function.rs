@@ -178,10 +178,7 @@ pub fn build(
     let mut calling_convention = None;
     for attribute in &function.attributes {
         let Some((ident, exprs)) = attribute.function() else {
-            anyhow::bail!(
-                "unsupported attribute for function `{}`: {attribute:?}",
-                function.name
-            );
+            continue;
         };
         match (ident.as_str(), &exprs[..]) {
             ("address", [grammar::Expr::IntLiteral(addr)]) => {
@@ -218,10 +215,7 @@ pub fn build(
                     )
                 })?);
             }
-            _ => anyhow::bail!(
-                "unsupported attribute for function `{}`: {attribute:?}",
-                function.name
-            ),
+            _ => {}
         }
     }
 

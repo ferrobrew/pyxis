@@ -48,22 +48,13 @@ pub fn convert_grammar_functions_to_semantic_functions(
         let mut index = None;
         for attribute in &function.attributes {
             let grammar::Attribute::Function(ident, exprs) = attribute else {
-                anyhow::bail!(
-                    "unsupported attribute for function `{}`: {attribute:?}",
-                    function.name
-                );
+                continue;
             };
             match (ident.as_str(), exprs.as_slice()) {
                 ("index", [grammar::Expr::IntLiteral(index_)]) => {
                     index = Some(*index_ as usize);
                 }
-                ("calling_convention", _) => {
-                    // ignore calling convention attribute, handled by function::build
-                }
-                _ => anyhow::bail!(
-                    "unsupported attribute for function `{}`: {attribute:?}",
-                    function.name
-                ),
+                _ => continue,
             }
         }
 

@@ -160,33 +160,32 @@ pub fn build(
     let mut packed = false;
     let mut align = None;
     for attribute in &definition.attributes {
-        if let grammar::Attribute::Function(ident, exprs) = attribute {
-            match (ident.as_str(), exprs.as_slice()) {
-                ("size", [grammar::Expr::IntLiteral(value)]) => {
-                    target_size = Some(
-                        (*value)
-                            .try_into()
-                            .with_context(|| format!("failed to convert `size` attribute into usize for type `{resolvee_path}`"))?,
-                    );
-                }
-                ("singleton", [grammar::Expr::IntLiteral(value)]) => {
-                    singleton = Some((*value).try_into().with_context(|| {
-                        format!(
-                            "failed to convert `singleton` attribute into usize for type `{resolvee_path}`"
-                        )
-                    })?);
-                }
-                ("align", [grammar::Expr::IntLiteral(value)]) => {
-                    align = Some((*value).try_into().with_context(|| {
-                        format!("failed to convert `align` attribute into usize for type `{resolvee_path}`")
-                    })?);
-                }
-                _ => {
-                    anyhow::bail!("unsupported attribute for type `{resolvee_path}`: {attribute:?}")
+        match attribute {
+            grammar::Attribute::Function(ident, exprs) => {
+                match (ident.as_str(), exprs.as_slice()) {
+                    ("size", [grammar::Expr::IntLiteral(value)]) => {
+                        target_size = Some(
+                            (*value)
+                                .try_into()
+                                .with_context(|| format!("failed to convert `size` attribute into usize for type `{resolvee_path}`"))?,
+                        );
+                    }
+                    ("singleton", [grammar::Expr::IntLiteral(value)]) => {
+                        singleton = Some((*value).try_into().with_context(|| {
+                            format!(
+                                "failed to convert `singleton` attribute into usize for type `{resolvee_path}`"
+                            )
+                        })?);
+                    }
+                    ("align", [grammar::Expr::IntLiteral(value)]) => {
+                        align = Some((*value).try_into().with_context(|| {
+                            format!("failed to convert `align` attribute into usize for type `{resolvee_path}`")
+                        })?);
+                    }
+                    _ => {}
                 }
             }
-        } else if let grammar::Attribute::Ident(ident) = attribute {
-            match ident.as_str() {
+            grammar::Attribute::Ident(ident) => match ident.as_str() {
                 "copyable" => {
                     copyable = true;
                     cloneable = true;
@@ -194,10 +193,9 @@ pub fn build(
                 "cloneable" => cloneable = true,
                 "defaultable" => defaultable = true,
                 "packed" => packed = true,
-                _ => {
-                    anyhow::bail!("unsupported attribute for type `{resolvee_path}`: {attribute:?}")
-                }
-            }
+                _ => {}
+            },
+            grammar::Attribute::Assign(_, _) => {}
         }
     }
 
@@ -216,9 +214,7 @@ pub fn build(
                     match attribute {
                         grammar::Attribute::Ident(ident) => match ident.as_str() {
                             "base" => is_base = true,
-                            _ => anyhow::bail!(
-                                "unsupported attribute for type `{resolvee_path}`: {attribute:?}"
-                            ),
+                            _ => {}
                         },
                         grammar::Attribute::Function(ident, exprs) => {
                             match (ident.as_str(), &exprs[..]) {
@@ -229,14 +225,10 @@ pub fn build(
                                             .with_context(|| format!("failed to convert `address` attribute into usize for field `{ident}` of type `{resolvee_path}`"))?,
                                     );
                                 }
-                                _ => anyhow::bail!("unsupported attribute for type `{resolvee_path}`: {attribute:?}"),
+                                _ => {}
                             }
                         }
-                        grammar::Attribute::Assign(_ident, _expr) => {
-                            anyhow::bail!(
-                                "unsupported attribute for type `{resolvee_path}`: {attribute:?}"
-                            );
-                        }
+                        grammar::Attribute::Assign(_ident, _expr) => {}
                     }
                 }
 
@@ -273,17 +265,13 @@ pub fn build(
                 let mut size = None;
                 for attribute in attributes {
                     let grammar::Attribute::Function(ident, exprs) = attribute else {
-                        anyhow::bail!(
-                            "unsupported attribute for type `{resolvee_path}`: {attribute:?}"
-                        );
+                        continue;
                     };
                     match (ident.as_str(), exprs.as_slice()) {
                         ("size", [grammar::Expr::IntLiteral(size_)]) => {
                             size = Some(*size_ as usize);
                         }
-                        _ => anyhow::bail!(
-                            "unsupported attribute for type `{resolvee_path}`: {attribute:?}"
-                        ),
+                        _ => {}
                     }
                 }
 

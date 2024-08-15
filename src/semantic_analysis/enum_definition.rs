@@ -107,16 +107,10 @@ pub fn build(
                         }
                         default_index = Some(fields.len() - 1);
                     }
-                    _ => anyhow::bail!("unsupported attribute for case `{name}` of enum `{resolvee_path}`: {attribute:?}"),
+                    _ => {}
                 },
-                grammar::Attribute::Function(_ident, _exprs) => {
-                    anyhow::bail!("unsupported attribute for case `{name}` of enum `{resolvee_path}`: {attribute:?}");
-                }
-                grammar::Attribute::Assign(_ident, _expr) => {
-                    anyhow::bail!(
-                        "unsupported attribute for enum `{resolvee_path}`: {attribute:?}"
-                    );
-                }
+                grammar::Attribute::Function(_ident, _exprs) => {}
+                grammar::Attribute::Assign(_ident, _expr) => {}
             }
         }
 
@@ -136,23 +130,17 @@ pub fn build(
                 }
                 "cloneable" => cloneable = true,
                 "defaultable" => defaultable = true,
-                _ => {
-                    anyhow::bail!("unsupported attribute for enum `{resolvee_path}`: {attribute:?}")
-                }
+                _ => {}
             },
             grammar::Attribute::Function(ident, exprs) => {
                 match (ident.as_str(), exprs.as_slice()) {
                     ("singleton", [grammar::Expr::IntLiteral(value)]) => {
                         singleton = Some(*value as usize);
                     }
-                    _ => anyhow::bail!(
-                        "unsupported attribute for enum `{resolvee_path}`: {attribute:?}"
-                    ),
+                    _ => {}
                 }
             }
-            grammar::Attribute::Assign(_ident, _expr) => {
-                anyhow::bail!("unsupported attribute for enum `{resolvee_path}`: {attribute:?}");
-            }
+            grammar::Attribute::Assign(_ident, _expr) => {}
         }
     }
 

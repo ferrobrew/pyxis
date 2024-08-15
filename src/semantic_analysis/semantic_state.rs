@@ -101,23 +101,13 @@ impl SemanticState {
                 let mut address = None;
                 for attribute in &ev.attributes {
                     let Some((ident, exprs)) = attribute.function() else {
-                        anyhow::bail!(
-                            "unsupported attribute for extern value `{}` in module `{}`: {:?}",
-                            name,
-                            path,
-                            attribute
-                        );
+                        continue;
                     };
                     match (ident.as_str(), &exprs[..]) {
                         ("address", [grammar::Expr::IntLiteral(addr)]) => {
                             address = Some(*addr as usize);
                         }
-                        _ => anyhow::bail!(
-                            "unsupported attribute for extern value `{}` in module `{}`: {:?}",
-                            name,
-                            path,
-                            attribute
-                        ),
+                        _ => {}
                     }
                 }
 
@@ -163,7 +153,7 @@ impl SemanticState {
             let mut alignment = None;
             for attribute in attributes {
                 let Some((ident, exprs)) = attribute.function() else {
-                    anyhow::bail!("unsupported attribute for extern type `{extern_path}` in module `{path}`: {attribute:?}");
+                    continue;
                 };
                 match (ident.as_str(), &exprs[..]) {
                     ("size", [grammar::Expr::IntLiteral(size_)]) => {
@@ -180,9 +170,7 @@ impl SemanticState {
                                 .with_context(|| format!("failed to convert `align` attribute into usize for extern type `{extern_path}` in module `{path}`"))?,
                         );
                     }
-                    _ => anyhow::bail!(
-                        "unsupported attribute for extern type `{extern_path}` in module `{path}`: {attribute:?}"
-                    ),
+                    _ => {}
                 }
             }
             let size = size.with_context(|| {
