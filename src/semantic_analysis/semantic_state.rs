@@ -103,11 +103,10 @@ impl SemanticState {
                     let Some((ident, exprs)) = attribute.function() else {
                         continue;
                     };
-                    match (ident.as_str(), &exprs[..]) {
-                        ("address", [grammar::Expr::IntLiteral(addr)]) => {
-                            address = Some(*addr as usize);
-                        }
-                        _ => {}
+                    if let ("address", [grammar::Expr::IntLiteral(addr)]) =
+                        (ident.as_str(), &exprs[..])
+                    {
+                        address = Some(*addr as usize);
                     }
                 }
 

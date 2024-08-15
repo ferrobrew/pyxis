@@ -550,7 +550,7 @@ impl Parse for Module {
             definitions,
             impls,
             backends,
-            attributes: module_attributes.into(),
+            attributes: module_attributes,
         })
     }
 }

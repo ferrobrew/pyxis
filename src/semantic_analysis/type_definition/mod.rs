@@ -218,23 +218,21 @@ pub fn build(
                 let doc: Option<String> = attributes.doc(resolvee_path)?;
                 for attribute in attributes {
                     match attribute {
-                        grammar::Attribute::Ident(ident) => match ident.as_str() {
-                            "base" => is_base = true,
-                            _ => {}
-                        },
+                        grammar::Attribute::Ident(ident) if ident.as_str() == "base" => {
+                            is_base = true
+                        }
                         grammar::Attribute::Function(ident, exprs) => {
-                            match (ident.as_str(), &exprs[..]) {
-                                ("address", [grammar::Expr::IntLiteral(addr)]) => {
-                                    address = Some(
-                                        (*addr)
-                                            .try_into()
-                                            .with_context(|| format!("failed to convert `address` attribute into usize for field `{ident}` of type `{resolvee_path}`"))?,
-                                    );
-                                }
-                                _ => {}
+                            if let ("address", [grammar::Expr::IntLiteral(addr)]) =
+                                (ident.as_str(), &exprs[..])
+                            {
+                                address = Some(
+                                    (*addr)
+                                        .try_into()
+                                        .with_context(|| format!("failed to convert `address` attribute into usize for field `{ident}` of type `{resolvee_path}`"))?,
+                                );
                             }
                         }
-                        grammar::Attribute::Assign(_ident, _expr) => {}
+                        _ => {}
                     }
                 }
 
@@ -274,11 +272,10 @@ pub fn build(
                     let grammar::Attribute::Function(ident, exprs) = attribute else {
                         continue;
                     };
-                    match (ident.as_str(), exprs.as_slice()) {
-                        ("size", [grammar::Expr::IntLiteral(size_)]) => {
-                            size = Some(*size_ as usize);
-                        }
-                        _ => {}
+                    if let ("size", [grammar::Expr::IntLiteral(size_)]) =
+                        (ident.as_str(), exprs.as_slice())
+                    {
+                        size = Some(*size_ as usize);
                     }
                 }
 

@@ -109,17 +109,13 @@ pub fn build(
 
         for attribute in attributes {
             match attribute {
-                grammar::Attribute::Ident(ident) => match ident.as_str() {
-                    "default" => {
-                        if default_index.is_some() {
-                            anyhow::bail!("enum {resolvee_path} has multiple default variants");
-                        }
-                        default_index = Some(fields.len() - 1);
+                grammar::Attribute::Ident(ident) if ident.as_str() == "default" => {
+                    if default_index.is_some() {
+                        anyhow::bail!("enum {resolvee_path} has multiple default variants");
                     }
-                    _ => {}
-                },
-                grammar::Attribute::Function(_ident, _exprs) => {}
-                grammar::Attribute::Assign(_ident, _expr) => {}
+                    default_index = Some(fields.len() - 1);
+                }
+                _ => {}
             }
         }
 
@@ -143,11 +139,10 @@ pub fn build(
                 _ => {}
             },
             grammar::Attribute::Function(ident, exprs) => {
-                match (ident.as_str(), exprs.as_slice()) {
-                    ("singleton", [grammar::Expr::IntLiteral(value)]) => {
-                        singleton = Some(*value as usize);
-                    }
-                    _ => {}
+                if let ("singleton", [grammar::Expr::IntLiteral(value)]) =
+                    (ident.as_str(), exprs.as_slice())
+                {
+                    singleton = Some(*value as usize);
                 }
             }
             grammar::Attribute::Assign(_ident, _expr) => {}
