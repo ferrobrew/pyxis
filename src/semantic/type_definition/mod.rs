@@ -1,6 +1,6 @@
 use crate::{
     grammar::{self, ItemPath},
-    semantic_analysis::{
+    semantic::{
         function,
         type_registry::TypeRegistry,
         types::{Function, FunctionBody, ItemState, ItemStateResolved, Type, Visibility},

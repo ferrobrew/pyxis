@@ -2,7 +2,7 @@ use anyhow::Context;
 
 use crate::{
     grammar::{self, ItemPath},
-    semantic_analysis::{
+    semantic::{
         types::{ItemStateResolved, Type},
         SemanticState,
     },

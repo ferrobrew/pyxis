@@ -2,10 +2,10 @@ use std::{fmt::Write as _, path::Path};
 
 use crate::{
     grammar::ItemPath,
-    semantic_analysis::{
+    semantic::{
         types::{
             Argument, EnumDefinition, ExternValue, Function, FunctionBody, ItemCategory,
-            ItemDefinition, ItemDefinitionInner, ItemStateResolved, Type, TypeDefinition,
+            ItemDefinition, ItemDefinitionInner, ItemStateResolved, Region, Type, TypeDefinition,
             Visibility,
         },
         Module, ResolvedSemanticState, TypeRegistry,
@@ -171,7 +171,7 @@ fn build_type(
     let fields = regions
         .iter()
         .map(|r| {
-            let crate::semantic_analysis::types::Region {
+            let Region {
                 visibility,
                 name: field,
                 doc,

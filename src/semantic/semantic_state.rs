@@ -5,7 +5,7 @@ use anyhow::Context;
 use crate::{
     grammar::{self, ItemPath},
     parser,
-    semantic_analysis::{
+    semantic::{
         enum_definition,
         module::Module,
         type_definition,

@@ -2,10 +2,10 @@ use std::fmt;
 
 use crate::{
     grammar::{self, ItemPath},
-    semantic_analysis::type_registry,
+    semantic::type_registry,
 };
 
-pub use crate::semantic_analysis::{
+pub use crate::semantic::{
     enum_definition::EnumDefinition,
     function::{Argument, CallingConvention, Function, FunctionBody},
     type_definition::{Region, TypeDefinition, TypeVftable},

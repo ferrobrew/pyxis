@@ -1,6 +1,6 @@
 use crate::{
     grammar::test_aliases::*,
-    semantic_analysis::{semantic_state::SemanticState, types::test_aliases::*},
+    semantic::{semantic_state::SemanticState, types::test_aliases::*},
 };
 
 use anyhow::Context;

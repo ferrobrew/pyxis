@@ -3,12 +3,12 @@ use std::path::Path;
 pub mod backends;
 pub mod grammar;
 pub mod parser;
-pub mod semantic_analysis;
+pub mod semantic;
 
 pub(crate) mod util;
 
 pub fn build(in_dir: &Path, out_dir: &Path, pointer_size: usize) -> anyhow::Result<()> {
-    let mut semantic_state = semantic_analysis::SemanticState::new(pointer_size);
+    let mut semantic_state = semantic::SemanticState::new(pointer_size);
 
     for path in glob::glob(&format!("{}/**/*.pyx", in_dir.display()))?.filter_map(Result::ok) {
         semantic_state.add_file(Path::new(&in_dir), &path)?;

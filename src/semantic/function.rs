@@ -4,7 +4,7 @@ use anyhow::Context;
 
 use crate::{
     grammar::{self, ItemPath},
-    semantic_analysis::{
+    semantic::{
         type_registry::TypeRegistry,
         types::{Type, Visibility},
     },

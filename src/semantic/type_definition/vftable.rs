@@ -2,7 +2,7 @@ use anyhow::Context;
 
 use crate::{
     grammar::{self, ItemPath},
-    semantic_analysis::{
+    semantic::{
         function,
         module::Module,
         type_definition::get_region_name_and_type_definition,

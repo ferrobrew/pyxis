@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     grammar::{self, ItemPath},
-    semantic_analysis::types::{ItemDefinition, Type},
+    semantic::types::{ItemDefinition, Type},
 };
 
 #[derive(Debug)]
