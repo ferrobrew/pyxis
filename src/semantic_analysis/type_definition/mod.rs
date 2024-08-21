@@ -323,20 +323,32 @@ pub fn build(
             continue;
         };
 
-        associated_functions.extend(base_type.associated_functions.iter().cloned().map(|f| {
-            Function {
-                body: FunctionBody::field(base_name.clone()),
-                ..f
-            }
-        }));
+        associated_functions.extend(
+            base_type
+                .associated_functions
+                .iter()
+                .filter(|f| f.is_public())
+                .cloned()
+                .map(|f| Function {
+                    body: FunctionBody::field(base_name.clone()),
+                    ..f
+                }),
+        );
 
         if i > 0 {
             // Inject all non-first-base vfuncs into the type
             if let Some(vftable) = &base_type.vftable {
-                associated_functions.extend(vftable.functions.iter().cloned().map(|f| Function {
-                    body: FunctionBody::field(base_name.clone()),
-                    ..f
-                }));
+                associated_functions.extend(
+                    vftable
+                        .functions
+                        .iter()
+                        .filter(|f| f.is_public())
+                        .cloned()
+                        .map(|f| Function {
+                            body: FunctionBody::field(base_name.clone()),
+                            ..f
+                        }),
+                );
             }
         }
     }

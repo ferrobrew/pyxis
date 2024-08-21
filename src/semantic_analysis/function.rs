@@ -175,6 +175,9 @@ impl Function {
     pub fn is_internal(&self) -> bool {
         self.name.starts_with("_")
     }
+    pub fn is_public(&self) -> bool {
+        matches!(self.visibility, Visibility::Public)
+    }
 }
 
 pub fn build(
