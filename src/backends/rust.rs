@@ -1,4 +1,4 @@
-use std::{fmt::Write as _, path::Path};
+use std::{collections::HashMap, fmt::Write as _, path::Path};
 
 use crate::{
     grammar::ItemPath,
@@ -13,7 +13,7 @@ use crate::{
 };
 
 use anyhow::Context;
-use quote::quote;
+use quote::{quote, ToTokens};
 
 pub fn write_module(
     out_dir: &Path,
@@ -283,30 +283,85 @@ fn build_type(
         (quote! {}, quote! { , align(#alignment) })
     };
 
-    let as_ref_conversions = type_definition
-        .dfs_hierarchy(type_registry, path, &[])?
-        .into_iter()
-        .map(|(field_path, type_)| {
-            let field_path = field_path
-                .into_iter()
-                .map(|s| str_to_ident(&s))
-                .collect::<Vec<_>>();
-            let type_ = sa_type_to_syn_type(&type_)?;
+    let as_ref_conversions = {
+        let types_to_field_paths = type_definition
+            .dfs_hierarchy(type_registry, path, &[])?
+            .into_iter()
+            .map(|(field_path, type_)| {
+                let field_path = field_path
+                    .into_iter()
+                    .map(|s| str_to_ident(&s))
+                    .collect::<Vec<_>>();
+                let type_ = sa_type_to_syn_type(&type_)?;
 
-            Ok(quote! {
-                impl std::convert::AsRef<#type_> for #name_ident {
-                    fn as_ref(&self) -> & #type_ {
-                        &self #(. #field_path)*
+                Ok((type_, field_path))
+            })
+            .collect::<anyhow::Result<Vec<_>>>()?;
+
+        let types_to_field_paths_vec: HashMap<_, Vec<_>> =
+            types_to_field_paths
+                .iter()
+                .fold(HashMap::new(), |mut acc, (type_, field_path)| {
+                    acc.entry(type_).or_default().push(field_path);
+                    acc
+                });
+
+        types_to_field_paths
+            .iter()
+            .map(|(type_, field_path)| {
+                let implementations = &types_to_field_paths_vec[type_];
+                if implementations.len() > 1 {
+                    let mut conflicting_impl_message = format!(
+                        concat!(
+                        "`AsRef` and `AsMut` implementations were not generated for `{}` to `{}`,\n",
+                        "as there are multiple implementations of the same type in the hierarchy:\n"
+                    ),
+                        name,
+                        type_.to_token_stream()
+                    );
+                    for ident_path in implementations {
+                        conflicting_impl_message.push_str("  - `");
+                        conflicting_impl_message.push_str(
+                            &ident_path
+                                .iter()
+                                .map(|i| i.to_string())
+                                .collect::<Vec<_>>()
+                                .join("."),
+                        );
+                        conflicting_impl_message.push_str("`\n");
                     }
-                }
-                impl std::convert::AsMut<#type_> for #name_ident {
-                    fn as_mut(&mut self) -> &mut #type_ {
-                        &mut self #(. #field_path)*
+                    let conflicting_impl_doc = doc_to_tokens(false, Some(conflicting_impl_message.trim()));
+                    let conflicting_impl_ident = quote::format_ident!(
+                        "_CONFLICTING_{}_{}",
+                        name.as_str().to_uppercase(),
+                        field_path
+                            .iter()
+                            .map(|f| f.to_string().to_uppercase())
+                            .collect::<Vec<_>>()
+                            .join("_")
+                    );
+
+                    quote! {
+                        #conflicting_impl_doc
+                        const #conflicting_impl_ident: () = ();
+                    }
+                } else {
+                    quote! {
+                        impl std::convert::AsRef<#type_> for #name_ident {
+                            fn as_ref(&self) -> & #type_ {
+                                &self #(. #field_path)*
+                            }
+                        }
+                        impl std::convert::AsMut<#type_> for #name_ident {
+                            fn as_mut(&mut self) -> &mut #type_ {
+                                &mut self #(. #field_path)*
+                            }
+                        }
                     }
                 }
             })
-        })
-        .collect::<anyhow::Result<Vec<_>>>()?;
+            .collect::<Vec<_>>()
+    };
 
     Ok(quote! {
         #derives

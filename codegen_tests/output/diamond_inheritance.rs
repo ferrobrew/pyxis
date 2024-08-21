@@ -153,16 +153,11 @@ impl std::convert::AsMut<crate::diamond_inheritance::BaseA> for Derived {
         &mut self.base_a
     }
 }
-impl std::convert::AsRef<crate::diamond_inheritance::Base> for Derived {
-    fn as_ref(&self) -> &crate::diamond_inheritance::Base {
-        &self.base_a.base
-    }
-}
-impl std::convert::AsMut<crate::diamond_inheritance::Base> for Derived {
-    fn as_mut(&mut self) -> &mut crate::diamond_inheritance::Base {
-        &mut self.base_a.base
-    }
-}
+///`AsRef` and `AsMut` implementations were not generated for `Derived` to `crate :: diamond_inheritance :: Base`,
+///as there are multiple implementations of the same type in the hierarchy:
+///  - `base_a.base`
+///  - `base_b.base`
+const _CONFLICTING_DERIVED_BASE_A_BASE: () = ();
 impl std::convert::AsRef<crate::diamond_inheritance::BaseB> for Derived {
     fn as_ref(&self) -> &crate::diamond_inheritance::BaseB {
         &self.base_b
@@ -173,16 +168,11 @@ impl std::convert::AsMut<crate::diamond_inheritance::BaseB> for Derived {
         &mut self.base_b
     }
 }
-impl std::convert::AsRef<crate::diamond_inheritance::Base> for Derived {
-    fn as_ref(&self) -> &crate::diamond_inheritance::Base {
-        &self.base_b.base
-    }
-}
-impl std::convert::AsMut<crate::diamond_inheritance::Base> for Derived {
-    fn as_mut(&mut self) -> &mut crate::diamond_inheritance::Base {
-        &mut self.base_b.base
-    }
-}
+///`AsRef` and `AsMut` implementations were not generated for `Derived` to `crate :: diamond_inheritance :: Base`,
+///as there are multiple implementations of the same type in the hierarchy:
+///  - `base_a.base`
+///  - `base_b.base`
+const _CONFLICTING_DERIVED_BASE_B_BASE: () = ();
 #[repr(C, align(8))]
 struct DerivedVftable {
     pub destructor: unsafe extern "thiscall" fn(
