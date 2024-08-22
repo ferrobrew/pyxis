@@ -135,7 +135,7 @@ impl Derived {
     pub fn vftable(&self) -> *const crate::diamond_inheritance::DerivedVftable {
         self.base_a.vftable() as *const crate::diamond_inheritance::DerivedVftable
     }
-    pub unsafe fn destructor(&mut self) {
+    pub unsafe fn base_b_destructor(&mut self) {
         self.base_b.destructor()
     }
     pub unsafe fn destructor(&mut self) {

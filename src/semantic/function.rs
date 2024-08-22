@@ -80,18 +80,37 @@ impl FromStr for CallingConvention {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum FunctionBody {
-    Address { address: usize },
-    Field { field: String },
-    Vftable,
+    Address {
+        address: usize,
+    },
+    Field {
+        field: String,
+        /// The function to call on this field. *Usually* the same as
+        /// the original function's name, but functions can be renamed
+        /// for inheritance reasons
+        function_name: String,
+    },
+    Vftable {
+        /// The function to call on this field. *Usually* the same as
+        /// the original function's name, but functions can be renamed
+        /// for inheritance reasons
+        function_name: String,
+    },
 }
 
 impl FunctionBody {
     pub fn address(address: usize) -> Self {
         FunctionBody::Address { address }
     }
-    pub fn field(field: impl Into<String>) -> Self {
+    pub fn field(field: impl Into<String>, function_name: impl Into<String>) -> Self {
         FunctionBody::Field {
             field: field.into(),
+            function_name: function_name.into(),
+        }
+    }
+    pub fn vftable(function_name: impl Into<String>) -> Self {
+        FunctionBody::Vftable {
+            function_name: function_name.into(),
         }
     }
     pub fn is_field(&self) -> bool {
@@ -114,11 +133,6 @@ impl fmt::Display for Function {
         if let Some(doc) = &self.doc {
             write!(f, "#[doc = r#{doc:?}#] ")?;
         }
-        match &self.body {
-            FunctionBody::Address { address } => write!(f, "#[address(0x{address:X})] ")?,
-            FunctionBody::Field { field } => write!(f, "#[field({field:?})] ")?,
-            FunctionBody::Vftable => {}
-        }
         match self.visibility {
             Visibility::Public => write!(f, "pub "),
             Visibility::Private => Ok(()),
@@ -134,6 +148,15 @@ impl fmt::Display for Function {
         write!(f, ")")?;
         if let Some(ty) = &self.return_type {
             write!(f, " -> {}", ty)?;
+        }
+        write!(f, " = ")?;
+        match &self.body {
+            FunctionBody::Address { address } => write!(f, "0x{address:X})")?,
+            FunctionBody::Field {
+                field,
+                function_name,
+            } => write!(f, "self.{field}.{function_name}")?,
+            FunctionBody::Vftable { function_name } => write!(f, "self.vftable.{function_name}")?,
         }
         Ok(())
     }
@@ -186,7 +209,9 @@ pub fn build(
     is_vfunc: bool,
     function: &grammar::Function,
 ) -> Result<Function, anyhow::Error> {
-    let mut body = is_vfunc.then_some(FunctionBody::Vftable);
+    let mut body = is_vfunc.then(|| FunctionBody::Vftable {
+        function_name: function.name.0.clone(),
+    });
     // TODO: This ItemPath is not correct, but this should be fixed another time - preferabl
     // once error handling is improved
     let doc = function

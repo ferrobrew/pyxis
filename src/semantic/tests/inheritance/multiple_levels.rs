@@ -799,8 +799,11 @@ fn b1_d1_dd1_with_associated_functions() {
                             ST::raw("test::DerivedVftable").const_pointer(),
                         ))
                         .with_associated_functions([
-                            SF::new((SV::Public, "base_associated"), SFB::field("base"))
-                                .with_arguments([SAr::MutSelf]),
+                            SF::new(
+                                (SV::Public, "base_associated"),
+                                SFB::field("base", "base_associated"),
+                            )
+                            .with_arguments([SAr::MutSelf]),
                             SF::new((SV::Public, "derived_associated"), SFB::address(0x456))
                                 .with_arguments([SAr::MutSelf]),
                         ]),
@@ -836,10 +839,16 @@ fn b1_d1_dd1_with_associated_functions() {
                             ST::raw("test::DerivedDerivedVftable").const_pointer(),
                         ))
                         .with_associated_functions([
-                            SF::new((SV::Public, "base_associated"), SFB::field("derived"))
-                                .with_arguments([SAr::MutSelf]),
-                            SF::new((SV::Public, "derived_associated"), SFB::field("derived"))
-                                .with_arguments([SAr::MutSelf]),
+                            SF::new(
+                                (SV::Public, "base_associated"),
+                                SFB::field("derived", "base_associated"),
+                            )
+                            .with_arguments([SAr::MutSelf]),
+                            SF::new(
+                                (SV::Public, "derived_associated"),
+                                SFB::field("derived", "derived_associated"),
+                            )
+                            .with_arguments([SAr::MutSelf]),
                             SF::new(
                                 (SV::Public, "derived_derived_associated"),
                                 SFB::address(0x789),

@@ -291,8 +291,11 @@ fn b1_d1_with_associated_functions() {
                             ST::raw("test::DerivedVftable").const_pointer(),
                         ))
                         .with_associated_functions([
-                            SF::new((SV::Public, "base_associated"), SFB::field("base"))
-                                .with_arguments([SAr::MutSelf]),
+                            SF::new(
+                                (SV::Public, "base_associated"),
+                                SFB::field("base", "base_associated"),
+                            )
+                            .with_arguments([SAr::MutSelf]),
                             SF::new((SV::Public, "derived_associated"), SFB::address(0x456))
                                 .with_arguments([SAr::MutSelf]),
                         ]),
@@ -343,9 +346,9 @@ fn b1_d1_without_overlapping_vfuncs_will_fail() {
         concat!(
             "while processing `test::Derived`\n",
             "vftable for `test::Derived` has function ",
-            r#"`pub extern "thiscall" fn not_base_vfunc2(&mut self, arg0: u32, arg1: f32) -> i32` "#,
+            r#"`pub extern "thiscall" fn not_base_vfunc2(&mut self, arg0: u32, arg1: f32) -> i32 = self.vftable.not_base_vfunc2` "#,
             "at index 1 but base class `base` has function ",
-            r#"`pub extern "thiscall" fn base_vfunc2(&mut self, arg0: u32, arg1: f32) -> i32`"#
+            r#"`pub extern "thiscall" fn base_vfunc2(&mut self, arg0: u32, arg1: f32) -> i32 = self.vftable.base_vfunc2`"#
         ),
     );
 }

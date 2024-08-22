@@ -321,19 +321,25 @@ fn can_generate_vftable() {
                         .with_regions([SR::field((SV::Private, "vftable"), vftable_type.clone())])
                         .with_vftable(STV::new(
                             [
-                                SF::new((SV::Public, "test_function0"), SFB::Vftable)
-                                    .with_arguments([
-                                        SAr::MutSelf,
-                                        SAr::field("arg0", ST::raw("u32")),
-                                        SAr::field("arg1", ST::raw("f32")),
-                                    ])
-                                    .with_return_type(ST::raw("i32")),
-                                SF::new((SV::Public, "test_function1"), SFB::Vftable)
-                                    .with_arguments([
-                                        SAr::MutSelf,
-                                        SAr::field("arg0", ST::raw("u32")),
-                                        SAr::field("arg1", ST::raw("f32")),
-                                    ]),
+                                SF::new(
+                                    (SV::Public, "test_function0"),
+                                    SFB::vftable("test_function0"),
+                                )
+                                .with_arguments([
+                                    SAr::MutSelf,
+                                    SAr::field("arg0", ST::raw("u32")),
+                                    SAr::field("arg1", ST::raw("f32")),
+                                ])
+                                .with_return_type(ST::raw("i32")),
+                                SF::new(
+                                    (SV::Public, "test_function1"),
+                                    SFB::vftable("test_function1"),
+                                )
+                                .with_arguments([
+                                    SAr::MutSelf,
+                                    SAr::field("arg0", ST::raw("u32")),
+                                    SAr::field("arg1", ST::raw("f32")),
+                                ]),
                                 make_vfunc(2),
                                 make_vfunc(3),
                             ],
@@ -422,21 +428,27 @@ fn can_generate_vftable_with_indices() {
                             [
                                 make_vfunc(0),
                                 make_vfunc(1),
-                                SF::new((SV::Public, "test_function0"), SFB::Vftable)
-                                    .with_arguments([
-                                        SAr::MutSelf,
-                                        SAr::field("arg0", ST::raw("u32")),
-                                        SAr::field("arg1", ST::raw("f32")),
-                                    ])
-                                    .with_return_type(ST::raw("i32")),
+                                SF::new(
+                                    (SV::Public, "test_function0"),
+                                    SFB::vftable("test_function0"),
+                                )
+                                .with_arguments([
+                                    SAr::MutSelf,
+                                    SAr::field("arg0", ST::raw("u32")),
+                                    SAr::field("arg1", ST::raw("f32")),
+                                ])
+                                .with_return_type(ST::raw("i32")),
                                 make_vfunc(3),
                                 make_vfunc(4),
-                                SF::new((SV::Public, "test_function1"), SFB::Vftable)
-                                    .with_arguments([
-                                        SAr::MutSelf,
-                                        SAr::field("arg0", ST::raw("u32")),
-                                        SAr::field("arg1", ST::raw("f32")),
-                                    ]),
+                                SF::new(
+                                    (SV::Public, "test_function1"),
+                                    SFB::vftable("test_function1"),
+                                )
+                                .with_arguments([
+                                    SAr::MutSelf,
+                                    SAr::field("arg0", ST::raw("u32")),
+                                    SAr::field("arg1", ST::raw("f32")),
+                                ]),
                                 make_vfunc(6),
                                 make_vfunc(7),
                             ],
@@ -528,14 +540,17 @@ fn will_propagate_calling_convention_for_impl_and_vftable() {
                                 vftable_type.clone(),
                             )])
                             .with_vftable(STV::new(
-                                [SF::new((SV::Public, "test_function0"), SFB::Vftable)
-                                    .with_arguments([
-                                        SAr::MutSelf,
-                                        SAr::field("arg0", ST::raw("u32")),
-                                        SAr::field("arg1", ST::raw("f32")),
-                                    ])
-                                    .with_calling_convention(SCC::Cdecl)
-                                    .with_return_type(ST::raw("i32"))],
+                                [SF::new(
+                                    (SV::Public, "test_function0"),
+                                    SFB::vftable("test_function0"),
+                                )
+                                .with_arguments([
+                                    SAr::MutSelf,
+                                    SAr::field("arg0", ST::raw("u32")),
+                                    SAr::field("arg1", ST::raw("f32")),
+                                ])
+                                .with_calling_convention(SCC::Cdecl)
+                                .with_return_type(ST::raw("i32"))],
                                 None,
                                 vftable_type,
                             ))
@@ -573,7 +588,8 @@ fn will_propagate_calling_convention_for_impl_and_vftable() {
 }
 
 fn make_vfunc(index: usize) -> SF {
-    SF::new((SV::Private, format!("_vfunc_{index}")), SFB::Vftable).with_arguments([SAr::MutSelf])
+    let name = format!("_vfunc_{index}");
+    SF::new((SV::Private, name.clone()), SFB::vftable(name)).with_arguments([SAr::MutSelf])
 }
 
 fn make_vfunc_region(index: usize) -> SR {
@@ -977,9 +993,11 @@ fn can_propagate_doc_comments() {
                         ]))
                         .with_doc(" This is a doc comment")
                         .with_vftable(STV::new(
-                            [SF::new((SV::Private, "test_vfunc"), SFB::Vftable)
-                                .with_arguments([SAr::ConstSelf])
-                                .with_doc(" My test vfunc!")],
+                            [
+                                SF::new((SV::Private, "test_vfunc"), SFB::vftable("test_vfunc"))
+                                    .with_arguments([SAr::ConstSelf])
+                                    .with_doc(" My test vfunc!"),
+                            ],
                             None,
                             ST::raw("test::TestTypeVftable").const_pointer(),
                         ))

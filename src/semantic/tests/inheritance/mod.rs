@@ -34,7 +34,7 @@ fn vfunc_region(name: &str, self_type: &str) -> SR {
 }
 
 fn vfunc_semantic(name: &str) -> SF {
-    SF::new((SV::Public, name), SFB::Vftable)
+    SF::new((SV::Public, name), SFB::vftable(name))
         .with_arguments([
             SAr::MutSelf,
             SAr::field("arg0", ST::raw("u32")),

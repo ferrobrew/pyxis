@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use crate::{
     grammar::{self, ItemPath},
     semantic::{
@@ -312,6 +314,10 @@ pub fn build(
 
     // Handle functions
     let mut associated_functions = vec![];
+    let mut associated_functions_used_names: HashSet<String> = vftable
+        .as_ref()
+        .map(|v| v.functions.iter().map(|f| f.name.clone()).collect())
+        .unwrap_or_default();
     for (i, base_region) in regions.iter().filter(|r| r.is_base).enumerate() {
         // Inject all base associated functions into the type
         let Some((base_name, base_type)) = get_region_name_and_type_definition(
@@ -323,37 +329,39 @@ pub fn build(
             continue;
         };
 
-        associated_functions.extend(
-            base_type
-                .associated_functions
-                .iter()
-                .filter(|f| f.is_public())
-                .cloned()
-                .map(|f| Function {
-                    body: FunctionBody::field(base_name.clone()),
-                    ..f
-                }),
-        );
+        let mut add_functions = |functions: &[Function]| {
+            for function in functions.iter().filter(|f| f.is_public()) {
+                let mut function = function.clone();
+                let original_name = function.name.clone();
+                if associated_functions_used_names.contains(&original_name) {
+                    function.name = format!("{}_{}", base_name, original_name);
+                }
+                function.body = FunctionBody::field(base_name.clone(), original_name);
+                associated_functions_used_names.insert(function.name.clone());
+                associated_functions.push(function);
+            }
+        };
+
+        // Push this base's associated functions into the type
+        add_functions(&base_type.associated_functions);
 
         if i > 0 {
             // Inject all non-first-base vfuncs into the type
             if let Some(vftable) = &base_type.vftable {
-                associated_functions.extend(
-                    vftable
-                        .functions
-                        .iter()
-                        .filter(|f| f.is_public())
-                        .cloned()
-                        .map(|f| Function {
-                            body: FunctionBody::field(base_name.clone()),
-                            ..f
-                        }),
-                );
+                add_functions(&vftable.functions);
             }
         }
     }
     if let Some(type_impl) = module.impls.get(resolvee_path) {
         for function in &type_impl.functions {
+            if associated_functions_used_names.contains(&function.name.0) {
+                anyhow::bail!(
+                    "function `{}` is already defined in type `{}` (or a base type)",
+                    function.name,
+                    resolvee_path
+                );
+            }
+
             let function =
                 function::build(&semantic.type_registry, &module.scope(), false, function)
                     .with_context(|| {
@@ -362,6 +370,7 @@ pub fn build(
                             function.name
                         )
                     })?;
+            associated_functions_used_names.insert(function.name.clone());
             associated_functions.push(function);
         }
     }

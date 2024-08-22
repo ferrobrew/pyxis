@@ -74,13 +74,16 @@ pub fn convert_grammar_functions_to_semantic_functions(
     fn make_padding_functions(output: &mut Vec<Function>, target_len: usize) {
         let functions_to_add = target_len.saturating_sub(output.len());
         for _ in 0..functions_to_add {
+            let name = format!("_vfunc_{}", output.len());
             output.push(Function {
                 visibility: Visibility::Private,
-                name: format!("_vfunc_{}", output.len()),
+                name: name.clone(),
                 doc: None,
                 arguments: vec![Argument::MutSelf],
                 return_type: None,
-                body: FunctionBody::Vftable,
+                body: FunctionBody::Vftable {
+                    function_name: name,
+                },
                 calling_convention: CallingConvention::Thiscall,
             });
         }

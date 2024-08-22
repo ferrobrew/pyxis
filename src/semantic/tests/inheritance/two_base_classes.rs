@@ -503,9 +503,8 @@ fn a1_b1_d0() {
                             "base_a".to_string(),
                             ST::raw("test::BaseAVftable").const_pointer(),
                         ))
-                        .with_associated_functions([
-                            vfunc_semantic("base_b_vfunc").with_body(SFB::field("base_b"))
-                        ]),
+                        .with_associated_functions([vfunc_semantic("base_b_vfunc")
+                            .with_body(SFB::field("base_b", "base_b_vfunc"))]),
                 ),
             ),
         ],
@@ -659,11 +658,18 @@ fn a1_b1_d1_with_associated_functions() {
                             ST::raw("test::DerivedVftable").const_pointer(),
                         ))
                         .with_associated_functions([
-                            SF::new((SV::Public, "base_a_associated"), SFB::field("base_a"))
-                                .with_arguments([SAr::MutSelf]),
-                            SF::new((SV::Public, "base_b_associated"), SFB::field("base_b"))
-                                .with_arguments([SAr::MutSelf]),
-                            vfunc_semantic("base_b_vfunc").with_body(SFB::field("base_b")),
+                            SF::new(
+                                (SV::Public, "base_a_associated"),
+                                SFB::field("base_a", "base_a_associated"),
+                            )
+                            .with_arguments([SAr::MutSelf]),
+                            SF::new(
+                                (SV::Public, "base_b_associated"),
+                                SFB::field("base_b", "base_b_associated"),
+                            )
+                            .with_arguments([SAr::MutSelf]),
+                            vfunc_semantic("base_b_vfunc")
+                                .with_body(SFB::field("base_b", "base_b_vfunc")),
                             SF::new((SV::Public, "derived_associated"), SFB::address(0x789))
                                 .with_arguments([SAr::MutSelf]),
                         ]),

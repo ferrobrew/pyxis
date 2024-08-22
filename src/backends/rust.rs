@@ -543,16 +543,23 @@ fn build_function(function: &Function) -> Result<proc_macro2::TokenStream, anyho
             = ::std::mem::transmute(#address);
             f(#(#call_arguments),*)
         },
-        FunctionBody::Field { field } => {
+        FunctionBody::Field {
+            field,
+            function_name,
+        } => {
             let field_ident = str_to_ident(field);
+            let function_to_call_name = str_to_ident(function_name);
             quote! {
-                self.#field_ident.#name(#(#call_arguments),*)
+                self.#field_ident.#function_to_call_name(#(#call_arguments),*)
             }
         }
-        FunctionBody::Vftable => quote! {
-            let f = std::ptr::addr_of!((*self.vftable()).#name).read();
-            f(#(#call_arguments),*)
-        },
+        FunctionBody::Vftable { function_name } => {
+            let function_to_call_name = str_to_ident(function_name);
+            quote! {
+                let f = std::ptr::addr_of!((*self.vftable()).#function_to_call_name).read();
+                f(#(#call_arguments),*)
+            }
+        }
     };
 
     let visibility = visibility_to_tokens(function.visibility);
