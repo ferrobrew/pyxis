@@ -30,6 +30,16 @@ impl Base {
         f(self as *const Self as _, a)
     }
 }
+impl std::convert::AsRef<Base> for Base {
+    fn as_ref(&self) -> &Base {
+        self
+    }
+}
+impl std::convert::AsMut<Base> for Base {
+    fn as_mut(&mut self) -> &mut Base {
+        self
+    }
+}
 #[repr(C, align(8))]
 struct BaseVftable {
     pub base_vfunc: unsafe extern "thiscall" fn(
@@ -44,6 +54,16 @@ fn _BaseVftable_size_check() {
     unreachable!()
 }
 impl BaseVftable {}
+impl std::convert::AsRef<BaseVftable> for BaseVftable {
+    fn as_ref(&self) -> &BaseVftable {
+        self
+    }
+}
+impl std::convert::AsMut<BaseVftable> for BaseVftable {
+    fn as_mut(&mut self) -> &mut BaseVftable {
+        self
+    }
+}
 #[repr(C, align(8))]
 struct Derived {
     pub base: crate::multiple_levels::Base,
@@ -85,6 +105,16 @@ impl std::convert::AsRef<crate::multiple_levels::Base> for Derived {
 impl std::convert::AsMut<crate::multiple_levels::Base> for Derived {
     fn as_mut(&mut self) -> &mut crate::multiple_levels::Base {
         &mut self.base
+    }
+}
+impl std::convert::AsRef<Derived> for Derived {
+    fn as_ref(&self) -> &Derived {
+        self
+    }
+}
+impl std::convert::AsMut<Derived> for Derived {
+    fn as_mut(&mut self) -> &mut Derived {
+        self
     }
 }
 #[repr(C, align(8))]
@@ -145,6 +175,16 @@ impl std::convert::AsRef<crate::multiple_levels::Base> for DerivedDerived {
 impl std::convert::AsMut<crate::multiple_levels::Base> for DerivedDerived {
     fn as_mut(&mut self) -> &mut crate::multiple_levels::Base {
         &mut self.derived.base
+    }
+}
+impl std::convert::AsRef<DerivedDerived> for DerivedDerived {
+    fn as_ref(&self) -> &DerivedDerived {
+        self
+    }
+}
+impl std::convert::AsMut<DerivedDerived> for DerivedDerived {
+    fn as_mut(&mut self) -> &mut DerivedDerived {
+        self
     }
 }
 #[repr(C, align(8))]
@@ -230,6 +270,16 @@ impl std::convert::AsMut<crate::multiple_levels::Base> for DerivedDerivedDerived
         &mut self.derived_derived.derived.base
     }
 }
+impl std::convert::AsRef<DerivedDerivedDerived> for DerivedDerivedDerived {
+    fn as_ref(&self) -> &DerivedDerivedDerived {
+        self
+    }
+}
+impl std::convert::AsMut<DerivedDerivedDerived> for DerivedDerivedDerived {
+    fn as_mut(&mut self) -> &mut DerivedDerivedDerived {
+        self
+    }
+}
 #[repr(C, align(8))]
 struct DerivedDerivedDerivedVftable {
     pub base_vfunc: unsafe extern "thiscall" fn(
@@ -259,6 +309,16 @@ fn _DerivedDerivedDerivedVftable_size_check() {
     unreachable!()
 }
 impl DerivedDerivedDerivedVftable {}
+impl std::convert::AsRef<DerivedDerivedDerivedVftable> for DerivedDerivedDerivedVftable {
+    fn as_ref(&self) -> &DerivedDerivedDerivedVftable {
+        self
+    }
+}
+impl std::convert::AsMut<DerivedDerivedDerivedVftable> for DerivedDerivedDerivedVftable {
+    fn as_mut(&mut self) -> &mut DerivedDerivedDerivedVftable {
+        self
+    }
+}
 #[repr(C, align(8))]
 struct DerivedDerivedVftable {
     pub base_vfunc: unsafe extern "thiscall" fn(
@@ -281,6 +341,16 @@ fn _DerivedDerivedVftable_size_check() {
     unreachable!()
 }
 impl DerivedDerivedVftable {}
+impl std::convert::AsRef<DerivedDerivedVftable> for DerivedDerivedVftable {
+    fn as_ref(&self) -> &DerivedDerivedVftable {
+        self
+    }
+}
+impl std::convert::AsMut<DerivedDerivedVftable> for DerivedDerivedVftable {
+    fn as_mut(&mut self) -> &mut DerivedDerivedVftable {
+        self
+    }
+}
 #[repr(C, align(8))]
 struct DerivedVftable {
     pub base_vfunc: unsafe extern "thiscall" fn(
@@ -299,3 +369,13 @@ fn _DerivedVftable_size_check() {
     unreachable!()
 }
 impl DerivedVftable {}
+impl std::convert::AsRef<DerivedVftable> for DerivedVftable {
+    fn as_ref(&self) -> &DerivedVftable {
+        self
+    }
+}
+impl std::convert::AsMut<DerivedVftable> for DerivedVftable {
+    fn as_mut(&mut self) -> &mut DerivedVftable {
+        self
+    }
+}

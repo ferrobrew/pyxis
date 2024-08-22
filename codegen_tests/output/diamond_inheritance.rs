@@ -23,6 +23,16 @@ impl Base {
         f(self as *mut Self as _)
     }
 }
+impl std::convert::AsRef<Base> for Base {
+    fn as_ref(&self) -> &Base {
+        self
+    }
+}
+impl std::convert::AsMut<Base> for Base {
+    fn as_mut(&mut self) -> &mut Base {
+        self
+    }
+}
 #[repr(C, align(8))]
 struct BaseA {
     pub base: crate::diamond_inheritance::Base,
@@ -58,6 +68,16 @@ impl std::convert::AsMut<crate::diamond_inheritance::Base> for BaseA {
         &mut self.base
     }
 }
+impl std::convert::AsRef<BaseA> for BaseA {
+    fn as_ref(&self) -> &BaseA {
+        self
+    }
+}
+impl std::convert::AsMut<BaseA> for BaseA {
+    fn as_mut(&mut self) -> &mut BaseA {
+        self
+    }
+}
 #[repr(C, align(8))]
 struct BaseAVftable {
     pub destructor: unsafe extern "thiscall" fn(
@@ -71,6 +91,16 @@ fn _BaseAVftable_size_check() {
     unreachable!()
 }
 impl BaseAVftable {}
+impl std::convert::AsRef<BaseAVftable> for BaseAVftable {
+    fn as_ref(&self) -> &BaseAVftable {
+        self
+    }
+}
+impl std::convert::AsMut<BaseAVftable> for BaseAVftable {
+    fn as_mut(&mut self) -> &mut BaseAVftable {
+        self
+    }
+}
 #[repr(C, align(8))]
 struct BaseB {
     pub base: crate::diamond_inheritance::Base,
@@ -106,6 +136,16 @@ impl std::convert::AsMut<crate::diamond_inheritance::Base> for BaseB {
         &mut self.base
     }
 }
+impl std::convert::AsRef<BaseB> for BaseB {
+    fn as_ref(&self) -> &BaseB {
+        self
+    }
+}
+impl std::convert::AsMut<BaseB> for BaseB {
+    fn as_mut(&mut self) -> &mut BaseB {
+        self
+    }
+}
 #[repr(C, align(8))]
 struct BaseBVftable {
     pub destructor: unsafe extern "thiscall" fn(
@@ -119,6 +159,16 @@ fn _BaseBVftable_size_check() {
     unreachable!()
 }
 impl BaseBVftable {}
+impl std::convert::AsRef<BaseBVftable> for BaseBVftable {
+    fn as_ref(&self) -> &BaseBVftable {
+        self
+    }
+}
+impl std::convert::AsMut<BaseBVftable> for BaseBVftable {
+    fn as_mut(&mut self) -> &mut BaseBVftable {
+        self
+    }
+}
 #[repr(C, align(8))]
 struct BaseVftable {
     pub destructor: unsafe extern "thiscall" fn(
@@ -132,6 +182,16 @@ fn _BaseVftable_size_check() {
     unreachable!()
 }
 impl BaseVftable {}
+impl std::convert::AsRef<BaseVftable> for BaseVftable {
+    fn as_ref(&self) -> &BaseVftable {
+        self
+    }
+}
+impl std::convert::AsMut<BaseVftable> for BaseVftable {
+    fn as_mut(&mut self) -> &mut BaseVftable {
+        self
+    }
+}
 #[repr(C, align(8))]
 struct Derived {
     pub base_a: crate::diamond_inheritance::BaseA,
@@ -191,6 +251,16 @@ impl std::convert::AsMut<crate::diamond_inheritance::BaseB> for Derived {
 ///  - `base_a.base`
 ///  - `base_b.base`
 const _CONFLICTING_DERIVED_BASE_B_BASE: () = ();
+impl std::convert::AsRef<Derived> for Derived {
+    fn as_ref(&self) -> &Derived {
+        self
+    }
+}
+impl std::convert::AsMut<Derived> for Derived {
+    fn as_mut(&mut self) -> &mut Derived {
+        self
+    }
+}
 #[repr(C, align(8))]
 struct DerivedVftable {
     pub destructor: unsafe extern "thiscall" fn(
@@ -204,3 +274,13 @@ fn _DerivedVftable_size_check() {
     unreachable!()
 }
 impl DerivedVftable {}
+impl std::convert::AsRef<DerivedVftable> for DerivedVftable {
+    fn as_ref(&self) -> &DerivedVftable {
+        self
+    }
+}
+impl std::convert::AsMut<DerivedVftable> for DerivedVftable {
+    fn as_mut(&mut self) -> &mut DerivedVftable {
+        self
+    }
+}

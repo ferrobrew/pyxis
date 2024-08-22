@@ -39,6 +39,16 @@ impl TestType {
         f(self as *const Self as _)
     }
 }
+impl std::convert::AsRef<TestType> for TestType {
+    fn as_ref(&self) -> &TestType {
+        self
+    }
+}
+impl std::convert::AsMut<TestType> for TestType {
+    fn as_mut(&mut self) -> &mut TestType {
+        self
+    }
+}
 #[repr(C, align(8))]
 pub struct TestTypeVftable {
     /// My test vfunc!
@@ -53,3 +63,13 @@ fn _TestTypeVftable_size_check() {
     unreachable!()
 }
 impl TestTypeVftable {}
+impl std::convert::AsRef<TestTypeVftable> for TestTypeVftable {
+    fn as_ref(&self) -> &TestTypeVftable {
+        self
+    }
+}
+impl std::convert::AsMut<TestTypeVftable> for TestTypeVftable {
+    fn as_mut(&mut self) -> &mut TestTypeVftable {
+        self
+    }
+}

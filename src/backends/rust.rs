@@ -360,6 +360,19 @@ fn build_type(
                     }
                 }
             })
+            // Inject conversions from T to T to make it easier to work with traits that rely on AsRef/AsMut
+            .chain(std::iter::once(quote! {
+                impl std::convert::AsRef<#name_ident> for #name_ident {
+                    fn as_ref(&self) -> & #name_ident {
+                        self
+                    }
+                }
+                impl std::convert::AsMut<#name_ident> for #name_ident {
+                    fn as_mut(&mut self) -> &mut #name_ident {
+                        self
+                    }
+                }
+            }))
             .collect::<Vec<_>>()
     };
 

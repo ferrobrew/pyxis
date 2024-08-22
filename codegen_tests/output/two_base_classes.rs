@@ -30,6 +30,16 @@ impl BaseA {
         f(self as *const Self as _, a)
     }
 }
+impl std::convert::AsRef<BaseA> for BaseA {
+    fn as_ref(&self) -> &BaseA {
+        self
+    }
+}
+impl std::convert::AsMut<BaseA> for BaseA {
+    fn as_mut(&mut self) -> &mut BaseA {
+        self
+    }
+}
 #[repr(C, align(8))]
 struct BaseAVftable {
     pub base_a_vfunc: unsafe extern "thiscall" fn(
@@ -44,6 +54,16 @@ fn _BaseAVftable_size_check() {
     unreachable!()
 }
 impl BaseAVftable {}
+impl std::convert::AsRef<BaseAVftable> for BaseAVftable {
+    fn as_ref(&self) -> &BaseAVftable {
+        self
+    }
+}
+impl std::convert::AsMut<BaseAVftable> for BaseAVftable {
+    fn as_mut(&mut self) -> &mut BaseAVftable {
+        self
+    }
+}
 #[repr(C, align(8))]
 struct BaseB {
     vftable: *const crate::two_base_classes::BaseBVftable,
@@ -70,6 +90,16 @@ impl BaseB {
         f(self as *const Self as _, a)
     }
 }
+impl std::convert::AsRef<BaseB> for BaseB {
+    fn as_ref(&self) -> &BaseB {
+        self
+    }
+}
+impl std::convert::AsMut<BaseB> for BaseB {
+    fn as_mut(&mut self) -> &mut BaseB {
+        self
+    }
+}
 #[repr(C, align(8))]
 struct BaseBVftable {
     pub base_b_vfunc: unsafe extern "thiscall" fn(
@@ -84,6 +114,16 @@ fn _BaseBVftable_size_check() {
     unreachable!()
 }
 impl BaseBVftable {}
+impl std::convert::AsRef<BaseBVftable> for BaseBVftable {
+    fn as_ref(&self) -> &BaseBVftable {
+        self
+    }
+}
+impl std::convert::AsMut<BaseBVftable> for BaseBVftable {
+    fn as_mut(&mut self) -> &mut BaseBVftable {
+        self
+    }
+}
 #[repr(C, align(8))]
 struct Derived {
     pub base_a: crate::two_base_classes::BaseA,
@@ -143,6 +183,16 @@ impl std::convert::AsMut<crate::two_base_classes::BaseB> for Derived {
         &mut self.base_b
     }
 }
+impl std::convert::AsRef<Derived> for Derived {
+    fn as_ref(&self) -> &Derived {
+        self
+    }
+}
+impl std::convert::AsMut<Derived> for Derived {
+    fn as_mut(&mut self) -> &mut Derived {
+        self
+    }
+}
 #[repr(C, align(8))]
 struct DerivedVftable {
     pub base_a_vfunc: unsafe extern "thiscall" fn(
@@ -161,3 +211,13 @@ fn _DerivedVftable_size_check() {
     unreachable!()
 }
 impl DerivedVftable {}
+impl std::convert::AsRef<DerivedVftable> for DerivedVftable {
+    fn as_ref(&self) -> &DerivedVftable {
+        self
+    }
+}
+impl std::convert::AsMut<DerivedVftable> for DerivedVftable {
+    fn as_mut(&mut self) -> &mut DerivedVftable {
+        self
+    }
+}
