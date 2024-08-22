@@ -2,6 +2,7 @@
 
 use super::*;
 
+mod diamond_inheritance;
 mod multiple_levels;
 mod one_base_class;
 mod two_base_classes;

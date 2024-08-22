@@ -11,6 +11,10 @@ type BaseA {
     #[base]
     pub base: Base,
 }
+impl BaseA {
+    #[address(0x123)]
+    pub fn associated(&mut self);
+}
 
 type BaseB {
     vftable {
@@ -18,6 +22,10 @@ type BaseB {
     },
     #[base]
     pub base: Base,
+}
+impl BaseB {
+    #[address(0x123)]
+    pub fn associated(&mut self);
 }
 
 type Derived {

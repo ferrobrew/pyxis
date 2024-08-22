@@ -688,5 +688,3 @@ fn a1_b1_d1_with_associated_functions() {
         ],
     );
 }
-
-// TODO: vfuncs + associated funcs for a1_b1_d1

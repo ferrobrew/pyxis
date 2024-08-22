@@ -37,6 +37,12 @@ impl BaseA {
     pub fn vftable(&self) -> *const crate::diamond_inheritance::BaseAVftable {
         self.base.vftable() as *const crate::diamond_inheritance::BaseAVftable
     }
+    pub unsafe fn associated(&mut self) {
+        let f: unsafe extern "thiscall" fn(this: *mut Self) = ::std::mem::transmute(
+            291usize,
+        );
+        f(self as *mut Self as _)
+    }
     pub unsafe fn destructor(&mut self) {
         let f = std::ptr::addr_of!((* self.vftable()).destructor).read();
         f(self as *mut Self as _)
@@ -78,6 +84,12 @@ fn _BaseB_size_check() {
 impl BaseB {
     pub fn vftable(&self) -> *const crate::diamond_inheritance::BaseBVftable {
         self.base.vftable() as *const crate::diamond_inheritance::BaseBVftable
+    }
+    pub unsafe fn associated(&mut self) {
+        let f: unsafe extern "thiscall" fn(this: *mut Self) = ::std::mem::transmute(
+            291usize,
+        );
+        f(self as *mut Self as _)
     }
     pub unsafe fn destructor(&mut self) {
         let f = std::ptr::addr_of!((* self.vftable()).destructor).read();
@@ -134,6 +146,12 @@ fn _Derived_size_check() {
 impl Derived {
     pub fn vftable(&self) -> *const crate::diamond_inheritance::DerivedVftable {
         self.base_a.vftable() as *const crate::diamond_inheritance::DerivedVftable
+    }
+    pub unsafe fn associated(&mut self) {
+        self.base_a.associated()
+    }
+    pub unsafe fn base_b_associated(&mut self) {
+        self.base_b.associated()
     }
     pub unsafe fn base_b_destructor(&mut self) {
         self.base_b.destructor()
