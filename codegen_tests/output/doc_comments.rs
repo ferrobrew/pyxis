@@ -4,6 +4,7 @@
     clippy::missing_safety_doc,
     clippy::unnecessary_cast
 )]
+#![cfg_attr(any(), rustfmt::skip)]
 //! This is a module doc comment
 //!
 //! The best of its kind

@@ -42,6 +42,10 @@ pub fn write_module(
         raw_output,
         "#![allow(dead_code, non_snake_case, clippy::missing_safety_doc, clippy::unnecessary_cast)]"
     )?;
+    // Disable rustfmt on generated files to prevent the prettyplease-formatted code being reformatted
+    // by a stray project-wide `cargo fmt` invocation.
+    // <https://stackoverflow.com/questions/59247458/is-there-a-stable-way-to-tell-rustfmt-to-skip-an-entire-file#comment138279076_75910283>
+    writeln!(raw_output, "#![cfg_attr(any(), rustfmt::skip)]")?;
     writeln!(raw_output, "{}", doc_to_tokens(true, module.doc()))?;
 
     let backends = module.backends.get("rust");

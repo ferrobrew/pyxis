@@ -4,6 +4,7 @@
     clippy::missing_safety_doc,
     clippy::unnecessary_cast
 )]
+#![cfg_attr(any(), rustfmt::skip)]
 #[repr(C, align(8))]
 struct BaseA {
     vftable: *const crate::two_base_classes::BaseAVftable,
