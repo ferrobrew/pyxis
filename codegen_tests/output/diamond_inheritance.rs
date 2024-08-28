@@ -11,7 +11,7 @@ struct Base {
 }
 fn _Base_size_check() {
     unsafe {
-        ::std::mem::transmute::<[u8; 8usize], Base>([0u8; 8usize]);
+        ::std::mem::transmute::<[u8; 0x8], Base>([0u8; 0x8]);
     }
     unreachable!()
 }
@@ -40,7 +40,7 @@ struct BaseA {
 }
 fn _BaseA_size_check() {
     unsafe {
-        ::std::mem::transmute::<[u8; 8usize], BaseA>([0u8; 8usize]);
+        ::std::mem::transmute::<[u8; 0x8], BaseA>([0u8; 0x8]);
     }
     unreachable!()
 }
@@ -50,7 +50,7 @@ impl BaseA {
     }
     pub unsafe fn associated(&mut self) {
         let f: unsafe extern "thiscall" fn(this: *mut Self) = ::std::mem::transmute(
-            291usize,
+            0x123 as usize,
         );
         f(self as *mut Self as _)
     }
@@ -87,7 +87,7 @@ struct BaseAVftable {
 }
 fn _BaseAVftable_size_check() {
     unsafe {
-        ::std::mem::transmute::<[u8; 8usize], BaseAVftable>([0u8; 8usize]);
+        ::std::mem::transmute::<[u8; 0x8], BaseAVftable>([0u8; 0x8]);
     }
     unreachable!()
 }
@@ -108,7 +108,7 @@ struct BaseB {
 }
 fn _BaseB_size_check() {
     unsafe {
-        ::std::mem::transmute::<[u8; 8usize], BaseB>([0u8; 8usize]);
+        ::std::mem::transmute::<[u8; 0x8], BaseB>([0u8; 0x8]);
     }
     unreachable!()
 }
@@ -118,7 +118,7 @@ impl BaseB {
     }
     pub unsafe fn associated(&mut self) {
         let f: unsafe extern "thiscall" fn(this: *mut Self) = ::std::mem::transmute(
-            291usize,
+            0x123 as usize,
         );
         f(self as *mut Self as _)
     }
@@ -155,7 +155,7 @@ struct BaseBVftable {
 }
 fn _BaseBVftable_size_check() {
     unsafe {
-        ::std::mem::transmute::<[u8; 8usize], BaseBVftable>([0u8; 8usize]);
+        ::std::mem::transmute::<[u8; 0x8], BaseBVftable>([0u8; 0x8]);
     }
     unreachable!()
 }
@@ -178,7 +178,7 @@ struct BaseVftable {
 }
 fn _BaseVftable_size_check() {
     unsafe {
-        ::std::mem::transmute::<[u8; 8usize], BaseVftable>([0u8; 8usize]);
+        ::std::mem::transmute::<[u8; 0x8], BaseVftable>([0u8; 0x8]);
     }
     unreachable!()
 }
@@ -200,7 +200,7 @@ struct Derived {
 }
 fn _Derived_size_check() {
     unsafe {
-        ::std::mem::transmute::<[u8; 16usize], Derived>([0u8; 16usize]);
+        ::std::mem::transmute::<[u8; 0x10], Derived>([0u8; 0x10]);
     }
     unreachable!()
 }
@@ -270,7 +270,7 @@ struct DerivedVftable {
 }
 fn _DerivedVftable_size_check() {
     unsafe {
-        ::std::mem::transmute::<[u8; 8usize], DerivedVftable>([0u8; 8usize]);
+        ::std::mem::transmute::<[u8; 0x8], DerivedVftable>([0u8; 0x8]);
     }
     unreachable!()
 }

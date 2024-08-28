@@ -17,7 +17,7 @@ pub struct TestType {
 }
 fn _TestType_size_check() {
     unsafe {
-        ::std::mem::transmute::<[u8; 16usize], TestType>([0u8; 16usize]);
+        ::std::mem::transmute::<[u8; 0x10], TestType>([0u8; 0x10]);
     }
     unreachable!()
 }
@@ -30,7 +30,7 @@ impl TestType {
     /// And its second line! :)
     pub unsafe fn test_func(&self) {
         let f: unsafe extern "thiscall" fn(this: *const Self) = ::std::mem::transmute(
-            291usize,
+            0x123 as usize,
         );
         f(self as *const Self as _)
     }
@@ -59,7 +59,7 @@ pub struct TestTypeVftable {
 }
 fn _TestTypeVftable_size_check() {
     unsafe {
-        ::std::mem::transmute::<[u8; 8usize], TestTypeVftable>([0u8; 8usize]);
+        ::std::mem::transmute::<[u8; 0x8], TestTypeVftable>([0u8; 0x8]);
     }
     unreachable!()
 }

@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Write as _, path::Path};
+use std::{collections::HashMap, fmt::Write as _, path::Path, str::FromStr};
 
 use crate::{
     grammar::ItemPath,
@@ -197,6 +197,7 @@ fn build_type(
     let name_ident = str_to_ident(name.as_str());
     let size_check_ident = quote::format_ident!("_{}_size_check", name.as_str());
     let size_check_impl = (size > 0).then(|| {
+        let size = hex_literal(size);
         quote! {
             fn #size_check_ident() {
                 unsafe {
@@ -441,6 +442,7 @@ fn build_enum(
 
     let size_check_ident = quote::format_ident!("_{}_size_check", name.as_str());
     let size_check_impl = (size > 0).then(|| {
+        let size = hex_literal(size);
         quote! {
             fn #size_check_ident() {
                 unsafe {
@@ -452,6 +454,7 @@ fn build_enum(
     });
 
     let singleton_impl = singleton.map(|address| {
+        let address = hex_literal(address);
         quote! {
             impl #name_ident {
                 #visibility unsafe fn get() -> Self {
@@ -553,13 +556,16 @@ fn build_function(function: &Function) -> Result<proc_macro2::TokenStream, anyho
 
     let calling_convention = function.calling_convention.as_str();
     let function_body = match &function.body {
-        FunctionBody::Address { address } => quote! {
-            let f:
-                unsafe extern #calling_convention
-                fn(#(#lambda_arguments),*) #return_type
-            = ::std::mem::transmute(#address);
-            f(#(#call_arguments),*)
-        },
+        FunctionBody::Address { address } => {
+            let address = hex_literal(*address);
+            quote! {
+                let f:
+                    unsafe extern #calling_convention
+                    fn(#(#lambda_arguments),*) #return_type
+                = ::std::mem::transmute(#address as usize);
+                f(#(#call_arguments),*)
+            }
+        }
         FunctionBody::Field {
             field,
             function_name,
@@ -592,7 +598,7 @@ fn build_extern_value(ev: &ExternValue) -> anyhow::Result<proc_macro2::TokenStre
     let visibility = visibility_to_tokens(ev.visibility);
     let function_ident = quote::format_ident!("get_{}", ev.name);
     let type_ = sa_type_to_syn_type(&ev.type_)?;
-    let address = ev.address;
+    let address = hex_literal(ev.address);
 
     Ok(quote! {
         #visibility unsafe fn #function_ident() -> &'static mut #type_ {
@@ -682,4 +688,9 @@ fn doc_to_tokens(is_module_doc: bool, doc: Option<&str>) -> proc_macro2::TokenSt
     quote! {
         #(#doc_attrs)*
     }
+}
+
+fn hex_literal(value: impl Into<usize>) -> proc_macro2::Literal {
+    // https://stackoverflow.com/a/78902864
+    proc_macro2::Literal::from_str(&format!("0x{:X}", value.into())).unwrap()
 }

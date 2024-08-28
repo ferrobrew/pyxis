@@ -12,7 +12,7 @@ struct Base {
 }
 fn _Base_size_check() {
     unsafe {
-        ::std::mem::transmute::<[u8; 16usize], Base>([0u8; 16usize]);
+        ::std::mem::transmute::<[u8; 0x10], Base>([0u8; 0x10]);
     }
     unreachable!()
 }
@@ -22,7 +22,7 @@ impl Base {
     }
     pub unsafe fn base_associated(&self, a: i32) -> i32 {
         let f: unsafe extern "thiscall" fn(this: *const Self, a: i32) -> i32 = ::std::mem::transmute(
-            291usize,
+            0x123 as usize,
         );
         f(self as *const Self as _, a)
     }
@@ -50,7 +50,7 @@ struct BaseVftable {
 }
 fn _BaseVftable_size_check() {
     unsafe {
-        ::std::mem::transmute::<[u8; 8usize], BaseVftable>([0u8; 8usize]);
+        ::std::mem::transmute::<[u8; 0x8], BaseVftable>([0u8; 0x8]);
     }
     unreachable!()
 }
@@ -72,7 +72,7 @@ struct Derived {
 }
 fn _Derived_size_check() {
     unsafe {
-        ::std::mem::transmute::<[u8; 24usize], Derived>([0u8; 24usize]);
+        ::std::mem::transmute::<[u8; 0x18], Derived>([0u8; 0x18]);
     }
     unreachable!()
 }
@@ -85,7 +85,7 @@ impl Derived {
     }
     pub unsafe fn derived_associated(&self, a: i32) -> i32 {
         let f: unsafe extern "thiscall" fn(this: *const Self, a: i32) -> i32 = ::std::mem::transmute(
-            1110usize,
+            0x456 as usize,
         );
         f(self as *const Self as _, a)
     }
@@ -125,7 +125,7 @@ struct DerivedDerived {
 }
 fn _DerivedDerived_size_check() {
     unsafe {
-        ::std::mem::transmute::<[u8; 32usize], DerivedDerived>([0u8; 32usize]);
+        ::std::mem::transmute::<[u8; 0x20], DerivedDerived>([0u8; 0x20]);
     }
     unreachable!()
 }
@@ -141,7 +141,7 @@ impl DerivedDerived {
     }
     pub unsafe fn derived_derived_associated(&self, a: i32) -> i32 {
         let f: unsafe extern "thiscall" fn(this: *const Self, a: i32) -> i32 = ::std::mem::transmute(
-            1929usize,
+            0x789 as usize,
         );
         f(self as *const Self as _, a)
     }
@@ -195,7 +195,7 @@ struct DerivedDerivedDerived {
 }
 fn _DerivedDerivedDerived_size_check() {
     unsafe {
-        ::std::mem::transmute::<[u8; 40usize], DerivedDerivedDerived>([0u8; 40usize]);
+        ::std::mem::transmute::<[u8; 0x28], DerivedDerivedDerived>([0u8; 0x28]);
     }
     unreachable!()
 }
@@ -217,7 +217,7 @@ impl DerivedDerivedDerived {
     }
     pub unsafe fn derived_derived_derived_associated(&self, a: i32) -> i32 {
         let f: unsafe extern "thiscall" fn(this: *const Self, a: i32) -> i32 = ::std::mem::transmute(
-            2748usize,
+            0xABC as usize,
         );
         f(self as *const Self as _, a)
     }
@@ -302,10 +302,7 @@ struct DerivedDerivedDerivedVftable {
 }
 fn _DerivedDerivedDerivedVftable_size_check() {
     unsafe {
-        ::std::mem::transmute::<
-            [u8; 32usize],
-            DerivedDerivedDerivedVftable,
-        >([0u8; 32usize]);
+        ::std::mem::transmute::<[u8; 0x20], DerivedDerivedDerivedVftable>([0u8; 0x20]);
     }
     unreachable!()
 }
@@ -337,7 +334,7 @@ struct DerivedDerivedVftable {
 }
 fn _DerivedDerivedVftable_size_check() {
     unsafe {
-        ::std::mem::transmute::<[u8; 24usize], DerivedDerivedVftable>([0u8; 24usize]);
+        ::std::mem::transmute::<[u8; 0x18], DerivedDerivedVftable>([0u8; 0x18]);
     }
     unreachable!()
 }
@@ -365,7 +362,7 @@ struct DerivedVftable {
 }
 fn _DerivedVftable_size_check() {
     unsafe {
-        ::std::mem::transmute::<[u8; 16usize], DerivedVftable>([0u8; 16usize]);
+        ::std::mem::transmute::<[u8; 0x10], DerivedVftable>([0u8; 0x10]);
     }
     unreachable!()
 }

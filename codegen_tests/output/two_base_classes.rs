@@ -12,7 +12,7 @@ struct BaseA {
 }
 fn _BaseA_size_check() {
     unsafe {
-        ::std::mem::transmute::<[u8; 16usize], BaseA>([0u8; 16usize]);
+        ::std::mem::transmute::<[u8; 0x10], BaseA>([0u8; 0x10]);
     }
     unreachable!()
 }
@@ -22,7 +22,7 @@ impl BaseA {
     }
     pub unsafe fn base_a_associated(&self, a: i32) -> i32 {
         let f: unsafe extern "thiscall" fn(this: *const Self, a: i32) -> i32 = ::std::mem::transmute(
-            291usize,
+            0x123 as usize,
         );
         f(self as *const Self as _, a)
     }
@@ -50,7 +50,7 @@ struct BaseAVftable {
 }
 fn _BaseAVftable_size_check() {
     unsafe {
-        ::std::mem::transmute::<[u8; 8usize], BaseAVftable>([0u8; 8usize]);
+        ::std::mem::transmute::<[u8; 0x8], BaseAVftable>([0u8; 0x8]);
     }
     unreachable!()
 }
@@ -72,7 +72,7 @@ struct BaseB {
 }
 fn _BaseB_size_check() {
     unsafe {
-        ::std::mem::transmute::<[u8; 16usize], BaseB>([0u8; 16usize]);
+        ::std::mem::transmute::<[u8; 0x10], BaseB>([0u8; 0x10]);
     }
     unreachable!()
 }
@@ -82,7 +82,7 @@ impl BaseB {
     }
     pub unsafe fn base_b_associated(&self, a: i32) -> i32 {
         let f: unsafe extern "thiscall" fn(this: *const Self, a: i32) -> i32 = ::std::mem::transmute(
-            1110usize,
+            0x456 as usize,
         );
         f(self as *const Self as _, a)
     }
@@ -110,7 +110,7 @@ struct BaseBVftable {
 }
 fn _BaseBVftable_size_check() {
     unsafe {
-        ::std::mem::transmute::<[u8; 8usize], BaseBVftable>([0u8; 8usize]);
+        ::std::mem::transmute::<[u8; 0x8], BaseBVftable>([0u8; 0x8]);
     }
     unreachable!()
 }
@@ -132,7 +132,7 @@ struct Derived {
 }
 fn _Derived_size_check() {
     unsafe {
-        ::std::mem::transmute::<[u8; 32usize], Derived>([0u8; 32usize]);
+        ::std::mem::transmute::<[u8; 0x20], Derived>([0u8; 0x20]);
     }
     unreachable!()
 }
@@ -151,7 +151,7 @@ impl Derived {
     }
     pub unsafe fn derived_associated(&self, a: i32) -> i32 {
         let f: unsafe extern "thiscall" fn(this: *const Self, a: i32) -> i32 = ::std::mem::transmute(
-            1929usize,
+            0x789 as usize,
         );
         f(self as *const Self as _, a)
     }
@@ -207,7 +207,7 @@ struct DerivedVftable {
 }
 fn _DerivedVftable_size_check() {
     unsafe {
-        ::std::mem::transmute::<[u8; 16usize], DerivedVftable>([0u8; 16usize]);
+        ::std::mem::transmute::<[u8; 0x10], DerivedVftable>([0u8; 0x10]);
     }
     unreachable!()
 }
