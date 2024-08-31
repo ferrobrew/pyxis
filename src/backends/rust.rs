@@ -214,11 +214,7 @@ fn build_type(
                 #visibility unsafe fn get() -> Option<&'static mut Self> {
                     unsafe {
                         let ptr: *mut Self = *(#address as *mut *mut Self);
-                        if ptr.is_null() {
-                            None
-                        } else {
-                            Some(&mut *ptr)
-                        }
+                        ptr.as_mut()
                     }
                 }
             }

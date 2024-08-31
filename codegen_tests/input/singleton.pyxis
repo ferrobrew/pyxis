@@ -1,0 +1,4 @@
+#[singleton(0x1337_7331)]
+pub type TestType {
+    pub field_1: u32,
+}
