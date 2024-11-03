@@ -36,7 +36,7 @@ impl TestType {
     }
     /// My test vfunc!
     pub unsafe fn test_vfunc(&self) {
-        let f = std::ptr::addr_of!((* self.vftable()).test_vfunc).read();
+        let f = (&raw const (*self.vftable()).test_vfunc).read();
         f(self as *const Self as _)
     }
 }

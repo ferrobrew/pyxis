@@ -575,7 +575,7 @@ fn build_function(function: &Function) -> Result<proc_macro2::TokenStream, anyho
         FunctionBody::Vftable { function_name } => {
             let function_to_call_name = str_to_ident(function_name);
             quote! {
-                let f = std::ptr::addr_of!((*self.vftable()).#function_to_call_name).read();
+                let f = (&raw const (*self.vftable()).#function_to_call_name).read();
                 f(#(#call_arguments),*)
             }
         }

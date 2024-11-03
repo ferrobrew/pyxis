@@ -27,7 +27,7 @@ impl BaseA {
         f(self as *const Self as _, a)
     }
     pub unsafe fn base_a_vfunc(&self, a: i32) -> i32 {
-        let f = std::ptr::addr_of!((* self.vftable()).base_a_vfunc).read();
+        let f = (&raw const (*self.vftable()).base_a_vfunc).read();
         f(self as *const Self as _, a)
     }
 }
@@ -87,7 +87,7 @@ impl BaseB {
         f(self as *const Self as _, a)
     }
     pub unsafe fn base_b_vfunc(&self, a: i32) -> i32 {
-        let f = std::ptr::addr_of!((* self.vftable()).base_b_vfunc).read();
+        let f = (&raw const (*self.vftable()).base_b_vfunc).read();
         f(self as *const Self as _, a)
     }
 }
@@ -156,11 +156,11 @@ impl Derived {
         f(self as *const Self as _, a)
     }
     pub unsafe fn base_a_vfunc(&self, a: i32) -> i32 {
-        let f = std::ptr::addr_of!((* self.vftable()).base_a_vfunc).read();
+        let f = (&raw const (*self.vftable()).base_a_vfunc).read();
         f(self as *const Self as _, a)
     }
     pub unsafe fn derived_vfunc(&self, a: i32) -> i32 {
-        let f = std::ptr::addr_of!((* self.vftable()).derived_vfunc).read();
+        let f = (&raw const (*self.vftable()).derived_vfunc).read();
         f(self as *const Self as _, a)
     }
 }

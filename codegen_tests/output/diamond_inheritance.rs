@@ -20,7 +20,7 @@ impl Base {
         self.vftable as *const crate::diamond_inheritance::BaseVftable
     }
     pub unsafe fn destructor(&mut self) {
-        let f = std::ptr::addr_of!((* self.vftable()).destructor).read();
+        let f = (&raw const (*self.vftable()).destructor).read();
         f(self as *mut Self as _)
     }
 }
@@ -55,7 +55,7 @@ impl BaseA {
         f(self as *mut Self as _)
     }
     pub unsafe fn destructor(&mut self) {
-        let f = std::ptr::addr_of!((* self.vftable()).destructor).read();
+        let f = (&raw const (*self.vftable()).destructor).read();
         f(self as *mut Self as _)
     }
 }
@@ -123,7 +123,7 @@ impl BaseB {
         f(self as *mut Self as _)
     }
     pub unsafe fn destructor(&mut self) {
-        let f = std::ptr::addr_of!((* self.vftable()).destructor).read();
+        let f = (&raw const (*self.vftable()).destructor).read();
         f(self as *mut Self as _)
     }
 }
@@ -218,7 +218,7 @@ impl Derived {
         self.base_b.destructor()
     }
     pub unsafe fn destructor(&mut self) {
-        let f = std::ptr::addr_of!((* self.vftable()).destructor).read();
+        let f = (&raw const (*self.vftable()).destructor).read();
         f(self as *mut Self as _)
     }
 }
