@@ -10,9 +10,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+          target: i686-pc-windows-msvc
+
+      - run: rustup component add clippy
+
       - name: Run Clippy
         run: cargo clippy --all-targets --all-features
+
       - name: Run tests
         run: cargo test --all-features -- --nocapture
+
       - name: Run codegen_tests
         run: cargo run --example codegen_tests
