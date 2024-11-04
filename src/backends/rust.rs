@@ -411,6 +411,7 @@ fn build_enum(
         copyable,
         cloneable,
         defaultable,
+        bitflags,
         default_index,
     } = enum_definition;
 
@@ -419,22 +420,6 @@ fn build_enum(
 
     let visibility = visibility_to_tokens(visibility);
     let doc = doc_to_tokens(false, doc.as_deref());
-
-    let syn_fields = fields.iter().enumerate().map(|(idx, (name, value))| {
-        let name_ident = str_to_ident(name);
-        let field = quote! {
-            #name_ident = #value as _
-        };
-
-        if default_index.is_some_and(|i| i == idx) {
-            quote! {
-                #[default]
-                #field
-            }
-        } else {
-            field
-        }
-    });
 
     let size_check_ident = quote::format_ident!("_{}_size_check", name.as_str());
     let size_check_impl = (size > 0).then(|| {
@@ -473,16 +458,53 @@ fn build_enum(
         extra_derives.push(quote! { Default });
     }
 
-    Ok(quote! {
-        #[repr(#syn_type)]
-        #[derive(PartialEq, Eq, PartialOrd, Ord, Debug, #(#extra_derives),*)]
-        #doc
-        #visibility enum #name_ident {
-            #(#syn_fields),*
-        }
-        #size_check_impl
-        #singleton_impl
-    })
+    if *bitflags {
+        let syn_fields = fields.iter().map(|(name, value)| {
+            let name_ident = str_to_ident(name);
+            quote! {
+                const #name_ident = #value as _;
+            }
+        });
+
+        Ok(quote! {
+            bitflags::bitflags! {
+                #[derive(PartialEq, Eq, PartialOrd, Ord, Debug, #(#extra_derives),*)]
+                #doc
+                #visibility struct #name_ident: #syn_type {
+                    #(#syn_fields)*
+                }
+            }
+            #size_check_impl
+            #singleton_impl
+        })
+    } else {
+        let syn_fields = fields.iter().enumerate().map(|(idx, (name, value))| {
+            let name_ident = str_to_ident(name);
+            let field = quote! {
+                #name_ident = #value as _
+            };
+
+            if default_index.is_some_and(|i| i == idx) {
+                quote! {
+                    #[default]
+                    #field
+                }
+            } else {
+                field
+            }
+        });
+
+        Ok(quote! {
+            #[repr(#syn_type)]
+            #[derive(PartialEq, Eq, PartialOrd, Ord, Debug, #(#extra_derives),*)]
+            #doc
+            #visibility enum #name_ident {
+                #(#syn_fields),*
+            }
+            #size_check_impl
+            #singleton_impl
+        })
+    }
 }
 
 fn build_function(function: &Function) -> Result<proc_macro2::TokenStream, anyhow::Error> {

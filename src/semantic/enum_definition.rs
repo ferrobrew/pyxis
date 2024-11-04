@@ -17,6 +17,7 @@ pub struct EnumDefinition {
     pub copyable: bool,
     pub cloneable: bool,
     pub defaultable: bool,
+    pub bitflags: bool,
     pub default_index: Option<usize>,
 }
 impl EnumDefinition {
@@ -29,6 +30,7 @@ impl EnumDefinition {
             copyable: false,
             cloneable: false,
             defaultable: false,
+            bitflags: false,
             default_index: None,
         }
     }
@@ -57,6 +59,10 @@ impl EnumDefinition {
     }
     pub fn with_defaultable(mut self, defaultable: bool) -> Self {
         self.defaultable = defaultable;
+        self
+    }
+    pub fn with_bitflags(mut self, bitflags: bool) -> Self {
+        self.bitflags = bitflags;
         self
     }
     pub fn with_default_index(mut self, default_index: usize) -> Self {
@@ -126,6 +132,7 @@ pub fn build(
     let mut copyable = false;
     let mut cloneable = false;
     let mut defaultable = false;
+    let mut bitflags = false;
     let doc = definition.attributes.doc(resolvee_path)?;
     for attribute in &definition.attributes {
         match attribute {
@@ -136,6 +143,7 @@ pub fn build(
                 }
                 "cloneable" => cloneable = true,
                 "defaultable" => defaultable = true,
+                "bitflags" => bitflags = true,
                 _ => {}
             },
             grammar::Attribute::Function(ident, exprs) => {
@@ -149,15 +157,19 @@ pub fn build(
         }
     }
 
-    if defaultable && default_index.is_none() {
-        anyhow::bail!(
-            "enum `{resolvee_path}` is marked as defaultable but has no default variant set"
-        );
+    if bitflags && default_index.is_some() {
+        anyhow::bail!("enum `{resolvee_path}` has a default variant set but is marked as bitflags");
     }
 
     if !defaultable && default_index.is_some() {
         anyhow::bail!(
             "enum `{resolvee_path}` has a default variant set but is not marked as defaultable"
+        );
+    }
+
+    if !bitflags && defaultable && default_index.is_none() {
+        anyhow::bail!(
+            "enum `{resolvee_path}` is marked as defaultable but has no default variant set"
         );
     }
 
@@ -173,6 +185,7 @@ pub fn build(
             singleton,
             copyable,
             cloneable,
+            bitflags,
             defaultable,
             default_index,
         }

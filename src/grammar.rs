@@ -219,6 +219,9 @@ impl Attribute {
     pub fn defaultable() -> Self {
         Attribute::Ident("defaultable".into())
     }
+    pub fn bitflags() -> Self {
+        Attribute::Ident("bitflags".into())
+    }
     #[allow(clippy::should_implement_trait)]
     pub fn default() -> Self {
         Attribute::Ident("default".into())
