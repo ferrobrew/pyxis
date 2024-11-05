@@ -9,18 +9,18 @@ use crate::{
 };
 
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]
-pub struct EnumDefinition {
+pub struct BitflagsDefinition {
     pub type_: Type,
     pub doc: Option<String>,
-    pub fields: Vec<(String, isize)>,
+    pub fields: Vec<(String, usize)>,
     pub singleton: Option<usize>,
     pub copyable: bool,
     pub cloneable: bool,
     pub default: Option<usize>,
 }
-impl EnumDefinition {
+impl BitflagsDefinition {
     pub fn new(type_: Type) -> Self {
-        EnumDefinition {
+        BitflagsDefinition {
             type_,
             doc: None,
             fields: Vec::new(),
@@ -34,7 +34,7 @@ impl EnumDefinition {
         self.doc = Some(doc.into());
         self
     }
-    pub fn with_fields<'a>(mut self, fields: impl IntoIterator<Item = (&'a str, isize)>) -> Self {
+    pub fn with_fields<'a>(mut self, fields: impl IntoIterator<Item = (&'a str, usize)>) -> Self {
         self.fields = fields
             .into_iter()
             .map(|(n, v)| (n.to_string(), v))
@@ -65,55 +65,67 @@ impl EnumDefinition {
 pub fn build(
     semantic: &SemanticState,
     resolvee_path: &ItemPath,
-    definition: &grammar::EnumDefinition,
+    definition: &grammar::BitflagsDefinition,
 ) -> anyhow::Result<Option<ItemStateResolved>> {
     let module = semantic
         .get_module_for_path(resolvee_path)
         .with_context(|| format!("failed to get module for path `{resolvee_path}`"))?;
 
+    // Retrieve the type for this bitflags, and validate it, before getting its size
     let Some(ty) = semantic
         .type_registry
         .resolve_grammar_type(&module.scope(), &definition.type_)
     else {
         return Ok(None);
     };
-
-    // TODO: verify that `ty` actually makes sense for an enum
-    let Some(size) = ty.size(&semantic.type_registry) else {
+    let ty_raw_path = ty.as_raw().with_context(|| {
+        format!("bitflags definition `{resolvee_path}` has a type that is not a raw type: {ty}")
+    })?;
+    let Some(ty_item) = semantic.type_registry.get(ty_raw_path) else {
         return Ok(None);
     };
+    let Some(predefined_item) = ty_item.predefined else {
+        anyhow::bail!(
+            "bitflags definition `{resolvee_path}` has a type that is not a predefined type: {ty}"
+        );
+    };
+    if !predefined_item.is_unsigned_integer() {
+        anyhow::bail!("bitflags definition `{resolvee_path}` has a type that is not an unsigned integer: {ty}");
+    }
+    let size = predefined_item.size();
 
-    let mut fields: Vec<(String, isize)> = vec![];
-    let mut last_field = 0;
+    let mut fields: Vec<(String, usize)> = vec![];
     let mut default = None;
     for statement in &definition.statements {
-        let grammar::EnumStatement {
+        let grammar::BitflagsStatement {
             name,
             expr,
             attributes,
         } = statement;
         let value = match expr {
-            Some(grammar::Expr::IntLiteral(value)) => *value,
-            Some(_) => anyhow::bail!(
-                "unsupported enum value for case `{name}` of enum `{resolvee_path}`: {expr:?}"
+            grammar::Expr::IntLiteral(value) => *value,
+            _ => anyhow::bail!(
+                "unsupported bitflags value for case `{name}` of bitflags `{resolvee_path}`: {expr:?}"
             ),
-            None => last_field,
         };
-        fields.push((name.0.clone(), value));
+        fields.push((
+            name.0.clone(),
+            value.try_into().with_context(|| {
+                format!("bitflags value `{value}` is too large for `{name}` of `{resolvee_path}`")
+            })?,
+        ));
 
         for attribute in attributes {
             match attribute {
                 grammar::Attribute::Ident(ident) if ident.as_str() == "default" => {
                     if default.is_some() {
-                        anyhow::bail!("enum {resolvee_path} has multiple default variants");
+                        anyhow::bail!("bitflags {resolvee_path} has multiple default values");
                     }
                     default = Some(fields.len() - 1);
                 }
                 _ => {}
             }
         }
-
-        last_field = value + 1;
     }
 
     let mut singleton = None;
@@ -145,22 +157,22 @@ pub fn build(
 
     if !defaultable && default.is_some() {
         anyhow::bail!(
-            "enum `{resolvee_path}` has a default variant set but is not marked as defaultable"
+            "bitflags `{resolvee_path}` has a default value set but is not marked as defaultable"
         );
     }
 
     if defaultable && default.is_none() {
         anyhow::bail!(
-            "enum `{resolvee_path}` is marked as defaultable but has no default variant set"
+            "bitflags `{resolvee_path}` is marked as defaultable but has no default value set"
         );
     }
 
     Ok(Some(ItemStateResolved {
         size,
         alignment: ty.alignment(&semantic.type_registry).with_context(|| {
-            format!("failed to get alignment for base type of enum `{resolvee_path}`")
+            format!("failed to get alignment for base type of bitflags `{resolvee_path}`")
         })?,
-        inner: EnumDefinition {
+        inner: BitflagsDefinition {
             type_: ty,
             doc,
             fields,

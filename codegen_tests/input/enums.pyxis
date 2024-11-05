@@ -1,0 +1,7 @@
+#[defaultable]
+pub enum TestEnum: u32 {
+    #[default]
+    None,
+    Some,
+    Value,
+}

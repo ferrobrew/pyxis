@@ -319,6 +319,36 @@ fn can_parse_enum() {
 }
 
 #[test]
+fn can_parse_bitflags() {
+    let text = r#"
+        #[singleton(0x1234)]
+        pub bitflags TestType: u32 {
+            #[default]
+            Item1 = 0b0001,
+            Item2 = 0b0010,
+            Item3 = 0b0100,
+            Item4 = 0b1000,
+        }
+        "#;
+
+    let ast = M::new().with_definitions([ID::new(
+        (V::Public, "TestType"),
+        BFD::new(
+            T::ident("u32"),
+            [
+                BFS::field("Item1", E::IntLiteral(0b0001)).with_attributes([A::default()]),
+                BFS::field("Item2", E::IntLiteral(0b0010)),
+                BFS::field("Item3", E::IntLiteral(0b0100)),
+                BFS::field("Item4", E::IntLiteral(0b1000)),
+            ],
+            [A::singleton(0x1234)],
+        ),
+    )]);
+
+    assert_eq!(parse_str(text).unwrap(), ast);
+}
+
+#[test]
 fn can_parse_array_field() {
     let text = r#"
         pub type TestType {

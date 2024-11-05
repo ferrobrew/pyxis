@@ -6,6 +6,7 @@ use crate::{
 };
 
 pub use crate::semantic::{
+    bitflags_definition::BitflagsDefinition,
     enum_definition::EnumDefinition,
     function::{Argument, CallingConvention, Function, FunctionBody},
     type_definition::{Region, TypeDefinition, TypeVftable},
@@ -16,6 +17,7 @@ pub mod test_aliases {
     pub type SID = super::ItemDefinition;
     pub type STD = super::TypeDefinition;
     pub type SED = super::EnumDefinition;
+    pub type SBFD = super::BitflagsDefinition;
     pub type ST = super::Type;
     pub type SAr = super::Argument;
     pub type SF = super::Function;
@@ -123,6 +125,12 @@ impl Type {
             Type::Function(_, _, _) => "a function",
         }
     }
+    pub fn as_raw(&self) -> Option<&ItemPath> {
+        match self {
+            Self::Raw(v) => Some(v),
+            _ => None,
+        }
+    }
 }
 impl fmt::Display for Type {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -166,6 +174,7 @@ impl fmt::Display for Type {
 pub enum ItemDefinitionInner {
     Type(TypeDefinition),
     Enum(EnumDefinition),
+    Bitflags(BitflagsDefinition),
 }
 impl From<TypeDefinition> for ItemDefinitionInner {
     fn from(td: TypeDefinition) -> Self {
@@ -177,11 +186,17 @@ impl From<EnumDefinition> for ItemDefinitionInner {
         ItemDefinitionInner::Enum(ed)
     }
 }
+impl From<BitflagsDefinition> for ItemDefinitionInner {
+    fn from(bd: BitflagsDefinition) -> Self {
+        ItemDefinitionInner::Bitflags(bd)
+    }
+}
 impl ItemDefinitionInner {
     pub fn defaultable(&self) -> bool {
         match self {
             ItemDefinitionInner::Type(td) => td.defaultable,
-            ItemDefinitionInner::Enum(ed) => ed.defaultable && ed.default_index.is_some(),
+            ItemDefinitionInner::Enum(ed) => ed.default.is_some(),
+            ItemDefinitionInner::Bitflags(bd) => bd.default.is_some(),
         }
     }
     pub fn as_type(&self) -> Option<&TypeDefinition> {
@@ -200,12 +215,14 @@ impl ItemDefinitionInner {
         match self {
             ItemDefinitionInner::Type(_) => "a type",
             ItemDefinitionInner::Enum(_) => "an enum",
+            ItemDefinitionInner::Bitflags(_) => "a bitflags",
         }
     }
     pub fn doc(&self) -> Option<&str> {
         match self {
             ItemDefinitionInner::Type(t) => t.doc(),
             ItemDefinitionInner::Enum(e) => e.doc(),
+            ItemDefinitionInner::Bitflags(b) => b.doc(),
         }
     }
 }
@@ -244,12 +261,56 @@ pub enum ItemCategory {
     Extern,
 }
 
+macro_rules! predefined_items {
+    ($(($variant:ident, $name:expr, $size:expr)),* $(,)?) => {
+        #[derive(PartialEq, Eq, Debug, Copy, Clone, Hash)]
+        pub enum PredefinedItem {
+            $($variant),*
+        }
+        impl PredefinedItem {
+            pub const ALL: &'static [PredefinedItem] = &[
+                $(Self::$variant),*
+            ];
+            pub fn name(&self) -> &'static str {
+                match self {
+                    $(Self::$variant => $name),*
+                }
+            }
+            pub fn size(&self) -> usize {
+                match self {
+                    $(Self::$variant => $size),*
+                }
+            }
+            pub fn is_unsigned_integer(&self) -> bool {
+                matches!(self, Self::U8 | Self::U16 | Self::U32 | Self::U64 | Self::U128)
+            }
+        }
+    }
+}
+predefined_items! {
+    (Void, "void", 0),
+    (Bool, "bool", 1),
+    (U8, "u8", 1),
+    (U16, "u16", 2),
+    (U32, "u32", 4),
+    (U64, "u64", 8),
+    (U128, "u128", 16),
+    (I8, "i8", 1),
+    (I16, "i16", 2),
+    (I32, "i32", 4),
+    (I64, "i64", 8),
+    (I128, "i128", 16),
+    (F32, "f32", 4),
+    (F64, "f64", 8),
+}
+
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]
 pub struct ItemDefinition {
     pub visibility: Visibility,
     pub path: ItemPath,
     pub state: ItemState,
     pub category: ItemCategory,
+    pub predefined: Option<PredefinedItem>,
 }
 impl ItemDefinition {
     pub fn category_resolved(
@@ -262,6 +323,7 @@ impl ItemDefinition {
             path: path.into(),
             state: ItemState::Resolved(resolved),
             category,
+            predefined: None,
         }
     }
     pub fn defined_resolved(

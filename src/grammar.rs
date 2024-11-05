@@ -7,6 +7,8 @@ pub mod test_aliases {
     pub type TD = super::TypeDefinition;
     pub type ES = super::EnumStatement;
     pub type ED = super::EnumDefinition;
+    pub type BFS = super::BitflagsStatement;
+    pub type BFD = super::BitflagsDefinition;
     pub type T = super::Type;
     pub type A = super::Attribute;
     pub type As = super::Attributes;
@@ -397,6 +399,7 @@ impl From<(Ident, Expr)> for ExprField {
     }
 }
 
+// types
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TypeField {
     Field(Visibility, Ident, Type),
@@ -419,7 +422,6 @@ impl TypeField {
         matches!(self, TypeField::Vftable(_))
     }
 }
-
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TypeStatement {
     pub field: TypeField,
@@ -443,7 +445,6 @@ impl TypeStatement {
         self
     }
 }
-
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TypeDefinition {
     pub statements: Vec<TypeStatement>,
@@ -462,6 +463,7 @@ impl TypeDefinition {
     }
 }
 
+// enums
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct EnumStatement {
     pub name: Ident,
@@ -487,7 +489,6 @@ impl EnumStatement {
         self
     }
 }
-
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct EnumDefinition {
     pub type_: Type,
@@ -512,10 +513,59 @@ impl EnumDefinition {
     }
 }
 
+// bitflags
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct BitflagsStatement {
+    pub name: Ident,
+    pub expr: Expr,
+    pub attributes: Attributes,
+}
+impl BitflagsStatement {
+    pub fn new(name: Ident, expr: Expr) -> BitflagsStatement {
+        BitflagsStatement {
+            name,
+            expr,
+            attributes: Default::default(),
+        }
+    }
+    pub fn field(name: &str, expr: Expr) -> BitflagsStatement {
+        Self::new(name.into(), expr)
+    }
+    pub fn with_attributes(mut self, attributes: impl Into<Attributes>) -> Self {
+        self.attributes = attributes.into();
+        self
+    }
+}
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct BitflagsDefinition {
+    pub type_: Type,
+    pub statements: Vec<BitflagsStatement>,
+    pub attributes: Attributes,
+}
+impl BitflagsDefinition {
+    pub fn new(
+        type_: Type,
+        statements: impl Into<Vec<BitflagsStatement>>,
+        attributes: impl Into<Attributes>,
+    ) -> Self {
+        Self {
+            type_,
+            statements: statements.into(),
+            attributes: attributes.into(),
+        }
+    }
+    pub fn with_attributes(mut self, attributes: impl Into<Attributes>) -> Self {
+        self.attributes = attributes.into();
+        self
+    }
+}
+
+// items
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ItemDefinitionInner {
     Type(TypeDefinition),
     Enum(EnumDefinition),
+    Bitflags(BitflagsDefinition),
 }
 impl From<TypeDefinition> for ItemDefinitionInner {
     fn from(item: TypeDefinition) -> Self {
@@ -525,6 +575,11 @@ impl From<TypeDefinition> for ItemDefinitionInner {
 impl From<EnumDefinition> for ItemDefinitionInner {
     fn from(item: EnumDefinition) -> Self {
         ItemDefinitionInner::Enum(item)
+    }
+}
+impl From<BitflagsDefinition> for ItemDefinitionInner {
+    fn from(item: BitflagsDefinition) -> Self {
+        ItemDefinitionInner::Bitflags(item)
     }
 }
 

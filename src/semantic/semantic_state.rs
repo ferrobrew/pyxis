@@ -6,13 +6,13 @@ use crate::{
     grammar::{self, ItemPath},
     parser,
     semantic::{
-        enum_definition,
+        bitflags_definition, enum_definition,
         module::Module,
         type_definition,
         type_registry::TypeRegistry,
         types::{
-            ExternValue, ItemCategory, ItemDefinition, ItemState, ItemStateResolved, Type,
-            TypeDefinition, Visibility,
+            ExternValue, ItemCategory, ItemDefinition, ItemState, ItemStateResolved,
+            PredefinedItem, Type, TypeDefinition, Visibility,
         },
     },
 };
@@ -34,26 +34,9 @@ impl SemanticState {
             .modules
             .insert(ItemPath::empty(), Module::default());
 
-        // Insert all of our predefined types.
-        let predefined_types = [
-            ("void", 0),
-            ("bool", 1),
-            ("u8", 1),
-            ("u16", 2),
-            ("u32", 4),
-            ("u64", 8),
-            ("u128", 16),
-            ("i8", 1),
-            ("i16", 2),
-            ("i32", 4),
-            ("i64", 8),
-            ("i128", 16),
-            ("f32", 4),
-            ("f64", 8),
-        ];
-
-        for (name, size) in predefined_types {
-            let path = ItemPath::from(name);
+        for predefined_item in PredefinedItem::ALL {
+            let path = ItemPath::from(predefined_item.name());
+            let size = predefined_item.size();
             let alignment = size.max(1);
             semantic_state
                 .add_item(ItemDefinition {
@@ -69,6 +52,7 @@ impl SemanticState {
                             .into(),
                     }),
                     category: ItemCategory::Predefined,
+                    predefined: Some(*predefined_item),
                 })
                 .expect("failed to add predefined type");
         }
@@ -144,6 +128,7 @@ impl SemanticState {
                 path: new_path,
                 state: ItemState::Unresolved(definition.clone()),
                 category: ItemCategory::Defined,
+                predefined: None,
             })?;
         }
 
@@ -190,6 +175,7 @@ impl SemanticState {
                     inner: TypeDefinition::default().into(),
                 }),
                 category: ItemCategory::Extern,
+                predefined: None,
             })?;
         }
 
@@ -238,6 +224,9 @@ impl SemanticState {
                     }
                     grammar::ItemDefinitionInner::Enum(e) => {
                         enum_definition::build(&self, resolvee_path, e)?
+                    }
+                    grammar::ItemDefinitionInner::Bitflags(b) => {
+                        bitflags_definition::build(&self, resolvee_path, b)?
                     }
                 };
 

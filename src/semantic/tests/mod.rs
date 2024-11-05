@@ -903,8 +903,7 @@ fn can_handle_defaultable_on_enum_with_default_field() {
                 (4, 4),
                 SED::new(ST::raw("u32"))
                     .with_fields([("Item1", 0), ("Item2", 1)])
-                    .with_defaultable(true)
-                    .with_default_index(1),
+                    .with_default(1),
             ),
         )],
     );
@@ -1030,5 +1029,145 @@ fn can_propagate_doc_comments() {
     assert_eq!(
         created_module.doc,
         Some(" This is a module doc comment\n The best of its kind".to_string())
+    );
+}
+
+#[test]
+fn can_resolve_bitflags() {
+    assert_ast_produces_type_definitions(
+        M::new().with_definitions([ID::new(
+            (V::Public, "TestType"),
+            BFD::new(
+                T::ident("u32"),
+                [
+                    BFS::field("Item1", E::IntLiteral(0b0001)),
+                    BFS::field("Item2", E::IntLiteral(0b0010)),
+                    BFS::field("Item3", E::IntLiteral(0b0100)),
+                    BFS::field("Item4", E::IntLiteral(0b1000)),
+                ],
+                [A::singleton(0x1234)],
+            ),
+        )]),
+        [SID::defined_resolved(
+            (SV::Public, "test::TestType"),
+            SISR::new(
+                (4, 4),
+                SBFD::new(ST::raw("u32"))
+                    .with_fields([
+                        ("Item1", 0b0001),
+                        ("Item2", 0b0010),
+                        ("Item3", 0b0100),
+                        ("Item4", 0b1000),
+                    ])
+                    .with_singleton(0x1234),
+            ),
+        )],
+    );
+}
+
+#[test]
+fn bitflags_handle_defaultable_correctly() {
+    assert_ast_produces_failure(
+        M::new().with_definitions([ID::new(
+            (V::Public, "TestType"),
+            BFD::new(
+                T::ident("u32"),
+                [
+                    BFS::field("Item1", E::IntLiteral(0b0001)),
+                    BFS::field("Item2", E::IntLiteral(0b0010)),
+                ],
+                [],
+            )
+            .with_attributes([A::defaultable()]),
+        )]),
+        "bitflags `test::TestType` is marked as defaultable but has no default value set",
+    );
+
+    assert_ast_produces_failure(
+        M::new().with_definitions([ID::new(
+            (V::Public, "TestType"),
+            BFD::new(
+                T::ident("u32"),
+                [
+                    BFS::field("Item1", E::IntLiteral(0b0001)),
+                    BFS::field("Item2", E::IntLiteral(0b0010)).with_attributes([A::default()]),
+                ],
+                [],
+            )
+            .with_attributes([]),
+        )]),
+        "bitflags `test::TestType` has a default value set but is not marked as defaultable",
+    );
+
+    assert_ast_produces_type_definitions(
+        M::new().with_definitions([ID::new(
+            (V::Public, "TestType"),
+            BFD::new(
+                T::ident("u32"),
+                [
+                    BFS::field("Item1", E::IntLiteral(0b0001)),
+                    BFS::field("Item2", E::IntLiteral(0b0010)).with_attributes([A::default()]),
+                ],
+                [],
+            )
+            .with_attributes([A::defaultable()]),
+        )]),
+        [SID::defined_resolved(
+            (SV::Public, "test::TestType"),
+            SISR::new(
+                (4, 4),
+                SBFD::new(ST::raw("u32"))
+                    .with_fields([("Item1", 0b0001), ("Item2", 0b0010)])
+                    .with_default(1),
+            ),
+        )],
+    );
+}
+
+#[test]
+fn bitflags_with_invalid_underlying_type_are_rejected() {
+    for invalid_type in ["i8", "i16", "i32", "i64", "i128", "Lol"] {
+        assert_ast_produces_failure(
+            M::new().with_definitions([
+                ID::new((V::Public, "Lol"), TD::new([])),
+                ID::new(
+                    (V::Public, "TestType"),
+                    BFD::new(
+                        T::ident(invalid_type),
+                        [
+                            BFS::field("Item1", E::IntLiteral(0b0001)),
+                            BFS::field("Item2", E::IntLiteral(0b0010)),
+                        ],
+                        [],
+                    ),
+                ),
+            ]),
+            &if invalid_type == "Lol" {
+                "bitflags definition `test::TestType` has a type that is not a predefined type: test::Lol".to_string()
+            } else {
+                format!("bitflags definition `test::TestType` has a type that is not an unsigned integer: {invalid_type}")
+            },
+        );
+    }
+
+    assert_ast_produces_type_definitions(
+        M::new().with_definitions([ID::new(
+            (V::Public, "TestType"),
+            BFD::new(
+                T::ident("u32"),
+                [
+                    BFS::field("Item1", E::IntLiteral(0b0001)),
+                    BFS::field("Item2", E::IntLiteral(0b0010)),
+                ],
+                [],
+            ),
+        )]),
+        [SID::defined_resolved(
+            (SV::Public, "test::TestType"),
+            SISR::new(
+                (4, 4),
+                SBFD::new(ST::raw("u32")).with_fields([("Item1", 0b0001), ("Item2", 0b0010)]),
+            ),
+        )],
     );
 }
