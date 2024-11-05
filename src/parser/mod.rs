@@ -18,6 +18,7 @@ mod kw {
     syn::custom_keyword!(prologue);
     syn::custom_keyword!(epilogue);
     syn::custom_keyword!(vftable);
+    syn::custom_keyword!(bitflags);
 }
 
 impl Parse for Ident {
@@ -289,6 +290,7 @@ impl Parse for ExprField {
     }
 }
 
+// types
 impl Parse for TypeField {
     fn parse(input: ParseStream) -> Result<Self> {
         if input.peek(kw::vftable) {
@@ -310,7 +312,6 @@ impl Parse for TypeField {
         }
     }
 }
-
 impl Parse for TypeStatement {
     fn parse(input: ParseStream) -> Result<Self> {
         let attributes = Attribute::parse_many(input, false)?;
@@ -320,7 +321,6 @@ impl Parse for TypeStatement {
         })
     }
 }
-
 fn parse_type_definition(input: ParseStream, attributes: Attributes) -> Result<TypeDefinition> {
     let statements = if input.peek(Token![;]) {
         input.parse::<Token![;]>()?;
@@ -340,6 +340,7 @@ fn parse_type_definition(input: ParseStream, attributes: Attributes) -> Result<T
     })
 }
 
+// enums
 impl Parse for EnumStatement {
     fn parse(input: ParseStream) -> Result<Self> {
         let attributes = Attribute::parse_many(input, false)?;
@@ -355,7 +356,6 @@ impl Parse for EnumStatement {
         Ok(EnumStatement::new(name, expr).with_attributes(attributes))
     }
 }
-
 fn parse_enum_definition(input: ParseStream, attributes: Attributes) -> Result<EnumDefinition> {
     input.parse::<Token![:]>()?;
     let type_: Type = input.parse()?;
@@ -376,6 +376,42 @@ fn parse_enum_definition(input: ParseStream, attributes: Attributes) -> Result<E
     })
 }
 
+// bitflags
+impl Parse for BitflagsStatement {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let attributes = Attribute::parse_many(input, false)?;
+
+        let name: Ident = input.parse()?;
+        input.parse::<Token![=]>()?;
+        let expr = input.parse()?;
+
+        Ok(BitflagsStatement::new(name, expr).with_attributes(attributes))
+    }
+}
+fn parse_bitflags_definition(
+    input: ParseStream,
+    attributes: Attributes,
+) -> Result<BitflagsDefinition> {
+    input.parse::<Token![:]>()?;
+    let type_: Type = input.parse()?;
+
+    let statements = {
+        let content;
+        braced!(content in input);
+
+        let statements: Punctuated<BitflagsStatement, Token![,]> =
+            content.parse_terminated(BitflagsStatement::parse, Token![,])?;
+        Vec::from_iter(statements)
+    };
+
+    Ok(BitflagsDefinition {
+        type_,
+        statements,
+        attributes,
+    })
+}
+
+// items
 fn parse_item_definition(
     input: ParseStream,
     visibility: Visibility,
@@ -396,6 +432,13 @@ fn parse_item_definition(
         (
             name,
             parse_enum_definition(input, attributes).map(ItemDefinitionInner::from),
+        )
+    } else if lookahead.peek(kw::bitflags) {
+        input.parse::<kw::bitflags>()?;
+        let name = input.parse()?;
+        (
+            name,
+            parse_bitflags_definition(input, attributes).map(ItemDefinitionInner::from),
         )
     } else {
         return Err(lookahead.error());
@@ -535,7 +578,10 @@ impl Parse for Module {
                     attributes,
                 });
                 continue;
-            } else if input.peek(Token![type]) || input.peek(Token![enum]) {
+            } else if input.peek(Token![type])
+                || input.peek(Token![enum])
+                || input.peek(kw::bitflags)
+            {
                 definitions.push(parse_item_definition(input, visibility, attributes)?);
                 continue;
             }

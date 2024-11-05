@@ -4,9 +4,9 @@ use crate::{
     grammar::ItemPath,
     semantic::{
         types::{
-            Argument, EnumDefinition, ExternValue, Function, FunctionBody, ItemCategory,
-            ItemDefinition, ItemDefinitionInner, ItemStateResolved, Region, Type, TypeDefinition,
-            Visibility,
+            Argument, BitflagsDefinition, EnumDefinition, ExternValue, Function, FunctionBody,
+            ItemCategory, ItemDefinition, ItemDefinitionInner, ItemStateResolved, Region, Type,
+            TypeDefinition, Visibility,
         },
         Module, ResolvedSemanticState, TypeRegistry,
     },
@@ -142,6 +142,7 @@ fn build_item(
         ItemCategory::Defined => match inner {
             IDI::Type(td) => build_type(type_registry, path, *size, *alignment, visibility, td),
             IDI::Enum(ed) => build_enum(path, *size, visibility, ed),
+            IDI::Bitflags(bd) => build_bitflags(path, *size, visibility, bd),
         },
         ItemCategory::Predefined => Ok(quote! {}),
         ItemCategory::Extern => Ok(quote! {}),
@@ -457,33 +458,109 @@ fn build_enum(
         extra_derives.push(quote! { Default });
     }
 
-        let syn_fields = fields.iter().enumerate().map(|(idx, (name, value))| {
-            let name_ident = str_to_ident(name);
-            let field = quote! {
-                #name_ident = #value as _
-            };
+    let syn_fields = fields.iter().enumerate().map(|(idx, (name, value))| {
+        let name_ident = str_to_ident(name);
+        let field = quote! {
+            #name_ident = #value as _
+        };
 
-            if default_index.is_some_and(|i| i == idx) {
-                quote! {
-                    #[default]
-                    #field
-                }
-            } else {
-                field
+        if default_index.is_some_and(|i| i == idx) {
+            quote! {
+                #[default]
+                #field
             }
-        });
+        } else {
+            field
+        }
+    });
 
-        Ok(quote! {
-            #[repr(#syn_type)]
+    Ok(quote! {
+        #[repr(#syn_type)]
+        #[derive(PartialEq, Eq, PartialOrd, Ord, Debug, #(#extra_derives),*)]
+        #doc
+        #visibility enum #name_ident {
+            #(#syn_fields),*
+        }
+        #size_check_impl
+        #singleton_impl
+    })
+}
+
+fn build_bitflags(
+    path: &ItemPath,
+    size: usize,
+    visibility: Visibility,
+    bitflags_definition: &BitflagsDefinition,
+) -> anyhow::Result<proc_macro2::TokenStream> {
+    let name = path.last().context("failed to get last of item path")?;
+
+    let BitflagsDefinition {
+        singleton,
+        fields,
+        doc,
+        type_,
+        copyable,
+        cloneable,
+    } = bitflags_definition;
+
+    let syn_type = sa_type_to_syn_type(type_)?;
+    let name_ident = str_to_ident(name.as_str());
+
+    let visibility = visibility_to_tokens(visibility);
+    let doc = doc_to_tokens(false, doc.as_deref());
+
+    let size_check_ident = quote::format_ident!("_{}_size_check", name.as_str());
+    let size_check_impl = (size > 0).then(|| {
+        let size = hex_literal(size);
+        quote! {
+            fn #size_check_ident() {
+                unsafe {
+                    ::std::mem::transmute::<[u8; #size], #name_ident>([0u8; #size]);
+                }
+                unreachable!()
+            }
+        }
+    });
+
+    let singleton_impl = singleton.map(|address| {
+        let address = hex_literal(address);
+        quote! {
+            impl #name_ident {
+                #visibility unsafe fn get() -> Self {
+                    unsafe {
+                        *(#address as *const Self)
+                    }
+                }
+            }
+        }
+    });
+
+    let mut extra_derives = vec![];
+    if *copyable {
+        extra_derives.push(quote! { Copy });
+    }
+    if *cloneable {
+        extra_derives.push(quote! { Clone });
+    }
+
+    let syn_fields = fields.iter().map(|(name, value)| {
+        let name_ident = str_to_ident(name);
+        quote! {
+            const #name_ident = #value as _;
+        }
+    });
+
+    Ok(quote! {
+        bitflags::bitflags! {
             #[derive(PartialEq, Eq, PartialOrd, Ord, Debug, #(#extra_derives),*)]
             #doc
-            #visibility enum #name_ident {
-                #(#syn_fields),*
+            #visibility struct #name_ident: #syn_type {
+                #(#syn_fields)*
             }
-            #size_check_impl
-            #singleton_impl
-        })
-    }
+        }
+        #size_check_impl
+        #singleton_impl
+    })
 }
 
 fn build_function(function: &Function) -> Result<proc_macro2::TokenStream, anyhow::Error> {

@@ -1,3 +1,4 @@
+pub mod bitflags;
 pub mod diamond_inheritance;
 pub mod doc_comments;
 pub mod enums;

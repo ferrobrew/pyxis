@@ -1,5 +1,6 @@
 pub mod types;
 
+mod bitflags_definition;
 mod enum_definition;
 mod function;
 mod module;

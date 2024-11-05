@@ -6,7 +6,7 @@ use crate::{
     grammar::{self, ItemPath},
     parser,
     semantic::{
-        enum_definition,
+        bitflags_definition, enum_definition,
         module::Module,
         type_definition,
         type_registry::TypeRegistry,
@@ -224,6 +224,9 @@ impl SemanticState {
                     }
                     grammar::ItemDefinitionInner::Enum(e) => {
                         enum_definition::build(&self, resolvee_path, e)?
+                    }
+                    grammar::ItemDefinitionInner::Bitflags(b) => {
+                        bitflags_definition::build(&self, resolvee_path, b)?
                     }
                 };
 

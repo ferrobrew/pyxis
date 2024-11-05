@@ -1,0 +1,6 @@
+pub bitflags TestBitflags: u32 {
+    NONE = 0,
+    FLAG_1 = 1,
+    FLAG_2 = 2,
+    FLAG_3 = 4,
+}

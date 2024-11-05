@@ -1032,3 +1032,73 @@ fn can_propagate_doc_comments() {
         Some(" This is a module doc comment\n The best of its kind".to_string())
     );
 }
+
+#[test]
+fn can_resolve_bitflags() {
+    assert_ast_produces_type_definitions(
+        M::new().with_definitions([ID::new(
+            (V::Public, "TestType"),
+            BFD::new(
+                T::ident("u32"),
+                [
+                    BFS::field("Item1", E::IntLiteral(0b0001)),
+                    BFS::field("Item2", E::IntLiteral(0b0010)),
+                    BFS::field("Item3", E::IntLiteral(0b0100)),
+                    BFS::field("Item4", E::IntLiteral(0b1000)),
+                ],
+                [A::singleton(0x1234)],
+            ),
+        )]),
+        [SID::defined_resolved(
+            (SV::Public, "test::TestType"),
+            SISR::new(
+                (4, 4),
+                SBFD::new(ST::raw("u32"))
+                    .with_fields([
+                        ("Item1", 0b0001),
+                        ("Item2", 0b0010),
+                        ("Item3", 0b0100),
+                        ("Item4", 0b1000),
+                    ])
+                    .with_singleton(0x1234),
+            ),
+        )],
+    );
+}
+
+#[test]
+fn defaultable_bitflags_are_rejected() {
+    assert_ast_produces_failure(
+        M::new().with_definitions([ID::new(
+            (V::Public, "TestType"),
+            BFD::new(
+                T::ident("u32"),
+                [
+                    BFS::field("Item1", E::IntLiteral(0b0001)),
+                    BFS::field("Item2", E::IntLiteral(0b0010)),
+                ],
+                [],
+            )
+            .with_attributes([A::defaultable()]),
+        )]),
+        "defaultable was specified for bitflags `test::TestType`, but bitflags do not support defaults",
+    );
+
+    assert_ast_produces_failure(
+        M::new().with_definitions([ID::new(
+            (V::Public, "TestType"),
+            BFD::new(
+                T::ident("u32"),
+                [
+                    BFS::field("Item1", E::IntLiteral(0b0001)),
+                    BFS::field("Item2", E::IntLiteral(0b0010)).with_attributes([A::default()]),
+                ],
+                [],
+            )
+            .with_attributes([]),
+        )]),
+        "default was specified for field `Item2` of bitflags `test::TestType`, but bitflags do not support defaults",
+    );
+}
+
+// TODO: write a test to reject bitflags fail with non-unsigned integers

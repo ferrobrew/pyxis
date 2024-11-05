@@ -6,6 +6,7 @@ use crate::{
 };
 
 pub use crate::semantic::{
+    bitflags_definition::BitflagsDefinition,
     enum_definition::EnumDefinition,
     function::{Argument, CallingConvention, Function, FunctionBody},
     type_definition::{Region, TypeDefinition, TypeVftable},
@@ -16,6 +17,7 @@ pub mod test_aliases {
     pub type SID = super::ItemDefinition;
     pub type STD = super::TypeDefinition;
     pub type SED = super::EnumDefinition;
+    pub type SBFD = super::BitflagsDefinition;
     pub type ST = super::Type;
     pub type SAr = super::Argument;
     pub type SF = super::Function;
@@ -123,6 +125,12 @@ impl Type {
             Type::Function(_, _, _) => "a function",
         }
     }
+    pub fn as_raw(&self) -> Option<&ItemPath> {
+        match self {
+            Self::Raw(v) => Some(v),
+            _ => None,
+        }
+    }
 }
 impl fmt::Display for Type {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -166,6 +174,7 @@ impl fmt::Display for Type {
 pub enum ItemDefinitionInner {
     Type(TypeDefinition),
     Enum(EnumDefinition),
+    Bitflags(BitflagsDefinition),
 }
 impl From<TypeDefinition> for ItemDefinitionInner {
     fn from(td: TypeDefinition) -> Self {
@@ -177,11 +186,17 @@ impl From<EnumDefinition> for ItemDefinitionInner {
         ItemDefinitionInner::Enum(ed)
     }
 }
+impl From<BitflagsDefinition> for ItemDefinitionInner {
+    fn from(bd: BitflagsDefinition) -> Self {
+        ItemDefinitionInner::Bitflags(bd)
+    }
+}
 impl ItemDefinitionInner {
     pub fn defaultable(&self) -> bool {
         match self {
             ItemDefinitionInner::Type(td) => td.defaultable,
             ItemDefinitionInner::Enum(ed) => ed.defaultable && ed.default_index.is_some(),
+            ItemDefinitionInner::Bitflags(_bd) => false,
         }
     }
     pub fn as_type(&self) -> Option<&TypeDefinition> {
@@ -200,12 +215,14 @@ impl ItemDefinitionInner {
         match self {
             ItemDefinitionInner::Type(_) => "a type",
             ItemDefinitionInner::Enum(_) => "an enum",
+            ItemDefinitionInner::Bitflags(_) => "a bitflags",
         }
     }
     pub fn doc(&self) -> Option<&str> {
         match self {
             ItemDefinitionInner::Type(t) => t.doc(),
             ItemDefinitionInner::Enum(e) => e.doc(),
+            ItemDefinitionInner::Bitflags(b) => b.doc(),
         }
     }
 }
