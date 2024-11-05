@@ -411,7 +411,6 @@ fn build_enum(
         copyable,
         cloneable,
         defaultable,
-        bitflags,
         default_index,
     } = enum_definition;
 
@@ -458,26 +457,6 @@ fn build_enum(
         extra_derives.push(quote! { Default });
     }
 
-    if *bitflags {
-        let syn_fields = fields.iter().map(|(name, value)| {
-            let name_ident = str_to_ident(name);
-            quote! {
-                const #name_ident = #value as _;
-            }
-        });
-
-        Ok(quote! {
-            bitflags::bitflags! {
-                #[derive(PartialEq, Eq, PartialOrd, Ord, Debug, #(#extra_derives),*)]
-                #doc
-                #visibility struct #name_ident: #syn_type {
-                    #(#syn_fields)*
-                }
-            }
-            #size_check_impl
-            #singleton_impl
-        })
-    } else {
         let syn_fields = fields.iter().enumerate().map(|(idx, (name, value))| {
             let name_ident = str_to_ident(name);
             let field = quote! {
