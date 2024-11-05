@@ -903,8 +903,7 @@ fn can_handle_defaultable_on_enum_with_default_field() {
                 (4, 4),
                 SED::new(ST::raw("u32"))
                     .with_fields([("Item1", 0), ("Item2", 1)])
-                    .with_defaultable(true)
-                    .with_default_index(1),
+                    .with_default(1),
             ),
         )],
     );
@@ -1067,7 +1066,7 @@ fn can_resolve_bitflags() {
 }
 
 #[test]
-fn defaultable_bitflags_are_rejected() {
+fn bitflags_handle_defaultable_correctly() {
     assert_ast_produces_failure(
         M::new().with_definitions([ID::new(
             (V::Public, "TestType"),
@@ -1081,7 +1080,7 @@ fn defaultable_bitflags_are_rejected() {
             )
             .with_attributes([A::defaultable()]),
         )]),
-        "defaultable was specified for bitflags `test::TestType`, but bitflags do not support defaults",
+        "bitflags `test::TestType` is marked as defaultable but has no default value set",
     );
 
     assert_ast_produces_failure(
@@ -1097,7 +1096,31 @@ fn defaultable_bitflags_are_rejected() {
             )
             .with_attributes([]),
         )]),
-        "default was specified for field `Item2` of bitflags `test::TestType`, but bitflags do not support defaults",
+        "bitflags `test::TestType` has a default value set but is not marked as defaultable",
+    );
+
+    assert_ast_produces_type_definitions(
+        M::new().with_definitions([ID::new(
+            (V::Public, "TestType"),
+            BFD::new(
+                T::ident("u32"),
+                [
+                    BFS::field("Item1", E::IntLiteral(0b0001)),
+                    BFS::field("Item2", E::IntLiteral(0b0010)).with_attributes([A::default()]),
+                ],
+                [],
+            )
+            .with_attributes([A::defaultable()]),
+        )]),
+        [SID::defined_resolved(
+            (SV::Public, "test::TestType"),
+            SISR::new(
+                (4, 4),
+                SBFD::new(ST::raw("u32"))
+                    .with_fields([("Item1", 0b0001), ("Item2", 0b0010)])
+                    .with_default(1),
+            ),
+        )],
     );
 }
 

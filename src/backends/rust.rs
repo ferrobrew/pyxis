@@ -411,8 +411,7 @@ fn build_enum(
         type_,
         copyable,
         cloneable,
-        defaultable,
-        default_index,
+        default,
     } = enum_definition;
 
     let syn_type = sa_type_to_syn_type(type_)?;
@@ -454,7 +453,7 @@ fn build_enum(
     if *cloneable {
         extra_derives.push(quote! { Clone });
     }
-    if *defaultable {
+    if default.is_some() {
         extra_derives.push(quote! { Default });
     }
 
@@ -464,7 +463,7 @@ fn build_enum(
             #name_ident = #value as _
         };
 
-        if default_index.is_some_and(|i| i == idx) {
+        if default.is_some_and(|i| i == idx) {
             quote! {
                 #[default]
                 #field
@@ -501,6 +500,7 @@ fn build_bitflags(
         type_,
         copyable,
         cloneable,
+        default,
     } = bitflags_definition;
 
     let syn_type = sa_type_to_syn_type(type_)?;
@@ -535,6 +535,17 @@ fn build_bitflags(
         }
     });
 
+    let default_impl = default.map(|idx| {
+        let field_ident = str_to_ident(&fields[idx].0);
+        quote! {
+            impl Default for #name_ident {
+                fn default() -> Self {
+                    Self::#field_ident
+                }
+            }
+        }
+    });
+
     let mut extra_derives = vec![];
     if *copyable {
         extra_derives.push(quote! { Copy });
@@ -560,6 +571,7 @@ fn build_bitflags(
         }
         #size_check_impl
         #singleton_impl
+        #default_impl
     })
 }
 

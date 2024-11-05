@@ -16,8 +16,7 @@ pub struct EnumDefinition {
     pub singleton: Option<usize>,
     pub copyable: bool,
     pub cloneable: bool,
-    pub defaultable: bool,
-    pub default_index: Option<usize>,
+    pub default: Option<usize>,
 }
 impl EnumDefinition {
     pub fn new(type_: Type) -> Self {
@@ -28,8 +27,7 @@ impl EnumDefinition {
             singleton: None,
             copyable: false,
             cloneable: false,
-            defaultable: false,
-            default_index: None,
+            default: None,
         }
     }
     pub fn with_doc(mut self, doc: impl Into<String>) -> Self {
@@ -55,12 +53,8 @@ impl EnumDefinition {
         self.cloneable = cloneable;
         self
     }
-    pub fn with_defaultable(mut self, defaultable: bool) -> Self {
-        self.defaultable = defaultable;
-        self
-    }
-    pub fn with_default_index(mut self, default_index: usize) -> Self {
-        self.default_index = Some(default_index);
+    pub fn with_default(mut self, default: usize) -> Self {
+        self.default = Some(default);
         self
     }
     pub fn doc(&self) -> Option<&str> {
@@ -91,7 +85,7 @@ pub fn build(
 
     let mut fields: Vec<(String, isize)> = vec![];
     let mut last_field = 0;
-    let mut default_index = None;
+    let mut default = None;
     for statement in &definition.statements {
         let grammar::EnumStatement {
             name,
@@ -110,10 +104,10 @@ pub fn build(
         for attribute in attributes {
             match attribute {
                 grammar::Attribute::Ident(ident) if ident.as_str() == "default" => {
-                    if default_index.is_some() {
+                    if default.is_some() {
                         anyhow::bail!("enum {resolvee_path} has multiple default variants");
                     }
-                    default_index = Some(fields.len() - 1);
+                    default = Some(fields.len() - 1);
                 }
                 _ => {}
             }
@@ -149,13 +143,13 @@ pub fn build(
         }
     }
 
-    if !defaultable && default_index.is_some() {
+    if !defaultable && default.is_some() {
         anyhow::bail!(
             "enum `{resolvee_path}` has a default variant set but is not marked as defaultable"
         );
     }
 
-    if defaultable && default_index.is_none() {
+    if defaultable && default.is_none() {
         anyhow::bail!(
             "enum `{resolvee_path}` is marked as defaultable but has no default variant set"
         );
@@ -173,8 +167,7 @@ pub fn build(
             singleton,
             copyable,
             cloneable,
-            defaultable,
-            default_index,
+            default,
         }
         .into(),
     }))

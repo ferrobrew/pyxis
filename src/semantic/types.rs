@@ -195,8 +195,8 @@ impl ItemDefinitionInner {
     pub fn defaultable(&self) -> bool {
         match self {
             ItemDefinitionInner::Type(td) => td.defaultable,
-            ItemDefinitionInner::Enum(ed) => ed.defaultable && ed.default_index.is_some(),
-            ItemDefinitionInner::Bitflags(_bd) => false,
+            ItemDefinitionInner::Enum(ed) => ed.default.is_some(),
+            ItemDefinitionInner::Bitflags(bd) => bd.default.is_some(),
         }
     }
     pub fn as_type(&self) -> Option<&TypeDefinition> {

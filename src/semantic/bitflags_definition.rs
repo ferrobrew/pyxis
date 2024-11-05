@@ -16,6 +16,7 @@ pub struct BitflagsDefinition {
     pub singleton: Option<usize>,
     pub copyable: bool,
     pub cloneable: bool,
+    pub default: Option<usize>,
 }
 impl BitflagsDefinition {
     pub fn new(type_: Type) -> Self {
@@ -26,6 +27,7 @@ impl BitflagsDefinition {
             singleton: None,
             copyable: false,
             cloneable: false,
+            default: None,
         }
     }
     pub fn with_doc(mut self, doc: impl Into<String>) -> Self {
@@ -49,6 +51,10 @@ impl BitflagsDefinition {
     }
     pub fn with_cloneable(mut self, cloneable: bool) -> Self {
         self.cloneable = cloneable;
+        self
+    }
+    pub fn with_default(mut self, default: usize) -> Self {
+        self.default = Some(default);
         self
     }
     pub fn doc(&self) -> Option<&str> {
@@ -89,6 +95,7 @@ pub fn build(
     let size = predefined_item.size();
 
     let mut fields: Vec<(String, usize)> = vec![];
+    let mut default = None;
     for statement in &definition.statements {
         let grammar::BitflagsStatement {
             name,
@@ -98,7 +105,7 @@ pub fn build(
         let value = match expr {
             grammar::Expr::IntLiteral(value) => *value,
             _ => anyhow::bail!(
-                "unsupported enum value for case `{name}` of enum `{resolvee_path}`: {expr:?}"
+                "unsupported bitflags value for case `{name}` of bitflags `{resolvee_path}`: {expr:?}"
             ),
         };
         fields.push((
@@ -111,9 +118,10 @@ pub fn build(
         for attribute in attributes {
             match attribute {
                 grammar::Attribute::Ident(ident) if ident.as_str() == "default" => {
-                    anyhow::bail!(
-                        "default was specified for field `{name}` of bitflags `{resolvee_path}`, but bitflags do not support defaults"
-                    );
+                    if default.is_some() {
+                        anyhow::bail!("bitflags {resolvee_path} has multiple default values");
+                    }
+                    default = Some(fields.len() - 1);
                 }
                 _ => {}
             }
@@ -123,6 +131,7 @@ pub fn build(
     let mut singleton = None;
     let mut copyable = false;
     let mut cloneable = false;
+    let mut defaultable = false;
     let doc = definition.attributes.doc(resolvee_path)?;
     for attribute in &definition.attributes {
         match attribute {
@@ -132,11 +141,7 @@ pub fn build(
                     cloneable = true;
                 }
                 "cloneable" => cloneable = true,
-                "defaultable" => {
-                    anyhow::bail!(
-                        "defaultable was specified for bitflags `{resolvee_path}`, but bitflags do not support defaults"
-                    );
-                }
+                "defaultable" => defaultable = true,
                 _ => {}
             },
             grammar::Attribute::Function(ident, exprs) => {
@@ -150,10 +155,22 @@ pub fn build(
         }
     }
 
+    if !defaultable && default.is_some() {
+        anyhow::bail!(
+            "bitflags `{resolvee_path}` has a default value set but is not marked as defaultable"
+        );
+    }
+
+    if defaultable && default.is_none() {
+        anyhow::bail!(
+            "bitflags `{resolvee_path}` is marked as defaultable but has no default value set"
+        );
+    }
+
     Ok(Some(ItemStateResolved {
         size,
         alignment: ty.alignment(&semantic.type_registry).with_context(|| {
-            format!("failed to get alignment for base type of enum `{resolvee_path}`")
+            format!("failed to get alignment for base type of bitflags `{resolvee_path}`")
         })?,
         inner: BitflagsDefinition {
             type_: ty,
@@ -162,6 +179,7 @@ pub fn build(
             singleton,
             copyable,
             cloneable,
+            default,
         }
         .into(),
     }))
