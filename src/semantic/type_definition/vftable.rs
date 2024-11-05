@@ -232,6 +232,7 @@ fn build_type(
             .into(),
         }),
         category: ItemCategory::Defined,
+        predefined: None,
     })
 }
 

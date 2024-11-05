@@ -244,12 +244,56 @@ pub enum ItemCategory {
     Extern,
 }
 
+macro_rules! predefined_items {
+    ($(($variant:ident, $name:expr, $size:expr)),* $(,)?) => {
+        #[derive(PartialEq, Eq, Debug, Copy, Clone, Hash)]
+        pub enum PredefinedItem {
+            $($variant),*
+        }
+        impl PredefinedItem {
+            pub const ALL: &'static [PredefinedItem] = &[
+                $(Self::$variant),*
+            ];
+            pub fn name(&self) -> &'static str {
+                match self {
+                    $(Self::$variant => $name),*
+                }
+            }
+            pub fn size(&self) -> usize {
+                match self {
+                    $(Self::$variant => $size),*
+                }
+            }
+            pub fn is_unsigned_integer(&self) -> bool {
+                matches!(self, Self::U8 | Self::U16 | Self::U32 | Self::U64 | Self::U128)
+            }
+        }
+    }
+}
+predefined_items! {
+    (Void, "void", 0),
+    (Bool, "bool", 1),
+    (U8, "u8", 1),
+    (U16, "u16", 2),
+    (U32, "u32", 4),
+    (U64, "u64", 8),
+    (U128, "u128", 16),
+    (I8, "i8", 1),
+    (I16, "i16", 2),
+    (I32, "i32", 4),
+    (I64, "i64", 8),
+    (I128, "i128", 16),
+    (F32, "f32", 4),
+    (F64, "f64", 8),
+}
+
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]
 pub struct ItemDefinition {
     pub visibility: Visibility,
     pub path: ItemPath,
     pub state: ItemState,
     pub category: ItemCategory,
+    pub predefined: Option<PredefinedItem>,
 }
 impl ItemDefinition {
     pub fn category_resolved(
@@ -262,6 +306,7 @@ impl ItemDefinition {
             path: path.into(),
             state: ItemState::Resolved(resolved),
             category,
+            predefined: None,
         }
     }
     pub fn defined_resolved(
