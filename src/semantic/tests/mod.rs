@@ -1101,4 +1101,50 @@ fn defaultable_bitflags_are_rejected() {
     );
 }
 
-// TODO: write a test to reject bitflags fail with non-unsigned integers
+#[test]
+fn bitflags_with_invalid_underlying_type_are_rejected() {
+    for invalid_type in ["i8", "i16", "i32", "i64", "i128", "Lol"] {
+        assert_ast_produces_failure(
+            M::new().with_definitions([
+                ID::new((V::Public, "Lol"), TD::new([])),
+                ID::new(
+                    (V::Public, "TestType"),
+                    BFD::new(
+                        T::ident(invalid_type),
+                        [
+                            BFS::field("Item1", E::IntLiteral(0b0001)),
+                            BFS::field("Item2", E::IntLiteral(0b0010)),
+                        ],
+                        [],
+                    ),
+                ),
+            ]),
+            &if invalid_type == "Lol" {
+                "bitflags definition `test::TestType` has a type that is not a predefined type: test::Lol".to_string()
+            } else {
+                format!("bitflags definition `test::TestType` has a type that is not an unsigned integer: {invalid_type}")
+            },
+        );
+    }
+
+    assert_ast_produces_type_definitions(
+        M::new().with_definitions([ID::new(
+            (V::Public, "TestType"),
+            BFD::new(
+                T::ident("u32"),
+                [
+                    BFS::field("Item1", E::IntLiteral(0b0001)),
+                    BFS::field("Item2", E::IntLiteral(0b0010)),
+                ],
+                [],
+            ),
+        )]),
+        [SID::defined_resolved(
+            (SV::Public, "test::TestType"),
+            SISR::new(
+                (4, 4),
+                SBFD::new(ST::raw("u32")).with_fields([("Item1", 0b0001), ("Item2", 0b0010)]),
+            ),
+        )],
+    );
+}
