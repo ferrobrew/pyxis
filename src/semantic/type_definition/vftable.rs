@@ -44,6 +44,7 @@ pub fn convert_grammar_functions_to_semantic_functions(
 ) -> anyhow::Result<Vec<Function>> {
     // Insert function, with padding if necessary
     let mut output = vec![];
+    let calling_convention = CallingConvention::for_member_function(type_registry.pointer_size());
     for function in functions {
         let mut index = None;
         for attribute in &function.attributes {
@@ -59,7 +60,7 @@ pub fn convert_grammar_functions_to_semantic_functions(
         }
 
         if let Some(index) = index {
-            make_padding_functions(&mut output, index);
+            make_padding_functions(&mut output, index, calling_convention);
         }
         let function = function::build(type_registry, &module.scope(), true, function)
             .with_context(|| format!("while building vftable function `{}`", function.name))?;
@@ -68,10 +69,14 @@ pub fn convert_grammar_functions_to_semantic_functions(
 
     // Pad out to target size
     if let Some(size) = size {
-        make_padding_functions(&mut output, size);
+        make_padding_functions(&mut output, size, calling_convention);
     }
 
-    fn make_padding_functions(output: &mut Vec<Function>, target_len: usize) {
+    fn make_padding_functions(
+        output: &mut Vec<Function>,
+        target_len: usize,
+        calling_convention: CallingConvention,
+    ) {
         let functions_to_add = target_len.saturating_sub(output.len());
         for _ in 0..functions_to_add {
             let name = format!("_vfunc_{}", output.len());
@@ -84,7 +89,7 @@ pub fn convert_grammar_functions_to_semantic_functions(
                 body: FunctionBody::Vftable {
                     function_name: name,
                 },
-                calling_convention: CallingConvention::Thiscall,
+                calling_convention,
             });
         }
     }

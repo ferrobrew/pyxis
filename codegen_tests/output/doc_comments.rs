@@ -29,7 +29,7 @@ impl TestType {
     ///
     /// And its second line! :)
     pub unsafe fn test_func(&self) {
-        let f: unsafe extern "thiscall" fn(this: *const Self) = ::std::mem::transmute(
+        let f: unsafe extern "system" fn(this: *const Self) = ::std::mem::transmute(
             0x123 as usize,
         );
         f(self as *const Self as _)
@@ -53,7 +53,7 @@ impl std::convert::AsMut<TestType> for TestType {
 #[repr(C, align(8))]
 pub struct TestTypeVftable {
     /// My test vfunc!
-    pub test_vfunc: unsafe extern "thiscall" fn(
+    pub test_vfunc: unsafe extern "system" fn(
         this: *const crate::doc_comments::TestType,
     ),
 }

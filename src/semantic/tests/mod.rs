@@ -158,7 +158,7 @@ fn can_resolve_complex_type() {
                         .with_associated_functions([SF::new(
                             (SV::Public, "test_function"),
                             SFB::address(0x800_000),
-                            SCC::Thiscall,
+                            SCC::for_member_function(pointer_size()),
                         )
                         .with_arguments([
                             SAr::MutSelf,
@@ -325,7 +325,7 @@ fn can_generate_vftable() {
                                 SF::new(
                                     (SV::Public, "test_function0"),
                                     SFB::vftable("test_function0"),
-                                    SCC::Thiscall,
+                                    SCC::for_member_function(pointer_size()),
                                 )
                                 .with_arguments([
                                     SAr::MutSelf,
@@ -336,7 +336,7 @@ fn can_generate_vftable() {
                                 SF::new(
                                     (SV::Public, "test_function1"),
                                     SFB::vftable("test_function1"),
-                                    SCC::Thiscall,
+                                    SCC::for_member_function(pointer_size()),
                                 )
                                 .with_arguments([
                                     SAr::MutSelf,
@@ -360,7 +360,7 @@ fn can_generate_vftable() {
                         SR::field(
                             (SV::Public, "test_function0"),
                             ST::function(
-                                SCC::Thiscall,
+                                SCC::for_member_function(pointer_size()),
                                 [
                                     ("this", ST::raw("test::TestType").mut_pointer()),
                                     ("arg0", ST::raw("u32")),
@@ -372,7 +372,7 @@ fn can_generate_vftable() {
                         SR::field(
                             (SV::Public, "test_function1"),
                             ST::function(
-                                SCC::Thiscall,
+                                SCC::for_member_function(pointer_size()),
                                 [
                                     ("this", ST::raw("test::TestType").mut_pointer()),
                                     ("arg0", ST::raw("u32")),
@@ -434,7 +434,7 @@ fn can_generate_vftable_with_indices() {
                                 SF::new(
                                     (SV::Public, "test_function0"),
                                     SFB::vftable("test_function0"),
-                                    SCC::Thiscall,
+                                    SCC::for_member_function(pointer_size()),
                                 )
                                 .with_arguments([
                                     SAr::MutSelf,
@@ -447,7 +447,7 @@ fn can_generate_vftable_with_indices() {
                                 SF::new(
                                     (SV::Public, "test_function1"),
                                     SFB::vftable("test_function1"),
-                                    SCC::Thiscall,
+                                    SCC::for_member_function(pointer_size()),
                                 )
                                 .with_arguments([
                                     SAr::MutSelf,
@@ -473,7 +473,7 @@ fn can_generate_vftable_with_indices() {
                         SR::field(
                             (SV::Public, "test_function0"),
                             ST::function(
-                                SCC::Thiscall,
+                                SCC::for_member_function(pointer_size()),
                                 [
                                     ("this", ST::raw("test::TestType").mut_pointer()),
                                     ("arg0", ST::raw("u32")),
@@ -487,7 +487,7 @@ fn can_generate_vftable_with_indices() {
                         SR::field(
                             (SV::Public, "test_function1"),
                             ST::function(
-                                SCC::Thiscall,
+                                SCC::for_member_function(pointer_size()),
                                 [
                                     ("this", ST::raw("test::TestType").mut_pointer()),
                                     ("arg0", ST::raw("u32")),
@@ -548,7 +548,7 @@ fn will_propagate_calling_convention_for_impl_and_vftable() {
                                 [SF::new(
                                     (SV::Public, "test_function0"),
                                     SFB::vftable("test_function0"),
-                                    SCC::Thiscall,
+                                    SCC::for_member_function(pointer_size()),
                                 )
                                 .with_arguments([
                                     SAr::MutSelf,
@@ -564,7 +564,7 @@ fn will_propagate_calling_convention_for_impl_and_vftable() {
                     .with_associated_functions([SF::new(
                         (SV::Public, "test_function"),
                         SFB::address(0x800_000),
-                        SCC::Thiscall,
+                        SCC::for_member_function(pointer_size()),
                     )
                     .with_calling_convention(SCC::Cdecl)
                     .with_arguments([SAr::field("arg1", ST::raw("i32"))])
@@ -599,7 +599,7 @@ fn make_vfunc(index: usize) -> SF {
     SF::new(
         (SV::Private, name.clone()),
         SFB::vftable(name),
-        SCC::Thiscall,
+        SCC::for_member_function(pointer_size()),
     )
     .with_arguments([SAr::MutSelf])
 }
@@ -608,7 +608,7 @@ fn make_vfunc_region(index: usize) -> SR {
     SR::field(
         (SV::Private, format!("_vfunc_{}", index)),
         ST::function(
-            SCC::Thiscall,
+            SCC::for_member_function(pointer_size()),
             [("this", ST::raw("test::TestType").mut_pointer())],
             None,
         ),
@@ -1007,7 +1007,7 @@ fn can_propagate_doc_comments() {
                             [SF::new(
                                 (SV::Private, "test_vfunc"),
                                 SFB::vftable("test_vfunc"),
-                                SCC::Thiscall,
+                                SCC::for_member_function(pointer_size()),
                             )
                             .with_arguments([SAr::ConstSelf])
                             .with_doc(" My test vfunc!")],
@@ -1017,7 +1017,7 @@ fn can_propagate_doc_comments() {
                         .with_associated_functions([SF::new(
                             (SV::Private, "test_func"),
                             SFB::address(0x123),
-                            SCC::Thiscall,
+                            SCC::for_member_function(pointer_size()),
                         )
                         .with_arguments([SAr::ConstSelf])
                         .with_doc(" My test func!")]),
@@ -1030,7 +1030,7 @@ fn can_propagate_doc_comments() {
                     STD::new().with_regions([SR::field(
                         (SV::Private, "test_vfunc"),
                         ST::function(
-                            SCC::Thiscall,
+                            SCC::for_member_function(pointer_size()),
                             [("this", ST::raw("test::TestType").const_pointer())],
                             None,
                         ),

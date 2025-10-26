@@ -23,7 +23,7 @@ fn vfunc_region(name: &str, self_type: &str) -> SR {
     SR::field(
         (SV::Public, name),
         ST::function(
-            SCC::Thiscall,
+            SCC::for_member_function(pointer_size()),
             vec![
                 ("this", ST::raw(self_type).mut_pointer()),
                 ("arg0", ST::raw("u32")),
@@ -35,11 +35,15 @@ fn vfunc_region(name: &str, self_type: &str) -> SR {
 }
 
 fn vfunc_semantic(name: &str) -> SF {
-    SF::new((SV::Public, name), SFB::vftable(name), SCC::Thiscall)
-        .with_arguments([
-            SAr::MutSelf,
-            SAr::field("arg0", ST::raw("u32")),
-            SAr::field("arg1", ST::raw("f32")),
-        ])
-        .with_return_type(ST::raw("i32"))
+    SF::new(
+        (SV::Public, name),
+        SFB::vftable(name),
+        SCC::for_member_function(pointer_size()),
+    )
+    .with_arguments([
+        SAr::MutSelf,
+        SAr::field("arg0", ST::raw("u32")),
+        SAr::field("arg1", ST::raw("f32")),
+    ])
+    .with_return_type(ST::raw("i32"))
 }

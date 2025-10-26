@@ -49,7 +49,7 @@ impl BaseA {
         self.base.vftable() as *const crate::diamond_inheritance::BaseAVftable
     }
     pub unsafe fn associated(&mut self) {
-        let f: unsafe extern "thiscall" fn(this: *mut Self) = ::std::mem::transmute(
+        let f: unsafe extern "system" fn(this: *mut Self) = ::std::mem::transmute(
             0x123 as usize,
         );
         f(self as *mut Self as _)
@@ -81,7 +81,7 @@ impl std::convert::AsMut<BaseA> for BaseA {
 }
 #[repr(C, align(8))]
 struct BaseAVftable {
-    pub destructor: unsafe extern "thiscall" fn(
+    pub destructor: unsafe extern "system" fn(
         this: *mut crate::diamond_inheritance::BaseA,
     ),
 }
@@ -117,7 +117,7 @@ impl BaseB {
         self.base.vftable() as *const crate::diamond_inheritance::BaseBVftable
     }
     pub unsafe fn associated(&mut self) {
-        let f: unsafe extern "thiscall" fn(this: *mut Self) = ::std::mem::transmute(
+        let f: unsafe extern "system" fn(this: *mut Self) = ::std::mem::transmute(
             0x123 as usize,
         );
         f(self as *mut Self as _)
@@ -149,7 +149,7 @@ impl std::convert::AsMut<BaseB> for BaseB {
 }
 #[repr(C, align(8))]
 struct BaseBVftable {
-    pub destructor: unsafe extern "thiscall" fn(
+    pub destructor: unsafe extern "system" fn(
         this: *mut crate::diamond_inheritance::BaseB,
     ),
 }
@@ -172,7 +172,7 @@ impl std::convert::AsMut<BaseBVftable> for BaseBVftable {
 }
 #[repr(C, align(8))]
 struct BaseVftable {
-    pub destructor: unsafe extern "thiscall" fn(
+    pub destructor: unsafe extern "system" fn(
         this: *mut crate::diamond_inheritance::Base,
     ),
 }
@@ -264,7 +264,7 @@ impl std::convert::AsMut<Derived> for Derived {
 }
 #[repr(C, align(8))]
 struct DerivedVftable {
-    pub destructor: unsafe extern "thiscall" fn(
+    pub destructor: unsafe extern "system" fn(
         this: *mut crate::diamond_inheritance::Derived,
     ),
 }

@@ -21,7 +21,7 @@ impl BaseA {
         self.vftable as *const crate::two_base_classes::BaseAVftable
     }
     pub unsafe fn base_a_associated(&self, a: i32) -> i32 {
-        let f: unsafe extern "thiscall" fn(this: *const Self, a: i32) -> i32 = ::std::mem::transmute(
+        let f: unsafe extern "system" fn(this: *const Self, a: i32) -> i32 = ::std::mem::transmute(
             0x123 as usize,
         );
         f(self as *const Self as _, a)
@@ -43,7 +43,7 @@ impl std::convert::AsMut<BaseA> for BaseA {
 }
 #[repr(C, align(8))]
 struct BaseAVftable {
-    pub base_a_vfunc: unsafe extern "thiscall" fn(
+    pub base_a_vfunc: unsafe extern "system" fn(
         this: *const crate::two_base_classes::BaseA,
         a: i32,
     ) -> i32,
@@ -81,7 +81,7 @@ impl BaseB {
         self.vftable as *const crate::two_base_classes::BaseBVftable
     }
     pub unsafe fn base_b_associated(&self, a: i32) -> i32 {
-        let f: unsafe extern "thiscall" fn(this: *const Self, a: i32) -> i32 = ::std::mem::transmute(
+        let f: unsafe extern "system" fn(this: *const Self, a: i32) -> i32 = ::std::mem::transmute(
             0x456 as usize,
         );
         f(self as *const Self as _, a)
@@ -103,7 +103,7 @@ impl std::convert::AsMut<BaseB> for BaseB {
 }
 #[repr(C, align(8))]
 struct BaseBVftable {
-    pub base_b_vfunc: unsafe extern "thiscall" fn(
+    pub base_b_vfunc: unsafe extern "system" fn(
         this: *const crate::two_base_classes::BaseB,
         a: i32,
     ) -> i32,
@@ -150,7 +150,7 @@ impl Derived {
         self.base_b.base_b_vfunc(a)
     }
     pub unsafe fn derived_associated(&self, a: i32) -> i32 {
-        let f: unsafe extern "thiscall" fn(this: *const Self, a: i32) -> i32 = ::std::mem::transmute(
+        let f: unsafe extern "system" fn(this: *const Self, a: i32) -> i32 = ::std::mem::transmute(
             0x789 as usize,
         );
         f(self as *const Self as _, a)
@@ -196,11 +196,11 @@ impl std::convert::AsMut<Derived> for Derived {
 }
 #[repr(C, align(8))]
 struct DerivedVftable {
-    pub base_a_vfunc: unsafe extern "thiscall" fn(
+    pub base_a_vfunc: unsafe extern "system" fn(
         this: *const crate::two_base_classes::Derived,
         a: i32,
     ) -> i32,
-    pub derived_vfunc: unsafe extern "thiscall" fn(
+    pub derived_vfunc: unsafe extern "system" fn(
         this: *const crate::two_base_classes::Derived,
         a: i32,
     ) -> i32,

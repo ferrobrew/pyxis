@@ -56,6 +56,17 @@ impl CallingConvention {
             CallingConvention::System => "system",
         }
     }
+
+    // Assume that if the function is 4-byte pointer-sized, it's a thiscall function, otherwise it's "system"
+    //
+    // This is very sus; we should probably have global configuration per-project for this kind of thing
+    pub fn for_member_function(pointer_size: usize) -> Self {
+        if pointer_size == 4 {
+            CallingConvention::Thiscall
+        } else {
+            CallingConvention::System
+        }
+    }
 }
 impl fmt::Display for CallingConvention {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -304,14 +315,12 @@ pub fn build(
         .and_then(|t| type_registry.resolve_grammar_type(scope, t));
 
     let calling_convention = calling_convention.unwrap_or_else(|| {
-        // Assume that if the function has a self argument, it's a thiscall function, otherwise it's "system"
-        // for interoperating with system libraries: <https://doc.rust-lang.org/nomicon/ffi.html#foreign-calling-conventions>
-        // Bit sus honestly, maybe we should enforce a calling convention for all non-self functions?
         let has_self = arguments
             .iter()
             .any(|a| matches!(a, Argument::ConstSelf | Argument::MutSelf));
+        // probably a bit sus
         if has_self {
-            CallingConvention::Thiscall
+            CallingConvention::for_member_function(type_registry.pointer_size())
         } else {
             CallingConvention::System
         }

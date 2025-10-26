@@ -593,7 +593,7 @@ fn a1_b1_d1_with_associated_functions() {
                         .with_associated_functions([SF::new(
                             (SV::Public, "base_a_associated"),
                             SFB::address(0x123),
-                            SCC::Thiscall,
+                            SCC::for_member_function(pointer_size()),
                         )
                         .with_arguments([SAr::MutSelf])]),
                 ),
@@ -628,7 +628,7 @@ fn a1_b1_d1_with_associated_functions() {
                         .with_associated_functions([SF::new(
                             (SV::Public, "base_b_associated"),
                             SFB::address(0x456),
-                            SCC::Thiscall,
+                            SCC::for_member_function(pointer_size()),
                         )
                         .with_arguments([SAr::MutSelf])]),
                 ),
@@ -663,13 +663,13 @@ fn a1_b1_d1_with_associated_functions() {
                             SF::new(
                                 (SV::Public, "base_a_associated"),
                                 SFB::field("base_a", "base_a_associated"),
-                                SCC::Thiscall,
+                                SCC::for_member_function(pointer_size()),
                             )
                             .with_arguments([SAr::MutSelf]),
                             SF::new(
                                 (SV::Public, "base_b_associated"),
                                 SFB::field("base_b", "base_b_associated"),
-                                SCC::Thiscall,
+                                SCC::for_member_function(pointer_size()),
                             )
                             .with_arguments([SAr::MutSelf]),
                             vfunc_semantic("base_b_vfunc")
@@ -677,7 +677,7 @@ fn a1_b1_d1_with_associated_functions() {
                             SF::new(
                                 (SV::Public, "derived_associated"),
                                 SFB::address(0x789),
-                                SCC::Thiscall,
+                                SCC::for_member_function(pointer_size()),
                             )
                             .with_arguments([SAr::MutSelf]),
                         ]),

@@ -95,7 +95,7 @@ fn multiple_inheritance_with_vftables() {
                         .with_associated_functions([SF::new(
                             (SV::Public, "associated"),
                             SFB::address(0x123),
-                            SCC::Thiscall,
+                            SCC::for_member_function(pointer_size()),
                         )
                         .with_arguments([SAr::MutSelf])]),
                 ),
@@ -123,7 +123,7 @@ fn multiple_inheritance_with_vftables() {
                         .with_associated_functions([SF::new(
                             (SV::Public, "associated"),
                             SFB::address(0x123),
-                            SCC::Thiscall,
+                            SCC::for_member_function(pointer_size()),
                         )
                         .with_arguments([SAr::MutSelf])]),
                 ),
@@ -156,21 +156,21 @@ fn multiple_inheritance_with_vftables() {
                             SF::new(
                                 (SV::Public, "associated"),
                                 SFB::field("base_a", "associated"),
-                                SCC::Thiscall,
+                                SCC::for_member_function(pointer_size()),
                             )
                             .with_arguments([SAr::MutSelf]),
                             // base_b_associated
                             SF::new(
                                 (SV::Public, "base_b_associated"),
                                 SFB::field("base_b", "associated"),
-                                SCC::Thiscall,
+                                SCC::for_member_function(pointer_size()),
                             )
                             .with_arguments([SAr::MutSelf]),
                             // base_b_destructor
                             SF::new(
                                 (SV::Public, "base_b_destructor"),
                                 SFB::field("base_b", "destructor"),
-                                SCC::Thiscall,
+                                SCC::for_member_function(pointer_size()),
                             )
                             .with_arguments([
                                 SAr::MutSelf,
@@ -178,7 +178,7 @@ fn multiple_inheritance_with_vftables() {
                                 SAr::field("arg1", ST::raw("f32")),
                             ])
                             .with_return_type(ST::raw("i32"))
-                            .with_calling_convention(SCC::Thiscall),
+                            .with_calling_convention(SCC::for_member_function(pointer_size())),
                         ]),
                 ),
             ),

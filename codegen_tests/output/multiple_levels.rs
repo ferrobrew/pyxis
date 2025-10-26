@@ -21,7 +21,7 @@ impl Base {
         self.vftable as *const crate::multiple_levels::BaseVftable
     }
     pub unsafe fn base_associated(&self, a: i32) -> i32 {
-        let f: unsafe extern "thiscall" fn(this: *const Self, a: i32) -> i32 = ::std::mem::transmute(
+        let f: unsafe extern "system" fn(this: *const Self, a: i32) -> i32 = ::std::mem::transmute(
             0x123 as usize,
         );
         f(self as *const Self as _, a)
@@ -43,7 +43,7 @@ impl std::convert::AsMut<Base> for Base {
 }
 #[repr(C, align(8))]
 struct BaseVftable {
-    pub base_vfunc: unsafe extern "thiscall" fn(
+    pub base_vfunc: unsafe extern "system" fn(
         this: *const crate::multiple_levels::Base,
         a: i32,
     ) -> i32,
@@ -84,7 +84,7 @@ impl Derived {
         self.base.base_associated(a)
     }
     pub unsafe fn derived_associated(&self, a: i32) -> i32 {
-        let f: unsafe extern "thiscall" fn(this: *const Self, a: i32) -> i32 = ::std::mem::transmute(
+        let f: unsafe extern "system" fn(this: *const Self, a: i32) -> i32 = ::std::mem::transmute(
             0x456 as usize,
         );
         f(self as *const Self as _, a)
@@ -140,7 +140,7 @@ impl DerivedDerived {
         self.derived.derived_associated(a)
     }
     pub unsafe fn derived_derived_associated(&self, a: i32) -> i32 {
-        let f: unsafe extern "thiscall" fn(this: *const Self, a: i32) -> i32 = ::std::mem::transmute(
+        let f: unsafe extern "system" fn(this: *const Self, a: i32) -> i32 = ::std::mem::transmute(
             0x789 as usize,
         );
         f(self as *const Self as _, a)
@@ -216,7 +216,7 @@ impl DerivedDerivedDerived {
         self.derived_derived.derived_derived_associated(a)
     }
     pub unsafe fn derived_derived_derived_associated(&self, a: i32) -> i32 {
-        let f: unsafe extern "thiscall" fn(this: *const Self, a: i32) -> i32 = ::std::mem::transmute(
+        let f: unsafe extern "system" fn(this: *const Self, a: i32) -> i32 = ::std::mem::transmute(
             0xABC as usize,
         );
         f(self as *const Self as _, a)
@@ -282,19 +282,19 @@ impl std::convert::AsMut<DerivedDerivedDerived> for DerivedDerivedDerived {
 }
 #[repr(C, align(8))]
 struct DerivedDerivedDerivedVftable {
-    pub base_vfunc: unsafe extern "thiscall" fn(
+    pub base_vfunc: unsafe extern "system" fn(
         this: *const crate::multiple_levels::DerivedDerivedDerived,
         a: i32,
     ) -> i32,
-    pub derived_vfunc: unsafe extern "thiscall" fn(
+    pub derived_vfunc: unsafe extern "system" fn(
         this: *const crate::multiple_levels::DerivedDerivedDerived,
         a: i32,
     ) -> i32,
-    pub derived_derived_vfunc: unsafe extern "thiscall" fn(
+    pub derived_derived_vfunc: unsafe extern "system" fn(
         this: *const crate::multiple_levels::DerivedDerivedDerived,
         a: i32,
     ) -> i32,
-    pub derived_derived_derived_vfunc: unsafe extern "thiscall" fn(
+    pub derived_derived_derived_vfunc: unsafe extern "system" fn(
         this: *const crate::multiple_levels::DerivedDerivedDerived,
         a: i32,
     ) -> i32,
@@ -318,15 +318,15 @@ impl std::convert::AsMut<DerivedDerivedDerivedVftable> for DerivedDerivedDerived
 }
 #[repr(C, align(8))]
 struct DerivedDerivedVftable {
-    pub base_vfunc: unsafe extern "thiscall" fn(
+    pub base_vfunc: unsafe extern "system" fn(
         this: *const crate::multiple_levels::DerivedDerived,
         a: i32,
     ) -> i32,
-    pub derived_vfunc: unsafe extern "thiscall" fn(
+    pub derived_vfunc: unsafe extern "system" fn(
         this: *const crate::multiple_levels::DerivedDerived,
         a: i32,
     ) -> i32,
-    pub derived_derived_vfunc: unsafe extern "thiscall" fn(
+    pub derived_derived_vfunc: unsafe extern "system" fn(
         this: *const crate::multiple_levels::DerivedDerived,
         a: i32,
     ) -> i32,
@@ -350,11 +350,11 @@ impl std::convert::AsMut<DerivedDerivedVftable> for DerivedDerivedVftable {
 }
 #[repr(C, align(8))]
 struct DerivedVftable {
-    pub base_vfunc: unsafe extern "thiscall" fn(
+    pub base_vfunc: unsafe extern "system" fn(
         this: *const crate::multiple_levels::Derived,
         a: i32,
     ) -> i32,
-    pub derived_vfunc: unsafe extern "thiscall" fn(
+    pub derived_vfunc: unsafe extern "system" fn(
         this: *const crate::multiple_levels::Derived,
         a: i32,
     ) -> i32,
