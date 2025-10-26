@@ -3,8 +3,8 @@ use anyhow::Context;
 use crate::{
     grammar::{self, ItemPath},
     semantic::{
-        types::{ItemStateResolved, Type},
         SemanticState,
+        types::{ItemStateResolved, Type},
     },
 };
 
@@ -90,7 +90,9 @@ pub fn build(
         );
     };
     if !predefined_item.is_unsigned_integer() {
-        anyhow::bail!("bitflags definition `{resolvee_path}` has a type that is not an unsigned integer: {ty}");
+        anyhow::bail!(
+            "bitflags definition `{resolvee_path}` has a type that is not an unsigned integer: {ty}"
+        );
     }
     let size = predefined_item.size();
 

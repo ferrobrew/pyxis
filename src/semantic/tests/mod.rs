@@ -1160,7 +1160,9 @@ fn bitflags_with_invalid_underlying_type_are_rejected() {
             &if invalid_type == "Lol" {
                 "bitflags definition `test::TestType` has a type that is not a predefined type: test::Lol".to_string()
             } else {
-                format!("bitflags definition `test::TestType` has a type that is not an unsigned integer: {invalid_type}")
+                format!(
+                    "bitflags definition `test::TestType` has a type that is not an unsigned integer: {invalid_type}"
+                )
             },
         );
     }

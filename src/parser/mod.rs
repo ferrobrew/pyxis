@@ -1,8 +1,7 @@
 use syn::{
-    braced, bracketed, parenthesized,
+    Token, braced, bracketed, parenthesized,
     parse::{Parse, ParseStream, Result},
     punctuated::Punctuated,
-    Token,
 };
 
 use crate::grammar::*;

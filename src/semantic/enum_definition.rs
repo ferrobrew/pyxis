@@ -3,8 +3,8 @@ use anyhow::Context;
 use crate::{
     grammar::{self, ItemPath},
     semantic::{
-        types::{ItemStateResolved, Type},
         SemanticState,
+        types::{ItemStateResolved, Type},
     },
 };
 

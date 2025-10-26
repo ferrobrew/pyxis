@@ -1,9 +1,9 @@
 use crate::{
     grammar::test_aliases::*,
     semantic::{
+        Module,
         semantic_state::{ResolvedSemanticState, SemanticState},
         types::test_aliases::*,
-        Module,
     },
 };
 

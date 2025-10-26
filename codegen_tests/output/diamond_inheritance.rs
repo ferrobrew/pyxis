@@ -20,8 +20,10 @@ impl Base {
         self.vftable as *const crate::diamond_inheritance::BaseVftable
     }
     pub unsafe fn destructor(&mut self) {
-        let f = (&raw const (*self.vftable()).destructor).read();
-        f(self as *mut Self as _)
+        unsafe {
+            let f = (&raw const (*self.vftable()).destructor).read();
+            f(self as *mut Self as _)
+        }
     }
 }
 impl std::convert::AsRef<Base> for Base {
@@ -49,14 +51,18 @@ impl BaseA {
         self.base.vftable() as *const crate::diamond_inheritance::BaseAVftable
     }
     pub unsafe fn associated(&mut self) {
-        let f: unsafe extern "system" fn(this: *mut Self) = ::std::mem::transmute(
-            0x123 as usize,
-        );
-        f(self as *mut Self as _)
+        unsafe {
+            let f: unsafe extern "system" fn(this: *mut Self) = ::std::mem::transmute(
+                0x123 as usize,
+            );
+            f(self as *mut Self as _)
+        }
     }
     pub unsafe fn destructor(&mut self) {
-        let f = (&raw const (*self.vftable()).destructor).read();
-        f(self as *mut Self as _)
+        unsafe {
+            let f = (&raw const (*self.vftable()).destructor).read();
+            f(self as *mut Self as _)
+        }
     }
 }
 impl std::convert::AsRef<crate::diamond_inheritance::Base> for BaseA {
@@ -117,14 +123,18 @@ impl BaseB {
         self.base.vftable() as *const crate::diamond_inheritance::BaseBVftable
     }
     pub unsafe fn associated(&mut self) {
-        let f: unsafe extern "system" fn(this: *mut Self) = ::std::mem::transmute(
-            0x123 as usize,
-        );
-        f(self as *mut Self as _)
+        unsafe {
+            let f: unsafe extern "system" fn(this: *mut Self) = ::std::mem::transmute(
+                0x123 as usize,
+            );
+            f(self as *mut Self as _)
+        }
     }
     pub unsafe fn destructor(&mut self) {
-        let f = (&raw const (*self.vftable()).destructor).read();
-        f(self as *mut Self as _)
+        unsafe {
+            let f = (&raw const (*self.vftable()).destructor).read();
+            f(self as *mut Self as _)
+        }
     }
 }
 impl std::convert::AsRef<crate::diamond_inheritance::Base> for BaseB {
@@ -209,17 +219,19 @@ impl Derived {
         self.base_a.vftable() as *const crate::diamond_inheritance::DerivedVftable
     }
     pub unsafe fn associated(&mut self) {
-        self.base_a.associated()
+        unsafe { self.base_a.associated() }
     }
     pub unsafe fn base_b_associated(&mut self) {
-        self.base_b.associated()
+        unsafe { self.base_b.associated() }
     }
     pub unsafe fn base_b_destructor(&mut self) {
-        self.base_b.destructor()
+        unsafe { self.base_b.destructor() }
     }
     pub unsafe fn destructor(&mut self) {
-        let f = (&raw const (*self.vftable()).destructor).read();
-        f(self as *mut Self as _)
+        unsafe {
+            let f = (&raw const (*self.vftable()).destructor).read();
+            f(self as *mut Self as _)
+        }
     }
 }
 impl std::convert::AsRef<crate::diamond_inheritance::BaseA> for Derived {

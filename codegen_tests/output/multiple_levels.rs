@@ -21,14 +21,18 @@ impl Base {
         self.vftable as *const crate::multiple_levels::BaseVftable
     }
     pub unsafe fn base_associated(&self, a: i32) -> i32 {
-        let f: unsafe extern "system" fn(this: *const Self, a: i32) -> i32 = ::std::mem::transmute(
-            0x123 as usize,
-        );
-        f(self as *const Self as _, a)
+        unsafe {
+            let f: unsafe extern "system" fn(this: *const Self, a: i32) -> i32 = ::std::mem::transmute(
+                0x123 as usize,
+            );
+            f(self as *const Self as _, a)
+        }
     }
     pub unsafe fn base_vfunc(&self, a: i32) -> i32 {
-        let f = (&raw const (*self.vftable()).base_vfunc).read();
-        f(self as *const Self as _, a)
+        unsafe {
+            let f = (&raw const (*self.vftable()).base_vfunc).read();
+            f(self as *const Self as _, a)
+        }
     }
 }
 impl std::convert::AsRef<Base> for Base {
@@ -81,21 +85,27 @@ impl Derived {
         self.base.vftable() as *const crate::multiple_levels::DerivedVftable
     }
     pub unsafe fn base_associated(&self, a: i32) -> i32 {
-        self.base.base_associated(a)
+        unsafe { self.base.base_associated(a) }
     }
     pub unsafe fn derived_associated(&self, a: i32) -> i32 {
-        let f: unsafe extern "system" fn(this: *const Self, a: i32) -> i32 = ::std::mem::transmute(
-            0x456 as usize,
-        );
-        f(self as *const Self as _, a)
+        unsafe {
+            let f: unsafe extern "system" fn(this: *const Self, a: i32) -> i32 = ::std::mem::transmute(
+                0x456 as usize,
+            );
+            f(self as *const Self as _, a)
+        }
     }
     pub unsafe fn base_vfunc(&self, a: i32) -> i32 {
-        let f = (&raw const (*self.vftable()).base_vfunc).read();
-        f(self as *const Self as _, a)
+        unsafe {
+            let f = (&raw const (*self.vftable()).base_vfunc).read();
+            f(self as *const Self as _, a)
+        }
     }
     pub unsafe fn derived_vfunc(&self, a: i32) -> i32 {
-        let f = (&raw const (*self.vftable()).derived_vfunc).read();
-        f(self as *const Self as _, a)
+        unsafe {
+            let f = (&raw const (*self.vftable()).derived_vfunc).read();
+            f(self as *const Self as _, a)
+        }
     }
 }
 impl std::convert::AsRef<crate::multiple_levels::Base> for Derived {
@@ -134,28 +144,36 @@ impl DerivedDerived {
         self.derived.vftable() as *const crate::multiple_levels::DerivedDerivedVftable
     }
     pub unsafe fn base_associated(&self, a: i32) -> i32 {
-        self.derived.base_associated(a)
+        unsafe { self.derived.base_associated(a) }
     }
     pub unsafe fn derived_associated(&self, a: i32) -> i32 {
-        self.derived.derived_associated(a)
+        unsafe { self.derived.derived_associated(a) }
     }
     pub unsafe fn derived_derived_associated(&self, a: i32) -> i32 {
-        let f: unsafe extern "system" fn(this: *const Self, a: i32) -> i32 = ::std::mem::transmute(
-            0x789 as usize,
-        );
-        f(self as *const Self as _, a)
+        unsafe {
+            let f: unsafe extern "system" fn(this: *const Self, a: i32) -> i32 = ::std::mem::transmute(
+                0x789 as usize,
+            );
+            f(self as *const Self as _, a)
+        }
     }
     pub unsafe fn base_vfunc(&self, a: i32) -> i32 {
-        let f = (&raw const (*self.vftable()).base_vfunc).read();
-        f(self as *const Self as _, a)
+        unsafe {
+            let f = (&raw const (*self.vftable()).base_vfunc).read();
+            f(self as *const Self as _, a)
+        }
     }
     pub unsafe fn derived_vfunc(&self, a: i32) -> i32 {
-        let f = (&raw const (*self.vftable()).derived_vfunc).read();
-        f(self as *const Self as _, a)
+        unsafe {
+            let f = (&raw const (*self.vftable()).derived_vfunc).read();
+            f(self as *const Self as _, a)
+        }
     }
     pub unsafe fn derived_derived_vfunc(&self, a: i32) -> i32 {
-        let f = (&raw const (*self.vftable()).derived_derived_vfunc).read();
-        f(self as *const Self as _, a)
+        unsafe {
+            let f = (&raw const (*self.vftable()).derived_derived_vfunc).read();
+            f(self as *const Self as _, a)
+        }
     }
 }
 impl std::convert::AsRef<crate::multiple_levels::Derived> for DerivedDerived {
@@ -207,35 +225,45 @@ impl DerivedDerivedDerived {
             as *const crate::multiple_levels::DerivedDerivedDerivedVftable
     }
     pub unsafe fn base_associated(&self, a: i32) -> i32 {
-        self.derived_derived.base_associated(a)
+        unsafe { self.derived_derived.base_associated(a) }
     }
     pub unsafe fn derived_associated(&self, a: i32) -> i32 {
-        self.derived_derived.derived_associated(a)
+        unsafe { self.derived_derived.derived_associated(a) }
     }
     pub unsafe fn derived_derived_associated(&self, a: i32) -> i32 {
-        self.derived_derived.derived_derived_associated(a)
+        unsafe { self.derived_derived.derived_derived_associated(a) }
     }
     pub unsafe fn derived_derived_derived_associated(&self, a: i32) -> i32 {
-        let f: unsafe extern "system" fn(this: *const Self, a: i32) -> i32 = ::std::mem::transmute(
-            0xABC as usize,
-        );
-        f(self as *const Self as _, a)
+        unsafe {
+            let f: unsafe extern "system" fn(this: *const Self, a: i32) -> i32 = ::std::mem::transmute(
+                0xABC as usize,
+            );
+            f(self as *const Self as _, a)
+        }
     }
     pub unsafe fn base_vfunc(&self, a: i32) -> i32 {
-        let f = (&raw const (*self.vftable()).base_vfunc).read();
-        f(self as *const Self as _, a)
+        unsafe {
+            let f = (&raw const (*self.vftable()).base_vfunc).read();
+            f(self as *const Self as _, a)
+        }
     }
     pub unsafe fn derived_vfunc(&self, a: i32) -> i32 {
-        let f = (&raw const (*self.vftable()).derived_vfunc).read();
-        f(self as *const Self as _, a)
+        unsafe {
+            let f = (&raw const (*self.vftable()).derived_vfunc).read();
+            f(self as *const Self as _, a)
+        }
     }
     pub unsafe fn derived_derived_vfunc(&self, a: i32) -> i32 {
-        let f = (&raw const (*self.vftable()).derived_derived_vfunc).read();
-        f(self as *const Self as _, a)
+        unsafe {
+            let f = (&raw const (*self.vftable()).derived_derived_vfunc).read();
+            f(self as *const Self as _, a)
+        }
     }
     pub unsafe fn derived_derived_derived_vfunc(&self, a: i32) -> i32 {
-        let f = (&raw const (*self.vftable()).derived_derived_derived_vfunc).read();
-        f(self as *const Self as _, a)
+        unsafe {
+            let f = (&raw const (*self.vftable()).derived_derived_derived_vfunc).read();
+            f(self as *const Self as _, a)
+        }
     }
 }
 impl std::convert::AsRef<crate::multiple_levels::DerivedDerived>

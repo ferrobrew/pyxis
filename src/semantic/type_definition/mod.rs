@@ -3,10 +3,9 @@ use std::collections::HashSet;
 use crate::{
     grammar::{self, ItemPath},
     semantic::{
-        function,
+        SemanticState, function,
         type_registry::TypeRegistry,
         types::{Function, FunctionBody, ItemState, ItemStateResolved, Type, Visibility},
-        SemanticState,
     },
     util,
 };
@@ -395,7 +394,9 @@ pub fn build(
                 }
             }
             let Some(path) = get_defaultable_type_path(type_ref) else {
-                anyhow::bail!("field `{name}` of type `{resolvee_path}` is not a defaultable type (pointer or function?)");
+                anyhow::bail!(
+                    "field `{name}` of type `{resolvee_path}` is not a defaultable type (pointer or function?)"
+                );
             };
 
             let item = semantic
@@ -467,7 +468,9 @@ pub fn build(
 
         // Ensure that the size is a multiple of the alignment.
         if size % alignment != 0 {
-            anyhow::bail!("the type `{resolvee_path}` has a size of {size}, which is not a multiple of its alignment {alignment}");
+            anyhow::bail!(
+                "the type `{resolvee_path}` has a size of {size}, which is not a multiple of its alignment {alignment}"
+            );
         }
 
         alignment
@@ -531,13 +534,12 @@ fn resolve_regions(
         first_base,
         vftable_functions,
     )?;
-    if let Some(vftable_region) = vftable_region {
-        if resolved
+    if let Some(vftable_region) = vftable_region
+        && resolved
             .push(&semantic.type_registry, vftable_region)
             .is_none()
-        {
-            return Ok(None);
-        }
+    {
+        return Ok(None);
     }
 
     // Insert each region, including padding if necessary
@@ -552,7 +554,8 @@ fn resolve_regions(
                     .as_deref()
                     .unwrap_or_default();
                 anyhow::bail!(
-                    "attempted to insert padding at 0x{offset:X}, but overlapped with existing region `{existing_region}` that ends at 0x{:X}", resolved.last_address
+                    "attempted to insert padding at 0x{offset:X}, but overlapped with existing region `{existing_region}` that ends at 0x{:X}",
+                    resolved.last_address
                 );
             };
             let padding_region = Region::unnamed_field(semantic.type_registry.padding_type(size));
@@ -570,19 +573,19 @@ fn resolve_regions(
     }
 
     // Pad out to target size
-    if let Some(target_size) = target_size {
-        if resolved.last_address < target_size {
-            let padding_region = Region::unnamed_field(
-                semantic
-                    .type_registry
-                    .padding_type(target_size - resolved.last_address),
-            );
-            if resolved
-                .push(&semantic.type_registry, padding_region)
-                .is_none()
-            {
-                return Ok(None);
-            }
+    if let Some(target_size) = target_size
+        && resolved.last_address < target_size
+    {
+        let padding_region = Region::unnamed_field(
+            semantic
+                .type_registry
+                .padding_type(target_size - resolved.last_address),
+        );
+        if resolved
+            .push(&semantic.type_registry, padding_region)
+            .is_none()
+        {
+            return Ok(None);
         }
     }
 
@@ -614,12 +617,12 @@ fn resolve_regions(
     }
 
     // Check that the final size is equal to the target size
-    if let Some(target_size) = target_size {
-        if size != target_size {
-            anyhow::bail!(
-                "calculated size {size} for type `{resolvee_path}` does not match target size {target_size}; is your target size correct?"
-            );
-        }
+    if let Some(target_size) = target_size
+        && size != target_size
+    {
+        anyhow::bail!(
+            "calculated size {size} for type `{resolvee_path}` does not match target size {target_size}; is your target size correct?"
+        );
     }
 
     Ok(Some((resolved.regions, vftable, size)))

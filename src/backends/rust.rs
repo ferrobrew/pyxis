@@ -3,17 +3,17 @@ use std::{collections::HashMap, fmt::Write as _, path::Path, str::FromStr};
 use crate::{
     grammar::ItemPath,
     semantic::{
+        Module, ResolvedSemanticState, TypeRegistry,
         types::{
             Argument, BitflagsDefinition, EnumDefinition, ExternValue, Function, FunctionBody,
             ItemCategory, ItemDefinition, ItemDefinitionInner, ItemStateResolved, Region, Type,
             TypeDefinition, Visibility,
         },
-        Module, ResolvedSemanticState, TypeRegistry,
     },
 };
 
 use anyhow::Context;
-use quote::{quote, ToTokens};
+use quote::{ToTokens, quote};
 
 pub fn write_module(
     out_dir: &Path,
@@ -675,7 +675,9 @@ fn build_function(function: &Function) -> Result<proc_macro2::TokenStream, anyho
     Ok(quote! {
         #doc
         #visibility unsafe fn #name(#(#arguments),*) #return_type {
-            #function_body
+            unsafe {
+                #function_body
+            }
         }
     })
 }

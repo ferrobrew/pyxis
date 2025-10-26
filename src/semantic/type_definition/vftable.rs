@@ -3,7 +3,7 @@ use anyhow::Context;
 use crate::{
     grammar::{self, ItemPath},
     semantic::{
-        function,
+        SemanticState, function,
         module::Module,
         type_definition::get_region_name_and_type_definition,
         type_registry::TypeRegistry,
@@ -11,7 +11,6 @@ use crate::{
             Argument, CallingConvention, Function, FunctionBody, ItemCategory, ItemDefinition,
             ItemState, ItemStateResolved, Region, Type, TypeDefinition, Visibility,
         },
-        SemanticState,
     },
 };
 

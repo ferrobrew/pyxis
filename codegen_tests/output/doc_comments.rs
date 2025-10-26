@@ -29,15 +29,19 @@ impl TestType {
     ///
     /// And its second line! :)
     pub unsafe fn test_func(&self) {
-        let f: unsafe extern "system" fn(this: *const Self) = ::std::mem::transmute(
-            0x123 as usize,
-        );
-        f(self as *const Self as _)
+        unsafe {
+            let f: unsafe extern "system" fn(this: *const Self) = ::std::mem::transmute(
+                0x123 as usize,
+            );
+            f(self as *const Self as _)
+        }
     }
     /// My test vfunc!
     pub unsafe fn test_vfunc(&self) {
-        let f = (&raw const (*self.vftable()).test_vfunc).read();
-        f(self as *const Self as _)
+        unsafe {
+            let f = (&raw const (*self.vftable()).test_vfunc).read();
+            f(self as *const Self as _)
+        }
     }
 }
 impl std::convert::AsRef<TestType> for TestType {
