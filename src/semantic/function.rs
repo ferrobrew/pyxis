@@ -162,7 +162,11 @@ impl fmt::Display for Function {
     }
 }
 impl Function {
-    pub fn new((visibility, name): (Visibility, impl Into<String>), body: FunctionBody) -> Self {
+    pub fn new(
+        (visibility, name): (Visibility, impl Into<String>),
+        body: FunctionBody,
+        calling_convention: CallingConvention,
+    ) -> Self {
         Function {
             visibility,
             name: name.into(),
@@ -170,9 +174,7 @@ impl Function {
             body,
             arguments: Vec::new(),
             return_type: None,
-            // ehh. This is not really always going to be true,
-            // but I also don't want to specify it in all of the tests
-            calling_convention: CallingConvention::Thiscall,
+            calling_convention,
         }
     }
     pub fn with_arguments(mut self, arguments: impl Into<Vec<Argument>>) -> Self {

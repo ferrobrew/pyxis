@@ -263,6 +263,7 @@ fn b1_d1_with_associated_functions() {
                         .with_associated_functions([SF::new(
                             (SV::Public, "base_associated"),
                             SFB::address(0x123),
+                            SCC::Thiscall,
                         )
                         .with_arguments([SAr::MutSelf])]),
                 ),
@@ -294,10 +295,15 @@ fn b1_d1_with_associated_functions() {
                             SF::new(
                                 (SV::Public, "base_associated"),
                                 SFB::field("base", "base_associated"),
+                                SCC::Thiscall,
                             )
                             .with_arguments([SAr::MutSelf]),
-                            SF::new((SV::Public, "derived_associated"), SFB::address(0x456))
-                                .with_arguments([SAr::MutSelf]),
+                            SF::new(
+                                (SV::Public, "derived_associated"),
+                                SFB::address(0x456),
+                                SCC::Thiscall,
+                            )
+                            .with_arguments([SAr::MutSelf]),
                         ]),
                 ),
             ),

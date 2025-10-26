@@ -158,6 +158,7 @@ fn can_resolve_complex_type() {
                         .with_associated_functions([SF::new(
                             (SV::Public, "test_function"),
                             SFB::address(0x800_000),
+                            SCC::Thiscall,
                         )
                         .with_arguments([
                             SAr::MutSelf,
@@ -324,6 +325,7 @@ fn can_generate_vftable() {
                                 SF::new(
                                     (SV::Public, "test_function0"),
                                     SFB::vftable("test_function0"),
+                                    SCC::Thiscall,
                                 )
                                 .with_arguments([
                                     SAr::MutSelf,
@@ -334,6 +336,7 @@ fn can_generate_vftable() {
                                 SF::new(
                                     (SV::Public, "test_function1"),
                                     SFB::vftable("test_function1"),
+                                    SCC::Thiscall,
                                 )
                                 .with_arguments([
                                     SAr::MutSelf,
@@ -431,6 +434,7 @@ fn can_generate_vftable_with_indices() {
                                 SF::new(
                                     (SV::Public, "test_function0"),
                                     SFB::vftable("test_function0"),
+                                    SCC::Thiscall,
                                 )
                                 .with_arguments([
                                     SAr::MutSelf,
@@ -443,6 +447,7 @@ fn can_generate_vftable_with_indices() {
                                 SF::new(
                                     (SV::Public, "test_function1"),
                                     SFB::vftable("test_function1"),
+                                    SCC::Thiscall,
                                 )
                                 .with_arguments([
                                     SAr::MutSelf,
@@ -543,6 +548,7 @@ fn will_propagate_calling_convention_for_impl_and_vftable() {
                                 [SF::new(
                                     (SV::Public, "test_function0"),
                                     SFB::vftable("test_function0"),
+                                    SCC::Thiscall,
                                 )
                                 .with_arguments([
                                     SAr::MutSelf,
@@ -558,6 +564,7 @@ fn will_propagate_calling_convention_for_impl_and_vftable() {
                     .with_associated_functions([SF::new(
                         (SV::Public, "test_function"),
                         SFB::address(0x800_000),
+                        SCC::Thiscall,
                     )
                     .with_calling_convention(SCC::Cdecl)
                     .with_arguments([SAr::field("arg1", ST::raw("i32"))])
@@ -589,7 +596,12 @@ fn will_propagate_calling_convention_for_impl_and_vftable() {
 
 fn make_vfunc(index: usize) -> SF {
     let name = format!("_vfunc_{index}");
-    SF::new((SV::Private, name.clone()), SFB::vftable(name)).with_arguments([SAr::MutSelf])
+    SF::new(
+        (SV::Private, name.clone()),
+        SFB::vftable(name),
+        SCC::Thiscall,
+    )
+    .with_arguments([SAr::MutSelf])
 }
 
 fn make_vfunc_region(index: usize) -> SR {
@@ -992,17 +1004,20 @@ fn can_propagate_doc_comments() {
                         ]))
                         .with_doc(" This is a doc comment")
                         .with_vftable(STV::new(
-                            [
-                                SF::new((SV::Private, "test_vfunc"), SFB::vftable("test_vfunc"))
-                                    .with_arguments([SAr::ConstSelf])
-                                    .with_doc(" My test vfunc!"),
-                            ],
+                            [SF::new(
+                                (SV::Private, "test_vfunc"),
+                                SFB::vftable("test_vfunc"),
+                                SCC::Thiscall,
+                            )
+                            .with_arguments([SAr::ConstSelf])
+                            .with_doc(" My test vfunc!")],
                             None,
                             ST::raw("test::TestTypeVftable").const_pointer(),
                         ))
                         .with_associated_functions([SF::new(
                             (SV::Private, "test_func"),
                             SFB::address(0x123),
+                            SCC::Thiscall,
                         )
                         .with_arguments([SAr::ConstSelf])
                         .with_doc(" My test func!")]),

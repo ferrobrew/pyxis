@@ -95,6 +95,7 @@ fn multiple_inheritance_with_vftables() {
                         .with_associated_functions([SF::new(
                             (SV::Public, "associated"),
                             SFB::address(0x123),
+                            SCC::Thiscall,
                         )
                         .with_arguments([SAr::MutSelf])]),
                 ),
@@ -122,6 +123,7 @@ fn multiple_inheritance_with_vftables() {
                         .with_associated_functions([SF::new(
                             (SV::Public, "associated"),
                             SFB::address(0x123),
+                            SCC::Thiscall,
                         )
                         .with_arguments([SAr::MutSelf])]),
                 ),
@@ -154,18 +156,21 @@ fn multiple_inheritance_with_vftables() {
                             SF::new(
                                 (SV::Public, "associated"),
                                 SFB::field("base_a", "associated"),
+                                SCC::Thiscall,
                             )
                             .with_arguments([SAr::MutSelf]),
                             // base_b_associated
                             SF::new(
                                 (SV::Public, "base_b_associated"),
                                 SFB::field("base_b", "associated"),
+                                SCC::Thiscall,
                             )
                             .with_arguments([SAr::MutSelf]),
                             // base_b_destructor
                             SF::new(
                                 (SV::Public, "base_b_destructor"),
                                 SFB::field("base_b", "destructor"),
+                                SCC::Thiscall,
                             )
                             .with_arguments([
                                 SAr::MutSelf,
