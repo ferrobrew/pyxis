@@ -3,6 +3,7 @@ use std::collections::{HashMap, HashSet};
 use crate::{
     grammar::{self, ItemPath},
     semantic::{
+        function::Function,
         type_registry,
         types::{Backend, ExternValue, ItemDefinition, Type},
     },
@@ -14,6 +15,7 @@ pub struct Module {
     pub(crate) ast: grammar::Module,
     pub(crate) definition_paths: HashSet<ItemPath>,
     pub(crate) extern_values: Vec<ExternValue>,
+    pub(crate) functions: Vec<Function>,
     pub(crate) impls: HashMap<ItemPath, grammar::FunctionBlock>,
     pub(crate) backends: HashMap<String, Vec<Backend>>,
     pub(crate) doc: Option<String>,
@@ -26,6 +28,7 @@ impl Default for Module {
             ast: Default::default(),
             definition_paths: Default::default(),
             extern_values: Default::default(),
+            functions: Default::default(),
             impls: Default::default(),
             backends: Default::default(),
             doc: Default::default(),
@@ -63,6 +66,7 @@ impl Module {
             ast,
             definition_paths: HashSet::new(),
             extern_values,
+            functions: vec![],
             impls,
             backends: backends_map,
             doc,
@@ -109,7 +113,30 @@ impl Module {
         Ok(())
     }
 
+    pub(crate) fn resolve_functions(
+        &mut self,
+        type_registry: &type_registry::TypeRegistry,
+    ) -> anyhow::Result<()> {
+        let scope = self.scope();
+
+        for function in &self.ast.functions {
+            let semantic_function = crate::semantic::function::build(
+                type_registry,
+                &scope,
+                false, // is_vfunc
+                function,
+            )?;
+            self.functions.push(semantic_function);
+        }
+
+        Ok(())
+    }
+
     pub fn doc(&self) -> Option<&str> {
         self.doc.as_deref()
+    }
+
+    pub fn functions(&self) -> &[Function] {
+        &self.functions
     }
 }

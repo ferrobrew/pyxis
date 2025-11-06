@@ -1,0 +1,13 @@
+enum A: i32 {
+    None,
+}
+impl A {
+    #[address(0x123)]
+    fn test();
+}
+
+#[address(0x456)]
+pub fn freestanding();
+
+#[address(0x789)]
+fn another_freestanding(arg1: i32) -> i32;

@@ -493,3 +493,38 @@ fn can_parse_doc_comments() {
 
     assert_eq!(parse_str(text).unwrap(), ast);
 }
+
+#[test]
+fn can_parse_freestanding_functions() {
+    let text = r#"
+        enum A: i32 {}
+        impl A {
+            #[address(0x123)]
+            fn test();
+        }
+
+        #[address(0x456)]
+        pub fn freestanding();
+
+        #[address(0x789)]
+        fn another_freestanding(arg1: i32) -> i32;
+        "#;
+
+    let ast = M::new()
+        .with_definitions([ID::new(
+            (V::Private, "A"),
+            ED::new(T::ident("i32"), [], []),
+        )])
+        .with_impls([FB::new(
+            "A",
+            [F::new((V::Private, "test"), []).with_attributes([A::address(0x123)])],
+        )])
+        .with_functions([
+            F::new((V::Public, "freestanding"), []).with_attributes([A::address(0x456)]),
+            F::new((V::Private, "another_freestanding"), [Ar::named("arg1", T::ident("i32"))])
+                .with_attributes([A::address(0x789)])
+                .with_return_type(T::ident("i32")),
+        ]);
+
+    assert_eq!(parse_str(text).unwrap(), ast);
+}
