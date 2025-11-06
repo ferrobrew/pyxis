@@ -8,6 +8,7 @@ use pretty_assertions::assert_eq;
 
 mod alignment;
 mod inheritance;
+mod min_size;
 mod util;
 use util::*;
 

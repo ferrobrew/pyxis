@@ -158,6 +158,7 @@ pub fn build(
 
     // Handle attributes
     let mut target_size: Option<usize> = None;
+    let mut min_size: Option<usize> = None;
     let mut singleton = None;
     let mut copyable = false;
     let mut cloneable = false;
@@ -174,6 +175,13 @@ pub fn build(
                             (*value)
                                 .try_into()
                                 .with_context(|| format!("failed to convert `size` attribute into usize for type `{resolvee_path}`"))?,
+                        );
+                    }
+                    ("min_size", [grammar::Expr::IntLiteral(value)]) => {
+                        min_size = Some(
+                            (*value)
+                                .try_into()
+                                .with_context(|| format!("failed to convert `min_size` attribute into usize for type `{resolvee_path}`"))?,
                         );
                     }
                     ("singleton", [grammar::Expr::IntLiteral(value)]) => {
@@ -203,6 +211,13 @@ pub fn build(
             },
             grammar::Attribute::Assign(_, _) => {}
         }
+    }
+
+    // Ensure size and min_size are mutually exclusive
+    if target_size.is_some() && min_size.is_some() {
+        anyhow::bail!(
+            "cannot specify both `size` and `min_size` attributes for type `{resolvee_path}`"
+        );
     }
 
     // Handle fields
@@ -295,11 +310,47 @@ pub fn build(
         }
     }
 
+    // Handle min_size: pre-calculate alignment and round up min_size
+    if let Some(min_size_value) = min_size {
+        // Calculate preliminary alignment based on the pending regions
+        let preliminary_alignment = if packed {
+            1
+        } else {
+            // Determine the requested alignment
+            let requested_alignment = align
+                .or((pending_regions.len() == 1)
+                    .then(|| pending_regions[0].1.type_ref.alignment(&semantic.type_registry))
+                    .flatten())
+                .unwrap_or(semantic.type_registry.pointer_size());
+
+            // Calculate the minimum required alignment from field types
+            let required_alignment = util::lcm(
+                pending_regions
+                    .iter()
+                    .flat_map(|(_, r)| r.type_ref.alignment(&semantic.type_registry)),
+            );
+
+            // Use the maximum of requested and required alignment
+            requested_alignment.max(required_alignment)
+        };
+
+        // Round min_size up to nearest multiple of alignment
+        let rounded_min_size = if min_size_value % preliminary_alignment == 0 {
+            min_size_value
+        } else {
+            ((min_size_value / preliminary_alignment) + 1) * preliminary_alignment
+        };
+
+        // Use the rounded min_size as target_size for padding
+        target_size = Some(rounded_min_size);
+    }
+
     let Some((regions, vftable, size)) = resolve_regions(
         semantic,
         resolvee_path,
         visibility,
         target_size,
+        min_size.is_some(),
         pending_regions,
         vftable_functions,
     )
@@ -500,6 +551,7 @@ fn resolve_regions(
     resolvee_path: &ItemPath,
     visibility: Visibility,
     target_size: Option<usize>,
+    is_min_size: bool,
     regions: Vec<(Option<usize>, Region)>,
     vftable_functions: Option<Vec<Function>>,
 ) -> anyhow::Result<Option<(Vec<Region>, Option<TypeVftable>, usize)>> {
@@ -616,13 +668,23 @@ fn resolve_regions(
         size += region_size;
     }
 
-    // Check that the final size is equal to the target size
-    if let Some(target_size) = target_size
-        && size != target_size
-    {
-        anyhow::bail!(
-            "calculated size {size} for type `{resolvee_path}` does not match target size {target_size}; is your target size correct?"
-        );
+    // Check that the final size is equal to the target size (or >= for min_size)
+    if let Some(target_size) = target_size {
+        if is_min_size {
+            // For min_size, the final size should be >= target_size (which was already rounded)
+            if size < target_size {
+                anyhow::bail!(
+                    "calculated size {size} for type `{resolvee_path}` is less than minimum size {target_size}"
+                );
+            }
+        } else {
+            // For exact size, the final size must equal target_size
+            if size != target_size {
+                anyhow::bail!(
+                    "calculated size {size} for type `{resolvee_path}` does not match target size {target_size}; is your target size correct?"
+                );
+            }
+        }
     }
 
     Ok(Some((resolved.regions, vftable, size)))
