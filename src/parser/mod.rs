@@ -251,34 +251,40 @@ impl Parse for Argument {
 impl Parse for Function {
     fn parse(input: ParseStream) -> Result<Self> {
         let attributes = Attribute::parse_many(input, false)?;
-
         let visibility: Visibility = input.parse()?;
-
-        input.parse::<Token![fn]>()?;
-        let name: Ident = input.parse()?;
-
-        let content;
-        parenthesized!(content in input);
-
-        let arguments: Punctuated<_, Token![,]> =
-            content.parse_terminated(Argument::parse, Token![,])?;
-        let arguments = Vec::from_iter(arguments);
-
-        let return_type = if input.peek(Token![->]) {
-            input.parse::<Token![->]>()?;
-            Some(input.parse()?)
-        } else {
-            None
-        };
-
-        Ok(Function {
-            visibility,
-            name,
-            attributes,
-            arguments,
-            return_type,
-        })
+        parse_function_body(input, visibility, attributes)
     }
+}
+
+fn parse_function_body(
+    input: ParseStream,
+    visibility: Visibility,
+    attributes: Attributes,
+) -> Result<Function> {
+    input.parse::<Token![fn]>()?;
+    let name: Ident = input.parse()?;
+
+    let content;
+    parenthesized!(content in input);
+
+    let arguments: Punctuated<_, Token![,]> =
+        content.parse_terminated(Argument::parse, Token![,])?;
+    let arguments = Vec::from_iter(arguments);
+
+    let return_type = if input.peek(Token![->]) {
+        input.parse::<Token![->]>()?;
+        Some(input.parse()?)
+    } else {
+        None
+    };
+
+    Ok(Function {
+        visibility,
+        name,
+        attributes,
+        arguments,
+        return_type,
+    })
 }
 
 impl Parse for ExprField {
@@ -579,32 +585,9 @@ impl Parse for Module {
                 });
                 continue;
             } else if input.peek(Token![fn]) {
-                input.parse::<Token![fn]>()?;
-                let name: Ident = input.parse()?;
-
-                let content;
-                parenthesized!(content in input);
-
-                let arguments: Punctuated<_, Token![,]> =
-                    content.parse_terminated(Argument::parse, Token![,])?;
-                let arguments = Vec::from_iter(arguments);
-
-                let return_type = if input.peek(Token![->]) {
-                    input.parse::<Token![->]>()?;
-                    Some(input.parse()?)
-                } else {
-                    None
-                };
-
+                let function = parse_function_body(input, visibility, attributes)?;
                 input.parse::<Token![;]>()?;
-
-                functions.push(Function {
-                    visibility,
-                    name,
-                    attributes,
-                    arguments,
-                    return_type,
-                });
+                functions.push(function);
                 continue;
             } else if input.peek(Token![type])
                 || input.peek(Token![enum])
