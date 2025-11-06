@@ -512,6 +512,7 @@ impl Parse for Module {
         let mut uses = vec![];
         let mut extern_types = vec![];
         let mut extern_values = vec![];
+        let mut functions = vec![];
         let mut definitions = vec![];
         let mut impls = vec![];
         let mut backends = vec![];
@@ -577,6 +578,34 @@ impl Parse for Module {
                     attributes,
                 });
                 continue;
+            } else if input.peek(Token![fn]) {
+                input.parse::<Token![fn]>()?;
+                let name: Ident = input.parse()?;
+
+                let content;
+                parenthesized!(content in input);
+
+                let arguments: Punctuated<_, Token![,]> =
+                    content.parse_terminated(Argument::parse, Token![,])?;
+                let arguments = Vec::from_iter(arguments);
+
+                let return_type = if input.peek(Token![->]) {
+                    input.parse::<Token![->]>()?;
+                    Some(input.parse()?)
+                } else {
+                    None
+                };
+
+                input.parse::<Token![;]>()?;
+
+                functions.push(Function {
+                    visibility,
+                    name,
+                    attributes,
+                    arguments,
+                    return_type,
+                });
+                continue;
             } else if input.peek(Token![type])
                 || input.peek(Token![enum])
                 || input.peek(kw::bitflags)
@@ -592,6 +621,7 @@ impl Parse for Module {
             uses,
             extern_types,
             extern_values,
+            functions,
             definitions,
             impls,
             backends,

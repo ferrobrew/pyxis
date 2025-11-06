@@ -82,6 +82,17 @@ pub fn write_module(
         writeln!(raw_output, "{}", build_extern_value(ev)?)?;
     }
 
+    // Generate freestanding functions
+    let freestanding_functions = module
+        .functions()
+        .iter()
+        .filter(|f| !f.is_internal())
+        .map(build_function)
+        .collect::<anyhow::Result<Vec<_>>>()?;
+    for func in freestanding_functions {
+        writeln!(raw_output, "{}", func)?;
+    }
+
     writeln!(raw_output, "{epilogues}")?;
 
     let mut error = None;

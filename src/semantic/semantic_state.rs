@@ -252,6 +252,11 @@ impl SemanticState {
             module.resolve_extern_values(&mut self.type_registry)?;
         }
 
+        // Resolve freestanding functions after types are resolved
+        for module in self.modules.values_mut() {
+            module.resolve_functions(&self.type_registry)?;
+        }
+
         Ok(ResolvedSemanticState {
             modules: self.modules,
             type_registry: self.type_registry,
