@@ -412,6 +412,7 @@ fn build_enum(
         copyable,
         cloneable,
         default,
+        associated_functions,
     } = enum_definition;
 
     let syn_type = sa_type_to_syn_type(type_)?;
@@ -473,6 +474,23 @@ fn build_enum(
         }
     });
 
+    // Build associated functions
+    let associated_functions_impl = associated_functions
+        .iter()
+        .filter(|f| !f.is_internal())
+        .map(build_function)
+        .collect::<anyhow::Result<Vec<_>>>()?;
+
+    let associated_impl = if !associated_functions_impl.is_empty() {
+        Some(quote! {
+            impl #name_ident {
+                #(#associated_functions_impl)*
+            }
+        })
+    } else {
+        None
+    };
+
     Ok(quote! {
         #[repr(#syn_type)]
         #[derive(PartialEq, Eq, PartialOrd, Ord, Debug, #(#extra_derives),*)]
@@ -482,6 +500,7 @@ fn build_enum(
         }
         #size_check_impl
         #singleton_impl
+        #associated_impl
     })
 }
 

@@ -19,3 +19,19 @@ fn _TestEnum_size_check() {
     }
     unreachable!()
 }
+impl TestEnum {
+    pub unsafe fn test() {
+        unsafe {
+            let f: unsafe extern "system" fn() = ::std::mem::transmute(0x123 as usize);
+            f()
+        }
+    }
+    pub unsafe fn another_test(&self) -> i32 {
+        unsafe {
+            let f: unsafe extern "system" fn(this: *const Self) -> i32 = ::std::mem::transmute(
+                0x456 as usize,
+            );
+            f(self as *const Self as _)
+        }
+    }
+}

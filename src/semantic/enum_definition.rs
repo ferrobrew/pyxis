@@ -4,7 +4,7 @@ use crate::{
     grammar::{self, ItemPath},
     semantic::{
         SemanticState,
-        types::{ItemStateResolved, Type},
+        types::{Function, ItemStateResolved, Type},
     },
 };
 
@@ -13,6 +13,7 @@ pub struct EnumDefinition {
     pub type_: Type,
     pub doc: Option<String>,
     pub fields: Vec<(String, isize)>,
+    pub associated_functions: Vec<Function>,
     pub singleton: Option<usize>,
     pub copyable: bool,
     pub cloneable: bool,
@@ -24,6 +25,7 @@ impl EnumDefinition {
             type_,
             doc: None,
             fields: Vec::new(),
+            associated_functions: Vec::new(),
             singleton: None,
             copyable: false,
             cloneable: false,
@@ -39,6 +41,13 @@ impl EnumDefinition {
             .into_iter()
             .map(|(n, v)| (n.to_string(), v))
             .collect();
+        self
+    }
+    pub fn with_associated_functions(
+        mut self,
+        associated_functions: impl Into<Vec<Function>>,
+    ) -> Self {
+        self.associated_functions = associated_functions.into();
         self
     }
     pub fn with_singleton(mut self, singleton: usize) -> Self {
@@ -155,6 +164,26 @@ pub fn build(
         );
     }
 
+    // Handle associated functions
+    let mut associated_functions = vec![];
+    if let Some(enum_impl) = module.impls.get(resolvee_path) {
+        for function in &enum_impl.functions {
+            let function = crate::semantic::function::build(
+                &semantic.type_registry,
+                &module.scope(),
+                false,
+                function,
+            )
+            .with_context(|| {
+                format!(
+                    "while building impl function `{}` for enum `{resolvee_path}`",
+                    function.name
+                )
+            })?;
+            associated_functions.push(function);
+        }
+    }
+
     Ok(Some(ItemStateResolved {
         size,
         alignment: ty.alignment(&semantic.type_registry).with_context(|| {
@@ -164,6 +193,7 @@ pub fn build(
             type_: ty,
             doc,
             fields,
+            associated_functions,
             singleton,
             copyable,
             cloneable,
