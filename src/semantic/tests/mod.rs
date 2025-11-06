@@ -685,6 +685,61 @@ fn can_resolve_enum() {
 }
 
 #[test]
+fn can_resolve_enum_with_associated_functions() {
+    assert_ast_produces_type_definitions(
+        M::new()
+            .with_definitions([ID::new(
+                (V::Public, "TestEnum"),
+                ED::new(
+                    T::ident("u32"),
+                    [
+                        ES::field("None"),
+                        ES::field("Some"),
+                        ES::field("Value"),
+                    ],
+                    [],
+                ),
+            )])
+            .with_impls([FB::new(
+                "TestEnum",
+                [
+                    F::new((V::Public, "test"), [])
+                        .with_attributes([A::address(0x123)]),
+                    F::new((V::Public, "another_test"), [Ar::ConstSelf])
+                        .with_attributes([A::address(0x456)])
+                        .with_return_type(T::ident("i32")),
+                ],
+            )]),
+        [SID::defined_resolved(
+            (SV::Public, "test::TestEnum"),
+            SISR::new(
+                (4, 4),
+                SED::new(ST::raw("u32"))
+                    .with_fields([
+                        ("None", 0),
+                        ("Some", 1),
+                        ("Value", 2),
+                    ])
+                    .with_associated_functions([
+                        SF::new(
+                            (SV::Public, "test"),
+                            SFB::address(0x123),
+                            SCC::System,
+                        ),
+                        SF::new(
+                            (SV::Public, "another_test"),
+                            SFB::address(0x456),
+                            SCC::for_member_function(pointer_size()),
+                        )
+                        .with_arguments([SAr::ConstSelf])
+                        .with_return_type(ST::raw("i32")),
+                    ]),
+            ),
+        )],
+    );
+}
+
+#[test]
 fn can_carry_backend_across() {
     let prologue = r#"
         use std::ffi::CString;
