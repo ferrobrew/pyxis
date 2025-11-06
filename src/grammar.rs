@@ -248,6 +248,9 @@ impl Attribute {
     pub fn size(size: usize) -> Self {
         Self::integer_fn("size", size as isize)
     }
+    pub fn min_size(min_size: usize) -> Self {
+        Self::integer_fn("min_size", min_size as isize)
+    }
     pub fn align(align: usize) -> Self {
         Self::integer_fn("align", align as isize)
     }

@@ -1,0 +1,12 @@
+/// Test type with min_size attribute
+#[min_size(32), align(16)]
+pub type TestType {
+    pub field_1: i32,
+    pub field_2: i32,
+}
+
+/// Another type to test min_size rounding
+#[min_size(24), align(16)]
+pub type RoundedType {
+    pub value: u64,
+}
