@@ -5,3 +5,10 @@ pub enum TestEnum: u32 {
     Some,
     Value,
 }
+impl TestEnum {
+    #[address(0x123)]
+    pub fn test();
+
+    #[address(0x456)]
+    pub fn another_test(&self) -> i32;
+}
