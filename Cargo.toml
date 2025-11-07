@@ -1,12 +1,18 @@
+[workspace]
+members = [".", "driver", "codegen_tests"]
+default-members = [".", "driver"]
+
+[workspace.dependencies]
+anyhow = "1.0"
+
 [package]
 name = "pyxis"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+anyhow = { workspace = true }
 glob = { version = "0.3.0" }
-
-anyhow = "1.0"
 quote = "1.0"
 proc-macro2 = { version = "1.0", features = ["span-locations"] }
 syn = { version = "2.0", features = ["full", "extra-traits"] }
@@ -16,4 +22,3 @@ serde = { version = "1.0.228", features = ["derive"] }
 
 [dev-dependencies]
 pretty_assertions = "1.4"
-clap = { version = "4.5", features = ["derive"] }
