@@ -3,7 +3,7 @@ use std::path::Path;
 fn main() -> anyhow::Result<()> {
     let root = Path::new("codegen_tests");
     let output_dir = root.join("output");
-    pyxis::build(&root.join("input"), &output_dir, 8)?;
+    pyxis::build(&root.join("input"), &output_dir)?;
 
     let mut module_decls = std::fs::read_dir(&output_dir)?
         .filter_map(|entry| Some(entry.ok()?.path()))
