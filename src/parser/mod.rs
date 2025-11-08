@@ -222,7 +222,14 @@ fn item_path<'a>() -> impl Parser<'a, ParserInput<'a>, Spanned<ItemPath>, ParseE
         .separated_by(just("::"))
         .at_least(1)
         .collect::<Vec<_>>()
-        .map(|segments| ItemPath(segments.into_iter().map(ItemPathSegment::from).collect()))
+        .try_map(|segments: Vec<String>, span| {
+            // Check for "super" which is not supported
+            if segments.iter().any(|s| s == "super") {
+                Err(Rich::custom(span, "super not supported"))
+            } else {
+                Ok(ItemPath(segments.into_iter().map(ItemPathSegment::from).collect()))
+            }
+        })
         .map_with(|path, extra| Spanned::new(path, to_span(extra.span())))
 }
 
@@ -367,24 +374,36 @@ fn type_field<'a>(
         })
         .map_with(|func, extra| Spanned::new(func, to_span(extra.span())));
 
-    let vftable = padded(just("vftable")).ignore_then(
-        padded(just('{'))
-            .ignore_then(
-                vftable_func
-                    .separated_by(padded(just(';')))
-                    .allow_trailing()
-                    .collect::<Vec<_>>(),
-            )
-            .then_ignore(padded(just('}'))),
-    ).map(TypeField::Vftable);
+    let vftable = whitespace()
+        .ignore_then(text::keyword("vftable"))
+        .then_ignore(whitespace())
+        .ignore_then(
+            just('{')
+                .then_ignore(whitespace())
+                .ignore_then(
+                    vftable_func
+                        .separated_by(padded(just(';')))
+                        .allow_trailing()
+                        .collect::<Vec<_>>(),
+                )
+                .then_ignore(just('}'))
+                .then_ignore(whitespace()),
+        )
+        .map(TypeField::Vftable);
 
     let field = padded(visibility())
-        .then(padded(ident()))
+        .then(padded(ident()).try_map(|name, span| {
+            if name.node.0 == "vftable" {
+                Err(Rich::custom(span, "vftable is a keyword here"))
+            } else {
+                Ok(name)
+            }
+        }))
         .then_ignore(padded(just(':')))
         .then(padded(type_parser()))
         .map(|((vis, name), ty)| TypeField::Field(vis, name, ty));
 
-    choice((vftable, field))
+    vftable.or(field)
 }
 
 fn type_statement<'a>(
@@ -420,19 +439,31 @@ fn type_statement<'a>(
         })
         .map_with(|func, extra| Spanned::new(func, to_span(extra.span())));
 
-    let vftable = padded(just("vftable")).ignore_then(
-        padded(just('{'))
-            .ignore_then(
-                vftable_func
-                    .separated_by(padded(just(';')))
-                    .allow_trailing()
-                    .collect::<Vec<_>>(),
-            )
-            .then_ignore(padded(just('}'))),
-    ).map(TypeField::Vftable);
+    let vftable = whitespace()
+        .ignore_then(text::keyword("vftable"))
+        .then_ignore(whitespace())
+        .ignore_then(
+            just('{')
+                .then_ignore(whitespace())
+                .ignore_then(
+                    vftable_func
+                        .separated_by(padded(just(';')))
+                        .allow_trailing()
+                        .collect::<Vec<_>>(),
+                )
+                .then_ignore(just('}'))
+                .then_ignore(whitespace()),
+        )
+        .map(TypeField::Vftable);
 
     let field = padded(visibility())
-        .then(padded(ident()))
+        .then(padded(ident()).try_map(|name, span| {
+            if name.node.0 == "vftable" {
+                Err(Rich::custom(span, "vftable is a keyword here"))
+            } else {
+                Ok(name)
+            }
+        }))
         .then_ignore(padded(just(':')))
         .then(padded(type_parser()))
         .map(|((vis, name), ty)| TypeField::Field(vis, name, ty));
@@ -441,7 +472,7 @@ fn type_statement<'a>(
         .repeated()
         .collect::<Vec<_>>()
         .then(attributes().or(empty().to(Attributes::default())))
-        .then(choice((vftable, field)))
+        .then(vftable.or(field))
         .map(|((doc_comments, attrs), field)| TypeStatement {
             field,
             attributes: attrs,
