@@ -74,19 +74,21 @@ impl<T> Spanned<T> {
         }
     }
 
-    /// Get a reference to the inner value
-    pub fn as_ref(&self) -> &T {
-        &self.node
-    }
-
-    /// Get a mutable reference to the inner value
-    pub fn as_mut(&mut self) -> &mut T {
-        &mut self.node
-    }
-
     /// Convert into the inner value, discarding the span
     pub fn into_inner(self) -> T {
         self.node
+    }
+}
+
+impl<T> AsRef<T> for Spanned<T> {
+    fn as_ref(&self) -> &T {
+        &self.node
+    }
+}
+
+impl<T> AsMut<T> for Spanned<T> {
+    fn as_mut(&mut self) -> &mut T {
+        &mut self.node
     }
 }
 

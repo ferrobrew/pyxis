@@ -391,13 +391,13 @@ pub struct Attributes(pub Vec<Spanned<Attribute>>);
 
 impl<const N: usize> From<[Attribute; N]> for Attributes {
     fn from(s: [Attribute; N]) -> Self {
-        Attributes(s.into_iter().map(|a| spanned(a)).collect())
+        Attributes(s.into_iter().map(spanned).collect())
     }
 }
 
 impl From<Vec<Attribute>> for Attributes {
     fn from(s: Vec<Attribute>) -> Self {
-        Attributes(s.into_iter().map(|a| spanned(a)).collect())
+        Attributes(s.into_iter().map(spanned).collect())
     }
 }
 
@@ -421,7 +421,7 @@ impl<'a> IntoIterator for &'a Attributes {
 
 impl FromIterator<Attribute> for Attributes {
     fn from_iter<I: IntoIterator<Item = Attribute>>(iter: I) -> Self {
-        Attributes(iter.into_iter().map(|a| spanned(a)).collect())
+        Attributes(iter.into_iter().map(spanned).collect())
     }
 }
 

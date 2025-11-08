@@ -20,13 +20,6 @@ fn whitespace<'a>() -> impl Parser<'a, ParserInput<'a>, (), ParseError<'a>> + Cl
     one_of(" \t\r\n").repeated().ignored()
 }
 
-fn line_comment<'a>() -> impl Parser<'a, ParserInput<'a>, Spanned<String>, ParseError<'a>> + Clone {
-    just("//")
-        .then(none_of("\r\n").repeated().collect::<String>())
-        .map(|(_, content)| content)
-        .map_with(|content, extra| Spanned::new(content, to_span(extra.span())))
-}
-
 fn doc_comment<'a>() -> impl Parser<'a, ParserInput<'a>, Spanned<String>, ParseError<'a>> + Clone {
     just("///")
         .then(none_of("\r\n").repeated().collect::<String>())
@@ -339,71 +332,6 @@ fn function<'a>(
 
 // Type definitions
 
-fn type_field<'a>(
-    doc_comments: Vec<Spanned<String>>,
-) -> impl Parser<'a, ParserInput<'a>, TypeField, ParseError<'a>> + Clone {
-    let vftable_func = doc_comment()
-        .repeated()
-        .collect::<Vec<_>>()
-        .then(
-            attributes()
-                .or(empty().to(Attributes::default()))
-                .then(padded(visibility()))
-                .then_ignore(padded(keyword("fn")))
-                .then(padded(ident()))
-                .then(
-                    padded(just('('))
-                        .ignore_then(
-                            padded(argument())
-                                .separated_by(padded(just(',')))
-                                .allow_trailing()
-                                .collect(),
-                        )
-                        .then_ignore(padded(just(')'))),
-                )
-                .then(padded(just("->")).ignore_then(padded(type_parser())).or_not()),
-        )
-        .map(|(doc_comments, ((((attrs, vis), name), args), ret_ty))| Function {
-            visibility: vis,
-            name,
-            attributes: attrs,
-            doc_comments,
-            arguments: args,
-            return_type: ret_ty,
-        })
-        .map_with(|func, extra| Spanned::new(func, to_span(extra.span())));
-
-    // vftable never has visibility, so if we see "pub", it must be a field
-    let pub_field = padded(keyword("pub"))
-        .to(Visibility::Public)
-        .then(padded(ident()))
-        .then_ignore(padded(just(':')))
-        .then(padded(type_parser()))
-        .map(|((vis, name), ty)| TypeField::Field(vis, name, ty));
-
-    // Try to parse vftable (no visibility keyword)
-    let vftable = padded(keyword("vftable"))
-        .ignore_then(just('{'))
-        .then_ignore(whitespace())
-        .ignore_then(
-            vftable_func
-                .separated_by(padded(just(';')))
-                .allow_trailing()
-                .collect::<Vec<_>>()
-        )
-        .then_ignore(whitespace())
-        .then_ignore(just('}'))
-        .map(TypeField::Vftable);
-
-    // Private field (no visibility keyword, not vftable)
-    let private_field = padded(ident())
-        .then_ignore(padded(just(':')))
-        .then(padded(type_parser()))
-        .map(|(name, ty)| TypeField::Field(Visibility::Private, name, ty));
-
-    choice((pub_field, vftable, private_field))
-}
-
 fn type_statement<'a>(
 ) -> impl Parser<'a, ParserInput<'a>, Spanned<TypeStatement>, ParseError<'a>> + Clone {
     let vftable_func = doc_comment()
@@ -496,30 +424,6 @@ fn type_statement<'a>(
         .map_with(|stmt, extra| Spanned::new(stmt, to_span(extra.span())))
 }
 
-fn type_definition<'a>(
-    attrs: Attributes,
-) -> impl Parser<'a, ParserInput<'a>, TypeDefinition, ParseError<'a>> + Clone {
-    let empty_def = padded(just(';')).to(TypeDefinition {
-        statements: vec![],
-        attributes: attrs.clone(),
-    });
-
-    let full_def = padded(just('{'))
-        .ignore_then(
-            padded(type_statement())
-                .separated_by(padded(just(',')))
-                .allow_trailing()
-                .collect(),
-        )
-        .then_ignore(padded(just('}')))
-        .map(move |statements| TypeDefinition {
-            statements,
-            attributes: attrs.clone(),
-        });
-
-    choice((full_def, empty_def))
-}
-
 // Enum definitions
 
 fn enum_statement<'a>(
@@ -537,28 +441,6 @@ fn enum_statement<'a>(
             doc_comments,
         })
         .map_with(|stmt, extra| Spanned::new(stmt, to_span(extra.span())))
-}
-
-fn enum_definition<'a>(
-    attrs: Attributes,
-) -> impl Parser<'a, ParserInput<'a>, EnumDefinition, ParseError<'a>> + Clone {
-    padded(just(':'))
-        .ignore_then(padded(type_parser()))
-        .then(
-            padded(just('{'))
-                .ignore_then(
-                    padded(enum_statement())
-                        .separated_by(padded(just(',')))
-                        .allow_trailing()
-                        .collect(),
-                )
-                .then_ignore(padded(just('}'))),
-        )
-        .map(move |(ty, statements)| EnumDefinition {
-            type_: ty,
-            statements,
-            attributes: attrs.clone(),
-        })
 }
 
 // Bitflags definitions
@@ -579,28 +461,6 @@ fn bitflags_statement<'a>(
             doc_comments,
         })
         .map_with(|stmt, extra| Spanned::new(stmt, to_span(extra.span())))
-}
-
-fn bitflags_definition<'a>(
-    attrs: Attributes,
-) -> impl Parser<'a, ParserInput<'a>, BitflagsDefinition, ParseError<'a>> + Clone {
-    padded(just(':'))
-        .ignore_then(padded(type_parser()))
-        .then(
-            padded(just('{'))
-                .ignore_then(
-                    padded(bitflags_statement())
-                        .separated_by(padded(just(',')))
-                        .allow_trailing()
-                        .collect(),
-                )
-                .then_ignore(padded(just('}'))),
-        )
-        .map(move |(ty, statements)| BitflagsDefinition {
-            type_: ty,
-            statements,
-            attributes: attrs.clone(),
-        })
 }
 
 // Item definitions
@@ -770,7 +630,7 @@ fn extern_type<'a>(
         .then_ignore(padded(keyword("type")))
         .then(
             type_ident()
-                .map(|s| Ident(s))
+                .map(Ident)
                 .map_with(|ident, extra| Spanned::new(ident, to_span(extra.span()))),
         )
         .then_ignore(padded(just(';')))
@@ -955,6 +815,6 @@ pub fn module<'a>() -> impl Parser<'a, ParserInput<'a>, Module, ParseError<'a>> 
         })
 }
 
-pub fn parse_str(input: &str) -> Result<Module, Vec<Rich<char>>> {
+pub fn parse_str(input: &str) -> Result<Module, Vec<Rich<'_, char>>> {
     module().parse(input).into_result()
 }

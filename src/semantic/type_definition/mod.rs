@@ -250,14 +250,13 @@ pub fn build(
                             is_base = true
                         }
                         grammar::Attribute::Function(ident, exprs) => {
-                            if let ("address", [expr]) = (ident.as_str(), &exprs[..]) {
-                                if let grammar::Expr::IntLiteral(addr) = expr.node {
+                            if let ("address", [expr]) = (ident.as_str(), &exprs[..])
+                                && let grammar::Expr::IntLiteral(addr) = expr.node {
                                     address = Some(
                                         addr.try_into()
                                             .with_context(|| format!("failed to convert `address` attribute into usize for field `{ident}` of type `{resolvee_path}`"))?,
                                     );
                                 }
-                            }
                         }
                         _ => {}
                     }
@@ -299,11 +298,10 @@ pub fn build(
                     let grammar::Attribute::Function(ident, exprs) = &attribute.node else {
                         continue;
                     };
-                    if let ("size", [expr]) = (ident.as_str(), exprs.as_slice()) {
-                        if let grammar::Expr::IntLiteral(size_) = expr.node {
+                    if let ("size", [expr]) = (ident.as_str(), exprs.as_slice())
+                        && let grammar::Expr::IntLiteral(size_) = expr.node {
                             size = Some(size_ as usize);
                         }
-                    }
                 }
 
                 vftable_functions = Some(
