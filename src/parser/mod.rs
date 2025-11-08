@@ -374,31 +374,23 @@ fn type_field<'a>(
         })
         .map_with(|func, extra| Spanned::new(func, to_span(extra.span())));
 
-    let vftable = whitespace()
-        .ignore_then(text::keyword("vftable"))
+    let vftable = just("vftable")
+        .then_ignore(text::ident().not().rewind())
+        .then_ignore(whitespace())
+        .then_ignore(just('{'))
         .then_ignore(whitespace())
         .ignore_then(
-            just('{')
-                .then_ignore(whitespace())
-                .ignore_then(
-                    vftable_func
-                        .separated_by(padded(just(';')))
-                        .allow_trailing()
-                        .collect::<Vec<_>>(),
-                )
-                .then_ignore(just('}'))
-                .then_ignore(whitespace()),
+            vftable_func
+                .separated_by(padded(just(';')))
+                .allow_trailing()
+                .collect::<Vec<_>>()
         )
+        .then_ignore(whitespace())
+        .then_ignore(just('}'))
         .map(TypeField::Vftable);
 
     let field = padded(visibility())
-        .then(padded(ident()).try_map(|name, span| {
-            if name.node.0 == "vftable" {
-                Err(Rich::custom(span, "vftable is a keyword here"))
-            } else {
-                Ok(name)
-            }
-        }))
+        .then(padded(ident()))
         .then_ignore(padded(just(':')))
         .then(padded(type_parser()))
         .map(|((vis, name), ty)| TypeField::Field(vis, name, ty));
@@ -439,31 +431,23 @@ fn type_statement<'a>(
         })
         .map_with(|func, extra| Spanned::new(func, to_span(extra.span())));
 
-    let vftable = whitespace()
-        .ignore_then(text::keyword("vftable"))
+    let vftable = just("vftable")
+        .then_ignore(text::ident().not().rewind())
+        .then_ignore(whitespace())
+        .then_ignore(just('{'))
         .then_ignore(whitespace())
         .ignore_then(
-            just('{')
-                .then_ignore(whitespace())
-                .ignore_then(
-                    vftable_func
-                        .separated_by(padded(just(';')))
-                        .allow_trailing()
-                        .collect::<Vec<_>>(),
-                )
-                .then_ignore(just('}'))
-                .then_ignore(whitespace()),
+            vftable_func
+                .separated_by(padded(just(';')))
+                .allow_trailing()
+                .collect::<Vec<_>>()
         )
+        .then_ignore(whitespace())
+        .then_ignore(just('}'))
         .map(TypeField::Vftable);
 
     let field = padded(visibility())
-        .then(padded(ident()).try_map(|name, span| {
-            if name.node.0 == "vftable" {
-                Err(Rich::custom(span, "vftable is a keyword here"))
-            } else {
-                Ok(name)
-            }
-        }))
+        .then(padded(ident()))
         .then_ignore(padded(just(':')))
         .then(padded(type_parser()))
         .map(|((vis, name), ty)| TypeField::Field(vis, name, ty));
