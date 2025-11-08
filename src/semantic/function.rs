@@ -235,8 +235,9 @@ pub fn build(
         let Some((ident, exprs)) = attribute.function() else {
             continue;
         };
-        match (ident.as_str(), &exprs[..]) {
-            ("address", [grammar::Expr::IntLiteral(addr)]) => {
+        match (ident.as_str(), exprs.as_slice()) {
+            ("address", [addr_expr]) if matches!(addr_expr.node, grammar::Expr::IntLiteral(_)) => {
+                let grammar::Expr::IntLiteral(addr) = addr_expr.node else { unreachable!() };
                 if is_vfunc {
                     anyhow::bail!(
                         "address attribute is not supported for virtual function `{}`",
@@ -245,7 +246,7 @@ pub fn build(
                 }
 
                 body = Some(FunctionBody::Address {
-                    address: (*addr).try_into().with_context(|| {
+                    address: addr.try_into().with_context(|| {
                         format!(
                             "failed to convert `address` attribute into usize for function `{}`",
                             function.name
@@ -262,7 +263,8 @@ pub fn build(
                     );
                 }
             }
-            ("calling_convention", [grammar::Expr::StringLiteral(cc)]) => {
+            ("calling_convention", [cc_expr]) if matches!(cc_expr.node, grammar::Expr::StringLiteral(_)) => {
+                let grammar::Expr::StringLiteral(cc) = &cc_expr.node else { unreachable!() };
                 calling_convention = Some(cc.parse().map_err(|_| {
                     anyhow::anyhow!(
                         "invalid calling convention for function `{}`: {cc}",
@@ -291,13 +293,13 @@ pub fn build(
     let arguments = function
         .arguments
         .iter()
-        .map(|a| match a {
+        .map(|a| match &a.node {
             grammar::Argument::ConstSelf => Ok(Argument::ConstSelf),
             grammar::Argument::MutSelf => Ok(Argument::MutSelf),
             grammar::Argument::Named(name, type_) => Ok(Argument::Field(
-                name.0.clone(),
+                name.node.0.clone(),
                 type_registry
-                    .resolve_grammar_type(scope, type_)
+                    .resolve_grammar_type(scope, &type_.node)
                     .ok_or_else(|| {
                         anyhow::anyhow!(
                             "failed to resolve type of field `{:?}` ({:?})",
@@ -312,7 +314,7 @@ pub fn build(
     let return_type = function
         .return_type
         .as_ref()
-        .and_then(|t| type_registry.resolve_grammar_type(scope, t));
+        .and_then(|t| type_registry.resolve_grammar_type(scope, &t.node));
 
     let calling_convention = calling_convention.unwrap_or_else(|| {
         let has_self = arguments

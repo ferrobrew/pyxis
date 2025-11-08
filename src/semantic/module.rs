@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::{
     grammar::{self, ItemPath},
+    span::Spanned,
     semantic::{
         function::Function,
         type_registry,
@@ -41,22 +42,22 @@ impl Module {
         path: ItemPath,
         ast: grammar::Module,
         extern_values: Vec<ExternValue>,
-        impls: &[grammar::FunctionBlock],
-        backends: &[grammar::Backend],
+        impls: &[Spanned<grammar::FunctionBlock>],
+        backends: &[Spanned<grammar::Backend>],
     ) -> anyhow::Result<Self> {
         let impls = impls
             .iter()
-            .map(|f| (path.join(f.name.as_str().into()), f.clone()))
+            .map(|f| (path.join(f.node.name.node.as_str().into()), f.node.clone()))
             .collect();
 
         let mut backends_map: HashMap<String, Vec<Backend>> = HashMap::new();
         for backend in backends {
             backends_map
-                .entry(backend.name.0.clone())
+                .entry(backend.node.name.node.0.clone())
                 .or_default()
                 .push(Backend {
-                    prologue: backend.prologue.clone(),
-                    epilogue: backend.epilogue.clone(),
+                    prologue: backend.node.prologue.clone(),
+                    epilogue: backend.node.epilogue.clone(),
                 });
         }
 
@@ -73,7 +74,7 @@ impl Module {
         })
     }
 
-    pub fn uses(&self) -> &[ItemPath] {
+    pub fn uses(&self) -> &[Spanned<ItemPath>] {
         &self.ast.uses
     }
 
@@ -92,7 +93,7 @@ impl Module {
 
     pub fn scope(&self) -> Vec<ItemPath> {
         std::iter::once(self.path.clone())
-            .chain(self.uses().iter().cloned())
+            .chain(self.uses().iter().map(|u| u.node.clone()))
             .collect()
     }
 

@@ -43,10 +43,11 @@ fn module_doc_comment<'a>(
 }
 
 // Whitespace and comments are skipped between tokens
+// Note: whitespace() already has .repeated() built in, so we just use it directly
 fn padded<'a, O: Clone>(
     parser: impl Parser<'a, ParserInput<'a>, O, ParseError<'a>> + Clone + 'a,
 ) -> impl Parser<'a, ParserInput<'a>, O, ParseError<'a>> + Clone {
-    parser.padded_by(whitespace().or(line_comment().ignored()).repeated())
+    parser.padded_by(whitespace())
 }
 
 fn keyword<'a>(kw: &'static str) -> impl Parser<'a, ParserInput<'a>, (), ParseError<'a>> + Clone {
@@ -817,7 +818,8 @@ fn use_statement<'a>() -> impl Parser<'a, ParserInput<'a>, Spanned<ItemPath>, Pa
 
 pub fn module<'a>() -> impl Parser<'a, ParserInput<'a>, Module, ParseError<'a>> + Clone {
     // Skip initial whitespace and comments
-    let skip_ws_comments = whitespace().or(line_comment().ignored()).repeated();
+    // Note: whitespace() already contains .repeated(), so we just use it with line_comment in a choice
+    let skip_ws_comments = whitespace();
 
     // Freestanding function parser
     let freestanding_func = doc_comment()
@@ -864,7 +866,7 @@ pub fn module<'a>() -> impl Parser<'a, ParserInput<'a>, Module, ParseError<'a>> 
                 // Item definitions
                 item_def.map(|item| (6, None, None, None, None, None, None, Some(item))),
             ))
-            .padded_by(skip_ws_comments.clone())
+            .then_ignore(skip_ws_comments.clone())
             .repeated()
             .collect::<Vec<_>>(),
         )

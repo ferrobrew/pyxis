@@ -167,34 +167,42 @@ pub fn build(
     let mut align = None;
     let doc = definition.attributes.doc(resolvee_path)?;
     for attribute in &definition.attributes {
-        match attribute {
+        match &attribute.node {
             grammar::Attribute::Function(ident, exprs) => {
                 match (ident.as_str(), exprs.as_slice()) {
-                    ("size", [grammar::Expr::IntLiteral(value)]) => {
-                        target_size = Some(
-                            (*value)
-                                .try_into()
-                                .with_context(|| format!("failed to convert `size` attribute into usize for type `{resolvee_path}`"))?,
-                        );
+                    ("size", [expr]) if matches!(expr.node, grammar::Expr::IntLiteral(_)) => {
+                        if let grammar::Expr::IntLiteral(value) = expr.node {
+                            target_size = Some(
+                                value
+                                    .try_into()
+                                    .with_context(|| format!("failed to convert `size` attribute into usize for type `{resolvee_path}`"))?,
+                            );
+                        }
                     }
-                    ("min_size", [grammar::Expr::IntLiteral(value)]) => {
-                        min_size = Some(
-                            (*value)
-                                .try_into()
-                                .with_context(|| format!("failed to convert `min_size` attribute into usize for type `{resolvee_path}`"))?,
-                        );
+                    ("min_size", [expr]) if matches!(expr.node, grammar::Expr::IntLiteral(_)) => {
+                        if let grammar::Expr::IntLiteral(value) = expr.node {
+                            min_size = Some(
+                                value
+                                    .try_into()
+                                    .with_context(|| format!("failed to convert `min_size` attribute into usize for type `{resolvee_path}`"))?,
+                            );
+                        }
                     }
-                    ("singleton", [grammar::Expr::IntLiteral(value)]) => {
-                        singleton = Some((*value).try_into().with_context(|| {
-                            format!(
-                                "failed to convert `singleton` attribute into usize for type `{resolvee_path}`"
-                            )
-                        })?);
+                    ("singleton", [expr]) if matches!(expr.node, grammar::Expr::IntLiteral(_)) => {
+                        if let grammar::Expr::IntLiteral(value) = expr.node {
+                            singleton = Some(value.try_into().with_context(|| {
+                                format!(
+                                    "failed to convert `singleton` attribute into usize for type `{resolvee_path}`"
+                                )
+                            })?);
+                        }
                     }
-                    ("align", [grammar::Expr::IntLiteral(value)]) => {
-                        align = Some((*value).try_into().with_context(|| {
-                            format!("failed to convert `align` attribute into usize for type `{resolvee_path}`")
-                        })?);
+                    ("align", [expr]) if matches!(expr.node, grammar::Expr::IntLiteral(_)) => {
+                        if let grammar::Expr::IntLiteral(value) = expr.node {
+                            align = Some(value.try_into().with_context(|| {
+                                format!("failed to convert `align` attribute into usize for type `{resolvee_path}`")
+                            })?);
+                        }
                     }
                     _ => {}
                 }
@@ -224,7 +232,11 @@ pub fn build(
     let mut pending_regions: Vec<(Option<usize>, Region)> = vec![];
     let mut vftable_functions = None;
     for (idx, statement) in definition.statements.iter().enumerate() {
-        let grammar::TypeStatement { field, attributes } = statement;
+        let grammar::TypeStatement {
+            field,
+            attributes,
+            doc_comments: _,
+        } = &statement.node;
 
         match field {
             grammar::TypeField::Field(visibility, ident, type_) => {
@@ -233,19 +245,18 @@ pub fn build(
                 let mut is_base = false;
                 let doc: Option<String> = attributes.doc(resolvee_path)?;
                 for attribute in attributes {
-                    match attribute {
+                    match &attribute.node {
                         grammar::Attribute::Ident(ident) if ident.as_str() == "base" => {
                             is_base = true
                         }
                         grammar::Attribute::Function(ident, exprs) => {
-                            if let ("address", [grammar::Expr::IntLiteral(addr)]) =
-                                (ident.as_str(), &exprs[..])
-                            {
-                                address = Some(
-                                    (*addr)
-                                        .try_into()
-                                        .with_context(|| format!("failed to convert `address` attribute into usize for field `{ident}` of type `{resolvee_path}`"))?,
-                                );
+                            if let ("address", [expr]) = (ident.as_str(), &exprs[..]) {
+                                if let grammar::Expr::IntLiteral(addr) = expr.node {
+                                    address = Some(
+                                        addr.try_into()
+                                            .with_context(|| format!("failed to convert `address` attribute into usize for field `{ident}` of type `{resolvee_path}`"))?,
+                                    );
+                                }
                             }
                         }
                         _ => {}
@@ -285,13 +296,13 @@ pub fn build(
                 // Extract size attribute
                 let mut size = None;
                 for attribute in attributes {
-                    let grammar::Attribute::Function(ident, exprs) = attribute else {
+                    let grammar::Attribute::Function(ident, exprs) = &attribute.node else {
                         continue;
                     };
-                    if let ("size", [grammar::Expr::IntLiteral(size_)]) =
-                        (ident.as_str(), exprs.as_slice())
-                    {
-                        size = Some(*size_ as usize);
+                    if let ("size", [expr]) = (ident.as_str(), exprs.as_slice()) {
+                        if let grammar::Expr::IntLiteral(size_) = expr.node {
+                            size = Some(size_ as usize);
+                        }
                     }
                 }
 

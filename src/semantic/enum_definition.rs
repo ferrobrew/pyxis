@@ -100,18 +100,21 @@ pub fn build(
             name,
             expr,
             attributes,
-        } = statement;
+            doc_comments: _,
+        } = &statement.node;
         let value = match expr {
-            Some(grammar::Expr::IntLiteral(value)) => *value,
-            Some(_) => anyhow::bail!(
-                "unsupported enum value for case `{name}` of enum `{resolvee_path}`: {expr:?}"
-            ),
+            Some(expr_spanned) => match &expr_spanned.node {
+                grammar::Expr::IntLiteral(value) => *value,
+                _ => anyhow::bail!(
+                    "unsupported enum value for case `{name}` of enum `{resolvee_path}`: {expr:?}"
+                ),
+            },
             None => last_field,
         };
-        fields.push((name.0.clone(), value));
+        fields.push((name.node.0.clone(), value));
 
         for attribute in attributes {
-            match attribute {
+            match &attribute.node {
                 grammar::Attribute::Ident(ident) if ident.as_str() == "default" => {
                     if default.is_some() {
                         anyhow::bail!("enum {resolvee_path} has multiple default variants");
@@ -131,7 +134,7 @@ pub fn build(
     let mut defaultable = false;
     let doc = definition.attributes.doc(resolvee_path)?;
     for attribute in &definition.attributes {
-        match attribute {
+        match &attribute.node {
             grammar::Attribute::Ident(ident) => match ident.as_str() {
                 "copyable" => {
                     copyable = true;
@@ -142,10 +145,10 @@ pub fn build(
                 _ => {}
             },
             grammar::Attribute::Function(ident, exprs) => {
-                if let ("singleton", [grammar::Expr::IntLiteral(value)]) =
-                    (ident.as_str(), exprs.as_slice())
-                {
-                    singleton = Some(*value as usize);
+                if let ("singleton", [expr]) = (ident.as_str(), exprs.as_slice()) {
+                    if let grammar::Expr::IntLiteral(value) = expr.node {
+                        singleton = Some(value as usize);
+                    }
                 }
             }
             grammar::Attribute::Assign(_ident, _expr) => {}

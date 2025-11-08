@@ -103,22 +103,23 @@ pub fn build(
             name,
             expr,
             attributes,
-        } = statement;
-        let value = match expr {
+            doc_comments: _,
+        } = &statement.node;
+        let value = match &expr.node {
             grammar::Expr::IntLiteral(value) => *value,
             _ => anyhow::bail!(
                 "unsupported bitflags value for case `{name}` of bitflags `{resolvee_path}`: {expr:?}"
             ),
         };
         fields.push((
-            name.0.clone(),
+            name.node.0.clone(),
             value.try_into().with_context(|| {
                 format!("bitflags value `{value}` is too large for `{name}` of `{resolvee_path}`")
             })?,
         ));
 
         for attribute in attributes {
-            match attribute {
+            match &attribute.node {
                 grammar::Attribute::Ident(ident) if ident.as_str() == "default" => {
                     if default.is_some() {
                         anyhow::bail!("bitflags {resolvee_path} has multiple default values");
@@ -136,7 +137,7 @@ pub fn build(
     let mut defaultable = false;
     let doc = definition.attributes.doc(resolvee_path)?;
     for attribute in &definition.attributes {
-        match attribute {
+        match &attribute.node {
             grammar::Attribute::Ident(ident) => match ident.as_str() {
                 "copyable" => {
                     copyable = true;
@@ -147,10 +148,10 @@ pub fn build(
                 _ => {}
             },
             grammar::Attribute::Function(ident, exprs) => {
-                if let ("singleton", [grammar::Expr::IntLiteral(value)]) =
-                    (ident.as_str(), exprs.as_slice())
-                {
-                    singleton = Some(*value as usize);
+                if let ("singleton", [expr]) = (ident.as_str(), exprs.as_slice()) {
+                    if let grammar::Expr::IntLiteral(value) = expr.node {
+                        singleton = Some(value as usize);
+                    }
                 }
             }
             grammar::Attribute::Assign(_ident, _expr) => {}

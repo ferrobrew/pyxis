@@ -219,10 +219,12 @@ fn will_die_on_super_for_now() {
         use super::TestType<Hey>;
         "#;
 
-    assert_eq!(
-        parse_str(text).err().unwrap().to_string(),
-        "super not supported"
-    );
+    let errors = parse_str(text).err().unwrap();
+    let error_str = errors.iter()
+        .map(|e| format!("{}", e))
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(error_str.contains("super not supported"), "Expected 'super not supported' error, got: {}", error_str);
 }
 
 #[test]

@@ -3,6 +3,7 @@ use std::fmt;
 use crate::{
     grammar::{self, ItemPath},
     semantic::type_registry,
+    span::Spanned,
 };
 
 pub use crate::semantic::{
@@ -250,7 +251,7 @@ impl ItemStateResolved {
 
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]
 pub enum ItemState {
-    Unresolved(grammar::ItemDefinition),
+    Unresolved(Spanned<grammar::ItemDefinition>),
     Resolved(ItemStateResolved),
 }
 

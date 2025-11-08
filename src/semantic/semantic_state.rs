@@ -63,14 +63,17 @@ impl SemanticState {
     // todo: define an actual error type
     pub fn add_file(&mut self, base_path: &Path, path: &Path) -> anyhow::Result<()> {
         self.add_module(
-            &parser::parse_str(&std::fs::read_to_string(path)?).map_err(|e| {
-                let proc_macro2::LineColumn { line, column } = e.span().start();
-                anyhow::Error::new(e).context(format!(
-                    "failed to parse {}:{}:{}",
+            &parser::parse_str(&std::fs::read_to_string(path)?).map_err(|errors| {
+                // Format chumsky errors
+                let error_msg = errors.iter()
+                    .map(|e| format!("{}", e))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                anyhow::anyhow!(
+                    "failed to parse {}: {}",
                     path.display(),
-                    line,
-                    column + 1
-                ))
+                    error_msg
+                )
             })?,
             &ItemPath::from_path(path.strip_prefix(base_path).unwrap_or(path)),
         )
@@ -81,16 +84,19 @@ impl SemanticState {
             .extern_values
             .iter()
             .map(|ev| {
-                let name = &ev.name;
+                let name = &ev.node.name;
                 let mut address = None;
-                for attribute in &ev.attributes {
+                for attribute in &ev.node.attributes {
                     let Some((ident, exprs)) = attribute.function() else {
                         continue;
                     };
-                    if let ("address", [grammar::Expr::IntLiteral(addr)]) =
-                        (ident.as_str(), &exprs[..])
-                    {
-                        address = Some(*addr as usize);
+                    match (ident.as_str(), exprs.as_slice()) {
+                        ("address", [addr_expr]) if matches!(addr_expr.node, grammar::Expr::IntLiteral(_)) => {
+                            if let grammar::Expr::IntLiteral(addr) = addr_expr.node {
+                                address = Some(addr as usize);
+                            }
+                        }
+                        _ => {}
                     }
                 }
 
@@ -102,9 +108,9 @@ impl SemanticState {
                 })?;
 
                 Ok(ExternValue {
-                    visibility: Visibility::from(ev.visibility),
-                    name: name.as_str().to_owned(),
-                    type_: Type::Unresolved(ev.type_.clone()),
+                    visibility: Visibility::from(ev.node.visibility),
+                    name: name.node.as_str().to_owned(),
+                    type_: Type::Unresolved(ev.node.type_.node.clone()),
                     address,
                 })
             })
@@ -122,9 +128,9 @@ impl SemanticState {
         );
 
         for definition in &module.definitions {
-            let new_path = path.join(definition.name.as_str().into());
+            let new_path = path.join(definition.node.name.node.as_str().into());
             self.add_item(ItemDefinition {
-                visibility: definition.visibility.into(),
+                visibility: definition.node.visibility.into(),
                 path: new_path,
                 state: ItemState::Unresolved(definition.clone()),
                 category: ItemCategory::Defined,
@@ -139,20 +145,24 @@ impl SemanticState {
                 let Some((ident, exprs)) = attribute.function() else {
                     continue;
                 };
-                match (ident.as_str(), &exprs[..]) {
-                    ("size", [grammar::Expr::IntLiteral(size_)]) => {
-                        size = Some(
-                            (*size_)
-                                .try_into()
-                                .with_context(|| format!("failed to convert `size` attribute into usize for extern type `{extern_path}` in module `{path}`"))?,
-                        );
+                match (ident.as_str(), exprs.as_slice()) {
+                    ("size", [size_expr]) if matches!(size_expr.node, grammar::Expr::IntLiteral(_)) => {
+                        if let grammar::Expr::IntLiteral(size_) = size_expr.node {
+                            size = Some(
+                                size_
+                                    .try_into()
+                                    .with_context(|| format!("failed to convert `size` attribute into usize for extern type `{extern_path}` in module `{path}`"))?,
+                            );
+                        }
                     }
-                    ("align", [grammar::Expr::IntLiteral(alignment_)]) => {
-                        alignment = Some(
-                            (*alignment_)
-                                .try_into()
-                                .with_context(|| format!("failed to convert `align` attribute into usize for extern type `{extern_path}` in module `{path}`"))?,
-                        );
+                    ("align", [align_expr]) if matches!(align_expr.node, grammar::Expr::IntLiteral(_)) => {
+                        if let grammar::Expr::IntLiteral(alignment_) = align_expr.node {
+                            alignment = Some(
+                                alignment_
+                                    .try_into()
+                                    .with_context(|| format!("failed to convert `align` attribute into usize for extern type `{extern_path}` in module `{path}`"))?,
+                            );
+                        }
                     }
                     _ => {}
                 }

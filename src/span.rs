@@ -119,6 +119,13 @@ impl<T> std::ops::DerefMut for Spanned<T> {
     }
 }
 
+// Implement Display for Spanned<T> where T: Display
+impl<T: std::fmt::Display> std::fmt::Display for Spanned<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.node.fmt(f)
+    }
+}
+
 /// Trait for structural equality comparison that ignores spans
 pub trait StructuralEq {
     fn structural_eq(&self, other: &Self) -> bool;

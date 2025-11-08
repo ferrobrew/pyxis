@@ -2,6 +2,7 @@ use anyhow::Context;
 
 use crate::{
     grammar::{self, ItemPath},
+    span::Spanned,
     semantic::{
         SemanticState, function,
         module::Module,
@@ -39,20 +40,23 @@ pub fn convert_grammar_functions_to_semantic_functions(
     type_registry: &TypeRegistry,
     module: &Module,
     size: Option<usize>,
-    functions: &[grammar::Function],
+    functions: &[Spanned<grammar::Function>],
 ) -> anyhow::Result<Vec<Function>> {
     // Insert function, with padding if necessary
     let mut output = vec![];
     let calling_convention = CallingConvention::for_member_function(type_registry.pointer_size());
-    for function in functions {
+    for function_spanned in functions {
+        let function = &function_spanned.node;
         let mut index = None;
         for attribute in &function.attributes {
-            let grammar::Attribute::Function(ident, exprs) = attribute else {
+            let grammar::Attribute::Function(ident, exprs) = &attribute.node else {
                 continue;
             };
             match (ident.as_str(), exprs.as_slice()) {
-                ("index", [grammar::Expr::IntLiteral(index_)]) => {
-                    index = Some(*index_ as usize);
+                ("index", [index_expr]) if matches!(index_expr.node, grammar::Expr::IntLiteral(_)) => {
+                    if let grammar::Expr::IntLiteral(index_) = index_expr.node {
+                        index = Some(index_ as usize);
+                    }
                 }
                 _ => continue,
             }
@@ -61,9 +65,9 @@ pub fn convert_grammar_functions_to_semantic_functions(
         if let Some(index) = index {
             make_padding_functions(&mut output, index, calling_convention);
         }
-        let function = function::build(type_registry, &module.scope(), true, function)
+        let semantic_function = function::build(type_registry, &module.scope(), true, function)
             .with_context(|| format!("while building vftable function `{}`", function.name))?;
-        output.push(function);
+        output.push(semantic_function);
     }
 
     // Pad out to target size
