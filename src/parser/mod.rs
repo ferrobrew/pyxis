@@ -306,7 +306,7 @@ fn function<'a>(
 
     attrs
         .then(padded(visibility()))
-        .then_ignore(keyword("fn"))
+        .then_ignore(padded(keyword("fn")))
         .then(padded(ident()))
         .then(
             padded(just('('))
@@ -342,7 +342,7 @@ fn type_field<'a>(
             attributes()
                 .or(empty().to(Attributes::default()))
                 .then(padded(visibility()))
-                .then_ignore(keyword("fn"))
+                .then_ignore(padded(keyword("fn")))
                 .then(padded(ident()))
                 .then(
                     padded(just('('))
@@ -366,7 +366,7 @@ fn type_field<'a>(
         })
         .map_with(|func, extra| Spanned::new(func, to_span(extra.span())));
 
-    let vftable = keyword("vftable").ignore_then(
+    let vftable = padded(keyword("vftable")).ignore_then(
         padded(just('{'))
             .ignore_then(
                 vftable_func
@@ -395,7 +395,7 @@ fn type_statement<'a>(
             attributes()
                 .or(empty().to(Attributes::default()))
                 .then(padded(visibility()))
-                .then_ignore(keyword("fn"))
+                .then_ignore(padded(keyword("fn")))
                 .then(padded(ident()))
                 .then(
                     padded(just('('))
@@ -419,7 +419,7 @@ fn type_statement<'a>(
         })
         .map_with(|func, extra| Spanned::new(func, to_span(extra.span())));
 
-    let vftable = keyword("vftable").ignore_then(
+    let vftable = padded(keyword("vftable")).ignore_then(
         padded(just('{'))
             .ignore_then(
                 vftable_func
@@ -562,7 +562,7 @@ fn item_definition<'a>(
     doc_comments: Vec<Spanned<String>>,
 ) -> impl Parser<'a, ParserInput<'a>, Spanned<ItemDefinition>, ParseError<'a>> + Clone {
     // Type definition
-    let type_def = keyword("type")
+    let type_def = padded(keyword("type"))
         .ignore_then(padded(ident()))
         .then(choice((
             padded(just(';')).to(vec![]),
@@ -578,7 +578,7 @@ fn item_definition<'a>(
         .map(|(name, statements)| (name, ItemDefinitionInner::Type(TypeDefinition { statements, attributes: Attributes::default() })));
 
     // Enum definition
-    let enum_def = keyword("enum")
+    let enum_def = padded(keyword("enum"))
         .ignore_then(padded(ident()))
         .then(
             padded(just(':'))
@@ -597,7 +597,7 @@ fn item_definition<'a>(
         .map(|(name, (ty, statements))| (name, ItemDefinitionInner::Enum(EnumDefinition { type_: ty, statements, attributes: Attributes::default() })));
 
     // Bitflags definition
-    let bitflags_def = keyword("bitflags")
+    let bitflags_def = padded(keyword("bitflags"))
         .ignore_then(padded(ident()))
         .then(
             padded(just(':'))
@@ -639,11 +639,11 @@ fn item_definition<'a>(
 // Backend definitions
 
 fn backend<'a>() -> impl Parser<'a, ParserInput<'a>, Spanned<Backend>, ParseError<'a>> + Clone {
-    keyword("backend")
+    padded(keyword("backend"))
         .ignore_then(padded(ident()))
         .then(choice((
             // Inline prologue or epilogue
-            keyword("prologue")
+            padded(keyword("prologue"))
                 .ignore_then(padded(string_literal()))
                 .then_ignore(padded(just(';')))
                 .map(|s| {
@@ -653,7 +653,7 @@ fn backend<'a>() -> impl Parser<'a, ParserInput<'a>, Spanned<Backend>, ParseErro
                         (None, None)
                     }
                 }),
-            keyword("epilogue")
+            padded(keyword("epilogue"))
                 .ignore_then(padded(string_literal()))
                 .then_ignore(padded(just(';')))
                 .map(|s| {
@@ -667,7 +667,7 @@ fn backend<'a>() -> impl Parser<'a, ParserInput<'a>, Spanned<Backend>, ParseErro
             padded(just('{'))
                 .ignore_then(
                     choice((
-                        keyword("prologue")
+                        padded(keyword("prologue"))
                             .ignore_then(padded(string_literal()))
                             .then_ignore(padded(just(';')))
                             .map(|s| {
@@ -677,7 +677,7 @@ fn backend<'a>() -> impl Parser<'a, ParserInput<'a>, Spanned<Backend>, ParseErro
                                     (0, String::new())
                                 }
                             }),
-                        keyword("epilogue")
+                        padded(keyword("epilogue"))
                             .ignore_then(padded(string_literal()))
                             .then_ignore(padded(just(';')))
                             .map(|s| {
@@ -719,8 +719,8 @@ fn extern_type<'a>(
 ) -> impl Parser<'a, ParserInput<'a>, (Spanned<Ident>, Attributes), ParseError<'a>> + Clone {
     attributes()
         .or(empty().to(Attributes::default()))
-        .then_ignore(keyword("extern"))
-        .then_ignore(keyword("type"))
+        .then_ignore(padded(keyword("extern")))
+        .then_ignore(padded(keyword("type")))
         .then(
             type_ident()
                 .map(|s| Ident(s))
@@ -735,7 +735,7 @@ fn extern_value<'a>() -> impl Parser<'a, ParserInput<'a>, Spanned<ExternValue>, 
     attributes()
         .or(empty().to(Attributes::default()))
         .then(padded(visibility()))
-        .then_ignore(keyword("extern"))
+        .then_ignore(padded(keyword("extern")))
         .then(padded(ident()))
         .then_ignore(padded(just(':')))
         .then(padded(type_parser()))
@@ -760,7 +760,7 @@ fn impl_block<'a>() -> impl Parser<'a, ParserInput<'a>, Spanned<FunctionBlock>, 
             attributes()
                 .or(empty().to(Attributes::default()))
                 .then(padded(visibility()))
-                .then_ignore(keyword("fn"))
+                .then_ignore(padded(keyword("fn")))
                 .then(padded(ident()))
                 .then(
                     padded(just('('))
@@ -786,7 +786,7 @@ fn impl_block<'a>() -> impl Parser<'a, ParserInput<'a>, Spanned<FunctionBlock>, 
 
     attributes()
         .or(empty().to(Attributes::default()))
-        .then_ignore(keyword("impl"))
+        .then_ignore(padded(keyword("impl")))
         .then(padded(ident()))
         .then(
             padded(just('{'))
