@@ -65,8 +65,9 @@ fn ident<'a>() -> impl Parser<'a, ParserInput<'a>, Spanned<Ident>, ParseError<'a
             // Filter out keywords
             match s {
                 "type" | "enum" | "pub" | "fn" | "impl" | "use" | "extern" | "const" | "mut"
-                | "self" | "backend" | "prologue" | "epilogue" | "vftable" | "bitflags"
+                | "self" | "backend" | "prologue" | "epilogue" | "bitflags"
                 | "unknown" => Err(Rich::custom(span, format!("'{}' is a reserved keyword", s))),
+                // Note: "vftable" is allowed as an identifier since it's only a keyword in specific contexts
                 _ => Ok(Ident(s.to_string())),
             }
         })
@@ -366,7 +367,7 @@ fn type_field<'a>(
         })
         .map_with(|func, extra| Spanned::new(func, to_span(extra.span())));
 
-    let vftable = padded(keyword("vftable")).ignore_then(
+    let vftable = padded(just("vftable")).ignore_then(
         padded(just('{'))
             .ignore_then(
                 vftable_func
@@ -419,7 +420,7 @@ fn type_statement<'a>(
         })
         .map_with(|func, extra| Spanned::new(func, to_span(extra.span())));
 
-    let vftable = padded(keyword("vftable")).ignore_then(
+    let vftable = padded(just("vftable")).ignore_then(
         padded(just('{'))
             .ignore_then(
                 vftable_func
