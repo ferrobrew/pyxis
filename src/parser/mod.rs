@@ -1,618 +1,911 @@
-use syn::{
-    Token, braced, bracketed, parenthesized,
-    parse::{Parse, ParseStream, Result},
-    punctuated::Punctuated,
-};
+use chumsky::prelude::*;
 
 use crate::grammar::*;
+use crate::span::{Span, Spanned};
 
 #[cfg(test)]
 mod tests;
 
-mod kw {
-    syn::custom_keyword!(meta);
-    syn::custom_keyword!(functions);
-    syn::custom_keyword!(unknown);
-    syn::custom_keyword!(backend);
-    syn::custom_keyword!(prologue);
-    syn::custom_keyword!(epilogue);
-    syn::custom_keyword!(vftable);
-    syn::custom_keyword!(bitflags);
+type ParserInput<'a> = &'a str;
+type ParseError<'a> = extra::Err<Rich<'a, char>>;
+
+// Helper to convert SimpleSpan to our Span
+fn to_span(simple_span: SimpleSpan) -> Span {
+    Span::new(simple_span.start, simple_span.end)
 }
 
-impl Parse for Ident {
-    fn parse(input: ParseStream) -> Result<Self> {
-        if input.peek(Token![_]) {
-            input.parse::<Token![_]>()?;
-            Ok(Ident("_".to_string()))
-        } else if input.peek(syn::Ident) {
-            Ok(Ident(input.parse::<syn::Ident>()?.to_string()))
-        } else {
-            Err(input.error("expected identifier"))
-        }
-    }
+// Lexical elements
+
+fn whitespace<'a>() -> impl Parser<'a, ParserInput<'a>, (), ParseError<'a>> + Clone {
+    one_of(" \t\r\n").repeated().ignored()
 }
 
-fn parse_type_ident(input: ParseStream) -> Result<String> {
-    // dodgy hack to "support" generics for now
-    let ident: syn::Ident = input.parse()?;
-    let mut name = ident.to_string();
-
-    loop {
-        if input.peek(Token![<]) {
-            input.parse::<Token![<]>()?;
-            name += "<";
-        } else if input.peek(syn::Ident) {
-            let ident: syn::Ident = input.parse()?;
-            name += &ident.to_string();
-        } else if input.peek(Token![>]) {
-            input.parse::<Token![>]>()?;
-            name += ">";
-        } else {
-            break Ok(name);
-        }
-    }
+fn line_comment<'a>() -> impl Parser<'a, ParserInput<'a>, Spanned<String>, ParseError<'a>> + Clone {
+    just("//")
+        .then(none_of("\r\n").repeated().collect::<String>())
+        .map(|(_, content)| content)
+        .map_with(|content, extra| Spanned::new(content, to_span(extra.span())))
 }
 
-impl Parse for ItemPath {
-    fn parse(input: ParseStream) -> Result<Self> {
-        let mut item_path = ItemPath::empty();
-        loop {
-            // todo: make parsing stricter so that this takes idents
-            // separated by double-colons that end in a type, not just
-            // all types
-            // that is to say, `use lol<lol>::lol` should not parse, but
-            // `use lol::lol<lol>` should
-            if input.peek(syn::Ident) {
-                item_path.push(parse_type_ident(input)?.into());
-            } else if input.peek(Token![::]) {
-                input.parse::<Token![::]>()?;
-            } else if input.peek(Token![super]) {
-                return Err(input.error("super not supported"));
-            } else {
-                break;
+fn doc_comment<'a>() -> impl Parser<'a, ParserInput<'a>, Spanned<String>, ParseError<'a>> + Clone {
+    just("///")
+        .then(none_of("\r\n").repeated().collect::<String>())
+        .map(|(_, content)| content)
+        .map_with(|content, extra| Spanned::new(content, to_span(extra.span())))
+}
+
+fn module_doc_comment<'a>(
+) -> impl Parser<'a, ParserInput<'a>, Spanned<String>, ParseError<'a>> + Clone {
+    just("//!")
+        .then(none_of("\r\n").repeated().collect::<String>())
+        .map(|(_, content)| content)
+        .map_with(|content, extra| Spanned::new(content, to_span(extra.span())))
+}
+
+// Whitespace and comments are skipped between tokens
+fn padded<'a, O: Clone>(
+    parser: impl Parser<'a, ParserInput<'a>, O, ParseError<'a>> + Clone + 'a,
+) -> impl Parser<'a, ParserInput<'a>, O, ParseError<'a>> + Clone {
+    parser.padded_by(whitespace().or(line_comment().ignored()).repeated())
+}
+
+fn keyword<'a>(kw: &'static str) -> impl Parser<'a, ParserInput<'a>, (), ParseError<'a>> + Clone {
+    just(kw).then_ignore(
+        text::ident()
+            .not()
+            .rewind()
+            .or(end().rewind())
+    ).ignored()
+}
+
+fn ident<'a>() -> impl Parser<'a, ParserInput<'a>, Spanned<Ident>, ParseError<'a>> + Clone {
+    text::ident()
+        .try_map(|s: &str, span| {
+            // Filter out keywords
+            match s {
+                "type" | "enum" | "pub" | "fn" | "impl" | "use" | "extern" | "const" | "mut"
+                | "self" | "backend" | "prologue" | "epilogue" | "vftable" | "bitflags"
+                | "unknown" => Err(Rich::custom(span, format!("'{}' is a reserved keyword", s))),
+                _ => Ok(Ident(s.to_string())),
             }
-        }
-        Ok(item_path)
-    }
+        })
+        .map_with(|ident, extra| Spanned::new(ident, to_span(extra.span())))
+        .or(just("_")
+            .to(Ident("_".to_string()))
+            .map_with(|ident, extra| Spanned::new(ident, to_span(extra.span()))))
 }
 
-impl Parse for Type {
-    fn parse(input: ParseStream) -> Result<Self> {
-        let lookahead = input.lookahead1();
-        if lookahead.peek(kw::unknown) {
-            input.parse::<kw::unknown>()?;
-            input.parse::<Token![<]>()?;
-            let size: usize = input.parse::<syn::LitInt>()?.base10_parse()?;
-            input.parse::<Token![>]>()?;
-
-            Ok(Type::Unknown(size))
-        } else if lookahead.peek(syn::Ident) {
-            Ok(Type::Ident(parse_type_ident(input)?.as_str().into()))
-        } else if lookahead.peek(Token![*]) {
-            input.parse::<Token![*]>()?;
-
-            let lookahead = input.lookahead1();
-            if lookahead.peek(Token![const]) {
-                input.parse::<Token![const]>()?;
-                Ok(Type::ConstPointer(Box::new(input.parse()?)))
-            } else if lookahead.peek(Token![mut]) {
-                input.parse::<Token![mut]>()?;
-                Ok(Type::MutPointer(Box::new(input.parse()?)))
+// For types that can have generics-like syntax
+fn type_ident<'a>() -> impl Parser<'a, ParserInput<'a>, String, ParseError<'a>> + Clone {
+    text::ident()
+        .then(
+            just('<')
+                .ignore_then(none_of('>').repeated().collect::<String>())
+                .then_ignore(just('>'))
+                .or_not(),
+        )
+        .map(move |(base, generic): (&str, Option<String>)| {
+            if let Some(generic_part) = generic {
+                format!("{}<{}>", base, generic_part)
             } else {
-                Err(lookahead.error())
+                base.to_string()
             }
-        } else if lookahead.peek(syn::token::Bracket) {
-            let content;
-            bracketed!(content in input);
-
-            let type_: Type = content.parse()?;
-            content.parse::<Token![;]>()?;
-            let size: syn::LitInt = content.parse()?;
-            let size: usize = size.base10_parse()?;
-            Ok(Type::Array(Box::new(type_), size))
-        } else {
-            Err(lookahead.error())
-        }
-    }
+        })
 }
 
-impl Parse for Expr {
-    fn parse(input: ParseStream) -> Result<Self> {
-        let lookahead = input.lookahead1();
-        if lookahead.peek(syn::Ident) {
-            Ok(Expr::Ident(input.parse()?))
-        } else if lookahead.peek(syn::LitInt) {
-            let lit: syn::LitInt = input.parse()?;
-            Ok(Expr::IntLiteral(lit.base10_parse()?))
-        } else if lookahead.peek(syn::LitStr) {
-            let lit: syn::LitStr = input.parse()?;
-            Ok(Expr::StringLiteral(lit.value()))
-        } else {
-            Err(lookahead.error())
-        }
-    }
+// Literals
+
+fn int_literal<'a>() -> impl Parser<'a, ParserInput<'a>, Spanned<Expr>, ParseError<'a>> + Clone {
+    let hex = just("0x")
+        .ignore_then(text::int(16))
+        .map(|s: &str| isize::from_str_radix(&s.replace('_', ""), 16).unwrap());
+
+    let bin = just("0b")
+        .ignore_then(text::int(2))
+        .map(|s: &str| isize::from_str_radix(&s.replace('_', ""), 2).unwrap());
+
+    let dec = just('-')
+        .or_not()
+        .then(text::int(10))
+        .map(|(neg, s): (Option<char>, &str)| {
+            let num = s.replace('_', "").parse::<isize>().unwrap();
+            if neg.is_some() {
+                -num
+            } else {
+                num
+            }
+        });
+
+    choice((hex, bin, dec))
+        .map(Expr::IntLiteral)
+        .map_with(|expr, extra| Spanned::new(expr, to_span(extra.span())))
 }
 
-impl Attribute {
-    /// also implicitly handles multiple attributes within the same brackets:
-    /// #[a(b), c(d)] -> Function(a, [b]), Function(c, [d])
-    fn parse_many(input: ParseStream, expect_module_attributes: bool) -> Result<Attributes> {
-        enum AttributePart {
-            Ident(Ident),
-            Function { name: Ident, arguments: Vec<Expr> },
-            Assign { name: Ident, value: Expr },
-        }
-        impl Parse for AttributePart {
-            fn parse(input: ParseStream) -> Result<Self> {
-                let name = input.parse()?;
+fn string_literal<'a>() -> impl Parser<'a, ParserInput<'a>, Spanned<Expr>, ParseError<'a>> + Clone {
+    let escape = just('\\').ignore_then(choice((
+        just('n').to('\n'),
+        just('r').to('\r'),
+        just('t').to('\t'),
+        just('\\').to('\\'),
+        just('"').to('"'),
+    )));
 
-                if input.peek(syn::token::Paren) {
-                    let content2;
-                    parenthesized!(content2 in input);
+    let string_char = escape.or(none_of("\"\\"));
 
-                    let arguments: Punctuated<_, Token![,]> =
-                        content2.parse_terminated(Expr::parse, Token![,])?;
-                    let arguments = Vec::from_iter(arguments);
+    // Regular string
+    let regular_string = just('"')
+        .ignore_then(string_char.repeated().collect::<String>())
+        .then_ignore(just('"'));
 
-                    Ok(AttributePart::Function { name, arguments })
-                } else if input.peek(Token![=]) {
-                    input.parse::<Token![=]>()?;
-                    Ok(AttributePart::Assign {
-                        name,
-                        value: input.parse()?,
-                    })
+    // Raw string r#"..."#
+    let raw_string = just("r#\"")
+        .ignore_then(none_of('"').repeated().collect::<String>())
+        .then_ignore(just("\"#"));
+
+    choice((raw_string, regular_string))
+        .map(Expr::StringLiteral)
+        .map_with(|expr, extra| Spanned::new(expr, to_span(extra.span())))
+}
+
+// Expressions
+
+fn expr<'a>() -> impl Parser<'a, ParserInput<'a>, Spanned<Expr>, ParseError<'a>> + Clone {
+    recursive(|_| {
+        choice((
+            int_literal(),
+            string_literal(),
+            ident().map(|id| id.map(Expr::Ident)),
+        ))
+    })
+}
+
+// Types
+
+fn type_parser<'a>() -> impl Parser<'a, ParserInput<'a>, Spanned<Type>, ParseError<'a>> + Clone {
+    recursive(|type_| {
+        let unknown = keyword("unknown")
+            .ignore_then(padded(just('<')))
+            .ignore_then(padded(int_literal()))
+            .then_ignore(padded(just('>')))
+            .try_map(|lit, span| {
+                if let Expr::IntLiteral(size) = lit.node {
+                    Ok(Type::Unknown(size as usize))
                 } else {
-                    Ok(AttributePart::Ident(name))
+                    Err(Rich::custom(span, "Expected integer literal"))
+                }
+            })
+            .map_with(|ty, extra| Spanned::new(ty, to_span(extra.span())));
+
+        let ident_type = type_ident()
+            .map(|s| Type::Ident(Ident(s)))
+            .map_with(|ty, extra| Spanned::new(ty, to_span(extra.span())));
+
+        let pointer = padded(just('*'))
+            .ignore_then(choice((
+                keyword("const").to(true),
+                keyword("mut").to(false),
+            )))
+            .then(padded(type_.clone()))
+            .map(|(is_const, inner)| {
+                if is_const {
+                    Type::ConstPointer(Box::new(inner))
+                } else {
+                    Type::MutPointer(Box::new(inner))
+                }
+            })
+            .map_with(|ty, extra| Spanned::new(ty, to_span(extra.span())));
+
+        let array = padded(just('['))
+            .ignore_then(padded(type_.clone()))
+            .then_ignore(padded(just(';')))
+            .then(padded(int_literal()))
+            .then_ignore(padded(just(']')))
+            .try_map(|(inner, size_expr), span| {
+                if let Expr::IntLiteral(size) = size_expr.node {
+                    Ok(Type::Array(Box::new(inner), size as usize))
+                } else {
+                    Err(Rich::custom(span, "Array size must be an integer"))
+                }
+            })
+            .map_with(|ty, extra| Spanned::new(ty, to_span(extra.span())));
+
+        choice((pointer, array, unknown, ident_type))
+    })
+}
+
+// Item paths (for use statements)
+
+fn item_path<'a>() -> impl Parser<'a, ParserInput<'a>, Spanned<ItemPath>, ParseError<'a>> + Clone {
+    type_ident()
+        .separated_by(just("::"))
+        .at_least(1)
+        .collect::<Vec<_>>()
+        .map(|segments| ItemPath(segments.into_iter().map(ItemPathSegment::from).collect()))
+        .map_with(|path, extra| Spanned::new(path, to_span(extra.span())))
+}
+
+// Attributes
+
+fn attribute<'a>() -> impl Parser<'a, ParserInput<'a>, Spanned<Attribute>, ParseError<'a>> + Clone {
+    let ident_attr = ident().map(|id| id.map(Attribute::Ident));
+
+    let function_attr = ident()
+        .then(
+            padded(just('('))
+                .ignore_then(padded(expr()).separated_by(padded(just(','))).collect())
+                .then_ignore(padded(just(')'))),
+        )
+        .map(|(name, args)| Spanned::new(Attribute::Function(name.node, args), name.span));
+
+    let assign_attr = ident()
+        .then_ignore(padded(just('=')))
+        .then(padded(expr()))
+        .map(|(name, value)| Spanned::new(Attribute::Assign(name.node, value), name.span));
+
+    choice((function_attr, assign_attr, ident_attr))
+}
+
+fn attributes<'a>() -> impl Parser<'a, ParserInput<'a>, Attributes, ParseError<'a>> + Clone {
+    padded(just('#'))
+        .ignore_then(padded(just('[')))
+        .ignore_then(attribute().separated_by(padded(just(','))).collect::<Vec<_>>())
+        .then_ignore(padded(just(']')))
+        .repeated()
+        .collect::<Vec<Vec<_>>>()
+        .map(|attrs_list| Attributes(attrs_list.into_iter().flatten().collect()))
+}
+
+fn module_attributes<'a>() -> impl Parser<'a, ParserInput<'a>, Attributes, ParseError<'a>> + Clone {
+    padded(just("#!"))
+        .ignore_then(padded(just('[')))
+        .ignore_then(attribute().separated_by(padded(just(','))).collect::<Vec<_>>())
+        .then_ignore(padded(just(']')))
+        .repeated()
+        .collect::<Vec<Vec<_>>>()
+        .map(|attrs_list| Attributes(attrs_list.into_iter().flatten().collect()))
+}
+
+// Visibility
+
+fn visibility<'a>() -> impl Parser<'a, ParserInput<'a>, Visibility, ParseError<'a>> + Clone {
+    keyword("pub")
+        .to(Visibility::Public)
+        .or(empty().to(Visibility::Private))
+}
+
+// Arguments
+
+fn argument<'a>() -> impl Parser<'a, ParserInput<'a>, Spanned<Argument>, ParseError<'a>> + Clone {
+    let const_self = padded(just('&'))
+        .ignore_then(keyword("self"))
+        .to(Argument::ConstSelf)
+        .map_with(|arg, extra| Spanned::new(arg, to_span(extra.span())));
+
+    let mut_self = padded(just('&'))
+        .ignore_then(keyword("mut"))
+        .ignore_then(keyword("self"))
+        .to(Argument::MutSelf)
+        .map_with(|arg, extra| Spanned::new(arg, to_span(extra.span())));
+
+    let named = padded(ident())
+        .then_ignore(padded(just(':')))
+        .then(padded(type_parser()))
+        .map(|(name, ty)| Argument::Named(name, ty))
+        .map_with(|arg, extra| Spanned::new(arg, to_span(extra.span())));
+
+    choice((mut_self, const_self, named))
+}
+
+// Functions
+
+fn function<'a>(
+    doc_comments: Vec<Spanned<String>>,
+) -> impl Parser<'a, ParserInput<'a>, Spanned<Function>, ParseError<'a>> + Clone {
+    let attrs = attributes().or(empty().to(Attributes::default()));
+
+    attrs
+        .then(padded(visibility()))
+        .then_ignore(keyword("fn"))
+        .then(padded(ident()))
+        .then(
+            padded(just('('))
+                .ignore_then(
+                    padded(argument())
+                        .separated_by(padded(just(',')))
+                        .allow_trailing()
+                        .collect(),
+                )
+                .then_ignore(padded(just(')'))),
+        )
+        .then(padded(just("->")).ignore_then(padded(type_parser())).or_not())
+        .map(move |((((attrs, vis), name), args), ret_ty)| Function {
+            visibility: vis,
+            name,
+            attributes: attrs,
+            doc_comments: doc_comments.clone(),
+            arguments: args,
+            return_type: ret_ty,
+        })
+        .map_with(|func, extra| Spanned::new(func, to_span(extra.span())))
+}
+
+// Type definitions
+
+fn type_field<'a>(
+    doc_comments: Vec<Spanned<String>>,
+) -> impl Parser<'a, ParserInput<'a>, TypeField, ParseError<'a>> + Clone {
+    let vftable_func = doc_comment()
+        .repeated()
+        .collect::<Vec<_>>()
+        .then(
+            attributes()
+                .or(empty().to(Attributes::default()))
+                .then(padded(visibility()))
+                .then_ignore(keyword("fn"))
+                .then(padded(ident()))
+                .then(
+                    padded(just('('))
+                        .ignore_then(
+                            padded(argument())
+                                .separated_by(padded(just(',')))
+                                .allow_trailing()
+                                .collect(),
+                        )
+                        .then_ignore(padded(just(')'))),
+                )
+                .then(padded(just("->")).ignore_then(padded(type_parser())).or_not()),
+        )
+        .map(|(doc_comments, ((((attrs, vis), name), args), ret_ty))| Function {
+            visibility: vis,
+            name,
+            attributes: attrs,
+            doc_comments,
+            arguments: args,
+            return_type: ret_ty,
+        })
+        .map_with(|func, extra| Spanned::new(func, to_span(extra.span())));
+
+    let vftable = keyword("vftable").ignore_then(
+        padded(just('{'))
+            .ignore_then(
+                vftable_func
+                    .separated_by(padded(just(';')))
+                    .allow_trailing()
+                    .collect::<Vec<_>>(),
+            )
+            .then_ignore(padded(just('}'))),
+    ).map(TypeField::Vftable);
+
+    let field = padded(visibility())
+        .then(padded(ident()))
+        .then_ignore(padded(just(':')))
+        .then(padded(type_parser()))
+        .map(|((vis, name), ty)| TypeField::Field(vis, name, ty));
+
+    choice((vftable, field))
+}
+
+fn type_statement<'a>(
+) -> impl Parser<'a, ParserInput<'a>, Spanned<TypeStatement>, ParseError<'a>> + Clone {
+    let vftable_func = doc_comment()
+        .repeated()
+        .collect::<Vec<_>>()
+        .then(
+            attributes()
+                .or(empty().to(Attributes::default()))
+                .then(padded(visibility()))
+                .then_ignore(keyword("fn"))
+                .then(padded(ident()))
+                .then(
+                    padded(just('('))
+                        .ignore_then(
+                            padded(argument())
+                                .separated_by(padded(just(',')))
+                                .allow_trailing()
+                                .collect(),
+                        )
+                        .then_ignore(padded(just(')'))),
+                )
+                .then(padded(just("->")).ignore_then(padded(type_parser())).or_not()),
+        )
+        .map(|(doc_comments, ((((attrs, vis), name), args), ret_ty))| Function {
+            visibility: vis,
+            name,
+            attributes: attrs,
+            doc_comments,
+            arguments: args,
+            return_type: ret_ty,
+        })
+        .map_with(|func, extra| Spanned::new(func, to_span(extra.span())));
+
+    let vftable = keyword("vftable").ignore_then(
+        padded(just('{'))
+            .ignore_then(
+                vftable_func
+                    .separated_by(padded(just(';')))
+                    .allow_trailing()
+                    .collect::<Vec<_>>(),
+            )
+            .then_ignore(padded(just('}'))),
+    ).map(TypeField::Vftable);
+
+    let field = padded(visibility())
+        .then(padded(ident()))
+        .then_ignore(padded(just(':')))
+        .then(padded(type_parser()))
+        .map(|((vis, name), ty)| TypeField::Field(vis, name, ty));
+
+    doc_comment()
+        .repeated()
+        .collect::<Vec<_>>()
+        .then(attributes().or(empty().to(Attributes::default())))
+        .then(choice((vftable, field)))
+        .map(|((doc_comments, attrs), field)| TypeStatement {
+            field,
+            attributes: attrs,
+            doc_comments,
+        })
+        .map_with(|stmt, extra| Spanned::new(stmt, to_span(extra.span())))
+}
+
+fn type_definition<'a>(
+    attrs: Attributes,
+) -> impl Parser<'a, ParserInput<'a>, TypeDefinition, ParseError<'a>> + Clone {
+    let empty_def = padded(just(';')).to(TypeDefinition {
+        statements: vec![],
+        attributes: attrs.clone(),
+    });
+
+    let full_def = padded(just('{'))
+        .ignore_then(
+            padded(type_statement())
+                .separated_by(padded(just(',')))
+                .allow_trailing()
+                .collect(),
+        )
+        .then_ignore(padded(just('}')))
+        .map(move |statements| TypeDefinition {
+            statements,
+            attributes: attrs.clone(),
+        });
+
+    choice((full_def, empty_def))
+}
+
+// Enum definitions
+
+fn enum_statement<'a>(
+) -> impl Parser<'a, ParserInput<'a>, Spanned<EnumStatement>, ParseError<'a>> + Clone {
+    doc_comment()
+        .repeated()
+        .collect::<Vec<_>>()
+        .then(attributes().or(empty().to(Attributes::default())))
+        .then(padded(ident()))
+        .then(padded(just('=')).ignore_then(padded(expr())).or_not())
+        .map(|(((doc_comments, attrs), name), expr)| EnumStatement {
+            name,
+            expr,
+            attributes: attrs,
+            doc_comments,
+        })
+        .map_with(|stmt, extra| Spanned::new(stmt, to_span(extra.span())))
+}
+
+fn enum_definition<'a>(
+    attrs: Attributes,
+) -> impl Parser<'a, ParserInput<'a>, EnumDefinition, ParseError<'a>> + Clone {
+    padded(just(':'))
+        .ignore_then(padded(type_parser()))
+        .then(
+            padded(just('{'))
+                .ignore_then(
+                    padded(enum_statement())
+                        .separated_by(padded(just(',')))
+                        .allow_trailing()
+                        .collect(),
+                )
+                .then_ignore(padded(just('}'))),
+        )
+        .map(move |(ty, statements)| EnumDefinition {
+            type_: ty,
+            statements,
+            attributes: attrs.clone(),
+        })
+}
+
+// Bitflags definitions
+
+fn bitflags_statement<'a>(
+) -> impl Parser<'a, ParserInput<'a>, Spanned<BitflagsStatement>, ParseError<'a>> + Clone {
+    doc_comment()
+        .repeated()
+        .collect::<Vec<_>>()
+        .then(attributes().or(empty().to(Attributes::default())))
+        .then(padded(ident()))
+        .then_ignore(padded(just('=')))
+        .then(padded(expr()))
+        .map(|(((doc_comments, attrs), name), expr)| BitflagsStatement {
+            name,
+            expr,
+            attributes: attrs,
+            doc_comments,
+        })
+        .map_with(|stmt, extra| Spanned::new(stmt, to_span(extra.span())))
+}
+
+fn bitflags_definition<'a>(
+    attrs: Attributes,
+) -> impl Parser<'a, ParserInput<'a>, BitflagsDefinition, ParseError<'a>> + Clone {
+    padded(just(':'))
+        .ignore_then(padded(type_parser()))
+        .then(
+            padded(just('{'))
+                .ignore_then(
+                    padded(bitflags_statement())
+                        .separated_by(padded(just(',')))
+                        .allow_trailing()
+                        .collect(),
+                )
+                .then_ignore(padded(just('}'))),
+        )
+        .map(move |(ty, statements)| BitflagsDefinition {
+            type_: ty,
+            statements,
+            attributes: attrs.clone(),
+        })
+}
+
+// Item definitions
+
+fn item_definition<'a>(
+    doc_comments: Vec<Spanned<String>>,
+) -> impl Parser<'a, ParserInput<'a>, Spanned<ItemDefinition>, ParseError<'a>> + Clone {
+    // Type definition
+    let type_def = keyword("type")
+        .ignore_then(padded(ident()))
+        .then(choice((
+            padded(just(';')).to(vec![]),
+            padded(just('{'))
+                .ignore_then(
+                    padded(type_statement())
+                        .separated_by(padded(just(',')))
+                        .allow_trailing()
+                        .collect(),
+                )
+                .then_ignore(padded(just('}'))),
+        )))
+        .map(|(name, statements)| (name, ItemDefinitionInner::Type(TypeDefinition { statements, attributes: Attributes::default() })));
+
+    // Enum definition
+    let enum_def = keyword("enum")
+        .ignore_then(padded(ident()))
+        .then(
+            padded(just(':'))
+                .ignore_then(padded(type_parser()))
+                .then(
+                    padded(just('{'))
+                        .ignore_then(
+                            padded(enum_statement())
+                                .separated_by(padded(just(',')))
+                                .allow_trailing()
+                                .collect(),
+                        )
+                        .then_ignore(padded(just('}'))),
+                )
+        )
+        .map(|(name, (ty, statements))| (name, ItemDefinitionInner::Enum(EnumDefinition { type_: ty, statements, attributes: Attributes::default() })));
+
+    // Bitflags definition
+    let bitflags_def = keyword("bitflags")
+        .ignore_then(padded(ident()))
+        .then(
+            padded(just(':'))
+                .ignore_then(padded(type_parser()))
+                .then(
+                    padded(just('{'))
+                        .ignore_then(
+                            padded(bitflags_statement())
+                                .separated_by(padded(just(',')))
+                                .allow_trailing()
+                                .collect(),
+                        )
+                        .then_ignore(padded(just('}'))),
+                )
+        )
+        .map(|(name, (ty, statements))| (name, ItemDefinitionInner::Bitflags(BitflagsDefinition { type_: ty, statements, attributes: Attributes::default() })));
+
+    attributes()
+        .or(empty().to(Attributes::default()))
+        .then(padded(visibility()))
+        .then(choice((type_def, enum_def, bitflags_def)))
+        .map(move |((attrs, vis), (name, mut inner))| {
+            // Update the inner attributes
+            match &mut inner {
+                ItemDefinitionInner::Type(td) => td.attributes = attrs.clone(),
+                ItemDefinitionInner::Enum(ed) => ed.attributes = attrs.clone(),
+                ItemDefinitionInner::Bitflags(bd) => bd.attributes = attrs.clone(),
+            }
+            ItemDefinition {
+                visibility: vis,
+                name,
+                doc_comments: doc_comments.clone(),
+                inner,
+            }
+        })
+        .map_with(|item, extra| Spanned::new(item, to_span(extra.span())))
+}
+
+// Backend definitions
+
+fn backend<'a>() -> impl Parser<'a, ParserInput<'a>, Spanned<Backend>, ParseError<'a>> + Clone {
+    keyword("backend")
+        .ignore_then(padded(ident()))
+        .then(choice((
+            // Inline prologue or epilogue
+            keyword("prologue")
+                .ignore_then(padded(string_literal()))
+                .then_ignore(padded(just(';')))
+                .map(|s| {
+                    if let Expr::StringLiteral(content) = s.node {
+                        (Some(content.trim().to_string()), None)
+                    } else {
+                        (None, None)
+                    }
+                }),
+            keyword("epilogue")
+                .ignore_then(padded(string_literal()))
+                .then_ignore(padded(just(';')))
+                .map(|s| {
+                    if let Expr::StringLiteral(content) = s.node {
+                        (None, Some(content.trim().to_string()))
+                    } else {
+                        (None, None)
+                    }
+                }),
+            // Block form
+            padded(just('{'))
+                .ignore_then(
+                    choice((
+                        keyword("prologue")
+                            .ignore_then(padded(string_literal()))
+                            .then_ignore(padded(just(';')))
+                            .map(|s| {
+                                if let Expr::StringLiteral(content) = s.node {
+                                    (0, content.trim().to_string())
+                                } else {
+                                    (0, String::new())
+                                }
+                            }),
+                        keyword("epilogue")
+                            .ignore_then(padded(string_literal()))
+                            .then_ignore(padded(just(';')))
+                            .map(|s| {
+                                if let Expr::StringLiteral(content) = s.node {
+                                    (1, content.trim().to_string())
+                                } else {
+                                    (1, String::new())
+                                }
+                            }),
+                    ))
+                    .repeated()
+                    .collect::<Vec<_>>(),
+                )
+                .then_ignore(padded(just('}')))
+                .map(|items| {
+                    let mut prologue = None;
+                    let mut epilogue = None;
+                    for (kind, content) in items {
+                        if kind == 0 {
+                            prologue = Some(content);
+                        } else {
+                            epilogue = Some(content);
+                        }
+                    }
+                    (prologue, epilogue)
+                }),
+        )))
+        .map(|(name, (prologue, epilogue))| Backend {
+            name,
+            prologue,
+            epilogue,
+        })
+        .map_with(|backend, extra| Spanned::new(backend, to_span(extra.span())))
+}
+
+// Extern types and values
+
+fn extern_type<'a>(
+) -> impl Parser<'a, ParserInput<'a>, (Spanned<Ident>, Attributes), ParseError<'a>> + Clone {
+    attributes()
+        .or(empty().to(Attributes::default()))
+        .then_ignore(keyword("extern"))
+        .then_ignore(keyword("type"))
+        .then(
+            type_ident()
+                .map(|s| Ident(s))
+                .map_with(|ident, extra| Spanned::new(ident, to_span(extra.span()))),
+        )
+        .then_ignore(padded(just(';')))
+        .map(|(attrs, ident)| (ident, attrs))
+}
+
+fn extern_value<'a>() -> impl Parser<'a, ParserInput<'a>, Spanned<ExternValue>, ParseError<'a>> + Clone
+{
+    attributes()
+        .or(empty().to(Attributes::default()))
+        .then(padded(visibility()))
+        .then_ignore(keyword("extern"))
+        .then(padded(ident()))
+        .then_ignore(padded(just(':')))
+        .then(padded(type_parser()))
+        .then_ignore(padded(just(';')))
+        .map(|(((attrs, vis), name), ty)| ExternValue {
+            visibility: vis,
+            name,
+            type_: ty,
+            attributes: attrs,
+        })
+        .map_with(|ev, extra| Spanned::new(ev, to_span(extra.span())))
+}
+
+// Impl blocks
+
+fn impl_block<'a>() -> impl Parser<'a, ParserInput<'a>, Spanned<FunctionBlock>, ParseError<'a>> + Clone
+{
+    let impl_func = doc_comment()
+        .repeated()
+        .collect::<Vec<_>>()
+        .then(
+            attributes()
+                .or(empty().to(Attributes::default()))
+                .then(padded(visibility()))
+                .then_ignore(keyword("fn"))
+                .then(padded(ident()))
+                .then(
+                    padded(just('('))
+                        .ignore_then(
+                            padded(argument())
+                                .separated_by(padded(just(',')))
+                                .allow_trailing()
+                                .collect(),
+                        )
+                        .then_ignore(padded(just(')'))),
+                )
+                .then(padded(just("->")).ignore_then(padded(type_parser())).or_not()),
+        )
+        .map(|(doc_comments, ((((attrs, vis), name), args), ret_ty))| Function {
+            visibility: vis,
+            name,
+            attributes: attrs,
+            doc_comments,
+            arguments: args,
+            return_type: ret_ty,
+        })
+        .map_with(|func, extra| Spanned::new(func, to_span(extra.span())));
+
+    attributes()
+        .or(empty().to(Attributes::default()))
+        .then_ignore(keyword("impl"))
+        .then(padded(ident()))
+        .then(
+            padded(just('{'))
+                .ignore_then(
+                    impl_func
+                        .separated_by(padded(just(';')))
+                        .allow_trailing()
+                        .collect::<Vec<_>>(),
+                )
+                .then_ignore(padded(just('}'))),
+        )
+        .map(|((attrs, name), functions)| FunctionBlock {
+            name,
+            functions,
+            attributes: attrs,
+        })
+        .map_with(|fb, extra| Spanned::new(fb, to_span(extra.span())))
+}
+
+// Use statements
+
+fn use_statement<'a>() -> impl Parser<'a, ParserInput<'a>, Spanned<ItemPath>, ParseError<'a>> + Clone {
+    keyword("use")
+        .ignore_then(padded(item_path()))
+        .then_ignore(padded(just(';')))
+}
+
+// Module
+
+pub fn module<'a>() -> impl Parser<'a, ParserInput<'a>, Module, ParseError<'a>> + Clone {
+    // Skip initial whitespace and comments
+    let skip_ws_comments = whitespace().or(line_comment().ignored()).repeated();
+
+    // Freestanding function parser
+    let freestanding_func = doc_comment()
+        .repeated()
+        .collect::<Vec<_>>()
+        .then(function(vec![]))
+        .map(|(doc_comments, mut func)| {
+            func.node.doc_comments = doc_comments;
+            func
+        })
+        .then_ignore(padded(just(';')));
+
+    // Item definition parser
+    let item_def = doc_comment()
+        .repeated()
+        .collect::<Vec<_>>()
+        .then(item_definition(vec![]))
+        .map(|(doc_comments, mut item)| {
+            item.node.doc_comments = doc_comments;
+            item
+        });
+
+    skip_ws_comments
+        .clone()
+        .ignore_then(module_doc_comment().repeated().collect::<Vec<_>>())
+        .then_ignore(skip_ws_comments.clone())
+        .then(module_attributes().or(empty().to(Attributes::default())))
+        .then_ignore(skip_ws_comments.clone())
+        .then(
+            choice((
+                // Use statements
+                use_statement().map(|path| (0, Some(path), None, None, None, None, None, None)),
+                // Extern types
+                extern_type()
+                    .map(|(name, attrs)| (1, None, Some((name, attrs)), None, None, None, None, None)),
+                // Extern values
+                extern_value().map(|ev| (2, None, None, Some(ev), None, None, None, None)),
+                // Backend
+                backend().map(|b| (3, None, None, None, Some(b), None, None, None)),
+                // Impl blocks
+                impl_block().map(|ib| (4, None, None, None, None, Some(ib), None, None)),
+                // Freestanding functions
+                freestanding_func.map(|f| (5, None, None, None, None, None, Some(f), None)),
+                // Item definitions
+                item_def.map(|item| (6, None, None, None, None, None, None, Some(item))),
+            ))
+            .padded_by(skip_ws_comments.clone())
+            .repeated()
+            .collect::<Vec<_>>(),
+        )
+        .then_ignore(skip_ws_comments.clone())
+        .then_ignore(end())
+        .map(|((module_doc_comments, module_attrs), items)| {
+            let mut uses = vec![];
+            let mut extern_types = vec![];
+            let mut extern_values = vec![];
+            let mut backends = vec![];
+            let mut impls = vec![];
+            let mut functions = vec![];
+            let mut definitions = vec![];
+
+            for item in items {
+                match item.0 {
+                    0 => uses.push(item.1.unwrap()),
+                    1 => extern_types.push(item.2.unwrap()),
+                    2 => extern_values.push(item.3.unwrap()),
+                    3 => backends.push(item.4.unwrap()),
+                    4 => impls.push(item.5.unwrap()),
+                    5 => functions.push(item.6.unwrap()),
+                    6 => definitions.push(item.7.unwrap()),
+                    _ => unreachable!(),
                 }
             }
-        }
 
-        let mut attributes = vec![];
-        if expect_module_attributes {
-            while input.peek(Token![#]) && input.peek2(Token![!]) {
-                input.parse::<Token![#]>()?;
-                input.parse::<Token![!]>()?;
-                parse_attribute_body(input, &mut attributes)?;
+            Module {
+                uses,
+                extern_types,
+                extern_values,
+                functions,
+                definitions,
+                impls,
+                backends,
+                attributes: module_attrs,
+                module_doc_comments,
             }
-        } else {
-            while input.peek(Token![#]) {
-                input.parse::<Token![#]>()?;
-                parse_attribute_body(input, &mut attributes)?;
-            }
-        }
-
-        fn parse_attribute_body(
-            input: &syn::parse::ParseBuffer,
-            attributes: &mut Vec<Attribute>,
-        ) -> Result<()> {
-            let content;
-            bracketed!(content in input);
-            let attribute_parts: Punctuated<_, Token![,]> =
-                content.parse_terminated(AttributePart::parse, Token![,])?;
-
-            for part in attribute_parts {
-                attributes.push(match part {
-                    AttributePart::Ident(ident) => Attribute::Ident(ident),
-                    AttributePart::Function { name, arguments } => {
-                        Attribute::Function(name, arguments)
-                    }
-                    AttributePart::Assign { name, value } => Attribute::Assign(name, value),
-                });
-            }
-
-            Ok(())
-        }
-
-        Ok(attributes.into())
-    }
-}
-
-impl Parse for Visibility {
-    fn parse(input: ParseStream) -> Result<Self> {
-        if input.peek(Token![pub]) {
-            input.parse::<Token![pub]>()?;
-            Ok(Visibility::Public)
-        } else {
-            Ok(Visibility::Private)
-        }
-    }
-}
-
-impl Parse for Argument {
-    fn parse(input: ParseStream) -> Result<Self> {
-        let lookahead = input.lookahead1();
-        if lookahead.peek(Token![&]) {
-            input.parse::<Token![&]>()?;
-
-            let lookahead = input.lookahead1();
-            if lookahead.peek(Token![mut]) {
-                input.parse::<Token![mut]>()?;
-                input.parse::<Token![self]>()?;
-
-                Ok(Argument::MutSelf)
-            } else if lookahead.peek(Token![self]) {
-                input.parse::<Token![self]>()?;
-
-                Ok(Argument::ConstSelf)
-            } else {
-                Err(lookahead.error())
-            }
-        } else if lookahead.peek(syn::Ident) {
-            let name: Ident = input.parse()?;
-            input.parse::<Token![:]>()?;
-            Ok(Argument::Named(name, input.parse()?))
-        } else {
-            Err(lookahead.error())
-        }
-    }
-}
-
-impl Parse for Function {
-    fn parse(input: ParseStream) -> Result<Self> {
-        let attributes = Attribute::parse_many(input, false)?;
-        let visibility: Visibility = input.parse()?;
-        parse_function_body(input, visibility, attributes)
-    }
-}
-
-fn parse_function_body(
-    input: ParseStream,
-    visibility: Visibility,
-    attributes: Attributes,
-) -> Result<Function> {
-    input.parse::<Token![fn]>()?;
-    let name: Ident = input.parse()?;
-
-    let content;
-    parenthesized!(content in input);
-
-    let arguments: Punctuated<_, Token![,]> =
-        content.parse_terminated(Argument::parse, Token![,])?;
-    let arguments = Vec::from_iter(arguments);
-
-    let return_type = if input.peek(Token![->]) {
-        input.parse::<Token![->]>()?;
-        Some(input.parse()?)
-    } else {
-        None
-    };
-
-    Ok(Function {
-        visibility,
-        name,
-        attributes,
-        arguments,
-        return_type,
-    })
-}
-
-impl Parse for ExprField {
-    fn parse(input: ParseStream) -> Result<Self> {
-        let name: Ident = input.parse()?;
-        input.parse::<Token![:]>()?;
-        Ok(ExprField(name, input.parse()?))
-    }
-}
-
-// types
-impl Parse for TypeField {
-    fn parse(input: ParseStream) -> Result<Self> {
-        if input.peek(kw::vftable) {
-            input.parse::<kw::vftable>()?;
-
-            let content;
-            braced!(content in input);
-
-            let functions: Punctuated<Function, Token![;]> =
-                content.parse_terminated(Function::parse, Token![;])?;
-            let functions = Vec::from_iter(functions);
-
-            Ok(TypeField::Vftable(functions))
-        } else {
-            let visibility: Visibility = input.parse()?;
-            let name: Ident = input.parse()?;
-            input.parse::<Token![:]>()?;
-            Ok(TypeField::Field(visibility, name, input.parse()?))
-        }
-    }
-}
-impl Parse for TypeStatement {
-    fn parse(input: ParseStream) -> Result<Self> {
-        let attributes = Attribute::parse_many(input, false)?;
-        Ok(TypeStatement {
-            field: input.parse()?,
-            attributes,
         })
-    }
-}
-fn parse_type_definition(input: ParseStream, attributes: Attributes) -> Result<TypeDefinition> {
-    let statements = if input.peek(Token![;]) {
-        input.parse::<Token![;]>()?;
-        vec![]
-    } else {
-        let content;
-        braced!(content in input);
-
-        let statements: Punctuated<TypeStatement, Token![,]> =
-            content.parse_terminated(TypeStatement::parse, Token![,])?;
-        Vec::from_iter(statements)
-    };
-
-    Ok(TypeDefinition {
-        statements,
-        attributes,
-    })
 }
 
-// enums
-impl Parse for EnumStatement {
-    fn parse(input: ParseStream) -> Result<Self> {
-        let attributes = Attribute::parse_many(input, false)?;
-
-        let name: Ident = input.parse()?;
-        let expr = if input.peek(Token![=]) {
-            input.parse::<Token![=]>()?;
-            Some(input.parse()?)
-        } else {
-            None
-        };
-
-        Ok(EnumStatement::new(name, expr).with_attributes(attributes))
-    }
-}
-fn parse_enum_definition(input: ParseStream, attributes: Attributes) -> Result<EnumDefinition> {
-    input.parse::<Token![:]>()?;
-    let type_: Type = input.parse()?;
-
-    let statements = {
-        let content;
-        braced!(content in input);
-
-        let statements: Punctuated<EnumStatement, Token![,]> =
-            content.parse_terminated(EnumStatement::parse, Token![,])?;
-        Vec::from_iter(statements)
-    };
-
-    Ok(EnumDefinition {
-        type_,
-        statements,
-        attributes,
-    })
-}
-
-// bitflags
-impl Parse for BitflagsStatement {
-    fn parse(input: ParseStream) -> Result<Self> {
-        let attributes = Attribute::parse_many(input, false)?;
-
-        let name: Ident = input.parse()?;
-        input.parse::<Token![=]>()?;
-        let expr = input.parse()?;
-
-        Ok(BitflagsStatement::new(name, expr).with_attributes(attributes))
-    }
-}
-fn parse_bitflags_definition(
-    input: ParseStream,
-    attributes: Attributes,
-) -> Result<BitflagsDefinition> {
-    input.parse::<Token![:]>()?;
-    let type_: Type = input.parse()?;
-
-    let statements = {
-        let content;
-        braced!(content in input);
-
-        let statements: Punctuated<BitflagsStatement, Token![,]> =
-            content.parse_terminated(BitflagsStatement::parse, Token![,])?;
-        Vec::from_iter(statements)
-    };
-
-    Ok(BitflagsDefinition {
-        type_,
-        statements,
-        attributes,
-    })
-}
-
-// items
-fn parse_item_definition(
-    input: ParseStream,
-    visibility: Visibility,
-    attributes: Attributes,
-) -> Result<ItemDefinition> {
-    let lookahead = input.lookahead1();
-    // We return a Result for the inner so that we can annotate it with the name
-    let (name, inner) = if lookahead.peek(Token![type]) {
-        input.parse::<Token![type]>()?;
-        let name = input.parse()?;
-        (
-            name,
-            parse_type_definition(input, attributes).map(ItemDefinitionInner::from),
-        )
-    } else if lookahead.peek(Token![enum]) {
-        input.parse::<Token![enum]>()?;
-        let name = input.parse()?;
-        (
-            name,
-            parse_enum_definition(input, attributes).map(ItemDefinitionInner::from),
-        )
-    } else if lookahead.peek(kw::bitflags) {
-        input.parse::<kw::bitflags>()?;
-        let name = input.parse()?;
-        (
-            name,
-            parse_bitflags_definition(input, attributes).map(ItemDefinitionInner::from),
-        )
-    } else {
-        return Err(lookahead.error());
-    };
-
-    let inner = inner
-        .map_err(|e| syn::Error::new(e.span(), format!("failed to parse type {name}: {e}")))?;
-    Ok(ItemDefinition {
-        name,
-        visibility,
-        inner,
-    })
-}
-
-fn parse_backend(input: ParseStream) -> Result<Backend> {
-    input.parse::<kw::backend>()?;
-    let name: Ident = input.parse()?;
-
-    if let Some(new_prologue) = parse_block::<kw::prologue>(input, kw::prologue)? {
-        return Ok(Backend {
-            name,
-            prologue: Some(new_prologue),
-            epilogue: None,
-        });
-    } else if let Some(new_epilogue) = parse_block::<kw::epilogue>(input, kw::epilogue)? {
-        return Ok(Backend {
-            name,
-            prologue: None,
-            epilogue: Some(new_epilogue),
-        });
-    }
-
-    let content;
-    braced!(content in input);
-
-    let mut prologue = None;
-    let mut epilogue = None;
-
-    while !content.is_empty() {
-        if let Some(new_prologue) = parse_block::<kw::prologue>(&content, kw::prologue)? {
-            prologue = Some(new_prologue);
-        } else if let Some(new_epilogue) = parse_block::<kw::epilogue>(&content, kw::epilogue)? {
-            epilogue = Some(new_epilogue);
-        } else {
-            return Err(content.error("expected prologue or epilogue"));
-        }
-    }
-
-    fn parse_block<T: syn::parse::Parse>(
-        input: ParseStream,
-        token: impl syn::parse::Peek,
-    ) -> Result<Option<String>> {
-        if !input.peek(token) {
-            return Ok(None);
-        }
-
-        input.parse::<T>()?;
-        let temp: syn::LitStr = input.parse()?;
-        input.parse::<Token![;]>()?;
-        Ok(Some(temp.value().trim().to_string()))
-    }
-
-    Ok(Backend {
-        name,
-        prologue,
-        epilogue,
-    })
-}
-
-impl Parse for Module {
-    fn parse(input: ParseStream) -> Result<Self> {
-        let mut uses = vec![];
-        let mut extern_types = vec![];
-        let mut extern_values = vec![];
-        let mut functions = vec![];
-        let mut definitions = vec![];
-        let mut impls = vec![];
-        let mut backends = vec![];
-
-        // Parse all module attributes before parsing any other statements
-        let module_attributes = Attribute::parse_many(input, true)?;
-
-        // Exhaust all of our declarations
-        while !input.is_empty() {
-            // Attribute-less statements
-            if input.peek(Token![use]) {
-                input.parse::<Token![use]>()?;
-                let item_path = input.parse()?;
-                input.parse::<Token![;]>()?;
-                uses.push(item_path);
-                continue;
-            } else if input.peek(kw::backend) {
-                backends.push(parse_backend(input)?);
-                continue;
-            }
-
-            // Attributed statements
-            let attributes = Attribute::parse_many(input, false)?;
-            if input.peek(Token![extern]) && input.peek2(Token![type]) {
-                input.parse::<Token![extern]>()?;
-                input.parse::<Token![type]>()?;
-                let ident: Ident = parse_type_ident(input)?.as_str().into();
-                input.parse::<Token![;]>()?;
-
-                extern_types.push((ident, attributes));
-                continue;
-            } else if input.peek(Token![impl]) {
-                input.parse::<Token![impl]>()?;
-                let name: Ident = input.parse()?;
-
-                let content;
-                braced!(content in input);
-                let functions: Punctuated<Function, Token![;]> =
-                    content.parse_terminated(Function::parse, Token![;])?;
-                let functions = Vec::from_iter(functions);
-
-                impls.push(FunctionBlock {
-                    name,
-                    functions,
-                    attributes,
-                });
-                continue;
-            }
-
-            // Attributed statements with visibility
-            let visibility: Visibility = input.parse()?;
-            if input.peek(Token![extern]) {
-                input.parse::<Token![extern]>()?;
-                let name: Ident = input.parse()?;
-                input.parse::<Token![:]>()?;
-                let type_: Type = input.parse()?;
-                input.parse::<Token![;]>()?;
-
-                extern_values.push(ExternValue {
-                    visibility,
-                    name,
-                    type_,
-                    attributes,
-                });
-                continue;
-            } else if input.peek(Token![fn]) {
-                let function = parse_function_body(input, visibility, attributes)?;
-                input.parse::<Token![;]>()?;
-                functions.push(function);
-                continue;
-            } else if input.peek(Token![type])
-                || input.peek(Token![enum])
-                || input.peek(kw::bitflags)
-            {
-                definitions.push(parse_item_definition(input, visibility, attributes)?);
-                continue;
-            }
-
-            return Err(input.error("unexpected keyword"));
-        }
-
-        Ok(Module {
-            uses,
-            extern_types,
-            extern_values,
-            functions,
-            definitions,
-            impls,
-            backends,
-            attributes: module_attributes,
-        })
-    }
-}
-
-pub fn parse_str(input: &str) -> Result<Module> {
-    syn::parse_str(input)
+pub fn parse_str(input: &str) -> Result<Module, Vec<Rich<char>>> {
+    module().parse(input).into_result()
 }

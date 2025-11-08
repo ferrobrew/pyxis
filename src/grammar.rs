@@ -1,5 +1,7 @@
 use std::{fmt, path::Path};
 
+use crate::span::{Span, Spanned, StructuralEq};
+
 pub mod test_aliases {
     pub type M = super::Module;
     pub type ID = super::ItemDefinition;
@@ -23,37 +25,57 @@ pub mod test_aliases {
     pub type EV = super::ExternValue;
 }
 
+// Helper to create dummy spans for tests
+pub fn dummy_span() -> Span {
+    Span::new(0, 0)
+}
+
+pub fn spanned<T>(node: T) -> Spanned<T> {
+    Spanned::new(node, dummy_span())
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Ident(pub String);
+
 impl From<&str> for Ident {
     fn from(item: &str) -> Self {
         Ident(item.to_string())
     }
 }
+
 impl Ident {
     pub fn as_str(&self) -> &str {
         self.0.as_str()
     }
 }
+
 impl AsRef<str> for Ident {
     fn as_ref(&self) -> &str {
         self.as_str()
     }
 }
+
 impl fmt::Display for Ident {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0)
     }
 }
 
+impl StructuralEq for Ident {
+    fn structural_eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Type {
-    ConstPointer(Box<Type>),
-    MutPointer(Box<Type>),
-    Array(Box<Type>, usize),
+    ConstPointer(Box<Spanned<Type>>),
+    MutPointer(Box<Spanned<Type>>),
+    Array(Box<Spanned<Type>>, usize),
     Ident(Ident),
     Unknown(usize),
 }
+
 impl Type {
     pub fn ident(ident: &str) -> Type {
         Type::Ident(ident.into())
@@ -66,53 +88,83 @@ impl Type {
         }
     }
 
+    #[cfg(test)]
     pub fn const_pointer(self) -> Type {
-        Type::ConstPointer(Box::new(self))
+        Type::ConstPointer(Box::new(spanned(self)))
     }
 
+    #[cfg(test)]
     pub fn mut_pointer(self) -> Type {
-        Type::MutPointer(Box::new(self))
+        Type::MutPointer(Box::new(spanned(self)))
     }
 
+    #[cfg(test)]
     pub fn array(self, size: usize) -> Type {
-        Type::Array(Box::new(self), size)
+        Type::Array(Box::new(spanned(self)), size)
     }
 
     pub fn unknown(size: usize) -> Type {
         Type::Unknown(size)
     }
 }
+
 impl From<&str> for Type {
     fn from(item: &str) -> Self {
         Type::Ident(item.into())
     }
 }
 
+impl StructuralEq for Type {
+    fn structural_eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Type::ConstPointer(a), Type::ConstPointer(b)) => a.structural_eq(b),
+            (Type::MutPointer(a), Type::MutPointer(b)) => a.structural_eq(b),
+            (Type::Array(a, sa), Type::Array(b, sb)) => {
+                sa == sb && a.structural_eq(b)
+            }
+            (Type::Ident(a), Type::Ident(b)) => a.structural_eq(b),
+            (Type::Unknown(a), Type::Unknown(b)) => a == b,
+            _ => false,
+        }
+    }
+}
+
 #[derive(PartialEq, Hash, Eq, Clone, Debug, PartialOrd, Ord)]
 pub struct ItemPathSegment(String);
+
 impl ItemPathSegment {
     pub fn as_str(&self) -> &str {
         self.0.as_str()
     }
 }
+
 impl From<&str> for ItemPathSegment {
     fn from(value: &str) -> Self {
         ItemPathSegment(value.to_string())
     }
 }
+
 impl From<String> for ItemPathSegment {
     fn from(value: String) -> Self {
         ItemPathSegment(value)
     }
 }
+
 impl fmt::Display for ItemPathSegment {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0)
     }
 }
 
+impl StructuralEq for ItemPathSegment {
+    fn structural_eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
 #[derive(PartialEq, Hash, Eq, Clone, Debug, PartialOrd, Ord)]
-pub struct ItemPath(Vec<ItemPathSegment>);
+pub struct ItemPath(pub Vec<ItemPathSegment>);
+
 impl ItemPath {
     pub fn empty() -> ItemPath {
         ItemPath(vec![])
@@ -161,6 +213,7 @@ impl ItemPath {
         self.0.last()
     }
 }
+
 impl fmt::Display for ItemPath {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         for (index, segment) in self.0.iter().enumerate() {
@@ -172,14 +225,22 @@ impl fmt::Display for ItemPath {
         Ok(())
     }
 }
+
 impl FromIterator<ItemPathSegment> for ItemPath {
     fn from_iter<I: IntoIterator<Item = ItemPathSegment>>(iter: I) -> Self {
         ItemPath(Vec::from_iter(iter))
     }
 }
+
 impl From<&str> for ItemPath {
     fn from(value: &str) -> Self {
         ItemPath(value.split("::").map(|s| s.into()).collect())
+    }
+}
+
+impl StructuralEq for ItemPath {
+    fn structural_eq(&self, other: &Self) -> bool {
+        self.0.structural_eq(&other.0)
     }
 }
 
@@ -189,6 +250,7 @@ pub enum Expr {
     StringLiteral(String),
     Ident(Ident),
 }
+
 impl Expr {
     pub fn int_literal(&self) -> Option<isize> {
         match self {
@@ -204,12 +266,24 @@ impl Expr {
     }
 }
 
+impl StructuralEq for Expr {
+    fn structural_eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Expr::IntLiteral(a), Expr::IntLiteral(b)) => a == b,
+            (Expr::StringLiteral(a), Expr::StringLiteral(b)) => a == b,
+            (Expr::Ident(a), Expr::Ident(b)) => a.structural_eq(b),
+            _ => false,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Attribute {
     Ident(Ident),
-    Function(Ident, Vec<Expr>),
-    Assign(Ident, Expr),
+    Function(Ident, Vec<Spanned<Expr>>),
+    Assign(Ident, Spanned<Expr>),
 }
+
 impl Attribute {
     // Ident attributes
     pub fn copyable() -> Self {
@@ -233,96 +307,136 @@ impl Attribute {
     }
 
     // Function attributes
-    pub fn function(&self) -> Option<(&Ident, &Vec<Expr>)> {
+    pub fn function(&self) -> Option<(&Ident, &Vec<Spanned<Expr>>)> {
         match self {
             Attribute::Function(ident, exprs) => Some((ident, exprs)),
             _ => None,
         }
     }
+
+    #[cfg(test)]
     pub fn integer_fn(name: &str, value: isize) -> Self {
-        Attribute::Function(name.into(), vec![Expr::IntLiteral(value)])
+        Attribute::Function(name.into(), vec![spanned(Expr::IntLiteral(value))])
     }
+
+    #[cfg(test)]
     pub fn address(address: usize) -> Self {
         Self::integer_fn("address", address as isize)
     }
+
+    #[cfg(test)]
     pub fn size(size: usize) -> Self {
         Self::integer_fn("size", size as isize)
     }
+
+    #[cfg(test)]
     pub fn min_size(min_size: usize) -> Self {
         Self::integer_fn("min_size", min_size as isize)
     }
+
+    #[cfg(test)]
     pub fn align(align: usize) -> Self {
         Self::integer_fn("align", align as isize)
     }
+
+    #[cfg(test)]
     pub fn singleton(address: usize) -> Self {
         Self::integer_fn("singleton", address as isize)
     }
+
+    #[cfg(test)]
     pub fn index(index: usize) -> Self {
         Self::integer_fn("index", index as isize)
     }
+
+    #[cfg(test)]
     pub fn calling_convention(name: &str) -> Self {
         Attribute::Function(
             "calling_convention".into(),
-            vec![Expr::StringLiteral(name.into())],
+            vec![spanned(Expr::StringLiteral(name.into()))],
         )
     }
 
     // Assign attributes
-    pub fn assign(&self) -> Option<(&Ident, &Expr)> {
+    pub fn assign(&self) -> Option<(&Ident, &Spanned<Expr>)> {
         match self {
             Attribute::Assign(ident, expr) => Some((ident, expr)),
             _ => None,
         }
     }
+
+    #[cfg(test)]
     pub fn doc(doc: &str) -> Self {
-        Attribute::Assign("doc".into(), Expr::StringLiteral(doc.into()))
+        Attribute::Assign("doc".into(), spanned(Expr::StringLiteral(doc.into())))
     }
 }
+
+impl StructuralEq for Attribute {
+    fn structural_eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Attribute::Ident(a), Attribute::Ident(b)) => a.structural_eq(b),
+            (Attribute::Function(na, ea), Attribute::Function(nb, eb)) => {
+                na.structural_eq(nb) && ea.structural_eq(eb)
+            }
+            (Attribute::Assign(na, ea), Attribute::Assign(nb, eb)) => {
+                na.structural_eq(nb) && ea.structural_eq(eb)
+            }
+            _ => false,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
-pub struct Attributes(pub Vec<Attribute>);
+pub struct Attributes(pub Vec<Spanned<Attribute>>);
+
 impl<const N: usize> From<[Attribute; N]> for Attributes {
     fn from(s: [Attribute; N]) -> Self {
-        Attributes(s.to_vec())
+        Attributes(s.into_iter().map(|a| spanned(a)).collect())
     }
 }
+
 impl From<Vec<Attribute>> for Attributes {
     fn from(s: Vec<Attribute>) -> Self {
-        Attributes(s)
+        Attributes(s.into_iter().map(|a| spanned(a)).collect())
     }
 }
+
 impl IntoIterator for Attributes {
-    type Item = Attribute;
-    type IntoIter = std::vec::IntoIter<Attribute>;
+    type Item = Spanned<Attribute>;
+    type IntoIter = std::vec::IntoIter<Spanned<Attribute>>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
     }
 }
+
 impl<'a> IntoIterator for &'a Attributes {
-    type Item = &'a Attribute;
-    type IntoIter = std::slice::Iter<'a, Attribute>;
+    type Item = &'a Spanned<Attribute>;
+    type IntoIter = std::slice::Iter<'a, Spanned<Attribute>>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.iter()
     }
 }
+
 impl FromIterator<Attribute> for Attributes {
     fn from_iter<I: IntoIterator<Item = Attribute>>(iter: I) -> Self {
-        Attributes(iter.into_iter().collect())
+        Attributes(iter.into_iter().map(|a| spanned(a)).collect())
     }
 }
+
 impl Attributes {
     pub fn doc(&self, path: &ItemPath) -> anyhow::Result<Option<String>> {
         let mut doc = None;
         for attr in &self.0 {
-            let Some((key, value)) = attr.assign() else {
+            let Some((key, value)) = attr.node.assign() else {
                 continue;
             };
             if key.as_str() != "doc" {
                 continue;
             }
 
-            let Some(value) = value.string_literal() else {
+            let Some(value) = value.node.string_literal() else {
                 anyhow::bail!("doc attribute for `{path}` must be a string literal");
             };
 
@@ -336,230 +450,391 @@ impl Attributes {
     }
 }
 
+impl StructuralEq for Attributes {
+    fn structural_eq(&self, other: &Self) -> bool {
+        self.0.structural_eq(&other.0)
+    }
+}
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum Visibility {
     Public,
     Private,
 }
 
+impl StructuralEq for Visibility {
+    fn structural_eq(&self, other: &Self) -> bool {
+        self == other
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Argument {
     ConstSelf,
     MutSelf,
-    Named(Ident, Type),
+    Named(Spanned<Ident>, Spanned<Type>),
 }
+
 impl Argument {
+    #[cfg(test)]
     pub fn named(ident: impl Into<Ident>, type_: impl Into<Type>) -> Argument {
-        Argument::Named(ident.into(), type_.into())
+        Argument::Named(spanned(ident.into()), spanned(type_.into()))
+    }
+}
+
+impl StructuralEq for Argument {
+    fn structural_eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Argument::ConstSelf, Argument::ConstSelf) => true,
+            (Argument::MutSelf, Argument::MutSelf) => true,
+            (Argument::Named(na, ta), Argument::Named(nb, tb)) => {
+                na.structural_eq(nb) && ta.structural_eq(tb)
+            }
+            _ => false,
+        }
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Function {
     pub visibility: Visibility,
-    pub name: Ident,
+    pub name: Spanned<Ident>,
     pub attributes: Attributes,
-    pub arguments: Vec<Argument>,
-    pub return_type: Option<Type>,
+    pub doc_comments: Vec<Spanned<String>>,
+    pub arguments: Vec<Spanned<Argument>>,
+    pub return_type: Option<Spanned<Type>>,
 }
+
 impl Function {
+    #[cfg(test)]
     pub fn new(
         (visibility, name): (Visibility, &str),
         arguments: impl Into<Vec<Argument>>,
     ) -> Self {
         Self {
             visibility,
-            name: name.into(),
+            name: spanned(name.into()),
             attributes: Default::default(),
-            arguments: arguments.into(),
+            doc_comments: vec![],
+            arguments: arguments.into().into_iter().map(spanned).collect(),
             return_type: None,
         }
     }
+
+    #[cfg(test)]
     pub fn with_attributes(mut self, attributes: impl Into<Attributes>) -> Self {
         self.attributes = attributes.into();
         self
     }
+
+    #[cfg(test)]
     pub fn with_return_type(mut self, return_type: impl Into<Type>) -> Self {
-        self.return_type = Some(return_type.into());
+        self.return_type = Some(spanned(return_type.into()));
         self
     }
 }
 
+impl StructuralEq for Function {
+    fn structural_eq(&self, other: &Self) -> bool {
+        self.visibility.structural_eq(&other.visibility)
+            && self.name.structural_eq(&other.name)
+            && self.attributes.structural_eq(&other.attributes)
+            && self.doc_comments.structural_eq(&other.doc_comments)
+            && self.arguments.structural_eq(&other.arguments)
+            && self.return_type.structural_eq(&other.return_type)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ExprField(pub Ident, pub Expr);
+pub struct ExprField(pub Spanned<Ident>, pub Spanned<Expr>);
+
 impl ExprField {
     pub fn ident(&self) -> &Ident {
-        &self.0
+        &self.0.node
     }
 
     pub fn ident_as_str(&self) -> &str {
-        self.0.as_str()
+        self.0.node.as_str()
     }
 }
+
 impl From<(Ident, Expr)> for ExprField {
     fn from(item: (Ident, Expr)) -> Self {
-        ExprField(item.0, item.1)
+        ExprField(spanned(item.0), spanned(item.1))
+    }
+}
+
+impl StructuralEq for ExprField {
+    fn structural_eq(&self, other: &Self) -> bool {
+        self.0.structural_eq(&other.0) && self.1.structural_eq(&other.1)
     }
 }
 
 // types
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TypeField {
-    Field(Visibility, Ident, Type),
-    Vftable(Vec<Function>),
+    Field(Visibility, Spanned<Ident>, Spanned<Type>),
+    Vftable(Vec<Spanned<Function>>),
 }
+
 impl TypeField {
+    #[cfg(test)]
     pub fn field(
         visibility: Visibility,
         name: impl Into<Ident>,
         type_: impl Into<Type>,
     ) -> TypeField {
-        TypeField::Field(visibility, name.into(), type_.into())
+        TypeField::Field(visibility, spanned(name.into()), spanned(type_.into()))
     }
 
+    #[cfg(test)]
     pub fn vftable(functions: impl IntoIterator<Item = Function>) -> TypeField {
-        TypeField::Vftable(functions.into_iter().collect())
+        TypeField::Vftable(functions.into_iter().map(spanned).collect())
     }
 
     pub fn is_vftable(&self) -> bool {
         matches!(self, TypeField::Vftable(_))
     }
 }
+
+impl StructuralEq for TypeField {
+    fn structural_eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (TypeField::Field(va, na, ta), TypeField::Field(vb, nb, tb)) => {
+                va == vb && na.structural_eq(nb) && ta.structural_eq(tb)
+            }
+            (TypeField::Vftable(a), TypeField::Vftable(b)) => a.structural_eq(b),
+            _ => false,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TypeStatement {
     pub field: TypeField,
     pub attributes: Attributes,
+    pub doc_comments: Vec<Spanned<String>>,
 }
+
 impl TypeStatement {
+    #[cfg(test)]
     pub fn field((visibility, name): (Visibility, &str), type_: Type) -> TypeStatement {
         TypeStatement {
-            field: TypeField::Field(visibility, name.into(), type_),
+            field: TypeField::Field(visibility, spanned(name.into()), spanned(type_)),
             attributes: Default::default(),
+            doc_comments: vec![],
         }
     }
+
+    #[cfg(test)]
     pub fn vftable(functions: impl IntoIterator<Item = Function>) -> TypeStatement {
         TypeStatement {
             field: TypeField::vftable(functions),
             attributes: Default::default(),
+            doc_comments: vec![],
         }
     }
+
+    #[cfg(test)]
     pub fn with_attributes(mut self, attributes: impl Into<Attributes>) -> Self {
         self.attributes = attributes.into();
         self
     }
 }
+
+impl StructuralEq for TypeStatement {
+    fn structural_eq(&self, other: &Self) -> bool {
+        self.field.structural_eq(&other.field)
+            && self.attributes.structural_eq(&other.attributes)
+            && self.doc_comments.structural_eq(&other.doc_comments)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TypeDefinition {
-    pub statements: Vec<TypeStatement>,
+    pub statements: Vec<Spanned<TypeStatement>>,
     pub attributes: Attributes,
 }
+
 impl TypeDefinition {
+    #[cfg(test)]
     pub fn new(statements: impl Into<Vec<TypeStatement>>) -> Self {
         Self {
-            statements: statements.into(),
+            statements: statements.into().into_iter().map(spanned).collect(),
             attributes: Default::default(),
         }
     }
+
+    #[cfg(test)]
     pub fn with_attributes(mut self, attributes: impl Into<Attributes>) -> Self {
         self.attributes = attributes.into();
         self
+    }
+}
+
+impl StructuralEq for TypeDefinition {
+    fn structural_eq(&self, other: &Self) -> bool {
+        self.statements.structural_eq(&other.statements)
+            && self.attributes.structural_eq(&other.attributes)
     }
 }
 
 // enums
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct EnumStatement {
-    pub name: Ident,
-    pub expr: Option<Expr>,
+    pub name: Spanned<Ident>,
+    pub expr: Option<Spanned<Expr>>,
     pub attributes: Attributes,
+    pub doc_comments: Vec<Spanned<String>>,
 }
+
 impl EnumStatement {
     pub fn new(name: Ident, expr: Option<Expr>) -> EnumStatement {
+        let dummy_span = Span::new(0, 0);
         EnumStatement {
-            name,
-            expr,
+            name: Spanned::new(name, dummy_span),
+            expr: expr.map(|e| Spanned::new(e, dummy_span)),
             attributes: Default::default(),
+            doc_comments: vec![],
         }
     }
+
+    #[cfg(test)]
     pub fn field(name: &str) -> EnumStatement {
         Self::new(name.into(), None)
     }
+
+    #[cfg(test)]
     pub fn field_with_expr(name: &str, expr: Expr) -> EnumStatement {
         Self::new(name.into(), Some(expr))
     }
-    pub fn with_attributes(mut self, attributes: impl Into<Attributes>) -> Self {
-        self.attributes = attributes.into();
-        self
-    }
-}
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct EnumDefinition {
-    pub type_: Type,
-    pub statements: Vec<EnumStatement>,
-    pub attributes: Attributes,
-}
-impl EnumDefinition {
-    pub fn new(
-        type_: Type,
-        statements: impl Into<Vec<EnumStatement>>,
-        attributes: impl Into<Attributes>,
-    ) -> Self {
-        Self {
-            type_,
-            statements: statements.into(),
-            attributes: attributes.into(),
-        }
-    }
+
+    #[cfg(test)]
     pub fn with_attributes(mut self, attributes: impl Into<Attributes>) -> Self {
         self.attributes = attributes.into();
         self
     }
 }
 
-// bitflags
+impl StructuralEq for EnumStatement {
+    fn structural_eq(&self, other: &Self) -> bool {
+        self.name.structural_eq(&other.name)
+            && self.expr.structural_eq(&other.expr)
+            && self.attributes.structural_eq(&other.attributes)
+            && self.doc_comments.structural_eq(&other.doc_comments)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct BitflagsStatement {
-    pub name: Ident,
-    pub expr: Expr,
+pub struct EnumDefinition {
+    pub type_: Spanned<Type>,
+    pub statements: Vec<Spanned<EnumStatement>>,
     pub attributes: Attributes,
 }
-impl BitflagsStatement {
-    pub fn new(name: Ident, expr: Expr) -> BitflagsStatement {
-        BitflagsStatement {
-            name,
-            expr,
-            attributes: Default::default(),
+
+impl EnumDefinition {
+    #[cfg(test)]
+    pub fn new(
+        type_: Type,
+        statements: impl Into<Vec<EnumStatement>>,
+        attributes: impl Into<Attributes>,
+    ) -> Self {
+        Self {
+            type_: spanned(type_),
+            statements: statements.into().into_iter().map(spanned).collect(),
+            attributes: attributes.into(),
         }
     }
-    pub fn field(name: &str, expr: Expr) -> BitflagsStatement {
-        Self::new(name.into(), expr)
-    }
+
+    #[cfg(test)]
     pub fn with_attributes(mut self, attributes: impl Into<Attributes>) -> Self {
         self.attributes = attributes.into();
         self
     }
 }
+
+impl StructuralEq for EnumDefinition {
+    fn structural_eq(&self, other: &Self) -> bool {
+        self.type_.structural_eq(&other.type_)
+            && self.statements.structural_eq(&other.statements)
+            && self.attributes.structural_eq(&other.attributes)
+    }
+}
+
+// bitflags
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct BitflagsStatement {
+    pub name: Spanned<Ident>,
+    pub expr: Spanned<Expr>,
+    pub attributes: Attributes,
+    pub doc_comments: Vec<Spanned<String>>,
+}
+
+impl BitflagsStatement {
+    pub fn new(name: Ident, expr: Expr) -> BitflagsStatement {
+        let dummy_span = Span::new(0, 0);
+        BitflagsStatement {
+            name: Spanned::new(name, dummy_span),
+            expr: Spanned::new(expr, dummy_span),
+            attributes: Default::default(),
+            doc_comments: vec![],
+        }
+    }
+
+    #[cfg(test)]
+    pub fn field(name: &str, expr: Expr) -> BitflagsStatement {
+        Self::new(name.into(), expr)
+    }
+
+    #[cfg(test)]
+    pub fn with_attributes(mut self, attributes: impl Into<Attributes>) -> Self {
+        self.attributes = attributes.into();
+        self
+    }
+}
+
+impl StructuralEq for BitflagsStatement {
+    fn structural_eq(&self, other: &Self) -> bool {
+        self.name.structural_eq(&other.name)
+            && self.expr.structural_eq(&other.expr)
+            && self.attributes.structural_eq(&other.attributes)
+            && self.doc_comments.structural_eq(&other.doc_comments)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct BitflagsDefinition {
-    pub type_: Type,
-    pub statements: Vec<BitflagsStatement>,
+    pub type_: Spanned<Type>,
+    pub statements: Vec<Spanned<BitflagsStatement>>,
     pub attributes: Attributes,
 }
+
 impl BitflagsDefinition {
+    #[cfg(test)]
     pub fn new(
         type_: Type,
         statements: impl Into<Vec<BitflagsStatement>>,
         attributes: impl Into<Attributes>,
     ) -> Self {
         Self {
-            type_,
-            statements: statements.into(),
+            type_: spanned(type_),
+            statements: statements.into().into_iter().map(spanned).collect(),
             attributes: attributes.into(),
         }
     }
+
+    #[cfg(test)]
     pub fn with_attributes(mut self, attributes: impl Into<Attributes>) -> Self {
         self.attributes = attributes.into();
         self
+    }
+}
+
+impl StructuralEq for BitflagsDefinition {
+    fn structural_eq(&self, other: &Self) -> bool {
+        self.type_.structural_eq(&other.type_)
+            && self.statements.structural_eq(&other.statements)
+            && self.attributes.structural_eq(&other.attributes)
     }
 }
 
@@ -570,93 +845,150 @@ pub enum ItemDefinitionInner {
     Enum(EnumDefinition),
     Bitflags(BitflagsDefinition),
 }
+
 impl From<TypeDefinition> for ItemDefinitionInner {
     fn from(item: TypeDefinition) -> Self {
         ItemDefinitionInner::Type(item)
     }
 }
+
 impl From<EnumDefinition> for ItemDefinitionInner {
     fn from(item: EnumDefinition) -> Self {
         ItemDefinitionInner::Enum(item)
     }
 }
+
 impl From<BitflagsDefinition> for ItemDefinitionInner {
     fn from(item: BitflagsDefinition) -> Self {
         ItemDefinitionInner::Bitflags(item)
     }
 }
 
+impl StructuralEq for ItemDefinitionInner {
+    fn structural_eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (ItemDefinitionInner::Type(a), ItemDefinitionInner::Type(b)) => a.structural_eq(b),
+            (ItemDefinitionInner::Enum(a), ItemDefinitionInner::Enum(b)) => a.structural_eq(b),
+            (ItemDefinitionInner::Bitflags(a), ItemDefinitionInner::Bitflags(b)) => {
+                a.structural_eq(b)
+            }
+            _ => false,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ItemDefinition {
     pub visibility: Visibility,
-    pub name: Ident,
+    pub name: Spanned<Ident>,
+    pub doc_comments: Vec<Spanned<String>>,
     pub inner: ItemDefinitionInner,
 }
+
 impl ItemDefinition {
+    #[cfg(test)]
     pub fn new(
         (visibility, name): (Visibility, &str),
         inner: impl Into<ItemDefinitionInner>,
     ) -> Self {
         Self {
             visibility,
-            name: name.into(),
+            name: spanned(name.into()),
+            doc_comments: vec![],
             inner: inner.into(),
         }
     }
 }
 
+impl StructuralEq for ItemDefinition {
+    fn structural_eq(&self, other: &Self) -> bool {
+        self.visibility.structural_eq(&other.visibility)
+            && self.name.structural_eq(&other.name)
+            && self.doc_comments.structural_eq(&other.doc_comments)
+            && self.inner.structural_eq(&other.inner)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FunctionBlock {
-    pub name: Ident,
-    pub functions: Vec<Function>,
+    pub name: Spanned<Ident>,
+    pub functions: Vec<Spanned<Function>>,
     pub attributes: Attributes,
 }
+
 impl FunctionBlock {
+    #[cfg(test)]
     pub fn new(name: impl Into<Ident>, functions: impl Into<Vec<Function>>) -> Self {
         Self {
-            name: name.into(),
-            functions: functions.into(),
+            name: spanned(name.into()),
+            functions: functions.into().into_iter().map(spanned).collect(),
             attributes: Default::default(),
         }
     }
+
+    #[cfg(test)]
     pub fn with_attributes(mut self, attributes: impl Into<Attributes>) -> Self {
         self.attributes = attributes.into();
         self
     }
 }
 
+impl StructuralEq for FunctionBlock {
+    fn structural_eq(&self, other: &Self) -> bool {
+        self.name.structural_eq(&other.name)
+            && self.functions.structural_eq(&other.functions)
+            && self.attributes.structural_eq(&other.attributes)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Backend {
-    pub name: Ident,
+    pub name: Spanned<Ident>,
     pub prologue: Option<String>,
     pub epilogue: Option<String>,
 }
+
 impl Backend {
+    #[cfg(test)]
     pub fn new(name: &str) -> Self {
         Self {
-            name: name.into(),
+            name: spanned(name.into()),
             prologue: None,
             epilogue: None,
         }
     }
+
+    #[cfg(test)]
     pub fn with_prologue(mut self, prologue: impl Into<String>) -> Self {
         self.prologue = Some(prologue.into());
         self
     }
+
+    #[cfg(test)]
     pub fn with_epilogue(mut self, epilogue: impl Into<String>) -> Self {
         self.epilogue = Some(epilogue.into());
         self
     }
 }
 
+impl StructuralEq for Backend {
+    fn structural_eq(&self, other: &Self) -> bool {
+        self.name.structural_eq(&other.name)
+            && self.prologue == other.prologue
+            && self.epilogue == other.epilogue
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExternValue {
     pub visibility: Visibility,
-    pub name: Ident,
-    pub type_: Type,
+    pub name: Spanned<Ident>,
+    pub type_: Spanned<Type>,
     pub attributes: Attributes,
 }
+
 impl ExternValue {
+    #[cfg(test)]
     pub fn new(
         visibility: Visibility,
         name: &str,
@@ -665,59 +997,110 @@ impl ExternValue {
     ) -> Self {
         Self {
             visibility,
-            name: name.into(),
-            type_,
+            name: spanned(name.into()),
+            type_: spanned(type_),
             attributes: attributes.into(),
         }
     }
 }
 
+impl StructuralEq for ExternValue {
+    fn structural_eq(&self, other: &Self) -> bool {
+        self.visibility.structural_eq(&other.visibility)
+            && self.name.structural_eq(&other.name)
+            && self.type_.structural_eq(&other.type_)
+            && self.attributes.structural_eq(&other.attributes)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Module {
-    pub uses: Vec<ItemPath>,
-    pub extern_types: Vec<(Ident, Attributes)>,
-    pub extern_values: Vec<ExternValue>,
-    pub functions: Vec<Function>,
-    pub definitions: Vec<ItemDefinition>,
-    pub impls: Vec<FunctionBlock>,
-    pub backends: Vec<Backend>,
+    pub uses: Vec<Spanned<ItemPath>>,
+    pub extern_types: Vec<(Spanned<Ident>, Attributes)>,
+    pub extern_values: Vec<Spanned<ExternValue>>,
+    pub functions: Vec<Spanned<Function>>,
+    pub definitions: Vec<Spanned<ItemDefinition>>,
+    pub impls: Vec<Spanned<FunctionBlock>>,
+    pub backends: Vec<Spanned<Backend>>,
     pub attributes: Attributes,
+    pub module_doc_comments: Vec<Spanned<String>>,
 }
+
 impl Module {
     pub fn new() -> Self {
         Self::default()
     }
 
+    #[cfg(test)]
     pub fn with_uses(mut self, uses: impl Into<Vec<ItemPath>>) -> Self {
-        self.uses = uses.into();
+        self.uses = uses.into().into_iter().map(spanned).collect();
         self
     }
+
+    #[cfg(test)]
     pub fn with_extern_types(mut self, extern_types: impl Into<Vec<(Ident, Attributes)>>) -> Self {
-        self.extern_types = extern_types.into();
+        self.extern_types = extern_types
+            .into()
+            .into_iter()
+            .map(|(i, a)| (spanned(i), a))
+            .collect();
         self
     }
+
+    #[cfg(test)]
     pub fn with_extern_values(mut self, extern_values: impl Into<Vec<ExternValue>>) -> Self {
-        self.extern_values = extern_values.into();
+        self.extern_values = extern_values.into().into_iter().map(spanned).collect();
         self
     }
+
+    #[cfg(test)]
     pub fn with_functions(mut self, functions: impl Into<Vec<Function>>) -> Self {
-        self.functions = functions.into();
+        self.functions = functions.into().into_iter().map(spanned).collect();
         self
     }
+
+    #[cfg(test)]
     pub fn with_definitions(mut self, definitions: impl Into<Vec<ItemDefinition>>) -> Self {
-        self.definitions = definitions.into();
+        self.definitions = definitions.into().into_iter().map(spanned).collect();
         self
     }
+
+    #[cfg(test)]
     pub fn with_impls(mut self, impls: impl Into<Vec<FunctionBlock>>) -> Self {
-        self.impls = impls.into();
+        self.impls = impls.into().into_iter().map(spanned).collect();
         self
     }
+
+    #[cfg(test)]
     pub fn with_backends(mut self, backends: impl Into<Vec<Backend>>) -> Self {
-        self.backends = backends.into();
+        self.backends = backends.into().into_iter().map(spanned).collect();
         self
     }
+
+    #[cfg(test)]
     pub fn with_attributes(mut self, attributes: impl Into<Attributes>) -> Self {
         self.attributes = attributes.into();
         self
+    }
+}
+
+impl StructuralEq for Module {
+    fn structural_eq(&self, other: &Self) -> bool {
+        self.uses.structural_eq(&other.uses)
+            && self.extern_types.len() == other.extern_types.len()
+            && self
+                .extern_types
+                .iter()
+                .zip(other.extern_types.iter())
+                .all(|((na, aa), (nb, ab))| na.structural_eq(nb) && aa.structural_eq(ab))
+            && self.extern_values.structural_eq(&other.extern_values)
+            && self.functions.structural_eq(&other.functions)
+            && self.definitions.structural_eq(&other.definitions)
+            && self.impls.structural_eq(&other.impls)
+            && self.backends.structural_eq(&other.backends)
+            && self.attributes.structural_eq(&other.attributes)
+            && self
+                .module_doc_comments
+                .structural_eq(&other.module_doc_comments)
     }
 }
