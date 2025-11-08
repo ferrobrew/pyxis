@@ -62,12 +62,11 @@ fn keyword<'a>(kw: &'static str) -> impl Parser<'a, ParserInput<'a>, (), ParseEr
 fn ident<'a>() -> impl Parser<'a, ParserInput<'a>, Spanned<Ident>, ParseError<'a>> + Clone {
     text::ident()
         .try_map(|s: &str, span| {
-            // Filter out keywords
+            // Filter out keywords (vftable is intentionally NOT here - it's handled specially in type_field)
             match s {
                 "type" | "enum" | "pub" | "fn" | "impl" | "use" | "extern" | "const" | "mut"
                 | "self" | "backend" | "prologue" | "epilogue" | "bitflags"
                 | "unknown" => Err(Rich::custom(span, format!("'{}' is a reserved keyword", s))),
-                // Note: "vftable" is allowed as an identifier since it's only a keyword in specific contexts
                 _ => Ok(Ident(s.to_string())),
             }
         })
@@ -374,10 +373,17 @@ fn type_field<'a>(
         })
         .map_with(|func, extra| Spanned::new(func, to_span(extra.span())));
 
-    let vftable = just("vftable")
-        .then_ignore(text::ident().not().rewind())
-        .then_ignore(whitespace())
-        .then_ignore(just('{'))
+    // vftable never has visibility, so if we see "pub", it must be a field
+    let pub_field = padded(keyword("pub"))
+        .to(Visibility::Public)
+        .then(padded(ident()))
+        .then_ignore(padded(just(':')))
+        .then(padded(type_parser()))
+        .map(|((vis, name), ty)| TypeField::Field(vis, name, ty));
+
+    // Try to parse vftable (no visibility keyword)
+    let vftable = padded(keyword("vftable"))
+        .ignore_then(just('{'))
         .then_ignore(whitespace())
         .ignore_then(
             vftable_func
@@ -389,13 +395,13 @@ fn type_field<'a>(
         .then_ignore(just('}'))
         .map(TypeField::Vftable);
 
-    let field = padded(visibility())
-        .then(padded(ident()))
+    // Private field (no visibility keyword, not vftable)
+    let private_field = padded(ident())
         .then_ignore(padded(just(':')))
         .then(padded(type_parser()))
-        .map(|((vis, name), ty)| TypeField::Field(vis, name, ty));
+        .map(|(name, ty)| TypeField::Field(Visibility::Private, name, ty));
 
-    vftable.or(field)
+    choice((pub_field, vftable, private_field))
 }
 
 fn type_statement<'a>(
@@ -431,32 +437,57 @@ fn type_statement<'a>(
         })
         .map_with(|func, extra| Spanned::new(func, to_span(extra.span())));
 
-    let vftable = just("vftable")
-        .then_ignore(text::ident().not().rewind())
+    // Public field must have "pub" keyword
+    let pub_field = keyword("pub")
+        .to(Visibility::Public)
         .then_ignore(whitespace())
-        .then_ignore(just('{'))
+        .then(ident())
         .then_ignore(whitespace())
-        .ignore_then(
-            vftable_func
-                .separated_by(padded(just(';')))
-                .allow_trailing()
-                .collect::<Vec<_>>()
-        )
+        .then_ignore(just(':'))
         .then_ignore(whitespace())
-        .then_ignore(just('}'))
-        .map(TypeField::Vftable);
-
-    let field = padded(visibility())
-        .then(padded(ident()))
-        .then_ignore(padded(just(':')))
-        .then(padded(type_parser()))
+        .then(type_parser())
         .map(|((vis, name), ty)| TypeField::Field(vis, name, ty));
 
+    // Inline all parsers to avoid any closure issues
     doc_comment()
         .repeated()
         .collect::<Vec<_>>()
         .then(attributes().or(empty().to(Attributes::default())))
-        .then(vftable.or(field))
+        .then_ignore(whitespace())
+        .then(
+            // Try vftable first
+            just("vftable")
+                .then_ignore(whitespace())
+                .then_ignore(just('{'))
+                .then_ignore(whitespace())
+                .ignore_then(
+                    vftable_func
+                        .separated_by(padded(just(';')))
+                        .allow_trailing()
+                        .collect::<Vec<_>>()
+                )
+                .then_ignore(whitespace())
+                .then_ignore(just('}'))
+                .map(TypeField::Vftable)
+                .or(pub_field)
+                .or(
+                    // Private field
+                    text::ident()
+                        .try_map(|s: &str, span| {
+                            if s == "vftable" {
+                                Err(Rich::custom(span, "vftable cannot be used as a field name"))
+                            } else {
+                                Ok(s.to_string())
+                            }
+                        })
+                        .map_with(|s, extra| Spanned::new(Ident(s), to_span(extra.span())))
+                        .then_ignore(whitespace())
+                        .then_ignore(just(':'))
+                        .then_ignore(whitespace())
+                        .then(type_parser())
+                        .map(|(name, ty)| TypeField::Field(Visibility::Private, name, ty))
+                )
+        )
         .map(|((doc_comments, attrs), field)| TypeStatement {
             field,
             attributes: attrs,
