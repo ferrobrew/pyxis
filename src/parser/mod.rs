@@ -90,18 +90,54 @@ fn type_ident<'a>() -> impl Parser<'a, ParserInput<'a>, String, ParseError<'a>> 
 fn int_literal<'a>() -> impl Parser<'a, ParserInput<'a>, Spanned<Expr>, ParseError<'a>> + Clone {
     let hex = just("0x")
         .ignore_then(text::int(16))
-        .map(|s: &str| isize::from_str_radix(&s.replace('_', ""), 16).unwrap());
+        .map_with(|s: &str, extra| (s, extra.span()))
+        .validate(|(s, span), _extra, emitter| {
+            match isize::from_str_radix(&s.replace('_', ""), 16) {
+                Ok(n) => n,
+                Err(e) => {
+                    emitter.emit(Rich::custom(
+                        span,
+                        format!("Invalid hexadecimal literal: {}", e),
+                    ));
+                    0 // Return dummy value so parse can continue
+                }
+            }
+        });
 
     let bin = just("0b")
         .ignore_then(one_of("01_").repeated().at_least(1).collect::<String>())
-        .map(|s: String| isize::from_str_radix(&s.replace('_', ""), 2).unwrap());
+        .map_with(|s: String, extra| (s, extra.span()))
+        .validate(|(s, span), _extra, emitter| {
+            match isize::from_str_radix(&s.replace('_', ""), 2) {
+                Ok(n) => n,
+                Err(e) => {
+                    emitter.emit(Rich::custom(span, format!("Invalid binary literal: {}", e)));
+                    0 // Return dummy value so parse can continue
+                }
+            }
+        });
 
     let dec = just('-')
         .or_not()
         .then(text::int(10))
-        .map(|(neg, s): (Option<char>, &str)| {
-            let num = s.replace('_', "").parse::<isize>().unwrap();
-            if neg.is_some() { -num } else { num }
+        .map_with(|(neg, s): (Option<char>, &str), extra| ((neg, s), extra.span()))
+        .validate(|((neg, s), span), _extra, emitter| {
+            match s.replace('_', "").parse::<isize>() {
+                Ok(num) => {
+                    if neg.is_some() {
+                        -num
+                    } else {
+                        num
+                    }
+                }
+                Err(e) => {
+                    emitter.emit(Rich::custom(
+                        span,
+                        format!("Invalid decimal literal: {}", e),
+                    ));
+                    0 // Return dummy value so parse can continue
+                }
+            }
         });
 
     choice((hex, bin, dec))
@@ -223,13 +259,11 @@ fn string_literal<'a>() -> impl Parser<'a, ParserInput<'a>, Spanned<Expr>, Parse
 // Expressions
 
 fn expr<'a>() -> impl Parser<'a, ParserInput<'a>, Spanned<Expr>, ParseError<'a>> + Clone {
-    recursive(|_| {
-        choice((
-            int_literal(),
-            string_literal(),
-            ident().map(|id| id.map(Expr::Ident)),
-        ))
-    })
+    choice((
+        int_literal(),
+        string_literal(),
+        ident().map(|id| id.map(Expr::Ident)),
+    ))
 }
 
 // Types

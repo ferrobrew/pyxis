@@ -1,15 +1,17 @@
 use crate::{assert_ast_eq, grammar::test_aliases::*, parser::parse_str};
 
+/// Helper function to format parse errors with "test.pyxis" as the source name
+fn format_test_errors(text: &str, errors: &[crate::parser::Rich<'_, char>]) -> String {
+    crate::parser::format_parse_errors("test.pyxis", text, errors)
+}
+
 /// Helper macro to parse and compare AST with pretty error formatting on failure
 macro_rules! assert_parse_eq {
     ($text:expr, $expected:expr) => {
         match parse_str($text) {
             Ok(parsed) => assert_ast_eq!(parsed, $expected),
             Err(errors) => {
-                eprintln!(
-                    "\n{}",
-                    crate::parser::format_parse_errors("test.pyxis", $text, &errors)
-                );
+                eprintln!("\n{}", format_test_errors($text, &errors));
                 panic!("Parse failed - see formatted error above");
             }
         }
@@ -234,7 +236,7 @@ fn will_die_on_super_for_now() {
         "#;
 
     let errors = parse_str(text).err().unwrap();
-    let error_str = crate::parser::format_parse_errors("test.pyxis", text, &errors);
+    let error_str = format_test_errors(text, &errors);
     assert!(
         error_str.contains("super not supported"),
         "Expected 'super not supported' error, got:\n{}",
@@ -558,4 +560,134 @@ fn can_parse_freestanding_functions() {
         ]);
 
     assert_ast_eq!(parse_str(text).unwrap(), ast);
+}
+
+#[test]
+fn test_invalid_hex_literal() {
+    // Hexadecimal literal that's too large for isize
+    let text = r#"
+        enum Test: i32 {
+            Item = 0xFFFFFFFFFFFFFFFFFFFFFFFF,
+        }
+    "#;
+
+    let errors = parse_str(text).err().unwrap();
+    let error_str = format_test_errors(text, &errors);
+    assert!(
+        error_str.contains("Invalid hexadecimal literal"),
+        "Expected hexadecimal overflow error, got:\n{}",
+        error_str
+    );
+}
+
+#[test]
+fn test_invalid_binary_literal() {
+    // Binary literal that's too large for isize
+    let text = r#"
+        enum Test: i32 {
+            Item = 0b11111111111111111111111111111111111111111111111111111111111111111111111111111111,
+        }
+    "#;
+
+    let errors = parse_str(text).err().unwrap();
+    let error_str = format_test_errors(text, &errors);
+    assert!(
+        error_str.contains("Invalid binary literal"),
+        "Expected binary overflow error, got:\n{}",
+        error_str
+    );
+}
+
+#[test]
+fn test_invalid_decimal_literal() {
+    // Decimal literal that's too large for isize
+    let text = r#"
+        enum Test: i32 {
+            Item = 999999999999999999999999999999,
+        }
+    "#;
+
+    let errors = parse_str(text).err().unwrap();
+    let error_str = format_test_errors(text, &errors);
+    assert!(
+        error_str.contains("Invalid decimal literal"),
+        "Expected decimal overflow error, got:\n{}",
+        error_str
+    );
+}
+
+#[test]
+fn test_hex_literal_with_invalid_chars() {
+    // Hexadecimal literal with invalid hex characters
+    let text = r#"
+        enum Test: i32 {
+            Item = 0x12G4,
+        }
+    "#;
+
+    let errors = parse_str(text).err().unwrap();
+    let error_str = format_test_errors(text, &errors);
+    // Should fail to parse because 'G' is not a valid hex digit
+    assert!(
+        error_str.contains("found 'G'") || error_str.contains("expected"),
+        "Expected parse error for invalid hex character, got:\n{}",
+        error_str
+    );
+}
+
+#[test]
+fn test_binary_literal_with_invalid_chars() {
+    // Binary literal with invalid binary characters
+    let text = r#"
+        enum Test: i32 {
+            Item = 0b1012,
+        }
+    "#;
+
+    let errors = parse_str(text).err().unwrap();
+    let error_str = format_test_errors(text, &errors);
+    // Should fail to parse because '2' is not a valid binary digit
+    assert!(
+        error_str.contains("found '2'") || error_str.contains("expected"),
+        "Expected parse error for invalid binary character, got:\n{}",
+        error_str
+    );
+}
+
+#[test]
+fn test_hex_literal_empty() {
+    // Hexadecimal prefix with no digits
+    let text = r#"
+        enum Test: i32 {
+            Item = 0x,
+        }
+    "#;
+
+    let errors = parse_str(text).err().unwrap();
+    let error_str = format_test_errors(text, &errors);
+    // Should fail because there are no hex digits after 0x
+    assert!(
+        error_str.contains("found ','") || error_str.contains("expected"),
+        "Expected parse error for empty hex literal, got:\n{}",
+        error_str
+    );
+}
+
+#[test]
+fn test_binary_literal_empty() {
+    // Binary prefix with no digits
+    let text = r#"
+        enum Test: i32 {
+            Item = 0b,
+        }
+    "#;
+
+    let errors = parse_str(text).err().unwrap();
+    let error_str = format_test_errors(text, &errors);
+    // Should fail because there are no binary digits after 0b
+    assert!(
+        error_str.contains("found ','") || error_str.contains("expected"),
+        "Expected parse error for empty binary literal, got:\n{}",
+        error_str
+    );
 }
