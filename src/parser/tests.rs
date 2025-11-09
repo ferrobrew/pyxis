@@ -1,5 +1,21 @@
 use crate::{assert_ast_eq, grammar::test_aliases::*, parser::parse_str};
 
+/// Helper macro to parse and compare AST with pretty error formatting on failure
+macro_rules! assert_parse_eq {
+    ($text:expr, $expected:expr) => {
+        match parse_str($text) {
+            Ok(parsed) => assert_ast_eq!(parsed, $expected),
+            Err(errors) => {
+                eprintln!(
+                    "\n{}",
+                    crate::parser::format_parse_errors("test.pyxis", $text, &errors)
+                );
+                panic!("Parse failed - see formatted error above");
+            }
+        }
+    };
+}
+
 #[test]
 fn can_parse_basic_struct() {
     let text = r#"
@@ -40,7 +56,7 @@ fn can_parse_vftable() {
         .with_attributes([A::size(4)])]),
     )]);
 
-    assert_ast_eq!(parse_str(text).unwrap(), ast);
+    assert_parse_eq!(text, ast);
 }
 
 #[test]
@@ -169,7 +185,7 @@ fn can_parse_spawn_manager() {
             ],
         )]);
 
-    assert_ast_eq!(parse_str(text).unwrap(), ast);
+    assert_parse_eq!(text, ast);
 }
 
 #[test]
@@ -218,14 +234,10 @@ fn will_die_on_super_for_now() {
         "#;
 
     let errors = parse_str(text).err().unwrap();
-    let error_str = errors
-        .iter()
-        .map(|e| format!("{}", e))
-        .collect::<Vec<_>>()
-        .join("\n");
+    let error_str = crate::parser::format_parse_errors("test.pyxis", text, &errors);
     assert!(
         error_str.contains("super not supported"),
-        "Expected 'super not supported' error, got: {}",
+        "Expected 'super not supported' error, got:\n{}",
         error_str
     );
 }
@@ -350,7 +362,7 @@ fn can_parse_bitflags() {
         ),
     )]);
 
-    assert_ast_eq!(parse_str(text).unwrap(), ast);
+    assert_parse_eq!(text, ast);
 }
 
 #[test]
@@ -444,7 +456,7 @@ backend cpp epilogue r####"
         return 0;
     }
 "####
-            .trim(),
+                .trim(),
         ),
     ]);
 

@@ -62,15 +62,13 @@ impl SemanticState {
 
     // todo: define an actual error type
     pub fn add_file(&mut self, base_path: &Path, path: &Path) -> anyhow::Result<()> {
+        let source = std::fs::read_to_string(path)?;
         self.add_module(
-            &parser::parse_str(&std::fs::read_to_string(path)?).map_err(|errors| {
-                // Format chumsky errors
-                let error_msg = errors
-                    .iter()
-                    .map(|e| format!("{}", e))
-                    .collect::<Vec<_>>()
-                    .join("\n");
-                anyhow::anyhow!("failed to parse {}: {}", path.display(), error_msg)
+            &parser::parse_str(&source).map_err(|errors| {
+                // Format chumsky errors with nice diagnostics
+                let error_msg =
+                    parser::format_parse_errors(&path.display().to_string(), &source, &errors);
+                anyhow::anyhow!("failed to parse {}:\n{}", path.display(), error_msg)
             })?,
             &ItemPath::from_path(path.strip_prefix(base_path).unwrap_or(path)),
         )

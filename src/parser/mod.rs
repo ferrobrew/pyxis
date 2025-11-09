@@ -941,3 +941,28 @@ pub fn module<'a>() -> impl Parser<'a, ParserInput<'a>, Module, ParseError<'a>> 
 pub fn parse_str(input: &str) -> Result<Module, Vec<Rich<'_, char>>> {
     module().parse(input).into_result()
 }
+
+/// Format parse errors with nice diagnostics using ariadne
+pub fn format_parse_errors(source_name: &str, source: &str, errors: &[Rich<'_, char>]) -> String {
+    use ariadne::{Color, Label, Report, ReportKind, Source};
+
+    let mut output = Vec::new();
+
+    for error in errors {
+        let span = error.span();
+        let report = Report::build(ReportKind::Error, source_name, span.start)
+            .with_message(error.to_string())
+            .with_label(
+                Label::new((source_name, span.into_range()))
+                    .with_message(error.reason().to_string())
+                    .with_color(Color::Red),
+            );
+
+        report
+            .finish()
+            .write((source_name, Source::from(source)), &mut output)
+            .unwrap();
+    }
+
+    String::from_utf8(output).unwrap()
+}
