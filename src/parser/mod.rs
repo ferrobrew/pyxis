@@ -767,6 +767,16 @@ fn use_statement<'a>() -> impl Parser<'a, ParserInput<'a>, Spanned<ItemPath>, Pa
 // Module
 
 pub fn module<'a>() -> impl Parser<'a, ParserInput<'a>, Module, ParseError<'a>> + Clone {
+    enum ModuleItem {
+        Use(Spanned<ItemPath>),
+        ExternType(Spanned<Ident>, Attributes),
+        ExternValue(Spanned<ExternValue>),
+        Backend(Spanned<Backend>),
+        Impl(Spanned<FunctionBlock>),
+        Function(Spanned<Function>),
+        Definition(Spanned<ItemDefinition>),
+    }
+
     // Skip initial whitespace and comments
     // Note: whitespace() already contains .repeated(), so we just use it with line_comment in a choice
     let skip_ws_comments = whitespace();
@@ -806,21 +816,19 @@ pub fn module<'a>() -> impl Parser<'a, ParserInput<'a>, Module, ParseError<'a>> 
         .then(
             choice((
                 // Use statements
-                use_statement().map(|path| (0, Some(path), None, None, None, None, None, None)),
+                use_statement().map(ModuleItem::Use),
                 // Extern types
-                extern_type().map(|(name, attrs)| {
-                    (1, None, Some((name, attrs)), None, None, None, None, None)
-                }),
+                extern_type().map(|(name, attrs)| ModuleItem::ExternType(name, attrs)),
                 // Extern values
-                extern_value().map(|ev| (2, None, None, Some(ev), None, None, None, None)),
+                extern_value().map(ModuleItem::ExternValue),
                 // Backend
-                backend().map(|b| (3, None, None, None, Some(b), None, None, None)),
+                backend().map(ModuleItem::Backend),
                 // Impl blocks
-                impl_block().map(|ib| (4, None, None, None, None, Some(ib), None, None)),
+                impl_block().map(ModuleItem::Impl),
                 // Freestanding functions
-                freestanding_func.map(|f| (5, None, None, None, None, None, Some(f), None)),
+                freestanding_func.map(ModuleItem::Function),
                 // Item definitions
-                item_def.map(|item| (6, None, None, None, None, None, None, Some(item))),
+                item_def.map(ModuleItem::Definition),
             ))
             .then_ignore(skip_ws_comments.clone())
             .repeated()
@@ -838,15 +846,14 @@ pub fn module<'a>() -> impl Parser<'a, ParserInput<'a>, Module, ParseError<'a>> 
             let mut definitions = vec![];
 
             for item in items {
-                match item.0 {
-                    0 => uses.push(item.1.unwrap()),
-                    1 => extern_types.push(item.2.unwrap()),
-                    2 => extern_values.push(item.3.unwrap()),
-                    3 => backends.push(item.4.unwrap()),
-                    4 => impls.push(item.5.unwrap()),
-                    5 => functions.push(item.6.unwrap()),
-                    6 => definitions.push(item.7.unwrap()),
-                    _ => unreachable!(),
+                match item {
+                    ModuleItem::Use(path) => uses.push(path),
+                    ModuleItem::ExternType(name, attrs) => extern_types.push((name, attrs)),
+                    ModuleItem::ExternValue(ev) => extern_values.push(ev),
+                    ModuleItem::Backend(b) => backends.push(b),
+                    ModuleItem::Impl(ib) => impls.push(ib),
+                    ModuleItem::Function(f) => functions.push(f),
+                    ModuleItem::Definition(item) => definitions.push(item),
                 }
             }
 
