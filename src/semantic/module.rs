@@ -2,12 +2,12 @@ use std::collections::{HashMap, HashSet};
 
 use crate::{
     grammar::{self, ItemPath},
-    span::Spanned,
     semantic::{
         function::Function,
         type_registry,
         types::{Backend, ExternValue, ItemDefinition, Type},
     },
+    span::Spanned,
 };
 
 #[derive(Debug, Clone)]

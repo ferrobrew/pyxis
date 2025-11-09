@@ -237,7 +237,9 @@ pub fn build(
         };
         match (ident.as_str(), exprs.as_slice()) {
             ("address", [addr_expr]) if matches!(addr_expr.node, grammar::Expr::IntLiteral(_)) => {
-                let grammar::Expr::IntLiteral(addr) = addr_expr.node else { unreachable!() };
+                let grammar::Expr::IntLiteral(addr) = addr_expr.node else {
+                    unreachable!()
+                };
                 if is_vfunc {
                     anyhow::bail!(
                         "address attribute is not supported for virtual function `{}`",
@@ -263,8 +265,12 @@ pub fn build(
                     );
                 }
             }
-            ("calling_convention", [cc_expr]) if matches!(cc_expr.node, grammar::Expr::StringLiteral(_)) => {
-                let grammar::Expr::StringLiteral(cc) = &cc_expr.node else { unreachable!() };
+            ("calling_convention", [cc_expr])
+                if matches!(cc_expr.node, grammar::Expr::StringLiteral(_)) =>
+            {
+                let grammar::Expr::StringLiteral(cc) = &cc_expr.node else {
+                    unreachable!()
+                };
                 calling_convention = Some(cc.parse().map_err(|_| {
                     anyhow::anyhow!(
                         "invalid calling convention for function `{}`: {cc}",

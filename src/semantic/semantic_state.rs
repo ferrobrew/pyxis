@@ -65,15 +65,12 @@ impl SemanticState {
         self.add_module(
             &parser::parse_str(&std::fs::read_to_string(path)?).map_err(|errors| {
                 // Format chumsky errors
-                let error_msg = errors.iter()
+                let error_msg = errors
+                    .iter()
                     .map(|e| format!("{}", e))
                     .collect::<Vec<_>>()
                     .join("\n");
-                anyhow::anyhow!(
-                    "failed to parse {}: {}",
-                    path.display(),
-                    error_msg
-                )
+                anyhow::anyhow!("failed to parse {}: {}", path.display(), error_msg)
             })?,
             &ItemPath::from_path(path.strip_prefix(base_path).unwrap_or(path)),
         )
@@ -91,7 +88,9 @@ impl SemanticState {
                         continue;
                     };
                     match (ident.as_str(), exprs.as_slice()) {
-                        ("address", [addr_expr]) if matches!(addr_expr.node, grammar::Expr::IntLiteral(_)) => {
+                        ("address", [addr_expr])
+                            if matches!(addr_expr.node, grammar::Expr::IntLiteral(_)) =>
+                        {
                             if let grammar::Expr::IntLiteral(addr) = addr_expr.node {
                                 address = Some(addr as usize);
                             }
@@ -146,7 +145,9 @@ impl SemanticState {
                     continue;
                 };
                 match (ident.as_str(), exprs.as_slice()) {
-                    ("size", [size_expr]) if matches!(size_expr.node, grammar::Expr::IntLiteral(_)) => {
+                    ("size", [size_expr])
+                        if matches!(size_expr.node, grammar::Expr::IntLiteral(_)) =>
+                    {
                         if let grammar::Expr::IntLiteral(size_) = size_expr.node {
                             size = Some(
                                 size_
@@ -155,7 +156,9 @@ impl SemanticState {
                             );
                         }
                     }
-                    ("align", [align_expr]) if matches!(align_expr.node, grammar::Expr::IntLiteral(_)) => {
+                    ("align", [align_expr])
+                        if matches!(align_expr.node, grammar::Expr::IntLiteral(_)) =>
+                    {
                         if let grammar::Expr::IntLiteral(alignment_) = align_expr.node {
                             alignment = Some(
                                 alignment_

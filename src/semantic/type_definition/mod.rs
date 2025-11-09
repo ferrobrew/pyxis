@@ -251,12 +251,13 @@ pub fn build(
                         }
                         grammar::Attribute::Function(ident, exprs) => {
                             if let ("address", [expr]) = (ident.as_str(), &exprs[..])
-                                && let grammar::Expr::IntLiteral(addr) = expr.node {
-                                    address = Some(
+                                && let grammar::Expr::IntLiteral(addr) = expr.node
+                            {
+                                address = Some(
                                         addr.try_into()
                                             .with_context(|| format!("failed to convert `address` attribute into usize for field `{ident}` of type `{resolvee_path}`"))?,
                                     );
-                                }
+                            }
                         }
                         _ => {}
                     }
@@ -299,9 +300,10 @@ pub fn build(
                         continue;
                     };
                     if let ("size", [expr]) = (ident.as_str(), exprs.as_slice())
-                        && let grammar::Expr::IntLiteral(size_) = expr.node {
-                            size = Some(size_ as usize);
-                        }
+                        && let grammar::Expr::IntLiteral(size_) = expr.node
+                    {
+                        size = Some(size_ as usize);
+                    }
                 }
 
                 vftable_functions = Some(
@@ -328,7 +330,12 @@ pub fn build(
             // Determine the requested alignment
             let requested_alignment = align
                 .or((pending_regions.len() == 1)
-                    .then(|| pending_regions[0].1.type_ref.alignment(&semantic.type_registry))
+                    .then(|| {
+                        pending_regions[0]
+                            .1
+                            .type_ref
+                            .alignment(&semantic.type_registry)
+                    })
                     .flatten())
                 .unwrap_or(semantic.type_registry.pointer_size());
 

@@ -119,9 +119,7 @@ impl StructuralEq for Type {
         match (self, other) {
             (Type::ConstPointer(a), Type::ConstPointer(b)) => a.structural_eq(b),
             (Type::MutPointer(a), Type::MutPointer(b)) => a.structural_eq(b),
-            (Type::Array(a, sa), Type::Array(b, sb)) => {
-                sa == sb && a.structural_eq(b)
-            }
+            (Type::Array(a, sa), Type::Array(b, sb)) => sa == sb && a.structural_eq(b),
             (Type::Ident(a), Type::Ident(b)) => a.structural_eq(b),
             (Type::Unknown(a), Type::Unknown(b)) => a == b,
             _ => false,
@@ -532,6 +530,19 @@ impl Function {
         self.return_type = Some(spanned(return_type.into()));
         self
     }
+
+    #[cfg(test)]
+    pub fn with_doc_comments<I, S>(mut self, doc_comments: I) -> Self
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        self.doc_comments = doc_comments
+            .into_iter()
+            .map(|s| spanned(s.into()))
+            .collect();
+        self
+    }
 }
 
 impl StructuralEq for Function {
@@ -638,6 +649,19 @@ impl TypeStatement {
     #[cfg(test)]
     pub fn with_attributes(mut self, attributes: impl Into<Attributes>) -> Self {
         self.attributes = attributes.into();
+        self
+    }
+
+    #[cfg(test)]
+    pub fn with_doc_comments<I, S>(mut self, doc_comments: I) -> Self
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        self.doc_comments = doc_comments
+            .into_iter()
+            .map(|s| spanned(s.into()))
+            .collect();
         self
     }
 }
@@ -898,6 +922,19 @@ impl ItemDefinition {
             inner: inner.into(),
         }
     }
+
+    #[cfg(test)]
+    pub fn with_doc_comments<I, S>(mut self, doc_comments: I) -> Self
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        self.doc_comments = doc_comments
+            .into_iter()
+            .map(|s| spanned(s.into()))
+            .collect();
+        self
+    }
 }
 
 impl StructuralEq for ItemDefinition {
@@ -1080,6 +1117,19 @@ impl Module {
     #[cfg(test)]
     pub fn with_attributes(mut self, attributes: impl Into<Attributes>) -> Self {
         self.attributes = attributes.into();
+        self
+    }
+
+    #[cfg(test)]
+    pub fn with_module_doc_comments<I, S>(mut self, module_doc_comments: I) -> Self
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        self.module_doc_comments = module_doc_comments
+            .into_iter()
+            .map(|s| spanned(s.into()))
+            .collect();
         self
     }
 }

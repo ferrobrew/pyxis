@@ -2,7 +2,6 @@ use anyhow::Context;
 
 use crate::{
     grammar::{self, ItemPath},
-    span::Spanned,
     semantic::{
         SemanticState, function,
         module::Module,
@@ -13,6 +12,7 @@ use crate::{
             ItemState, ItemStateResolved, Region, Type, TypeDefinition, Visibility,
         },
     },
+    span::Spanned,
 };
 
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]
@@ -53,7 +53,9 @@ pub fn convert_grammar_functions_to_semantic_functions(
                 continue;
             };
             match (ident.as_str(), exprs.as_slice()) {
-                ("index", [index_expr]) if matches!(index_expr.node, grammar::Expr::IntLiteral(_)) => {
+                ("index", [index_expr])
+                    if matches!(index_expr.node, grammar::Expr::IntLiteral(_)) =>
+                {
                     if let grammar::Expr::IntLiteral(index_) = index_expr.node {
                         index = Some(index_ as usize);
                     }

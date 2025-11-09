@@ -27,8 +27,8 @@ fn doc_comment<'a>() -> impl Parser<'a, ParserInput<'a>, Spanned<String>, ParseE
         .map_with(|content, extra| Spanned::new(content, to_span(extra.span())))
 }
 
-fn module_doc_comment<'a>(
-) -> impl Parser<'a, ParserInput<'a>, Spanned<String>, ParseError<'a>> + Clone {
+fn module_doc_comment<'a>()
+-> impl Parser<'a, ParserInput<'a>, Spanned<String>, ParseError<'a>> + Clone {
     just("//!")
         .then(none_of("\r\n").repeated().collect::<String>())
         .map(|(_, content)| content)
@@ -44,12 +44,9 @@ fn padded<'a, O: Clone>(
 }
 
 fn keyword<'a>(kw: &'static str) -> impl Parser<'a, ParserInput<'a>, (), ParseError<'a>> + Clone {
-    just(kw).then_ignore(
-        text::ident()
-            .not()
-            .rewind()
-            .or(end().rewind())
-    ).ignored()
+    just(kw)
+        .then_ignore(text::ident().not().rewind().or(end().rewind()))
+        .ignored()
 }
 
 fn ident<'a>() -> impl Parser<'a, ParserInput<'a>, Spanned<Ident>, ParseError<'a>> + Clone {
@@ -58,8 +55,9 @@ fn ident<'a>() -> impl Parser<'a, ParserInput<'a>, Spanned<Ident>, ParseError<'a
             // Filter out keywords (vftable is intentionally NOT here - it's handled specially in type_field)
             match s {
                 "type" | "enum" | "pub" | "fn" | "impl" | "use" | "extern" | "const" | "mut"
-                | "self" | "backend" | "prologue" | "epilogue" | "bitflags"
-                | "unknown" => Err(Rich::custom(span, format!("'{}' is a reserved keyword", s))),
+                | "self" | "backend" | "prologue" | "epilogue" | "bitflags" | "unknown" => {
+                    Err(Rich::custom(span, format!("'{}' is a reserved keyword", s)))
+                }
                 _ => Ok(Ident(s.to_string())),
             }
         })
@@ -103,11 +101,7 @@ fn int_literal<'a>() -> impl Parser<'a, ParserInput<'a>, Spanned<Expr>, ParseErr
         .then(text::int(10))
         .map(|(neg, s): (Option<char>, &str)| {
             let num = s.replace('_', "").parse::<isize>().unwrap();
-            if neg.is_some() {
-                -num
-            } else {
-                num
-            }
+            if neg.is_some() { -num } else { num }
         });
 
     choice((hex, bin, dec))
@@ -219,7 +213,9 @@ fn item_path<'a>() -> impl Parser<'a, ParserInput<'a>, Spanned<ItemPath>, ParseE
             if segments.iter().any(|s| s == "super") {
                 Err(Rich::custom(span, "super not supported"))
             } else {
-                Ok(ItemPath(segments.into_iter().map(ItemPathSegment::from).collect()))
+                Ok(ItemPath(
+                    segments.into_iter().map(ItemPathSegment::from).collect(),
+                ))
             }
         })
         .map_with(|path, extra| Spanned::new(path, to_span(extra.span())))
@@ -249,7 +245,11 @@ fn attribute<'a>() -> impl Parser<'a, ParserInput<'a>, Spanned<Attribute>, Parse
 fn attributes<'a>() -> impl Parser<'a, ParserInput<'a>, Attributes, ParseError<'a>> + Clone {
     padded(just('#'))
         .ignore_then(padded(just('[')))
-        .ignore_then(attribute().separated_by(padded(just(','))).collect::<Vec<_>>())
+        .ignore_then(
+            attribute()
+                .separated_by(padded(just(',')))
+                .collect::<Vec<_>>(),
+        )
         .then_ignore(padded(just(']')))
         .repeated()
         .collect::<Vec<Vec<_>>>()
@@ -259,7 +259,11 @@ fn attributes<'a>() -> impl Parser<'a, ParserInput<'a>, Attributes, ParseError<'
 fn module_attributes<'a>() -> impl Parser<'a, ParserInput<'a>, Attributes, ParseError<'a>> + Clone {
     padded(just("#!"))
         .ignore_then(padded(just('[')))
-        .ignore_then(attribute().separated_by(padded(just(','))).collect::<Vec<_>>())
+        .ignore_then(
+            attribute()
+                .separated_by(padded(just(',')))
+                .collect::<Vec<_>>(),
+        )
         .then_ignore(padded(just(']')))
         .repeated()
         .collect::<Vec<Vec<_>>>()
@@ -318,7 +322,11 @@ fn function<'a>(
                 )
                 .then_ignore(padded(just(')'))),
         )
-        .then(padded(just("->")).ignore_then(padded(type_parser())).or_not())
+        .then(
+            padded(just("->"))
+                .ignore_then(padded(type_parser()))
+                .or_not(),
+        )
         .map(move |((((attrs, vis), name), args), ret_ty)| Function {
             visibility: vis,
             name,
@@ -332,8 +340,8 @@ fn function<'a>(
 
 // Type definitions
 
-fn type_statement<'a>(
-) -> impl Parser<'a, ParserInput<'a>, Spanned<TypeStatement>, ParseError<'a>> + Clone {
+fn type_statement<'a>()
+-> impl Parser<'a, ParserInput<'a>, Spanned<TypeStatement>, ParseError<'a>> + Clone {
     let vftable_func = doc_comment()
         .repeated()
         .collect::<Vec<_>>()
@@ -353,16 +361,22 @@ fn type_statement<'a>(
                         )
                         .then_ignore(padded(just(')'))),
                 )
-                .then(padded(just("->")).ignore_then(padded(type_parser())).or_not()),
+                .then(
+                    padded(just("->"))
+                        .ignore_then(padded(type_parser()))
+                        .or_not(),
+                ),
         )
-        .map(|(doc_comments, ((((attrs, vis), name), args), ret_ty))| Function {
-            visibility: vis,
-            name,
-            attributes: attrs,
-            doc_comments,
-            arguments: args,
-            return_type: ret_ty,
-        })
+        .map(
+            |(doc_comments, ((((attrs, vis), name), args), ret_ty))| Function {
+                visibility: vis,
+                name,
+                attributes: attrs,
+                doc_comments,
+                arguments: args,
+                return_type: ret_ty,
+            },
+        )
         .map_with(|func, extra| Spanned::new(func, to_span(extra.span())));
 
     // Public field must have "pub" keyword
@@ -392,7 +406,7 @@ fn type_statement<'a>(
                     vftable_func
                         .separated_by(padded(just(';')))
                         .allow_trailing()
-                        .collect::<Vec<_>>()
+                        .collect::<Vec<_>>(),
                 )
                 .then_ignore(whitespace())
                 .then_ignore(just('}'))
@@ -413,8 +427,8 @@ fn type_statement<'a>(
                         .then_ignore(just(':'))
                         .then_ignore(whitespace())
                         .then(type_parser())
-                        .map(|(name, ty)| TypeField::Field(Visibility::Private, name, ty))
-                )
+                        .map(|(name, ty)| TypeField::Field(Visibility::Private, name, ty)),
+                ),
         )
         .map(|((doc_comments, attrs), field)| TypeStatement {
             field,
@@ -426,8 +440,8 @@ fn type_statement<'a>(
 
 // Enum definitions
 
-fn enum_statement<'a>(
-) -> impl Parser<'a, ParserInput<'a>, Spanned<EnumStatement>, ParseError<'a>> + Clone {
+fn enum_statement<'a>()
+-> impl Parser<'a, ParserInput<'a>, Spanned<EnumStatement>, ParseError<'a>> + Clone {
     doc_comment()
         .repeated()
         .collect::<Vec<_>>()
@@ -445,8 +459,8 @@ fn enum_statement<'a>(
 
 // Bitflags definitions
 
-fn bitflags_statement<'a>(
-) -> impl Parser<'a, ParserInput<'a>, Spanned<BitflagsStatement>, ParseError<'a>> + Clone {
+fn bitflags_statement<'a>()
+-> impl Parser<'a, ParserInput<'a>, Spanned<BitflagsStatement>, ParseError<'a>> + Clone {
     doc_comment()
         .repeated()
         .collect::<Vec<_>>()
@@ -482,45 +496,67 @@ fn item_definition<'a>(
                 )
                 .then_ignore(padded(just('}'))),
         )))
-        .map(|(name, statements)| (name, ItemDefinitionInner::Type(TypeDefinition { statements, attributes: Attributes::default() })));
+        .map(|(name, statements)| {
+            (
+                name,
+                ItemDefinitionInner::Type(TypeDefinition {
+                    statements,
+                    attributes: Attributes::default(),
+                }),
+            )
+        });
 
     // Enum definition
     let enum_def = padded(keyword("enum"))
         .ignore_then(padded(ident()))
         .then(
-            padded(just(':'))
-                .ignore_then(padded(type_parser()))
-                .then(
-                    padded(just('{'))
-                        .ignore_then(
-                            padded(enum_statement())
-                                .separated_by(padded(just(',')))
-                                .allow_trailing()
-                                .collect(),
-                        )
-                        .then_ignore(padded(just('}'))),
-                )
+            padded(just(':')).ignore_then(padded(type_parser())).then(
+                padded(just('{'))
+                    .ignore_then(
+                        padded(enum_statement())
+                            .separated_by(padded(just(',')))
+                            .allow_trailing()
+                            .collect(),
+                    )
+                    .then_ignore(padded(just('}'))),
+            ),
         )
-        .map(|(name, (ty, statements))| (name, ItemDefinitionInner::Enum(EnumDefinition { type_: ty, statements, attributes: Attributes::default() })));
+        .map(|(name, (ty, statements))| {
+            (
+                name,
+                ItemDefinitionInner::Enum(EnumDefinition {
+                    type_: ty,
+                    statements,
+                    attributes: Attributes::default(),
+                }),
+            )
+        });
 
     // Bitflags definition
     let bitflags_def = padded(keyword("bitflags"))
         .ignore_then(padded(ident()))
         .then(
-            padded(just(':'))
-                .ignore_then(padded(type_parser()))
-                .then(
-                    padded(just('{'))
-                        .ignore_then(
-                            padded(bitflags_statement())
-                                .separated_by(padded(just(',')))
-                                .allow_trailing()
-                                .collect(),
-                        )
-                        .then_ignore(padded(just('}'))),
-                )
+            padded(just(':')).ignore_then(padded(type_parser())).then(
+                padded(just('{'))
+                    .ignore_then(
+                        padded(bitflags_statement())
+                            .separated_by(padded(just(',')))
+                            .allow_trailing()
+                            .collect(),
+                    )
+                    .then_ignore(padded(just('}'))),
+            ),
         )
-        .map(|(name, (ty, statements))| (name, ItemDefinitionInner::Bitflags(BitflagsDefinition { type_: ty, statements, attributes: Attributes::default() })));
+        .map(|(name, (ty, statements))| {
+            (
+                name,
+                ItemDefinitionInner::Bitflags(BitflagsDefinition {
+                    type_: ty,
+                    statements,
+                    attributes: Attributes::default(),
+                }),
+            )
+        });
 
     attributes()
         .or(empty().to(Attributes::default()))
@@ -622,8 +658,8 @@ fn backend<'a>() -> impl Parser<'a, ParserInput<'a>, Spanned<Backend>, ParseErro
 
 // Extern types and values
 
-fn extern_type<'a>(
-) -> impl Parser<'a, ParserInput<'a>, (Spanned<Ident>, Attributes), ParseError<'a>> + Clone {
+fn extern_type<'a>()
+-> impl Parser<'a, ParserInput<'a>, (Spanned<Ident>, Attributes), ParseError<'a>> + Clone {
     attributes()
         .or(empty().to(Attributes::default()))
         .then_ignore(padded(keyword("extern")))
@@ -637,8 +673,8 @@ fn extern_type<'a>(
         .map(|(attrs, ident)| (ident, attrs))
 }
 
-fn extern_value<'a>() -> impl Parser<'a, ParserInput<'a>, Spanned<ExternValue>, ParseError<'a>> + Clone
-{
+fn extern_value<'a>()
+-> impl Parser<'a, ParserInput<'a>, Spanned<ExternValue>, ParseError<'a>> + Clone {
     attributes()
         .or(empty().to(Attributes::default()))
         .then(padded(visibility()))
@@ -658,8 +694,8 @@ fn extern_value<'a>() -> impl Parser<'a, ParserInput<'a>, Spanned<ExternValue>, 
 
 // Impl blocks
 
-fn impl_block<'a>() -> impl Parser<'a, ParserInput<'a>, Spanned<FunctionBlock>, ParseError<'a>> + Clone
-{
+fn impl_block<'a>()
+-> impl Parser<'a, ParserInput<'a>, Spanned<FunctionBlock>, ParseError<'a>> + Clone {
     let impl_func = doc_comment()
         .repeated()
         .collect::<Vec<_>>()
@@ -679,16 +715,22 @@ fn impl_block<'a>() -> impl Parser<'a, ParserInput<'a>, Spanned<FunctionBlock>, 
                         )
                         .then_ignore(padded(just(')'))),
                 )
-                .then(padded(just("->")).ignore_then(padded(type_parser())).or_not()),
+                .then(
+                    padded(just("->"))
+                        .ignore_then(padded(type_parser()))
+                        .or_not(),
+                ),
         )
-        .map(|(doc_comments, ((((attrs, vis), name), args), ret_ty))| Function {
-            visibility: vis,
-            name,
-            attributes: attrs,
-            doc_comments,
-            arguments: args,
-            return_type: ret_ty,
-        })
+        .map(
+            |(doc_comments, ((((attrs, vis), name), args), ret_ty))| Function {
+                visibility: vis,
+                name,
+                attributes: attrs,
+                doc_comments,
+                arguments: args,
+                return_type: ret_ty,
+            },
+        )
         .map_with(|func, extra| Spanned::new(func, to_span(extra.span())));
 
     attributes()
@@ -715,7 +757,8 @@ fn impl_block<'a>() -> impl Parser<'a, ParserInput<'a>, Spanned<FunctionBlock>, 
 
 // Use statements
 
-fn use_statement<'a>() -> impl Parser<'a, ParserInput<'a>, Spanned<ItemPath>, ParseError<'a>> + Clone {
+fn use_statement<'a>() -> impl Parser<'a, ParserInput<'a>, Spanned<ItemPath>, ParseError<'a>> + Clone
+{
     keyword("use")
         .ignore_then(padded(item_path()))
         .then_ignore(padded(just(';')))
@@ -751,7 +794,12 @@ pub fn module<'a>() -> impl Parser<'a, ParserInput<'a>, Module, ParseError<'a>> 
 
     skip_ws_comments
         .clone()
-        .ignore_then(module_doc_comment().repeated().collect::<Vec<_>>())
+        .ignore_then(
+            module_doc_comment()
+                .then_ignore(whitespace())
+                .repeated()
+                .collect::<Vec<_>>(),
+        )
         .then_ignore(skip_ws_comments.clone())
         .then(module_attributes().or(empty().to(Attributes::default())))
         .then_ignore(skip_ws_comments.clone())
@@ -760,8 +808,9 @@ pub fn module<'a>() -> impl Parser<'a, ParserInput<'a>, Module, ParseError<'a>> 
                 // Use statements
                 use_statement().map(|path| (0, Some(path), None, None, None, None, None, None)),
                 // Extern types
-                extern_type()
-                    .map(|(name, attrs)| (1, None, Some((name, attrs)), None, None, None, None, None)),
+                extern_type().map(|(name, attrs)| {
+                    (1, None, Some((name, attrs)), None, None, None, None, None)
+                }),
                 // Extern values
                 extern_value().map(|ev| (2, None, None, Some(ev), None, None, None, None)),
                 // Backend

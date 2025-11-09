@@ -220,11 +220,16 @@ fn will_die_on_super_for_now() {
         "#;
 
     let errors = parse_str(text).err().unwrap();
-    let error_str = errors.iter()
+    let error_str = errors
+        .iter()
         .map(|e| format!("{}", e))
         .collect::<Vec<_>>()
         .join("\n");
-    assert!(error_str.contains("super not supported"), "Expected 'super not supported' error, got: {}", error_str);
+    assert!(
+        error_str.contains("super not supported"),
+        "Expected 'super not supported' error, got: {}",
+        error_str
+    );
 }
 
 #[test]
@@ -477,21 +482,19 @@ fn can_parse_doc_comments() {
             (V::Private, "TestType"),
             TD::new([
                 TS::vftable([F::new((V::Private, "test_vfunc"), [Ar::ConstSelf])
-                    .with_attributes([A::doc(" My test vfunc!")])]),
+                    .with_doc_comments([" My test vfunc!"])]),
                 TS::field((V::Private, "field_1"), T::ident("i32"))
-                    .with_attributes([A::doc(" This is a field doc comment")]),
-            ])
-            .with_attributes([A::doc(" This is a doc comment")]),
-        )])
+                    .with_doc_comments([" This is a field doc comment"]),
+            ]),
+        )
+        .with_doc_comments([" This is a doc comment"])])
         .with_impls([FB::new(
             "TestType",
             [F::new((V::Private, "test_func"), [Ar::ConstSelf])
-                .with_attributes([A::doc(" My test func!"), A::address(0x123)])],
+                .with_doc_comments([" My test func!"])
+                .with_attributes([A::address(0x123)])],
         )])
-        .with_attributes([
-            A::doc(" This is a module doc comment"),
-            A::doc(" The best of its kind"),
-        ]);
+        .with_module_doc_comments([" This is a module doc comment", " The best of its kind"]);
 
     assert_ast_eq!(parse_str(text).unwrap(), ast);
 }
@@ -513,19 +516,19 @@ fn can_parse_freestanding_functions() {
         "#;
 
     let ast = M::new()
-        .with_definitions([ID::new(
-            (V::Private, "A"),
-            ED::new(T::ident("i32"), [], []),
-        )])
+        .with_definitions([ID::new((V::Private, "A"), ED::new(T::ident("i32"), [], []))])
         .with_impls([FB::new(
             "A",
             [F::new((V::Private, "test"), []).with_attributes([A::address(0x123)])],
         )])
         .with_functions([
             F::new((V::Public, "freestanding"), []).with_attributes([A::address(0x456)]),
-            F::new((V::Private, "another_freestanding"), [Ar::named("arg1", T::ident("i32"))])
-                .with_attributes([A::address(0x789)])
-                .with_return_type(T::ident("i32")),
+            F::new(
+                (V::Private, "another_freestanding"),
+                [Ar::named("arg1", T::ident("i32"))],
+            )
+            .with_attributes([A::address(0x789)])
+            .with_return_type(T::ident("i32")),
         ]);
 
     assert_ast_eq!(parse_str(text).unwrap(), ast);

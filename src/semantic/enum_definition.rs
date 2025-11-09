@@ -146,9 +146,10 @@ pub fn build(
             },
             grammar::Attribute::Function(ident, exprs) => {
                 if let ("singleton", [expr]) = (ident.as_str(), exprs.as_slice())
-                    && let grammar::Expr::IntLiteral(value) = expr.node {
-                        singleton = Some(value as usize);
-                    }
+                    && let grammar::Expr::IntLiteral(value) = expr.node
+                {
+                    singleton = Some(value as usize);
+                }
             }
             grammar::Attribute::Assign(_ident, _expr) => {}
         }
