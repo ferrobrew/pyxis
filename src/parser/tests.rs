@@ -1,7 +1,5 @@
 use crate::{assert_ast_eq, grammar::test_aliases::*, parser::parse_str};
 
-use pretty_assertions::assert_eq;
-
 #[test]
 fn can_parse_basic_struct() {
     let text = r#"
@@ -373,7 +371,7 @@ fn can_parse_array_field() {
 
 #[test]
 fn can_parse_backends() {
-    let text = r##"
+    let text = r#####"
 backend rust {
     prologue r#"
         use std::ffi::CString;
@@ -398,7 +396,14 @@ backend rust epilogue r#"
         println!("Hello, world!");
     }
 "#;
-"##;
+
+backend cpp epilogue r####"
+    // This has "# and "## and "### inside
+    int main() {
+        return 0;
+    }
+"####;
+"#####;
 
     let ast = M::new().with_backends([
         B::new("rust")
@@ -430,6 +435,15 @@ backend rust epilogue r#"
         println!("Hello, world!");
     }
 "#
+            .trim(),
+        ),
+        B::new("cpp").with_epilogue(
+            r####"
+    // This has "# and "## and "### inside
+    int main() {
+        return 0;
+    }
+"####
             .trim(),
         ),
     ]);

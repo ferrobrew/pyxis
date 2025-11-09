@@ -125,10 +125,77 @@ fn string_literal<'a>() -> impl Parser<'a, ParserInput<'a>, Spanned<Expr>, Parse
         .ignore_then(string_char.repeated().collect::<String>())
         .then_ignore(just('"'));
 
-    // Raw string r#"..."#
-    let raw_string = just("r#\"")
-        .ignore_then(none_of('"').repeated().collect::<String>())
-        .then_ignore(just("\"#"));
+    // Raw string r#"..."# with variable number of # characters
+    // This mirrors Rust's raw string behavior: r#"..."#, r##"..."##, etc.
+    let raw_string = custom(|input| {
+        let start = input.cursor();
+
+        // Match 'r'
+        match input.next() {
+            Some('r') => {},
+            _ => return Err(Rich::custom(input.span_since(&start), "Expected 'r' at start of raw string")),
+        }
+
+        // Count the number of '#' characters
+        let mut hash_count = 0;
+        loop {
+            let saved = input.save();
+            match input.next() {
+                Some('#') => hash_count += 1,
+                _ => {
+                    input.rewind(saved);
+                    break;
+                }
+            }
+        }
+
+        if hash_count == 0 {
+            return Err(Rich::custom(input.span_since(&start), "Expected at least one '#' after 'r'"));
+        }
+
+        // Match opening quote
+        match input.next() {
+            Some('"') => {},
+            _ => return Err(Rich::custom(input.span_since(&start), "Expected '\"' after hashes")),
+        }
+
+        // Build closing delimiter
+        let mut closing = vec!['"'];
+        closing.extend(std::iter::repeat_n('#', hash_count));
+
+        // Collect content until we find the closing delimiter
+        let mut content = String::new();
+        'outer: loop {
+            // Check if we've found the closing delimiter
+            let saved = input.save();
+            let mut found = true;
+
+            for &expected in &closing {
+                match input.next() {
+                    Some(c) if c == expected => continue,
+                    _ => {
+                        found = false;
+                        break;
+                    }
+                }
+            }
+
+            if found {
+                // We found the closing delimiter!
+                break 'outer;
+            }
+
+            // Not the closing delimiter, restore position and consume one char
+            input.rewind(saved);
+
+            match input.next() {
+                Some(c) => content.push(c),
+                None => return Err(Rich::custom(input.span_since(&start), "Unclosed raw string literal")),
+            }
+        }
+
+        Ok(content)
+    });
 
     choice((raw_string, regular_string))
         .map(Expr::StringLiteral)
