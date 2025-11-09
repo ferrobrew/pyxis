@@ -400,18 +400,21 @@ fn visibility<'a>() -> impl Parser<'a, ParserInput<'a>, Visibility, ParseError<'
 // Arguments
 
 fn argument<'a>() -> impl Parser<'a, ParserInput<'a>, Spanned<Argument>, ParseError<'a>> + Clone {
-    let const_self = padded(just('&'))
+    let const_self = just('&')
+        .then_ignore(whitespace())
         .ignore_then(keyword("self"))
         .to(Argument::ConstSelf)
         .map_with(|arg, extra| Spanned::new(arg, to_span(extra.span())));
 
-    let mut_self = padded(just('&'))
+    let mut_self = just('&')
+        .then_ignore(whitespace())
         .ignore_then(keyword("mut"))
+        .then_ignore(whitespace())
         .ignore_then(keyword("self"))
         .to(Argument::MutSelf)
         .map_with(|arg, extra| Spanned::new(arg, to_span(extra.span())));
 
-    let named = padded(ident())
+    let named = ident()
         .then_ignore(padded(just(':')))
         .then(padded(type_parser()))
         .map(|(name, ty)| Argument::Named(name, ty))
@@ -498,57 +501,54 @@ fn type_statement<'a>()
         )
         .map_with(|func, extra| Spanned::new(func, to_span(extra.span())));
 
-    // Public field must have "pub" keyword
-    let pub_field = keyword("pub")
-        .to(Visibility::Public)
-        .then_ignore(whitespace())
-        .then(ident())
-        .then_ignore(whitespace())
-        .then_ignore(just(':'))
-        .then_ignore(whitespace())
-        .then(type_parser())
-        .map(|((vis, name), ty)| TypeField::Field(vis, name, ty));
+    // Shared parser: identifier followed by ':' and type
+    let field_with_vis = |vis| {
+        text::ident()
+            .map_with(|s: &str, extra| (s.to_string(), extra.span()))
+            .then_ignore(padded(just(':')))
+            .then(padded(type_parser()))
+            .map(move |((name_str, name_span), ty)| {
+                TypeField::Field(vis, Spanned::new(Ident(name_str), to_span(name_span)), ty)
+            })
+    };
 
-    // Inline all parsers to avoid any closure issues
+    // Public field: pub name : type
+    let pub_field = keyword("pub")
+        .ignore_then(whitespace())
+        .ignore_then(field_with_vis(Visibility::Public));
+
+    // Vftable: vftable { functions }
+    let vftable = text::ident()
+        .try_map(|s: &str, span| {
+            if s == "vftable" {
+                Ok(())
+            } else {
+                Err(Rich::custom(span, "expected 'vftable'"))
+            }
+        })
+        .ignore_then(padded(just('{')))
+        .ignore_then(
+            vftable_func
+                .separated_by(padded(just(';')))
+                .allow_trailing()
+                .collect::<Vec<_>>(),
+        )
+        .then_ignore(padded(just('}')))
+        .map(TypeField::Vftable);
+
+    // Private field: name : type
+    let private_field = field_with_vis(Visibility::Private);
+
+    // Private field or vftable
+    let private_or_vftable = vftable.or(private_field);
+
+    // Parse doc comments and attributes, then the field type
     doc_comment()
         .repeated()
         .collect::<Vec<_>>()
         .then(attributes().or(empty().to(Attributes::default())))
         .then_ignore(whitespace())
-        .then(
-            // Try vftable first
-            just("vftable")
-                .then_ignore(whitespace())
-                .then_ignore(just('{'))
-                .then_ignore(whitespace())
-                .ignore_then(
-                    vftable_func
-                        .separated_by(padded(just(';')))
-                        .allow_trailing()
-                        .collect::<Vec<_>>(),
-                )
-                .then_ignore(whitespace())
-                .then_ignore(just('}'))
-                .map(TypeField::Vftable)
-                .or(pub_field)
-                .or(
-                    // Private field
-                    text::ident()
-                        .try_map(|s: &str, span| {
-                            if s == "vftable" {
-                                Err(Rich::custom(span, "vftable cannot be used as a field name"))
-                            } else {
-                                Ok(s.to_string())
-                            }
-                        })
-                        .map_with(|s, extra| Spanned::new(Ident(s), to_span(extra.span())))
-                        .then_ignore(whitespace())
-                        .then_ignore(just(':'))
-                        .then_ignore(whitespace())
-                        .then(type_parser())
-                        .map(|(name, ty)| TypeField::Field(Visibility::Private, name, ty)),
-                ),
-        )
+        .then(pub_field.or(private_or_vftable))
         .map(|((doc_comments, attrs), field)| TypeStatement {
             field,
             attributes: attrs,
