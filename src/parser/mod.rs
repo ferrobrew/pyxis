@@ -89,8 +89,13 @@ fn type_ident<'a>() -> impl Parser<'a, ParserInput<'a>, String, ParseError<'a>> 
 
 fn int_literal<'a>() -> impl Parser<'a, ParserInput<'a>, Spanned<Expr>, ParseError<'a>> + Clone {
     let hex = just("0x")
-        .ignore_then(text::int(16))
-        .map_with(|s: &str, extra| (s, extra.span()))
+        .ignore_then(
+            one_of("0123456789abcdefABCDEF_")
+                .repeated()
+                .at_least(1)
+                .collect::<String>(),
+        )
+        .map_with(|s: String, extra| (s, extra.span()))
         .validate(|(s, span), _extra, emitter| {
             match isize::from_str_radix(&s.replace('_', ""), 16) {
                 Ok(n) => n,
@@ -119,8 +124,13 @@ fn int_literal<'a>() -> impl Parser<'a, ParserInput<'a>, Spanned<Expr>, ParseErr
 
     let dec = just('-')
         .or_not()
-        .then(text::int(10))
-        .map_with(|(neg, s): (Option<char>, &str), extra| ((neg, s), extra.span()))
+        .then(
+            one_of("0123456789_")
+                .repeated()
+                .at_least(1)
+                .collect::<String>(),
+        )
+        .map_with(|(neg, s): (Option<char>, String), extra| ((neg, s), extra.span()))
         .validate(|((neg, s), span), _extra, emitter| {
             match s.replace('_', "").parse::<isize>() {
                 Ok(num) => {
