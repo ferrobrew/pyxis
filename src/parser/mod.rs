@@ -353,22 +353,31 @@ fn item_path<'a>() -> impl Parser<'a, ParserInput<'a>, Spanned<ItemPath>, ParseE
 // Attributes
 
 fn attribute<'a>() -> impl Parser<'a, ParserInput<'a>, Spanned<Attribute>, ParseError<'a>> + Clone {
-    let ident_attr = ident().map(|id| id.map(Attribute::Ident));
-
-    let function_attr = ident()
+    ident()
         .then(
             padded(just('('))
-                .ignore_then(padded(expr()).separated_by(padded(just(','))).collect())
-                .then_ignore(padded(just(')'))),
+                .ignore_then(
+                    padded(expr())
+                        .separated_by(padded(just(',')))
+                        .allow_trailing()
+                        .collect(),
+                )
+                .then_ignore(padded(just(')')))
+                .map(|args| (Some(args), None))
+                .or(padded(just('='))
+                    .ignore_then(padded(expr()))
+                    .map(|value| (None, Some(value))))
+                .or_not(),
         )
-        .map(|(name, args)| Spanned::new(Attribute::Function(name.node, args), name.span));
-
-    let assign_attr = ident()
-        .then_ignore(padded(just('=')))
-        .then(padded(expr()))
-        .map(|(name, value)| Spanned::new(Attribute::Assign(name.node, value), name.span));
-
-    choice((function_attr, assign_attr, ident_attr))
+        .map_with(|(name, trailing), extra| {
+            let attr = match trailing {
+                Some((Some(args), None)) => Attribute::Function(name.node, args),
+                Some((None, Some(value))) => Attribute::Assign(name.node, value),
+                None => Attribute::Ident(name.node),
+                _ => unreachable!(),
+            };
+            Spanned::new(attr, to_span(extra.span()))
+        })
 }
 
 fn attributes<'a>() -> impl Parser<'a, ParserInput<'a>, Attributes, ParseError<'a>> + Clone {
