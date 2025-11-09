@@ -93,8 +93,8 @@ fn int_literal<'a>() -> impl Parser<'a, ParserInput<'a>, Spanned<Expr>, ParseErr
         .map(|s: &str| isize::from_str_radix(&s.replace('_', ""), 16).unwrap());
 
     let bin = just("0b")
-        .ignore_then(text::int(2))
-        .map(|s: &str| isize::from_str_radix(&s.replace('_', ""), 2).unwrap());
+        .ignore_then(one_of("01_").repeated().at_least(1).collect::<String>())
+        .map(|s: String| isize::from_str_radix(&s.replace('_', ""), 2).unwrap());
 
     let dec = just('-')
         .or_not()
@@ -132,8 +132,13 @@ fn string_literal<'a>() -> impl Parser<'a, ParserInput<'a>, Spanned<Expr>, Parse
 
         // Match 'r'
         match input.next() {
-            Some('r') => {},
-            _ => return Err(Rich::custom(input.span_since(&start), "Expected 'r' at start of raw string")),
+            Some('r') => {}
+            _ => {
+                return Err(Rich::custom(
+                    input.span_since(&start),
+                    "Expected 'r' at start of raw string",
+                ));
+            }
         }
 
         // Count the number of '#' characters
@@ -150,13 +155,21 @@ fn string_literal<'a>() -> impl Parser<'a, ParserInput<'a>, Spanned<Expr>, Parse
         }
 
         if hash_count == 0 {
-            return Err(Rich::custom(input.span_since(&start), "Expected at least one '#' after 'r'"));
+            return Err(Rich::custom(
+                input.span_since(&start),
+                "Expected at least one '#' after 'r'",
+            ));
         }
 
         // Match opening quote
         match input.next() {
-            Some('"') => {},
-            _ => return Err(Rich::custom(input.span_since(&start), "Expected '\"' after hashes")),
+            Some('"') => {}
+            _ => {
+                return Err(Rich::custom(
+                    input.span_since(&start),
+                    "Expected '\"' after hashes",
+                ));
+            }
         }
 
         // Build closing delimiter
@@ -190,7 +203,12 @@ fn string_literal<'a>() -> impl Parser<'a, ParserInput<'a>, Spanned<Expr>, Parse
 
             match input.next() {
                 Some(c) => content.push(c),
-                None => return Err(Rich::custom(input.span_since(&start), "Unclosed raw string literal")),
+                None => {
+                    return Err(Rich::custom(
+                        input.span_since(&start),
+                        "Unclosed raw string literal",
+                    ));
+                }
             }
         }
 
