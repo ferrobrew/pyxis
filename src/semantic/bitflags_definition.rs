@@ -99,7 +99,7 @@ pub fn build(
 
     let mut fields: Vec<(String, usize)> = vec![];
     let mut default = None;
-    for statement in &definition.statements {
+    for statement in definition.statements() {
         let grammar::BitflagsStatement {
             name,
             expr,

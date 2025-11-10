@@ -72,30 +72,60 @@ fn multi_line_comment<'a>() -> impl Parser<'a, ParserInput<'a>, (), ParseError<'
         }))
 }
 
-fn comment<'a>() -> impl Parser<'a, ParserInput<'a>, (), ParseError<'a>> + Clone {
-    choice((single_line_comment(), multi_line_comment()))
+// Comment-capturing parsers - return Comment nodes for inclusion in AST
+fn line_comment_node<'a>() -> impl Parser<'a, ParserInput<'a>, Comment, ParseError<'a>> + Clone {
+    just("//")
+        .then(one_of("/!").not().rewind())
+        .ignore_then(none_of("\r\n").repeated().collect::<String>())
+        .map(Comment::Line)
 }
 
-// Whitespace and comments are skipped between tokens
-fn skip<'a>() -> impl Parser<'a, ParserInput<'a>, (), ParseError<'a>> + Clone {
-    comment()
+fn block_comment_node<'a>() -> impl Parser<'a, ParserInput<'a>, Comment, ParseError<'a>> + Clone {
+    just("/*")
+        .ignore_then(custom(|input| {
+            let start = input.cursor();
+            let mut content = String::new();
+
+            // Capture content between /* and */
+            let mut prev_was_star = false;
+            loop {
+                match input.next() {
+                    Some('/') if prev_was_star => {
+                        // Found closing */ - remove the trailing '*' we added
+                        content.pop();
+                        return Ok(content);
+                    }
+                    Some(c) => {
+                        prev_was_star = c == '*';
+                        content.push(c);
+                    }
+                    None => {
+                        return Err(Rich::custom(
+                            input.span_since(&start),
+                            "Unclosed multi-line comment",
+                        ));
+                    }
+                }
+            }
+        }))
+        .map(Comment::Block)
+}
+
+// Skip whitespace and comments - matches multiple whitespace chars and comments in one go
+// Used ONLY at strategic locations to avoid exponential parser complexity
+fn skip_ws_and_comments<'a>() -> impl Parser<'a, ParserInput<'a>, (), ParseError<'a>> + Clone {
+    single_line_comment()
+        .or(multi_line_comment())
         .or(one_of(" \t\r\n").ignored())
         .repeated()
         .ignored()
 }
 
-// Padding with just whitespace - used for most tokens to avoid parser complexity
+// Padding with just whitespace - used for most tokens
 fn padded<'a, O: Clone>(
     parser: impl Parser<'a, ParserInput<'a>, O, ParseError<'a>> + Clone + 'a,
 ) -> impl Parser<'a, ParserInput<'a>, O, ParseError<'a>> + Clone {
     parser.padded_by(whitespace())
-}
-
-// Padding that also skips comments - used in specific places where comments are expected
-fn padded_skip<'a, O: Clone>(
-    parser: impl Parser<'a, ParserInput<'a>, O, ParseError<'a>> + Clone + 'a,
-) -> impl Parser<'a, ParserInput<'a>, O, ParseError<'a>> + Clone {
-    parser.padded_by(skip())
 }
 
 fn keyword<'a>(kw: &'static str) -> impl Parser<'a, ParserInput<'a>, (), ParseError<'a>> + Clone {
@@ -486,8 +516,8 @@ fn argument<'a>() -> impl Parser<'a, ParserInput<'a>, Spanned<Argument>, ParseEr
         .map_with(|arg, extra| Spanned::new(arg, to_span(extra.span())));
 
     let named = ident()
-        .then_ignore(padded_skip(just(':')))
-        .then(padded_skip(type_parser()))
+        .then_ignore(padded(just(':')))
+        .then(padded(type_parser()))
         .map(|(name, ty)| Argument::Named(name, ty))
         .map_with(|arg, extra| Spanned::new(arg, to_span(extra.span())));
 
@@ -506,14 +536,14 @@ fn function<'a>(
         .then_ignore(padded(keyword("fn")))
         .then(padded(ident()))
         .then(
-            padded_skip(just('('))
+            padded(just('('))
                 .ignore_then(
-                    padded_skip(argument())
-                        .separated_by(padded_skip(just(',')))
+                    padded(argument())
+                        .separated_by(padded(just(',')))
                         .allow_trailing()
                         .collect(),
                 )
-                .then_ignore(padded_skip(just(')'))),
+                .then_ignore(padded(just(')'))),
         )
         .then(
             padded(just("->"))
@@ -546,18 +576,18 @@ fn type_statement<'a>()
                 .then_ignore(padded(keyword("fn")))
                 .then(padded(ident()))
                 .then(
-                    padded_skip(just('('))
+                    padded(just('('))
                         .ignore_then(
-                            padded_skip(argument())
-                                .separated_by(padded_skip(just(',')))
+                            padded(argument())
+                                .separated_by(padded(just(',')))
                                 .allow_trailing()
                                 .collect(),
                         )
-                        .then_ignore(padded_skip(just(')'))),
+                        .then_ignore(padded(just(')'))),
                 )
                 .then(
-                    padded_skip(just("->"))
-                        .ignore_then(padded_skip(type_parser()))
+                    padded(just("->"))
+                        .ignore_then(padded(type_parser()))
                         .or_not(),
                 ),
         )
@@ -598,15 +628,28 @@ fn type_statement<'a>()
                 Err(Rich::custom(span, "expected 'vftable'"))
             }
         })
-        .ignore_then(padded_skip(just('{')))
+        .ignore_then(padded(just('{')))
+        .then_ignore(whitespace())
         .ignore_then(
-            vftable_func
-                .separated_by(padded_skip(just(';')))
-                .allow_trailing()
-                .collect::<Vec<_>>(),
+            choice((
+                vftable_func
+                    .then_ignore(just(';').padded_by(whitespace()).or_not())
+                    .map_with(|f, extra| {
+                        Spanned::new(VftableChild::Function(f), to_span(extra.span()))
+                    }),
+                line_comment_node()
+                    .or(block_comment_node())
+                    .padded_by(whitespace())
+                    .map_with(|comment, extra| {
+                        Spanned::new(VftableChild::Comment(comment), to_span(extra.span()))
+                    }),
+            ))
+            .repeated()
+            .collect::<Vec<_>>(),
         )
-        .then_ignore(padded_skip(just('}')))
-        .map(TypeField::Vftable);
+        .then_ignore(whitespace())
+        .then_ignore(just('}'))
+        .map(|children| TypeField::Vftable(VftableDefinition { children }));
 
     // Private field: name : type
     let private_field = field_with_vis(Visibility::Private);
@@ -615,10 +658,14 @@ fn type_statement<'a>()
     let private_or_vftable = vftable.or(private_field);
 
     // Parse doc comments and attributes, then the field type
-    doc_comment()
-        .then_ignore(one_of(" \t\r\n").repeated())
-        .repeated()
-        .collect::<Vec<_>>()
+    // Skip regular comments and whitespace before doc comments
+    skip_ws_and_comments()
+        .ignore_then(
+            doc_comment()
+                .then_ignore(one_of(" \t\r\n").repeated())
+                .repeated()
+                .collect::<Vec<_>>()
+        )
         .then(attributes().or(empty().to(Attributes::default())))
         .then_ignore(whitespace())
         .then(pub_field.or(private_or_vftable))
@@ -681,20 +728,36 @@ fn item_definition<'a>(
         .ignore_then(padded(ident()))
         .then(choice((
             padded(just(';')).to(vec![]),
-            padded_skip(just('{'))
+            padded(just('{'))
+                .then_ignore(whitespace())
                 .ignore_then(
-                    padded_skip(type_statement())
-                        .separated_by(padded_skip(just(',')))
-                        .allow_trailing()
-                        .collect(),
+                    choice((
+                        // Try to parse statements first - this allows the statement parser
+                        // to consume regular comments before doc comments via skip_ws_and_comments
+                        type_statement()
+                            .then_ignore(just(',').padded_by(whitespace()).or_not())
+                            .map_with(|stmt, extra| {
+                                Spanned::new(TypeChild::Statement(stmt), to_span(extra.span()))
+                            }),
+                        // Only parse standalone comments (not before statements with doc comments)
+                        line_comment_node()
+                            .or(block_comment_node())
+                            .padded_by(whitespace())
+                            .map_with(|comment, extra| {
+                                Spanned::new(TypeChild::Comment(comment), to_span(extra.span()))
+                            }),
+                    ))
+                    .repeated()
+                    .collect(),
                 )
-                .then_ignore(padded_skip(just('}'))),
+                .then_ignore(whitespace())
+                .then_ignore(just('}')),
         )))
-        .map(|(name, statements)| {
+        .map(|(name, children)| {
             (
                 name,
                 ItemDefinitionInner::Type(TypeDefinition {
-                    statements,
+                    children,
                     attributes: Attributes::default(),
                 }),
             )
@@ -705,22 +768,27 @@ fn item_definition<'a>(
         .ignore_then(padded(ident()))
         .then(
             padded(just(':')).ignore_then(padded(type_parser())).then(
-                padded_skip(just('{'))
+                padded(just('{'))
+                    .then_ignore(skip_ws_and_comments())
                     .ignore_then(
-                        padded_skip(enum_statement())
-                            .separated_by(padded_skip(just(',')))
+                        enum_statement()
+                            .map_with(|stmt, extra| {
+                                Spanned::new(EnumChild::Statement(stmt), to_span(extra.span()))
+                            })
+                            .separated_by(just(',').then_ignore(skip_ws_and_comments()))
                             .allow_trailing()
                             .collect(),
                     )
-                    .then_ignore(padded_skip(just('}'))),
+                    .then_ignore(skip_ws_and_comments())
+                    .then_ignore(just('}')),
             ),
         )
-        .map(|(name, (ty, statements))| {
+        .map(|(name, (ty, children))| {
             (
                 name,
                 ItemDefinitionInner::Enum(EnumDefinition {
                     type_: ty,
-                    statements,
+                    children,
                     attributes: Attributes::default(),
                 }),
             )
@@ -731,22 +799,27 @@ fn item_definition<'a>(
         .ignore_then(padded(ident()))
         .then(
             padded(just(':')).ignore_then(padded(type_parser())).then(
-                padded_skip(just('{'))
+                padded(just('{'))
+                    .then_ignore(skip_ws_and_comments())
                     .ignore_then(
-                        padded_skip(bitflags_statement())
-                            .separated_by(padded_skip(just(',')))
+                        bitflags_statement()
+                            .map_with(|stmt, extra| {
+                                Spanned::new(BitflagsChild::Statement(stmt), to_span(extra.span()))
+                            })
+                            .separated_by(just(',').then_ignore(skip_ws_and_comments()))
                             .allow_trailing()
                             .collect(),
                     )
-                    .then_ignore(padded_skip(just('}'))),
+                    .then_ignore(skip_ws_and_comments())
+                    .then_ignore(just('}')),
             ),
         )
-        .map(|(name, (ty, statements))| {
+        .map(|(name, (ty, children))| {
             (
                 name,
                 ItemDefinitionInner::Bitflags(BitflagsDefinition {
                     type_: ty,
-                    statements,
+                    children,
                     attributes: Attributes::default(),
                 }),
             )
@@ -901,18 +974,18 @@ fn impl_block<'a>()
                 .then_ignore(padded(keyword("fn")))
                 .then(padded(ident()))
                 .then(
-                    padded_skip(just('('))
+                    padded(just('('))
                         .ignore_then(
-                            padded_skip(argument())
-                                .separated_by(padded_skip(just(',')))
+                            padded(argument())
+                                .separated_by(padded(just(',')))
                                 .allow_trailing()
                                 .collect(),
                         )
-                        .then_ignore(padded_skip(just(')'))),
+                        .then_ignore(padded(just(')'))),
                 )
                 .then(
-                    padded_skip(just("->"))
-                        .ignore_then(padded_skip(type_parser()))
+                    padded(just("->"))
+                        .ignore_then(padded(type_parser()))
                         .or_not(),
                 ),
         )
@@ -933,18 +1006,23 @@ fn impl_block<'a>()
         .then_ignore(padded(keyword("impl")))
         .then(padded(ident()))
         .then(
-            padded_skip(just('{'))
+            padded(just('{'))
+                .then_ignore(skip_ws_and_comments())
                 .ignore_then(
                     impl_func
-                        .separated_by(padded_skip(just(';')))
+                        .map_with(|f, extra| {
+                            Spanned::new(ImplChild::Function(f), to_span(extra.span()))
+                        })
+                        .separated_by(just(';').then_ignore(skip_ws_and_comments()))
                         .allow_trailing()
                         .collect::<Vec<_>>(),
                 )
-                .then_ignore(padded_skip(just('}'))),
+                .then_ignore(skip_ws_and_comments())
+                .then_ignore(just('}')),
         )
-        .map(|((attrs, name), functions)| FunctionBlock {
+        .map(|((attrs, name), children)| FunctionBlock {
             name,
-            functions,
+            children,
             attributes: attrs,
         })
         .map_with(|fb, extra| Spanned::new(fb, to_span(extra.span())))
@@ -962,18 +1040,6 @@ fn use_statement<'a>() -> impl Parser<'a, ParserInput<'a>, Spanned<ItemPath>, Pa
 // Module
 
 pub fn module<'a>() -> impl Parser<'a, ParserInput<'a>, Module, ParseError<'a>> + Clone {
-    enum ModuleItem {
-        Use(Spanned<ItemPath>),
-        ExternType(Spanned<Ident>, Attributes),
-        ExternValue(Spanned<ExternValue>),
-        Backend(Spanned<Backend>),
-        Impl(Spanned<FunctionBlock>),
-        Function(Spanned<Function>),
-        Definition(Spanned<ItemDefinition>),
-    }
-
-    // Skip initial whitespace and comments
-    let skip_ws_comments = skip();
 
     // Freestanding function parser
     let freestanding_func = doc_comment()
@@ -998,71 +1064,57 @@ pub fn module<'a>() -> impl Parser<'a, ParserInput<'a>, Module, ParseError<'a>> 
             item
         });
 
-    skip_ws_comments
-        .clone()
+    skip_ws_and_comments()
         .ignore_then(
             module_doc_comment()
                 .then_ignore(whitespace())
                 .repeated()
                 .collect::<Vec<_>>(),
         )
-        .then_ignore(skip_ws_comments.clone())
+        .then_ignore(skip_ws_and_comments())
         .then(module_attributes().or(empty().to(Attributes::default())))
-        .then_ignore(skip_ws_comments.clone())
+        .then_ignore(skip_ws_and_comments())
         .then(
             choice((
                 // Use statements
-                use_statement().map(ModuleItem::Use),
+                use_statement().map(ModuleChild::Use),
                 // Extern types
-                extern_type().map(|(name, attrs)| ModuleItem::ExternType(name, attrs)),
+                extern_type().map(|(name, attrs)| ModuleChild::ExternType(name, attrs)),
                 // Extern values
-                extern_value().map(ModuleItem::ExternValue),
+                extern_value().map(ModuleChild::ExternValue),
                 // Backend
-                backend().map(ModuleItem::Backend),
+                backend().map(ModuleChild::Backend),
                 // Impl blocks
-                impl_block().map(ModuleItem::Impl),
+                impl_block().map(ModuleChild::Impl),
                 // Freestanding functions
-                freestanding_func.map(ModuleItem::Function),
+                freestanding_func.map(ModuleChild::Function),
                 // Item definitions
-                item_def.map(ModuleItem::Definition),
+                item_def.map(ModuleChild::Definition),
             ))
-            .then_ignore(skip_ws_comments.clone())
+            .map_with(|child, extra| Spanned::new(child, to_span(extra.span())))
+            .then_ignore(skip_ws_and_comments())
             .repeated()
             .collect::<Vec<_>>(),
         )
-        .then_ignore(skip_ws_comments.clone())
+        .then_ignore(skip_ws_and_comments())
         .then_ignore(end())
-        .map(|((module_doc_comments, module_attrs), items)| {
-            let mut uses = vec![];
-            let mut extern_types = vec![];
-            let mut extern_values = vec![];
-            let mut backends = vec![];
-            let mut impls = vec![];
-            let mut functions = vec![];
-            let mut definitions = vec![];
+        .map(|((module_doc_comments, module_attrs), mut items)| {
+            let mut children = vec![];
 
-            for item in items {
-                match item {
-                    ModuleItem::Use(path) => uses.push(path),
-                    ModuleItem::ExternType(name, attrs) => extern_types.push((name, attrs)),
-                    ModuleItem::ExternValue(ev) => extern_values.push(ev),
-                    ModuleItem::Backend(b) => backends.push(b),
-                    ModuleItem::Impl(ib) => impls.push(ib),
-                    ModuleItem::Function(f) => functions.push(f),
-                    ModuleItem::Definition(item) => definitions.push(item),
-                }
+            // Add module doc comments as Comment children at the beginning
+            for comment in module_doc_comments {
+                children.push(Spanned::new(
+                    ModuleChild::Comment(Comment::ModuleDoc(comment.node)),
+                    comment.span,
+                ));
             }
 
+            // Add all items as children (they're already spanned)
+            children.append(&mut items);
+
             Module {
-                uses,
-                extern_types,
-                extern_values,
-                functions,
-                definitions,
-                impls,
-                backends,
+                children,
                 attributes: module_attrs,
-                module_doc_comments,
             }
         })
 }

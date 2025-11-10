@@ -76,8 +76,7 @@ impl SemanticState {
 
     pub fn add_module(&mut self, module: &grammar::Module, path: &ItemPath) -> anyhow::Result<()> {
         let extern_values = module
-            .extern_values
-            .iter()
+            .extern_values()
             .map(|ev| {
                 let name = &ev.node.name;
                 let mut address = None;
@@ -119,12 +118,12 @@ impl SemanticState {
                 path.clone(),
                 module.clone(),
                 extern_values,
-                &module.impls,
-                &module.backends,
+                module.impls(),
+                module.backends(),
             )?,
         );
 
-        for definition in &module.definitions {
+        for definition in module.definitions() {
             let new_path = path.join(definition.node.name.node.as_str().into());
             self.add_item(ItemDefinition {
                 visibility: definition.node.visibility.into(),
@@ -135,7 +134,7 @@ impl SemanticState {
             })?;
         }
 
-        for (extern_path, attributes) in &module.extern_types {
+        for (extern_path, attributes) in module.extern_types() {
             let mut size = None;
             let mut alignment = None;
             for attribute in attributes {

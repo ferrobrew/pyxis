@@ -36,11 +36,11 @@ impl TypeVftable {
 }
 
 /// Given a parsed size/list of functions, construct the list of semantic functions
-pub fn convert_grammar_functions_to_semantic_functions(
+pub fn convert_grammar_functions_to_semantic_functions<'a>(
     type_registry: &TypeRegistry,
     module: &Module,
     size: Option<usize>,
-    functions: &[Spanned<grammar::Function>],
+    functions: impl Iterator<Item = &'a Spanned<grammar::Function>>,
 ) -> anyhow::Result<Vec<Function>> {
     // Insert function, with padding if necessary
     let mut output = vec![];

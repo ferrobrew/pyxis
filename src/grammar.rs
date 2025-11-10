@@ -648,7 +648,7 @@ impl TypeField {
 
     #[cfg(test)]
     pub fn vftable(functions: impl IntoIterator<Item = Function>) -> TypeField {
-        TypeField::Vftable(VftableDefinition::new(functions.into_iter().collect()))
+        TypeField::Vftable(VftableDefinition::new(functions.into_iter().collect::<Vec<_>>()))
     }
 
     pub fn is_vftable(&self) -> bool {
@@ -689,6 +689,15 @@ impl TypeStatement {
     pub fn vftable(functions: impl IntoIterator<Item = Function>) -> TypeStatement {
         TypeStatement {
             field: TypeField::vftable(functions),
+            attributes: Default::default(),
+            doc_comments: vec![],
+        }
+    }
+
+    #[cfg(test)]
+    pub fn vftable_with_children(vftable_def: VftableDefinition) -> TypeStatement {
+        TypeStatement {
+            field: TypeField::Vftable(vftable_def),
             attributes: Default::default(),
             doc_comments: vec![],
         }
@@ -739,6 +748,31 @@ impl VftableDefinition {
                 .collect(),
         }
     }
+
+    #[cfg(test)]
+    pub fn with_children(children: impl Into<Vec<VftableChild>>) -> Self {
+        Self {
+            children: children
+                .into()
+                .into_iter()
+                .map(spanned)
+                .collect(),
+        }
+    }
+}
+
+impl VftableDefinition {
+    pub fn functions(&self) -> impl Iterator<Item = &Spanned<Function>> + '_ {
+        self.children
+            .iter()
+            .filter_map(|child| {
+                if let VftableChild::Function(f) = &child.node {
+                    Some(f)
+                } else {
+                    None
+                }
+            })
+    }
 }
 
 impl StructuralEq for VftableDefinition {
@@ -751,6 +785,28 @@ impl StructuralEq for VftableDefinition {
 pub enum VftableChild {
     Function(Spanned<Function>),
     Comment(Comment),
+}
+
+impl VftableChild {
+    #[cfg(test)]
+    pub fn function(func: Function) -> Self {
+        VftableChild::Function(spanned(func))
+    }
+
+    #[cfg(test)]
+    pub fn comment(comment: Comment) -> Self {
+        VftableChild::Comment(comment)
+    }
+
+    #[cfg(test)]
+    pub fn line_comment(text: impl Into<String>) -> Self {
+        VftableChild::Comment(Comment::Line(text.into()))
+    }
+
+    #[cfg(test)]
+    pub fn block_comment(text: impl Into<String>) -> Self {
+        VftableChild::Comment(Comment::Block(text.into()))
+    }
 }
 
 impl StructuralEq for VftableChild {
@@ -767,6 +823,28 @@ impl StructuralEq for VftableChild {
 pub enum TypeChild {
     Statement(Spanned<TypeStatement>),
     Comment(Comment),
+}
+
+impl TypeChild {
+    #[cfg(test)]
+    pub fn statement(stmt: TypeStatement) -> Self {
+        TypeChild::Statement(spanned(stmt))
+    }
+
+    #[cfg(test)]
+    pub fn comment(comment: Comment) -> Self {
+        TypeChild::Comment(comment)
+    }
+
+    #[cfg(test)]
+    pub fn line_comment(text: impl Into<String>) -> Self {
+        TypeChild::Comment(Comment::Line(text.into()))
+    }
+
+    #[cfg(test)]
+    pub fn block_comment(text: impl Into<String>) -> Self {
+        TypeChild::Comment(Comment::Block(text.into()))
+    }
 }
 
 impl StructuralEq for TypeChild {
@@ -799,9 +877,35 @@ impl TypeDefinition {
     }
 
     #[cfg(test)]
+    pub fn with_children(children: impl Into<Vec<TypeChild>>) -> Self {
+        Self {
+            children: children
+                .into()
+                .into_iter()
+                .map(spanned)
+                .collect(),
+            attributes: Default::default(),
+        }
+    }
+
+    #[cfg(test)]
     pub fn with_attributes(mut self, attributes: impl Into<Attributes>) -> Self {
         self.attributes = attributes.into();
         self
+    }
+}
+
+impl TypeDefinition {
+    pub fn statements(&self) -> impl Iterator<Item = &Spanned<TypeStatement>> + '_ {
+        self.children
+            .iter()
+            .filter_map(|child| {
+                if let TypeChild::Statement(stmt) = &child.node {
+                    Some(stmt)
+                } else {
+                    None
+                }
+            })
     }
 }
 
@@ -906,6 +1010,20 @@ impl EnumDefinition {
     }
 }
 
+impl EnumDefinition {
+    pub fn statements(&self) -> impl Iterator<Item = &Spanned<EnumStatement>> + '_ {
+        self.children
+            .iter()
+            .filter_map(|child| {
+                if let EnumChild::Statement(stmt) = &child.node {
+                    Some(stmt)
+                } else {
+                    None
+                }
+            })
+    }
+}
+
 impl StructuralEq for EnumDefinition {
     fn structural_eq(&self, other: &Self) -> bool {
         self.type_.structural_eq(&other.type_)
@@ -956,9 +1074,25 @@ impl StructuralEq for BitflagsStatement {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum BitflagsChild {
+    Statement(Spanned<BitflagsStatement>),
+    Comment(Comment),
+}
+
+impl StructuralEq for BitflagsChild {
+    fn structural_eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (BitflagsChild::Statement(a), BitflagsChild::Statement(b)) => a.structural_eq(b),
+            (BitflagsChild::Comment(a), BitflagsChild::Comment(b)) => a.structural_eq(b),
+            _ => false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct BitflagsDefinition {
     pub type_: Spanned<Type>,
-    pub statements: Vec<Spanned<BitflagsStatement>>,
+    pub children: Vec<Spanned<BitflagsChild>>,
     pub attributes: Attributes,
 }
 
@@ -971,7 +1105,11 @@ impl BitflagsDefinition {
     ) -> Self {
         Self {
             type_: spanned(type_),
-            statements: statements.into().into_iter().map(spanned).collect(),
+            children: statements
+                .into()
+                .into_iter()
+                .map(|s| spanned(BitflagsChild::Statement(spanned(s))))
+                .collect(),
             attributes: attributes.into(),
         }
     }
@@ -983,10 +1121,24 @@ impl BitflagsDefinition {
     }
 }
 
+impl BitflagsDefinition {
+    pub fn statements(&self) -> impl Iterator<Item = &Spanned<BitflagsStatement>> + '_ {
+        self.children
+            .iter()
+            .filter_map(|child| {
+                if let BitflagsChild::Statement(stmt) = &child.node {
+                    Some(stmt)
+                } else {
+                    None
+                }
+            })
+    }
+}
+
 impl StructuralEq for BitflagsDefinition {
     fn structural_eq(&self, other: &Self) -> bool {
         self.type_.structural_eq(&other.type_)
-            && self.statements.structural_eq(&other.statements)
+            && self.children.structural_eq(&other.children)
             && self.attributes.structural_eq(&other.attributes)
     }
 }
@@ -1075,10 +1227,26 @@ impl StructuralEq for ItemDefinition {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum ImplChild {
+    Function(Spanned<Function>),
+    Comment(Comment),
+}
+
+impl StructuralEq for ImplChild {
+    fn structural_eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (ImplChild::Function(a), ImplChild::Function(b)) => a.structural_eq(b),
+            (ImplChild::Comment(a), ImplChild::Comment(b)) => a.structural_eq(b),
+            _ => false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FunctionBlock {
     pub name: Spanned<Ident>,
-    pub functions: Vec<Spanned<Function>>,
+    pub children: Vec<Spanned<ImplChild>>,
     pub attributes: Attributes,
 }
 
@@ -1087,7 +1255,11 @@ impl FunctionBlock {
     pub fn new(name: impl Into<Ident>, functions: impl Into<Vec<Function>>) -> Self {
         Self {
             name: spanned(name.into()),
-            functions: functions.into().into_iter().map(spanned).collect(),
+            children: functions
+                .into()
+                .into_iter()
+                .map(|f| spanned(ImplChild::Function(spanned(f))))
+                .collect(),
             attributes: Default::default(),
         }
     }
@@ -1099,15 +1271,29 @@ impl FunctionBlock {
     }
 }
 
+impl FunctionBlock {
+    pub fn functions(&self) -> impl Iterator<Item = &Spanned<Function>> + '_ {
+        self.children
+            .iter()
+            .filter_map(|child| {
+                if let ImplChild::Function(f) = &child.node {
+                    Some(f)
+                } else {
+                    None
+                }
+            })
+    }
+}
+
 impl StructuralEq for FunctionBlock {
     fn structural_eq(&self, other: &Self) -> bool {
         self.name.structural_eq(&other.name)
-            && self.functions.structural_eq(&other.functions)
+            && self.children.structural_eq(&other.children)
             && self.attributes.structural_eq(&other.attributes)
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Backend {
     pub name: Spanned<Ident>,
     pub prologue: Option<String>,
@@ -1145,7 +1331,7 @@ impl StructuralEq for Backend {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ExternValue {
     pub visibility: Visibility,
     pub name: Spanned<Ident>,
@@ -1179,17 +1365,40 @@ impl StructuralEq for ExternValue {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum ModuleChild {
+    Use(Spanned<ItemPath>),
+    ExternType(Spanned<Ident>, Attributes),
+    ExternValue(Spanned<ExternValue>),
+    Backend(Spanned<Backend>),
+    Impl(Spanned<FunctionBlock>),
+    Function(Spanned<Function>),
+    Definition(Spanned<ItemDefinition>),
+    Comment(Comment),
+}
+
+impl StructuralEq for ModuleChild {
+    fn structural_eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (ModuleChild::Use(a), ModuleChild::Use(b)) => a.structural_eq(b),
+            (ModuleChild::ExternType(na, aa), ModuleChild::ExternType(nb, ab)) => {
+                na.structural_eq(nb) && aa.structural_eq(ab)
+            }
+            (ModuleChild::ExternValue(a), ModuleChild::ExternValue(b)) => a.structural_eq(b),
+            (ModuleChild::Backend(a), ModuleChild::Backend(b)) => a.structural_eq(b),
+            (ModuleChild::Impl(a), ModuleChild::Impl(b)) => a.structural_eq(b),
+            (ModuleChild::Function(a), ModuleChild::Function(b)) => a.structural_eq(b),
+            (ModuleChild::Definition(a), ModuleChild::Definition(b)) => a.structural_eq(b),
+            (ModuleChild::Comment(a), ModuleChild::Comment(b)) => a.structural_eq(b),
+            _ => false,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Module {
-    pub uses: Vec<Spanned<ItemPath>>,
-    pub extern_types: Vec<(Spanned<Ident>, Attributes)>,
-    pub extern_values: Vec<Spanned<ExternValue>>,
-    pub functions: Vec<Spanned<Function>>,
-    pub definitions: Vec<Spanned<ItemDefinition>>,
-    pub impls: Vec<Spanned<FunctionBlock>>,
-    pub backends: Vec<Spanned<Backend>>,
+    pub children: Vec<Spanned<ModuleChild>>,
     pub attributes: Attributes,
-    pub module_doc_comments: Vec<Spanned<String>>,
 }
 
 impl Module {
@@ -1199,47 +1408,64 @@ impl Module {
 
     #[cfg(test)]
     pub fn with_uses(mut self, uses: impl Into<Vec<ItemPath>>) -> Self {
-        self.uses = uses.into().into_iter().map(spanned).collect();
+        for use_item in uses.into() {
+            self.children
+                .push(spanned(ModuleChild::Use(spanned(use_item))));
+        }
         self
     }
 
     #[cfg(test)]
     pub fn with_extern_types(mut self, extern_types: impl Into<Vec<(Ident, Attributes)>>) -> Self {
-        self.extern_types = extern_types
-            .into()
-            .into_iter()
-            .map(|(i, a)| (spanned(i), a))
-            .collect();
+        for (ident, attrs) in extern_types.into() {
+            self.children
+                .push(spanned(ModuleChild::ExternType(spanned(ident), attrs)));
+        }
         self
     }
 
     #[cfg(test)]
     pub fn with_extern_values(mut self, extern_values: impl Into<Vec<ExternValue>>) -> Self {
-        self.extern_values = extern_values.into().into_iter().map(spanned).collect();
+        for ev in extern_values.into() {
+            self.children
+                .push(spanned(ModuleChild::ExternValue(spanned(ev))));
+        }
         self
     }
 
     #[cfg(test)]
     pub fn with_functions(mut self, functions: impl Into<Vec<Function>>) -> Self {
-        self.functions = functions.into().into_iter().map(spanned).collect();
+        for func in functions.into() {
+            self.children
+                .push(spanned(ModuleChild::Function(spanned(func))));
+        }
         self
     }
 
     #[cfg(test)]
     pub fn with_definitions(mut self, definitions: impl Into<Vec<ItemDefinition>>) -> Self {
-        self.definitions = definitions.into().into_iter().map(spanned).collect();
+        for def in definitions.into() {
+            self.children
+                .push(spanned(ModuleChild::Definition(spanned(def))));
+        }
         self
     }
 
     #[cfg(test)]
     pub fn with_impls(mut self, impls: impl Into<Vec<FunctionBlock>>) -> Self {
-        self.impls = impls.into().into_iter().map(spanned).collect();
+        for impl_block in impls.into() {
+            self.children
+                .push(spanned(ModuleChild::Impl(spanned(impl_block))));
+        }
         self
     }
 
     #[cfg(test)]
     pub fn with_backends(mut self, backends: impl Into<Vec<Backend>>) -> Self {
-        self.backends = backends.into().into_iter().map(spanned).collect();
+        for backend in backends.into() {
+            self.children
+                .push(spanned(ModuleChild::Backend(spanned(backend))));
+        }
         self
     }
 
@@ -1255,31 +1481,117 @@ impl Module {
         I: IntoIterator<Item = S>,
         S: Into<String>,
     {
-        self.module_doc_comments = module_doc_comments
-            .into_iter()
-            .map(|s| spanned(s.into()))
-            .collect();
+        for comment in module_doc_comments.into_iter() {
+            self.children.push(spanned(ModuleChild::Comment(Comment::ModuleDoc(
+                comment.into(),
+            ))));
+        }
         self
+    }
+}
+
+impl Module {
+    // Helper methods to extract items from children
+    pub fn uses(&self) -> impl Iterator<Item = &Spanned<ItemPath>> + '_ {
+        self.children
+            .iter()
+            .filter_map(|child| {
+                if let ModuleChild::Use(path) = &child.node {
+                    Some(path)
+                } else {
+                    None
+                }
+            })
+    }
+
+    pub fn extern_types(&self) -> impl Iterator<Item = (&Spanned<Ident>, &Attributes)> + '_ {
+        self.children
+            .iter()
+            .filter_map(|child| {
+                if let ModuleChild::ExternType(name, attrs) = &child.node {
+                    Some((name, attrs))
+                } else {
+                    None
+                }
+            })
+    }
+
+    pub fn extern_values(&self) -> impl Iterator<Item = &Spanned<ExternValue>> + '_ {
+        self.children
+            .iter()
+            .filter_map(|child| {
+                if let ModuleChild::ExternValue(ev) = &child.node {
+                    Some(ev)
+                } else {
+                    None
+                }
+            })
+    }
+
+    pub fn backends(&self) -> impl Iterator<Item = &Spanned<Backend>> + '_ {
+        self.children
+            .iter()
+            .filter_map(|child| {
+                if let ModuleChild::Backend(b) = &child.node {
+                    Some(b)
+                } else {
+                    None
+                }
+            })
+    }
+
+    pub fn impls(&self) -> impl Iterator<Item = &Spanned<FunctionBlock>> + '_ {
+        self.children
+            .iter()
+            .filter_map(|child| {
+                if let ModuleChild::Impl(ib) = &child.node {
+                    Some(ib)
+                } else {
+                    None
+                }
+            })
+    }
+
+    pub fn functions(&self) -> impl Iterator<Item = &Spanned<Function>> + '_ {
+        self.children
+            .iter()
+            .filter_map(|child| {
+                if let ModuleChild::Function(f) = &child.node {
+                    Some(f)
+                } else {
+                    None
+                }
+            })
+    }
+
+    pub fn definitions(&self) -> impl Iterator<Item = &Spanned<ItemDefinition>> + '_ {
+        self.children
+            .iter()
+            .filter_map(|child| {
+                if let ModuleChild::Definition(d) = &child.node {
+                    Some(d)
+                } else {
+                    None
+                }
+            })
+    }
+
+    pub fn module_doc_comments(&self) -> impl Iterator<Item = Spanned<String>> + '_ {
+        self.children
+            .iter()
+            .filter_map(|child| {
+                if let ModuleChild::Comment(Comment::ModuleDoc(s)) = &child.node {
+                    Some(Spanned::new(s.clone(), child.span))
+                } else {
+                    None
+                }
+            })
     }
 }
 
 impl StructuralEq for Module {
     fn structural_eq(&self, other: &Self) -> bool {
-        self.uses.structural_eq(&other.uses)
-            && self.extern_types.len() == other.extern_types.len()
-            && self
-                .extern_types
-                .iter()
-                .zip(other.extern_types.iter())
-                .all(|((na, aa), (nb, ab))| na.structural_eq(nb) && aa.structural_eq(ab))
-            && self.extern_values.structural_eq(&other.extern_values)
-            && self.functions.structural_eq(&other.functions)
-            && self.definitions.structural_eq(&other.definitions)
-            && self.impls.structural_eq(&other.impls)
-            && self.backends.structural_eq(&other.backends)
+        self.children.structural_eq(&other.children)
             && self.attributes.structural_eq(&other.attributes)
-            && self
-                .module_doc_comments
-                .structural_eq(&other.module_doc_comments)
     }
 }

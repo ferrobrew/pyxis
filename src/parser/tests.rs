@@ -506,6 +506,7 @@ fn can_parse_doc_comments() {
         "#;
 
     let ast = M::new()
+        .with_module_doc_comments([" This is a module doc comment", " The best of its kind"])
         .with_definitions([ID::new(
             (V::Private, "TestType"),
             TD::new([
@@ -521,8 +522,7 @@ fn can_parse_doc_comments() {
             [F::new((V::Private, "test_func"), [Ar::ConstSelf])
                 .with_doc_comments([" My test func!"])
                 .with_attributes([A::address(0x123)])],
-        )])
-        .with_module_doc_comments([" This is a module doc comment", " The best of its kind"]);
+        )]);
 
     assert_ast_eq!(parse_str(text).unwrap(), ast);
 }
@@ -706,9 +706,12 @@ fn can_parse_single_line_comments() {
 
     let ast = M::new().with_definitions([ID::new(
         (V::Public, "TestType"),
-        TD::new([
-            TS::field((V::Private, "field_1"), T::ident("i32")),
-            TS::field((V::Private, "field_2"), T::ident("i32")),
+        TD::with_children([
+            TC::line_comment(" Comment before field"),
+            TC::statement(TS::field((V::Private, "field_1"), T::ident("i32"))),
+            TC::line_comment(" Comment after field"),
+            TC::line_comment(" Another comment"),
+            TC::statement(TS::field((V::Private, "field_2"), T::ident("i32"))),
         ]),
     )]);
 
@@ -732,9 +735,12 @@ fn can_parse_multi_line_comments() {
 
     let ast = M::new().with_definitions([ID::new(
         (V::Public, "TestType"),
-        TD::new([
-            TS::field((V::Private, "field_1"), T::ident("i32")),
-            TS::field((V::Private, "field_2"), T::ident("i32")),
+        TD::with_children([
+            TC::block_comment(" Comment before field "),
+            TC::statement(TS::field((V::Private, "field_1"), T::ident("i32"))),
+            TC::block_comment(" Comment after field "),
+            TC::block_comment(" Another\n               multi-line\n               comment "),
+            TC::statement(TS::field((V::Private, "field_2"), T::ident("i32"))),
         ]),
     )]);
 
@@ -757,9 +763,13 @@ fn can_parse_mixed_comments() {
 
     let ast = M::new().with_definitions([ID::new(
         (V::Public, "TestType"),
-        TD::new([
-            TS::field((V::Private, "field_1"), T::ident("i32")),
-            TS::field((V::Private, "field_2"), T::ident("i32")),
+        TD::with_children([
+            TC::line_comment(" Single-line comment"),
+            TC::statement(TS::field((V::Private, "field_1"), T::ident("i32"))),
+            TC::block_comment(" inline multi-line "),
+            TC::block_comment(" Multi-line\n               comment "),
+            TC::statement(TS::field((V::Private, "field_2"), T::ident("i32"))),
+            TC::line_comment(" inline single-line"),
         ]),
     )]);
 
@@ -805,14 +815,24 @@ fn can_parse_comments_in_functions() {
 
     let ast = M::new().with_definitions([ID::new(
         (V::Private, "TestType"),
-        TD::new([TS::vftable([F::new(
-            (V::Private, "test_func"),
-            [
-                Ar::named("arg1", T::ident("i32")),
-                Ar::named("arg2", T::ident("i32")),
-            ],
-        )
-        .with_return_type(T::ident("i32"))])]),
+        TD::new([
+            TS::vftable_with_children(VD::with_children([
+                VC::line_comment(" Comment before function"),
+                VC::function(
+                    F::new(
+                        (V::Private, "test_func"),
+                        [
+                            Ar::named("arg1", T::ident("i32")),
+                            Ar::named("arg2", T::ident("i32")),
+                        ],
+                    )
+                    .with_return_type(T::ident("i32")),
+                ),
+                VC::block_comment(" comment after function signature "),
+            ]))
+            .with_doc_comments([" Doc comment for vftable"]),
+            TS::field((V::Private, "field_1"), T::ident("i32")),
+        ]),
     )]);
 
     assert_parse_eq!(text, ast);

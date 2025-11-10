@@ -38,15 +38,14 @@ impl Default for Module {
 }
 
 impl Module {
-    pub(crate) fn new(
+    pub(crate) fn new<'a>(
         path: ItemPath,
         ast: grammar::Module,
         extern_values: Vec<ExternValue>,
-        impls: &[Spanned<grammar::FunctionBlock>],
-        backends: &[Spanned<grammar::Backend>],
+        impls: impl Iterator<Item = &'a Spanned<grammar::FunctionBlock>>,
+        backends: impl Iterator<Item = &'a Spanned<grammar::Backend>>,
     ) -> anyhow::Result<Self> {
         let impls = impls
-            .iter()
             .map(|f| (path.join(f.node.name.node.as_str().into()), f.node.clone()))
             .collect();
 
@@ -62,8 +61,7 @@ impl Module {
         }
 
         let doc = ast
-            .module_doc_comments
-            .iter()
+            .module_doc_comments()
             .map(|s| s.node.clone())
             .collect::<Vec<_>>();
         Ok(Self {
@@ -78,8 +76,8 @@ impl Module {
         })
     }
 
-    pub fn uses(&self) -> &[Spanned<ItemPath>] {
-        &self.ast.uses
+    pub fn uses(&self) -> impl Iterator<Item = &Spanned<ItemPath>> + '_ {
+        self.ast.uses()
     }
 
     pub fn definition_paths(&self) -> &HashSet<ItemPath> {
@@ -97,7 +95,7 @@ impl Module {
 
     pub fn scope(&self) -> Vec<ItemPath> {
         std::iter::once(self.path.clone())
-            .chain(self.uses().iter().map(|u| u.node.clone()))
+            .chain(self.uses().map(|u| u.node.clone()))
             .collect()
     }
 
@@ -124,7 +122,7 @@ impl Module {
     ) -> anyhow::Result<()> {
         let scope = self.scope();
 
-        for function in &self.ast.functions {
+        for function in self.ast.functions() {
             let semantic_function = crate::semantic::function::build(
                 type_registry,
                 &scope,

@@ -235,7 +235,7 @@ pub fn build(
     // Handle fields
     let mut pending_regions: Vec<(Option<usize>, Region)> = vec![];
     let mut vftable_functions = None;
-    for (idx, statement) in definition.statements.iter().enumerate() {
+    for (idx, statement) in definition.statements().enumerate() {
         let grammar::TypeStatement {
             field,
             attributes,
@@ -273,7 +273,7 @@ pub fn build(
                 // Push field
                 let Some(type_) = semantic
                     .type_registry
-                    .resolve_grammar_type(&module.scope(), type_)
+                    .resolve_grammar_type(&module.scope(), &type_.node)
                 else {
                     return Ok(None);
                 };
@@ -318,7 +318,7 @@ pub fn build(
                         &semantic.type_registry,
                         module,
                         size,
-                        functions,
+                        functions.functions(),
                     )
                     .with_context(|| {
                         format!("while building vftable for type `{resolvee_path}`")
@@ -426,7 +426,7 @@ pub fn build(
         }
     }
     if let Some(type_impl) = module.impls.get(resolvee_path) {
-        for function in &type_impl.functions {
+        for function in type_impl.functions() {
             if associated_functions_used_names.contains(&function.name.0) {
                 anyhow::bail!(
                     "function `{}` is already defined in type `{}` (or a base type)",

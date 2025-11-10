@@ -96,7 +96,7 @@ pub fn build(
     let mut fields: Vec<(String, isize)> = vec![];
     let mut last_field = 0;
     let mut default = None;
-    for statement in &definition.statements {
+    for statement in definition.statements() {
         let grammar::EnumStatement {
             name,
             expr,
@@ -174,7 +174,7 @@ pub fn build(
     // Handle associated functions
     let mut associated_functions = vec![];
     if let Some(enum_impl) = module.impls.get(resolvee_path) {
-        for function in &enum_impl.functions {
+        for function in enum_impl.functions() {
             let function = crate::semantic::function::build(
                 &semantic.type_registry,
                 &module.scope(),
