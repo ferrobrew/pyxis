@@ -4,25 +4,34 @@ use crate::span::{Span, Spanned, StructuralEq};
 
 pub mod test_aliases {
     pub type M = super::Module;
+    pub type MC = super::ModuleChild;
     pub type ID = super::ItemDefinition;
     pub type TS = super::TypeStatement;
+    pub type TC = super::TypeChild;
     pub type TD = super::TypeDefinition;
     pub type ES = super::EnumStatement;
+    pub type EC = super::EnumChild;
     pub type ED = super::EnumDefinition;
     pub type BFS = super::BitflagsStatement;
+    pub type BFC = super::BitflagsChild;
     pub type BFD = super::BitflagsDefinition;
+    pub type VD = super::VftableDefinition;
+    pub type VC = super::VftableChild;
     pub type T = super::Type;
     pub type A = super::Attribute;
     pub type As = super::Attributes;
     pub type Ar = super::Argument;
+    pub type AC = super::ArgumentChild;
     pub type TF = super::TypeField;
     pub type E = super::Expr;
     pub type F = super::Function;
     pub type FB = super::FunctionBlock;
+    pub type IC = super::ImplChild;
     pub type IP = super::ItemPath;
     pub type B = super::Backend;
     pub type V = super::Visibility;
     pub type EV = super::ExternValue;
+    pub type C = super::Comment;
 }
 
 // Helper to create dummy spans for tests
@@ -32,6 +41,27 @@ pub fn dummy_span() -> Span {
 
 pub fn spanned<T>(node: T) -> Spanned<T> {
     Spanned::new(node, dummy_span())
+}
+
+// Comments
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum Comment {
+    Line(String),       // // regular comment
+    Doc(String),        // /// doc comment
+    ModuleDoc(String),  // //! module doc comment
+    Block(String),      // /* */ block comment
+}
+
+impl StructuralEq for Comment {
+    fn structural_eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Comment::Line(a), Comment::Line(b)) => a == b,
+            (Comment::Doc(a), Comment::Doc(b)) => a == b,
+            (Comment::ModuleDoc(a), Comment::ModuleDoc(b)) => a == b,
+            (Comment::Block(a), Comment::Block(b)) => a == b,
+            _ => false,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -493,6 +523,24 @@ impl StructuralEq for Argument {
     }
 }
 
+// Child enums for containers that can hold comments
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum ArgumentChild {
+    Argument(Spanned<Argument>),
+    Comment(Comment),
+}
+
+impl StructuralEq for ArgumentChild {
+    fn structural_eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (ArgumentChild::Argument(a), ArgumentChild::Argument(b)) => a.structural_eq(b),
+            (ArgumentChild::Comment(a), ArgumentChild::Comment(b)) => a.structural_eq(b),
+            _ => false,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Function {
     pub visibility: Visibility,
@@ -585,7 +633,7 @@ impl StructuralEq for ExprField {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TypeField {
     Field(Visibility, Spanned<Ident>, Spanned<Type>),
-    Vftable(Vec<Spanned<Function>>),
+    Vftable(VftableDefinition),
 }
 
 impl TypeField {
@@ -600,7 +648,7 @@ impl TypeField {
 
     #[cfg(test)]
     pub fn vftable(functions: impl IntoIterator<Item = Function>) -> TypeField {
-        TypeField::Vftable(functions.into_iter().map(spanned).collect())
+        TypeField::Vftable(VftableDefinition::new(functions.into_iter().collect()))
     }
 
     pub fn is_vftable(&self) -> bool {
@@ -674,9 +722,66 @@ impl StructuralEq for TypeStatement {
     }
 }
 
+// Vftable definition
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct VftableDefinition {
+    pub children: Vec<Spanned<VftableChild>>,
+}
+
+impl VftableDefinition {
+    #[cfg(test)]
+    pub fn new(functions: impl Into<Vec<Function>>) -> Self {
+        Self {
+            children: functions
+                .into()
+                .into_iter()
+                .map(|f| spanned(VftableChild::Function(spanned(f))))
+                .collect(),
+        }
+    }
+}
+
+impl StructuralEq for VftableDefinition {
+    fn structural_eq(&self, other: &Self) -> bool {
+        self.children.structural_eq(&other.children)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum VftableChild {
+    Function(Spanned<Function>),
+    Comment(Comment),
+}
+
+impl StructuralEq for VftableChild {
+    fn structural_eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (VftableChild::Function(a), VftableChild::Function(b)) => a.structural_eq(b),
+            (VftableChild::Comment(a), VftableChild::Comment(b)) => a.structural_eq(b),
+            _ => false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum TypeChild {
+    Statement(Spanned<TypeStatement>),
+    Comment(Comment),
+}
+
+impl StructuralEq for TypeChild {
+    fn structural_eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (TypeChild::Statement(a), TypeChild::Statement(b)) => a.structural_eq(b),
+            (TypeChild::Comment(a), TypeChild::Comment(b)) => a.structural_eq(b),
+            _ => false,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TypeDefinition {
-    pub statements: Vec<Spanned<TypeStatement>>,
+    pub children: Vec<Spanned<TypeChild>>,
     pub attributes: Attributes,
 }
 
@@ -684,7 +789,11 @@ impl TypeDefinition {
     #[cfg(test)]
     pub fn new(statements: impl Into<Vec<TypeStatement>>) -> Self {
         Self {
-            statements: statements.into().into_iter().map(spanned).collect(),
+            children: statements
+                .into()
+                .into_iter()
+                .map(|s| spanned(TypeChild::Statement(spanned(s))))
+                .collect(),
             attributes: Default::default(),
         }
     }
@@ -698,7 +807,7 @@ impl TypeDefinition {
 
 impl StructuralEq for TypeDefinition {
     fn structural_eq(&self, other: &Self) -> bool {
-        self.statements.structural_eq(&other.statements)
+        self.children.structural_eq(&other.children)
             && self.attributes.structural_eq(&other.attributes)
     }
 }
@@ -750,9 +859,25 @@ impl StructuralEq for EnumStatement {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum EnumChild {
+    Statement(Spanned<EnumStatement>),
+    Comment(Comment),
+}
+
+impl StructuralEq for EnumChild {
+    fn structural_eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (EnumChild::Statement(a), EnumChild::Statement(b)) => a.structural_eq(b),
+            (EnumChild::Comment(a), EnumChild::Comment(b)) => a.structural_eq(b),
+            _ => false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct EnumDefinition {
     pub type_: Spanned<Type>,
-    pub statements: Vec<Spanned<EnumStatement>>,
+    pub children: Vec<Spanned<EnumChild>>,
     pub attributes: Attributes,
 }
 
@@ -765,7 +890,11 @@ impl EnumDefinition {
     ) -> Self {
         Self {
             type_: spanned(type_),
-            statements: statements.into().into_iter().map(spanned).collect(),
+            children: statements
+                .into()
+                .into_iter()
+                .map(|s| spanned(EnumChild::Statement(spanned(s))))
+                .collect(),
             attributes: attributes.into(),
         }
     }
@@ -780,7 +909,7 @@ impl EnumDefinition {
 impl StructuralEq for EnumDefinition {
     fn structural_eq(&self, other: &Self) -> bool {
         self.type_.structural_eq(&other.type_)
-            && self.statements.structural_eq(&other.statements)
+            && self.children.structural_eq(&other.children)
             && self.attributes.structural_eq(&other.attributes)
     }
 }
