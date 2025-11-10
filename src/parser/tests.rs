@@ -691,3 +691,147 @@ fn test_binary_literal_empty() {
         error_str
     );
 }
+
+#[test]
+fn can_parse_single_line_comments() {
+    let text = r#"
+        // This is a regular comment
+        pub type TestType {
+            // Comment before field
+            field_1: i32, // Comment after field
+            // Another comment
+            field_2: i32,
+        }
+        "#;
+
+    let ast = M::new().with_definitions([ID::new(
+        (V::Public, "TestType"),
+        TD::new([
+            TS::field((V::Private, "field_1"), T::ident("i32")),
+            TS::field((V::Private, "field_2"), T::ident("i32")),
+        ]),
+    )]);
+
+    assert_parse_eq!(text, ast);
+}
+
+#[test]
+fn can_parse_multi_line_comments() {
+    let text = r#"
+        /* This is a multi-line comment
+           that spans multiple lines */
+        pub type TestType {
+            /* Comment before field */
+            field_1: i32, /* Comment after field */
+            /* Another
+               multi-line
+               comment */
+            field_2: i32,
+        }
+        "#;
+
+    let ast = M::new().with_definitions([ID::new(
+        (V::Public, "TestType"),
+        TD::new([
+            TS::field((V::Private, "field_1"), T::ident("i32")),
+            TS::field((V::Private, "field_2"), T::ident("i32")),
+        ]),
+    )]);
+
+    assert_parse_eq!(text, ast);
+}
+
+#[test]
+fn can_parse_mixed_comments() {
+    let text = r#"
+        // Single-line comment
+        /* Multi-line comment */
+        pub type TestType {
+            // Single-line comment
+            field_1: i32, /* inline multi-line */
+            /* Multi-line
+               comment */
+            field_2: i32, // inline single-line
+        }
+        "#;
+
+    let ast = M::new().with_definitions([ID::new(
+        (V::Public, "TestType"),
+        TD::new([
+            TS::field((V::Private, "field_1"), T::ident("i32")),
+            TS::field((V::Private, "field_2"), T::ident("i32")),
+        ]),
+    )]);
+
+    assert_parse_eq!(text, ast);
+}
+
+#[test]
+fn comments_do_not_interfere_with_doc_comments() {
+    let text = r#"
+        // Regular comment
+        /// Doc comment for type
+        pub type TestType {
+            // Regular comment
+            /// Doc comment for field
+            field_1: i32,
+        }
+        "#;
+
+    let ast = M::new().with_definitions([ID::new(
+        (V::Public, "TestType"),
+        TD::new([TS::field((V::Private, "field_1"), T::ident("i32"))
+            .with_doc_comments([" Doc comment for field"])]),
+    )
+    .with_doc_comments([" Doc comment for type"])]);
+
+    assert_parse_eq!(text, ast);
+}
+
+#[test]
+fn can_parse_comments_in_functions() {
+    let text = r#"
+        type TestType {
+            vftable {
+                // Comment before function
+                fn test_func(
+                    // Comment in args
+                    arg1: i32, /* multi-line in args */
+                    arg2: i32
+                ) -> i32; /* comment after function signature */
+            }
+        }
+        "#;
+
+    let ast = M::new().with_definitions([ID::new(
+        (V::Private, "TestType"),
+        TD::new([TS::vftable([F::new(
+            (V::Private, "test_func"),
+            [
+                Ar::named("arg1", T::ident("i32")),
+                Ar::named("arg2", T::ident("i32")),
+            ],
+        )
+        .with_return_type(T::ident("i32"))])]),
+    )]);
+
+    assert_parse_eq!(text, ast);
+}
+
+#[test]
+fn can_parse_comments_with_special_chars() {
+    let text = r#"
+        // Comment with special chars: !@#$%^&*()
+        /* Comment with slashes: // and more /* stuff */
+        pub type TestType {
+            field_1: i32,
+        }
+        "#;
+
+    let ast = M::new().with_definitions([ID::new(
+        (V::Public, "TestType"),
+        TD::new([TS::field((V::Private, "field_1"), T::ident("i32"))]),
+    )]);
+
+    assert_parse_eq!(text, ast);
+}
