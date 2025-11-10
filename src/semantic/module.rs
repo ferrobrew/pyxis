@@ -19,7 +19,7 @@ pub struct Module {
     pub(crate) functions: Vec<Function>,
     pub(crate) impls: HashMap<ItemPath, grammar::FunctionBlock>,
     pub(crate) backends: HashMap<String, Vec<Backend>>,
-    pub(crate) doc: Option<String>,
+    pub(crate) doc: Vec<String>,
 }
 
 impl Default for Module {
@@ -61,7 +61,11 @@ impl Module {
                 });
         }
 
-        let doc = ast.attributes.doc(&path)?;
+        let doc = ast
+            .module_doc_comments
+            .iter()
+            .map(|s| s.node.clone())
+            .collect::<Vec<_>>();
         Ok(Self {
             path,
             ast,
@@ -133,8 +137,8 @@ impl Module {
         Ok(())
     }
 
-    pub fn doc(&self) -> Option<&str> {
-        self.doc.as_deref()
+    pub fn doc(&self) -> &[String] {
+        &self.doc
     }
 
     pub fn functions(&self) -> &[Function] {

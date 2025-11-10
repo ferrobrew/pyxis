@@ -230,15 +230,22 @@ impl SemanticState {
                 let visibility: Visibility = definition.visibility.into();
 
                 let item = match &definition.inner {
-                    grammar::ItemDefinitionInner::Type(ty) => {
-                        type_definition::build(&mut self, resolvee_path, visibility, ty)?
-                    }
+                    grammar::ItemDefinitionInner::Type(ty) => type_definition::build(
+                        &mut self,
+                        resolvee_path,
+                        visibility,
+                        ty,
+                        &definition.doc_comments,
+                    )?,
                     grammar::ItemDefinitionInner::Enum(e) => {
-                        enum_definition::build(&self, resolvee_path, e)?
+                        enum_definition::build(&self, resolvee_path, e, &definition.doc_comments)?
                     }
-                    grammar::ItemDefinitionInner::Bitflags(b) => {
-                        bitflags_definition::build(&self, resolvee_path, b)?
-                    }
+                    grammar::ItemDefinitionInner::Bitflags(b) => bitflags_definition::build(
+                        &self,
+                        resolvee_path,
+                        b,
+                        &definition.doc_comments,
+                    )?,
                 };
 
                 let Some(item) = item else { continue };

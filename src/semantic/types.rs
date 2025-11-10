@@ -219,7 +219,7 @@ impl ItemDefinitionInner {
             ItemDefinitionInner::Bitflags(_) => "a bitflags",
         }
     }
-    pub fn doc(&self) -> Option<&str> {
+    pub fn doc(&self) -> &[String] {
         match self {
             ItemDefinitionInner::Type(t) => t.doc(),
             ItemDefinitionInner::Enum(e) => e.doc(),

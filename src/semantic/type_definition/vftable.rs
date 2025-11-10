@@ -88,7 +88,7 @@ pub fn convert_grammar_functions_to_semantic_functions(
             output.push(Function {
                 visibility: Visibility::Private,
                 name: name.clone(),
-                doc: None,
+                doc: Vec::new(),
                 arguments: vec![Argument::MutSelf],
                 return_type: None,
                 body: FunctionBody::Vftable {
@@ -172,7 +172,7 @@ pub fn build(
             let region = Region {
                 visibility: Visibility::Private,
                 name: Some("vftable".to_string()),
-                doc: None,
+                doc: Vec::new(),
                 type_ref: vftable_pointer_type.clone(),
                 is_base: false,
             };
@@ -230,7 +230,7 @@ fn build_type(
             alignment: type_registry.pointer_size(),
             inner: TypeDefinition {
                 regions,
-                doc: None,
+                doc: Vec::new(),
                 associated_functions: vec![],
                 vftable: None,
                 singleton: None,

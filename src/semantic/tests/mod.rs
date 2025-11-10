@@ -1015,21 +1015,21 @@ fn can_propagate_doc_comments() {
                 (V::Private, "TestType"),
                 TD::new([
                     TS::vftable([F::new((V::Private, "test_vfunc"), [Ar::ConstSelf])
-                        .with_attributes([A::doc(" My test vfunc!")])]),
+                        .with_doc_comments([" My test vfunc!"])]),
                     TS::field((V::Private, "field_1"), T::ident("u64"))
-                        .with_attributes([A::doc(" This is a field doc comment"), A::address(8)]),
+                        .with_doc_comments([" This is a field doc comment"])
+                        .with_attributes([A::address(8)]),
                 ])
-                .with_attributes([A::doc(" This is a doc comment"), A::align(8)]),
-            )])
+                .with_attributes([A::align(8)]),
+            )
+            .with_doc_comments([" This is a doc comment"])])
             .with_impls([FB::new(
                 "TestType",
                 [F::new((V::Private, "test_func"), [Ar::ConstSelf])
-                    .with_attributes([A::doc(" My test func!"), A::address(0x123)])],
+                    .with_doc_comments([" My test func!"])
+                    .with_attributes([A::address(0x123)])],
             )])
-            .with_attributes([
-                A::doc(" This is a module doc comment"),
-                A::doc(" The best of its kind"),
-            ]),
+            .with_module_doc_comments([" This is a module doc comment", " The best of its kind"]),
         [
             SID::defined_resolved(
                 (SV::Private, "test::TestType"),
@@ -1086,7 +1086,10 @@ fn can_propagate_doc_comments() {
 
     assert_eq!(
         created_module.doc,
-        Some(" This is a module doc comment\n The best of its kind".to_string())
+        vec![
+            " This is a module doc comment".to_string(),
+            " The best of its kind".to_string()
+        ]
     );
 }
 

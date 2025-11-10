@@ -11,7 +11,7 @@ use crate::{
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]
 pub struct BitflagsDefinition {
     pub type_: Type,
-    pub doc: Option<String>,
+    pub doc: Vec<String>,
     pub fields: Vec<(String, usize)>,
     pub singleton: Option<usize>,
     pub copyable: bool,
@@ -22,7 +22,7 @@ impl BitflagsDefinition {
     pub fn new(type_: Type) -> Self {
         BitflagsDefinition {
             type_,
-            doc: None,
+            doc: Vec::new(),
             fields: Vec::new(),
             singleton: None,
             copyable: false,
@@ -31,7 +31,7 @@ impl BitflagsDefinition {
         }
     }
     pub fn with_doc(mut self, doc: impl Into<String>) -> Self {
-        self.doc = Some(doc.into());
+        self.doc.push(doc.into());
         self
     }
     pub fn with_fields<'a>(mut self, fields: impl IntoIterator<Item = (&'a str, usize)>) -> Self {
@@ -57,8 +57,8 @@ impl BitflagsDefinition {
         self.default = Some(default);
         self
     }
-    pub fn doc(&self) -> Option<&str> {
-        self.doc.as_deref()
+    pub fn doc(&self) -> &[String] {
+        &self.doc
     }
 }
 
@@ -66,6 +66,7 @@ pub fn build(
     semantic: &SemanticState,
     resolvee_path: &ItemPath,
     definition: &grammar::BitflagsDefinition,
+    doc_comments: &[crate::span::Spanned<String>],
 ) -> anyhow::Result<Option<ItemStateResolved>> {
     let module = semantic
         .get_module_for_path(resolvee_path)
@@ -135,7 +136,10 @@ pub fn build(
     let mut copyable = false;
     let mut cloneable = false;
     let mut defaultable = false;
-    let doc = definition.attributes.doc(resolvee_path)?;
+    let doc = doc_comments
+        .iter()
+        .map(|s| s.node.clone())
+        .collect::<Vec<_>>();
     for attribute in &definition.attributes {
         match &attribute.node {
             grammar::Attribute::Ident(ident) => match ident.as_str() {

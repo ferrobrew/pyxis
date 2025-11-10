@@ -18,7 +18,7 @@ pub use vftable::TypeVftable;
 pub struct Region {
     pub visibility: Visibility,
     pub name: Option<String>,
-    pub doc: Option<String>,
+    pub doc: Vec<String>,
     pub type_ref: Type,
     pub is_base: bool,
 }
@@ -27,7 +27,7 @@ impl Region {
         Region {
             visibility,
             name: Some(name.into()),
-            doc: None,
+            doc: Vec::new(),
             type_ref,
             is_base: false,
         }
@@ -36,7 +36,7 @@ impl Region {
         Region {
             visibility: Visibility::Private,
             name: None,
-            doc: None,
+            doc: Vec::new(),
             type_ref,
             is_base: false,
         }
@@ -46,7 +46,7 @@ impl Region {
         self
     }
     pub fn with_doc(mut self, doc: impl Into<String>) -> Self {
-        self.doc = Some(doc.into());
+        self.doc.push(doc.into());
         self
     }
     pub fn size(&self, type_registry: &TypeRegistry) -> Option<usize> {
@@ -57,7 +57,7 @@ impl Region {
 #[derive(PartialEq, Eq, Debug, Clone, Default, Hash)]
 pub struct TypeDefinition {
     pub regions: Vec<Region>,
-    pub doc: Option<String>,
+    pub doc: Vec<String>,
     pub associated_functions: Vec<Function>,
     pub vftable: Option<TypeVftable>,
     pub singleton: Option<usize>,
@@ -75,7 +75,7 @@ impl TypeDefinition {
         self
     }
     pub fn with_doc(mut self, doc: impl Into<String>) -> Self {
-        self.doc = Some(doc.into());
+        self.doc.push(doc.into());
         self
     }
     pub fn with_associated_functions(
@@ -141,8 +141,8 @@ impl TypeDefinition {
 
         Ok(output)
     }
-    pub fn doc(&self) -> Option<&str> {
-        self.doc.as_deref()
+    pub fn doc(&self) -> &[String] {
+        &self.doc
     }
 }
 
@@ -151,6 +151,7 @@ pub fn build(
     resolvee_path: &ItemPath,
     visibility: Visibility,
     definition: &grammar::TypeDefinition,
+    doc_comments: &[crate::span::Spanned<String>],
 ) -> anyhow::Result<Option<ItemStateResolved>> {
     let module = semantic
         .get_module_for_path(resolvee_path)
@@ -165,7 +166,10 @@ pub fn build(
     let mut defaultable = false;
     let mut packed = false;
     let mut align = None;
-    let doc = definition.attributes.doc(resolvee_path)?;
+    let doc = doc_comments
+        .iter()
+        .map(|s| s.node.clone())
+        .collect::<Vec<_>>();
     for attribute in &definition.attributes {
         match &attribute.node {
             grammar::Attribute::Function(ident, exprs) => {
@@ -235,7 +239,7 @@ pub fn build(
         let grammar::TypeStatement {
             field,
             attributes,
-            doc_comments: _,
+            doc_comments,
         } = &statement.node;
 
         match field {
@@ -243,7 +247,10 @@ pub fn build(
                 // Extract address attribute
                 let mut address: Option<usize> = None;
                 let mut is_base = false;
-                let doc: Option<String> = attributes.doc(resolvee_path)?;
+                let doc = doc_comments
+                    .iter()
+                    .map(|s| s.node.clone())
+                    .collect::<Vec<_>>();
                 for attribute in attributes {
                     match &attribute.node {
                         grammar::Attribute::Ident(ident) if ident.as_str() == "base" => {
@@ -675,7 +682,7 @@ fn resolve_regions(
             *region = Region {
                 visibility: Visibility::Private,
                 name: Some(format!("_field_{size:x}")),
-                doc: None,
+                doc: Vec::new(),
                 type_ref: type_ref.clone(),
                 is_base: false,
             };

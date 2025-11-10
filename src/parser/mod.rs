@@ -362,7 +362,7 @@ fn attribute<'a>() -> impl Parser<'a, ParserInput<'a>, Spanned<Attribute>, Parse
                         .allow_trailing()
                         .collect(),
                 )
-                .then_ignore(padded(just(')')))
+                .then_ignore(padded(just(')'))),
         )
         .map(|(name, args)| Attribute::Function(name.node, args));
 
@@ -371,8 +371,7 @@ fn attribute<'a>() -> impl Parser<'a, ParserInput<'a>, Spanned<Attribute>, Parse
         .then(padded(expr()))
         .map(|(name, value)| Attribute::Assign(name.node, value));
 
-    let ident_attr = ident()
-        .map(|name| Attribute::Ident(name.node));
+    let ident_attr = ident().map(|name| Attribute::Ident(name.node));
 
     choice((function, assign, ident_attr))
         .map_with(|attr, extra| Spanned::new(attr, to_span(extra.span())))
@@ -482,6 +481,7 @@ fn function<'a>(
 fn type_statement<'a>()
 -> impl Parser<'a, ParserInput<'a>, Spanned<TypeStatement>, ParseError<'a>> + Clone {
     let vftable_func = doc_comment()
+        .then_ignore(one_of(" \t\r\n").repeated())
         .repeated()
         .collect::<Vec<_>>()
         .then(
@@ -561,6 +561,7 @@ fn type_statement<'a>()
 
     // Parse doc comments and attributes, then the field type
     doc_comment()
+        .then_ignore(one_of(" \t\r\n").repeated())
         .repeated()
         .collect::<Vec<_>>()
         .then(attributes().or(empty().to(Attributes::default())))
@@ -579,6 +580,7 @@ fn type_statement<'a>()
 fn enum_statement<'a>()
 -> impl Parser<'a, ParserInput<'a>, Spanned<EnumStatement>, ParseError<'a>> + Clone {
     doc_comment()
+        .then_ignore(one_of(" \t\r\n").repeated())
         .repeated()
         .collect::<Vec<_>>()
         .then(attributes().or(empty().to(Attributes::default())))
@@ -598,6 +600,7 @@ fn enum_statement<'a>()
 fn bitflags_statement<'a>()
 -> impl Parser<'a, ParserInput<'a>, Spanned<BitflagsStatement>, ParseError<'a>> + Clone {
     doc_comment()
+        .then_ignore(one_of(" \t\r\n").repeated())
         .repeated()
         .collect::<Vec<_>>()
         .then(attributes().or(empty().to(Attributes::default())))
@@ -833,6 +836,7 @@ fn extern_value<'a>()
 fn impl_block<'a>()
 -> impl Parser<'a, ParserInput<'a>, Spanned<FunctionBlock>, ParseError<'a>> + Clone {
     let impl_func = doc_comment()
+        .then_ignore(one_of(" \t\r\n").repeated())
         .repeated()
         .collect::<Vec<_>>()
         .then(
@@ -919,6 +923,7 @@ pub fn module<'a>() -> impl Parser<'a, ParserInput<'a>, Module, ParseError<'a>> 
 
     // Freestanding function parser
     let freestanding_func = doc_comment()
+        .then_ignore(one_of(" \t\r\n").repeated())
         .repeated()
         .collect::<Vec<_>>()
         .then(function(vec![]))
@@ -930,6 +935,7 @@ pub fn module<'a>() -> impl Parser<'a, ParserInput<'a>, Module, ParseError<'a>> 
 
     // Item definition parser
     let item_def = doc_comment()
+        .then_ignore(one_of(" \t\r\n").repeated())
         .repeated()
         .collect::<Vec<_>>()
         .then(item_definition(vec![]))

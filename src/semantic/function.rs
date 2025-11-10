@@ -133,7 +133,7 @@ impl FunctionBody {
 pub struct Function {
     pub visibility: Visibility,
     pub name: String,
-    pub doc: Option<String>,
+    pub doc: Vec<String>,
     pub body: FunctionBody,
     pub arguments: Vec<Argument>,
     pub return_type: Option<Type>,
@@ -141,7 +141,7 @@ pub struct Function {
 }
 impl fmt::Display for Function {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if let Some(doc) = &self.doc {
+        for doc in &self.doc {
             write!(f, "#[doc = r#{doc:?}#] ")?;
         }
         match self.visibility {
@@ -181,7 +181,7 @@ impl Function {
         Function {
             visibility,
             name: name.into(),
-            doc: None,
+            doc: Vec::new(),
             body,
             arguments: Vec::new(),
             return_type: None,
@@ -205,7 +205,7 @@ impl Function {
         self
     }
     pub fn with_doc(mut self, doc: impl Into<String>) -> Self {
-        self.doc = Some(doc.into());
+        self.doc.push(doc.into());
         self
     }
     pub fn is_internal(&self) -> bool {
@@ -225,11 +225,11 @@ pub fn build(
     let mut body = is_vfunc.then(|| FunctionBody::Vftable {
         function_name: function.name.0.clone(),
     });
-    // TODO: This ItemPath is not correct, but this should be fixed another time - preferabl
-    // once error handling is improved
     let doc = function
-        .attributes
-        .doc(&ItemPath::from_iter([function.name.0.clone().into()]))?;
+        .doc_comments
+        .iter()
+        .map(|s| s.node.clone())
+        .collect::<Vec<_>>();
     let mut calling_convention = None;
     for attribute in &function.attributes {
         let Some((ident, exprs)) = attribute.function() else {
