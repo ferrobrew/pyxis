@@ -18,7 +18,7 @@ proc-macro2 = { version = "1.0", features = ["span-locations"] }
 syn = { version = "2.0", features = ["full", "extra-traits"] }
 prettyplease = "0.2.20"
 toml = "0.9.8"
-serde = { version = "1.0.228", features = ["derive"] }
+serde = { version = "1.0", features = ["derive"] }
 chumsky = "1.0.0-alpha.8"
 ariadne = "0.4"
 
