@@ -353,7 +353,7 @@ fn item_path<'a>() -> impl Parser<'a, ParserInput<'a>, Spanned<ItemPath>, ParseE
 // Attributes
 
 fn attribute<'a>() -> impl Parser<'a, ParserInput<'a>, Spanned<Attribute>, ParseError<'a>> + Clone {
-    ident()
+    let function = ident()
         .then(
             padded(just('('))
                 .ignore_then(
@@ -363,21 +363,19 @@ fn attribute<'a>() -> impl Parser<'a, ParserInput<'a>, Spanned<Attribute>, Parse
                         .collect(),
                 )
                 .then_ignore(padded(just(')')))
-                .map(|args| (Some(args), None))
-                .or(padded(just('='))
-                    .ignore_then(padded(expr()))
-                    .map(|value| (None, Some(value))))
-                .or_not(),
         )
-        .map_with(|(name, trailing), extra| {
-            let attr = match trailing {
-                Some((Some(args), None)) => Attribute::Function(name.node, args),
-                Some((None, Some(value))) => Attribute::Assign(name.node, value),
-                None => Attribute::Ident(name.node),
-                _ => unreachable!(),
-            };
-            Spanned::new(attr, to_span(extra.span()))
-        })
+        .map(|(name, args)| Attribute::Function(name.node, args));
+
+    let assign = ident()
+        .then_ignore(padded(just('=')))
+        .then(padded(expr()))
+        .map(|(name, value)| Attribute::Assign(name.node, value));
+
+    let ident_attr = ident()
+        .map(|name| Attribute::Ident(name.node));
+
+    choice((function, assign, ident_attr))
+        .map_with(|attr, extra| Spanned::new(attr, to_span(extra.span())))
 }
 
 fn attributes<'a>() -> impl Parser<'a, ParserInput<'a>, Attributes, ParseError<'a>> + Clone {
