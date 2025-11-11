@@ -83,12 +83,12 @@ impl<T> Spanned<T> {
     }
 
     /// Get a reference to the value
-    pub fn as_ref(&self) -> &T {
+    pub fn value_ref(&self) -> &T {
         &self.value
     }
 
     /// Get a mutable reference to the value
-    pub fn as_mut(&mut self) -> &mut T {
+    pub fn value_mut(&mut self) -> &mut T {
         &mut self.value
     }
 }

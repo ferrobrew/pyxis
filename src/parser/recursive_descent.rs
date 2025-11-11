@@ -132,18 +132,6 @@ impl Parser {
     }
 
     /// Skip over all comments and whitespace
-    fn skip_trivia(&mut self) {
-        while matches!(
-            self.peek(),
-            TokenKind::Comment(_)
-                | TokenKind::DocOuter(_)
-                | TokenKind::DocInner(_)
-                | TokenKind::MultiLineComment(_)
-        ) {
-            self.advance();
-        }
-    }
-
     pub fn parse_module(&mut self) -> Result<Module, ParseError> {
         let mut items = Vec::new();
         let mut module_doc_comments = Vec::new();
@@ -274,13 +262,13 @@ impl Parser {
         self.expect(TokenKind::Use)?;
 
         // Check for super keyword (not supported yet)
-        if let TokenKind::Ident(name) = self.peek() {
-            if name == "super" {
-                return Err(ParseError {
-                    message: "super not supported".to_string(),
-                    location: self.current().span.start,
-                });
-            }
+        if let TokenKind::Ident(name) = self.peek()
+            && name == "super"
+        {
+            return Err(ParseError {
+                message: "super not supported".to_string(),
+                location: self.current().span.start,
+            });
         }
 
         let path = self.parse_item_path()?;
@@ -855,27 +843,22 @@ impl Parser {
     fn parse_item_path(&mut self) -> Result<ItemPath, ParseError> {
         let mut segments = Vec::new();
 
-        loop {
-            if let TokenKind::Ident(name) = self.peek() {
-                segments.push(ItemPathSegment::from(name.clone()));
-                self.advance();
+        while let TokenKind::Ident(name) = self.peek() {
+            segments.push(ItemPathSegment::from(name.clone()));
+            self.advance();
 
-                // Handle generics in the path
-                if matches!(self.peek(), TokenKind::Lt) {
-                    // Parse generic arguments as part of the segment
-                    let generic_str = self.parse_generic_args_as_string()?;
-                    let last = segments.last_mut().unwrap();
-                    *last = ItemPathSegment::from(format!("{}{}", last.as_str(), generic_str));
-                }
+            // Handle generics in the path
+            if matches!(self.peek(), TokenKind::Lt) {
+                // Parse generic arguments as part of the segment
+                let generic_str = self.parse_generic_args_as_string()?;
+                let last = segments.last_mut().unwrap();
+                *last = ItemPathSegment::from(format!("{}{}", last.as_str(), generic_str));
+            }
 
-                if matches!(self.peek(), TokenKind::ColonColon) {
-                    self.advance();
-                } else {
-                    break;
-                }
-            } else {
+            if !matches!(self.peek(), TokenKind::ColonColon) {
                 break;
             }
+            self.advance();
         }
 
         Ok(ItemPath::from_iter(segments))

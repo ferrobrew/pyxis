@@ -244,10 +244,10 @@ impl Lexer {
                     Ok(Token::new(TokenKind::Arrow, Span::new(start, end, text)))
                 } else {
                     // Could be negative number
-                    if let Some(ch) = self.peek() {
-                        if ch.is_ascii_digit() {
-                            return self.lex_number(start, start_pos);
-                        }
+                    if let Some(ch) = self.peek()
+                        && ch.is_ascii_digit()
+                    {
+                        return self.lex_number(start, start_pos);
                     }
                     Err(LexError {
                         message: "Unexpected '-' character".to_string(),

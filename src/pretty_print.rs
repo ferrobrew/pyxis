@@ -5,7 +5,6 @@
 /// - Validating the AST design
 /// - Formatting/normalizing code
 /// - Testing round-trip parsing
-
 use crate::grammar::*;
 use std::fmt::Write;
 
