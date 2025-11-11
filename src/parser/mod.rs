@@ -577,13 +577,16 @@ fn type_statement<'a>()
                 .then(padded(ident()))
                 .then(
                     padded(just('('))
+                        .then_ignore(skip_ws_and_comments())
                         .ignore_then(
-                            padded(argument())
-                                .separated_by(padded(just(',')))
+                            argument()
+                                .then_ignore(skip_ws_and_comments())
+                                .separated_by(just(',').then_ignore(skip_ws_and_comments()))
                                 .allow_trailing()
                                 .collect(),
                         )
-                        .then_ignore(padded(just(')'))),
+                        .then_ignore(skip_ws_and_comments())
+                        .then_ignore(just(')')),
                 )
                 .then(
                     padded(just("->"))
@@ -632,11 +635,13 @@ fn type_statement<'a>()
         .then_ignore(whitespace())
         .ignore_then(
             choice((
+                // Try functions first
                 vftable_func
                     .then_ignore(just(';').padded_by(whitespace()).or_not())
                     .map_with(|f, extra| {
                         Spanned::new(VftableChild::Function(f), to_span(extra.span()))
                     }),
+                // Then try standalone comments
                 line_comment_node()
                     .or(block_comment_node())
                     .padded_by(whitespace())
@@ -658,14 +663,11 @@ fn type_statement<'a>()
     let private_or_vftable = vftable.or(private_field);
 
     // Parse doc comments and attributes, then the field type
-    // Skip regular comments and whitespace before doc comments
-    skip_ws_and_comments()
-        .ignore_then(
-            doc_comment()
-                .then_ignore(one_of(" \t\r\n").repeated())
-                .repeated()
-                .collect::<Vec<_>>()
-        )
+    // Note: whitespace is handled by parent parser, we just parse the statement itself
+    doc_comment()
+        .then_ignore(one_of(" \t\r\n").repeated())
+        .repeated()
+        .collect::<Vec<_>>()
         .then(attributes().or(empty().to(Attributes::default())))
         .then_ignore(whitespace())
         .then(pub_field.or(private_or_vftable))
@@ -732,14 +734,13 @@ fn item_definition<'a>(
                 .then_ignore(whitespace())
                 .ignore_then(
                     choice((
-                        // Try to parse statements first - this allows the statement parser
-                        // to consume regular comments before doc comments via skip_ws_and_comments
+                        // Try statements first
                         type_statement()
                             .then_ignore(just(',').padded_by(whitespace()).or_not())
                             .map_with(|stmt, extra| {
                                 Spanned::new(TypeChild::Statement(stmt), to_span(extra.span()))
                             }),
-                        // Only parse standalone comments (not before statements with doc comments)
+                        // Then try standalone comments
                         line_comment_node()
                             .or(block_comment_node())
                             .padded_by(whitespace())
@@ -975,13 +976,16 @@ fn impl_block<'a>()
                 .then(padded(ident()))
                 .then(
                     padded(just('('))
+                        .then_ignore(skip_ws_and_comments())
                         .ignore_then(
-                            padded(argument())
-                                .separated_by(padded(just(',')))
+                            argument()
+                                .then_ignore(skip_ws_and_comments())
+                                .separated_by(just(',').then_ignore(skip_ws_and_comments()))
                                 .allow_trailing()
                                 .collect(),
                         )
-                        .then_ignore(padded(just(')'))),
+                        .then_ignore(skip_ws_and_comments())
+                        .then_ignore(just(')')),
                 )
                 .then(
                     padded(just("->"))
