@@ -299,7 +299,11 @@ pub fn build(
     let arguments = function
         .arguments
         .iter()
-        .map(|a| match &a.node {
+        .filter_map(|a| match &a.node {
+            grammar::ArgumentChild::Argument(arg) => Some(arg),
+            grammar::ArgumentChild::Comment(_) => None,
+        })
+        .map(|arg| match &arg.node {
             grammar::Argument::ConstSelf => Ok(Argument::ConstSelf),
             grammar::Argument::MutSelf => Ok(Argument::MutSelf),
             grammar::Argument::Named(name, type_) => Ok(Argument::Field(

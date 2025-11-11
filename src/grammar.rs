@@ -541,13 +541,30 @@ impl StructuralEq for ArgumentChild {
     }
 }
 
+impl ArgumentChild {
+    #[cfg(test)]
+    pub fn argument(arg: Argument) -> Self {
+        ArgumentChild::Argument(spanned(arg))
+    }
+
+    #[cfg(test)]
+    pub fn line_comment(text: impl Into<String>) -> Self {
+        ArgumentChild::Comment(Comment::Line(text.into()))
+    }
+
+    #[cfg(test)]
+    pub fn block_comment(text: impl Into<String>) -> Self {
+        ArgumentChild::Comment(Comment::Block(text.into()))
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Function {
     pub visibility: Visibility,
     pub name: Spanned<Ident>,
     pub attributes: Attributes,
     pub doc_comments: Vec<Spanned<String>>,
-    pub arguments: Vec<Spanned<Argument>>,
+    pub arguments: Vec<Spanned<ArgumentChild>>,
     pub return_type: Option<Spanned<Type>>,
 }
 
@@ -556,6 +573,25 @@ impl Function {
     pub fn new(
         (visibility, name): (Visibility, &str),
         arguments: impl Into<Vec<Argument>>,
+    ) -> Self {
+        Self {
+            visibility,
+            name: spanned(name.into()),
+            attributes: Default::default(),
+            doc_comments: vec![],
+            arguments: arguments
+                .into()
+                .into_iter()
+                .map(|arg| spanned(ArgumentChild::Argument(spanned(arg))))
+                .collect(),
+            return_type: None,
+        }
+    }
+
+    #[cfg(test)]
+    pub fn new_with_children(
+        (visibility, name): (Visibility, &str),
+        arguments: impl Into<Vec<ArgumentChild>>,
     ) -> Self {
         Self {
             visibility,

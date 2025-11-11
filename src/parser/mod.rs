@@ -524,6 +524,38 @@ fn argument<'a>() -> impl Parser<'a, ParserInput<'a>, Spanned<Argument>, ParseEr
     choice((mut_self, const_self, named))
 }
 
+// Parse argument list with interleaved comments
+// Captures both arguments and comments in their original order
+fn argument_list<'a>() -> impl Parser<'a, ParserInput<'a>, Vec<Spanned<ArgumentChild>>, ParseError<'a>> + Clone {
+    padded(just('('))
+        .then_ignore(whitespace())
+        .ignore_then(
+            // Parse a sequence of ArgumentChild items
+            // Comments can appear anywhere, arguments are separated by commas
+            choice((
+                // Parse a comment (can appear anywhere)
+                line_comment_node()
+                    .or(block_comment_node())
+                    .padded_by(whitespace())
+                    .map_with(|comment, extra| {
+                        Spanned::new(ArgumentChild::Comment(comment), to_span(extra.span()))
+                    }),
+                // Parse an argument (followed by optional comma and whitespace)
+                argument()
+                    .then_ignore(whitespace())
+                    .then_ignore(just(',').or_not())
+                    .then_ignore(whitespace())
+                    .map_with(|arg, extra| {
+                        Spanned::new(ArgumentChild::Argument(arg), to_span(extra.span()))
+                    }),
+            ))
+            .repeated()
+            .collect(),
+        )
+        .then_ignore(whitespace())
+        .then_ignore(just(')'))
+}
+
 // Functions
 
 fn function<'a>(
@@ -535,16 +567,7 @@ fn function<'a>(
         .then(padded(visibility()))
         .then_ignore(padded(keyword("fn")))
         .then(padded(ident()))
-        .then(
-            padded(just('('))
-                .ignore_then(
-                    padded(argument())
-                        .separated_by(padded(just(',')))
-                        .allow_trailing()
-                        .collect(),
-                )
-                .then_ignore(padded(just(')'))),
-        )
+        .then(argument_list())
         .then(
             padded(just("->"))
                 .ignore_then(padded(type_parser()))
@@ -575,19 +598,7 @@ fn type_statement<'a>()
                 .then(padded(visibility()))
                 .then_ignore(padded(keyword("fn")))
                 .then(padded(ident()))
-                .then(
-                    padded(just('('))
-                        .then_ignore(skip_ws_and_comments())
-                        .ignore_then(
-                            argument()
-                                .then_ignore(skip_ws_and_comments())
-                                .separated_by(just(',').then_ignore(skip_ws_and_comments()))
-                                .allow_trailing()
-                                .collect(),
-                        )
-                        .then_ignore(skip_ws_and_comments())
-                        .then_ignore(just(')')),
-                )
+                .then(argument_list())
                 .then(
                     padded(just("->"))
                         .ignore_then(padded(type_parser()))
@@ -974,19 +985,7 @@ fn impl_block<'a>()
                 .then(padded(visibility()))
                 .then_ignore(padded(keyword("fn")))
                 .then(padded(ident()))
-                .then(
-                    padded(just('('))
-                        .then_ignore(skip_ws_and_comments())
-                        .ignore_then(
-                            argument()
-                                .then_ignore(skip_ws_and_comments())
-                                .separated_by(just(',').then_ignore(skip_ws_and_comments()))
-                                .allow_trailing()
-                                .collect(),
-                        )
-                        .then_ignore(skip_ws_and_comments())
-                        .then_ignore(just(')')),
-                )
+                .then(argument_list())
                 .then(
                     padded(just("->"))
                         .ignore_then(padded(type_parser()))

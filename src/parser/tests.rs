@@ -820,14 +820,18 @@ fn can_parse_comments_in_functions() {
         (V::Private, "TestType"),
         TD::new([TS::vftable_with_children(VD::with_children([
             VC::line_comment(" Comment before function"),
-            VC::function(F::new(
-                (V::Private, "test_func"),
-                [
-                    Ar::named("arg1", T::ident("i32")),
-                    Ar::named("arg2", T::ident("i32")),
-                ],
-            )
-            .with_return_type(T::ident("i32"))),
+            VC::function(
+                F::new_with_children(
+                    (V::Private, "test_func"),
+                    [
+                        AC::line_comment(" Comment in args"),
+                        AC::argument(Ar::named("arg1", T::ident("i32"))),
+                        AC::block_comment(" multi-line in args "),
+                        AC::argument(Ar::named("arg2", T::ident("i32"))),
+                    ],
+                )
+                .with_return_type(T::ident("i32")),
+            ),
             VC::block_comment(" comment after function signature "),
         ]))]),
     )]);
