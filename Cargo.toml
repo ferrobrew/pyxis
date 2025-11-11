@@ -4,6 +4,11 @@ default-members = [".", "driver"]
 
 [workspace.dependencies]
 anyhow = "1.0"
+specta = { git = "https://github.com/specta-rs/specta.git", rev = "effe988832312009388a11487ad0ceb09b934a80", features = [
+    "derive",
+    "export",
+] }
+specta-typescript = { git = "https://github.com/specta-rs/specta.git", rev = "effe988832312009388a11487ad0ceb09b934a80" }
 
 [package]
 name = "pyxis"
@@ -19,6 +24,13 @@ syn = { version = "2.0", features = ["full", "extra-traits"] }
 prettyplease = "0.2"
 toml = "0.9.8"
 serde = { version = "1.0", features = ["derive"] }
+
+# driver-only
+serde_json = { version = "1.0", optional = true }
+specta = { workspace = true, optional = true }
+
+[features]
+json = ["dep:serde_json", "dep:specta"]
 
 [dev-dependencies]
 pretty_assertions = "1.4"

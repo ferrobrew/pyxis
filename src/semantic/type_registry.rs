@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use crate::{
     grammar::{self, ItemPath},
@@ -7,14 +7,14 @@ use crate::{
 
 #[derive(Debug)]
 pub struct TypeRegistry {
-    types: HashMap<ItemPath, ItemDefinition>,
+    types: BTreeMap<ItemPath, ItemDefinition>,
     pointer_size: usize,
 }
 
 impl TypeRegistry {
     pub(crate) fn new(pointer_size: usize) -> TypeRegistry {
         TypeRegistry {
-            types: HashMap::new(),
+            types: BTreeMap::new(),
             pointer_size,
         }
     }

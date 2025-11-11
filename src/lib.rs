@@ -16,6 +16,8 @@ pub(crate) mod util;
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Backend {
     Rust,
+    #[cfg(feature = "json")]
+    Json,
 }
 
 pub fn build(in_dir: &Path, out_dir: &Path, backend: Backend) -> anyhow::Result<()> {
@@ -33,6 +35,10 @@ pub fn build(in_dir: &Path, out_dir: &Path, backend: Backend) -> anyhow::Result<
             for (key, module) in resolved_semantic_state.modules() {
                 backends::rust::write_module(out_dir, key, &resolved_semantic_state, module)?;
             }
+        }
+        #[cfg(feature = "json")]
+        Backend::Json => {
+            backends::json::build(out_dir, &resolved_semantic_state, &config.project.name)?;
         }
     }
 

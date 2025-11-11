@@ -3,6 +3,9 @@ use std::path::Path;
 fn main() -> anyhow::Result<()> {
     let root = Path::new("codegen_tests");
     let output_dir = root.join("output");
+    let json_output_dir = root.join("json_output");
+
+    // Generate Rust backend output
     pyxis::build(&root.join("input"), &output_dir, pyxis::Backend::Rust)?;
 
     let mut module_decls = std::fs::read_dir(&output_dir)?
@@ -13,7 +16,7 @@ fn main() -> anyhow::Result<()> {
         .map(|name| format!("pub mod {name};"))
         .collect::<Vec<_>>();
     module_decls.sort();
-    std::fs::write(output_dir.join("lib.rs"), module_decls.join("\n"))?;
+    std::fs::write(output_dir.join("lib.rs"), module_decls.join("\n") + "\n")?;
 
     let status = std::process::Command::new("cargo")
         .arg("clippy")
@@ -22,6 +25,20 @@ fn main() -> anyhow::Result<()> {
     if !status.success() {
         anyhow::bail!("cargo clippy failed");
     }
+
+    // Generate JSON backend output
+    std::fs::create_dir_all(&json_output_dir)?;
+    pyxis::build(&root.join("input"), &json_output_dir, pyxis::Backend::Json)?;
+
+    // Verify JSON output exists and is valid
+    let json_output_file = json_output_dir.join("output.json");
+    if !json_output_file.exists() {
+        anyhow::bail!("JSON output file was not created");
+    }
+
+    // Parse JSON to verify it's valid
+    let json_content = std::fs::read_to_string(&json_output_file)?;
+    serde_json::from_str::<pyxis::backends::json::JsonDocumentation>(&json_content)?;
 
     Ok(())
 }

@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::Path};
+use std::{collections::BTreeMap, path::Path};
 
 use anyhow::Context;
 
@@ -18,14 +18,14 @@ use crate::{
 };
 
 pub struct SemanticState {
-    modules: HashMap<ItemPath, Module>,
+    modules: BTreeMap<ItemPath, Module>,
     pub(crate) type_registry: TypeRegistry,
 }
 
 impl SemanticState {
     pub fn new(pointer_size: usize) -> Self {
         let mut semantic_state = Self {
-            modules: HashMap::new(),
+            modules: BTreeMap::new(),
             type_registry: TypeRegistry::new(pointer_size),
         };
 
@@ -267,7 +267,7 @@ impl SemanticState {
 #[derive(Debug)]
 pub struct ResolvedSemanticState {
     type_registry: TypeRegistry,
-    modules: HashMap<ItemPath, Module>,
+    modules: BTreeMap<ItemPath, Module>,
 }
 
 impl ResolvedSemanticState {
@@ -275,7 +275,7 @@ impl ResolvedSemanticState {
         &self.type_registry
     }
 
-    pub fn modules(&self) -> &HashMap<ItemPath, Module> {
+    pub fn modules(&self) -> &BTreeMap<ItemPath, Module> {
         &self.modules
     }
 }

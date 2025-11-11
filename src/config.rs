@@ -14,5 +14,6 @@ impl Config {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Project {
+    pub name: String,
     pub pointer_size: usize,
 }

@@ -511,19 +511,19 @@ fn can_parse_freestanding_functions() {
         "#;
 
     let ast = M::new()
-        .with_definitions([ID::new(
-            (V::Private, "A"),
-            ED::new(T::ident("i32"), [], []),
-        )])
+        .with_definitions([ID::new((V::Private, "A"), ED::new(T::ident("i32"), [], []))])
         .with_impls([FB::new(
             "A",
             [F::new((V::Private, "test"), []).with_attributes([A::address(0x123)])],
         )])
         .with_functions([
             F::new((V::Public, "freestanding"), []).with_attributes([A::address(0x456)]),
-            F::new((V::Private, "another_freestanding"), [Ar::named("arg1", T::ident("i32"))])
-                .with_attributes([A::address(0x789)])
-                .with_return_type(T::ident("i32")),
+            F::new(
+                (V::Private, "another_freestanding"),
+                [Ar::named("arg1", T::ident("i32"))],
+            )
+            .with_attributes([A::address(0x789)])
+            .with_return_type(T::ident("i32")),
         ]);
 
     assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
