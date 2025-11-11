@@ -781,17 +781,26 @@ fn item_definition<'a>(
         .then(
             padded(just(':')).ignore_then(padded(type_parser())).then(
                 padded(just('{'))
-                    .then_ignore(skip_ws_and_comments())
+                    .then_ignore(whitespace())
                     .ignore_then(
                         enum_statement()
                             .map_with(|stmt, extra| {
                                 Spanned::new(EnumChild::Statement(stmt), to_span(extra.span()))
                             })
-                            .separated_by(just(',').then_ignore(skip_ws_and_comments()))
+                            .or(
+                                // Parse comments between enum items
+                                line_comment_node()
+                                    .or(block_comment_node())
+                                    .padded_by(whitespace())
+                                    .map_with(|comment, extra| {
+                                        Spanned::new(EnumChild::Comment(comment), to_span(extra.span()))
+                                    })
+                            )
+                            .separated_by(just(',').padded_by(whitespace()))
                             .allow_trailing()
                             .collect(),
                     )
-                    .then_ignore(skip_ws_and_comments())
+                    .then_ignore(whitespace())
                     .then_ignore(just('}')),
             ),
         )
@@ -812,17 +821,26 @@ fn item_definition<'a>(
         .then(
             padded(just(':')).ignore_then(padded(type_parser())).then(
                 padded(just('{'))
-                    .then_ignore(skip_ws_and_comments())
+                    .then_ignore(whitespace())
                     .ignore_then(
                         bitflags_statement()
                             .map_with(|stmt, extra| {
                                 Spanned::new(BitflagsChild::Statement(stmt), to_span(extra.span()))
                             })
-                            .separated_by(just(',').then_ignore(skip_ws_and_comments()))
+                            .or(
+                                // Parse comments between bitflags items
+                                line_comment_node()
+                                    .or(block_comment_node())
+                                    .padded_by(whitespace())
+                                    .map_with(|comment, extra| {
+                                        Spanned::new(BitflagsChild::Comment(comment), to_span(extra.span()))
+                                    })
+                            )
+                            .separated_by(just(',').padded_by(whitespace()))
                             .allow_trailing()
                             .collect(),
                     )
-                    .then_ignore(skip_ws_and_comments())
+                    .then_ignore(whitespace())
                     .then_ignore(just('}')),
             ),
         )
@@ -1010,17 +1028,29 @@ fn impl_block<'a>()
         .then(padded(ident()))
         .then(
             padded(just('{'))
-                .then_ignore(skip_ws_and_comments())
+                .then_ignore(whitespace())
                 .ignore_then(
-                    impl_func
-                        .map_with(|f, extra| {
-                            Spanned::new(ImplChild::Function(f), to_span(extra.span()))
-                        })
-                        .separated_by(just(';').then_ignore(skip_ws_and_comments()))
-                        .allow_trailing()
-                        .collect::<Vec<_>>(),
+                    choice((
+                        // Parse a comment (can appear anywhere)
+                        line_comment_node()
+                            .or(block_comment_node())
+                            .padded_by(whitespace())
+                            .map_with(|comment, extra| {
+                                Spanned::new(ImplChild::Comment(comment), to_span(extra.span()))
+                            }),
+                        // Parse a function (followed by optional semicolon and whitespace)
+                        impl_func
+                            .then_ignore(whitespace())
+                            .then_ignore(just(';').or_not())
+                            .then_ignore(whitespace())
+                            .map_with(|f, extra| {
+                                Spanned::new(ImplChild::Function(f), to_span(extra.span()))
+                            }),
+                    ))
+                    .repeated()
+                    .collect::<Vec<_>>(),
                 )
-                .then_ignore(skip_ws_and_comments())
+                .then_ignore(whitespace())
                 .then_ignore(just('}')),
         )
         .map(|((attrs, name), children)| FunctionBlock {
@@ -1067,39 +1097,51 @@ pub fn module<'a>() -> impl Parser<'a, ParserInput<'a>, Module, ParseError<'a>> 
             item
         });
 
-    skip_ws_and_comments()
+    whitespace()
         .ignore_then(
             module_doc_comment()
                 .then_ignore(whitespace())
                 .repeated()
                 .collect::<Vec<_>>(),
         )
-        .then_ignore(skip_ws_and_comments())
+        .then_ignore(whitespace())
         .then(module_attributes().or(empty().to(Attributes::default())))
-        .then_ignore(skip_ws_and_comments())
+        .then_ignore(whitespace())
         .then(
             choice((
+                // Parse standalone comments
+                line_comment_node()
+                    .or(block_comment_node())
+                    .padded_by(whitespace())
+                    .map(ModuleChild::Comment)
+                    .map_with(|child, extra| Spanned::new(child, to_span(extra.span()))),
                 // Use statements
-                use_statement().map(ModuleChild::Use),
+                use_statement().map(ModuleChild::Use)
+                    .map_with(|child, extra| Spanned::new(child, to_span(extra.span()))),
                 // Extern types
-                extern_type().map(|(name, attrs)| ModuleChild::ExternType(name, attrs)),
+                extern_type().map(|(name, attrs)| ModuleChild::ExternType(name, attrs))
+                    .map_with(|child, extra| Spanned::new(child, to_span(extra.span()))),
                 // Extern values
-                extern_value().map(ModuleChild::ExternValue),
+                extern_value().map(ModuleChild::ExternValue)
+                    .map_with(|child, extra| Spanned::new(child, to_span(extra.span()))),
                 // Backend
-                backend().map(ModuleChild::Backend),
+                backend().map(ModuleChild::Backend)
+                    .map_with(|child, extra| Spanned::new(child, to_span(extra.span()))),
                 // Impl blocks
-                impl_block().map(ModuleChild::Impl),
+                impl_block().map(ModuleChild::Impl)
+                    .map_with(|child, extra| Spanned::new(child, to_span(extra.span()))),
                 // Freestanding functions
-                freestanding_func.map(ModuleChild::Function),
+                freestanding_func.map(ModuleChild::Function)
+                    .map_with(|child, extra| Spanned::new(child, to_span(extra.span()))),
                 // Item definitions
-                item_def.map(ModuleChild::Definition),
+                item_def.map(ModuleChild::Definition)
+                    .map_with(|child, extra| Spanned::new(child, to_span(extra.span()))),
             ))
-            .map_with(|child, extra| Spanned::new(child, to_span(extra.span())))
-            .then_ignore(skip_ws_and_comments())
+            .then_ignore(whitespace())
             .repeated()
             .collect::<Vec<_>>(),
         )
-        .then_ignore(skip_ws_and_comments())
+        .then_ignore(whitespace())
         .then_ignore(end())
         .map(|((module_doc_comments, module_attrs), mut items)| {
             let mut children = vec![];

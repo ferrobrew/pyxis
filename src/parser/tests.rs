@@ -704,16 +704,18 @@ fn can_parse_single_line_comments() {
         }
         "#;
 
-    let ast = M::new().with_definitions([ID::new(
-        (V::Public, "TestType"),
-        TD::with_children([
-            TC::line_comment(" Comment before field"),
-            TC::statement(TS::field((V::Private, "field_1"), T::ident("i32"))),
-            TC::line_comment(" Comment after field"),
-            TC::line_comment(" Another comment"),
-            TC::statement(TS::field((V::Private, "field_2"), T::ident("i32"))),
-        ]),
-    )]);
+    let ast = M::new()
+        .with_comments([C::Line(" This is a regular comment".into())])
+        .with_definitions([ID::new(
+            (V::Public, "TestType"),
+            TD::with_children([
+                TC::line_comment(" Comment before field"),
+                TC::statement(TS::field((V::Private, "field_1"), T::ident("i32"))),
+                TC::line_comment(" Comment after field"),
+                TC::line_comment(" Another comment"),
+                TC::statement(TS::field((V::Private, "field_2"), T::ident("i32"))),
+            ]),
+        )]);
 
     assert_parse_eq!(text, ast);
 }
@@ -733,16 +735,18 @@ fn can_parse_multi_line_comments() {
         }
         "#;
 
-    let ast = M::new().with_definitions([ID::new(
-        (V::Public, "TestType"),
-        TD::with_children([
-            TC::block_comment(" Comment before field "),
-            TC::statement(TS::field((V::Private, "field_1"), T::ident("i32"))),
-            TC::block_comment(" Comment after field "),
-            TC::block_comment(" Another\n               multi-line\n               comment "),
-            TC::statement(TS::field((V::Private, "field_2"), T::ident("i32"))),
-        ]),
-    )]);
+    let ast = M::new()
+        .with_comments([C::Block(" This is a multi-line comment\n           that spans multiple lines ".into())])
+        .with_definitions([ID::new(
+            (V::Public, "TestType"),
+            TD::with_children([
+                TC::block_comment(" Comment before field "),
+                TC::statement(TS::field((V::Private, "field_1"), T::ident("i32"))),
+                TC::block_comment(" Comment after field "),
+                TC::block_comment(" Another\n               multi-line\n               comment "),
+                TC::statement(TS::field((V::Private, "field_2"), T::ident("i32"))),
+            ]),
+        )]);
 
     assert_parse_eq!(text, ast);
 }
@@ -761,17 +765,22 @@ fn can_parse_mixed_comments() {
         }
         "#;
 
-    let ast = M::new().with_definitions([ID::new(
-        (V::Public, "TestType"),
-        TD::with_children([
-            TC::line_comment(" Single-line comment"),
-            TC::statement(TS::field((V::Private, "field_1"), T::ident("i32"))),
-            TC::block_comment(" inline multi-line "),
-            TC::block_comment(" Multi-line\n               comment "),
-            TC::statement(TS::field((V::Private, "field_2"), T::ident("i32"))),
-            TC::line_comment(" inline single-line"),
-        ]),
-    )]);
+    let ast = M::new()
+        .with_comments([
+            C::Line(" Single-line comment".into()),
+            C::Block(" Multi-line comment ".into()),
+        ])
+        .with_definitions([ID::new(
+            (V::Public, "TestType"),
+            TD::with_children([
+                TC::line_comment(" Single-line comment"),
+                TC::statement(TS::field((V::Private, "field_1"), T::ident("i32"))),
+                TC::block_comment(" inline multi-line "),
+                TC::block_comment(" Multi-line\n               comment "),
+                TC::statement(TS::field((V::Private, "field_2"), T::ident("i32"))),
+                TC::line_comment(" inline single-line"),
+            ]),
+        )]);
 
     assert_parse_eq!(text, ast);
 }
@@ -788,15 +797,17 @@ fn comments_do_not_interfere_with_doc_comments() {
         }
         "#;
 
-    let ast = M::new().with_definitions([ID::new(
-        (V::Public, "TestType"),
-        TD::with_children([
-            TC::line_comment(" Regular comment"),
-            TC::statement(TS::field((V::Private, "field_1"), T::ident("i32"))
-                .with_doc_comments([" Doc comment for field"])),
-        ]),
-    )
-    .with_doc_comments([" Doc comment for type"])]);
+    let ast = M::new()
+        .with_comments([C::Line(" Regular comment".into())])
+        .with_definitions([ID::new(
+            (V::Public, "TestType"),
+            TD::with_children([
+                TC::line_comment(" Regular comment"),
+                TC::statement(TS::field((V::Private, "field_1"), T::ident("i32"))
+                    .with_doc_comments([" Doc comment for field"])),
+            ]),
+        )
+        .with_doc_comments([" Doc comment for type"])]);
 
     assert_parse_eq!(text, ast);
 }
@@ -849,10 +860,15 @@ fn can_parse_comments_with_special_chars() {
         }
         "#;
 
-    let ast = M::new().with_definitions([ID::new(
-        (V::Public, "TestType"),
-        TD::new([TS::field((V::Private, "field_1"), T::ident("i32"))]),
-    )]);
+    let ast = M::new()
+        .with_comments([
+            C::Line(" Comment with special chars: !@#$%^&*()".into()),
+            C::Block(" Comment with slashes: // and more /* stuff ".into()),
+        ])
+        .with_definitions([ID::new(
+            (V::Public, "TestType"),
+            TD::new([TS::field((V::Private, "field_1"), T::ident("i32"))]),
+        )]);
 
     assert_parse_eq!(text, ast);
 }

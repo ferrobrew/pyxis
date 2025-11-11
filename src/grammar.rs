@@ -1512,6 +1512,14 @@ impl Module {
     }
 
     #[cfg(test)]
+    pub fn with_comments(mut self, comments: impl Into<Vec<Comment>>) -> Self {
+        for comment in comments.into() {
+            self.children.push(spanned(ModuleChild::Comment(comment)));
+        }
+        self
+    }
+
+    #[cfg(test)]
     pub fn with_module_doc_comments<I, S>(mut self, module_doc_comments: I) -> Self
     where
         I: IntoIterator<Item = S>,
