@@ -221,7 +221,7 @@ fn will_die_on_super_for_now() {
 
     assert_eq!(
         parse_str(text).err().unwrap().to_string(),
-        "super not supported"
+        "Parse error at 2:13: super not supported"
     );
 }
 

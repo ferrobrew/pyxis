@@ -68,6 +68,10 @@ impl Parser {
                     unreachable!()
                 }
             }
+            TokenKind::Underscore => {
+                let token = self.advance();
+                Ok((Ident("_".to_string()), token.span))
+            }
             _ => Err(ParseError {
                 message: format!("Expected identifier, found {:?}", self.peek()),
                 location: self.current().span.start,
@@ -268,6 +272,17 @@ impl Parser {
 
     fn parse_use(&mut self) -> Result<ItemPath, ParseError> {
         self.expect(TokenKind::Use)?;
+
+        // Check for super keyword (not supported yet)
+        if let TokenKind::Ident(name) = self.peek() {
+            if name == "super" {
+                return Err(ParseError {
+                    message: "super not supported".to_string(),
+                    location: self.current().span.start,
+                });
+            }
+        }
+
         let path = self.parse_item_path()?;
         self.expect(TokenKind::Semi)?;
         Ok(path)
