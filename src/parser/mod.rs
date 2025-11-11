@@ -35,43 +35,6 @@ fn module_doc_comment<'a>()
         .map_with(|content, extra| Spanned::new(content, to_span(extra.span())))
 }
 
-fn single_line_comment<'a>() -> impl Parser<'a, ParserInput<'a>, (), ParseError<'a>> + Clone {
-    just("//")
-        .then(one_of("/!").not().rewind())
-        .then(none_of("\r\n").repeated())
-        .ignored()
-}
-
-fn multi_line_comment<'a>() -> impl Parser<'a, ParserInput<'a>, (), ParseError<'a>> + Clone {
-    just("/*")
-        .ignore_then(custom(|input| {
-            let start = input.cursor();
-
-            // Find the closing '*/' by tracking if previous char was '*'
-            let mut prev_was_star = false;
-            loop {
-                match input.next() {
-                    Some('/') if prev_was_star => {
-                        // Found closing */
-                        return Ok(());
-                    }
-                    Some('*') => {
-                        prev_was_star = true;
-                    }
-                    Some(_) => {
-                        prev_was_star = false;
-                    }
-                    None => {
-                        return Err(Rich::custom(
-                            input.span_since(&start),
-                            "Unclosed multi-line comment",
-                        ));
-                    }
-                }
-            }
-        }))
-}
-
 // Comment-capturing parsers - return Comment nodes for inclusion in AST
 fn line_comment_node<'a>() -> impl Parser<'a, ParserInput<'a>, Comment, ParseError<'a>> + Clone {
     just("//")
@@ -109,16 +72,6 @@ fn block_comment_node<'a>() -> impl Parser<'a, ParserInput<'a>, Comment, ParseEr
             }
         }))
         .map(Comment::Block)
-}
-
-// Skip whitespace and comments - matches multiple whitespace chars and comments in one go
-// Used ONLY at strategic locations to avoid exponential parser complexity
-fn skip_ws_and_comments<'a>() -> impl Parser<'a, ParserInput<'a>, (), ParseError<'a>> + Clone {
-    single_line_comment()
-        .or(multi_line_comment())
-        .or(one_of(" \t\r\n").ignored())
-        .repeated()
-        .ignored()
 }
 
 // Padding with just whitespace - used for most tokens
