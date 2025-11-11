@@ -1,4 +1,4 @@
-use crate::{grammar::test_aliases::*, parser::parse_str};
+use crate::{grammar::test_aliases::*, parser::{parse_str, strip_spans::StripSpans}};
 
 use pretty_assertions::assert_eq;
 
@@ -19,7 +19,7 @@ fn can_parse_basic_struct() {
         ]),
     )]);
 
-    assert_eq!(parse_str(text).unwrap(), ast);
+    assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
 }
 
 #[test]
@@ -42,7 +42,7 @@ fn can_parse_vftable() {
         .with_attributes([A::size(4)])]),
     )]);
 
-    assert_eq!(parse_str(text).unwrap(), ast);
+    assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
 }
 
 #[test]
@@ -88,7 +88,7 @@ fn can_parse_vehicle_types() {
         ]),
     )]);
 
-    assert_eq!(parse_str(text).unwrap(), ast);
+    assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
 }
 
 #[test]
@@ -171,7 +171,7 @@ fn can_parse_spawn_manager() {
             ],
         )]);
 
-    assert_eq!(parse_str(text).unwrap(), ast);
+    assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
 }
 
 #[test]
@@ -191,7 +191,7 @@ fn can_parse_address_field() {
         ]),
     )]);
 
-    assert_eq!(parse_str(text).unwrap(), ast);
+    assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
 }
 
 #[test]
@@ -210,7 +210,7 @@ fn can_parse_use() {
             TD::new([TS::field((V::Private, "test"), T::ident("TestType<Hey>"))]),
         )]);
 
-    assert_eq!(parse_str(text).unwrap(), ast);
+    assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
 }
 
 #[test]
@@ -242,7 +242,7 @@ fn can_parse_extern() {
             TD::new([TS::field((V::Private, "test"), T::ident("TestType<Hey>"))]),
         )]);
 
-    assert_eq!(parse_str(text).unwrap(), ast);
+    assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
 }
 
 #[test]
@@ -252,7 +252,7 @@ fn can_parse_an_empty_type() {
         "#;
 
     let ast = M::new().with_definitions([ID::new((V::Private, "Test"), TD::new([]))]);
-    assert_eq!(parse_str(text).unwrap(), ast);
+    assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
 }
 
 #[test]
@@ -283,7 +283,7 @@ fn can_parse_extern_value() {
             ),
         ]);
 
-    assert_eq!(parse_str(text).unwrap(), ast);
+    assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
 }
 
 #[test]
@@ -315,7 +315,7 @@ fn can_parse_enum() {
         ),
     )]);
 
-    assert_eq!(parse_str(text).unwrap(), ast);
+    assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
 }
 
 #[test]
@@ -345,7 +345,7 @@ fn can_parse_bitflags() {
         ),
     )]);
 
-    assert_eq!(parse_str(text).unwrap(), ast);
+    assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
 }
 
 #[test]
@@ -361,7 +361,7 @@ fn can_parse_array_field() {
         TD::new([TS::field((V::Private, "field_1"), T::ident("i32").array(4))]),
     )]);
 
-    assert_eq!(parse_str(text).unwrap(), ast);
+    assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
 }
 
 #[test]
@@ -427,7 +427,7 @@ backend rust epilogue r#"
         ),
     ]);
 
-    assert_eq!(parse_str(text).unwrap(), ast);
+    assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
 }
 
 #[test]
@@ -445,7 +445,7 @@ fn can_parse_ident_attributes() {
             .with_attributes([A::copyable(), A::cloneable()]),
     )]);
 
-    assert_eq!(parse_str(text).unwrap(), ast);
+    assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
 }
 
 #[test]
@@ -491,7 +491,7 @@ fn can_parse_doc_comments() {
             A::doc(" The best of its kind"),
         ]);
 
-    assert_eq!(parse_str(text).unwrap(), ast);
+    assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
 }
 
 #[test]
@@ -526,5 +526,5 @@ fn can_parse_freestanding_functions() {
                 .with_return_type(T::ident("i32")),
         ]);
 
-    assert_eq!(parse_str(text).unwrap(), ast);
+    assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
 }

@@ -173,9 +173,12 @@ impl Parser {
     }
 
     fn parse_module_item(&mut self) -> Result<ModuleItem, ParseError> {
+        // Attributes can appear before any item
+        let has_attributes = matches!(self.peek(), TokenKind::Hash);
+
         match self.peek() {
             TokenKind::Use => self.parse_use().map(ModuleItem::Use),
-            TokenKind::Extern => {
+            TokenKind::Extern if !has_attributes => {
                 // Peek ahead to distinguish extern type from extern value
                 if matches!(self.peek_nth(1), TokenKind::Type) {
                     self.parse_extern_type()
@@ -184,7 +187,49 @@ impl Parser {
                 }
             }
             TokenKind::Backend => self.parse_backend().map(ModuleItem::Backend),
-            TokenKind::Hash | TokenKind::Pub | TokenKind::Type | TokenKind::Enum | TokenKind::Bitflags => {
+            TokenKind::Hash => {
+                // Attributes - need to peek ahead to see what comes after
+                let mut pos = self.pos;
+                // Skip past attributes
+                while matches!(self.tokens[pos].kind, TokenKind::Hash) {
+                    pos += 1; // skip #
+                    if matches!(self.tokens[pos].kind, TokenKind::LBracket) {
+                        pos += 1; // skip [
+                        // Skip until ]
+                        let mut depth = 1;
+                        while depth > 0 && pos < self.tokens.len() {
+                            match &self.tokens[pos].kind {
+                                TokenKind::LBracket => depth += 1,
+                                TokenKind::RBracket => depth -= 1,
+                                _ => {}
+                            }
+                            pos += 1;
+                        }
+                    }
+                }
+
+                // Now check what comes after attributes
+                match &self.tokens[pos].kind {
+                    TokenKind::Extern => {
+                        // Could be extern type or extern value
+                        if matches!(self.tokens.get(pos + 1).map(|t| &t.kind), Some(TokenKind::Type)) {
+                            self.parse_extern_type()
+                        } else {
+                            self.parse_extern_value().map(ModuleItem::ExternValue)
+                        }
+                    }
+                    TokenKind::Pub | TokenKind::Type | TokenKind::Enum | TokenKind::Bitflags => {
+                        self.parse_item_definition().map(ModuleItem::Definition)
+                    }
+                    TokenKind::Impl => self.parse_impl_block().map(ModuleItem::Impl),
+                    TokenKind::Fn => self.parse_function().map(ModuleItem::Function),
+                    _ => Err(ParseError {
+                        message: format!("Unexpected token after attributes: {:?}", self.tokens[pos].kind),
+                        location: self.tokens[pos].span.start,
+                    }),
+                }
+            }
+            TokenKind::Pub | TokenKind::Type | TokenKind::Enum | TokenKind::Bitflags => {
                 self.parse_item_definition().map(ModuleItem::Definition)
             }
             TokenKind::Impl => self.parse_impl_block().map(ModuleItem::Impl),
@@ -208,14 +253,14 @@ impl Parser {
 
     fn parse_extern_type(&mut self) -> Result<ModuleItem, ParseError> {
         let doc_comments = self.collect_doc_comments();
-        self.expect(TokenKind::Extern)?;
-        self.expect(TokenKind::Type)?;
-        let (name, _) = self.expect_ident()?;
         let attributes = if matches!(self.peek(), TokenKind::Hash) {
             self.parse_attributes()?
         } else {
             Attributes::default()
         };
+        self.expect(TokenKind::Extern)?;
+        self.expect(TokenKind::Type)?;
+        let (name, _) = self.expect_ident()?;
         self.expect(TokenKind::Semi)?;
         Ok(ModuleItem::ExternType(name, attributes, doc_comments))
     }
@@ -790,25 +835,49 @@ impl Parser {
                 Ok(Type::Array(Box::new(inner), size))
             }
             TokenKind::Ident(_) => {
-                let (ident, _) = self.expect_ident()?;
+                let (mut ident, _) = self.expect_ident()?;
 
-                // Check for generic arguments
+                // Check for generic arguments - treat them as part of the identifier string
+                // This is needed for extern types that need exact reproduction
                 if matches!(self.peek(), TokenKind::Lt) {
-                    self.advance();
-                    let mut args = Vec::new();
-                    while !matches!(self.peek(), TokenKind::Gt) {
-                        args.push(self.parse_type()?);
-                        if matches!(self.peek(), TokenKind::Comma) {
-                            self.advance();
-                        } else {
-                            break;
+                    let mut type_str = ident.0;
+                    type_str.push('<');
+                    self.advance(); // consume <
+
+                    let mut depth = 1;
+                    while depth > 0 && !matches!(self.peek(), TokenKind::Eof) {
+                        match self.peek().clone() {
+                            TokenKind::Lt => {
+                                type_str.push('<');
+                                depth += 1;
+                                self.advance();
+                            }
+                            TokenKind::Gt => {
+                                type_str.push('>');
+                                depth -= 1;
+                                self.advance();
+                            }
+                            TokenKind::Comma => {
+                                type_str.push_str(", ");
+                                self.advance();
+                            }
+                            TokenKind::Ident(name) => {
+                                type_str.push_str(&name);
+                                self.advance();
+                            }
+                            TokenKind::ColonColon => {
+                                type_str.push_str("::");
+                                self.advance();
+                            }
+                            _ => {
+                                self.advance();
+                            }
                         }
                     }
-                    self.expect(TokenKind::Gt)?;
-                    Ok(Type::Ident(ident, args))
-                } else {
-                    Ok(Type::Ident(ident, vec![]))
+                    ident = Ident(type_str);
                 }
+
+                Ok(Type::Ident(ident, vec![]))
             }
             _ => Err(ParseError {
                 message: format!("Expected type, found {:?}", self.peek()),
