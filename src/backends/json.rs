@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::Path};
+use std::{collections::BTreeMap, path::Path};
 
 use anyhow::Context;
 use serde::{Deserialize, Serialize};
@@ -9,7 +9,7 @@ use crate::semantic::{
         FunctionBody, ItemCategory, ItemDefinition, ItemDefinitionInner, Region, TypeDefinition,
         TypeVftable, Visibility,
     },
-    ResolvedSemanticState,
+    ResolvedSemanticState, TypeRegistry,
 };
 
 /// Top-level JSON documentation structure
@@ -20,9 +20,9 @@ pub struct JsonDocumentation {
     /// Project name
     pub project_name: String,
     /// Map of absolute paths to items
-    pub items: HashMap<String, JsonItem>,
+    pub items: BTreeMap<String, JsonItem>,
     /// Nested module hierarchy
-    pub modules: HashMap<String, JsonModule>,
+    pub modules: BTreeMap<String, JsonModule>,
 }
 
 /// A module containing items and potentially submodules
@@ -34,7 +34,7 @@ pub struct JsonModule {
     pub items: Vec<String>, // Paths to items
     /// Child modules
     #[specta(inline)]
-    pub submodules: HashMap<String, JsonModule>,
+    pub submodules: BTreeMap<String, JsonModule>,
     /// Extern values (global variables)
     pub extern_values: Vec<JsonExternValue>,
     /// Freestanding functions
@@ -59,7 +59,7 @@ pub struct JsonItem {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize,specta::Type)]
-#[serde(tag = "type")]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum JsonItemKind {
     Type(JsonTypeDefinition),
     Enum(JsonEnumDefinition),
@@ -98,6 +98,12 @@ pub struct JsonRegion {
     pub doc: Option<String>,
     /// Type reference
     pub type_ref: JsonType,
+    /// Offset in bytes from start of structure
+    pub offset: usize,
+    /// Size in bytes
+    pub size: usize,
+    /// Alignment in bytes
+    pub alignment: usize,
     /// Whether this is a base class field
     pub is_base: bool,
 }
@@ -181,7 +187,7 @@ pub struct JsonFunction {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize,specta::Type)]
-#[serde(tag = "type")]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum JsonFunctionBody {
     Address { address: usize },
     Field { field: String, function_name: String },
@@ -189,7 +195,7 @@ pub enum JsonFunctionBody {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize,specta::Type)]
-#[serde(tag = "type")]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum JsonArgument {
     ConstSelf,
     MutSelf,
@@ -209,7 +215,7 @@ pub struct JsonExternValue {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize,specta::Type)]
-#[serde(tag = "type")]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum JsonType {
     Raw { path: String },
     ConstPointer { inner: Box<JsonType> },
@@ -229,12 +235,14 @@ pub struct JsonFunctionArgument {
 }
 
 #[derive(Debug, Copy, Clone, Serialize, Deserialize,specta::Type)]
+#[serde(rename_all = "snake_case")]
 pub enum JsonVisibility {
     Public,
     Private,
 }
 
 #[derive(Debug, Copy, Clone, Serialize, Deserialize,specta::Type)]
+#[serde(rename_all = "snake_case")]
 pub enum JsonItemCategory {
     Defined,
     Predefined,
@@ -242,6 +250,7 @@ pub enum JsonItemCategory {
 }
 
 #[derive(Debug, Copy, Clone, Serialize, Deserialize,specta::Type)]
+#[serde(rename_all = "snake_case")]
 pub enum JsonCallingConvention {
     C,
     Cdecl,
@@ -361,12 +370,18 @@ fn convert_function(func: &Function) -> JsonFunction {
     }
 }
 
-fn convert_region(region: &Region) -> JsonRegion {
+fn convert_region(region: &Region, type_registry: &TypeRegistry, offset: usize) -> JsonRegion {
+    let size = region.type_ref.size(type_registry).unwrap_or(0);
+    let alignment = region.type_ref.alignment(type_registry).unwrap_or(1);
+
     JsonRegion {
         visibility: region.visibility.into(),
         name: region.name.clone(),
         doc: region.doc.clone(),
         type_ref: convert_type(&region.type_ref),
+        offset,
+        size,
+        alignment,
         is_base: region.is_base,
     }
 }
@@ -377,10 +392,18 @@ fn convert_vftable(vftable: &TypeVftable) -> JsonTypeVftable {
     }
 }
 
-fn convert_type_definition(td: &TypeDefinition) -> JsonTypeDefinition {
+fn convert_type_definition(td: &TypeDefinition, type_registry: &TypeRegistry) -> JsonTypeDefinition {
+    // Calculate field offsets
+    let mut current_offset = 0;
+    let fields = td.regions.iter().map(|region| {
+        let json_region = convert_region(region, type_registry, current_offset);
+        current_offset += json_region.size;
+        json_region
+    }).collect();
+
     JsonTypeDefinition {
         doc: td.doc.clone(),
-        fields: td.regions.iter().map(convert_region).collect(),
+        fields,
         associated_functions: td
             .associated_functions
             .iter()
@@ -438,11 +461,11 @@ fn convert_bitflags_definition(bd: &BitflagsDefinition) -> JsonBitflagsDefinitio
     }
 }
 
-fn convert_item(item: &ItemDefinition) -> Option<JsonItem> {
+fn convert_item(item: &ItemDefinition, type_registry: &TypeRegistry) -> Option<JsonItem> {
     let resolved = item.resolved()?;
 
     let kind = match &resolved.inner {
-        ItemDefinitionInner::Type(td) => JsonItemKind::Type(convert_type_definition(td)),
+        ItemDefinitionInner::Type(td) => JsonItemKind::Type(convert_type_definition(td, type_registry)),
         ItemDefinitionInner::Enum(ed) => JsonItemKind::Enum(convert_enum_definition(ed)),
         ItemDefinitionInner::Bitflags(bd) => JsonItemKind::Bitflags(convert_bitflags_definition(bd)),
     };
@@ -469,8 +492,8 @@ fn convert_extern_value(ev: &ExternValue) -> JsonExternValue {
 /// Build the module hierarchy from a flat list of modules
 fn build_module_hierarchy(
     semantic_state: &ResolvedSemanticState,
-) -> HashMap<String, JsonModule> {
-    let mut root_modules: HashMap<String, JsonModule> = HashMap::new();
+) -> BTreeMap<String, JsonModule> {
+    let mut root_modules: BTreeMap<String, JsonModule> = BTreeMap::new();
 
     for (module_path, module) in semantic_state.modules() {
         let segments: Vec<String> = module_path
@@ -494,7 +517,7 @@ fn build_module_hierarchy(
         let json_module = JsonModule {
             doc: module.doc().map(|s| s.to_string()),
             items,
-            submodules: HashMap::new(),
+            submodules: BTreeMap::new(),
             extern_values,
             functions,
         };
@@ -509,7 +532,7 @@ fn build_module_hierarchy(
             let mut current = root_modules.entry(root_name.clone()).or_insert_with(|| JsonModule {
                 doc: None,
                 items: vec![],
-                submodules: HashMap::new(),
+                submodules: BTreeMap::new(),
                 extern_values: vec![],
                 functions: vec![],
             });
@@ -527,7 +550,7 @@ fn build_module_hierarchy(
                         .or_insert_with(|| JsonModule {
                             doc: None,
                             items: vec![],
-                            submodules: HashMap::new(),
+                            submodules: BTreeMap::new(),
                             extern_values: vec![],
                             functions: vec![],
                         });
@@ -545,11 +568,13 @@ pub fn build(
     semantic_state: &ResolvedSemanticState,
     project_name: &str,
 ) -> anyhow::Result<()> {
+    let type_registry = semantic_state.type_registry();
+
     // Build items map
-    let mut items = HashMap::new();
+    let mut items = BTreeMap::new();
     for module in semantic_state.modules().values() {
-        for definition in module.definitions(semantic_state.type_registry()) {
-            if let Some(json_item) = convert_item(definition) {
+        for definition in module.definitions(type_registry) {
+            if let Some(json_item) = convert_item(definition, type_registry) {
                 items.insert(json_item.path.clone(), json_item);
             }
         }
@@ -560,7 +585,7 @@ pub fn build(
 
     // Create the top-level documentation structure
     let documentation = JsonDocumentation {
-        pointer_size: semantic_state.type_registry().pointer_size(),
+        pointer_size: type_registry.pointer_size(),
         project_name: project_name.to_string(),
         items,
         modules,
