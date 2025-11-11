@@ -1,27 +1,46 @@
 use std::path::PathBuf;
 
-use clap::{Parser, ValueEnum};
+use clap::{Parser, Subcommand, ValueEnum};
 
 #[derive(Parser)]
+#[clap(name = "pyxis", about = "Pyxis code generation tool")]
 struct Args {
-    /// The directory containing the Pyxis source files
-    in_dir: PathBuf,
-    /// The backend to use
-    #[clap(short, long)]
-    backend: Backend,
-    #[clap(default_value = "out")]
-    /// The directory to write the generated Rust files to
-    out_dir: PathBuf,
+    #[clap(subcommand)]
+    command: Command,
+}
+
+#[derive(Subcommand)]
+enum Command {
+    /// Build the project using the specified backend
+    Build {
+        /// The directory containing the Pyxis source files
+        in_dir: PathBuf,
+        /// The backend to use
+        #[clap(short, long)]
+        backend: Backend,
+        /// The directory to write the generated files to
+        #[clap(default_value = "out")]
+        out_dir: PathBuf,
+    },
+    /// Generate TypeScript type definitions from JSON backend types
+    GenTypes {
+        /// Output file path for TypeScript definitions
+        #[clap(default_value = "pyxis-types.ts")]
+        output: PathBuf,
+    },
 }
 
 #[derive(Copy, Clone, ValueEnum)]
 enum Backend {
     Rust,
+    Json,
 }
+
 impl From<Backend> for pyxis::Backend {
     fn from(backend: Backend) -> Self {
         match backend {
             Backend::Rust => pyxis::Backend::Rust,
+            Backend::Json => pyxis::Backend::Json,
         }
     }
 }
@@ -29,6 +48,28 @@ impl From<Backend> for pyxis::Backend {
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
-    std::fs::create_dir_all(&args.out_dir)?;
-    pyxis::build(&args.in_dir, &args.out_dir, args.backend.into())
+    match args.command {
+        Command::Build {
+            in_dir,
+            backend,
+            out_dir,
+        } => {
+            std::fs::create_dir_all(&out_dir)?;
+            pyxis::build(&in_dir, &out_dir, backend.into())
+        }
+        Command::GenTypes { output } => {
+            println!("Generating TypeScript definitions to {:?}", output);
+
+            let typescript = specta_typescript::export::<pyxis::backends::json::JsonDocumentation>(
+                &Default::default(),
+            )?;
+
+            std::fs::write(&output, typescript)?;
+
+            println!("✓ TypeScript definitions generated successfully!");
+            println!("  File: {:?}", output);
+
+            Ok(())
+        }
+    }
 }

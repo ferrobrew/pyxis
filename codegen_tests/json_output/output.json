@@ -1,0 +1,3131 @@
+{
+  "pointer_size": 8,
+  "project_name": "test-project",
+  "items": {
+    "bitflags::TestBitflags": {
+      "path": "bitflags::TestBitflags",
+      "visibility": "public",
+      "size": 4,
+      "alignment": 4,
+      "category": "defined",
+      "kind": {
+        "type": "bitflags",
+        "doc": null,
+        "underlying_type": {
+          "type": "raw",
+          "path": "u32"
+        },
+        "flags": [
+          {
+            "name": "NONE",
+            "value": 0
+          },
+          {
+            "name": "FLAG_1",
+            "value": 1
+          },
+          {
+            "name": "FLAG_2",
+            "value": 2
+          },
+          {
+            "name": "FLAG_3",
+            "value": 4
+          }
+        ],
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "default": null
+      }
+    },
+    "bitflags::TestBitflags2": {
+      "path": "bitflags::TestBitflags2",
+      "visibility": "public",
+      "size": 4,
+      "alignment": 4,
+      "category": "defined",
+      "kind": {
+        "type": "bitflags",
+        "doc": null,
+        "underlying_type": {
+          "type": "raw",
+          "path": "u32"
+        },
+        "flags": [
+          {
+            "name": "NONE",
+            "value": 0
+          },
+          {
+            "name": "FLAG_1",
+            "value": 1
+          },
+          {
+            "name": "FLAG_2",
+            "value": 2
+          },
+          {
+            "name": "FLAG_3",
+            "value": 4
+          }
+        ],
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "default": 2
+      }
+    },
+    "bool": {
+      "path": "bool",
+      "visibility": "public",
+      "size": 1,
+      "alignment": 1,
+      "category": "predefined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": true,
+        "cloneable": true,
+        "defaultable": true,
+        "packed": false
+      }
+    },
+    "diamond_inheritance::Base": {
+      "path": "diamond_inheritance::Base",
+      "visibility": "private",
+      "size": 8,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [
+          {
+            "visibility": "private",
+            "name": "vftable",
+            "doc": null,
+            "type_ref": {
+              "type": "const_pointer",
+              "inner": {
+                "type": "raw",
+                "path": "diamond_inheritance::BaseVftable"
+              }
+            },
+            "offset": 0,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false
+          }
+        ],
+        "associated_functions": [],
+        "vftable": {
+          "functions": [
+            {
+              "visibility": "public",
+              "name": "destructor",
+              "doc": null,
+              "body": {
+                "type": "vftable",
+                "function_name": "destructor"
+              },
+              "arguments": [
+                {
+                  "type": "mut_self"
+                }
+              ],
+              "return_type": null,
+              "calling_convention": "system"
+            }
+          ]
+        },
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false
+      }
+    },
+    "diamond_inheritance::BaseA": {
+      "path": "diamond_inheritance::BaseA",
+      "visibility": "private",
+      "size": 8,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "base",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "diamond_inheritance::Base"
+            },
+            "offset": 0,
+            "size": 8,
+            "alignment": 8,
+            "is_base": true
+          }
+        ],
+        "associated_functions": [
+          {
+            "visibility": "public",
+            "name": "associated",
+            "doc": null,
+            "body": {
+              "type": "address",
+              "address": 291
+            },
+            "arguments": [
+              {
+                "type": "mut_self"
+              }
+            ],
+            "return_type": null,
+            "calling_convention": "system"
+          }
+        ],
+        "vftable": {
+          "functions": [
+            {
+              "visibility": "public",
+              "name": "destructor",
+              "doc": null,
+              "body": {
+                "type": "vftable",
+                "function_name": "destructor"
+              },
+              "arguments": [
+                {
+                  "type": "mut_self"
+                }
+              ],
+              "return_type": null,
+              "calling_convention": "system"
+            }
+          ]
+        },
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false
+      }
+    },
+    "diamond_inheritance::BaseAVftable": {
+      "path": "diamond_inheritance::BaseAVftable",
+      "visibility": "private",
+      "size": 8,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "destructor",
+            "doc": null,
+            "type_ref": {
+              "type": "function",
+              "calling_convention": "system",
+              "arguments": [
+                {
+                  "name": "this",
+                  "type_ref": {
+                    "type": "mut_pointer",
+                    "inner": {
+                      "type": "raw",
+                      "path": "diamond_inheritance::BaseA"
+                    }
+                  }
+                }
+              ],
+              "return_type": null
+            },
+            "offset": 0,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false
+          }
+        ],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false
+      }
+    },
+    "diamond_inheritance::BaseB": {
+      "path": "diamond_inheritance::BaseB",
+      "visibility": "private",
+      "size": 8,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "base",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "diamond_inheritance::Base"
+            },
+            "offset": 0,
+            "size": 8,
+            "alignment": 8,
+            "is_base": true
+          }
+        ],
+        "associated_functions": [
+          {
+            "visibility": "public",
+            "name": "associated",
+            "doc": null,
+            "body": {
+              "type": "address",
+              "address": 291
+            },
+            "arguments": [
+              {
+                "type": "mut_self"
+              }
+            ],
+            "return_type": null,
+            "calling_convention": "system"
+          }
+        ],
+        "vftable": {
+          "functions": [
+            {
+              "visibility": "public",
+              "name": "destructor",
+              "doc": null,
+              "body": {
+                "type": "vftable",
+                "function_name": "destructor"
+              },
+              "arguments": [
+                {
+                  "type": "mut_self"
+                }
+              ],
+              "return_type": null,
+              "calling_convention": "system"
+            }
+          ]
+        },
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false
+      }
+    },
+    "diamond_inheritance::BaseBVftable": {
+      "path": "diamond_inheritance::BaseBVftable",
+      "visibility": "private",
+      "size": 8,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "destructor",
+            "doc": null,
+            "type_ref": {
+              "type": "function",
+              "calling_convention": "system",
+              "arguments": [
+                {
+                  "name": "this",
+                  "type_ref": {
+                    "type": "mut_pointer",
+                    "inner": {
+                      "type": "raw",
+                      "path": "diamond_inheritance::BaseB"
+                    }
+                  }
+                }
+              ],
+              "return_type": null
+            },
+            "offset": 0,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false
+          }
+        ],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false
+      }
+    },
+    "diamond_inheritance::BaseVftable": {
+      "path": "diamond_inheritance::BaseVftable",
+      "visibility": "private",
+      "size": 8,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "destructor",
+            "doc": null,
+            "type_ref": {
+              "type": "function",
+              "calling_convention": "system",
+              "arguments": [
+                {
+                  "name": "this",
+                  "type_ref": {
+                    "type": "mut_pointer",
+                    "inner": {
+                      "type": "raw",
+                      "path": "diamond_inheritance::Base"
+                    }
+                  }
+                }
+              ],
+              "return_type": null
+            },
+            "offset": 0,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false
+          }
+        ],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false
+      }
+    },
+    "diamond_inheritance::Derived": {
+      "path": "diamond_inheritance::Derived",
+      "visibility": "private",
+      "size": 16,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "base_a",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "diamond_inheritance::BaseA"
+            },
+            "offset": 0,
+            "size": 8,
+            "alignment": 8,
+            "is_base": true
+          },
+          {
+            "visibility": "public",
+            "name": "base_b",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "diamond_inheritance::BaseB"
+            },
+            "offset": 8,
+            "size": 8,
+            "alignment": 8,
+            "is_base": true
+          }
+        ],
+        "associated_functions": [
+          {
+            "visibility": "public",
+            "name": "associated",
+            "doc": null,
+            "body": {
+              "type": "field",
+              "field": "base_a",
+              "function_name": "associated"
+            },
+            "arguments": [
+              {
+                "type": "mut_self"
+              }
+            ],
+            "return_type": null,
+            "calling_convention": "system"
+          },
+          {
+            "visibility": "public",
+            "name": "base_b_associated",
+            "doc": null,
+            "body": {
+              "type": "field",
+              "field": "base_b",
+              "function_name": "associated"
+            },
+            "arguments": [
+              {
+                "type": "mut_self"
+              }
+            ],
+            "return_type": null,
+            "calling_convention": "system"
+          },
+          {
+            "visibility": "public",
+            "name": "base_b_destructor",
+            "doc": null,
+            "body": {
+              "type": "field",
+              "field": "base_b",
+              "function_name": "destructor"
+            },
+            "arguments": [
+              {
+                "type": "mut_self"
+              }
+            ],
+            "return_type": null,
+            "calling_convention": "system"
+          }
+        ],
+        "vftable": {
+          "functions": [
+            {
+              "visibility": "public",
+              "name": "destructor",
+              "doc": null,
+              "body": {
+                "type": "vftable",
+                "function_name": "destructor"
+              },
+              "arguments": [
+                {
+                  "type": "mut_self"
+                }
+              ],
+              "return_type": null,
+              "calling_convention": "system"
+            }
+          ]
+        },
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false
+      }
+    },
+    "diamond_inheritance::DerivedVftable": {
+      "path": "diamond_inheritance::DerivedVftable",
+      "visibility": "private",
+      "size": 8,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "destructor",
+            "doc": null,
+            "type_ref": {
+              "type": "function",
+              "calling_convention": "system",
+              "arguments": [
+                {
+                  "name": "this",
+                  "type_ref": {
+                    "type": "mut_pointer",
+                    "inner": {
+                      "type": "raw",
+                      "path": "diamond_inheritance::Derived"
+                    }
+                  }
+                }
+              ],
+              "return_type": null
+            },
+            "offset": 0,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false
+          }
+        ],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false
+      }
+    },
+    "doc_comments::TestType": {
+      "path": "doc_comments::TestType",
+      "visibility": "public",
+      "size": 16,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": " This is a doc comment",
+        "fields": [
+          {
+            "visibility": "private",
+            "name": "vftable",
+            "doc": null,
+            "type_ref": {
+              "type": "const_pointer",
+              "inner": {
+                "type": "raw",
+                "path": "doc_comments::TestTypeVftable"
+              }
+            },
+            "offset": 0,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false
+          },
+          {
+            "visibility": "public",
+            "name": "field_1",
+            "doc": " This is a field doc comment",
+            "type_ref": {
+              "type": "raw",
+              "path": "u64"
+            },
+            "offset": 8,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false
+          }
+        ],
+        "associated_functions": [
+          {
+            "visibility": "public",
+            "name": "test_func",
+            "doc": " My test func!\n\n And its second line! :)",
+            "body": {
+              "type": "address",
+              "address": 291
+            },
+            "arguments": [
+              {
+                "type": "const_self"
+              }
+            ],
+            "return_type": null,
+            "calling_convention": "system"
+          }
+        ],
+        "vftable": {
+          "functions": [
+            {
+              "visibility": "public",
+              "name": "test_vfunc",
+              "doc": " My test vfunc!",
+              "body": {
+                "type": "vftable",
+                "function_name": "test_vfunc"
+              },
+              "arguments": [
+                {
+                  "type": "const_self"
+                }
+              ],
+              "return_type": null,
+              "calling_convention": "system"
+            }
+          ]
+        },
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false
+      }
+    },
+    "doc_comments::TestTypeVftable": {
+      "path": "doc_comments::TestTypeVftable",
+      "visibility": "public",
+      "size": 8,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "test_vfunc",
+            "doc": " My test vfunc!",
+            "type_ref": {
+              "type": "function",
+              "calling_convention": "system",
+              "arguments": [
+                {
+                  "name": "this",
+                  "type_ref": {
+                    "type": "const_pointer",
+                    "inner": {
+                      "type": "raw",
+                      "path": "doc_comments::TestType"
+                    }
+                  }
+                }
+              ],
+              "return_type": null
+            },
+            "offset": 0,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false
+          }
+        ],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false
+      }
+    },
+    "enums::TestEnum": {
+      "path": "enums::TestEnum",
+      "visibility": "public",
+      "size": 4,
+      "alignment": 4,
+      "category": "defined",
+      "kind": {
+        "type": "enum",
+        "doc": null,
+        "underlying_type": {
+          "type": "raw",
+          "path": "u32"
+        },
+        "variants": [
+          {
+            "name": "None",
+            "value": 0
+          },
+          {
+            "name": "Some",
+            "value": 1
+          },
+          {
+            "name": "Value",
+            "value": 2
+          }
+        ],
+        "associated_functions": [
+          {
+            "visibility": "public",
+            "name": "test",
+            "doc": null,
+            "body": {
+              "type": "address",
+              "address": 291
+            },
+            "arguments": [],
+            "return_type": null,
+            "calling_convention": "system"
+          },
+          {
+            "visibility": "public",
+            "name": "another_test",
+            "doc": null,
+            "body": {
+              "type": "address",
+              "address": 1110
+            },
+            "arguments": [
+              {
+                "type": "const_self"
+              }
+            ],
+            "return_type": {
+              "type": "raw",
+              "path": "i32"
+            },
+            "calling_convention": "system"
+          }
+        ],
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "default": 0
+      }
+    },
+    "f32": {
+      "path": "f32",
+      "visibility": "public",
+      "size": 4,
+      "alignment": 4,
+      "category": "predefined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": true,
+        "cloneable": true,
+        "defaultable": true,
+        "packed": false
+      }
+    },
+    "f64": {
+      "path": "f64",
+      "visibility": "public",
+      "size": 8,
+      "alignment": 8,
+      "category": "predefined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": true,
+        "cloneable": true,
+        "defaultable": true,
+        "packed": false
+      }
+    },
+    "freestanding_functions::A": {
+      "path": "freestanding_functions::A",
+      "visibility": "private",
+      "size": 4,
+      "alignment": 4,
+      "category": "defined",
+      "kind": {
+        "type": "enum",
+        "doc": null,
+        "underlying_type": {
+          "type": "raw",
+          "path": "i32"
+        },
+        "variants": [
+          {
+            "name": "None",
+            "value": 0
+          }
+        ],
+        "associated_functions": [
+          {
+            "visibility": "private",
+            "name": "test",
+            "doc": null,
+            "body": {
+              "type": "address",
+              "address": 291
+            },
+            "arguments": [],
+            "return_type": null,
+            "calling_convention": "system"
+          }
+        ],
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "default": null
+      }
+    },
+    "i128": {
+      "path": "i128",
+      "visibility": "public",
+      "size": 16,
+      "alignment": 16,
+      "category": "predefined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": true,
+        "cloneable": true,
+        "defaultable": true,
+        "packed": false
+      }
+    },
+    "i16": {
+      "path": "i16",
+      "visibility": "public",
+      "size": 2,
+      "alignment": 2,
+      "category": "predefined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": true,
+        "cloneable": true,
+        "defaultable": true,
+        "packed": false
+      }
+    },
+    "i32": {
+      "path": "i32",
+      "visibility": "public",
+      "size": 4,
+      "alignment": 4,
+      "category": "predefined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": true,
+        "cloneable": true,
+        "defaultable": true,
+        "packed": false
+      }
+    },
+    "i64": {
+      "path": "i64",
+      "visibility": "public",
+      "size": 8,
+      "alignment": 8,
+      "category": "predefined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": true,
+        "cloneable": true,
+        "defaultable": true,
+        "packed": false
+      }
+    },
+    "i8": {
+      "path": "i8",
+      "visibility": "public",
+      "size": 1,
+      "alignment": 1,
+      "category": "predefined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": true,
+        "cloneable": true,
+        "defaultable": true,
+        "packed": false
+      }
+    },
+    "min_size::RoundedType": {
+      "path": "min_size::RoundedType",
+      "visibility": "public",
+      "size": 32,
+      "alignment": 16,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": " Another type to test min_size rounding",
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "value",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "u64"
+            },
+            "offset": 0,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false
+          },
+          {
+            "visibility": "private",
+            "name": "_field_8",
+            "doc": null,
+            "type_ref": {
+              "type": "array",
+              "inner": {
+                "type": "raw",
+                "path": "u8"
+              },
+              "size": 24
+            },
+            "offset": 8,
+            "size": 24,
+            "alignment": 1,
+            "is_base": false
+          }
+        ],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false
+      }
+    },
+    "min_size::TestType": {
+      "path": "min_size::TestType",
+      "visibility": "public",
+      "size": 32,
+      "alignment": 16,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": " Test type with min_size attribute",
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "field_1",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "i32"
+            },
+            "offset": 0,
+            "size": 4,
+            "alignment": 4,
+            "is_base": false
+          },
+          {
+            "visibility": "public",
+            "name": "field_2",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "i32"
+            },
+            "offset": 4,
+            "size": 4,
+            "alignment": 4,
+            "is_base": false
+          },
+          {
+            "visibility": "private",
+            "name": "_field_8",
+            "doc": null,
+            "type_ref": {
+              "type": "array",
+              "inner": {
+                "type": "raw",
+                "path": "u8"
+              },
+              "size": 24
+            },
+            "offset": 8,
+            "size": 24,
+            "alignment": 1,
+            "is_base": false
+          }
+        ],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false
+      }
+    },
+    "multiple_levels::Base": {
+      "path": "multiple_levels::Base",
+      "visibility": "private",
+      "size": 16,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [
+          {
+            "visibility": "private",
+            "name": "vftable",
+            "doc": null,
+            "type_ref": {
+              "type": "const_pointer",
+              "inner": {
+                "type": "raw",
+                "path": "multiple_levels::BaseVftable"
+              }
+            },
+            "offset": 0,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false
+          },
+          {
+            "visibility": "public",
+            "name": "base_field",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "u64"
+            },
+            "offset": 8,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false
+          }
+        ],
+        "associated_functions": [
+          {
+            "visibility": "public",
+            "name": "base_associated",
+            "doc": null,
+            "body": {
+              "type": "address",
+              "address": 291
+            },
+            "arguments": [
+              {
+                "type": "const_self"
+              },
+              {
+                "type": "field",
+                "name": "a",
+                "type_ref": {
+                  "type": "raw",
+                  "path": "i32"
+                }
+              }
+            ],
+            "return_type": {
+              "type": "raw",
+              "path": "i32"
+            },
+            "calling_convention": "system"
+          }
+        ],
+        "vftable": {
+          "functions": [
+            {
+              "visibility": "public",
+              "name": "base_vfunc",
+              "doc": null,
+              "body": {
+                "type": "vftable",
+                "function_name": "base_vfunc"
+              },
+              "arguments": [
+                {
+                  "type": "const_self"
+                },
+                {
+                  "type": "field",
+                  "name": "a",
+                  "type_ref": {
+                    "type": "raw",
+                    "path": "i32"
+                  }
+                }
+              ],
+              "return_type": {
+                "type": "raw",
+                "path": "i32"
+              },
+              "calling_convention": "system"
+            }
+          ]
+        },
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false
+      }
+    },
+    "multiple_levels::BaseVftable": {
+      "path": "multiple_levels::BaseVftable",
+      "visibility": "private",
+      "size": 8,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "base_vfunc",
+            "doc": null,
+            "type_ref": {
+              "type": "function",
+              "calling_convention": "system",
+              "arguments": [
+                {
+                  "name": "this",
+                  "type_ref": {
+                    "type": "const_pointer",
+                    "inner": {
+                      "type": "raw",
+                      "path": "multiple_levels::Base"
+                    }
+                  }
+                },
+                {
+                  "name": "a",
+                  "type_ref": {
+                    "type": "raw",
+                    "path": "i32"
+                  }
+                }
+              ],
+              "return_type": {
+                "type": "raw",
+                "path": "i32"
+              }
+            },
+            "offset": 0,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false
+          }
+        ],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false
+      }
+    },
+    "multiple_levels::Derived": {
+      "path": "multiple_levels::Derived",
+      "visibility": "private",
+      "size": 24,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "base",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "multiple_levels::Base"
+            },
+            "offset": 0,
+            "size": 16,
+            "alignment": 8,
+            "is_base": true
+          },
+          {
+            "visibility": "public",
+            "name": "derived_field",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "u64"
+            },
+            "offset": 16,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false
+          }
+        ],
+        "associated_functions": [
+          {
+            "visibility": "public",
+            "name": "base_associated",
+            "doc": null,
+            "body": {
+              "type": "field",
+              "field": "base",
+              "function_name": "base_associated"
+            },
+            "arguments": [
+              {
+                "type": "const_self"
+              },
+              {
+                "type": "field",
+                "name": "a",
+                "type_ref": {
+                  "type": "raw",
+                  "path": "i32"
+                }
+              }
+            ],
+            "return_type": {
+              "type": "raw",
+              "path": "i32"
+            },
+            "calling_convention": "system"
+          },
+          {
+            "visibility": "public",
+            "name": "derived_associated",
+            "doc": null,
+            "body": {
+              "type": "address",
+              "address": 1110
+            },
+            "arguments": [
+              {
+                "type": "const_self"
+              },
+              {
+                "type": "field",
+                "name": "a",
+                "type_ref": {
+                  "type": "raw",
+                  "path": "i32"
+                }
+              }
+            ],
+            "return_type": {
+              "type": "raw",
+              "path": "i32"
+            },
+            "calling_convention": "system"
+          }
+        ],
+        "vftable": {
+          "functions": [
+            {
+              "visibility": "public",
+              "name": "base_vfunc",
+              "doc": null,
+              "body": {
+                "type": "vftable",
+                "function_name": "base_vfunc"
+              },
+              "arguments": [
+                {
+                  "type": "const_self"
+                },
+                {
+                  "type": "field",
+                  "name": "a",
+                  "type_ref": {
+                    "type": "raw",
+                    "path": "i32"
+                  }
+                }
+              ],
+              "return_type": {
+                "type": "raw",
+                "path": "i32"
+              },
+              "calling_convention": "system"
+            },
+            {
+              "visibility": "public",
+              "name": "derived_vfunc",
+              "doc": null,
+              "body": {
+                "type": "vftable",
+                "function_name": "derived_vfunc"
+              },
+              "arguments": [
+                {
+                  "type": "const_self"
+                },
+                {
+                  "type": "field",
+                  "name": "a",
+                  "type_ref": {
+                    "type": "raw",
+                    "path": "i32"
+                  }
+                }
+              ],
+              "return_type": {
+                "type": "raw",
+                "path": "i32"
+              },
+              "calling_convention": "system"
+            }
+          ]
+        },
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false
+      }
+    },
+    "multiple_levels::DerivedDerived": {
+      "path": "multiple_levels::DerivedDerived",
+      "visibility": "private",
+      "size": 32,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "derived",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "multiple_levels::Derived"
+            },
+            "offset": 0,
+            "size": 24,
+            "alignment": 8,
+            "is_base": true
+          },
+          {
+            "visibility": "public",
+            "name": "derived_derived_field",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "u64"
+            },
+            "offset": 24,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false
+          }
+        ],
+        "associated_functions": [
+          {
+            "visibility": "public",
+            "name": "base_associated",
+            "doc": null,
+            "body": {
+              "type": "field",
+              "field": "derived",
+              "function_name": "base_associated"
+            },
+            "arguments": [
+              {
+                "type": "const_self"
+              },
+              {
+                "type": "field",
+                "name": "a",
+                "type_ref": {
+                  "type": "raw",
+                  "path": "i32"
+                }
+              }
+            ],
+            "return_type": {
+              "type": "raw",
+              "path": "i32"
+            },
+            "calling_convention": "system"
+          },
+          {
+            "visibility": "public",
+            "name": "derived_associated",
+            "doc": null,
+            "body": {
+              "type": "field",
+              "field": "derived",
+              "function_name": "derived_associated"
+            },
+            "arguments": [
+              {
+                "type": "const_self"
+              },
+              {
+                "type": "field",
+                "name": "a",
+                "type_ref": {
+                  "type": "raw",
+                  "path": "i32"
+                }
+              }
+            ],
+            "return_type": {
+              "type": "raw",
+              "path": "i32"
+            },
+            "calling_convention": "system"
+          },
+          {
+            "visibility": "public",
+            "name": "derived_derived_associated",
+            "doc": null,
+            "body": {
+              "type": "address",
+              "address": 1929
+            },
+            "arguments": [
+              {
+                "type": "const_self"
+              },
+              {
+                "type": "field",
+                "name": "a",
+                "type_ref": {
+                  "type": "raw",
+                  "path": "i32"
+                }
+              }
+            ],
+            "return_type": {
+              "type": "raw",
+              "path": "i32"
+            },
+            "calling_convention": "system"
+          }
+        ],
+        "vftable": {
+          "functions": [
+            {
+              "visibility": "public",
+              "name": "base_vfunc",
+              "doc": null,
+              "body": {
+                "type": "vftable",
+                "function_name": "base_vfunc"
+              },
+              "arguments": [
+                {
+                  "type": "const_self"
+                },
+                {
+                  "type": "field",
+                  "name": "a",
+                  "type_ref": {
+                    "type": "raw",
+                    "path": "i32"
+                  }
+                }
+              ],
+              "return_type": {
+                "type": "raw",
+                "path": "i32"
+              },
+              "calling_convention": "system"
+            },
+            {
+              "visibility": "public",
+              "name": "derived_vfunc",
+              "doc": null,
+              "body": {
+                "type": "vftable",
+                "function_name": "derived_vfunc"
+              },
+              "arguments": [
+                {
+                  "type": "const_self"
+                },
+                {
+                  "type": "field",
+                  "name": "a",
+                  "type_ref": {
+                    "type": "raw",
+                    "path": "i32"
+                  }
+                }
+              ],
+              "return_type": {
+                "type": "raw",
+                "path": "i32"
+              },
+              "calling_convention": "system"
+            },
+            {
+              "visibility": "public",
+              "name": "derived_derived_vfunc",
+              "doc": null,
+              "body": {
+                "type": "vftable",
+                "function_name": "derived_derived_vfunc"
+              },
+              "arguments": [
+                {
+                  "type": "const_self"
+                },
+                {
+                  "type": "field",
+                  "name": "a",
+                  "type_ref": {
+                    "type": "raw",
+                    "path": "i32"
+                  }
+                }
+              ],
+              "return_type": {
+                "type": "raw",
+                "path": "i32"
+              },
+              "calling_convention": "system"
+            }
+          ]
+        },
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false
+      }
+    },
+    "multiple_levels::DerivedDerivedDerived": {
+      "path": "multiple_levels::DerivedDerivedDerived",
+      "visibility": "private",
+      "size": 40,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "derived_derived",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "multiple_levels::DerivedDerived"
+            },
+            "offset": 0,
+            "size": 32,
+            "alignment": 8,
+            "is_base": true
+          },
+          {
+            "visibility": "public",
+            "name": "derived_derived_derived_field",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "u64"
+            },
+            "offset": 32,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false
+          }
+        ],
+        "associated_functions": [
+          {
+            "visibility": "public",
+            "name": "base_associated",
+            "doc": null,
+            "body": {
+              "type": "field",
+              "field": "derived_derived",
+              "function_name": "base_associated"
+            },
+            "arguments": [
+              {
+                "type": "const_self"
+              },
+              {
+                "type": "field",
+                "name": "a",
+                "type_ref": {
+                  "type": "raw",
+                  "path": "i32"
+                }
+              }
+            ],
+            "return_type": {
+              "type": "raw",
+              "path": "i32"
+            },
+            "calling_convention": "system"
+          },
+          {
+            "visibility": "public",
+            "name": "derived_associated",
+            "doc": null,
+            "body": {
+              "type": "field",
+              "field": "derived_derived",
+              "function_name": "derived_associated"
+            },
+            "arguments": [
+              {
+                "type": "const_self"
+              },
+              {
+                "type": "field",
+                "name": "a",
+                "type_ref": {
+                  "type": "raw",
+                  "path": "i32"
+                }
+              }
+            ],
+            "return_type": {
+              "type": "raw",
+              "path": "i32"
+            },
+            "calling_convention": "system"
+          },
+          {
+            "visibility": "public",
+            "name": "derived_derived_associated",
+            "doc": null,
+            "body": {
+              "type": "field",
+              "field": "derived_derived",
+              "function_name": "derived_derived_associated"
+            },
+            "arguments": [
+              {
+                "type": "const_self"
+              },
+              {
+                "type": "field",
+                "name": "a",
+                "type_ref": {
+                  "type": "raw",
+                  "path": "i32"
+                }
+              }
+            ],
+            "return_type": {
+              "type": "raw",
+              "path": "i32"
+            },
+            "calling_convention": "system"
+          },
+          {
+            "visibility": "public",
+            "name": "derived_derived_derived_associated",
+            "doc": null,
+            "body": {
+              "type": "address",
+              "address": 2748
+            },
+            "arguments": [
+              {
+                "type": "const_self"
+              },
+              {
+                "type": "field",
+                "name": "a",
+                "type_ref": {
+                  "type": "raw",
+                  "path": "i32"
+                }
+              }
+            ],
+            "return_type": {
+              "type": "raw",
+              "path": "i32"
+            },
+            "calling_convention": "system"
+          }
+        ],
+        "vftable": {
+          "functions": [
+            {
+              "visibility": "public",
+              "name": "base_vfunc",
+              "doc": null,
+              "body": {
+                "type": "vftable",
+                "function_name": "base_vfunc"
+              },
+              "arguments": [
+                {
+                  "type": "const_self"
+                },
+                {
+                  "type": "field",
+                  "name": "a",
+                  "type_ref": {
+                    "type": "raw",
+                    "path": "i32"
+                  }
+                }
+              ],
+              "return_type": {
+                "type": "raw",
+                "path": "i32"
+              },
+              "calling_convention": "system"
+            },
+            {
+              "visibility": "public",
+              "name": "derived_vfunc",
+              "doc": null,
+              "body": {
+                "type": "vftable",
+                "function_name": "derived_vfunc"
+              },
+              "arguments": [
+                {
+                  "type": "const_self"
+                },
+                {
+                  "type": "field",
+                  "name": "a",
+                  "type_ref": {
+                    "type": "raw",
+                    "path": "i32"
+                  }
+                }
+              ],
+              "return_type": {
+                "type": "raw",
+                "path": "i32"
+              },
+              "calling_convention": "system"
+            },
+            {
+              "visibility": "public",
+              "name": "derived_derived_vfunc",
+              "doc": null,
+              "body": {
+                "type": "vftable",
+                "function_name": "derived_derived_vfunc"
+              },
+              "arguments": [
+                {
+                  "type": "const_self"
+                },
+                {
+                  "type": "field",
+                  "name": "a",
+                  "type_ref": {
+                    "type": "raw",
+                    "path": "i32"
+                  }
+                }
+              ],
+              "return_type": {
+                "type": "raw",
+                "path": "i32"
+              },
+              "calling_convention": "system"
+            },
+            {
+              "visibility": "public",
+              "name": "derived_derived_derived_vfunc",
+              "doc": null,
+              "body": {
+                "type": "vftable",
+                "function_name": "derived_derived_derived_vfunc"
+              },
+              "arguments": [
+                {
+                  "type": "const_self"
+                },
+                {
+                  "type": "field",
+                  "name": "a",
+                  "type_ref": {
+                    "type": "raw",
+                    "path": "i32"
+                  }
+                }
+              ],
+              "return_type": {
+                "type": "raw",
+                "path": "i32"
+              },
+              "calling_convention": "system"
+            }
+          ]
+        },
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false
+      }
+    },
+    "multiple_levels::DerivedDerivedDerivedVftable": {
+      "path": "multiple_levels::DerivedDerivedDerivedVftable",
+      "visibility": "private",
+      "size": 32,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "base_vfunc",
+            "doc": null,
+            "type_ref": {
+              "type": "function",
+              "calling_convention": "system",
+              "arguments": [
+                {
+                  "name": "this",
+                  "type_ref": {
+                    "type": "const_pointer",
+                    "inner": {
+                      "type": "raw",
+                      "path": "multiple_levels::DerivedDerivedDerived"
+                    }
+                  }
+                },
+                {
+                  "name": "a",
+                  "type_ref": {
+                    "type": "raw",
+                    "path": "i32"
+                  }
+                }
+              ],
+              "return_type": {
+                "type": "raw",
+                "path": "i32"
+              }
+            },
+            "offset": 0,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false
+          },
+          {
+            "visibility": "public",
+            "name": "derived_vfunc",
+            "doc": null,
+            "type_ref": {
+              "type": "function",
+              "calling_convention": "system",
+              "arguments": [
+                {
+                  "name": "this",
+                  "type_ref": {
+                    "type": "const_pointer",
+                    "inner": {
+                      "type": "raw",
+                      "path": "multiple_levels::DerivedDerivedDerived"
+                    }
+                  }
+                },
+                {
+                  "name": "a",
+                  "type_ref": {
+                    "type": "raw",
+                    "path": "i32"
+                  }
+                }
+              ],
+              "return_type": {
+                "type": "raw",
+                "path": "i32"
+              }
+            },
+            "offset": 8,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false
+          },
+          {
+            "visibility": "public",
+            "name": "derived_derived_vfunc",
+            "doc": null,
+            "type_ref": {
+              "type": "function",
+              "calling_convention": "system",
+              "arguments": [
+                {
+                  "name": "this",
+                  "type_ref": {
+                    "type": "const_pointer",
+                    "inner": {
+                      "type": "raw",
+                      "path": "multiple_levels::DerivedDerivedDerived"
+                    }
+                  }
+                },
+                {
+                  "name": "a",
+                  "type_ref": {
+                    "type": "raw",
+                    "path": "i32"
+                  }
+                }
+              ],
+              "return_type": {
+                "type": "raw",
+                "path": "i32"
+              }
+            },
+            "offset": 16,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false
+          },
+          {
+            "visibility": "public",
+            "name": "derived_derived_derived_vfunc",
+            "doc": null,
+            "type_ref": {
+              "type": "function",
+              "calling_convention": "system",
+              "arguments": [
+                {
+                  "name": "this",
+                  "type_ref": {
+                    "type": "const_pointer",
+                    "inner": {
+                      "type": "raw",
+                      "path": "multiple_levels::DerivedDerivedDerived"
+                    }
+                  }
+                },
+                {
+                  "name": "a",
+                  "type_ref": {
+                    "type": "raw",
+                    "path": "i32"
+                  }
+                }
+              ],
+              "return_type": {
+                "type": "raw",
+                "path": "i32"
+              }
+            },
+            "offset": 24,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false
+          }
+        ],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false
+      }
+    },
+    "multiple_levels::DerivedDerivedVftable": {
+      "path": "multiple_levels::DerivedDerivedVftable",
+      "visibility": "private",
+      "size": 24,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "base_vfunc",
+            "doc": null,
+            "type_ref": {
+              "type": "function",
+              "calling_convention": "system",
+              "arguments": [
+                {
+                  "name": "this",
+                  "type_ref": {
+                    "type": "const_pointer",
+                    "inner": {
+                      "type": "raw",
+                      "path": "multiple_levels::DerivedDerived"
+                    }
+                  }
+                },
+                {
+                  "name": "a",
+                  "type_ref": {
+                    "type": "raw",
+                    "path": "i32"
+                  }
+                }
+              ],
+              "return_type": {
+                "type": "raw",
+                "path": "i32"
+              }
+            },
+            "offset": 0,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false
+          },
+          {
+            "visibility": "public",
+            "name": "derived_vfunc",
+            "doc": null,
+            "type_ref": {
+              "type": "function",
+              "calling_convention": "system",
+              "arguments": [
+                {
+                  "name": "this",
+                  "type_ref": {
+                    "type": "const_pointer",
+                    "inner": {
+                      "type": "raw",
+                      "path": "multiple_levels::DerivedDerived"
+                    }
+                  }
+                },
+                {
+                  "name": "a",
+                  "type_ref": {
+                    "type": "raw",
+                    "path": "i32"
+                  }
+                }
+              ],
+              "return_type": {
+                "type": "raw",
+                "path": "i32"
+              }
+            },
+            "offset": 8,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false
+          },
+          {
+            "visibility": "public",
+            "name": "derived_derived_vfunc",
+            "doc": null,
+            "type_ref": {
+              "type": "function",
+              "calling_convention": "system",
+              "arguments": [
+                {
+                  "name": "this",
+                  "type_ref": {
+                    "type": "const_pointer",
+                    "inner": {
+                      "type": "raw",
+                      "path": "multiple_levels::DerivedDerived"
+                    }
+                  }
+                },
+                {
+                  "name": "a",
+                  "type_ref": {
+                    "type": "raw",
+                    "path": "i32"
+                  }
+                }
+              ],
+              "return_type": {
+                "type": "raw",
+                "path": "i32"
+              }
+            },
+            "offset": 16,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false
+          }
+        ],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false
+      }
+    },
+    "multiple_levels::DerivedVftable": {
+      "path": "multiple_levels::DerivedVftable",
+      "visibility": "private",
+      "size": 16,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "base_vfunc",
+            "doc": null,
+            "type_ref": {
+              "type": "function",
+              "calling_convention": "system",
+              "arguments": [
+                {
+                  "name": "this",
+                  "type_ref": {
+                    "type": "const_pointer",
+                    "inner": {
+                      "type": "raw",
+                      "path": "multiple_levels::Derived"
+                    }
+                  }
+                },
+                {
+                  "name": "a",
+                  "type_ref": {
+                    "type": "raw",
+                    "path": "i32"
+                  }
+                }
+              ],
+              "return_type": {
+                "type": "raw",
+                "path": "i32"
+              }
+            },
+            "offset": 0,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false
+          },
+          {
+            "visibility": "public",
+            "name": "derived_vfunc",
+            "doc": null,
+            "type_ref": {
+              "type": "function",
+              "calling_convention": "system",
+              "arguments": [
+                {
+                  "name": "this",
+                  "type_ref": {
+                    "type": "const_pointer",
+                    "inner": {
+                      "type": "raw",
+                      "path": "multiple_levels::Derived"
+                    }
+                  }
+                },
+                {
+                  "name": "a",
+                  "type_ref": {
+                    "type": "raw",
+                    "path": "i32"
+                  }
+                }
+              ],
+              "return_type": {
+                "type": "raw",
+                "path": "i32"
+              }
+            },
+            "offset": 8,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false
+          }
+        ],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false
+      }
+    },
+    "singleton::TestType": {
+      "path": "singleton::TestType",
+      "visibility": "public",
+      "size": 4,
+      "alignment": 4,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "field_1",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "u32"
+            },
+            "offset": 0,
+            "size": 4,
+            "alignment": 4,
+            "is_base": false
+          }
+        ],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": 322401073,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false
+      }
+    },
+    "two_base_classes::BaseA": {
+      "path": "two_base_classes::BaseA",
+      "visibility": "private",
+      "size": 16,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [
+          {
+            "visibility": "private",
+            "name": "vftable",
+            "doc": null,
+            "type_ref": {
+              "type": "const_pointer",
+              "inner": {
+                "type": "raw",
+                "path": "two_base_classes::BaseAVftable"
+              }
+            },
+            "offset": 0,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false
+          },
+          {
+            "visibility": "public",
+            "name": "field_a",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "u64"
+            },
+            "offset": 8,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false
+          }
+        ],
+        "associated_functions": [
+          {
+            "visibility": "public",
+            "name": "base_a_associated",
+            "doc": null,
+            "body": {
+              "type": "address",
+              "address": 291
+            },
+            "arguments": [
+              {
+                "type": "const_self"
+              },
+              {
+                "type": "field",
+                "name": "a",
+                "type_ref": {
+                  "type": "raw",
+                  "path": "i32"
+                }
+              }
+            ],
+            "return_type": {
+              "type": "raw",
+              "path": "i32"
+            },
+            "calling_convention": "system"
+          }
+        ],
+        "vftable": {
+          "functions": [
+            {
+              "visibility": "public",
+              "name": "base_a_vfunc",
+              "doc": null,
+              "body": {
+                "type": "vftable",
+                "function_name": "base_a_vfunc"
+              },
+              "arguments": [
+                {
+                  "type": "const_self"
+                },
+                {
+                  "type": "field",
+                  "name": "a",
+                  "type_ref": {
+                    "type": "raw",
+                    "path": "i32"
+                  }
+                }
+              ],
+              "return_type": {
+                "type": "raw",
+                "path": "i32"
+              },
+              "calling_convention": "system"
+            }
+          ]
+        },
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false
+      }
+    },
+    "two_base_classes::BaseAVftable": {
+      "path": "two_base_classes::BaseAVftable",
+      "visibility": "private",
+      "size": 8,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "base_a_vfunc",
+            "doc": null,
+            "type_ref": {
+              "type": "function",
+              "calling_convention": "system",
+              "arguments": [
+                {
+                  "name": "this",
+                  "type_ref": {
+                    "type": "const_pointer",
+                    "inner": {
+                      "type": "raw",
+                      "path": "two_base_classes::BaseA"
+                    }
+                  }
+                },
+                {
+                  "name": "a",
+                  "type_ref": {
+                    "type": "raw",
+                    "path": "i32"
+                  }
+                }
+              ],
+              "return_type": {
+                "type": "raw",
+                "path": "i32"
+              }
+            },
+            "offset": 0,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false
+          }
+        ],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false
+      }
+    },
+    "two_base_classes::BaseB": {
+      "path": "two_base_classes::BaseB",
+      "visibility": "private",
+      "size": 16,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [
+          {
+            "visibility": "private",
+            "name": "vftable",
+            "doc": null,
+            "type_ref": {
+              "type": "const_pointer",
+              "inner": {
+                "type": "raw",
+                "path": "two_base_classes::BaseBVftable"
+              }
+            },
+            "offset": 0,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false
+          },
+          {
+            "visibility": "public",
+            "name": "field_b",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "u64"
+            },
+            "offset": 8,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false
+          }
+        ],
+        "associated_functions": [
+          {
+            "visibility": "public",
+            "name": "base_b_associated",
+            "doc": null,
+            "body": {
+              "type": "address",
+              "address": 1110
+            },
+            "arguments": [
+              {
+                "type": "const_self"
+              },
+              {
+                "type": "field",
+                "name": "a",
+                "type_ref": {
+                  "type": "raw",
+                  "path": "i32"
+                }
+              }
+            ],
+            "return_type": {
+              "type": "raw",
+              "path": "i32"
+            },
+            "calling_convention": "system"
+          }
+        ],
+        "vftable": {
+          "functions": [
+            {
+              "visibility": "public",
+              "name": "base_b_vfunc",
+              "doc": null,
+              "body": {
+                "type": "vftable",
+                "function_name": "base_b_vfunc"
+              },
+              "arguments": [
+                {
+                  "type": "const_self"
+                },
+                {
+                  "type": "field",
+                  "name": "a",
+                  "type_ref": {
+                    "type": "raw",
+                    "path": "i32"
+                  }
+                }
+              ],
+              "return_type": {
+                "type": "raw",
+                "path": "i32"
+              },
+              "calling_convention": "system"
+            }
+          ]
+        },
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false
+      }
+    },
+    "two_base_classes::BaseBVftable": {
+      "path": "two_base_classes::BaseBVftable",
+      "visibility": "private",
+      "size": 8,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "base_b_vfunc",
+            "doc": null,
+            "type_ref": {
+              "type": "function",
+              "calling_convention": "system",
+              "arguments": [
+                {
+                  "name": "this",
+                  "type_ref": {
+                    "type": "const_pointer",
+                    "inner": {
+                      "type": "raw",
+                      "path": "two_base_classes::BaseB"
+                    }
+                  }
+                },
+                {
+                  "name": "a",
+                  "type_ref": {
+                    "type": "raw",
+                    "path": "i32"
+                  }
+                }
+              ],
+              "return_type": {
+                "type": "raw",
+                "path": "i32"
+              }
+            },
+            "offset": 0,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false
+          }
+        ],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false
+      }
+    },
+    "two_base_classes::Derived": {
+      "path": "two_base_classes::Derived",
+      "visibility": "private",
+      "size": 32,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "base_a",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "two_base_classes::BaseA"
+            },
+            "offset": 0,
+            "size": 16,
+            "alignment": 8,
+            "is_base": true
+          },
+          {
+            "visibility": "public",
+            "name": "base_b",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "two_base_classes::BaseB"
+            },
+            "offset": 16,
+            "size": 16,
+            "alignment": 8,
+            "is_base": true
+          }
+        ],
+        "associated_functions": [
+          {
+            "visibility": "public",
+            "name": "base_a_associated",
+            "doc": null,
+            "body": {
+              "type": "field",
+              "field": "base_a",
+              "function_name": "base_a_associated"
+            },
+            "arguments": [
+              {
+                "type": "const_self"
+              },
+              {
+                "type": "field",
+                "name": "a",
+                "type_ref": {
+                  "type": "raw",
+                  "path": "i32"
+                }
+              }
+            ],
+            "return_type": {
+              "type": "raw",
+              "path": "i32"
+            },
+            "calling_convention": "system"
+          },
+          {
+            "visibility": "public",
+            "name": "base_b_associated",
+            "doc": null,
+            "body": {
+              "type": "field",
+              "field": "base_b",
+              "function_name": "base_b_associated"
+            },
+            "arguments": [
+              {
+                "type": "const_self"
+              },
+              {
+                "type": "field",
+                "name": "a",
+                "type_ref": {
+                  "type": "raw",
+                  "path": "i32"
+                }
+              }
+            ],
+            "return_type": {
+              "type": "raw",
+              "path": "i32"
+            },
+            "calling_convention": "system"
+          },
+          {
+            "visibility": "public",
+            "name": "base_b_vfunc",
+            "doc": null,
+            "body": {
+              "type": "field",
+              "field": "base_b",
+              "function_name": "base_b_vfunc"
+            },
+            "arguments": [
+              {
+                "type": "const_self"
+              },
+              {
+                "type": "field",
+                "name": "a",
+                "type_ref": {
+                  "type": "raw",
+                  "path": "i32"
+                }
+              }
+            ],
+            "return_type": {
+              "type": "raw",
+              "path": "i32"
+            },
+            "calling_convention": "system"
+          },
+          {
+            "visibility": "public",
+            "name": "derived_associated",
+            "doc": null,
+            "body": {
+              "type": "address",
+              "address": 1929
+            },
+            "arguments": [
+              {
+                "type": "const_self"
+              },
+              {
+                "type": "field",
+                "name": "a",
+                "type_ref": {
+                  "type": "raw",
+                  "path": "i32"
+                }
+              }
+            ],
+            "return_type": {
+              "type": "raw",
+              "path": "i32"
+            },
+            "calling_convention": "system"
+          }
+        ],
+        "vftable": {
+          "functions": [
+            {
+              "visibility": "public",
+              "name": "base_a_vfunc",
+              "doc": null,
+              "body": {
+                "type": "vftable",
+                "function_name": "base_a_vfunc"
+              },
+              "arguments": [
+                {
+                  "type": "const_self"
+                },
+                {
+                  "type": "field",
+                  "name": "a",
+                  "type_ref": {
+                    "type": "raw",
+                    "path": "i32"
+                  }
+                }
+              ],
+              "return_type": {
+                "type": "raw",
+                "path": "i32"
+              },
+              "calling_convention": "system"
+            },
+            {
+              "visibility": "public",
+              "name": "derived_vfunc",
+              "doc": null,
+              "body": {
+                "type": "vftable",
+                "function_name": "derived_vfunc"
+              },
+              "arguments": [
+                {
+                  "type": "const_self"
+                },
+                {
+                  "type": "field",
+                  "name": "a",
+                  "type_ref": {
+                    "type": "raw",
+                    "path": "i32"
+                  }
+                }
+              ],
+              "return_type": {
+                "type": "raw",
+                "path": "i32"
+              },
+              "calling_convention": "system"
+            }
+          ]
+        },
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false
+      }
+    },
+    "two_base_classes::DerivedVftable": {
+      "path": "two_base_classes::DerivedVftable",
+      "visibility": "private",
+      "size": 16,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "base_a_vfunc",
+            "doc": null,
+            "type_ref": {
+              "type": "function",
+              "calling_convention": "system",
+              "arguments": [
+                {
+                  "name": "this",
+                  "type_ref": {
+                    "type": "const_pointer",
+                    "inner": {
+                      "type": "raw",
+                      "path": "two_base_classes::Derived"
+                    }
+                  }
+                },
+                {
+                  "name": "a",
+                  "type_ref": {
+                    "type": "raw",
+                    "path": "i32"
+                  }
+                }
+              ],
+              "return_type": {
+                "type": "raw",
+                "path": "i32"
+              }
+            },
+            "offset": 0,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false
+          },
+          {
+            "visibility": "public",
+            "name": "derived_vfunc",
+            "doc": null,
+            "type_ref": {
+              "type": "function",
+              "calling_convention": "system",
+              "arguments": [
+                {
+                  "name": "this",
+                  "type_ref": {
+                    "type": "const_pointer",
+                    "inner": {
+                      "type": "raw",
+                      "path": "two_base_classes::Derived"
+                    }
+                  }
+                },
+                {
+                  "name": "a",
+                  "type_ref": {
+                    "type": "raw",
+                    "path": "i32"
+                  }
+                }
+              ],
+              "return_type": {
+                "type": "raw",
+                "path": "i32"
+              }
+            },
+            "offset": 8,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false
+          }
+        ],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false
+      }
+    },
+    "u128": {
+      "path": "u128",
+      "visibility": "public",
+      "size": 16,
+      "alignment": 16,
+      "category": "predefined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": true,
+        "cloneable": true,
+        "defaultable": true,
+        "packed": false
+      }
+    },
+    "u16": {
+      "path": "u16",
+      "visibility": "public",
+      "size": 2,
+      "alignment": 2,
+      "category": "predefined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": true,
+        "cloneable": true,
+        "defaultable": true,
+        "packed": false
+      }
+    },
+    "u32": {
+      "path": "u32",
+      "visibility": "public",
+      "size": 4,
+      "alignment": 4,
+      "category": "predefined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": true,
+        "cloneable": true,
+        "defaultable": true,
+        "packed": false
+      }
+    },
+    "u64": {
+      "path": "u64",
+      "visibility": "public",
+      "size": 8,
+      "alignment": 8,
+      "category": "predefined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": true,
+        "cloneable": true,
+        "defaultable": true,
+        "packed": false
+      }
+    },
+    "u8": {
+      "path": "u8",
+      "visibility": "public",
+      "size": 1,
+      "alignment": 1,
+      "category": "predefined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": true,
+        "cloneable": true,
+        "defaultable": true,
+        "packed": false
+      }
+    },
+    "void": {
+      "path": "void",
+      "visibility": "public",
+      "size": 0,
+      "alignment": 1,
+      "category": "predefined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": true,
+        "cloneable": true,
+        "defaultable": true,
+        "packed": false
+      }
+    }
+  },
+  "modules": {
+    "bitflags": {
+      "doc": null,
+      "items": [],
+      "submodules": {},
+      "extern_values": [],
+      "functions": []
+    },
+    "diamond_inheritance": {
+      "doc": null,
+      "items": [],
+      "submodules": {},
+      "extern_values": [],
+      "functions": []
+    },
+    "doc_comments": {
+      "doc": null,
+      "items": [],
+      "submodules": {},
+      "extern_values": [],
+      "functions": []
+    },
+    "enums": {
+      "doc": null,
+      "items": [],
+      "submodules": {},
+      "extern_values": [],
+      "functions": []
+    },
+    "freestanding_functions": {
+      "doc": null,
+      "items": [],
+      "submodules": {},
+      "extern_values": [],
+      "functions": []
+    },
+    "min_size": {
+      "doc": null,
+      "items": [],
+      "submodules": {},
+      "extern_values": [],
+      "functions": []
+    },
+    "multiple_levels": {
+      "doc": null,
+      "items": [],
+      "submodules": {},
+      "extern_values": [],
+      "functions": []
+    },
+    "root": {
+      "doc": null,
+      "items": [
+        "i32",
+        "f64",
+        "void",
+        "bool",
+        "u64",
+        "i16",
+        "i128",
+        "u16",
+        "i8",
+        "f32",
+        "i64",
+        "u32",
+        "u8",
+        "u128"
+      ],
+      "submodules": {},
+      "extern_values": [],
+      "functions": []
+    },
+    "singleton": {
+      "doc": null,
+      "items": [],
+      "submodules": {},
+      "extern_values": [],
+      "functions": []
+    },
+    "two_base_classes": {
+      "doc": null,
+      "items": [],
+      "submodules": {},
+      "extern_values": [],
+      "functions": []
+    }
+  }
+}
