@@ -36,11 +36,13 @@ pub fn build(in_dir: &Path, out_dir: &Path, backend: Backend) -> anyhow::Result<
     Ok(())
 }
 
-pub fn build_script(out_dir: Option<&Path>) -> anyhow::Result<()> {
-    println!("cargo:rerun-if-changed=types");
+/// Helper for running Pyxis against `in_dir` to produce `out_dir`. If `out_dir` is not provided, it will default to `OUT_DIR`.
+pub fn build_script(in_dir: &Path, out_dir: Option<&Path>) -> anyhow::Result<()> {
+    println!("cargo:rerun-if-changed={}", in_dir.display());
 
-    let cargo_out_dir = std::env::var("OUT_DIR")?;
-    let out_dir = out_dir.unwrap_or(Path::new(&cargo_out_dir));
-
-    build(Path::new("types"), out_dir, Backend::Rust)
+    build(
+        in_dir,
+        out_dir.unwrap_or(Path::new(&std::env::var("OUT_DIR")?)),
+        Backend::Rust,
+    )
 }
