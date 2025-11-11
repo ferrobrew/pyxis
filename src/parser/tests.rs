@@ -1,4 +1,7 @@
-use crate::{grammar::test_aliases::*, parser::{parse_str, strip_spans::StripSpans}};
+use crate::{
+    grammar::test_aliases::*,
+    parser::{parse_str, strip_spans::StripSpans},
+};
 
 use pretty_assertions::assert_eq;
 

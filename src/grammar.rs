@@ -836,8 +836,7 @@ impl Module {
     }
     pub fn with_extern_types(mut self, extern_types: impl Into<Vec<(Ident, Attributes)>>) -> Self {
         for (name, attrs) in extern_types.into() {
-            self.items
-                .push(ModuleItem::ExternType(name, attrs, vec![]));
+            self.items.push(ModuleItem::ExternType(name, attrs, vec![]));
         }
         self
     }

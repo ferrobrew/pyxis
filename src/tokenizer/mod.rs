@@ -26,35 +26,35 @@ pub enum TokenKind {
     CharLiteral(char),
 
     // Comments (preserve the original text including markers)
-    DocOuter(String),   // ///
-    DocInner(String),   // //!
-    Comment(String),    // //
+    DocOuter(String),         // ///
+    DocInner(String),         // //!
+    Comment(String),          // //
     MultiLineComment(String), // /* */
 
     // Punctuation and Operators
-    ColonColon,  // ::
-    Arrow,       // ->
-    Amp,         // &
-    Star,        // *
-    LBracket,    // [
-    RBracket,    // ]
-    LBrace,      // {
-    RBrace,      // }
-    LParen,      // (
-    RParen,      // )
-    Lt,          // <
-    Gt,          // >
-    Eq,          // =
-    Colon,       // :
-    Semi,        // ;
-    Comma,       // ,
-    Bang,        // !
-    Hash,        // #
-    Underscore,  // _
-    Mut,         // mut (for pointers)
-    Const,       // const (for pointers)
-    SelfValue,   // self
-    SelfType,    // Self
+    ColonColon, // ::
+    Arrow,      // ->
+    Amp,        // &
+    Star,       // *
+    LBracket,   // [
+    RBracket,   // ]
+    LBrace,     // {
+    RBrace,     // }
+    LParen,     // (
+    RParen,     // )
+    Lt,         // <
+    Gt,         // >
+    Eq,         // =
+    Colon,      // :
+    Semi,       // ;
+    Comma,      // ,
+    Bang,       // !
+    Hash,       // #
+    Underscore, // _
+    Mut,        // mut (for pointers)
+    Const,      // const (for pointers)
+    SelfValue,  // self
+    SelfType,   // Self
 
     // Special
     Eof,
@@ -228,7 +228,10 @@ impl Lexer {
                     self.advance();
                     let end = self.current_location();
                     let text = self.input[start_pos..self.pos].to_string();
-                    Ok(Token::new(TokenKind::ColonColon, Span::new(start, end, text)))
+                    Ok(Token::new(
+                        TokenKind::ColonColon,
+                        Span::new(start, end, text),
+                    ))
                 } else {
                     let end = self.current_location();
                     let text = self.input[start_pos..self.pos].to_string();
@@ -388,7 +391,11 @@ impl Lexer {
         Ok(Token::new(kind, Span::new(start, end, text)))
     }
 
-    fn lex_multiline_comment(&mut self, start: Location, start_pos: usize) -> Result<Token, LexError> {
+    fn lex_multiline_comment(
+        &mut self,
+        start: Location,
+        start_pos: usize,
+    ) -> Result<Token, LexError> {
         self.advance(); // consume '/'
         self.advance(); // consume '*'
 
@@ -418,10 +425,17 @@ impl Lexer {
         let end = self.current_location();
         let text = self.input[start_pos..self.pos].to_string();
 
-        Ok(Token::new(TokenKind::MultiLineComment(text.clone()), Span::new(start, end, text)))
+        Ok(Token::new(
+            TokenKind::MultiLineComment(text.clone()),
+            Span::new(start, end, text),
+        ))
     }
 
-    fn lex_ident_or_keyword(&mut self, start: Location, start_pos: usize) -> Result<Token, LexError> {
+    fn lex_ident_or_keyword(
+        &mut self,
+        start: Location,
+        start_pos: usize,
+    ) -> Result<Token, LexError> {
         while let Some(ch) = self.peek() {
             if ch.is_alphanumeric() || ch == '_' {
                 self.advance();
@@ -530,10 +544,18 @@ impl Lexer {
         let end = self.current_location();
         let text = self.input[start_pos..self.pos].to_string();
 
-        Ok(Token::new(TokenKind::IntLiteral(text.clone()), Span::new(start, end, text)))
+        Ok(Token::new(
+            TokenKind::IntLiteral(text.clone()),
+            Span::new(start, end, text),
+        ))
     }
 
-    fn lex_string(&mut self, start: Location, start_pos: usize, _hash_count: usize) -> Result<Token, LexError> {
+    fn lex_string(
+        &mut self,
+        start: Location,
+        start_pos: usize,
+        _hash_count: usize,
+    ) -> Result<Token, LexError> {
         self.advance(); // consume opening '"'
 
         let mut value = String::new();
@@ -581,7 +603,10 @@ impl Lexer {
         let end = self.current_location();
         let text = self.input[start_pos..self.pos].to_string();
 
-        Ok(Token::new(TokenKind::StringLiteral(value), Span::new(start, end, text)))
+        Ok(Token::new(
+            TokenKind::StringLiteral(value),
+            Span::new(start, end, text),
+        ))
     }
 
     fn lex_raw_string(&mut self, start: Location, start_pos: usize) -> Result<Token, LexError> {
@@ -643,7 +668,10 @@ impl Lexer {
         let end = self.current_location();
         let text = self.input[start_pos..self.pos].to_string();
 
-        Ok(Token::new(TokenKind::StringLiteral(value), Span::new(start, end, text)))
+        Ok(Token::new(
+            TokenKind::StringLiteral(value),
+            Span::new(start, end, text),
+        ))
     }
 
     fn lex_char(&mut self, start: Location, start_pos: usize) -> Result<Token, LexError> {
@@ -696,7 +724,10 @@ impl Lexer {
         let end = self.current_location();
         let text = self.input[start_pos..self.pos].to_string();
 
-        Ok(Token::new(TokenKind::CharLiteral(ch), Span::new(start, end, text)))
+        Ok(Token::new(
+            TokenKind::CharLiteral(ch),
+            Span::new(start, end, text),
+        ))
     }
 }
 

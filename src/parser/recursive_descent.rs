@@ -98,34 +98,22 @@ impl Parser {
             TokenKind::DocOuter(ref text) => {
                 let token = self.advance();
                 let content = text.strip_prefix("///").unwrap_or(text).trim().to_string();
-                Some(Spanned::new(
-                    Comment::DocOuter(vec![content]),
-                    token.span,
-                ))
+                Some(Spanned::new(Comment::DocOuter(vec![content]), token.span))
             }
             TokenKind::DocInner(ref text) => {
                 let token = self.advance();
                 let content = text.strip_prefix("//!").unwrap_or(text).trim().to_string();
-                Some(Spanned::new(
-                    Comment::DocInner(vec![content]),
-                    token.span,
-                ))
+                Some(Spanned::new(Comment::DocInner(vec![content]), token.span))
             }
             TokenKind::Comment(ref text) => {
                 let token = self.advance();
-                Some(Spanned::new(
-                    Comment::Regular(text.clone()),
-                    token.span,
-                ))
+                Some(Spanned::new(Comment::Regular(text.clone()), token.span))
             }
             TokenKind::MultiLineComment(ref text) => {
                 let token = self.advance();
                 // Split multiline comments into lines
                 let lines: Vec<String> = text.lines().map(|s| s.to_string()).collect();
-                Some(Spanned::new(
-                    Comment::MultiLine(lines),
-                    token.span,
-                ))
+                Some(Spanned::new(Comment::MultiLine(lines), token.span))
             }
             _ => None,
         }
@@ -146,7 +134,10 @@ impl Parser {
 
         while !matches!(self.peek(), TokenKind::Eof) {
             // Collect non-doc comments (doc comments will be collected by item parsers)
-            while matches!(self.peek(), TokenKind::Comment(_) | TokenKind::MultiLineComment(_)) {
+            while matches!(
+                self.peek(),
+                TokenKind::Comment(_) | TokenKind::MultiLineComment(_)
+            ) {
                 if let Some(comment) = self.collect_comment() {
                     items.push(ModuleItem::Comment(comment));
                 }
@@ -212,7 +203,10 @@ impl Parser {
                 match &self.tokens[pos].kind {
                     TokenKind::Extern => {
                         // Could be extern type or extern value
-                        if matches!(self.tokens.get(pos + 1).map(|t| &t.kind), Some(TokenKind::Type)) {
+                        if matches!(
+                            self.tokens.get(pos + 1).map(|t| &t.kind),
+                            Some(TokenKind::Type)
+                        ) {
                             self.parse_extern_type()
                         } else {
                             self.parse_extern_value().map(ModuleItem::ExternValue)
@@ -224,12 +218,8 @@ impl Parser {
                             Some(TokenKind::Extern) => {
                                 self.parse_extern_value().map(ModuleItem::ExternValue)
                             }
-                            Some(TokenKind::Fn) => {
-                                self.parse_function().map(ModuleItem::Function)
-                            }
-                            _ => {
-                                self.parse_item_definition().map(ModuleItem::Definition)
-                            }
+                            Some(TokenKind::Fn) => self.parse_function().map(ModuleItem::Function),
+                            _ => self.parse_item_definition().map(ModuleItem::Definition),
                         }
                     }
                     TokenKind::Type | TokenKind::Enum | TokenKind::Bitflags => {
@@ -238,14 +228,19 @@ impl Parser {
                     TokenKind::Impl => self.parse_impl_block().map(ModuleItem::Impl),
                     TokenKind::Fn => self.parse_function().map(ModuleItem::Function),
                     _ => Err(ParseError {
-                        message: format!("Unexpected token after attributes: {:?}", self.tokens[pos].kind),
+                        message: format!(
+                            "Unexpected token after attributes: {:?}",
+                            self.tokens[pos].kind
+                        ),
                         location: self.tokens[pos].span.start,
                     }),
                 }
             }
-            TokenKind::DocOuter(_) | TokenKind::Pub | TokenKind::Type | TokenKind::Enum | TokenKind::Bitflags => {
-                self.parse_item_definition().map(ModuleItem::Definition)
-            }
+            TokenKind::DocOuter(_)
+            | TokenKind::Pub
+            | TokenKind::Type
+            | TokenKind::Enum
+            | TokenKind::Bitflags => self.parse_item_definition().map(ModuleItem::Definition),
             TokenKind::Impl => self.parse_impl_block().map(ModuleItem::Impl),
             TokenKind::Fn => {
                 // Freestanding function with attributes
@@ -382,7 +377,10 @@ impl Parser {
                     }
                     _ => {
                         return Err(ParseError {
-                            message: format!("Expected prologue or epilogue, found {:?}", self.peek()),
+                            message: format!(
+                                "Expected prologue or epilogue, found {:?}",
+                                self.peek()
+                            ),
                             location: self.current().span.start,
                         });
                     }
@@ -407,7 +405,10 @@ impl Parser {
                 }
                 _ => {
                     return Err(ParseError {
-                        message: format!("Expected LBrace, Prologue, or Epilogue, found {:?}", self.peek()),
+                        message: format!(
+                            "Expected LBrace, Prologue, or Epilogue, found {:?}",
+                            self.peek()
+                        ),
                         location: self.current().span.start,
                     });
                 }
@@ -508,7 +509,10 @@ impl Parser {
 
         while !matches!(self.peek(), TokenKind::RBrace) {
             // Collect non-doc comments (doc comments will be collected by parse_type_statement)
-            while matches!(self.peek(), TokenKind::Comment(_) | TokenKind::MultiLineComment(_)) {
+            while matches!(
+                self.peek(),
+                TokenKind::Comment(_) | TokenKind::MultiLineComment(_)
+            ) {
                 if let Some(comment) = self.collect_comment() {
                     items.push(TypeDefItem::Comment(comment));
                 }
@@ -567,7 +571,10 @@ impl Parser {
 
         while !matches!(self.peek(), TokenKind::RBrace) {
             // Collect non-doc comments (doc comments will be collected by parse_enum_statement)
-            while matches!(self.peek(), TokenKind::Comment(_) | TokenKind::MultiLineComment(_)) {
+            while matches!(
+                self.peek(),
+                TokenKind::Comment(_) | TokenKind::MultiLineComment(_)
+            ) {
                 if let Some(comment) = self.collect_comment() {
                     items.push(EnumDefItem::Comment(comment));
                 }
@@ -617,7 +624,10 @@ impl Parser {
 
         while !matches!(self.peek(), TokenKind::RBrace) {
             // Collect non-doc comments (doc comments will be collected by parse_bitflags_statement)
-            while matches!(self.peek(), TokenKind::Comment(_) | TokenKind::MultiLineComment(_)) {
+            while matches!(
+                self.peek(),
+                TokenKind::Comment(_) | TokenKind::MultiLineComment(_)
+            ) {
                 if let Some(comment) = self.collect_comment() {
                     items.push(BitflagsDefItem::Comment(comment));
                 }
@@ -672,7 +682,10 @@ impl Parser {
         let mut items = Vec::new();
         while !matches!(self.peek(), TokenKind::RBrace) {
             // Collect non-doc comments (doc comments will be collected by parse_function)
-            while matches!(self.peek(), TokenKind::Comment(_) | TokenKind::MultiLineComment(_)) {
+            while matches!(
+                self.peek(),
+                TokenKind::Comment(_) | TokenKind::MultiLineComment(_)
+            ) {
                 if let Some(comment) = self.collect_comment() {
                     items.push(ImplItem::Comment(comment));
                 }
@@ -699,7 +712,10 @@ impl Parser {
 
         while !matches!(self.peek(), TokenKind::RBrace) {
             // Skip regular comments but not doc comments (parse_function will collect those)
-            while matches!(self.peek(), TokenKind::Comment(_) | TokenKind::MultiLineComment(_)) {
+            while matches!(
+                self.peek(),
+                TokenKind::Comment(_) | TokenKind::MultiLineComment(_)
+            ) {
                 self.advance();
             }
 

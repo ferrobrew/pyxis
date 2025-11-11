@@ -224,7 +224,9 @@ pub fn build(
     let mut pending_regions: Vec<(Option<usize>, Region)> = vec![];
     let mut vftable_functions = None;
     for (idx, statement) in definition.statements().enumerate() {
-        let grammar::TypeStatement { field, attributes, .. } = statement;
+        let grammar::TypeStatement {
+            field, attributes, ..
+        } = statement;
 
         match field {
             grammar::TypeField::Field(visibility, ident, type_) => {
