@@ -80,8 +80,8 @@ impl Parser {
         let mut comments = Vec::new();
         while matches!(self.peek(), TokenKind::DocOuter(_)) {
             if let TokenKind::DocOuter(text) = &self.advance().kind {
-                // Strip the /// prefix and any leading/trailing whitespace
-                let content = text.strip_prefix("///").unwrap_or(text).trim().to_string();
+                // Strip the /// prefix but preserve spacing
+                let content = text.strip_prefix("///").unwrap_or(text).to_string();
                 comments.push(content);
             }
         }
@@ -147,15 +147,17 @@ impl Parser {
         // Collect module-level doc comments (//!)
         while matches!(self.peek(), TokenKind::DocInner(_)) {
             if let TokenKind::DocInner(text) = &self.advance().kind {
-                let content = text.strip_prefix("//!").unwrap_or(text).trim().to_string();
+                let content = text.strip_prefix("//!").unwrap_or(text).to_string();
                 module_doc_comments.push(content);
             }
         }
 
         while !matches!(self.peek(), TokenKind::Eof) {
-            // Collect any comments
-            while let Some(comment) = self.collect_comment() {
-                items.push(ModuleItem::Comment(comment));
+            // Collect non-doc comments (doc comments will be collected by item parsers)
+            while matches!(self.peek(), TokenKind::Comment(_) | TokenKind::MultiLineComment(_)) {
+                if let Some(comment) = self.collect_comment() {
+                    items.push(ModuleItem::Comment(comment));
+                }
             }
 
             if matches!(self.peek(), TokenKind::Eof) {
@@ -166,9 +168,15 @@ impl Parser {
             items.push(self.parse_module_item()?);
         }
 
+        // Convert module doc comments to attributes
+        let mut attributes = Vec::new();
+        for comment in module_doc_comments {
+            attributes.push(Attribute::doc(&comment));
+        }
+
         Ok(Module {
             items,
-            attributes: Attributes::default(),
+            attributes: Attributes(attributes),
         })
     }
 
@@ -415,9 +423,11 @@ impl Parser {
         let mut items = Vec::new();
 
         while !matches!(self.peek(), TokenKind::RBrace) {
-            // Collect comments
-            while let Some(comment) = self.collect_comment() {
-                items.push(TypeDefItem::Comment(comment));
+            // Collect non-doc comments (doc comments will be collected by parse_type_statement)
+            while matches!(self.peek(), TokenKind::Comment(_) | TokenKind::MultiLineComment(_)) {
+                if let Some(comment) = self.collect_comment() {
+                    items.push(TypeDefItem::Comment(comment));
+                }
             }
 
             if matches!(self.peek(), TokenKind::RBrace) {
@@ -472,9 +482,11 @@ impl Parser {
         let mut items = Vec::new();
 
         while !matches!(self.peek(), TokenKind::RBrace) {
-            // Collect comments
-            while let Some(comment) = self.collect_comment() {
-                items.push(EnumDefItem::Comment(comment));
+            // Collect non-doc comments (doc comments will be collected by parse_enum_statement)
+            while matches!(self.peek(), TokenKind::Comment(_) | TokenKind::MultiLineComment(_)) {
+                if let Some(comment) = self.collect_comment() {
+                    items.push(EnumDefItem::Comment(comment));
+                }
             }
 
             if matches!(self.peek(), TokenKind::RBrace) {
@@ -520,9 +532,11 @@ impl Parser {
         let mut items = Vec::new();
 
         while !matches!(self.peek(), TokenKind::RBrace) {
-            // Collect comments
-            while let Some(comment) = self.collect_comment() {
-                items.push(BitflagsDefItem::Comment(comment));
+            // Collect non-doc comments (doc comments will be collected by parse_bitflags_statement)
+            while matches!(self.peek(), TokenKind::Comment(_) | TokenKind::MultiLineComment(_)) {
+                if let Some(comment) = self.collect_comment() {
+                    items.push(BitflagsDefItem::Comment(comment));
+                }
             }
 
             if matches!(self.peek(), TokenKind::RBrace) {
@@ -573,9 +587,11 @@ impl Parser {
 
         let mut items = Vec::new();
         while !matches!(self.peek(), TokenKind::RBrace) {
-            // Collect comments
-            while let Some(comment) = self.collect_comment() {
-                items.push(ImplItem::Comment(comment));
+            // Collect non-doc comments (doc comments will be collected by parse_function)
+            while matches!(self.peek(), TokenKind::Comment(_) | TokenKind::MultiLineComment(_)) {
+                if let Some(comment) = self.collect_comment() {
+                    items.push(ImplItem::Comment(comment));
+                }
             }
 
             if matches!(self.peek(), TokenKind::RBrace) {
@@ -598,8 +614,10 @@ impl Parser {
         let mut functions = Vec::new();
 
         while !matches!(self.peek(), TokenKind::RBrace) {
-            // Skip comments in vftable blocks
-            self.skip_trivia();
+            // Skip regular comments but not doc comments (parse_function will collect those)
+            while matches!(self.peek(), TokenKind::Comment(_) | TokenKind::MultiLineComment(_)) {
+                self.advance();
+            }
 
             if matches!(self.peek(), TokenKind::RBrace) {
                 break;
@@ -915,8 +933,9 @@ impl Parser {
                     // Remove underscores
                     let s = s.replace('_', "");
 
-                    // Parse hex or decimal
+                    // Parse based on prefix
                     if s.starts_with("0x") || s.starts_with("-0x") {
+                        // Hexadecimal
                         let (sign, hex_str) = if s.starts_with('-') {
                             (-1, &s[3..])
                         } else {
@@ -929,7 +948,36 @@ impl Parser {
                                 message: format!("Invalid hex literal: {}", s),
                                 location: token.span.start,
                             })
+                    } else if s.starts_with("0b") || s.starts_with("-0b") {
+                        // Binary
+                        let (sign, bin_str) = if s.starts_with('-') {
+                            (-1, &s[3..])
+                        } else {
+                            (1, &s[2..])
+                        };
+
+                        i64::from_str_radix(bin_str, 2)
+                            .map(|v| (v * sign) as isize)
+                            .map_err(|_| ParseError {
+                                message: format!("Invalid binary literal: {}", s),
+                                location: token.span.start,
+                            })
+                    } else if s.starts_with("0o") || s.starts_with("-0o") {
+                        // Octal
+                        let (sign, oct_str) = if s.starts_with('-') {
+                            (-1, &s[3..])
+                        } else {
+                            (1, &s[2..])
+                        };
+
+                        i64::from_str_radix(oct_str, 8)
+                            .map(|v| (v * sign) as isize)
+                            .map_err(|_| ParseError {
+                                message: format!("Invalid octal literal: {}", s),
+                                location: token.span.start,
+                            })
                     } else {
+                        // Decimal
                         s.parse::<isize>().map_err(|_| ParseError {
                             message: format!("Invalid integer literal: {}", s),
                             location: token.span.start,

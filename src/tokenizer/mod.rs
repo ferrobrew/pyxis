@@ -195,6 +195,11 @@ impl Lexer {
             }
         }
 
+        // Handle raw string literals (must come before identifier check)
+        if ch == 'r' && (self.peek_nth(1) == Some('"') || self.peek_nth(1) == Some('#')) {
+            return self.lex_raw_string(start, start_pos);
+        }
+
         // Handle identifiers and keywords
         if ch.is_alphabetic() || ch == '_' {
             return self.lex_ident_or_keyword(start, start_pos);
@@ -208,11 +213,6 @@ impl Lexer {
         // Handle string literals
         if ch == '"' {
             return self.lex_string(start, start_pos, 0);
-        }
-
-        // Handle raw string literals
-        if ch == 'r' && (self.peek_nth(1) == Some('"') || self.peek_nth(1) == Some('#')) {
-            return self.lex_raw_string(start, start_pos);
         }
 
         // Handle char literals
@@ -466,15 +466,54 @@ impl Lexer {
             self.advance();
         }
 
-        // Handle hex numbers
-        if self.peek() == Some('0') && self.peek_nth(1) == Some('x') {
-            self.advance();
-            self.advance();
-            while let Some(ch) = self.peek() {
-                if ch.is_ascii_hexdigit() || ch == '_' {
+        // Handle different number bases
+        if self.peek() == Some('0') {
+            match self.peek_nth(1) {
+                Some('x') => {
+                    // Hexadecimal
                     self.advance();
-                } else {
-                    break;
+                    self.advance();
+                    while let Some(ch) = self.peek() {
+                        if ch.is_ascii_hexdigit() || ch == '_' {
+                            self.advance();
+                        } else {
+                            break;
+                        }
+                    }
+                }
+                Some('b') => {
+                    // Binary
+                    self.advance();
+                    self.advance();
+                    while let Some(ch) = self.peek() {
+                        if ch == '0' || ch == '1' || ch == '_' {
+                            self.advance();
+                        } else {
+                            break;
+                        }
+                    }
+                }
+                Some('o') => {
+                    // Octal
+                    self.advance();
+                    self.advance();
+                    while let Some(ch) = self.peek() {
+                        if ch.is_digit(8) || ch == '_' {
+                            self.advance();
+                        } else {
+                            break;
+                        }
+                    }
+                }
+                _ => {
+                    // Decimal number starting with 0
+                    while let Some(ch) = self.peek() {
+                        if ch.is_ascii_digit() || ch == '_' {
+                            self.advance();
+                        } else {
+                            break;
+                        }
+                    }
                 }
             }
         } else {
