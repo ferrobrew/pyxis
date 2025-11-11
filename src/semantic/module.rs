@@ -73,8 +73,8 @@ impl Module {
         })
     }
 
-    pub fn uses(&self) -> &[ItemPath] {
-        &self.ast.uses
+    pub fn uses(&self) -> Vec<ItemPath> {
+        self.ast.uses().cloned().collect()
     }
 
     pub fn definition_paths(&self) -> &HashSet<ItemPath> {
@@ -119,7 +119,7 @@ impl Module {
     ) -> anyhow::Result<()> {
         let scope = self.scope();
 
-        for function in &self.ast.functions {
+        for function in self.ast.functions().collect::<Vec<_>>() {
             let semantic_function = crate::semantic::function::build(
                 type_registry,
                 &scope,

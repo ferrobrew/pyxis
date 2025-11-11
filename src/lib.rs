@@ -7,6 +7,8 @@ pub mod config;
 pub mod grammar;
 pub mod parser;
 pub mod semantic;
+pub mod span;
+pub mod tokenizer;
 
 pub(crate) mod util;
 

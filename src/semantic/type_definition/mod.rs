@@ -223,8 +223,8 @@ pub fn build(
     // Handle fields
     let mut pending_regions: Vec<(Option<usize>, Region)> = vec![];
     let mut vftable_functions = None;
-    for (idx, statement) in definition.statements.iter().enumerate() {
-        let grammar::TypeStatement { field, attributes } = statement;
+    for (idx, statement) in definition.statements().enumerate() {
+        let grammar::TypeStatement { field, attributes, .. } = statement;
 
         match field {
             grammar::TypeField::Field(visibility, ident, type_) => {
@@ -403,7 +403,7 @@ pub fn build(
         }
     }
     if let Some(type_impl) = module.impls.get(resolvee_path) {
-        for function in &type_impl.functions {
+        for function in type_impl.functions().collect::<Vec<_>>() {
             if associated_functions_used_names.contains(&function.name.0) {
                 anyhow::bail!(
                     "function `{}` is already defined in type `{}` (or a base type)",
