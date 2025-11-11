@@ -547,7 +547,7 @@ pub fn build(
 ) -> anyhow::Result<()> {
     // Build items map
     let mut items = HashMap::new();
-    for (_, module) in semantic_state.modules() {
+    for module in semantic_state.modules().values() {
         for definition in module.definitions(semantic_state.type_registry()) {
             if let Some(json_item) = convert_item(definition) {
                 items.insert(json_item.path.clone(), json_item);

@@ -222,7 +222,6 @@ dependencies = [
  "serde",
  "serde_json",
  "specta",
- "specta-typescript",
  "syn",
  "toml",
 ]
@@ -234,6 +233,7 @@ dependencies = [
  "anyhow",
  "clap",
  "pyxis",
+ "specta-typescript",
 ]
 
 [[package]]
