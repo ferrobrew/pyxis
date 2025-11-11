@@ -4,16 +4,16 @@ use anyhow::Context;
 use serde::{Deserialize, Serialize};
 
 use crate::semantic::{
+    ResolvedSemanticState, TypeRegistry,
     types::{
         Argument, BitflagsDefinition, CallingConvention, EnumDefinition, ExternValue, Function,
         FunctionBody, ItemCategory, ItemDefinition, ItemDefinitionInner, Region, TypeDefinition,
         TypeVftable, Visibility,
     },
-    ResolvedSemanticState, TypeRegistry,
 };
 
 /// Top-level JSON documentation structure
-#[derive(Debug, Clone, Serialize, Deserialize,specta::Type)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 pub struct JsonDocumentation {
     /// Pointer size for the target platform
     pub pointer_size: usize,
@@ -26,7 +26,7 @@ pub struct JsonDocumentation {
 }
 
 /// A module containing items and potentially submodules
-#[derive(Debug, Clone, Serialize, Deserialize,specta::Type)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 pub struct JsonModule {
     /// Module documentation
     pub doc: Option<String>,
@@ -42,7 +42,7 @@ pub struct JsonModule {
 }
 
 /// An item (type, enum, or bitflags) in the documentation
-#[derive(Debug, Clone, Serialize, Deserialize,specta::Type)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 pub struct JsonItem {
     /// Item path
     pub path: String,
@@ -58,7 +58,7 @@ pub struct JsonItem {
     pub kind: JsonItemKind,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize,specta::Type)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum JsonItemKind {
     Type(JsonTypeDefinition),
@@ -66,7 +66,7 @@ pub enum JsonItemKind {
     Bitflags(JsonBitflagsDefinition),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize,specta::Type)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 pub struct JsonTypeDefinition {
     /// Documentation
     pub doc: Option<String>,
@@ -88,7 +88,7 @@ pub struct JsonTypeDefinition {
     pub packed: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize,specta::Type)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 pub struct JsonRegion {
     /// Visibility
     pub visibility: JsonVisibility,
@@ -108,13 +108,13 @@ pub struct JsonRegion {
     pub is_base: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize,specta::Type)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 pub struct JsonTypeVftable {
     /// Virtual functions
     pub functions: Vec<JsonFunction>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize,specta::Type)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 pub struct JsonEnumDefinition {
     /// Documentation
     pub doc: Option<String>,
@@ -134,7 +134,7 @@ pub struct JsonEnumDefinition {
     pub default: Option<usize>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize,specta::Type)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 pub struct JsonEnumVariant {
     /// Variant name
     pub name: String,
@@ -168,7 +168,7 @@ pub struct JsonBitflag {
     pub value: usize,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize,specta::Type)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 pub struct JsonFunction {
     /// Visibility
     pub visibility: JsonVisibility,
@@ -186,15 +186,22 @@ pub struct JsonFunction {
     pub calling_convention: JsonCallingConvention,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize,specta::Type)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum JsonFunctionBody {
-    Address { address: usize },
-    Field { field: String, function_name: String },
-    Vftable { function_name: String },
+    Address {
+        address: usize,
+    },
+    Field {
+        field: String,
+        function_name: String,
+    },
+    Vftable {
+        function_name: String,
+    },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize,specta::Type)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum JsonArgument {
     ConstSelf,
@@ -202,7 +209,7 @@ pub enum JsonArgument {
     Field { name: String, type_ref: JsonType },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize,specta::Type)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 pub struct JsonExternValue {
     /// Visibility
     pub visibility: JsonVisibility,
@@ -214,13 +221,22 @@ pub struct JsonExternValue {
     pub address: usize,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize,specta::Type)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum JsonType {
-    Raw { path: String },
-    ConstPointer { inner: Box<JsonType> },
-    MutPointer { inner: Box<JsonType> },
-    Array { inner: Box<JsonType>, size: usize },
+    Raw {
+        path: String,
+    },
+    ConstPointer {
+        inner: Box<JsonType>,
+    },
+    MutPointer {
+        inner: Box<JsonType>,
+    },
+    Array {
+        inner: Box<JsonType>,
+        size: usize,
+    },
     Function {
         calling_convention: JsonCallingConvention,
         arguments: Vec<JsonFunctionArgument>,
@@ -228,20 +244,20 @@ pub enum JsonType {
     },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize,specta::Type)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 pub struct JsonFunctionArgument {
     pub name: String,
     pub type_ref: JsonType,
 }
 
-#[derive(Debug, Copy, Clone, Serialize, Deserialize,specta::Type)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "snake_case")]
 pub enum JsonVisibility {
     Public,
     Private,
 }
 
-#[derive(Debug, Copy, Clone, Serialize, Deserialize,specta::Type)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "snake_case")]
 pub enum JsonItemCategory {
     Defined,
@@ -249,7 +265,7 @@ pub enum JsonItemCategory {
     Extern,
 }
 
-#[derive(Debug, Copy, Clone, Serialize, Deserialize,specta::Type)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "snake_case")]
 pub enum JsonCallingConvention {
     C,
@@ -392,14 +408,21 @@ fn convert_vftable(vftable: &TypeVftable) -> JsonTypeVftable {
     }
 }
 
-fn convert_type_definition(td: &TypeDefinition, type_registry: &TypeRegistry) -> JsonTypeDefinition {
+fn convert_type_definition(
+    td: &TypeDefinition,
+    type_registry: &TypeRegistry,
+) -> JsonTypeDefinition {
     // Calculate field offsets
     let mut current_offset = 0;
-    let fields = td.regions.iter().map(|region| {
-        let json_region = convert_region(region, type_registry, current_offset);
-        current_offset += json_region.size;
-        json_region
-    }).collect();
+    let fields = td
+        .regions
+        .iter()
+        .map(|region| {
+            let json_region = convert_region(region, type_registry, current_offset);
+            current_offset += json_region.size;
+            json_region
+        })
+        .collect();
 
     JsonTypeDefinition {
         doc: td.doc.clone(),
@@ -465,9 +488,13 @@ fn convert_item(item: &ItemDefinition, type_registry: &TypeRegistry) -> Option<J
     let resolved = item.resolved()?;
 
     let kind = match &resolved.inner {
-        ItemDefinitionInner::Type(td) => JsonItemKind::Type(convert_type_definition(td, type_registry)),
+        ItemDefinitionInner::Type(td) => {
+            JsonItemKind::Type(convert_type_definition(td, type_registry))
+        }
         ItemDefinitionInner::Enum(ed) => JsonItemKind::Enum(convert_enum_definition(ed)),
-        ItemDefinitionInner::Bitflags(bd) => JsonItemKind::Bitflags(convert_bitflags_definition(bd)),
+        ItemDefinitionInner::Bitflags(bd) => {
+            JsonItemKind::Bitflags(convert_bitflags_definition(bd))
+        }
     };
 
     Some(JsonItem {
@@ -490,9 +517,7 @@ fn convert_extern_value(ev: &ExternValue) -> JsonExternValue {
 }
 
 /// Build the module hierarchy from a flat list of modules
-fn build_module_hierarchy(
-    semantic_state: &ResolvedSemanticState,
-) -> BTreeMap<String, JsonModule> {
+fn build_module_hierarchy(semantic_state: &ResolvedSemanticState) -> BTreeMap<String, JsonModule> {
     let mut root_modules: BTreeMap<String, JsonModule> = BTreeMap::new();
 
     for (module_path, module) in semantic_state.modules() {
@@ -509,8 +534,11 @@ fn build_module_hierarchy(
             .collect();
 
         // Convert extern values and functions
-        let extern_values: Vec<JsonExternValue> =
-            module.extern_values.iter().map(convert_extern_value).collect();
+        let extern_values: Vec<JsonExternValue> = module
+            .extern_values
+            .iter()
+            .map(convert_extern_value)
+            .collect();
         let functions: Vec<JsonFunction> =
             module.functions().iter().map(convert_function).collect();
 
@@ -529,18 +557,22 @@ fn build_module_hierarchy(
         } else {
             // Navigate to the right place in the hierarchy
             let root_name = segments[0].clone();
-            let mut current = root_modules.entry(root_name.clone()).or_insert_with(|| JsonModule {
-                doc: None,
-                items: vec![],
-                submodules: BTreeMap::new(),
-                extern_values: vec![],
-                functions: vec![],
-            });
+            let mut current = root_modules
+                .entry(root_name.clone())
+                .or_insert_with(|| JsonModule {
+                    doc: None,
+                    items: vec![],
+                    submodules: BTreeMap::new(),
+                    extern_values: vec![],
+                    functions: vec![],
+                });
 
             for (i, segment) in segments.iter().enumerate().skip(1) {
                 if i == segments.len() - 1 {
                     // Last segment, insert the module here
-                    current.submodules.insert(segment.clone(), json_module.clone());
+                    current
+                        .submodules
+                        .insert(segment.clone(), json_module.clone());
                     break;
                 } else {
                     // Navigate deeper

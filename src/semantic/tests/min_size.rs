@@ -77,8 +77,7 @@ fn min_size_with_explicit_address() {
             (V::Public, "TestType"),
             TD::new([
                 TS::field((V::Public, "field_1"), T::ident("i32")),
-                TS::field((V::Public, "field_2"), T::ident("i32"))
-                    .with_attributes([A::address(8)]),
+                TS::field((V::Public, "field_2"), T::ident("i32")).with_attributes([A::address(8)]),
             ])
             .with_attributes([A::min_size(32)]),
         )]),

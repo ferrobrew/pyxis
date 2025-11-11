@@ -16,7 +16,7 @@ fn main() -> anyhow::Result<()> {
         .map(|name| format!("pub mod {name};"))
         .collect::<Vec<_>>();
     module_decls.sort();
-    std::fs::write(output_dir.join("lib.rs"), module_decls.join("\n"))?;
+    std::fs::write(output_dir.join("lib.rs"), module_decls.join("\n") + "\n")?;
 
     let status = std::process::Command::new("cargo")
         .arg("clippy")

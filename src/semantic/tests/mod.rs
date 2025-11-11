@@ -693,19 +693,14 @@ fn can_resolve_enum_with_associated_functions() {
                 (V::Public, "TestEnum"),
                 ED::new(
                     T::ident("u32"),
-                    [
-                        ES::field("None"),
-                        ES::field("Some"),
-                        ES::field("Value"),
-                    ],
+                    [ES::field("None"), ES::field("Some"), ES::field("Value")],
                     [],
                 ),
             )])
             .with_impls([FB::new(
                 "TestEnum",
                 [
-                    F::new((V::Public, "test"), [])
-                        .with_attributes([A::address(0x123)]),
+                    F::new((V::Public, "test"), []).with_attributes([A::address(0x123)]),
                     F::new((V::Public, "another_test"), [Ar::ConstSelf])
                         .with_attributes([A::address(0x456)])
                         .with_return_type(T::ident("i32")),
@@ -716,17 +711,9 @@ fn can_resolve_enum_with_associated_functions() {
             SISR::new(
                 (4, 4),
                 SED::new(ST::raw("u32"))
-                    .with_fields([
-                        ("None", 0),
-                        ("Some", 1),
-                        ("Value", 2),
-                    ])
+                    .with_fields([("None", 0), ("Some", 1), ("Value", 2)])
                     .with_associated_functions([
-                        SF::new(
-                            (SV::Public, "test"),
-                            SFB::address(0x123),
-                            SCC::System,
-                        ),
+                        SF::new((SV::Public, "test"), SFB::address(0x123), SCC::System),
                         SF::new(
                             (SV::Public, "another_test"),
                             SFB::address(0x456),

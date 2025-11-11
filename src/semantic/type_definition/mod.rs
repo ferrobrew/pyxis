@@ -319,7 +319,12 @@ pub fn build(
             // Determine the requested alignment
             let requested_alignment = align
                 .or((pending_regions.len() == 1)
-                    .then(|| pending_regions[0].1.type_ref.alignment(&semantic.type_registry))
+                    .then(|| {
+                        pending_regions[0]
+                            .1
+                            .type_ref
+                            .alignment(&semantic.type_registry)
+                    })
                     .flatten())
                 .unwrap_or(semantic.type_registry.pointer_size());
 
