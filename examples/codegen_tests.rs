@@ -38,9 +38,7 @@ fn main() -> anyhow::Result<()> {
 
     // Parse JSON to verify it's valid
     let json_content = std::fs::read_to_string(&json_output_file)?;
-    serde_json::from_str::<serde_json::Value>(&json_content)?;
-
-    println!("✓ JSON backend output validated at {:?}", json_output_file);
+    serde_json::from_str::<pyxis::backends::json::JsonDocumentation>(&json_content)?;
 
     Ok(())
 }
