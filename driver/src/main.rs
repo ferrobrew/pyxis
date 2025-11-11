@@ -17,11 +17,13 @@ struct Args {
 #[derive(Copy, Clone, ValueEnum)]
 enum Backend {
     Rust,
+    Json,
 }
 impl From<Backend> for pyxis::Backend {
     fn from(backend: Backend) -> Self {
         match backend {
             Backend::Rust => pyxis::Backend::Rust,
+            Backend::Json => pyxis::Backend::Json,
         }
     }
 }
