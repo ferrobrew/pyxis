@@ -237,7 +237,7 @@ impl Parser {
                     }),
                 }
             }
-            TokenKind::Pub | TokenKind::Type | TokenKind::Enum | TokenKind::Bitflags => {
+            TokenKind::DocOuter(_) | TokenKind::Pub | TokenKind::Type | TokenKind::Enum | TokenKind::Bitflags => {
                 self.parse_item_definition().map(ModuleItem::Definition)
             }
             TokenKind::Impl => self.parse_impl_block().map(ModuleItem::Impl),
