@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
     grammar::{self, ItemPath},
@@ -13,11 +13,11 @@ use crate::{
 pub struct Module {
     pub(crate) path: ItemPath,
     pub(crate) ast: grammar::Module,
-    pub(crate) definition_paths: HashSet<ItemPath>,
+    pub(crate) definition_paths: BTreeSet<ItemPath>,
     pub(crate) extern_values: Vec<ExternValue>,
     pub(crate) functions: Vec<Function>,
-    pub(crate) impls: HashMap<ItemPath, grammar::FunctionBlock>,
-    pub(crate) backends: HashMap<String, Vec<Backend>>,
+    pub(crate) impls: BTreeMap<ItemPath, grammar::FunctionBlock>,
+    pub(crate) backends: BTreeMap<String, Vec<Backend>>,
     pub(crate) doc: Option<String>,
 }
 
@@ -49,7 +49,7 @@ impl Module {
             .map(|f| (path.join(f.name.as_str().into()), f.clone()))
             .collect();
 
-        let mut backends_map: HashMap<String, Vec<Backend>> = HashMap::new();
+        let mut backends_map: BTreeMap<String, Vec<Backend>> = BTreeMap::new();
         for backend in backends {
             backends_map
                 .entry(backend.name.0.clone())
@@ -64,7 +64,7 @@ impl Module {
         Ok(Self {
             path,
             ast,
-            definition_paths: HashSet::new(),
+            definition_paths: BTreeSet::new(),
             extern_values,
             functions: vec![],
             impls,
@@ -77,7 +77,7 @@ impl Module {
         &self.ast.uses
     }
 
-    pub fn definition_paths(&self) -> &HashSet<ItemPath> {
+    pub fn definition_paths(&self) -> &BTreeSet<ItemPath> {
         &self.definition_paths
     }
 
