@@ -226,7 +226,21 @@ impl Parser {
                             self.parse_extern_value().map(ModuleItem::ExternValue)
                         }
                     }
-                    TokenKind::Pub | TokenKind::Type | TokenKind::Enum | TokenKind::Bitflags => {
+                    TokenKind::Pub => {
+                        // Could be pub extern value, pub fn, or pub item definition
+                        match self.tokens.get(pos + 1).map(|t| &t.kind) {
+                            Some(TokenKind::Extern) => {
+                                self.parse_extern_value().map(ModuleItem::ExternValue)
+                            }
+                            Some(TokenKind::Fn) => {
+                                self.parse_function().map(ModuleItem::Function)
+                            }
+                            _ => {
+                                self.parse_item_definition().map(ModuleItem::Definition)
+                            }
+                        }
+                    }
+                    TokenKind::Type | TokenKind::Enum | TokenKind::Bitflags => {
                         self.parse_item_definition().map(ModuleItem::Definition)
                     }
                     TokenKind::Impl => self.parse_impl_block().map(ModuleItem::Impl),
@@ -268,7 +282,47 @@ impl Parser {
         };
         self.expect(TokenKind::Extern)?;
         self.expect(TokenKind::Type)?;
-        let (name, _) = self.expect_ident()?;
+        let (mut name, _) = self.expect_ident()?;
+
+        // Handle generics - concatenate them into the type name string
+        if matches!(self.peek(), TokenKind::Lt) {
+            let mut type_str = name.0;
+            type_str.push('<');
+            self.advance(); // consume <
+
+            let mut depth = 1;
+            while depth > 0 && !matches!(self.peek(), TokenKind::Eof) {
+                match self.peek().clone() {
+                    TokenKind::Lt => {
+                        type_str.push('<');
+                        depth += 1;
+                        self.advance();
+                    }
+                    TokenKind::Gt => {
+                        type_str.push('>');
+                        depth -= 1;
+                        self.advance();
+                    }
+                    TokenKind::Comma => {
+                        type_str.push_str(", ");
+                        self.advance();
+                    }
+                    TokenKind::Ident(n) => {
+                        type_str.push_str(&n);
+                        self.advance();
+                    }
+                    TokenKind::ColonColon => {
+                        type_str.push_str("::");
+                        self.advance();
+                    }
+                    _ => {
+                        self.advance();
+                    }
+                }
+            }
+            name = Ident(type_str);
+        }
+
         self.expect(TokenKind::Semi)?;
         Ok(ModuleItem::ExternType(name, attributes, doc_comments))
     }
@@ -281,8 +335,8 @@ impl Parser {
             Attributes::default()
         };
 
-        self.expect(TokenKind::Extern)?;
         let visibility = self.parse_visibility()?;
+        self.expect(TokenKind::Extern)?;
         let (name, _) = self.expect_ident()?;
         self.expect(TokenKind::Colon)?;
         let type_ = self.parse_type()?;
@@ -300,35 +354,62 @@ impl Parser {
     fn parse_backend(&mut self) -> Result<Backend, ParseError> {
         self.expect(TokenKind::Backend)?;
         let (name, _) = self.expect_ident()?;
-        self.expect(TokenKind::LBrace)?;
 
         let mut prologue = None;
         let mut epilogue = None;
 
-        while !matches!(self.peek(), TokenKind::RBrace) {
+        // Check if we have braces or direct prologue/epilogue
+        if matches!(self.peek(), TokenKind::LBrace) {
+            // Form: backend name { prologue ...; epilogue ...; }
+            self.advance(); // consume {
+
+            while !matches!(self.peek(), TokenKind::RBrace) {
+                match self.peek() {
+                    TokenKind::Prologue => {
+                        self.advance();
+                        let string = self.parse_string_literal()?.trim().to_string();
+                        self.expect(TokenKind::Semi)?;
+                        prologue = Some(string);
+                    }
+                    TokenKind::Epilogue => {
+                        self.advance();
+                        let string = self.parse_string_literal()?.trim().to_string();
+                        self.expect(TokenKind::Semi)?;
+                        epilogue = Some(string);
+                    }
+                    _ => {
+                        return Err(ParseError {
+                            message: format!("Expected prologue or epilogue, found {:?}", self.peek()),
+                            location: self.current().span.start,
+                        });
+                    }
+                }
+            }
+
+            self.expect(TokenKind::RBrace)?;
+        } else {
+            // Form: backend name prologue ... or backend name epilogue ...
             match self.peek() {
                 TokenKind::Prologue => {
                     self.advance();
-                    let string = self.parse_string_literal()?;
+                    let string = self.parse_string_literal()?.trim().to_string();
                     self.expect(TokenKind::Semi)?;
                     prologue = Some(string);
                 }
                 TokenKind::Epilogue => {
                     self.advance();
-                    let string = self.parse_string_literal()?;
+                    let string = self.parse_string_literal()?.trim().to_string();
                     self.expect(TokenKind::Semi)?;
                     epilogue = Some(string);
                 }
                 _ => {
                     return Err(ParseError {
-                        message: format!("Expected prologue or epilogue, found {:?}", self.peek()),
+                        message: format!("Expected LBrace, Prologue, or Epilogue, found {:?}", self.peek()),
                         location: self.current().span.start,
                     });
                 }
             }
         }
-
-        self.expect(TokenKind::RBrace)?;
 
         Ok(Backend {
             name,

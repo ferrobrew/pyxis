@@ -10,12 +10,19 @@ pub trait StripSpans {
 use crate::grammar::*;
 use crate::span::Spanned;
 
-/// Convert doc comments to doc attributes
-fn doc_comments_to_attributes(doc_comments: &[String], mut attrs: Attributes) -> Attributes {
+/// Convert doc comments to doc attributes (prepends them to existing attributes)
+fn doc_comments_to_attributes(doc_comments: &[String], attrs: Attributes) -> Attributes {
+    let mut new_attrs = Vec::new();
+
+    // Add doc comments first
     for comment in doc_comments {
-        attrs.0.push(Attribute::doc(comment));
+        new_attrs.push(Attribute::doc(comment));
     }
-    attrs
+
+    // Then add existing attributes
+    new_attrs.extend(attrs.0);
+
+    Attributes(new_attrs)
 }
 
 impl<T: Clone> StripSpans for Spanned<T> {
