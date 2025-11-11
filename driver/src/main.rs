@@ -25,7 +25,7 @@ enum Command {
     /// Generate TypeScript type definitions from JSON backend types
     GenTypes {
         /// Output file path for TypeScript definitions
-        #[clap(default_value = "pyxis-types.ts")]
+        #[clap(default_value = "src/backends/json.ts")]
         output: PathBuf,
     },
 }
@@ -58,16 +58,11 @@ fn main() -> anyhow::Result<()> {
             pyxis::build(&in_dir, &out_dir, backend.into())
         }
         Command::GenTypes { output } => {
-            println!("Generating TypeScript definitions to {:?}", output);
+            println!("Exporting TypeScript definitions to {output:?}");
 
-            let typescript = specta_typescript::export::<pyxis::backends::json::JsonDocumentation>(
-                &Default::default(),
-            )?;
-
-            std::fs::write(&output, typescript)?;
-
-            println!("✓ TypeScript definitions generated successfully!");
-            println!("  File: {:?}", output);
+            specta_typescript::Typescript::default()
+                .bigint(specta_typescript::BigIntExportBehavior::Number)
+                .export_to(output, &pyxis::backends::json::export_types())?;
 
             Ok(())
         }

@@ -12,6 +12,9 @@ use crate::semantic::{
     },
 };
 
+// If changing the structure, ensure you rerun `cargo run -- gen-types` to
+// update the TypeScript definitions.
+
 /// Top-level JSON documentation structure
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 pub struct JsonDocumentation {
@@ -278,7 +281,6 @@ pub enum JsonCallingConvention {
 }
 
 // Conversion functions from semantic types to JSON types
-
 impl From<Visibility> for JsonVisibility {
     fn from(v: Visibility) -> Self {
         match v {
@@ -310,6 +312,50 @@ impl From<CallingConvention> for JsonCallingConvention {
             CallingConvention::System => JsonCallingConvention::System,
         }
     }
+}
+
+/// Generate the JSON documentation for the entire project
+pub fn build(
+    out_dir: &Path,
+    semantic_state: &ResolvedSemanticState,
+    project_name: &str,
+) -> anyhow::Result<()> {
+    let type_registry = semantic_state.type_registry();
+
+    // Build items map
+    let mut items = BTreeMap::new();
+    for module in semantic_state.modules().values() {
+        for definition in module.definitions(type_registry) {
+            if let Some(json_item) = convert_item(definition, type_registry) {
+                items.insert(json_item.path.clone(), json_item);
+            }
+        }
+    }
+
+    // Build module hierarchy
+    let modules = build_module_hierarchy(semantic_state);
+
+    // Create the top-level documentation structure
+    let documentation = JsonDocumentation {
+        pointer_size: type_registry.pointer_size(),
+        project_name: project_name.to_string(),
+        items,
+        modules,
+    };
+
+    // Write to file
+    let output_path = out_dir.join("output.json");
+    let json_string = serde_json::to_string_pretty(&documentation)
+        .context("Failed to serialize JSON documentation")?;
+    std::fs::write(&output_path, json_string)
+        .context(format!("Failed to write JSON to {:?}", output_path))?;
+
+    Ok(())
+}
+
+/// Return the [`specta::TypeCollection`] for the JSON documentation.
+pub fn export_types() -> specta::TypeCollection {
+    specta::export()
 }
 
 fn convert_type(type_ref: &crate::semantic::types::Type) -> JsonType {
@@ -592,43 +638,4 @@ fn build_module_hierarchy(semantic_state: &ResolvedSemanticState) -> BTreeMap<St
     }
 
     root_modules
-}
-
-/// Generate the JSON documentation for the entire project
-pub fn build(
-    out_dir: &Path,
-    semantic_state: &ResolvedSemanticState,
-    project_name: &str,
-) -> anyhow::Result<()> {
-    let type_registry = semantic_state.type_registry();
-
-    // Build items map
-    let mut items = BTreeMap::new();
-    for module in semantic_state.modules().values() {
-        for definition in module.definitions(type_registry) {
-            if let Some(json_item) = convert_item(definition, type_registry) {
-                items.insert(json_item.path.clone(), json_item);
-            }
-        }
-    }
-
-    // Build module hierarchy
-    let modules = build_module_hierarchy(semantic_state);
-
-    // Create the top-level documentation structure
-    let documentation = JsonDocumentation {
-        pointer_size: type_registry.pointer_size(),
-        project_name: project_name.to_string(),
-        items,
-        modules,
-    };
-
-    // Write to file
-    let output_path = out_dir.join("output.json");
-    let json_string = serde_json::to_string_pretty(&documentation)
-        .context("Failed to serialize JSON documentation")?;
-    std::fs::write(&output_path, json_string)
-        .context(format!("Failed to write JSON to {:?}", output_path))?;
-
-    Ok(())
 }
