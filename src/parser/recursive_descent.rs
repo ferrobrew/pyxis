@@ -219,11 +219,14 @@ impl Parser {
                     }
                 }
 
-                // Skip over any comments after attributes in lookahead
+                // Skip over any comments (including doc comments) after attributes in lookahead
                 while pos < self.tokens.len()
                     && matches!(
                         &self.tokens[pos].kind,
-                        TokenKind::Comment(_) | TokenKind::MultiLineComment(_)
+                        TokenKind::Comment(_)
+                            | TokenKind::MultiLineComment(_)
+                            | TokenKind::DocOuter(_)
+                            | TokenKind::DocInner(_)
                     )
                 {
                     pos += 1;
@@ -455,7 +458,7 @@ impl Parser {
     }
 
     fn parse_item_definition(&mut self) -> Result<ItemDefinition, ParseError> {
-        let doc_comments = self.collect_doc_comments();
+        let mut doc_comments = self.collect_doc_comments();
         let attributes = if matches!(self.peek(), TokenKind::Hash) {
             self.parse_attributes()?
         } else {
@@ -471,6 +474,10 @@ impl Parser {
                 self.pending_comments.push(comment);
             }
         }
+
+        // Also collect doc comments that appear after attributes
+        let after_attr_doc_comments = self.collect_doc_comments();
+        doc_comments.extend(after_attr_doc_comments);
 
         let visibility = self.parse_visibility()?;
 

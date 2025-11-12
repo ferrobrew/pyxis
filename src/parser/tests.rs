@@ -557,3 +557,45 @@ fn can_parse_multiple_attributes_with_underscored_literals() {
 
     assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
 }
+
+#[test]
+fn can_parse_pfx_instance_with_vftable_and_impl() {
+    let text = r#"
+        #[size(0x10)]
+        /// `CPfxInstance` in original game
+        pub type PfxInstance {
+            vftable {},
+            pub instance: SharedPtr<PfxInstanceInterface>,
+        }
+        impl PfxInstance {
+            #[address(0x6B7C40)]
+            pub fn set_game_object(&mut self, game_object: *mut PfxGameObject);
+        }
+        "#;
+
+    let ast = M::new()
+        .with_definitions([ID::new(
+            (V::Public, "PfxInstance"),
+            TD::new([
+                TS::vftable([]),
+                TS::field(
+                    (V::Public, "instance"),
+                    T::ident("SharedPtr<PfxInstanceInterface>"),
+                ),
+            ])
+            .with_attributes([A::doc(" `CPfxInstance` in original game"), A::size(0x10)]),
+        )])
+        .with_impls([FB::new(
+            "PfxInstance",
+            [F::new(
+                (V::Public, "set_game_object"),
+                [
+                    Ar::MutSelf,
+                    Ar::named("game_object", T::ident("PfxGameObject").mut_pointer()),
+                ],
+            )
+            .with_attributes([A::address(0x6B7C40)])],
+        )]);
+
+    assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
+}
