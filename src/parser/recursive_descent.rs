@@ -296,7 +296,7 @@ impl Parser {
                 }
 
                 // Now check what comes after attributes (and comments)
-                let result = match &self.tokens[pos].kind {
+                match &self.tokens[pos].kind {
                     TokenKind::Extern => {
                         // Could be extern type or extern value
                         if matches!(
@@ -330,9 +330,7 @@ impl Parser {
                         ),
                         self.tokens[pos].span.start,
                     )),
-                };
-
-                result
+                }
             }
             TokenKind::DocOuter(_)
             | TokenKind::Pub
