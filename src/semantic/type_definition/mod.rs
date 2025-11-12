@@ -151,6 +151,7 @@ pub fn build(
     resolvee_path: &ItemPath,
     visibility: Visibility,
     definition: &grammar::TypeDefinition,
+    doc_comments: &[String],
 ) -> anyhow::Result<Option<ItemStateResolved>> {
     let module = semantic
         .get_module_for_path(resolvee_path)
@@ -165,7 +166,12 @@ pub fn build(
     let mut defaultable = false;
     let mut packed = false;
     let mut align = None;
-    let doc = definition.attributes.doc(resolvee_path)?;
+    // Use doc_comments from ItemDefinition, or fall back to attributes
+    let doc = if !doc_comments.is_empty() {
+        Some(doc_comments.join("\n"))
+    } else {
+        definition.attributes.doc(resolvee_path)?
+    };
     for attribute in &definition.attributes {
         match attribute {
             grammar::Attribute::Function(ident, items) => {

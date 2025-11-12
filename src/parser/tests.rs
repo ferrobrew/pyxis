@@ -1,5 +1,5 @@
 use crate::{
-    grammar::{test_aliases::*, ItemDefinitionInner, ModuleItem, TypeDefItem, Visibility},
+    grammar::{ItemDefinitionInner, ModuleItem, TypeDefItem, Visibility, test_aliases::*},
     parser::{parse_str, strip_spans::StripSpans},
 };
 
@@ -475,8 +475,9 @@ backend rust prologue "
 ";
     "#;
 
-    let ast = M::new().with_backends([B::new("rust")
-        .with_prologue("use crate::shared_ptr::*;\n    use std::mem::ManuallyDrop;")]);
+    let ast = M::new()
+        .with_backends([B::new("rust")
+            .with_prologue("use crate::shared_ptr::*;\n    use std::mem::ManuallyDrop;")]);
 
     assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
 }
@@ -708,7 +709,11 @@ pub type AnarkGui {
 
                 // Verify we have vftable and two fields
                 // vftable + 2 fields = 3 statements
-                let statement_count = td.items.iter().filter(|item| matches!(item, TypeDefItem::Statement(_))).count();
+                let statement_count = td
+                    .items
+                    .iter()
+                    .filter(|item| matches!(item, TypeDefItem::Statement(_)))
+                    .count();
                 assert_eq!(statement_count, 3);
             } else {
                 panic!("Expected Type definition");
@@ -746,7 +751,11 @@ impl PfxInstance {
 
     // Check extern type has no doc comments (doc comes after, not before)
     if let ModuleItem::ExternType(_name, _attrs, doc_comments) = &module.items[0] {
-        assert_eq!(doc_comments.len(), 0, "Extern type should have no doc comments");
+        assert_eq!(
+            doc_comments.len(),
+            0,
+            "Extern type should have no doc comments"
+        );
     } else {
         panic!("Expected ExternType");
     }

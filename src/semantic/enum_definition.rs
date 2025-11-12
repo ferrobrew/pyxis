@@ -75,6 +75,7 @@ pub fn build(
     semantic: &SemanticState,
     resolvee_path: &ItemPath,
     definition: &grammar::EnumDefinition,
+    doc_comments: &[String],
 ) -> anyhow::Result<Option<ItemStateResolved>> {
     let module = semantic
         .get_module_for_path(resolvee_path)
@@ -130,7 +131,12 @@ pub fn build(
     let mut copyable = false;
     let mut cloneable = false;
     let mut defaultable = false;
-    let doc = definition.attributes.doc(resolvee_path)?;
+    // Use doc_comments from ItemDefinition, or fall back to attributes
+    let doc = if !doc_comments.is_empty() {
+        Some(doc_comments.join("\n"))
+    } else {
+        definition.attributes.doc(resolvee_path)?
+    };
     for attribute in &definition.attributes {
         match attribute {
             grammar::Attribute::Ident(ident) => match ident.as_str() {

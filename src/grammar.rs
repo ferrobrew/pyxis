@@ -282,7 +282,10 @@ impl Attribute {
         }
     }
     pub fn integer_fn(name: &str, value: isize) -> Self {
-        Attribute::Function(name.into(), vec![AttributeItem::Expr(Expr::IntLiteral(value))])
+        Attribute::Function(
+            name.into(),
+            vec![AttributeItem::Expr(Expr::IntLiteral(value))],
+        )
     }
     pub fn address(address: usize) -> Self {
         Self::integer_fn("address", address as isize)
@@ -317,7 +320,10 @@ impl Attribute {
         }
     }
     pub fn doc(doc: &str) -> Self {
-        Attribute::Assign("doc".into(), vec![AttributeItem::Expr(Expr::StringLiteral(doc.into()))])
+        Attribute::Assign(
+            "doc".into(),
+            vec![AttributeItem::Expr(Expr::StringLiteral(doc.into()))],
+        )
     }
 }
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]

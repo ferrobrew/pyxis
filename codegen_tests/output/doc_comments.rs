@@ -12,7 +12,6 @@
 /// This is a doc comment
 pub struct TestType {
     vftable: *const crate::doc_comments::TestTypeVftable,
-    /// This is a field doc comment
     pub field_1: u64,
 }
 fn _TestType_size_check() {
@@ -25,9 +24,6 @@ impl TestType {
     pub fn vftable(&self) -> *const crate::doc_comments::TestTypeVftable {
         self.vftable as *const crate::doc_comments::TestTypeVftable
     }
-    /// My test func!
-    ///
-    /// And its second line! :)
     pub unsafe fn test_func(&self) {
         unsafe {
             let f: unsafe extern "system" fn(this: *const Self) = ::std::mem::transmute(
@@ -36,7 +32,6 @@ impl TestType {
             f(self as *const Self as _)
         }
     }
-    /// My test vfunc!
     pub unsafe fn test_vfunc(&self) {
         unsafe {
             let f = (&raw const (*self.vftable()).test_vfunc).read();
@@ -56,7 +51,6 @@ impl std::convert::AsMut<TestType> for TestType {
 }
 #[repr(C, align(8))]
 pub struct TestTypeVftable {
-    /// My test vfunc!
     pub test_vfunc: unsafe extern "system" fn(
         this: *const crate::doc_comments::TestType,
     ),
