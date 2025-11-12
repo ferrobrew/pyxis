@@ -717,3 +717,65 @@ pub type AnarkGui {
         _ => panic!("Expected Definition"),
     }
 }
+
+#[test]
+fn can_parse_doc_comments_after_attributes() {
+    let text = r#"
+#[size(8), align(4)]
+extern type SharedPtr<PfxInstanceInterface>;
+
+/// `IPfxInstance` in original game
+pub type PfxInstanceInterface {
+    vftable {}
+}
+
+#[size(0x10)]
+/// `CPfxInstance` in original game
+pub type PfxInstance {
+    vftable {},
+    pub instance: SharedPtr<PfxInstanceInterface>,
+}
+impl PfxInstance {
+    #[address(0x6B7C40)]
+    pub fn set_game_object(&mut self, game_object: *mut PfxGameObject);
+}
+    "#;
+
+    // Don't use strip_spans() - it empties doc_comments and converts them to attributes
+    let module = parse_str(text).unwrap();
+
+    // Check extern type has no doc comments (doc comes after, not before)
+    if let ModuleItem::ExternType(_name, _attrs, doc_comments) = &module.items[0] {
+        assert_eq!(doc_comments.len(), 0, "Extern type should have no doc comments");
+    } else {
+        panic!("Expected ExternType");
+    }
+
+    // Check first type definition has doc comments
+    if let ModuleItem::Definition(def) = &module.items[1] {
+        assert_eq!(def.name.0, "PfxInstanceInterface");
+        assert_eq!(
+            def.doc_comments.len(),
+            1,
+            "PfxInstanceInterface should have 1 doc comment, got: {:?}",
+            def.doc_comments
+        );
+        assert!(def.doc_comments[0].contains("IPfxInstance"));
+    } else {
+        panic!("Expected Definition for PfxInstanceInterface");
+    }
+
+    // Check second type definition has doc comments (after attributes)
+    if let ModuleItem::Definition(def) = &module.items[2] {
+        assert_eq!(def.name.0, "PfxInstance");
+        assert_eq!(
+            def.doc_comments.len(),
+            1,
+            "PfxInstance should have 1 doc comment, got: {:?}",
+            def.doc_comments
+        );
+        assert!(def.doc_comments[0].contains("CPfxInstance"));
+    } else {
+        panic!("Expected Definition for PfxInstance");
+    }
+}
