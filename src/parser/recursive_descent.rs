@@ -365,12 +365,17 @@ impl Parser {
     }
 
     fn parse_extern_type(&mut self) -> Result<ModuleItem, ParseError> {
-        let doc_comments = self.collect_doc_comments();
+        let mut doc_comments = self.collect_doc_comments();
         let attributes = if matches!(self.peek(), TokenKind::Hash) {
             self.parse_attributes()?
         } else {
             Attributes::default()
         };
+
+        // Also collect doc comments that appear after attributes
+        let after_attr_doc_comments = self.collect_doc_comments();
+        doc_comments.extend(after_attr_doc_comments);
+
         self.expect(TokenKind::Extern)?;
         self.expect(TokenKind::Type)?;
         let (mut name, _) = self.expect_ident()?;
@@ -419,12 +424,16 @@ impl Parser {
     }
 
     fn parse_extern_value(&mut self) -> Result<ExternValue, ParseError> {
-        let doc_comments = self.collect_doc_comments();
+        let mut doc_comments = self.collect_doc_comments();
         let attributes = if matches!(self.peek(), TokenKind::Hash) {
             self.parse_attributes()?
         } else {
             Attributes::default()
         };
+
+        // Also collect doc comments that appear after attributes
+        let after_attr_doc_comments = self.collect_doc_comments();
+        doc_comments.extend(after_attr_doc_comments);
 
         let visibility = self.parse_visibility()?;
         self.expect(TokenKind::Extern)?;
@@ -839,12 +848,16 @@ impl Parser {
     }
 
     fn parse_function(&mut self) -> Result<Function, ParseError> {
-        let doc_comments = self.collect_doc_comments();
+        let mut doc_comments = self.collect_doc_comments();
         let attributes = if matches!(self.peek(), TokenKind::Hash) {
             self.parse_attributes()?
         } else {
             Attributes::default()
         };
+
+        // Also collect doc comments that appear after attributes
+        let after_attr_doc_comments = self.collect_doc_comments();
+        doc_comments.extend(after_attr_doc_comments);
 
         let visibility = self.parse_visibility()?;
         self.expect(TokenKind::Fn)?;

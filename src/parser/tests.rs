@@ -1,5 +1,5 @@
 use crate::{
-    grammar::test_aliases::*,
+    grammar::{test_aliases::*, ModuleItem},
     parser::{parse_str, strip_spans::StripSpans},
 };
 
@@ -248,6 +248,37 @@ fn can_parse_extern() {
         )]);
 
     assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
+}
+
+#[test]
+fn can_parse_extern_with_multiline_doc_comment() {
+    let text = r#"
+#[size(8), align(4)]
+/// `ManuallyDrop<SharedPtr<u32>>` is used instead of `SharedPtr<u32>` to avoid
+/// the `Drop` implementation of `SharedPtr<u32>` being called when the `RenderBlock`
+/// is dropped. The destructor, which we call in `drop`, will decrement the refcount
+/// for us.
+extern type ManuallyDrop<SharedPtr<u32>>;
+    "#;
+
+    let module = parse_str(text).unwrap().strip_spans();
+
+    // Verify we have one extern type item
+    assert_eq!(module.items.len(), 1);
+
+    // Verify it's an ExternType with the correct attributes and doc comments
+    match &module.items[0] {
+        ModuleItem::ExternType(name, attrs, doc_comments) => {
+            assert_eq!(name.0, "ManuallyDrop<SharedPtr<u32>>");
+            assert_eq!(attrs.0.len(), 2);
+            assert_eq!(doc_comments.len(), 4); // 4 lines of doc comment
+            assert!(doc_comments[0].contains("ManuallyDrop<SharedPtr<u32>>"));
+            assert!(doc_comments[1].contains("Drop` implementation"));
+            assert!(doc_comments[2].contains("dropped"));
+            assert!(doc_comments[3].contains("for us"));
+        }
+        _ => panic!("Expected ExternType"),
+    }
 }
 
 #[test]
