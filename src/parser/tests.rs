@@ -601,3 +601,33 @@ fn can_parse_pfx_instance_with_vftable_and_impl() {
 
     assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
 }
+
+#[test]
+fn can_parse_raycast_result_with_pointers_and_arrays() {
+    let text = r#"
+        #[size(0x2C)]
+        pub type RayCastResult {
+            game_object: *mut u32,
+            pub normal: Vector3,
+            pub distance: f32,
+            rigid_body: *mut u32,
+            shape: *mut u32,
+            unknown: [u32; 4],
+        }
+        "#;
+
+    let ast = M::new().with_definitions([ID::new(
+        (V::Public, "RayCastResult"),
+        TD::new([
+            TS::field((V::Private, "game_object"), T::ident("u32").mut_pointer()),
+            TS::field((V::Public, "normal"), T::ident("Vector3")),
+            TS::field((V::Public, "distance"), T::ident("f32")),
+            TS::field((V::Private, "rigid_body"), T::ident("u32").mut_pointer()),
+            TS::field((V::Private, "shape"), T::ident("u32").mut_pointer()),
+            TS::field((V::Private, "unknown"), T::array(T::ident("u32"), 4)),
+        ])
+        .with_attributes([A::size(0x2C)]),
+    )]);
+
+    assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
+}

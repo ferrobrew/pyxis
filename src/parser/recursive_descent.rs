@@ -135,6 +135,11 @@ impl Parser {
                 let token = self.advance();
                 Ok((Ident("_".to_string()), token.span))
             }
+            TokenKind::Unknown => {
+                // "unknown" keyword can also be used as an identifier (e.g., field name)
+                let token = self.advance();
+                Ok((Ident("unknown".to_string()), token.span))
+            }
             _ => Err(self.error(
                 format!("Expected identifier, found {:?}", self.peek()),
                 self.current().span.start,
