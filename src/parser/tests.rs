@@ -535,7 +535,7 @@ fn can_parse_freestanding_functions() {
 #[test]
 fn can_parse_multiple_attributes_with_underscored_literals() {
     let text = r#"
-        #[singleton(0x1_18F_B64), size(0x40), align(16)]
+        #[singleton(0x1_18F_B64), size(0x40), align(16)] // 0x3C
         pub type InputDeviceManager {
             #[address(0x18)]
             pub enabled: bool,

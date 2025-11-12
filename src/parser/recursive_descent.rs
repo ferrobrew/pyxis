@@ -19,11 +19,16 @@ impl std::error::Error for ParseError {}
 pub struct Parser {
     tokens: Vec<Token>,
     pos: usize,
+    pending_comments: Vec<Spanned<Comment>>,
 }
 
 impl Parser {
     pub fn new(tokens: Vec<Token>) -> Self {
-        Self { tokens, pos: 0 }
+        Self {
+            tokens,
+            pos: 0,
+            pending_comments: Vec::new(),
+        }
     }
 
     fn current(&self) -> &Token {
@@ -149,6 +154,21 @@ impl Parser {
 
             // Parse module-level items
             items.push(self.parse_module_item()?);
+
+            // Add any pending comments that were collected during parsing (e.g., inline comments after attributes)
+            for comment in self.pending_comments.drain(..) {
+                items.push(ModuleItem::Comment(comment));
+            }
+
+            // Collect any inline comments that appeared after the item
+            while matches!(
+                self.peek(),
+                TokenKind::Comment(_) | TokenKind::MultiLineComment(_)
+            ) {
+                if let Some(comment) = self.collect_comment() {
+                    items.push(ModuleItem::Comment(comment));
+                }
+            }
         }
 
         // Convert module doc comments to attributes
@@ -199,7 +219,7 @@ impl Parser {
                     }
                 }
 
-                // Skip over any comments after attributes
+                // Skip over any comments after attributes in lookahead
                 while pos < self.tokens.len()
                     && matches!(
                         &self.tokens[pos].kind,
@@ -209,8 +229,8 @@ impl Parser {
                     pos += 1;
                 }
 
-                // Now check what comes after attributes
-                match &self.tokens[pos].kind {
+                // Now check what comes after attributes (and comments)
+                let result = match &self.tokens[pos].kind {
                     TokenKind::Extern => {
                         // Could be extern type or extern value
                         if matches!(
@@ -244,7 +264,9 @@ impl Parser {
                         ),
                         location: self.tokens[pos].span.start,
                     }),
-                }
+                };
+
+                result
             }
             TokenKind::DocOuter(_)
             | TokenKind::Pub
@@ -439,6 +461,16 @@ impl Parser {
         } else {
             Attributes::default()
         };
+
+        // Collect inline comments after attributes so they can be added to the AST
+        while matches!(
+            self.peek(),
+            TokenKind::Comment(_) | TokenKind::MultiLineComment(_)
+        ) {
+            if let Some(comment) = self.collect_comment() {
+                self.pending_comments.push(comment);
+            }
+        }
 
         let visibility = self.parse_visibility()?;
 
