@@ -953,7 +953,35 @@ impl Parser {
             self.advance();
             let mut args = Vec::new();
             while !matches!(self.peek(), TokenKind::RParen) {
+                // TODO: Preserve inline comments in attributes for pretty-printing
+                // For now, we skip comments to allow parsing
+                while matches!(
+                    self.peek(),
+                    TokenKind::Comment(_)
+                        | TokenKind::MultiLineComment(_)
+                        | TokenKind::DocOuter(_)
+                        | TokenKind::DocInner(_)
+                ) {
+                    self.advance();
+                }
+
+                if matches!(self.peek(), TokenKind::RParen) {
+                    break;
+                }
+
                 args.push(self.parse_expr()?);
+
+                // Skip trailing comments after expressions
+                while matches!(
+                    self.peek(),
+                    TokenKind::Comment(_)
+                        | TokenKind::MultiLineComment(_)
+                        | TokenKind::DocOuter(_)
+                        | TokenKind::DocInner(_)
+                ) {
+                    self.advance();
+                }
+
                 if matches!(self.peek(), TokenKind::Comma) {
                     self.advance();
                 } else {

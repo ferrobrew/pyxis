@@ -1,5 +1,5 @@
 use crate::{
-    grammar::{test_aliases::*, ModuleItem},
+    grammar::{test_aliases::*, ItemDefinitionInner, ModuleItem, TypeDefItem, Visibility},
     parser::{parse_str, strip_spans::StripSpans},
 };
 
@@ -676,4 +676,44 @@ fn can_parse_raycast_result_with_pointers_and_arrays() {
     )]);
 
     assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
+}
+
+#[test]
+fn can_parse_type_with_comment_in_attribute() {
+    let text = r#"
+#[singleton(0x1_18F_C20), size(0x620 /* actually 0x61C */), align(16)]
+pub type AnarkGui {
+    vftable {},
+
+    #[address(0x1A0)]
+    pub next_state: AnarkState,
+    pub active_state: AnarkState,
+}
+    "#;
+
+    let module = parse_str(text).unwrap().strip_spans();
+
+    // Verify we have one type definition
+    assert_eq!(module.items.len(), 1);
+
+    // Verify it's the correct type with attributes and fields
+    match &module.items[0] {
+        ModuleItem::Definition(def) => {
+            assert_eq!(def.name.0, "AnarkGui");
+            assert_eq!(def.visibility, Visibility::Public);
+
+            // Check the type has attributes
+            if let ItemDefinitionInner::Type(td) = &def.inner {
+                assert_eq!(td.attributes.0.len(), 3); // singleton, size, align
+
+                // Verify we have vftable and two fields
+                // vftable + 2 fields = 3 statements
+                let statement_count = td.items.iter().filter(|item| matches!(item, TypeDefItem::Statement(_))).count();
+                assert_eq!(statement_count, 3);
+            } else {
+                panic!("Expected Type definition");
+            }
+        }
+        _ => panic!("Expected Definition"),
+    }
 }
