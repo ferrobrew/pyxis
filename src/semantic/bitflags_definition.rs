@@ -147,7 +147,8 @@ pub fn build(
                 "defaultable" => defaultable = true,
                 _ => {}
             },
-            grammar::Attribute::Function(ident, exprs) => {
+            grammar::Attribute::Function(ident, items) => {
+                let exprs = grammar::AttributeItem::extract_exprs(items);
                 if let ("singleton", [grammar::Expr::IntLiteral(value)]) =
                     (ident.as_str(), exprs.as_slice())
                 {

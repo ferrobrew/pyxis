@@ -146,19 +146,37 @@ impl PrettyPrinter {
             Attribute::Ident(name) => {
                 write!(&mut self.output, "{}", name).unwrap();
             }
-            Attribute::Function(name, args) => {
+            Attribute::Function(name, items) => {
                 write!(&mut self.output, "{}(", name).unwrap();
-                for (i, arg) in args.iter().enumerate() {
-                    if i > 0 {
-                        write!(&mut self.output, ", ").unwrap();
+                let mut first_expr = true;
+                for item in items {
+                    match item {
+                        AttributeItem::Expr(expr) => {
+                            if !first_expr {
+                                write!(&mut self.output, ", ").unwrap();
+                            }
+                            first_expr = false;
+                            self.print_expr(expr);
+                        }
+                        AttributeItem::Comment(comment) => {
+                            write!(&mut self.output, " {}", comment).unwrap();
+                        }
                     }
-                    self.print_expr(arg);
                 }
                 write!(&mut self.output, ")").unwrap();
             }
-            Attribute::Assign(name, expr) => {
+            Attribute::Assign(name, items) => {
                 write!(&mut self.output, "{} = ", name).unwrap();
-                self.print_expr(expr);
+                for item in items {
+                    match item {
+                        AttributeItem::Expr(expr) => {
+                            self.print_expr(expr);
+                        }
+                        AttributeItem::Comment(comment) => {
+                            write!(&mut self.output, " {}", comment).unwrap();
+                        }
+                    }
+                }
             }
         }
     }
@@ -205,7 +223,13 @@ impl PrettyPrinter {
             writeln!(&mut self.output, "///{}", doc).unwrap();
         }
 
-        self.print_attributes(&Attributes::default()); // Attributes are on the inner definition
+        // Print attributes from the inner definition
+        let attributes = match &def.inner {
+            ItemDefinitionInner::Type(td) => &td.attributes,
+            ItemDefinitionInner::Enum(ed) => &ed.attributes,
+            ItemDefinitionInner::Bitflags(bf) => &bf.attributes,
+        };
+        self.print_attributes(attributes);
 
         self.write_indent();
         if def.visibility == Visibility::Public {
@@ -498,5 +522,33 @@ mod tests {
         // Check comment inside type definition
         assert!(printed.contains("// Field comment"));
         assert!(printed.contains("/// Doc comment for field2"));
+    }
+
+    #[test]
+    fn test_pretty_print_comments_in_attributes() {
+        let text = r#"
+#[singleton(0x1_18F_C20), size(0x620 /* actually 0x61C */), align(16)]
+pub type AnarkGui {
+    vftable {},
+
+    #[address(0x1A0)]
+    pub next_state: AnarkState,
+    pub active_state: AnarkState,
+}
+        "#;
+
+        let module = parse_str(text).unwrap();
+        let printed = pretty_print(&module);
+
+        // Check that the comment inside the attribute is preserved
+        assert!(
+            printed.contains("/* actually 0x61C */"),
+            "Comment should be preserved in attribute"
+        );
+        // The hex number might be printed as decimal, but the comment should be there
+        assert!(
+            printed.contains("size(") && printed.contains("/* actually 0x61C */"),
+            "Comment should appear inside size attribute"
+        );
     }
 }

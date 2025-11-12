@@ -232,9 +232,10 @@ pub fn build(
         .doc(&ItemPath::from_iter([function.name.0.clone().into()]))?;
     let mut calling_convention = None;
     for attribute in &function.attributes {
-        let Some((ident, exprs)) = attribute.function() else {
+        let Some((ident, items)) = attribute.function() else {
             continue;
         };
+        let exprs = grammar::AttributeItem::extract_exprs(items);
         match (ident.as_str(), &exprs[..]) {
             ("address", [grammar::Expr::IntLiteral(addr)]) => {
                 if is_vfunc {

@@ -224,10 +224,33 @@ impl Expr {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum AttributeItem {
+    Expr(Expr),
+    Comment(String),
+}
+
+impl AttributeItem {
+    /// Helper to extract just the expressions from a list of attribute items
+    pub fn extract_exprs(items: &[AttributeItem]) -> Vec<&Expr> {
+        items
+            .iter()
+            .filter_map(|item| match item {
+                AttributeItem::Expr(expr) => Some(expr),
+                AttributeItem::Comment(_) => None,
+            })
+            .collect()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Attribute {
     Ident(Ident),
-    Function(Ident, Vec<Expr>),
-    Assign(Ident, Expr),
+    /// Function attribute with expressions and comments
+    /// Example: size(0x620 /* actually 0x61C */)
+    Function(Ident, Vec<AttributeItem>),
+    /// Assign attribute with expression and optional comments
+    /// Example: foo = bar /* comment */
+    Assign(Ident, Vec<AttributeItem>),
 }
 impl Attribute {
     // Ident attributes
@@ -252,14 +275,14 @@ impl Attribute {
     }
 
     // Function attributes
-    pub fn function(&self) -> Option<(&Ident, &Vec<Expr>)> {
+    pub fn function(&self) -> Option<(&Ident, &Vec<AttributeItem>)> {
         match self {
-            Attribute::Function(ident, exprs) => Some((ident, exprs)),
+            Attribute::Function(ident, items) => Some((ident, items)),
             _ => None,
         }
     }
     pub fn integer_fn(name: &str, value: isize) -> Self {
-        Attribute::Function(name.into(), vec![Expr::IntLiteral(value)])
+        Attribute::Function(name.into(), vec![AttributeItem::Expr(Expr::IntLiteral(value))])
     }
     pub fn address(address: usize) -> Self {
         Self::integer_fn("address", address as isize)
@@ -282,19 +305,19 @@ impl Attribute {
     pub fn calling_convention(name: &str) -> Self {
         Attribute::Function(
             "calling_convention".into(),
-            vec![Expr::StringLiteral(name.into())],
+            vec![AttributeItem::Expr(Expr::StringLiteral(name.into()))],
         )
     }
 
     // Assign attributes
-    pub fn assign(&self) -> Option<(&Ident, &Expr)> {
+    pub fn assign(&self) -> Option<(&Ident, &Vec<AttributeItem>)> {
         match self {
-            Attribute::Assign(ident, expr) => Some((ident, expr)),
+            Attribute::Assign(ident, items) => Some((ident, items)),
             _ => None,
         }
     }
     pub fn doc(doc: &str) -> Self {
-        Attribute::Assign("doc".into(), Expr::StringLiteral(doc.into()))
+        Attribute::Assign("doc".into(), vec![AttributeItem::Expr(Expr::StringLiteral(doc.into()))])
     }
 }
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
@@ -334,14 +357,15 @@ impl Attributes {
     pub fn doc(&self, path: &ItemPath) -> anyhow::Result<Option<String>> {
         let mut doc = None;
         for attr in &self.0 {
-            let Some((key, value)) = attr.assign() else {
+            let Some((key, items)) = attr.assign() else {
                 continue;
             };
             if key.as_str() != "doc" {
                 continue;
             }
 
-            let Some(value) = value.string_literal() else {
+            let exprs = AttributeItem::extract_exprs(items);
+            let Some(value) = exprs.first().and_then(|e| e.string_literal()) else {
                 anyhow::bail!("doc attribute for `{path}` must be a string literal");
             };
 

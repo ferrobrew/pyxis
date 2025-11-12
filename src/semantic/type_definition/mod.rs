@@ -168,7 +168,8 @@ pub fn build(
     let doc = definition.attributes.doc(resolvee_path)?;
     for attribute in &definition.attributes {
         match attribute {
-            grammar::Attribute::Function(ident, exprs) => {
+            grammar::Attribute::Function(ident, items) => {
+                let exprs = grammar::AttributeItem::extract_exprs(items);
                 match (ident.as_str(), exprs.as_slice()) {
                     ("size", [grammar::Expr::IntLiteral(value)]) => {
                         target_size = Some(
@@ -239,7 +240,8 @@ pub fn build(
                         grammar::Attribute::Ident(ident) if ident.as_str() == "base" => {
                             is_base = true
                         }
-                        grammar::Attribute::Function(ident, exprs) => {
+                        grammar::Attribute::Function(ident, items) => {
+                            let exprs = grammar::AttributeItem::extract_exprs(items);
                             if let ("address", [grammar::Expr::IntLiteral(addr)]) =
                                 (ident.as_str(), &exprs[..])
                             {
@@ -287,9 +289,10 @@ pub fn build(
                 // Extract size attribute
                 let mut size = None;
                 for attribute in attributes {
-                    let grammar::Attribute::Function(ident, exprs) = attribute else {
+                    let grammar::Attribute::Function(ident, items) = attribute else {
                         continue;
                     };
+                    let exprs = grammar::AttributeItem::extract_exprs(items);
                     if let ("size", [grammar::Expr::IntLiteral(size_)]) =
                         (ident.as_str(), exprs.as_slice())
                     {

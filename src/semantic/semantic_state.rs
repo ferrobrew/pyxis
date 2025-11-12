@@ -77,9 +77,10 @@ impl SemanticState {
                 let name = &ev.name;
                 let mut address = None;
                 for attribute in &ev.attributes {
-                    let Some((ident, exprs)) = attribute.function() else {
+                    let Some((ident, items)) = attribute.function() else {
                         continue;
                     };
+                    let exprs = grammar::AttributeItem::extract_exprs(items);
                     if let ("address", [grammar::Expr::IntLiteral(addr)]) =
                         (ident.as_str(), &exprs[..])
                     {
@@ -132,9 +133,10 @@ impl SemanticState {
             let mut size = None;
             let mut alignment = None;
             for attribute in attributes {
-                let Some((ident, exprs)) = attribute.function() else {
+                let Some((ident, items)) = attribute.function() else {
                     continue;
                 };
+                let exprs = grammar::AttributeItem::extract_exprs(items);
                 match (ident.as_str(), &exprs[..]) {
                     ("size", [grammar::Expr::IntLiteral(size_)]) => {
                         size = Some(

@@ -951,17 +951,24 @@ impl Parser {
         if matches!(self.peek(), TokenKind::LParen) {
             // Function attribute
             self.advance();
-            let mut args = Vec::new();
+            let mut items = Vec::new();
             while !matches!(self.peek(), TokenKind::RParen) {
-                // TODO: Preserve inline comments in attributes for pretty-printing
-                // For now, we skip comments to allow parsing
+                // Collect any comments before the expression
                 while matches!(
                     self.peek(),
-                    TokenKind::Comment(_)
-                        | TokenKind::MultiLineComment(_)
-                        | TokenKind::DocOuter(_)
-                        | TokenKind::DocInner(_)
+                    TokenKind::Comment(_) | TokenKind::MultiLineComment(_)
                 ) {
+                    let token = self.advance();
+                    let comment_text = match &token.kind {
+                        TokenKind::Comment(text) => text.clone(),
+                        TokenKind::MultiLineComment(text) => text.clone(),
+                        _ => unreachable!(),
+                    };
+                    items.push(AttributeItem::Comment(comment_text));
+                }
+
+                // Skip doc comments (they don't belong in attribute expressions)
+                while matches!(self.peek(), TokenKind::DocOuter(_) | TokenKind::DocInner(_)) {
                     self.advance();
                 }
 
@@ -969,17 +976,20 @@ impl Parser {
                     break;
                 }
 
-                args.push(self.parse_expr()?);
+                items.push(AttributeItem::Expr(self.parse_expr()?));
 
-                // Skip trailing comments after expressions
+                // Collect trailing comments after the expression
                 while matches!(
                     self.peek(),
-                    TokenKind::Comment(_)
-                        | TokenKind::MultiLineComment(_)
-                        | TokenKind::DocOuter(_)
-                        | TokenKind::DocInner(_)
+                    TokenKind::Comment(_) | TokenKind::MultiLineComment(_)
                 ) {
-                    self.advance();
+                    let token = self.advance();
+                    let comment_text = match &token.kind {
+                        TokenKind::Comment(text) => text.clone(),
+                        TokenKind::MultiLineComment(text) => text.clone(),
+                        _ => unreachable!(),
+                    };
+                    items.push(AttributeItem::Comment(comment_text));
                 }
 
                 if matches!(self.peek(), TokenKind::Comma) {
@@ -989,12 +999,43 @@ impl Parser {
                 }
             }
             self.expect(TokenKind::RParen)?;
-            Ok(Attribute::Function(name, args))
+            Ok(Attribute::Function(name, items))
         } else if matches!(self.peek(), TokenKind::Eq) {
             // Assign attribute
             self.advance();
-            let expr = self.parse_expr()?;
-            Ok(Attribute::Assign(name, expr))
+            let mut items = Vec::new();
+
+            // Collect comments before the expression
+            while matches!(
+                self.peek(),
+                TokenKind::Comment(_) | TokenKind::MultiLineComment(_)
+            ) {
+                let token = self.advance();
+                let comment_text = match &token.kind {
+                    TokenKind::Comment(text) => text.clone(),
+                    TokenKind::MultiLineComment(text) => text.clone(),
+                    _ => unreachable!(),
+                };
+                items.push(AttributeItem::Comment(comment_text));
+            }
+
+            items.push(AttributeItem::Expr(self.parse_expr()?));
+
+            // Collect comments after the expression
+            while matches!(
+                self.peek(),
+                TokenKind::Comment(_) | TokenKind::MultiLineComment(_)
+            ) {
+                let token = self.advance();
+                let comment_text = match &token.kind {
+                    TokenKind::Comment(text) => text.clone(),
+                    TokenKind::MultiLineComment(text) => text.clone(),
+                    _ => unreachable!(),
+                };
+                items.push(AttributeItem::Comment(comment_text));
+            }
+
+            Ok(Attribute::Assign(name, items))
         } else {
             // Ident attribute
             Ok(Attribute::Ident(name))

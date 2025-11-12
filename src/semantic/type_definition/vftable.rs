@@ -47,9 +47,10 @@ pub fn convert_grammar_functions_to_semantic_functions(
     for function in functions {
         let mut index = None;
         for attribute in &function.attributes {
-            let grammar::Attribute::Function(ident, exprs) = attribute else {
+            let grammar::Attribute::Function(ident, items) = attribute else {
                 continue;
             };
+            let exprs = grammar::AttributeItem::extract_exprs(items);
             match (ident.as_str(), exprs.as_slice()) {
                 ("index", [grammar::Expr::IntLiteral(index_)]) => {
                     index = Some(*index_ as usize);
