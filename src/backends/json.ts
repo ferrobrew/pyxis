@@ -2,6 +2,19 @@
 
 export type JsonArgument = { type: "const_self" } | { type: "mut_self" } | { type: "field"; name: string; type_ref: JsonType };
 
+/**
+ * Backend configuration with prologue and epilogue
+ */
+export type JsonBackend = { 
+/**
+ * Prologue code inserted at the beginning of generated output
+ */
+prologue: string | null; 
+/**
+ * Epilogue code inserted at the end of generated output
+ */
+epilogue: string | null };
+
 export type JsonBitflag = { 
 /**
  * Flag name
@@ -217,7 +230,11 @@ extern_values: JsonExternValue[];
 /**
  * Freestanding functions
  */
-functions: JsonFunction[] };
+functions: JsonFunction[]; 
+/**
+ * Backend configurations (prologue/epilogue for code generation)
+ */
+backends: { [key in string]: JsonBackend[] } };
 
 export type JsonRegion = { 
 /**
