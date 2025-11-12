@@ -436,6 +436,21 @@ backend rust epilogue r#"
 }
 
 #[test]
+fn can_parse_backend_with_multiline_prologue() {
+    let text = r##"
+backend rust prologue r#"
+    use crate::shared_ptr::*;
+    use std::mem::ManuallyDrop;
+"#;
+    "##;
+
+    let ast = M::new().with_backends([B::new("rust")
+        .with_prologue("use crate::shared_ptr::*;\n    use std::mem::ManuallyDrop;")]);
+
+    assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
+}
+
+#[test]
 fn can_parse_ident_attributes() {
     let text = r#"
         #[copyable, cloneable]
