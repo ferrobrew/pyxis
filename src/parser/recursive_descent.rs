@@ -1,16 +1,60 @@
 use crate::grammar::*;
 use crate::span::{Location, Span, Spanned};
 use crate::tokenizer::{Token, TokenKind};
+use ariadne::{Color, Label, Report, ReportKind, Source};
 
 #[derive(Debug, Clone)]
 pub struct ParseError {
     pub message: String,
     pub location: Location,
+    pub filename: String,
+    pub source: String,
+}
+
+impl ParseError {
+    /// Convert a Location to a byte offset in the source text
+    fn location_to_offset(&self, location: Location) -> usize {
+        let mut offset = 0;
+        let mut current_line = 1;
+
+        for ch in self.source.chars() {
+            if current_line == location.line {
+                // We're on the target line, add column offset (1-indexed)
+                return offset + (location.column - 1);
+            }
+            if ch == '\n' {
+                current_line += 1;
+            }
+            offset += ch.len_utf8();
+        }
+
+        // If we reached the end, return the offset
+        offset
+    }
 }
 
 impl std::fmt::Display for ParseError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Parse error at {}: {}", self.location, self.message)
+        let offset = self.location_to_offset(self.location);
+
+        let report = Report::build(ReportKind::Error, &self.filename, offset)
+            .with_message(&self.message)
+            .with_label(
+                Label::new((&self.filename, offset..offset + 1))
+                    .with_message(&self.message)
+                    .with_color(Color::Red),
+            )
+            .finish();
+
+        // Write the report to a string buffer
+        let mut buffer = Vec::new();
+        report
+            .write((&self.filename, Source::from(&self.source)), &mut buffer)
+            .map_err(|_| std::fmt::Error)?;
+
+        // Convert to string and write to formatter
+        let output = String::from_utf8_lossy(&buffer);
+        write!(f, "{}", output)
     }
 }
 
@@ -20,14 +64,28 @@ pub struct Parser {
     tokens: Vec<Token>,
     pos: usize,
     pending_comments: Vec<Spanned<Comment>>,
+    filename: String,
+    source: String,
 }
 
 impl Parser {
-    pub fn new(tokens: Vec<Token>) -> Self {
+    pub fn new(tokens: Vec<Token>, filename: String, source: String) -> Self {
         Self {
             tokens,
             pos: 0,
             pending_comments: Vec::new(),
+            filename,
+            source,
+        }
+    }
+
+    /// Helper to create a ParseError with filename and source context
+    fn error(&self, message: String, location: Location) -> ParseError {
+        ParseError {
+            message,
+            location,
+            filename: self.filename.clone(),
+            source: self.source.clone(),
         }
     }
 
@@ -56,10 +114,10 @@ impl Parser {
         if std::mem::discriminant(self.peek()) == std::mem::discriminant(&kind) {
             Ok(self.advance())
         } else {
-            Err(ParseError {
-                message: format!("Expected {:?}, found {:?}", kind, self.peek()),
-                location: self.current().span.start,
-            })
+            Err(self.error(
+                format!("Expected {:?}, found {:?}", kind, self.peek()),
+                self.current().span.start,
+            ))
         }
     }
 
@@ -77,10 +135,10 @@ impl Parser {
                 let token = self.advance();
                 Ok((Ident("_".to_string()), token.span))
             }
-            _ => Err(ParseError {
-                message: format!("Expected identifier, found {:?}", self.peek()),
-                location: self.current().span.start,
-            }),
+            _ => Err(self.error(
+                format!("Expected identifier, found {:?}", self.peek()),
+                self.current().span.start,
+            )),
         }
     }
 
@@ -260,13 +318,13 @@ impl Parser {
                     }
                     TokenKind::Impl => self.parse_impl_block().map(ModuleItem::Impl),
                     TokenKind::Fn => self.parse_function().map(ModuleItem::Function),
-                    _ => Err(ParseError {
-                        message: format!(
+                    _ => Err(self.error(
+                        format!(
                             "Unexpected token after attributes: {:?}",
                             self.tokens[pos].kind
                         ),
-                        location: self.tokens[pos].span.start,
-                    }),
+                        self.tokens[pos].span.start,
+                    )),
                 };
 
                 result
@@ -281,10 +339,10 @@ impl Parser {
                 // Freestanding function with attributes
                 self.parse_function().map(ModuleItem::Function)
             }
-            _ => Err(ParseError {
-                message: format!("Unexpected token at module level: {:?}", self.peek()),
-                location: self.current().span.start,
-            }),
+            _ => Err(self.error(
+                format!("Unexpected token at module level: {:?}", self.peek()),
+                self.current().span.start,
+            )),
         }
     }
 
@@ -295,10 +353,7 @@ impl Parser {
         if let TokenKind::Ident(name) = self.peek()
             && name == "super"
         {
-            return Err(ParseError {
-                message: "super not supported".to_string(),
-                location: self.current().span.start,
-            });
+            return Err(self.error("super not supported".to_string(), self.current().span.start));
         }
 
         let path = self.parse_item_path()?;
@@ -411,13 +466,10 @@ impl Parser {
                         epilogue = Some(string);
                     }
                     _ => {
-                        return Err(ParseError {
-                            message: format!(
-                                "Expected prologue or epilogue, found {:?}",
-                                self.peek()
-                            ),
-                            location: self.current().span.start,
-                        });
+                        return Err(self.error(
+                            format!("Expected prologue or epilogue, found {:?}", self.peek()),
+                            self.current().span.start,
+                        ));
                     }
                 }
             }
@@ -439,13 +491,13 @@ impl Parser {
                     epilogue = Some(string);
                 }
                 _ => {
-                    return Err(ParseError {
-                        message: format!(
+                    return Err(self.error(
+                        format!(
                             "Expected LBrace, Prologue, or Epilogue, found {:?}",
                             self.peek()
                         ),
-                        location: self.current().span.start,
-                    });
+                        self.current().span.start,
+                    ));
                 }
             }
         }
@@ -546,10 +598,10 @@ impl Parser {
                     }),
                 })
             }
-            _ => Err(ParseError {
-                message: format!("Expected type, enum, or bitflags, found {:?}", self.peek()),
-                location: self.current().span.start,
-            }),
+            _ => Err(self.error(
+                format!("Expected type, enum, or bitflags, found {:?}", self.peek()),
+                self.current().span.start,
+            )),
         }
     }
 
@@ -982,10 +1034,10 @@ impl Parser {
                     self.advance();
                     Ok(Type::MutPointer(Box::new(self.parse_type()?)))
                 } else {
-                    Err(ParseError {
-                        message: "Expected const or mut after *".to_string(),
-                        location: self.current().span.start,
-                    })
+                    Err(self.error(
+                        "Expected const or mut after *".to_string(),
+                        self.current().span.start,
+                    ))
                 }
             }
             TokenKind::LBracket => {
@@ -1041,10 +1093,10 @@ impl Parser {
 
                 Ok(Type::Ident(ident, vec![]))
             }
-            _ => Err(ParseError {
-                message: format!("Expected type, found {:?}", self.peek()),
-                location: self.current().span.start,
-            }),
+            _ => Err(self.error(
+                format!("Expected type, found {:?}", self.peek()),
+                self.current().span.start,
+            )),
         }
     }
 
@@ -1062,10 +1114,10 @@ impl Parser {
                 let (ident, _) = self.expect_ident()?;
                 Ok(Expr::Ident(ident))
             }
-            _ => Err(ParseError {
-                message: format!("Expected expression, found {:?}", self.peek()),
-                location: self.current().span.start,
-            }),
+            _ => Err(self.error(
+                format!("Expected expression, found {:?}", self.peek()),
+                self.current().span.start,
+            )),
         }
     }
 
@@ -1088,9 +1140,8 @@ impl Parser {
 
                         i64::from_str_radix(hex_str, 16)
                             .map(|v| (v * sign) as isize)
-                            .map_err(|_| ParseError {
-                                message: format!("Invalid hex literal: {}", s),
-                                location: token.span.start,
+                            .map_err(|_| {
+                                self.error(format!("Invalid hex literal: {}", s), token.span.start)
                             })
                     } else if s.starts_with("0b") || s.starts_with("-0b") {
                         // Binary
@@ -1102,9 +1153,11 @@ impl Parser {
 
                         i64::from_str_radix(bin_str, 2)
                             .map(|v| (v * sign) as isize)
-                            .map_err(|_| ParseError {
-                                message: format!("Invalid binary literal: {}", s),
-                                location: token.span.start,
+                            .map_err(|_| {
+                                self.error(
+                                    format!("Invalid binary literal: {}", s),
+                                    token.span.start,
+                                )
                             })
                     } else if s.starts_with("0o") || s.starts_with("-0o") {
                         // Octal
@@ -1116,25 +1169,26 @@ impl Parser {
 
                         i64::from_str_radix(oct_str, 8)
                             .map(|v| (v * sign) as isize)
-                            .map_err(|_| ParseError {
-                                message: format!("Invalid octal literal: {}", s),
-                                location: token.span.start,
+                            .map_err(|_| {
+                                self.error(
+                                    format!("Invalid octal literal: {}", s),
+                                    token.span.start,
+                                )
                             })
                     } else {
                         // Decimal
-                        s.parse::<isize>().map_err(|_| ParseError {
-                            message: format!("Invalid integer literal: {}", s),
-                            location: token.span.start,
+                        s.parse::<isize>().map_err(|_| {
+                            self.error(format!("Invalid integer literal: {}", s), token.span.start)
                         })
                     }
                 } else {
                     unreachable!()
                 }
             }
-            _ => Err(ParseError {
-                message: format!("Expected integer literal, found {:?}", self.peek()),
-                location: self.current().span.start,
-            }),
+            _ => Err(self.error(
+                format!("Expected integer literal, found {:?}", self.peek()),
+                self.current().span.start,
+            )),
         }
     }
 
@@ -1148,10 +1202,10 @@ impl Parser {
                     unreachable!()
                 }
             }
-            _ => Err(ParseError {
-                message: format!("Expected string literal, found {:?}", self.peek()),
-                location: self.current().span.start,
-            }),
+            _ => Err(self.error(
+                format!("Expected string literal, found {:?}", self.peek()),
+                self.current().span.start,
+            )),
         }
     }
 }

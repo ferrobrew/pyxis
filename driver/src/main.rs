@@ -67,7 +67,8 @@ fn main() -> anyhow::Result<()> {
         }
         Command::AstDump { file, pretty } => {
             let content = std::fs::read_to_string(&file)?;
-            let module = pyxis::parser::parse_str(&content)?;
+            let filename = file.display().to_string();
+            let module = pyxis::parser::parse_str_with_filename(&content, &filename)?;
 
             if pretty {
                 // Use pretty printer

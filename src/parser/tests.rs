@@ -222,9 +222,11 @@ fn will_die_on_super_for_now() {
         use super::TestType<Hey>;
         "#;
 
-    assert_eq!(
-        parse_str(text).err().unwrap().to_string(),
-        "Parse error at 2:13: super not supported"
+    let error = parse_str(text).err().unwrap().to_string();
+    assert!(
+        error.contains("super not supported"),
+        "Expected error about 'super not supported', got: {}",
+        error
     );
 }
 

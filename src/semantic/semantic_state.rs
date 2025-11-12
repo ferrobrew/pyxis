@@ -62,8 +62,10 @@ impl SemanticState {
 
     // todo: define an actual error type
     pub fn add_file(&mut self, base_path: &Path, path: &Path) -> anyhow::Result<()> {
+        let source = std::fs::read_to_string(path)?;
+        let filename = path.display().to_string();
         self.add_module(
-            &parser::parse_str(&std::fs::read_to_string(path)?)?,
+            &parser::parse_str_with_filename(&source, &filename)?,
             &ItemPath::from_path(path.strip_prefix(base_path).unwrap_or(path)),
         )
     }
