@@ -531,3 +531,29 @@ fn can_parse_freestanding_functions() {
 
     assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
 }
+
+#[test]
+fn can_parse_multiple_attributes_with_underscored_literals() {
+    let text = r#"
+        #[singleton(0x1_18F_B64), size(0x40), align(16)]
+        pub type InputDeviceManager {
+            #[address(0x18)]
+            pub enabled: bool,
+
+            #[address(0x38)]
+            pub in_focus: bool,
+        }
+        "#;
+
+    let ast = M::new().with_definitions([ID::new(
+        (V::Public, "InputDeviceManager"),
+        TD::new([
+            TS::field((V::Public, "enabled"), T::ident("bool")).with_attributes([A::address(0x18)]),
+            TS::field((V::Public, "in_focus"), T::ident("bool"))
+                .with_attributes([A::address(0x38)]),
+        ])
+        .with_attributes([A::singleton(0x118FB64), A::size(0x40), A::align(16)]),
+    )]);
+
+    assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
+}

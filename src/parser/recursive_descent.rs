@@ -199,6 +199,16 @@ impl Parser {
                     }
                 }
 
+                // Skip over any comments after attributes
+                while pos < self.tokens.len()
+                    && matches!(
+                        &self.tokens[pos].kind,
+                        TokenKind::Comment(_) | TokenKind::MultiLineComment(_)
+                    )
+                {
+                    pos += 1;
+                }
+
                 // Now check what comes after attributes
                 match &self.tokens[pos].kind {
                     TokenKind::Extern => {
