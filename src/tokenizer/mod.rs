@@ -1,4 +1,5 @@
 use crate::span::{Location, Span};
+use ariadne::{Color, Label, Report, ReportKind, Source};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TokenKind {
@@ -76,11 +77,54 @@ impl Token {
 pub struct LexError {
     pub message: String,
     pub location: Location,
+    pub filename: String,
+    pub source: String,
+}
+
+impl LexError {
+    /// Convert a Location to a byte offset in the source text
+    fn location_to_offset(&self, location: Location) -> usize {
+        let mut offset = 0;
+        let mut current_line = 1;
+
+        for ch in self.source.chars() {
+            if current_line == location.line {
+                // We're on the target line, add column offset (1-indexed)
+                return offset + (location.column - 1);
+            }
+            if ch == '\n' {
+                current_line += 1;
+            }
+            offset += ch.len_utf8();
+        }
+
+        // If we reached the end, return the offset
+        offset
+    }
 }
 
 impl std::fmt::Display for LexError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Lexical error at {}: {}", self.location, self.message)
+        let offset = self.location_to_offset(self.location);
+
+        let report = Report::build(ReportKind::Error, &self.filename, offset)
+            .with_message(&self.message)
+            .with_label(
+                Label::new((&self.filename, offset..offset + 1))
+                    .with_message(&self.message)
+                    .with_color(Color::Red),
+            )
+            .finish();
+
+        // Write the report to a string buffer
+        let mut buffer = Vec::new();
+        report
+            .write((&self.filename, Source::from(&self.source)), &mut buffer)
+            .map_err(|_| std::fmt::Error)?;
+
+        // Convert to string and write to formatter
+        let output = String::from_utf8_lossy(&buffer);
+        write!(f, "{}", output)
     }
 }
 
@@ -92,10 +136,11 @@ pub struct Lexer {
     pos: usize,
     line: usize,
     column: usize,
+    filename: String,
 }
 
 impl Lexer {
-    pub fn new(input: String) -> Self {
+    pub fn new(input: String, filename: String) -> Self {
         let chars: Vec<char> = input.chars().collect();
         Self {
             input,
@@ -103,6 +148,17 @@ impl Lexer {
             pos: 0,
             line: 1,
             column: 1,
+            filename,
+        }
+    }
+
+    /// Helper to create a LexError with filename and source context
+    fn error(&self, message: String, location: Location) -> LexError {
+        LexError {
+            message,
+            location,
+            filename: self.filename.clone(),
+            source: self.input.clone(),
         }
     }
 
@@ -252,10 +308,7 @@ impl Lexer {
                     {
                         return self.lex_number(start, start_pos);
                     }
-                    Err(LexError {
-                        message: "Unexpected '-' character".to_string(),
-                        location: start,
-                    })
+                    Err(self.error("Unexpected '-' character".to_string(), start))
                 }
             }
             '&' => {
@@ -348,10 +401,7 @@ impl Lexer {
                 let text = self.input[start_pos..self.pos].to_string();
                 Ok(Token::new(TokenKind::Hash, Span::new(start, end, text)))
             }
-            _ => Err(LexError {
-                message: format!("Unexpected character: '{}'", ch),
-                location: start,
-            }),
+            _ => Err(self.error(format!("Unexpected character: '{}'", ch), start)),
         }
     }
 
@@ -416,10 +466,7 @@ impl Lexer {
         }
 
         if depth > 0 {
-            return Err(LexError {
-                message: "Unterminated multiline comment".to_string(),
-                location: start,
-            });
+            return Err(self.error("Unterminated multiline comment".to_string(), start));
         }
 
         let end = self.current_location();
@@ -577,23 +624,20 @@ impl Lexer {
                         '\'' => value.push('\''),
                         '0' => value.push('\0'),
                         _ => {
-                            return Err(LexError {
-                                message: format!("Invalid escape sequence: \\{}", escaped),
-                                location: self.current_location(),
-                            });
+                            return Err(self.error(
+                                format!("Invalid escape sequence: \\{}", escaped),
+                                self.current_location(),
+                            ));
                         }
                     }
                 } else {
-                    return Err(LexError {
-                        message: "Unexpected end of file in string literal".to_string(),
-                        location: self.current_location(),
-                    });
+                    return Err(self.error(
+                        "Unexpected end of file in string literal".to_string(),
+                        self.current_location(),
+                    ));
                 }
             } else if ch == '\n' {
-                return Err(LexError {
-                    message: "Unterminated string literal".to_string(),
-                    location: start,
-                });
+                return Err(self.error("Unterminated string literal".to_string(), start));
             } else {
                 value.push(ch);
                 self.advance();
@@ -620,10 +664,10 @@ impl Lexer {
         }
 
         if self.peek() != Some('"') {
-            return Err(LexError {
-                message: "Expected '\"' after 'r' and '#' in raw string literal".to_string(),
-                location: self.current_location(),
-            });
+            return Err(self.error(
+                "Expected '\"' after 'r' and '#' in raw string literal".to_string(),
+                self.current_location(),
+            ));
         }
 
         self.advance(); // consume opening '"'
@@ -632,10 +676,7 @@ impl Lexer {
 
         loop {
             if self.is_eof() {
-                return Err(LexError {
-                    message: "Unterminated raw string literal".to_string(),
-                    location: start,
-                });
+                return Err(self.error("Unterminated raw string literal".to_string(), start));
             }
 
             if self.peek() == Some('"') {
@@ -690,33 +731,33 @@ impl Lexer {
                     '"' => '"',
                     '0' => '\0',
                     _ => {
-                        return Err(LexError {
-                            message: format!("Invalid escape sequence: \\{}", escaped),
-                            location: self.current_location(),
-                        });
+                        return Err(self.error(
+                            format!("Invalid escape sequence: \\{}", escaped),
+                            self.current_location(),
+                        ));
                     }
                 }
             } else {
-                return Err(LexError {
-                    message: "Unexpected end of file in char literal".to_string(),
-                    location: self.current_location(),
-                });
+                return Err(self.error(
+                    "Unexpected end of file in char literal".to_string(),
+                    self.current_location(),
+                ));
             }
         } else if let Some(ch) = self.peek() {
             self.advance();
             ch
         } else {
-            return Err(LexError {
-                message: "Unexpected end of file in char literal".to_string(),
-                location: self.current_location(),
-            });
+            return Err(self.error(
+                "Unexpected end of file in char literal".to_string(),
+                self.current_location(),
+            ));
         };
 
         if self.peek() != Some('\'') {
-            return Err(LexError {
-                message: "Expected closing '\'' in char literal".to_string(),
-                location: self.current_location(),
-            });
+            return Err(self.error(
+                "Expected closing '\'' in char literal".to_string(),
+                self.current_location(),
+            ));
         }
 
         self.advance(); // consume closing '\''
@@ -732,7 +773,11 @@ impl Lexer {
 }
 
 pub fn tokenize(input: String) -> Result<Vec<Token>, LexError> {
-    Lexer::new(input).tokenize()
+    tokenize_with_filename(input, "<input>".to_string())
+}
+
+pub fn tokenize_with_filename(input: String, filename: String) -> Result<Vec<Token>, LexError> {
+    Lexer::new(input, filename).tokenize()
 }
 
 #[cfg(test)]

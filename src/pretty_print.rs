@@ -64,8 +64,8 @@ impl PrettyPrinter {
 
     fn print_module_item(&mut self, item: &ModuleItem) {
         match item {
-            ModuleItem::Comment(_) => {
-                // Comments are handled separately - skip for basic printing
+            ModuleItem::Comment(comment) => {
+                self.print_comment(&comment.value);
             }
             ModuleItem::Use(path) => {
                 self.write_indent();
@@ -94,6 +94,35 @@ impl PrettyPrinter {
             }
         }
         self.writeln("");
+    }
+
+    fn print_comment(&mut self, comment: &Comment) {
+        match comment {
+            Comment::DocOuter(lines) => {
+                for line in lines {
+                    self.write_indent();
+                    writeln!(&mut self.output, "/// {}", line).unwrap();
+                }
+            }
+            Comment::DocInner(lines) => {
+                for line in lines {
+                    self.write_indent();
+                    writeln!(&mut self.output, "//! {}", line).unwrap();
+                }
+            }
+            Comment::Regular(text) => {
+                // Regular comments include the // prefix
+                self.write_indent();
+                writeln!(&mut self.output, "{}", text).unwrap();
+            }
+            Comment::MultiLine(lines) => {
+                // Multiline comments include /* and */ in the text
+                for line in lines {
+                    self.write_indent();
+                    writeln!(&mut self.output, "{}", line).unwrap();
+                }
+            }
+        }
     }
 
     fn print_attributes(&mut self, attrs: &Attributes) {
@@ -170,6 +199,12 @@ impl PrettyPrinter {
     }
 
     fn print_item_definition(&mut self, def: &ItemDefinition) {
+        // Print doc comments (they already include the space after ///)
+        for doc in &def.doc_comments {
+            self.write_indent();
+            writeln!(&mut self.output, "///{}", doc).unwrap();
+        }
+
         self.print_attributes(&Attributes::default()); // Attributes are on the inner definition
 
         self.write_indent();
@@ -182,8 +217,13 @@ impl PrettyPrinter {
                 writeln!(&mut self.output, "type {} {{", def.name).unwrap();
                 self.indent();
                 for item in &td.items {
-                    if let TypeDefItem::Statement(stmt) = item {
-                        self.print_type_statement(stmt);
+                    match item {
+                        TypeDefItem::Comment(comment) => {
+                            self.print_comment(&comment.value);
+                        }
+                        TypeDefItem::Statement(stmt) => {
+                            self.print_type_statement(stmt);
+                        }
                     }
                 }
                 self.dedent();
@@ -196,8 +236,13 @@ impl PrettyPrinter {
                 writeln!(&mut self.output, " {{").unwrap();
                 self.indent();
                 for item in &ed.items {
-                    if let EnumDefItem::Statement(stmt) = item {
-                        self.print_enum_statement(stmt);
+                    match item {
+                        EnumDefItem::Comment(comment) => {
+                            self.print_comment(&comment.value);
+                        }
+                        EnumDefItem::Statement(stmt) => {
+                            self.print_enum_statement(stmt);
+                        }
                     }
                 }
                 self.dedent();
@@ -210,8 +255,13 @@ impl PrettyPrinter {
                 writeln!(&mut self.output, " {{").unwrap();
                 self.indent();
                 for item in &bf.items {
-                    if let BitflagsDefItem::Statement(stmt) = item {
-                        self.print_bitflags_statement(stmt);
+                    match item {
+                        BitflagsDefItem::Comment(comment) => {
+                            self.print_comment(&comment.value);
+                        }
+                        BitflagsDefItem::Statement(stmt) => {
+                            self.print_bitflags_statement(stmt);
+                        }
                     }
                 }
                 self.dedent();
@@ -222,6 +272,12 @@ impl PrettyPrinter {
     }
 
     fn print_type_statement(&mut self, stmt: &TypeStatement) {
+        // Print doc comments (they already include the space after ///)
+        for doc in &stmt.doc_comments {
+            self.write_indent();
+            writeln!(&mut self.output, "///{}", doc).unwrap();
+        }
+
         self.print_attributes(&stmt.attributes);
         self.write_indent();
 
@@ -248,6 +304,12 @@ impl PrettyPrinter {
     }
 
     fn print_enum_statement(&mut self, stmt: &EnumStatement) {
+        // Print doc comments (they already include the space after ///)
+        for doc in &stmt.doc_comments {
+            self.write_indent();
+            writeln!(&mut self.output, "///{}", doc).unwrap();
+        }
+
         self.print_attributes(&stmt.attributes);
         self.write_indent();
         write!(&mut self.output, "{}", stmt.name).unwrap();
@@ -259,6 +321,12 @@ impl PrettyPrinter {
     }
 
     fn print_bitflags_statement(&mut self, stmt: &BitflagsStatement) {
+        // Print doc comments (they already include the space after ///)
+        for doc in &stmt.doc_comments {
+            self.write_indent();
+            writeln!(&mut self.output, "///{}", doc).unwrap();
+        }
+
         self.print_attributes(&stmt.attributes);
         self.write_indent();
         write!(&mut self.output, "{} = ", stmt.name).unwrap();
@@ -295,8 +363,13 @@ impl PrettyPrinter {
         self.indent();
 
         for item in &impl_block.items {
-            if let ImplItem::Function(func) = item {
-                self.print_function(func);
+            match item {
+                ImplItem::Comment(comment) => {
+                    self.print_comment(&comment.value);
+                }
+                ImplItem::Function(func) => {
+                    self.print_function(func);
+                }
             }
         }
 
@@ -317,6 +390,12 @@ impl PrettyPrinter {
     }
 
     fn print_function(&mut self, func: &Function) {
+        // Print doc comments (they already include the space after ///)
+        for doc in &func.doc_comments {
+            self.write_indent();
+            writeln!(&mut self.output, "///{}", doc).unwrap();
+        }
+
         self.print_attributes(&func.attributes);
         self.write_indent();
         if func.visibility == Visibility::Public {
@@ -383,5 +462,41 @@ mod tests {
 
         assert!(printed.contains("pub type Test"));
         assert!(printed.contains("field: i32"));
+    }
+
+    #[test]
+    fn test_pretty_print_with_comments() {
+        let text = r#"
+        // This is a regular comment
+        /// This is a doc comment
+        pub type Test {
+            // Field comment
+            field1: i32,
+            /// Doc comment for field2
+            field2: bool,
+        }
+
+        #[singleton(0x1_18F_B64), size(0x40), align(16)] // 0x3C
+        pub type InputDeviceManager {
+            #[address(0x18)]
+            pub enabled: bool,
+        }
+        "#;
+
+        let module = parse_str(text).unwrap();
+        let printed = pretty_print(&module);
+
+        // Check regular comment
+        assert!(printed.contains("// This is a regular comment"));
+
+        // Check doc comment
+        assert!(printed.contains("/// This is a doc comment"));
+
+        // Check inline comment after attributes
+        assert!(printed.contains("// 0x3C"));
+
+        // Check comment inside type definition
+        assert!(printed.contains("// Field comment"));
+        assert!(printed.contains("/// Doc comment for field2"));
     }
 }
