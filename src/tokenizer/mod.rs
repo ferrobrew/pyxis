@@ -636,8 +636,6 @@ impl Lexer {
                         self.current_location(),
                     ));
                 }
-            } else if ch == '\n' {
-                return Err(self.error("Unterminated string literal".to_string(), start));
             } else {
                 value.push(ch);
                 self.advance();
