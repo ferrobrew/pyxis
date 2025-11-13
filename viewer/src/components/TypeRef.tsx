@@ -20,7 +20,7 @@ export function TypeRef({ type, currentModule = '' }: TypeRefProps) {
         const isPrimitive = isPrimitiveType(displayPath);
 
         if (isPrimitive) {
-          return <span className="text-purple-600 dark:text-slate-500">{displayPath}</span>;
+          return <span className="text-violet-600 dark:text-slate-500">{displayPath}</span>;
         }
 
         return (
