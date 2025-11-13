@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useMemo, type ReactNode } from 'react';
 import type { JsonDocumentation } from '@pyxis/types';
+import { getPredefinedTypes } from '../utils/pathUtils';
 
 interface DocumentationContextType {
   documentation: JsonDocumentation | null;
@@ -9,21 +10,6 @@ interface DocumentationContextType {
   selectedSource: string;
   setSelectedSource: (source: string) => void;
   predefinedTypes: Set<string>;
-}
-
-/**
- * Get all predefined type paths from documentation
- */
-export function getPredefinedTypes(documentation: JsonDocumentation | null): Set<string> {
-  if (!documentation) return new Set();
-
-  const predefinedTypes = new Set<string>();
-  for (const [path, item] of Object.entries(documentation.items)) {
-    if (item.category === 'predefined') {
-      predefinedTypes.add(path);
-    }
-  }
-  return predefinedTypes;
 }
 
 const DocumentationContext = createContext<DocumentationContextType | undefined>(undefined);
@@ -52,6 +38,7 @@ export function DocumentationProvider({ children }: { children: ReactNode }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useDocumentation() {
   const context = useContext(DocumentationContext);
   if (!context) {
