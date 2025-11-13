@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import type { JsonType, JsonCallingConvention } from '@pyxis/types';
-import { getRelativePath, isPrimitiveType } from '../utils/pathUtils';
+import { getRelativePath } from '../utils/pathUtils';
+import { useDocumentation } from '../contexts/DocumentationContext';
 
 interface TypeRefProps {
   type: JsonType;
@@ -13,13 +14,17 @@ function getCallingConvention(cc: JsonCallingConvention): string {
 }
 
 export function TypeRef({ type, currentModule = '' }: TypeRefProps) {
+  const { predefinedTypes } = useDocumentation();
+
   const renderType = (t: JsonType): React.ReactNode => {
     switch (t.type) {
       case 'raw': {
-        const displayPath = currentModule ? getRelativePath(currentModule, t.path) : t.path;
-        const isPrimitive = isPrimitiveType(displayPath);
+        const displayPath = currentModule
+          ? getRelativePath(currentModule, t.path, predefinedTypes)
+          : t.path;
+        const isPredefined = predefinedTypes.has(t.path);
 
-        if (isPrimitive) {
+        if (isPredefined) {
           return <span className="text-violet-600 dark:text-slate-500">{displayPath}</span>;
         }
 

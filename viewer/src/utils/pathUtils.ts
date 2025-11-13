@@ -2,13 +2,17 @@
  * Get the relative path from a current module path to a target path
  * If the target is in a parent or sibling module, use the absolute path
  */
-export function getRelativePath(currentModulePath: string, targetPath: string): string {
+export function getRelativePath(
+  currentModulePath: string,
+  targetPath: string,
+  predefinedTypes: Set<string>
+): string {
   // Split paths into segments
   const currentSegments = currentModulePath.split('::').filter(Boolean);
   const targetSegments = targetPath.split('::').filter(Boolean);
 
-  // If target is a primitive type, return as is
-  if (targetSegments.length === 1 && isPrimitiveType(targetPath)) {
+  // If target is a predefined type, return as is
+  if (targetSegments.length === 1 && predefinedTypes.has(targetPath)) {
     return targetPath;
   }
 
@@ -33,33 +37,6 @@ export function getRelativePath(currentModulePath: string, targetPath: string): 
 
   // Otherwise, use the full absolute path
   return targetPath;
-}
-
-/**
- * Check if a type name is a primitive type
- */
-export function isPrimitiveType(typeName: string): boolean {
-  const primitives = [
-    'bool',
-    'i8',
-    'i16',
-    'i32',
-    'i64',
-    'i128',
-    'isize',
-    'u8',
-    'u16',
-    'u32',
-    'u64',
-    'u128',
-    'usize',
-    'f32',
-    'f64',
-    'char',
-    'str',
-    'void',
-  ];
-  return primitives.includes(typeName);
 }
 
 /**
