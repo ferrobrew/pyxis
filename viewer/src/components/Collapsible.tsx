@@ -13,7 +13,7 @@ export function Collapsible({ title, children, defaultOpen = false }: Collapsibl
     <div className="border border-gray-300 dark:border-slate-800 rounded-md overflow-hidden">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between px-4 py-2 bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors"
+        className="w-full flex items-center justify-between p-2 bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors"
       >
         <span className="font-medium text-sm text-gray-900 dark:text-slate-200">{title}</span>
         <svg

@@ -23,8 +23,8 @@ interface ModuleData {
 function ExternValueItem({ extern: ext }: { extern: JsonExternValue }) {
   const isPrivate = ext.visibility === 'private';
   const containerClasses = isPrivate
-    ? 'mb-4 p-4 bg-gray-50 dark:bg-slate-800 rounded-md opacity-60'
-    : 'mb-4 p-4 bg-gray-50 dark:bg-slate-800 rounded-md';
+    ? 'p-2 opacity-60 border-b border-gray-200 dark:border-slate-700 last:border-b-0'
+    : 'p-2 border-b border-gray-200 dark:border-slate-700 last:border-b-0';
   const nameClasses = isPrivate
     ? 'font-semibold text-gray-500 dark:text-slate-600'
     : 'font-semibold text-gray-900 dark:text-slate-200';
@@ -98,7 +98,7 @@ function EpilogueSection({ backends }: BackendSectionProps) {
   if (!hasEpilogues) return null;
 
   return (
-    <div className="mb-6">
+    <div className="my-6">
       <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-slate-200">
         Backend Epilogue
       </h2>
@@ -188,7 +188,7 @@ function SubmoduleList({ submodules, parentPath }: SubmoduleListProps) {
   return (
     <div className="mt-6">
       <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-slate-200">Submodules</h2>
-      <div className="space-y-2">
+      <div className="bg-gray-50 dark:bg-slate-800 rounded-md overflow-hidden">
         {Object.entries(submodules).map(([name, submodule]) => {
           const subPath = parentPath ? `${parentPath}::${name}` : name;
           const data = submodule as SubmoduleData;
@@ -196,7 +196,7 @@ function SubmoduleList({ submodules, parentPath }: SubmoduleListProps) {
             <Link
               key={name}
               to={buildModuleUrl(subPath, selectedSource)}
-              className="block p-4 bg-gray-50 dark:bg-slate-800 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+              className="block p-2 border-b border-gray-200 dark:border-slate-700 last:border-b-0 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
             >
               <div className="font-mono text-sm font-semibold text-blue-600 dark:text-blue-400">
                 {name}
@@ -291,9 +291,11 @@ export function ModuleView() {
           <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-slate-200">
             Extern Values
           </h2>
-          {module.extern_values.map((ext: JsonExternValue, idx: number) => (
-            <ExternValueItem key={idx} extern={ext} />
-          ))}
+          <div className="bg-gray-50 dark:bg-slate-800 rounded-md overflow-hidden">
+            {module.extern_values.map((ext: JsonExternValue, idx: number) => (
+              <ExternValueItem key={idx} extern={ext} />
+            ))}
+          </div>
         </div>
       )}
 

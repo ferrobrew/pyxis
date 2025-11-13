@@ -30,7 +30,7 @@ export function TypeRef({ type, currentModule = '' }: TypeRefProps) {
             to={buildItemUrl(t.path, selectedSource)}
             className={
               isPredefined
-                ? 'text-violet-600 dark:text-slate-500 hover:underline'
+                ? 'text-violet-600 dark:text-violet-500 hover:underline'
                 : 'text-blue-600 dark:text-blue-400 hover:underline'
             }
           >
