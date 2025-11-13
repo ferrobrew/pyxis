@@ -123,7 +123,15 @@ export function FileUpload() {
       .finally(() => {
         setIsLoading(false);
       });
-  }, [selectedSource, availableDocs, documentation, fileName, isLoading]);
+  }, [
+    selectedSource,
+    availableDocs,
+    documentation,
+    fileName,
+    isLoading,
+    setDocumentation,
+    setFileName,
+  ]);
 
   // Fetch the index on mount
   useEffect(() => {

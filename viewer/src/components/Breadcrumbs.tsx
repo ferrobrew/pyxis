@@ -9,7 +9,7 @@ interface BreadcrumbsProps {
   itemType?: ItemType;
 }
 
-export function Breadcrumbs({ path, isItem = false, itemType }: BreadcrumbsProps) {
+export function Breadcrumbs({ path, isItem = false }: BreadcrumbsProps) {
   const { selectedSource, documentation } = useDocumentation();
 
   if (!path) {
@@ -22,8 +22,6 @@ export function Breadcrumbs({ path, isItem = false, itemType }: BreadcrumbsProps
   }
 
   const pathSegments = path.split('::');
-  const currentName = pathSegments[pathSegments.length - 1];
-  const parentSegments = pathSegments.slice(0, -1);
 
   // Determine item type if not provided
   let finalItemType: ItemType = 'module';
@@ -85,4 +83,3 @@ export function Breadcrumbs({ path, isItem = false, itemType }: BreadcrumbsProps
     </nav>
   );
 }
-
