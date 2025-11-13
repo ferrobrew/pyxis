@@ -13,4 +13,5 @@ target/
 # Node.js / npm
 node_modules/
 viewer/dist/
+viewer/public/*.json
 package-lock.json
