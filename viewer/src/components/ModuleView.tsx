@@ -7,6 +7,7 @@ import { Collapsible } from './Collapsible';
 import { TypeRef } from './TypeRef';
 import { FunctionDisplay } from './FunctionDisplay';
 import { CodeBlock } from './CodeBlock';
+import { Breadcrumbs } from './Breadcrumbs';
 import type { JsonExternValue, JsonBackend, JsonItem, JsonFunction } from '@pyxis/types';
 
 interface ModuleData {
@@ -271,46 +272,9 @@ export function ModuleView() {
       item: documentation.items[itemPath],
     })) || [];
 
-  // Generate breadcrumbs
-  const pathSegments = decodedPath ? decodedPath.split('::') : [];
-  const breadcrumbs = pathSegments.map((segment, idx) => {
-    const partialPath = pathSegments.slice(0, idx + 1).join('::');
-    return { name: segment, path: partialPath };
-  });
-
   return (
     <div className="p-8 max-w-6xl">
-      {/* Breadcrumbs */}
-      {breadcrumbs.length > 0 && (
-        <nav className="mb-4 flex items-center text-sm text-gray-600 dark:text-slate-400">
-          {breadcrumbs.map((crumb, idx) => (
-            <span key={crumb.path} className="flex items-center">
-              {idx > 0 && (
-                <svg className="w-4 h-4 mx-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 5l7 7-7 7"
-                  />
-                </svg>
-              )}
-              {idx === breadcrumbs.length - 1 ? (
-                <span className="font-semibold text-gray-900 dark:text-slate-200">
-                  {crumb.name}
-                </span>
-              ) : (
-                <Link
-                  to={buildModuleUrl(crumb.path, selectedSource)}
-                  className="hover:text-blue-600 dark:hover:text-blue-400"
-                >
-                  {crumb.name}
-                </Link>
-              )}
-            </span>
-          ))}
-        </nav>
-      )}
+      <Breadcrumbs path={decodedPath} />
 
       <h1 className="text-3xl font-bold mb-2 text-gray-900 dark:text-slate-200">
         {decodedPath || 'Root'}

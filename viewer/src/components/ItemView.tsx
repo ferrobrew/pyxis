@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useDocumentation } from '../contexts/DocumentationContext';
 import { getModulePath, getItemName, findLongestValidAncestor } from '../utils/pathUtils';
 import { buildModuleUrl, buildItemUrl, buildRootUrl } from '../utils/navigation';
@@ -7,6 +7,7 @@ import { TypeRef } from './TypeRef';
 import { Badge, SmallBadge } from './Badge';
 import { FunctionDisplay } from './FunctionDisplay';
 import { FieldTable } from './FieldTable';
+import { Breadcrumbs } from './Breadcrumbs';
 import type { JsonTypeDefinition, JsonEnumDefinition, JsonBitflagsDefinition } from '@pyxis/types';
 
 // Documentation display component for code blocks
@@ -306,12 +307,8 @@ export function ItemView() {
 
   return (
     <div className="p-8 max-w-6xl">
+      <Breadcrumbs path={decodedPath} isItem={true} />
       <div className="mb-4">
-        <div className="text-sm text-gray-500 dark:text-slate-400 mb-2">
-          <Link to={buildModuleUrl(modulePath, selectedSource)} className="hover:underline">
-            {modulePath || 'root'}
-          </Link>
-        </div>
         <h1 className="text-3xl font-bold mb-2 text-gray-900 dark:text-slate-200">{itemName}</h1>
         <div className="flex items-center gap-3 text-sm text-gray-600 dark:text-slate-400">
           <span className="px-2 py-1 bg-gray-100 dark:bg-slate-800 rounded capitalize">
