@@ -1,7 +1,14 @@
 import { useRef, useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useDocumentation } from '../contexts/DocumentationContext';
 import type { JsonDocumentation } from '@pyxis/types';
 import { CustomDropdown } from './CustomDropdown';
+import {
+  buildModuleUrl,
+  registerSource,
+  decodeSourceIdentifier,
+  extractSourceId,
+} from '../utils/navigation';
 
 const INDEX_URL =
   'https://raw.githubusercontent.com/ferrobrew/pyxis-defs/refs/heads/main/docs/index.json';
@@ -22,8 +29,55 @@ export function FileUpload() {
   const { setDocumentation, setFileName, selectedSource, setSelectedSource, documentation } =
     useDocumentation();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const navigate = useNavigate();
+  const location = useLocation();
   const [availableDocs, setAvailableDocs] = useState<DocEntry[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Sync source from URL when route changes (but not when on root - root means Local)
+  // Only sync if we're not currently loading (to avoid conflicts during project switching)
+  useEffect(() => {
+    if (isLoading) return; // Don't sync while loading a new project
+
+    // If we're on root, don't sync from URL - root means Local
+    if (location.pathname === '/') {
+      // Only set to local if we don't have documentation loaded
+      if (!documentation && selectedSource !== 'local') {
+        setSelectedSource('local');
+      }
+      return;
+    }
+
+    const pathMatch = location.pathname.match(/^\/(module|item)\/([^/]+)/);
+    if (pathMatch && availableDocs.length > 0) {
+      const sourceId = pathMatch[2];
+      if (sourceId === 'local') {
+        if (selectedSource !== 'local') {
+          setSelectedSource('local');
+        }
+      } else {
+        // Try to decode the source ID to full path
+        const decodedSource = decodeSourceIdentifier(sourceId);
+        // If decoding worked (got a full path), use it
+        if (decodedSource !== sourceId && decodedSource !== selectedSource) {
+          setSelectedSource(decodedSource);
+        } else {
+          // If decoding didn't work, try to find the doc by matching the ID
+          const matchingDoc = availableDocs.find((doc) => extractSourceId(doc.path) === sourceId);
+          if (matchingDoc && matchingDoc.path !== selectedSource) {
+            setSelectedSource(matchingDoc.path);
+          }
+        }
+      }
+    }
+  }, [
+    location.pathname,
+    availableDocs,
+    selectedSource,
+    setSelectedSource,
+    documentation,
+    isLoading,
+  ]);
 
   // Fetch the index on mount
   useEffect(() => {
@@ -36,6 +90,10 @@ export function FileUpload() {
         }
         const index: DocsIndex = await response.json();
         setAvailableDocs(index.docs);
+        // Register all source paths for ID lookup
+        index.docs.forEach((doc) => {
+          registerSource(doc.path);
+        });
       } catch (error) {
         console.error('Error fetching documentation index:', error);
       }
@@ -54,6 +112,14 @@ export function FileUpload() {
       setDocumentation(json);
       setFileName(file.name);
       setSelectedSource('local'); // Ensure selectedSource is set to 'local' after upload
+
+      // Navigate to first module with source in URL
+      const firstModule = Object.keys(json.modules)[0];
+      if (firstModule) {
+        navigate(buildModuleUrl(firstModule, 'local'));
+      } else {
+        navigate('/');
+      }
     } catch (error) {
       console.error('Error parsing JSON:', error);
       alert('Error parsing JSON file. Please ensure it is a valid Pyxis documentation file.');
@@ -81,12 +147,12 @@ export function FileUpload() {
       if (selectedSource !== 'local') {
         setDocumentation(null);
         setFileName(null);
+        // Navigate to root when switching to Local
+        navigate('/');
       }
       setSelectedSource(value);
       return;
     }
-
-    setSelectedSource(value);
 
     // Load from GitHub
     const docEntry = availableDocs.find((doc) => doc.path === value);
@@ -102,9 +168,22 @@ export function FileUpload() {
       const json = (await response.json()) as JsonDocumentation;
       setDocumentation(json);
       setFileName(docEntry.name);
+
+      // Set selectedSource AFTER loading documentation and BEFORE navigation
+      // This ensures the dropdown matches the new project
+      setSelectedSource(value);
+
+      // Navigate to first module with source in URL
+      const firstModule = Object.keys(json.modules)[0];
+      if (firstModule) {
+        navigate(buildModuleUrl(firstModule, value));
+      } else {
+        navigate('/');
+      }
     } catch (error) {
       console.error('Error loading documentation from GitHub:', error);
       alert('Error loading documentation from GitHub. Please try again or use a local file.');
+      // Don't update selectedSource on error
     } finally {
       setIsLoading(false);
     }

@@ -2,9 +2,10 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDocumentation } from '../contexts/DocumentationContext';
 import { searchDocumentation, type SearchResult } from '../utils/searchUtils';
+import { buildModuleUrl, buildItemUrl } from '../utils/navigation';
 
 export function SearchBar() {
-  const { documentation } = useDocumentation();
+  const { documentation, selectedSource } = useDocumentation();
   const [query, setQuery] = useState('');
   const [isOpen, setIsOpen] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -36,12 +37,12 @@ export function SearchBar() {
 
   const handleSelect = (result: SearchResult) => {
     if (result.type === 'module') {
-      navigate(`/module/${encodeURIComponent(result.path)}`);
+      navigate(buildModuleUrl(result.path, selectedSource));
     } else if (result.type === 'function') {
       const modulePath = result.path.split('::').slice(0, -1).join('::');
-      navigate(`/module/${encodeURIComponent(modulePath)}#${result.path.split('::').pop()}`);
+      navigate(`${buildModuleUrl(modulePath, selectedSource)}#${result.path.split('::').pop()}`);
     } else {
-      navigate(`/item/${encodeURIComponent(result.path)}`);
+      navigate(buildItemUrl(result.path, selectedSource));
     }
     setQuery('');
     setIsOpen(false);

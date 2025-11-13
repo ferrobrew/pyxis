@@ -1,9 +1,10 @@
 import { useDocumentation } from '../contexts/DocumentationContext';
 import { useNavigate } from 'react-router-dom';
 import { useEffect } from 'react';
+import { buildModuleUrl } from '../utils/navigation';
 
 export function WelcomePage() {
-  const { documentation } = useDocumentation();
+  const { documentation, selectedSource } = useDocumentation();
   const navigate = useNavigate();
 
   // If documentation is loaded, navigate to the first module
@@ -11,17 +12,15 @@ export function WelcomePage() {
     if (documentation) {
       const firstModule = Object.keys(documentation.modules)[0];
       if (firstModule) {
-        navigate(`/module/${encodeURIComponent(firstModule)}`);
+        navigate(buildModuleUrl(firstModule, selectedSource));
       }
     }
-  }, [documentation, navigate]);
+  }, [documentation, navigate, selectedSource]);
 
   return (
     <div className="flex items-center justify-center h-full p-8">
       <div className="max-w-2xl text-center">
-        <h1 className="text-4xl font-bold mb-4 text-gray-900 dark:text-slate-200">
-          Pyxis Documentation Viewer
-        </h1>
+        <h1 className="text-4xl font-bold mb-4 text-gray-900 dark:text-slate-200">pyxisdoc</h1>
         <p className="text-lg text-gray-600 dark:text-slate-400 mb-8">
           A rustdoc-style viewer for Pyxis JSON documentation files.
         </p>
@@ -30,8 +29,8 @@ export function WelcomePage() {
             Getting Started
           </h2>
           <ol className="list-decimal list-inside space-y-2 text-gray-700 dark:text-slate-400">
-            <li>Click "Load Documentation" in the top-left corner</li>
-            <li>Select a Pyxis JSON documentation file</li>
+            <li>Select "Local" from the dropdown and click "Browse" to load a local JSON file</li>
+            <li>Or select a project from the dropdown to load from GitHub</li>
             <li>Browse modules and types using the sidebar</li>
             <li>Use the search bar to quickly find items</li>
           </ol>

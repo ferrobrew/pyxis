@@ -2,6 +2,12 @@ import { useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useDocumentation } from '../contexts/DocumentationContext';
 import { getModulePath, getItemName, findLongestValidAncestor } from '../utils/pathUtils';
+import {
+  buildModuleUrl,
+  buildItemUrl,
+  buildRootUrl,
+  decodeSourceIdentifier,
+} from '../utils/navigation';
 import { TypeRef } from './TypeRef';
 import { Badge, SmallBadge } from './Badge';
 import { FunctionDisplay } from './FunctionDisplay';
@@ -243,9 +249,25 @@ function BitflagsView({ def, modulePath }: { def: JsonBitflagsDefinition; module
 
 // Main ItemView component
 export function ItemView() {
-  const { itemPath = '' } = useParams();
-  const { documentation } = useDocumentation();
+  const { itemPath = '', source = 'local' } = useParams();
+  const { documentation, selectedSource, setSelectedSource } = useDocumentation();
   const navigate = useNavigate();
+
+  // Sync source from URL to context (only if source is not 'local')
+  useEffect(() => {
+    if (source === 'local') {
+      // If URL says local, ensure context matches
+      if (selectedSource !== 'local') {
+        setSelectedSource('local');
+      }
+    } else {
+      // For remote sources, decode and sync
+      const decodedSource = decodeSourceIdentifier(source);
+      if (decodedSource !== selectedSource && decodedSource !== source) {
+        setSelectedSource(decodedSource);
+      }
+    }
+  }, [source, selectedSource, setSelectedSource]);
 
   useEffect(() => {
     if (documentation && itemPath) {
@@ -258,7 +280,7 @@ export function ItemView() {
 
         if (ancestorPath === null || ancestorPath === '') {
           // No valid ancestor found, navigate to root
-          navigate('/', { replace: true });
+          navigate(buildRootUrl(), { replace: true });
         } else if (ancestorPath === decodedPath) {
           // The item itself exists (shouldn't happen here, but handle it)
           return;
@@ -266,15 +288,15 @@ export function ItemView() {
           // Check if ancestor is an item or a module
           if (documentation.items[ancestorPath]) {
             // Ancestor is an item, navigate to it
-            navigate(`/item/${encodeURIComponent(ancestorPath)}`, { replace: true });
+            navigate(buildItemUrl(ancestorPath, selectedSource), { replace: true });
           } else {
             // Ancestor is a module, navigate to it
-            navigate(`/module/${encodeURIComponent(ancestorPath)}`, { replace: true });
+            navigate(buildModuleUrl(ancestorPath, selectedSource), { replace: true });
           }
         }
       }
     }
-  }, [documentation, itemPath, navigate]);
+  }, [documentation, itemPath, navigate, selectedSource]);
 
   if (!documentation) {
     return (
@@ -301,7 +323,7 @@ export function ItemView() {
     <div className="p-8 max-w-6xl">
       <div className="mb-4">
         <div className="text-sm text-gray-500 dark:text-slate-400 mb-2">
-          <Link to={`/module/${encodeURIComponent(modulePath)}`} className="hover:underline">
+          <Link to={buildModuleUrl(modulePath, selectedSource)} className="hover:underline">
             {modulePath || 'root'}
           </Link>
         </div>

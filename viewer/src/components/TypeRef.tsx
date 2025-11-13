@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import type { JsonType, JsonCallingConvention } from '@pyxis/types';
 import { getRelativePath } from '../utils/pathUtils';
 import { useDocumentation } from '../contexts/DocumentationContext';
+import { buildItemUrl } from '../utils/navigation';
 
 interface TypeRefProps {
   type: JsonType;
@@ -14,7 +15,7 @@ function getCallingConvention(cc: JsonCallingConvention): string {
 }
 
 export function TypeRef({ type, currentModule = '' }: TypeRefProps) {
-  const { predefinedTypes } = useDocumentation();
+  const { predefinedTypes, selectedSource } = useDocumentation();
 
   const renderType = (t: JsonType): React.ReactNode => {
     switch (t.type) {
@@ -26,7 +27,7 @@ export function TypeRef({ type, currentModule = '' }: TypeRefProps) {
 
         return (
           <Link
-            to={`/item/${encodeURIComponent(t.path)}`}
+            to={buildItemUrl(t.path, selectedSource)}
             className={
               isPredefined
                 ? 'text-violet-600 dark:text-slate-500 hover:underline'

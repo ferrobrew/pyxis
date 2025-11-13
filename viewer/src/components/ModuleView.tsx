@@ -2,6 +2,12 @@ import { useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useDocumentation } from '../contexts/DocumentationContext';
 import { findModule, findLongestValidAncestor } from '../utils/pathUtils';
+import {
+  buildModuleUrl,
+  buildItemUrl,
+  buildRootUrl,
+  decodeSourceIdentifier,
+} from '../utils/navigation';
 import { Collapsible } from './Collapsible';
 import { TypeRef } from './TypeRef';
 import { FunctionDisplay } from './FunctionDisplay';
@@ -130,6 +136,7 @@ interface ItemListProps {
 }
 
 function ItemList({ items }: ItemListProps) {
+  const { selectedSource } = useDocumentation();
   if (items.length === 0) return null;
 
   return (
@@ -142,7 +149,7 @@ function ItemList({ items }: ItemListProps) {
           return (
             <Link
               key={path}
-              to={`/item/${encodeURIComponent(path)}`}
+              to={buildItemUrl(path, selectedSource)}
               className="block p-4 bg-gray-50 dark:bg-slate-800 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
             >
               <div className="flex items-center justify-between">
@@ -179,6 +186,7 @@ interface SubmoduleData {
 }
 
 function SubmoduleList({ submodules, parentPath }: SubmoduleListProps) {
+  const { selectedSource } = useDocumentation();
   if (!submodules || Object.keys(submodules).length === 0) return null;
 
   return (
@@ -191,7 +199,7 @@ function SubmoduleList({ submodules, parentPath }: SubmoduleListProps) {
           return (
             <Link
               key={name}
-              to={`/module/${encodeURIComponent(subPath)}`}
+              to={buildModuleUrl(subPath, selectedSource)}
               className="block p-4 bg-gray-50 dark:bg-slate-800 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
             >
               <div className="font-mono text-sm font-semibold text-blue-600 dark:text-blue-400">
@@ -210,9 +218,25 @@ function SubmoduleList({ submodules, parentPath }: SubmoduleListProps) {
 
 // Main ModuleView component
 export function ModuleView() {
-  const { modulePath = '' } = useParams();
-  const { documentation } = useDocumentation();
+  const { modulePath = '', source = 'local' } = useParams();
+  const { documentation, selectedSource, setSelectedSource } = useDocumentation();
   const navigate = useNavigate();
+
+  // Sync source from URL to context (only if source is not 'local')
+  useEffect(() => {
+    if (source === 'local') {
+      // If URL says local, ensure context matches
+      if (selectedSource !== 'local') {
+        setSelectedSource('local');
+      }
+    } else {
+      // For remote sources, decode and sync
+      const decodedSource = decodeSourceIdentifier(source);
+      if (decodedSource !== selectedSource && decodedSource !== source) {
+        setSelectedSource(decodedSource);
+      }
+    }
+  }, [source, selectedSource, setSelectedSource]);
 
   useEffect(() => {
     if (documentation && modulePath !== undefined) {
@@ -229,14 +253,14 @@ export function ModuleView() {
 
         if (ancestorPath === null || ancestorPath === '') {
           // No valid ancestor found, navigate to root
-          navigate('/', { replace: true });
+          navigate(buildRootUrl(), { replace: true });
         } else {
           // Navigate to the ancestor module
-          navigate(`/module/${encodeURIComponent(ancestorPath)}`, { replace: true });
+          navigate(buildModuleUrl(ancestorPath, selectedSource), { replace: true });
         }
       }
     }
-  }, [documentation, modulePath, navigate]);
+  }, [documentation, modulePath, navigate, selectedSource]);
 
   if (!documentation) {
     return (
@@ -298,7 +322,7 @@ export function ModuleView() {
                 </span>
               ) : (
                 <Link
-                  to={`/module/${encodeURIComponent(crumb.path)}`}
+                  to={buildModuleUrl(crumb.path, selectedSource)}
                   className="hover:text-blue-600 dark:hover:text-blue-400"
                 >
                   {crumb.name}

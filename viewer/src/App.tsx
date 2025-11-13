@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { DocumentationProvider } from './contexts/DocumentationContext';
 import { Header } from './components/Header';
@@ -16,8 +16,8 @@ function AppLayout() {
         <main className="flex-1 overflow-y-auto">
           <Routes>
             <Route path="/" element={<WelcomePage />} />
-            <Route path="/module/:modulePath" element={<ModuleView />} />
-            <Route path="/item/:itemPath" element={<ItemView />} />
+            <Route path="/module/:source/:modulePath" element={<ModuleView />} />
+            <Route path="/item/:source/:itemPath" element={<ItemView />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>
@@ -30,9 +30,9 @@ export default function App() {
   return (
     <ThemeProvider>
       <DocumentationProvider>
-        <BrowserRouter>
+        <HashRouter>
           <AppLayout />
-        </BrowserRouter>
+        </HashRouter>
       </DocumentationProvider>
     </ThemeProvider>
   );

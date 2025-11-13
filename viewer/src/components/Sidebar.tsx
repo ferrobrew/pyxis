@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useDocumentation } from '../contexts/DocumentationContext';
 import type { JsonModule } from '@pyxis/types';
+import { buildModuleUrl, buildItemUrl } from '../utils/navigation';
 
 interface ModuleTreeProps {
   name: string;
@@ -96,7 +97,7 @@ interface ItemTreeProps {
 }
 
 function ItemTree({ itemPath, level }: ItemTreeProps) {
-  const { documentation } = useDocumentation();
+  const { documentation, selectedSource } = useDocumentation();
   const location = useLocation();
   const [isItemOpen, setIsItemOpen] = useState(false);
 
@@ -161,7 +162,7 @@ function ItemTree({ itemPath, level }: ItemTreeProps) {
         )}
         {!hasMembers && <div className="w-3.5" />}
         <Link
-          to={`/item/${encodeURIComponent(itemPath)}`}
+          to={buildItemUrl(itemPath, selectedSource)}
           className="flex items-center gap-2 flex-1 text-sm hover:text-blue-600 dark:hover:text-blue-400 min-w-0"
         >
           <Icon />
@@ -176,7 +177,7 @@ function ItemTree({ itemPath, level }: ItemTreeProps) {
           {publicFields.map((field) => (
             <Link
               key={`${itemPath}-field-${field.name}`}
-              to={`/item/${encodeURIComponent(itemPath)}#field-${field.name}`}
+              to={`${buildItemUrl(itemPath, selectedSource)}#field-${field.name}`}
               className="flex items-center gap-2 py-1 px-2 text-xs text-gray-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 rounded"
               style={{ paddingLeft: `${(level + 2) * 0.5 + 1.25}rem` }}
             >
@@ -189,7 +190,7 @@ function ItemTree({ itemPath, level }: ItemTreeProps) {
           {publicVirtualFunctions.map((func) => (
             <Link
               key={`${itemPath}-vfunc-${func.name}`}
-              to={`/item/${encodeURIComponent(itemPath)}#vfunc-${func.name}`}
+              to={`${buildItemUrl(itemPath, selectedSource)}#vfunc-${func.name}`}
               className="flex items-center gap-2 py-1 px-2 text-xs text-gray-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 rounded"
               style={{ paddingLeft: `${(level + 2) * 0.5 + 1.25}rem` }}
             >
@@ -202,7 +203,7 @@ function ItemTree({ itemPath, level }: ItemTreeProps) {
           {publicAssociatedFunctions.map((func) => (
             <Link
               key={`${itemPath}-func-${func.name}`}
-              to={`/item/${encodeURIComponent(itemPath)}#func-${func.name}`}
+              to={`${buildItemUrl(itemPath, selectedSource)}#func-${func.name}`}
               className="flex items-center gap-2 py-1 px-2 text-xs text-gray-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 rounded"
               style={{ paddingLeft: `${(level + 2) * 0.5 + 1.25}rem` }}
             >
@@ -215,7 +216,7 @@ function ItemTree({ itemPath, level }: ItemTreeProps) {
           {variants.map((variant) => (
             <Link
               key={`${itemPath}-variant-${variant.name}`}
-              to={`/item/${encodeURIComponent(itemPath)}#variant-${variant.name}`}
+              to={`${buildItemUrl(itemPath, selectedSource)}#variant-${variant.name}`}
               className="flex items-center gap-2 py-1 px-2 text-xs text-gray-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 rounded"
               style={{ paddingLeft: `${(level + 2) * 0.5 + 1.25}rem` }}
             >
@@ -228,7 +229,7 @@ function ItemTree({ itemPath, level }: ItemTreeProps) {
           {flags.map((flag) => (
             <Link
               key={`${itemPath}-flag-${flag.name}`}
-              to={`/item/${encodeURIComponent(itemPath)}#flag-${flag.name}`}
+              to={`${buildItemUrl(itemPath, selectedSource)}#flag-${flag.name}`}
               className="flex items-center gap-2 py-1 px-2 text-xs text-gray-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 rounded"
               style={{ paddingLeft: `${(level + 2) * 0.5 + 1.25}rem` }}
             >
@@ -245,7 +246,7 @@ function ItemTree({ itemPath, level }: ItemTreeProps) {
 function ModuleTree({ name, module, path, level }: ModuleTreeProps) {
   const [isOpen, setIsOpen] = useState(level < 2); // Auto-expand first two levels
   const location = useLocation();
-  const { documentation } = useDocumentation();
+  const { documentation, selectedSource } = useDocumentation();
   const currentPath = decodeURIComponent(location.pathname.split('/').pop() || '');
   const isActive = currentPath === path;
 
@@ -278,7 +279,7 @@ function ModuleTree({ name, module, path, level }: ModuleTreeProps) {
         )}
         {!hasContent && <div className="w-5" />}
         <Link
-          to={`/module/${encodeURIComponent(path)}`}
+          to={buildModuleUrl(path, selectedSource)}
           className="flex-1 text-sm hover:text-blue-600 dark:hover:text-blue-400"
           style={{ paddingLeft: `${level * 0.5}rem` }}
         >
