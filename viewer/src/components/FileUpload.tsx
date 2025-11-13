@@ -26,22 +26,29 @@ interface DocsIndex {
 }
 
 export function FileUpload() {
-  const { setDocumentation, setFileName, selectedSource, setSelectedSource, documentation } =
-    useDocumentation();
+  const {
+    setDocumentation,
+    setFileName,
+    selectedSource,
+    setSelectedSource,
+    documentation,
+    fileName,
+  } = useDocumentation();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   const location = useLocation();
   const [availableDocs, setAvailableDocs] = useState<DocEntry[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const isManualChangeRef = useRef(false);
 
   // Sync source from URL when route changes (but not when on root - root means Local)
-  // Only sync if we're not currently loading (to avoid conflicts during project switching)
+  // Only sync if we're not currently loading or manually changing (to avoid conflicts during project switching)
   useEffect(() => {
-    if (isLoading) return; // Don't sync while loading a new project
+    if (isLoading || isManualChangeRef.current) return; // Don't sync while loading or manually changing
 
-    // If we're on root, don't sync from URL - root means Local
+    // If we're on root without source, only set to local if we don't have documentation
     if (location.pathname === '/') {
-      // Only set to local if we don't have documentation loaded
+      // Don't change source if we already have documentation loaded
       if (!documentation && selectedSource !== 'local') {
         setSelectedSource('local');
       }
@@ -78,6 +85,45 @@ export function FileUpload() {
     documentation,
     isLoading,
   ]);
+
+  // Load documentation when selectedSource changes to a remote source and we don't have docs loaded
+  useEffect(() => {
+    if (isLoading || !availableDocs.length) return;
+    if (selectedSource === 'local') return;
+
+    // Check if we already have documentation for this source
+    const docEntry = availableDocs.find((doc) => doc.path === selectedSource);
+    if (!docEntry) return;
+
+    // Don't load if we already have this documentation loaded
+    if (documentation && fileName === docEntry.name) return;
+
+    // Don't load if we have a local file loaded (check if fileName doesn't match any remote doc)
+    if (documentation && fileName) {
+      const isLocalFile = !availableDocs.some((doc) => doc.name === fileName);
+      if (isLocalFile) return; // We have a local file loaded, don't overwrite it
+    }
+
+    // Load the documentation
+    setIsLoading(true);
+    fetch(BASE_URL + docEntry.path)
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`Failed to fetch: ${response.statusText}`);
+        }
+        return response.json();
+      })
+      .then((json: JsonDocumentation) => {
+        setDocumentation(json);
+        setFileName(docEntry.name);
+      })
+      .catch((error) => {
+        console.error('Error loading documentation from GitHub:', error);
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
+  }, [selectedSource, availableDocs, documentation, fileName, isLoading]);
 
   // Fetch the index on mount
   useEffect(() => {
@@ -142,6 +188,9 @@ export function FileUpload() {
       return;
     }
 
+    // Mark that we're making a manual change to prevent sync effect from interfering
+    isManualChangeRef.current = true;
+
     if (value === 'local') {
       // Only reset if we're switching from a different source
       if (selectedSource !== 'local') {
@@ -151,12 +200,19 @@ export function FileUpload() {
         navigate('/');
       }
       setSelectedSource(value);
+      // Allow sync effect to run again after a brief delay
+      setTimeout(() => {
+        isManualChangeRef.current = false;
+      }, 100);
       return;
     }
 
     // Load from GitHub
     const docEntry = availableDocs.find((doc) => doc.path === value);
-    if (!docEntry) return;
+    if (!docEntry) {
+      isManualChangeRef.current = false;
+      return;
+    }
 
     setIsLoading(true);
     try {
@@ -186,6 +242,10 @@ export function FileUpload() {
       // Don't update selectedSource on error
     } finally {
       setIsLoading(false);
+      // Allow sync effect to run again after navigation completes
+      setTimeout(() => {
+        isManualChangeRef.current = false;
+      }, 100);
     }
   };
 

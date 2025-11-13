@@ -79,9 +79,13 @@ export function buildItemUrl(itemPath: string, source: string): string {
 }
 
 /**
- * Build root URL
+ * Build root URL with source
  * Note: HashRouter automatically adds the #, so we don't include it here
  */
-export function buildRootUrl(): string {
+export function buildRootUrl(source?: string): string {
+  if (source) {
+    const sourceId = getSourceIdentifier(source);
+    return `/${sourceId}/module/`;
+  }
   return '/';
 }

@@ -2,12 +2,7 @@ import { useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useDocumentation } from '../contexts/DocumentationContext';
 import { findModule, findLongestValidAncestor } from '../utils/pathUtils';
-import {
-  buildModuleUrl,
-  buildItemUrl,
-  buildRootUrl,
-  decodeSourceIdentifier,
-} from '../utils/navigation';
+import { buildModuleUrl, buildItemUrl, buildRootUrl } from '../utils/navigation';
 import { Collapsible } from './Collapsible';
 import { TypeRef } from './TypeRef';
 import { FunctionDisplay } from './FunctionDisplay';
@@ -218,25 +213,9 @@ function SubmoduleList({ submodules, parentPath }: SubmoduleListProps) {
 
 // Main ModuleView component
 export function ModuleView() {
-  const { modulePath = '', source = 'local' } = useParams();
-  const { documentation, selectedSource, setSelectedSource } = useDocumentation();
+  const { modulePath = '' } = useParams();
+  const { documentation, selectedSource } = useDocumentation();
   const navigate = useNavigate();
-
-  // Sync source from URL to context (only if source is not 'local')
-  useEffect(() => {
-    if (source === 'local') {
-      // If URL says local, ensure context matches
-      if (selectedSource !== 'local') {
-        setSelectedSource('local');
-      }
-    } else {
-      // For remote sources, decode and sync
-      const decodedSource = decodeSourceIdentifier(source);
-      if (decodedSource !== selectedSource && decodedSource !== source) {
-        setSelectedSource(decodedSource);
-      }
-    }
-  }, [source, selectedSource, setSelectedSource]);
 
   useEffect(() => {
     if (documentation && modulePath !== undefined) {
@@ -252,8 +231,8 @@ export function ModuleView() {
         const ancestorPath = findLongestValidAncestor(decodedPath, documentation, false);
 
         if (ancestorPath === null || ancestorPath === '') {
-          // No valid ancestor found, navigate to root
-          navigate(buildRootUrl(), { replace: true });
+          // No valid ancestor found, navigate to root with current source
+          navigate(buildRootUrl(selectedSource), { replace: true });
         } else {
           // Navigate to the ancestor module
           navigate(buildModuleUrl(ancestorPath, selectedSource), { replace: true });

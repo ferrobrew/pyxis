@@ -2,12 +2,7 @@ import { useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useDocumentation } from '../contexts/DocumentationContext';
 import { getModulePath, getItemName, findLongestValidAncestor } from '../utils/pathUtils';
-import {
-  buildModuleUrl,
-  buildItemUrl,
-  buildRootUrl,
-  decodeSourceIdentifier,
-} from '../utils/navigation';
+import { buildModuleUrl, buildItemUrl, buildRootUrl } from '../utils/navigation';
 import { TypeRef } from './TypeRef';
 import { Badge, SmallBadge } from './Badge';
 import { FunctionDisplay } from './FunctionDisplay';
@@ -255,25 +250,9 @@ function BitflagsView({ def, modulePath }: { def: JsonBitflagsDefinition; module
 
 // Main ItemView component
 export function ItemView() {
-  const { itemPath = '', source = 'local' } = useParams();
-  const { documentation, selectedSource, setSelectedSource } = useDocumentation();
+  const { itemPath = '' } = useParams();
+  const { documentation, selectedSource } = useDocumentation();
   const navigate = useNavigate();
-
-  // Sync source from URL to context (only if source is not 'local')
-  useEffect(() => {
-    if (source === 'local') {
-      // If URL says local, ensure context matches
-      if (selectedSource !== 'local') {
-        setSelectedSource('local');
-      }
-    } else {
-      // For remote sources, decode and sync
-      const decodedSource = decodeSourceIdentifier(source);
-      if (decodedSource !== selectedSource && decodedSource !== source) {
-        setSelectedSource(decodedSource);
-      }
-    }
-  }, [source, selectedSource, setSelectedSource]);
 
   useEffect(() => {
     if (documentation && itemPath) {
@@ -285,8 +264,8 @@ export function ItemView() {
         const ancestorPath = findLongestValidAncestor(decodedPath, documentation, true);
 
         if (ancestorPath === null || ancestorPath === '') {
-          // No valid ancestor found, navigate to root
-          navigate(buildRootUrl(), { replace: true });
+          // No valid ancestor found, navigate to root with current source
+          navigate(buildRootUrl(selectedSource), { replace: true });
         } else if (ancestorPath === decodedPath) {
           // The item itself exists (shouldn't happen here, but handle it)
           return;
