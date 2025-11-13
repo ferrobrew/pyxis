@@ -15,7 +15,9 @@ export function DocumentationProvider({ children }: { children: ReactNode }) {
   const [fileName, setFileName] = useState<string | null>(null);
 
   return (
-    <DocumentationContext.Provider value={{ documentation, setDocumentation, fileName, setFileName }}>
+    <DocumentationContext.Provider
+      value={{ documentation, setDocumentation, fileName, setFileName }}
+    >
       {children}
     </DocumentationContext.Provider>
   );

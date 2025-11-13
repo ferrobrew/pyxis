@@ -38,8 +38,8 @@ export function WelcomePage() {
         </div>
         <div className="mt-8 text-sm text-gray-500 dark:text-gray-400">
           <p>
-            This viewer displays types, enums, bitflags, functions, and modules
-            from Pyxis-generated documentation.
+            This viewer displays types, enums, bitflags, functions, and modules from Pyxis-generated
+            documentation.
           </p>
         </div>
       </div>

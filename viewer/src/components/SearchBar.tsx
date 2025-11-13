@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDocumentation } from '../contexts/DocumentationContext';
 import { searchDocumentation, type SearchResult } from '../utils/searchUtils';
@@ -6,24 +6,22 @@ import { searchDocumentation, type SearchResult } from '../utils/searchUtils';
 export function SearchBar() {
   const { documentation } = useDocumentation();
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<SearchResult[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const navigate = useNavigate();
   const searchRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
+  const results = useMemo(() => {
     if (!documentation || !query.trim()) {
-      setResults([]);
-      setIsOpen(false);
-      return;
+      return [];
     }
+    return searchDocumentation(documentation, query).slice(0, 10); // Limit to 10 results
+  }, [documentation, query]);
 
-    const searchResults = searchDocumentation(documentation, query);
-    setResults(searchResults.slice(0, 10)); // Limit to 10 results
-    setIsOpen(searchResults.length > 0);
+  useEffect(() => {
+    setIsOpen(results.length > 0 && query.trim().length > 0);
     setSelectedIndex(0);
-  }, [query, documentation]);
+  }, [results, query]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -55,11 +53,11 @@ export function SearchBar() {
     switch (e.key) {
       case 'ArrowDown':
         e.preventDefault();
-        setSelectedIndex(prev => (prev + 1) % results.length);
+        setSelectedIndex((prev) => (prev + 1) % results.length);
         break;
       case 'ArrowUp':
         e.preventDefault();
-        setSelectedIndex(prev => (prev - 1 + results.length) % results.length);
+        setSelectedIndex((prev) => (prev - 1 + results.length) % results.length);
         break;
       case 'Enter':
         e.preventDefault();

@@ -3,60 +3,19 @@ import { useDocumentation } from '../contexts/DocumentationContext';
 import { findModule } from '../utils/pathUtils';
 import { Collapsible } from './Collapsible';
 import { TypeRef } from './TypeRef';
-import type { JsonFunction, JsonExternValue, JsonBackend, JsonItem } from '@pyxis/types';
+import { FunctionDisplay } from './FunctionDisplay';
+import type { JsonExternValue, JsonBackend, JsonItem, JsonFunction } from '@pyxis/types';
 
-function FunctionSignature({ func, modulePath }: { func: JsonFunction; modulePath: string }) {
-  return (
-    <div className="mb-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-md">
-      <div className="flex items-start gap-2">
-        <span className="text-purple-600 dark:text-purple-400 font-mono text-sm">fn</span>
-        <div className="flex-1">
-          <div className="font-mono text-sm">
-            <span className="font-semibold text-gray-900 dark:text-gray-100">{func.name}</span>
-            <span className="text-gray-600 dark:text-gray-400">(</span>
-            {func.arguments.map((arg, i) => (
-              <span key={i}>
-                {i > 0 && <span className="text-gray-600 dark:text-gray-400">, </span>}
-                {arg.type === 'const_self' && (
-                  <span className="text-orange-600 dark:text-orange-400">&amp;self</span>
-                )}
-                {arg.type === 'mut_self' && (
-                  <span className="text-orange-600 dark:text-orange-400">&amp;mut self</span>
-                )}
-                {arg.type === 'field' && (
-                  <>
-                    <span className="text-gray-800 dark:text-gray-200">{arg.name}</span>
-                    <span className="text-gray-600 dark:text-gray-400">: </span>
-                    <TypeRef type={arg.type_ref} currentModule={modulePath} />
-                  </>
-                )}
-              </span>
-            ))}
-            <span className="text-gray-600 dark:text-gray-400">)</span>
-            {func.return_type && (
-              <>
-                <span className="text-gray-600 dark:text-gray-400"> -&gt; </span>
-                <TypeRef type={func.return_type} currentModule={modulePath} />
-              </>
-            )}
-          </div>
-          {func.doc && (
-            <div className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-              {func.doc}
-            </div>
-          )}
-          <div className="mt-2 text-xs text-gray-500 dark:text-gray-500">
-            {func.body.type === 'address' && `Address: 0x${func.body.address.toString(16)}`}
-            {func.body.type === 'field' && `Field: ${func.body.field}`}
-            {func.body.type === 'vftable' && `VFTable: ${func.body.function_name}`}
-            {func.calling_convention !== 'c' && ` • ${func.calling_convention}`}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+interface ModuleData {
+  doc?: string | null;
+  items?: string[];
+  submodules?: { [key: string]: unknown };
+  extern_values?: JsonExternValue[];
+  functions?: JsonFunction[];
+  backends?: { [key: string]: unknown };
 }
 
+// Extern value display component
 function ExternValueItem({ extern: ext }: { extern: JsonExternValue }) {
   return (
     <div className="mb-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-md">
@@ -73,6 +32,133 @@ function ExternValueItem({ extern: ext }: { extern: JsonExternValue }) {
   );
 }
 
+// Backend configuration section
+interface BackendSectionProps {
+  backends: { [key: string]: unknown };
+}
+
+function BackendSection({ backends }: BackendSectionProps) {
+  if (!backends || Object.keys(backends).length === 0) return null;
+
+  return (
+    <div className="mb-6">
+      <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-gray-100">
+        Backend Configuration
+      </h2>
+      {Object.entries(backends).map(([backendName, configs]) => (
+        <div key={backendName} className="mb-4">
+          <h3 className="text-lg font-medium mb-2 text-gray-800 dark:text-gray-200">
+            {backendName}
+          </h3>
+          {(configs as JsonBackend[]).map((config: JsonBackend, idx: number) => (
+            <div key={idx} className="space-y-2">
+              {config.prologue && (
+                <Collapsible title="Prologue">
+                  <pre className="text-sm font-mono bg-gray-100 dark:bg-gray-900 p-3 rounded overflow-x-auto">
+                    {config.prologue}
+                  </pre>
+                </Collapsible>
+              )}
+              {config.epilogue && (
+                <Collapsible title="Epilogue">
+                  <pre className="text-sm font-mono bg-gray-100 dark:bg-gray-900 p-3 rounded overflow-x-auto">
+                    {config.epilogue}
+                  </pre>
+                </Collapsible>
+              )}
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Item list component
+interface ItemListProps {
+  items: Array<{ path: string; item: JsonItem }>;
+}
+
+function ItemList({ items }: ItemListProps) {
+  if (items.length === 0) return null;
+
+  return (
+    <div>
+      <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-gray-100">Types</h2>
+      <div className="space-y-2">
+        {items.map(({ path, item }: { path: string; item: JsonItem }) => {
+          if (!item) return null;
+          const name = path.split('::').pop();
+          return (
+            <Link
+              key={path}
+              to={`/item/${encodeURIComponent(path)}`}
+              className="block p-4 bg-gray-50 dark:bg-gray-800 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="font-mono text-sm font-semibold text-blue-600 dark:text-blue-400">
+                    {name}
+                  </div>
+                  <div className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                    {item.kind.type} • {item.size} bytes • align {item.alignment}
+                  </div>
+                </div>
+                {item.kind.doc && (
+                  <div className="text-sm text-gray-600 dark:text-gray-400 ml-4 max-w-md truncate">
+                    {item.kind.doc}
+                  </div>
+                )}
+              </div>
+            </Link>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// Submodule list component
+interface SubmoduleListProps {
+  submodules: { [key: string]: unknown };
+  parentPath: string;
+}
+
+interface SubmoduleData {
+  doc?: string | null;
+}
+
+function SubmoduleList({ submodules, parentPath }: SubmoduleListProps) {
+  if (!submodules || Object.keys(submodules).length === 0) return null;
+
+  return (
+    <div className="mt-6">
+      <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-gray-100">Submodules</h2>
+      <div className="space-y-2">
+        {Object.entries(submodules).map(([name, submodule]) => {
+          const subPath = parentPath ? `${parentPath}::${name}` : name;
+          const data = submodule as SubmoduleData;
+          return (
+            <Link
+              key={name}
+              to={`/module/${encodeURIComponent(subPath)}`}
+              className="block p-4 bg-gray-50 dark:bg-gray-800 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            >
+              <div className="font-mono text-sm font-semibold text-blue-600 dark:text-blue-400">
+                {name}
+              </div>
+              {data.doc && (
+                <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">{data.doc}</div>
+              )}
+            </Link>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// Main ModuleView component
 export function ModuleView() {
   const { modulePath = '' } = useParams();
   const { documentation } = useDocumentation();
@@ -88,9 +174,9 @@ export function ModuleView() {
   }
 
   const decodedPath = decodeURIComponent(modulePath);
-  const module = findModule(documentation.modules, decodedPath);
+  const moduleRaw = findModule(documentation.modules, decodedPath);
 
-  if (!module) {
+  if (!moduleRaw) {
     return (
       <div className="p-8">
         <div className="text-red-500">Module not found: {decodedPath}</div>
@@ -98,10 +184,13 @@ export function ModuleView() {
     );
   }
 
-  const items = module.items?.map((itemPath: string) => ({
-    path: itemPath,
-    item: documentation.items[itemPath],
-  })) || [];
+  const module = moduleRaw as ModuleData;
+
+  const items =
+    module.items?.map((itemPath: string) => ({
+      path: itemPath,
+      item: documentation.items[itemPath],
+    })) || [];
 
   return (
     <div className="p-8 max-w-6xl">
@@ -115,39 +204,8 @@ export function ModuleView() {
         </div>
       )}
 
-      {/* Backend Prologues */}
-      {module.backends && Object.entries(module.backends).length > 0 && (
-        <div className="mb-6">
-          <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-gray-100">
-            Backend Configuration
-          </h2>
-          {Object.entries(module.backends).map(([backendName, configs]) => (
-            <div key={backendName} className="mb-4">
-              <h3 className="text-lg font-medium mb-2 text-gray-800 dark:text-gray-200">
-                {backendName}
-              </h3>
-              {(configs as JsonBackend[]).map((config: JsonBackend, idx: number) => (
-                <div key={idx} className="space-y-2">
-                  {config.prologue && (
-                    <Collapsible title="Prologue">
-                      <pre className="text-sm font-mono bg-gray-100 dark:bg-gray-900 p-3 rounded overflow-x-auto">
-                        {config.prologue}
-                      </pre>
-                    </Collapsible>
-                  )}
-                  {config.epilogue && (
-                    <Collapsible title="Epilogue">
-                      <pre className="text-sm font-mono bg-gray-100 dark:bg-gray-900 p-3 rounded overflow-x-auto">
-                        {config.epilogue}
-                      </pre>
-                    </Collapsible>
-                  )}
-                </div>
-              ))}
-            </div>
-          ))}
-        </div>
-      )}
+      {/* Backend Configurations */}
+      <BackendSection backends={module.backends || {}} />
 
       {/* Extern Values */}
       {module.extern_values && module.extern_values.length > 0 && (
@@ -164,82 +222,18 @@ export function ModuleView() {
       {/* Functions */}
       {module.functions && module.functions.length > 0 && (
         <div className="mb-6">
-          <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-gray-100">
-            Functions
-          </h2>
+          <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-gray-100">Functions</h2>
           {module.functions.map((func: JsonFunction, idx: number) => (
-            <FunctionSignature key={idx} func={func} modulePath={decodedPath} />
+            <FunctionDisplay key={idx} func={func} modulePath={decodedPath} />
           ))}
         </div>
       )}
 
-      {/* Items */}
-      {items.length > 0 && (
-        <div>
-          <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-gray-100">
-            Types
-          </h2>
-          <div className="space-y-2">
-            {items.map(({ path, item }: { path: string; item: JsonItem }) => {
-              if (!item) return null;
-              const name = path.split('::').pop();
-              return (
-                <Link
-                  key={path}
-                  to={`/item/${encodeURIComponent(path)}`}
-                  className="block p-4 bg-gray-50 dark:bg-gray-800 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="font-mono text-sm font-semibold text-blue-600 dark:text-blue-400">
-                        {name}
-                      </div>
-                      <div className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-                        {item.kind.type} • {item.size} bytes • align {item.alignment}
-                      </div>
-                    </div>
-                    {item.kind.doc && (
-                      <div className="text-sm text-gray-600 dark:text-gray-400 ml-4 max-w-md truncate">
-                        {item.kind.doc}
-                      </div>
-                    )}
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
-        </div>
-      )}
+      {/* Items (Types/Enums/Bitflags) */}
+      <ItemList items={items} />
 
       {/* Submodules */}
-      {module.submodules && Object.keys(module.submodules).length > 0 && (
-        <div className="mt-6">
-          <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-gray-100">
-            Submodules
-          </h2>
-          <div className="space-y-2">
-            {Object.entries(module.submodules).map(([name, submodule]) => {
-              const subPath = decodedPath ? `${decodedPath}::${name}` : name;
-              return (
-                <Link
-                  key={name}
-                  to={`/module/${encodeURIComponent(subPath)}`}
-                  className="block p-4 bg-gray-50 dark:bg-gray-800 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                >
-                  <div className="font-mono text-sm font-semibold text-blue-600 dark:text-blue-400">
-                    {name}
-                  </div>
-                  {(submodule as any).doc && (
-                    <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                      {(submodule as any).doc}
-                    </div>
-                  )}
-                </Link>
-              );
-            })}
-          </div>
-        </div>
-      )}
+      <SubmoduleList submodules={module.submodules || {}} parentPath={decodedPath} />
     </div>
   );
 }

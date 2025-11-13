@@ -40,9 +40,24 @@ export function getRelativePath(currentModulePath: string, targetPath: string): 
  */
 export function isPrimitiveType(typeName: string): boolean {
   const primitives = [
-    'bool', 'i8', 'i16', 'i32', 'i64', 'i128', 'isize',
-    'u8', 'u16', 'u32', 'u64', 'u128', 'usize',
-    'f32', 'f64', 'char', 'str', 'void'
+    'bool',
+    'i8',
+    'i16',
+    'i32',
+    'i64',
+    'i128',
+    'isize',
+    'u8',
+    'u16',
+    'u32',
+    'u64',
+    'u128',
+    'usize',
+    'f32',
+    'f64',
+    'char',
+    'str',
+    'void',
   ];
   return primitives.includes(typeName);
 }
@@ -66,15 +81,18 @@ export function getItemName(itemPath: string): string {
 /**
  * Navigate through nested modules to find a specific module
  */
-export function findModule(modules: any, path: string): any {
+export function findModule(
+  modules: Record<string, unknown>,
+  path: string
+): Record<string, unknown> | null {
   if (!path) return null;
 
   const segments = path.split('::').filter(Boolean);
-  let current = modules;
+  let current: Record<string, unknown> = modules;
 
   for (const segment of segments) {
     if (!current[segment]) return null;
-    current = current[segment];
+    current = current[segment] as Record<string, unknown>;
   }
 
   return current;
@@ -83,7 +101,7 @@ export function findModule(modules: any, path: string): any {
 /**
  * Get all module paths from the nested module structure
  */
-export function getAllModulePaths(modules: any, prefix = ''): string[] {
+export function getAllModulePaths(modules: Record<string, unknown>, prefix = ''): string[] {
   const paths: string[] = [];
 
   for (const [name, module] of Object.entries(modules)) {
@@ -91,7 +109,8 @@ export function getAllModulePaths(modules: any, prefix = ''): string[] {
     paths.push(fullPath);
 
     if (module && typeof module === 'object' && 'submodules' in module) {
-      paths.push(...getAllModulePaths((module as any).submodules, fullPath));
+      const modRecord = module as Record<string, unknown>;
+      paths.push(...getAllModulePaths(modRecord.submodules as Record<string, unknown>, fullPath));
     }
   }
 

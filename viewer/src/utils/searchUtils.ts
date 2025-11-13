@@ -56,10 +56,11 @@ export function searchDocumentation(doc: JsonDocumentation, query: string): Sear
   }
 
   // Search functions in modules
-  const searchFunctionsInModule = (module: any, modulePath: string) => {
-    if (module.functions) {
+  const searchFunctionsInModule = (module: Record<string, unknown>, modulePath: string) => {
+    if (Array.isArray(module.functions)) {
       for (const func of module.functions) {
-        const funcName = func.name.toLowerCase();
+        const funcData = func as { name: string; doc?: string };
+        const funcName = funcData.name.toLowerCase();
         let score = 0;
 
         if (funcName === lowerQuery) {
@@ -68,14 +69,14 @@ export function searchDocumentation(doc: JsonDocumentation, query: string): Sear
           score = 80;
         } else if (funcName.includes(lowerQuery)) {
           score = 60;
-        } else if (func.doc && func.doc.toLowerCase().includes(lowerQuery)) {
+        } else if (funcData.doc && funcData.doc.toLowerCase().includes(lowerQuery)) {
           score = 20;
         }
 
         if (score > 0) {
           results.push({
-            path: modulePath ? `${modulePath}::${func.name}` : func.name,
-            item: func as any,
+            path: modulePath ? `${modulePath}::${funcData.name}` : funcData.name,
+            item: func as JsonItem,
             type: 'function',
             score,
           });
@@ -83,23 +84,23 @@ export function searchDocumentation(doc: JsonDocumentation, query: string): Sear
       }
     }
 
-    if (module.submodules) {
-      for (const [name, submodule] of Object.entries(module.submodules)) {
+    if (module.submodules && typeof module.submodules === 'object') {
+      for (const [name, submodule] of Object.entries(module.submodules as Record<string, unknown>)) {
         const subPath = modulePath ? `${modulePath}::${name}` : name;
-        searchFunctionsInModule(submodule, subPath);
+        searchFunctionsInModule(submodule as Record<string, unknown>, subPath);
       }
     }
   };
 
   for (const [name, module] of Object.entries(doc.modules)) {
-    searchFunctionsInModule(module, name);
+    searchFunctionsInModule(module as Record<string, unknown>, name);
 
     // Also match module names
     const moduleName = name.toLowerCase();
     if (moduleName.includes(lowerQuery)) {
       results.push({
         path: name,
-        item: module as any,
+        item: module as unknown as JsonItem,
         type: 'module',
         score: moduleName === lowerQuery ? 100 : moduleName.startsWith(lowerQuery) ? 80 : 60,
       });

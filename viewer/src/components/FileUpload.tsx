@@ -40,11 +40,7 @@ export function FileUpload() {
       >
         {fileName ? 'Change File' : 'Load Documentation'}
       </button>
-      {fileName && (
-        <span className="text-sm text-gray-600 dark:text-gray-400">
-          {fileName}
-        </span>
-      )}
+      {fileName && <span className="text-sm text-gray-600 dark:text-gray-400">{fileName}</span>}
       {/* Placeholder for future dropdown */}
       <div className="text-gray-400 dark:text-gray-600 text-sm">
         {/* Future: monorepo dropdown will go here */}
