@@ -9,7 +9,7 @@ import { WelcomePage } from './components/WelcomePage';
 
 function AppLayout() {
   return (
-    <div className="min-h-screen bg-white dark:bg-purple-950 text-gray-900 dark:text-purple-50">
+    <div className="min-h-screen bg-white dark:bg-slate-950 text-gray-900 dark:text-slate-200">
       <Header />
       <div className="flex h-[calc(100vh-60px)]">
         <Sidebar />

@@ -8,12 +8,12 @@ export function Header() {
   const { documentation } = useDocumentation();
 
   return (
-    <header className="sticky top-0 z-50 border-b bg-white dark:bg-purple-950 border-gray-200 dark:border-purple-800">
+    <header className="sticky top-0 z-50 border-b bg-white dark:bg-slate-950 border-gray-200 dark:border-slate-800">
       <div className="flex items-center justify-between px-6 py-3">
         <div className="flex items-center gap-6">
           <FileUpload />
           {documentation && (
-            <div className="text-lg font-semibold text-gray-900 dark:text-purple-50">
+            <div className="text-lg font-semibold text-gray-900 dark:text-slate-200">
               {documentation.project_name}
             </div>
           )}
@@ -23,7 +23,7 @@ export function Header() {
           {documentation && <SearchBar />}
           <button
             onClick={toggleTheme}
-            className="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-purple-900 transition-colors"
+            className="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-slate-900 transition-colors"
             aria-label="Toggle theme"
           >
             {theme === 'light' ? (

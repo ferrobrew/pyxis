@@ -17,59 +17,111 @@ interface ModuleData {
 
 // Extern value display component
 function ExternValueItem({ extern: ext }: { extern: JsonExternValue }) {
+  const isPrivate = ext.visibility === 'private';
+  const containerClasses = isPrivate
+    ? 'mb-4 p-4 bg-gray-50 dark:bg-purple-950 rounded-md opacity-60'
+    : 'mb-4 p-4 bg-gray-50 dark:bg-purple-950 rounded-md';
+  const nameClasses = isPrivate
+    ? 'font-semibold text-gray-500 dark:text-slate-600'
+    : 'font-semibold text-gray-900 dark:text-slate-200';
+
   return (
-    <div className="mb-4 p-4 bg-gray-50 dark:bg-purple-900 rounded-md">
+    <div className={containerClasses}>
       <div className="font-mono text-sm">
-        <span className="text-purple-600 dark:text-purple-400">extern </span>
-        <span className="font-semibold text-gray-900 dark:text-purple-50">{ext.name}</span>
-        <span className="text-gray-600 dark:text-purple-300">: </span>
+        <span className="text-purple-600 dark:text-slate-500">extern </span>
+        <span className={nameClasses}>{ext.name}</span>
+        <span className="text-gray-600 dark:text-slate-400">: </span>
         <TypeRef type={ext.type_ref} />
       </div>
-      <div className="mt-2 text-xs text-gray-500 dark:text-purple-400">
+      <div className="mt-2 text-xs text-gray-500 dark:text-slate-500">
         Address: 0x{ext.address.toString(16)}
       </div>
     </div>
   );
 }
 
-// Backend configuration section
+// Backend prologue section
 interface BackendSectionProps {
   backends: { [key: string]: unknown };
 }
 
-function BackendSection({ backends }: BackendSectionProps) {
+function PrologueSection({ backends }: BackendSectionProps) {
   if (!backends || Object.keys(backends).length === 0) return null;
+
+  const hasPrologues = Object.values(backends).some((configs) =>
+    (configs as JsonBackend[]).some((config: JsonBackend) => config.prologue)
+  );
+
+  if (!hasPrologues) return null;
 
   return (
     <div className="mb-6">
-      <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-purple-50">
-        Backend Configuration
+      <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-slate-200">
+        Backend Prologue
       </h2>
-      {Object.entries(backends).map(([backendName, configs]) => (
-        <div key={backendName} className="mb-4">
-          <h3 className="text-lg font-medium mb-2 text-gray-800 dark:text-purple-100">
-            {backendName}
-          </h3>
-          {(configs as JsonBackend[]).map((config: JsonBackend, idx: number) => (
-            <div key={idx} className="space-y-2">
-              {config.prologue && (
-                <Collapsible title="Prologue">
-                  <pre className="text-sm font-mono bg-gray-100 dark:bg-purple-950 p-3 rounded overflow-x-auto">
-                    {config.prologue}
-                  </pre>
-                </Collapsible>
-              )}
-              {config.epilogue && (
-                <Collapsible title="Epilogue">
-                  <pre className="text-sm font-mono bg-gray-100 dark:bg-purple-950 p-3 rounded overflow-x-auto">
-                    {config.epilogue}
-                  </pre>
-                </Collapsible>
-              )}
-            </div>
-          ))}
-        </div>
-      ))}
+      {Object.entries(backends).map(([backendName, configs]) => {
+        // Join all prologues for this backend
+        const joinedPrologue = (configs as JsonBackend[])
+          .map((config: JsonBackend) => config.prologue)
+          .filter((p) => p != null)
+          .join('\n\n');
+
+        if (!joinedPrologue) return null;
+
+        return (
+          <div key={backendName} className="mb-4">
+            <h3 className="text-lg font-medium mb-2 text-gray-800 dark:text-slate-300">
+              {backendName}
+            </h3>
+            <Collapsible title="Prologue">
+              <pre className="text-sm font-mono bg-gray-100 dark:bg-slate-950 p-3 rounded overflow-x-auto">
+                {joinedPrologue}
+              </pre>
+            </Collapsible>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// Backend epilogue section
+function EpilogueSection({ backends }: BackendSectionProps) {
+  if (!backends || Object.keys(backends).length === 0) return null;
+
+  const hasEpilogues = Object.values(backends).some((configs) =>
+    (configs as JsonBackend[]).some((config: JsonBackend) => config.epilogue)
+  );
+
+  if (!hasEpilogues) return null;
+
+  return (
+    <div className="mb-6">
+      <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-slate-200">
+        Backend Epilogue
+      </h2>
+      {Object.entries(backends).map(([backendName, configs]) => {
+        // Join all epilogues for this backend
+        const joinedEpilogue = (configs as JsonBackend[])
+          .map((config: JsonBackend) => config.epilogue)
+          .filter((e) => e != null)
+          .join('\n\n');
+
+        if (!joinedEpilogue) return null;
+
+        return (
+          <div key={backendName} className="mb-4">
+            <h3 className="text-lg font-medium mb-2 text-gray-800 dark:text-slate-300">
+              {backendName}
+            </h3>
+            <Collapsible title="Epilogue">
+              <pre className="text-sm font-mono bg-gray-100 dark:bg-slate-950 p-3 rounded overflow-x-auto">
+                {joinedEpilogue}
+              </pre>
+            </Collapsible>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -84,7 +136,7 @@ function ItemList({ items }: ItemListProps) {
 
   return (
     <div>
-      <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-purple-50">Types</h2>
+      <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-slate-200">Types</h2>
       <div className="space-y-2">
         {items.map(({ path, item }: { path: string; item: JsonItem }) => {
           if (!item) return null;
@@ -93,19 +145,19 @@ function ItemList({ items }: ItemListProps) {
             <Link
               key={path}
               to={`/item/${encodeURIComponent(path)}`}
-              className="block p-4 bg-gray-50 dark:bg-purple-900 rounded-md hover:bg-gray-100 dark:hover:bg-purple-800 transition-colors"
+              className="block p-4 bg-gray-50 dark:bg-purple-950 rounded-md hover:bg-gray-100 dark:hover:bg-purple-900 transition-colors"
             >
               <div className="flex items-center justify-between">
                 <div>
                   <div className="font-mono text-sm font-semibold text-blue-600 dark:text-blue-400">
                     {name}
                   </div>
-                  <div className="text-xs text-gray-500 dark:text-purple-400 mt-1">
+                  <div className="text-xs text-gray-500 dark:text-slate-500 mt-1">
                     {item.kind.type} • {item.size} bytes • align {item.alignment}
                   </div>
                 </div>
                 {item.kind.doc && (
-                  <div className="text-sm text-gray-600 dark:text-purple-300 ml-4 max-w-md truncate">
+                  <div className="text-sm text-gray-600 dark:text-slate-400 ml-4 max-w-md truncate">
                     {item.kind.doc}
                   </div>
                 )}
@@ -133,7 +185,7 @@ function SubmoduleList({ submodules, parentPath }: SubmoduleListProps) {
 
   return (
     <div className="mt-6">
-      <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-purple-50">Submodules</h2>
+      <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-slate-200">Submodules</h2>
       <div className="space-y-2">
         {Object.entries(submodules).map(([name, submodule]) => {
           const subPath = parentPath ? `${parentPath}::${name}` : name;
@@ -142,13 +194,13 @@ function SubmoduleList({ submodules, parentPath }: SubmoduleListProps) {
             <Link
               key={name}
               to={`/module/${encodeURIComponent(subPath)}`}
-              className="block p-4 bg-gray-50 dark:bg-purple-900 rounded-md hover:bg-gray-100 dark:hover:bg-purple-800 transition-colors"
+              className="block p-4 bg-gray-50 dark:bg-purple-950 rounded-md hover:bg-gray-100 dark:hover:bg-purple-900 transition-colors"
             >
               <div className="font-mono text-sm font-semibold text-blue-600 dark:text-blue-400">
                 {name}
               </div>
               {data.doc && (
-                <div className="text-sm text-gray-600 dark:text-purple-300 mt-1">{data.doc}</div>
+                <div className="text-sm text-gray-600 dark:text-slate-400 mt-1">{data.doc}</div>
               )}
             </Link>
           );
@@ -166,7 +218,7 @@ export function ModuleView() {
   if (!documentation) {
     return (
       <div className="p-8">
-        <div className="text-gray-500 dark:text-purple-300">
+        <div className="text-gray-500 dark:text-slate-400">
           Please load a documentation file to begin.
         </div>
       </div>
@@ -192,25 +244,64 @@ export function ModuleView() {
       item: documentation.items[itemPath],
     })) || [];
 
+  // Generate breadcrumbs
+  const pathSegments = decodedPath ? decodedPath.split('::') : [];
+  const breadcrumbs = pathSegments.map((segment, idx) => {
+    const partialPath = pathSegments.slice(0, idx + 1).join('::');
+    return { name: segment, path: partialPath };
+  });
+
   return (
     <div className="p-8 max-w-6xl">
-      <h1 className="text-3xl font-bold mb-2 text-gray-900 dark:text-purple-50">
+      {/* Breadcrumbs */}
+      {breadcrumbs.length > 0 && (
+        <nav className="mb-4 flex items-center text-sm text-gray-600 dark:text-slate-400">
+          {breadcrumbs.map((crumb, idx) => (
+            <span key={crumb.path} className="flex items-center">
+              {idx > 0 && (
+                <svg className="w-4 h-4 mx-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 5l7 7-7 7"
+                  />
+                </svg>
+              )}
+              {idx === breadcrumbs.length - 1 ? (
+                <span className="font-semibold text-gray-900 dark:text-slate-200">
+                  {crumb.name}
+                </span>
+              ) : (
+                <Link
+                  to={`/module/${encodeURIComponent(crumb.path)}`}
+                  className="hover:text-blue-600 dark:hover:text-blue-400"
+                >
+                  {crumb.name}
+                </Link>
+              )}
+            </span>
+          ))}
+        </nav>
+      )}
+
+      <h1 className="text-3xl font-bold mb-2 text-gray-900 dark:text-slate-200">
         {decodedPath || 'Root'}
       </h1>
 
       {module.doc && (
         <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 rounded">
-          <p className="text-gray-700 dark:text-purple-200">{module.doc}</p>
+          <p className="text-gray-700 dark:text-slate-400">{module.doc}</p>
         </div>
       )}
 
-      {/* Backend Configurations */}
-      <BackendSection backends={module.backends || {}} />
+      {/* Backend Prologues */}
+      <PrologueSection backends={module.backends || {}} />
 
       {/* Extern Values */}
       {module.extern_values && module.extern_values.length > 0 && (
         <div className="mb-6">
-          <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-purple-50">
+          <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-slate-200">
             Extern Values
           </h2>
           {module.extern_values.map((ext: JsonExternValue, idx: number) => (
@@ -222,7 +313,7 @@ export function ModuleView() {
       {/* Functions */}
       {module.functions && module.functions.length > 0 && (
         <div className="mb-6">
-          <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-purple-50">
+          <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-slate-200">
             Functions
           </h2>
           {module.functions.map((func: JsonFunction, idx: number) => (
@@ -236,6 +327,9 @@ export function ModuleView() {
 
       {/* Submodules */}
       <SubmoduleList submodules={module.submodules || {}} parentPath={decodedPath} />
+
+      {/* Backend Epilogues */}
+      <EpilogueSection backends={module.backends || {}} />
     </div>
   );
 }
