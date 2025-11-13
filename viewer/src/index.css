@@ -1,29 +1,5 @@
 @import 'tailwindcss';
 
-@theme {
-  --font-mono:
-    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
-    monospace;
-
-  /* Light theme colors - bright white */
-  --color-bg-light: #ffffff;
-  --color-bg-secondary-light: #fafafa;
-  --color-border-light: #e5e7eb;
-  --color-text-light: #111827;
-  --color-text-secondary-light: #6b7280;
-  --color-link-light: #2563eb;
-  --color-sidebar-light: #f9fafb;
-
-  /* Dark theme colors - dark purple */
-  --color-bg-dark: #1a0f2e;
-  --color-bg-secondary-dark: #2d1b4e;
-  --color-border-dark: #463465;
-  --color-text-dark: #e9d5ff;
-  --color-text-secondary-dark: #c4b5fd;
-  --color-link-dark: #a78bfa;
-  --color-sidebar-dark: #2d1b4e;
-}
-
 :root {
   font-family:
     system-ui,

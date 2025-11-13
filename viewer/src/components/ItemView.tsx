@@ -11,7 +11,7 @@ import type { JsonTypeDefinition, JsonEnumDefinition, JsonBitflagsDefinition } f
 function DocBlock({ doc }: { doc: string }) {
   return (
     <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 rounded">
-      <p className="text-gray-700 dark:text-gray-300">{doc}</p>
+      <p className="text-gray-700 dark:text-purple-200">{doc}</p>
     </div>
   );
 }
@@ -62,14 +62,14 @@ function TypeView({ def, modulePath }: { def: JsonTypeDefinition; modulePath: st
 
       {def.fields.length > 0 && (
         <div className="mb-6">
-          <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-gray-100">Fields</h2>
+          <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-purple-50">Fields</h2>
           <FieldTable fields={def.fields} modulePath={modulePath} />
         </div>
       )}
 
       {def.vftable && def.vftable.functions.length > 0 && (
         <div className="mb-6">
-          <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-gray-100">
+          <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-purple-50">
             Virtual Functions
           </h2>
           {def.vftable.functions.map((func, idx) => (
@@ -80,7 +80,7 @@ function TypeView({ def, modulePath }: { def: JsonTypeDefinition; modulePath: st
 
       {def.associated_functions.length > 0 && (
         <div className="mb-6">
-          <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-gray-100">
+          <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-purple-50">
             Associated Functions
           </h2>
           {def.associated_functions.map((func, idx) => (
@@ -99,7 +99,7 @@ function EnumView({ def, modulePath }: { def: JsonEnumDefinition; modulePath: st
       {def.doc && <DocBlock doc={def.doc} />}
 
       <div className="mb-6">
-        <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+        <div className="text-sm text-gray-600 dark:text-purple-300 mb-2">
           Underlying type: <TypeRef type={def.underlying_type} currentModule={modulePath} />
         </div>
         <MetadataBadges
@@ -110,27 +110,27 @@ function EnumView({ def, modulePath }: { def: JsonEnumDefinition; modulePath: st
       </div>
 
       <div className="mb-6">
-        <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-gray-100">Variants</h2>
+        <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-purple-50">Variants</h2>
         <div className="overflow-x-auto">
-          <table className="w-full border border-gray-200 dark:border-gray-700 rounded-md">
-            <thead className="bg-gray-100 dark:bg-gray-800">
+          <table className="w-full border border-gray-200 dark:border-purple-700 rounded-md">
+            <thead className="bg-gray-100 dark:bg-purple-900">
               <tr>
-                <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">
+                <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-purple-50">
                   Name
                 </th>
-                <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">
+                <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-purple-50">
                   Value
                 </th>
               </tr>
             </thead>
             <tbody>
               {def.variants.map((variant, idx) => (
-                <tr key={idx} className="border-b border-gray-200 dark:border-gray-700">
-                  <td className="px-4 py-2 font-mono text-sm text-gray-900 dark:text-gray-100">
+                <tr key={idx} className="border-b border-gray-200 dark:border-purple-700">
+                  <td className="px-4 py-2 font-mono text-sm text-gray-900 dark:text-purple-50">
                     {variant.name}
                     {def.default === idx && <SmallBadge variant="purple">default</SmallBadge>}
                   </td>
-                  <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 font-mono">
+                  <td className="px-4 py-2 text-sm text-gray-600 dark:text-purple-300 font-mono">
                     {variant.value}
                   </td>
                 </tr>
@@ -142,7 +142,7 @@ function EnumView({ def, modulePath }: { def: JsonEnumDefinition; modulePath: st
 
       {def.associated_functions.length > 0 && (
         <div className="mb-6">
-          <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-gray-100">
+          <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-purple-50">
             Associated Functions
           </h2>
           {def.associated_functions.map((func, idx) => (
@@ -161,7 +161,7 @@ function BitflagsView({ def, modulePath }: { def: JsonBitflagsDefinition; module
       {def.doc && <DocBlock doc={def.doc} />}
 
       <div className="mb-6">
-        <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+        <div className="text-sm text-gray-600 dark:text-purple-300 mb-2">
           Underlying type: <TypeRef type={def.underlying_type} currentModule={modulePath} />
         </div>
         <MetadataBadges
@@ -172,39 +172,39 @@ function BitflagsView({ def, modulePath }: { def: JsonBitflagsDefinition; module
       </div>
 
       <div className="mb-6">
-        <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-gray-100">Flags</h2>
+        <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-purple-50">Flags</h2>
         <div className="overflow-x-auto">
-          <table className="w-full border border-gray-200 dark:border-gray-700 rounded-md">
-            <thead className="bg-gray-100 dark:bg-gray-800">
+          <table className="w-full border border-gray-200 dark:border-purple-700 rounded-md">
+            <thead className="bg-gray-100 dark:bg-purple-900">
               <tr>
-                <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">
+                <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-purple-50">
                   Name
                 </th>
-                <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">
+                <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-purple-50">
                   Value (Dec)
                 </th>
-                <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">
+                <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-purple-50">
                   Value (Hex)
                 </th>
-                <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">
+                <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-purple-50">
                   Value (Bin)
                 </th>
               </tr>
             </thead>
             <tbody>
               {def.flags.map((flag, idx) => (
-                <tr key={idx} className="border-b border-gray-200 dark:border-gray-700">
-                  <td className="px-4 py-2 font-mono text-sm text-gray-900 dark:text-gray-100">
+                <tr key={idx} className="border-b border-gray-200 dark:border-purple-700">
+                  <td className="px-4 py-2 font-mono text-sm text-gray-900 dark:text-purple-50">
                     {flag.name}
                     {def.default === idx && <SmallBadge variant="purple">default</SmallBadge>}
                   </td>
-                  <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 font-mono">
+                  <td className="px-4 py-2 text-sm text-gray-600 dark:text-purple-300 font-mono">
                     {flag.value}
                   </td>
-                  <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 font-mono">
+                  <td className="px-4 py-2 text-sm text-gray-600 dark:text-purple-300 font-mono">
                     0x{flag.value.toString(16)}
                   </td>
-                  <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 font-mono">
+                  <td className="px-4 py-2 text-sm text-gray-600 dark:text-purple-300 font-mono">
                     0b{flag.value.toString(2).padStart(8, '0')}
                   </td>
                 </tr>
@@ -225,7 +225,7 @@ export function ItemView() {
   if (!documentation) {
     return (
       <div className="p-8">
-        <div className="text-gray-500 dark:text-gray-400">
+        <div className="text-gray-500 dark:text-purple-300">
           Please load a documentation file to begin.
         </div>
       </div>
@@ -249,14 +249,14 @@ export function ItemView() {
   return (
     <div className="p-8 max-w-6xl">
       <div className="mb-4">
-        <div className="text-sm text-gray-500 dark:text-gray-400 mb-2">
+        <div className="text-sm text-gray-500 dark:text-purple-300 mb-2">
           <Link to={`/module/${encodeURIComponent(modulePath)}`} className="hover:underline">
             {modulePath || 'root'}
           </Link>
         </div>
-        <h1 className="text-3xl font-bold mb-2 text-gray-900 dark:text-gray-100">{itemName}</h1>
-        <div className="flex items-center gap-3 text-sm text-gray-600 dark:text-gray-400">
-          <span className="px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded capitalize">
+        <h1 className="text-3xl font-bold mb-2 text-gray-900 dark:text-purple-50">{itemName}</h1>
+        <div className="flex items-center gap-3 text-sm text-gray-600 dark:text-purple-300">
+          <span className="px-2 py-1 bg-gray-100 dark:bg-purple-900 rounded capitalize">
             {item.kind.type}
           </span>
           <span>Size: {item.size} bytes</span>

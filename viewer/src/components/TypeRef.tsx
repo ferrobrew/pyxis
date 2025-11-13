@@ -36,7 +36,7 @@ export function TypeRef({ type, currentModule = '' }: TypeRefProps) {
       case 'const_pointer':
         return (
           <>
-            <span className="text-gray-600 dark:text-gray-400">*const </span>
+            <span className="text-gray-600 dark:text-purple-300">*const </span>
             {renderType(t.inner)}
           </>
         );
@@ -44,7 +44,7 @@ export function TypeRef({ type, currentModule = '' }: TypeRefProps) {
       case 'mut_pointer':
         return (
           <>
-            <span className="text-gray-600 dark:text-gray-400">*mut </span>
+            <span className="text-gray-600 dark:text-purple-300">*mut </span>
             {renderType(t.inner)}
           </>
         );
@@ -52,9 +52,9 @@ export function TypeRef({ type, currentModule = '' }: TypeRefProps) {
       case 'array':
         return (
           <>
-            <span className="text-gray-600 dark:text-gray-400">[</span>
+            <span className="text-gray-600 dark:text-purple-300">[</span>
             {renderType(t.inner)}
-            <span className="text-gray-600 dark:text-gray-400">; {t.size}]</span>
+            <span className="text-gray-600 dark:text-purple-300">; {t.size}]</span>
           </>
         );
 
@@ -63,19 +63,19 @@ export function TypeRef({ type, currentModule = '' }: TypeRefProps) {
         return (
           <span className="font-mono text-sm">
             {cc && <span className="text-orange-600 dark:text-orange-400">{cc}</span>}
-            <span className="text-gray-600 dark:text-gray-400">fn(</span>
+            <span className="text-gray-600 dark:text-purple-300">fn(</span>
             {t.arguments.map((arg, i) => (
               <span key={i}>
-                {i > 0 && <span className="text-gray-600 dark:text-gray-400">, </span>}
-                <span className="text-gray-800 dark:text-gray-200">{arg.name}</span>
-                <span className="text-gray-600 dark:text-gray-400">: </span>
+                {i > 0 && <span className="text-gray-600 dark:text-purple-300">, </span>}
+                <span className="text-gray-800 dark:text-purple-100">{arg.name}</span>
+                <span className="text-gray-600 dark:text-purple-300">: </span>
                 {renderType(arg.type_ref)}
               </span>
             ))}
-            <span className="text-gray-600 dark:text-gray-400">)</span>
+            <span className="text-gray-600 dark:text-purple-300">)</span>
             {t.return_type && (
               <>
-                <span className="text-gray-600 dark:text-gray-400"> -&gt; </span>
+                <span className="text-gray-600 dark:text-purple-300"> -&gt; </span>
                 {renderType(t.return_type)}
               </>
             )}

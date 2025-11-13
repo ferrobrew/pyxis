@@ -21,12 +21,12 @@ function ModuleTree({ name, module, path, level }: ModuleTreeProps) {
   return (
     <div>
       <div
-        className={`flex items-center gap-1 py-1 px-2 rounded ${isActive ? 'bg-blue-100 dark:bg-blue-900' : ''}`}
+        className={`flex items-center gap-1 py-1 px-2 rounded ${isActive ? 'bg-blue-100 dark:bg-purple-800/50' : ''}`}
       >
         {hasSubmodules && (
           <button
             onClick={() => setIsOpen(!isOpen)}
-            className="p-0.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
+            className="p-0.5 hover:bg-gray-200 dark:hover:bg-purple-800 rounded"
           >
             <svg
               className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-90' : ''}`}
@@ -70,16 +70,16 @@ export function Sidebar() {
 
   if (!documentation) {
     return (
-      <aside className="w-64 border-r bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-800 p-4">
-        <div className="text-sm text-gray-500 dark:text-gray-400">No documentation loaded</div>
+      <aside className="w-64 border-r bg-gray-50 dark:bg-purple-950 border-gray-200 dark:border-purple-800 p-4">
+        <div className="text-sm text-gray-500 dark:text-purple-300">No documentation loaded</div>
       </aside>
     );
   }
 
   return (
-    <aside className="w-64 border-r bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-800 overflow-y-auto">
+    <aside className="w-64 border-r bg-gray-50 dark:bg-purple-950 border-gray-200 dark:border-purple-800 overflow-y-auto">
       <div className="p-4">
-        <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">Modules</h2>
+        <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-purple-50">Modules</h2>
         <nav>
           {Object.entries(documentation.modules).map(([name, module]) => (
             <ModuleTree
