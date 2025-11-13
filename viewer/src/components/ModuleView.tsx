@@ -276,10 +276,6 @@ export function ModuleView() {
     <div className="p-8 max-w-6xl">
       <Breadcrumbs path={decodedPath} />
 
-      <h1 className="text-3xl font-bold mb-2 text-gray-900 dark:text-slate-200">
-        {decodedPath || 'Root'}
-      </h1>
-
       {module.doc && (
         <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 rounded">
           <p className="text-gray-700 dark:text-slate-400">{module.doc}</p>

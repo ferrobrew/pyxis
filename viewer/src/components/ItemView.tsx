@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useDocumentation } from '../contexts/DocumentationContext';
-import { getModulePath, getItemName, findLongestValidAncestor } from '../utils/pathUtils';
+import { getModulePath, findLongestValidAncestor } from '../utils/pathUtils';
 import { buildModuleUrl, buildItemUrl, buildRootUrl } from '../utils/navigation';
 import { TypeRef } from './TypeRef';
 import { Badge, SmallBadge } from './Badge';
@@ -303,22 +303,23 @@ export function ItemView() {
   }
 
   const modulePath = getModulePath(decodedPath);
-  const itemName = getItemName(decodedPath);
+
+  // Determine item type for color coding
+  let itemType: 'type' | 'enum' | 'bitflags' = 'type';
+  if (item.kind.type === 'enum') itemType = 'enum';
+  else if (item.kind.type === 'bitflags') itemType = 'bitflags';
 
   return (
     <div className="p-8 max-w-6xl">
-      <Breadcrumbs path={decodedPath} isItem={true} />
-      <div className="mb-4">
-        <h1 className="text-3xl font-bold mb-2 text-gray-900 dark:text-slate-200">{itemName}</h1>
-        <div className="flex items-center gap-3 text-sm text-gray-600 dark:text-slate-400">
-          <span className="px-2 py-1 bg-gray-100 dark:bg-slate-800 rounded capitalize">
-            {item.kind.type}
-          </span>
-          <span>Size: {item.size} bytes</span>
-          <span>Alignment: {item.alignment} bytes</span>
-          <span className="capitalize">{item.category}</span>
-          <span className="capitalize">{item.visibility}</span>
-        </div>
+      <Breadcrumbs path={decodedPath} isItem={true} itemType={itemType} />
+      <div className="mb-4 flex items-center gap-3 text-sm text-gray-600 dark:text-slate-400">
+        <span className="px-2 py-1 bg-gray-100 dark:bg-slate-800 rounded capitalize">
+          {item.kind.type}
+        </span>
+        <span>Size: {item.size} bytes</span>
+        <span>Alignment: {item.alignment} bytes</span>
+        <span className="capitalize">{item.category}</span>
+        <span className="capitalize">{item.visibility}</span>
       </div>
 
       {item.kind.type === 'type' && <TypeView def={item.kind} modulePath={modulePath} />}

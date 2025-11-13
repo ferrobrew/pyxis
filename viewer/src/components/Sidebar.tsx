@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { useDocumentation } from '../contexts/DocumentationContext';
 import type { JsonModule } from '@pyxis/types';
 import { buildModuleUrl, buildItemUrl } from '../utils/navigation';
+import { getItemTypeColor, getItemTypeHoverColor, type ItemType } from '../utils/colors';
 
 interface ModuleTreeProps {
   name: string;
@@ -111,8 +112,14 @@ function ItemTree({ itemPath, level }: ItemTreeProps) {
   const isItemActive = currentPath === itemPath;
 
   let Icon = TypeIcon;
-  if (item.kind.type === 'enum') Icon = EnumIcon;
-  else if (item.kind.type === 'bitflags') Icon = BitflagsIcon;
+  let itemType: ItemType = 'type';
+  if (item.kind.type === 'enum') {
+    Icon = EnumIcon;
+    itemType = 'enum';
+  } else if (item.kind.type === 'bitflags') {
+    Icon = BitflagsIcon;
+    itemType = 'bitflags';
+  }
 
   // Get public members for this item
   const publicFields =
@@ -173,7 +180,7 @@ function ItemTree({ itemPath, level }: ItemTreeProps) {
         <Link
           to={buildItemUrl(itemPath, selectedSource)}
           onClick={handleItemClick}
-          className="flex items-center gap-2 flex-1 text-sm hover:text-blue-600 dark:hover:text-blue-400 min-w-0"
+          className={`flex items-center gap-2 flex-1 text-sm min-w-0 ${getItemTypeColor(itemType)} ${getItemTypeHoverColor(itemType)}`}
         >
           <Icon />
           <span className="truncate">{itemName}</span>
@@ -201,7 +208,7 @@ function ItemTree({ itemPath, level }: ItemTreeProps) {
             <Link
               key={`${itemPath}-vfunc-${func.name}`}
               to={`${buildItemUrl(itemPath, selectedSource)}##vfunc-${func.name}`}
-              className="flex items-center gap-2 py-1 px-2 text-xs text-gray-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 rounded"
+              className={`flex items-center gap-2 py-1 px-2 text-xs rounded ${getItemTypeColor('function')} ${getItemTypeHoverColor('function')}`}
               style={{ paddingLeft: `${(level + 2) * 0.5 + 1.25}rem` }}
             >
               <FunctionIcon />
@@ -214,7 +221,7 @@ function ItemTree({ itemPath, level }: ItemTreeProps) {
             <Link
               key={`${itemPath}-func-${func.name}`}
               to={`${buildItemUrl(itemPath, selectedSource)}##func-${func.name}`}
-              className="flex items-center gap-2 py-1 px-2 text-xs text-gray-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 rounded"
+              className={`flex items-center gap-2 py-1 px-2 text-xs rounded ${getItemTypeColor('function')} ${getItemTypeHoverColor('function')}`}
               style={{ paddingLeft: `${(level + 2) * 0.5 + 1.25}rem` }}
             >
               <FunctionIcon />
@@ -227,7 +234,7 @@ function ItemTree({ itemPath, level }: ItemTreeProps) {
             <Link
               key={`${itemPath}-variant-${variant.name}`}
               to={`${buildItemUrl(itemPath, selectedSource)}##variant-${variant.name}`}
-              className="flex items-center gap-2 py-1 px-2 text-xs text-gray-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 rounded"
+              className={`flex items-center gap-2 py-1 px-2 text-xs rounded ${getItemTypeColor('enum-variant')} ${getItemTypeHoverColor('enum-variant')}`}
               style={{ paddingLeft: `${(level + 2) * 0.5 + 1.25}rem` }}
             >
               <EnumIcon />
@@ -240,7 +247,7 @@ function ItemTree({ itemPath, level }: ItemTreeProps) {
             <Link
               key={`${itemPath}-flag-${flag.name}`}
               to={`${buildItemUrl(itemPath, selectedSource)}##flag-${flag.name}`}
-              className="flex items-center gap-2 py-1 px-2 text-xs text-gray-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 rounded"
+              className={`flex items-center gap-2 py-1 px-2 text-xs rounded ${getItemTypeColor('bitflags')} ${getItemTypeHoverColor('bitflags')}`}
               style={{ paddingLeft: `${(level + 2) * 0.5 + 1.25}rem` }}
             >
               <BitflagsIcon />
@@ -300,7 +307,7 @@ function ModuleTree({ name, module, path, level }: ModuleTreeProps) {
         <Link
           to={buildModuleUrl(path, selectedSource)}
           onClick={handleModuleClick}
-          className="flex-1 text-sm hover:text-blue-600 dark:hover:text-blue-400"
+          className={`flex-1 text-sm ${getItemTypeColor('module')} ${getItemTypeHoverColor('module')}`}
           style={{ paddingLeft: `${level * 0.5}rem` }}
         >
           {name}
@@ -331,7 +338,7 @@ function ModuleTree({ name, module, path, level }: ModuleTreeProps) {
                   style={{ paddingLeft: `${(level + 1) * 0.5 + 1.25}rem` }}
                 >
                   <FunctionIcon />
-                  <span className="truncate text-gray-600 dark:text-slate-400">{func.name}</span>
+                  <span className={`truncate ${getItemTypeColor('function')}`}>{func.name}</span>
                 </div>
               );
             })}
@@ -346,7 +353,7 @@ function ModuleTree({ name, module, path, level }: ModuleTreeProps) {
                 <Link
                   key={`ext-${idx}`}
                   to={`${buildModuleUrl(path, selectedSource)}##extval-${extVal.name}`}
-                  className={`flex items-center gap-2 py-1 px-2 text-sm rounded text-gray-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 ${
+                  className={`flex items-center gap-2 py-1 px-2 text-sm rounded ${getItemTypeColor('extern')} ${getItemTypeHoverColor('extern')} ${
                     isExtActive ? 'bg-blue-100 dark:bg-slate-700/30' : ''
                   }`}
                   style={{ paddingLeft: `${(level + 1) * 0.5 + 1.25}rem` }}
