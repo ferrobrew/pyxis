@@ -19,7 +19,8 @@ interface DocsIndex {
 }
 
 export function FileUpload() {
-  const { setDocumentation, setFileName, selectedSource, setSelectedSource } = useDocumentation();
+  const { setDocumentation, setFileName, selectedSource, setSelectedSource, documentation } =
+    useDocumentation();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [availableDocs, setAvailableDocs] = useState<DocEntry[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -52,9 +53,15 @@ export function FileUpload() {
       const json = JSON.parse(text) as JsonDocumentation;
       setDocumentation(json);
       setFileName(file.name);
+      setSelectedSource('local'); // Ensure selectedSource is set to 'local' after upload
     } catch (error) {
       console.error('Error parsing JSON:', error);
       alert('Error parsing JSON file. Please ensure it is a valid Pyxis documentation file.');
+    }
+
+    // Reset the input so the same file can be selected again
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
   };
 
@@ -63,14 +70,23 @@ export function FileUpload() {
   };
 
   const handleSourceChange = async (value: string) => {
-    setSelectedSource(value);
-
-    if (value === 'local') {
-      // Reset the currently loaded file when switching to Local
-      setDocumentation(null);
-      setFileName(null);
+    if (value === 'another-local') {
+      // Trigger file input for another local project
+      fileInputRef.current?.click();
       return;
     }
+
+    if (value === 'local') {
+      // Only reset if we're switching from a different source
+      if (selectedSource !== 'local') {
+        setDocumentation(null);
+        setFileName(null);
+      }
+      setSelectedSource(value);
+      return;
+    }
+
+    setSelectedSource(value);
 
     // Load from GitHub
     const docEntry = availableDocs.find((doc) => doc.path === value);
@@ -104,7 +120,16 @@ export function FileUpload() {
   };
 
   const dropdownOptions = [
-    { value: 'local', label: 'Local' },
+    {
+      value: 'local',
+      label:
+        documentation && selectedSource === 'local'
+          ? `Local (${documentation.project_name})`
+          : 'Local',
+    },
+    ...(documentation && selectedSource === 'local'
+      ? [{ value: 'another-local', label: 'Another Local Project' }]
+      : []),
     ...availableDocs.map((doc) => ({
       value: doc.path,
       label: doc.name,

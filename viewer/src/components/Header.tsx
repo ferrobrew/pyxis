@@ -5,18 +5,13 @@ import { SearchBar } from './SearchBar';
 
 export function Header() {
   const { theme, toggleTheme } = useTheme();
-  const { documentation, selectedSource } = useDocumentation();
+  const { documentation } = useDocumentation();
 
   return (
     <header className="sticky top-0 z-50 border-b bg-white dark:bg-slate-950 border-gray-200 dark:border-slate-800">
       <div className="flex items-center justify-between px-6 py-3">
-        <div className="flex flex-col gap-1">
+        <div className="flex items-center gap-6">
           <FileUpload />
-          {documentation && selectedSource === 'local' && (
-            <div className="text-lg font-semibold text-gray-900 dark:text-slate-200">
-              {documentation.project_name}
-            </div>
-          )}
         </div>
 
         <div className="flex items-center gap-4">
