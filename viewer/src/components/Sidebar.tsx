@@ -137,6 +137,12 @@ function ItemTree({ itemPath, level }: ItemTreeProps) {
     variants.length > 0 ||
     flags.length > 0;
 
+  const handleItemClick = () => {
+    if (hasMembers) {
+      setIsItemOpen(true);
+    }
+  };
+
   return (
     <div>
       <div
@@ -147,7 +153,10 @@ function ItemTree({ itemPath, level }: ItemTreeProps) {
       >
         {hasMembers && (
           <button
-            onClick={() => setIsItemOpen(!isItemOpen)}
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsItemOpen(!isItemOpen);
+            }}
             className="p-0.5 hover:bg-gray-200 dark:hover:bg-slate-800 rounded flex-shrink-0"
           >
             <svg
@@ -163,6 +172,7 @@ function ItemTree({ itemPath, level }: ItemTreeProps) {
         {!hasMembers && <div className="w-3.5" />}
         <Link
           to={buildItemUrl(itemPath, selectedSource)}
+          onClick={handleItemClick}
           className="flex items-center gap-2 flex-1 text-sm hover:text-blue-600 dark:hover:text-blue-400 min-w-0"
         >
           <Icon />
@@ -257,6 +267,12 @@ function ModuleTree({ name, module, path, level }: ModuleTreeProps) {
     module.functions.length > 0 ||
     module.extern_values.length > 0;
 
+  const handleModuleClick = () => {
+    if (hasContent) {
+      setIsOpen(true);
+    }
+  };
+
   return (
     <div>
       <div
@@ -264,7 +280,10 @@ function ModuleTree({ name, module, path, level }: ModuleTreeProps) {
       >
         {hasContent && (
           <button
-            onClick={() => setIsOpen(!isOpen)}
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsOpen(!isOpen);
+            }}
             className="p-0.5 hover:bg-gray-200 dark:hover:bg-slate-800 rounded"
           >
             <svg
@@ -280,6 +299,7 @@ function ModuleTree({ name, module, path, level }: ModuleTreeProps) {
         {!hasContent && <div className="w-5" />}
         <Link
           to={buildModuleUrl(path, selectedSource)}
+          onClick={handleModuleClick}
           className="flex-1 text-sm hover:text-blue-600 dark:hover:text-blue-400"
           style={{ paddingLeft: `${level * 0.5}rem` }}
         >
