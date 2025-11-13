@@ -26,7 +26,7 @@ export function Collapsible({ title, children, defaultOpen = false }: Collapsibl
         </svg>
       </button>
       {isOpen && (
-        <div className="px-4 py-3 bg-white dark:bg-slate-950 border-t border-gray-300 dark:border-slate-800">
+        <div className="bg-white dark:bg-slate-950 border-t border-gray-300 dark:border-slate-800">
           {children}
         </div>
       )}
