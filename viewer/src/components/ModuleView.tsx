@@ -34,7 +34,7 @@ function ExternValueItem({ extern: ext }: { extern: JsonExternValue }) {
     : 'font-semibold text-gray-900 dark:text-slate-200';
 
   return (
-    <div className={containerClasses}>
+    <div id={`extval-${ext.name}`} className={containerClasses}>
       <div className="font-mono text-sm">
         <span className="text-violet-600 dark:text-slate-500">extern </span>
         <span className={nameClasses}>{ext.name}</span>

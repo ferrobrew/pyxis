@@ -323,16 +323,17 @@ function ModuleTree({ name, module, path, level }: ModuleTreeProps) {
               const isExtActive = currentPath === extKey;
 
               return (
-                <div
+                <Link
                   key={`ext-${idx}`}
-                  className={`flex items-center gap-2 py-1 px-2 text-sm rounded ${
+                  to={`${buildModuleUrl(path, selectedSource)}#extval-${extVal.name}`}
+                  className={`flex items-center gap-2 py-1 px-2 text-sm rounded text-gray-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 ${
                     isExtActive ? 'bg-blue-100 dark:bg-slate-700/30' : ''
                   }`}
                   style={{ paddingLeft: `${(level + 1) * 0.5 + 1.25}rem` }}
                 >
                   <GlobalIcon />
-                  <span className="truncate text-gray-600 dark:text-slate-400">{extVal.name}</span>
-                </div>
+                  <span className="truncate">{extVal.name}</span>
+                </Link>
               );
             })}
 
