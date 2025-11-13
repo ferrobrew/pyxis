@@ -367,8 +367,7 @@ export function Sidebar() {
 
   return (
     <aside className="w-64 border-r bg-gray-50 dark:bg-slate-950 border-gray-200 dark:border-slate-800 overflow-y-auto">
-      <div className="p-4">
-        <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-slate-200">Modules</h2>
+      <div className="p-2">
         <nav>
           {Object.entries(documentation.modules).map(([name, module]) => (
             <ModuleTree
