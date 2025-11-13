@@ -1,3 +1,20 @@
+import type { JsonDocumentation } from '@pyxis/types';
+
+/**
+ * Get all predefined type paths from documentation
+ */
+export function getPredefinedTypes(documentation: JsonDocumentation | null): Set<string> {
+  if (!documentation) return new Set();
+
+  const predefinedTypes = new Set<string>();
+  for (const [path, item] of Object.entries(documentation.items)) {
+    if (item.category === 'predefined') {
+      predefinedTypes.add(path);
+    }
+  }
+  return predefinedTypes;
+}
+
 /**
  * Get the relative path from a current module path to a target path
  * If the target is in a parent or sibling module, use the absolute path
