@@ -76,6 +76,177 @@ function GlobalIcon() {
   );
 }
 
+function FieldIcon() {
+  return (
+    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
+      />
+    </svg>
+  );
+}
+
+// Item tree component for types/enums/bitflags with their members
+interface ItemTreeProps {
+  itemPath: string;
+  level: number;
+}
+
+function ItemTree({ itemPath, level }: ItemTreeProps) {
+  const { documentation } = useDocumentation();
+  const location = useLocation();
+  const [isItemOpen, setIsItemOpen] = useState(false);
+
+  if (!documentation) return null;
+
+  const item = documentation.items[itemPath];
+  if (!item) return null;
+
+  const itemName = itemPath.split('::').pop() || itemPath;
+  const currentPath = decodeURIComponent(location.pathname.split('/').pop() || '');
+  const isItemActive = currentPath === itemPath;
+
+  let Icon = TypeIcon;
+  if (item.kind.type === 'enum') Icon = EnumIcon;
+  else if (item.kind.type === 'bitflags') Icon = BitflagsIcon;
+
+  // Get public members for this item
+  const publicFields =
+    item.kind.type === 'type'
+      ? item.kind.fields.filter((f) => f.visibility === 'public' && f.name)
+      : [];
+  const publicVirtualFunctions =
+    item.kind.type === 'type' && item.kind.vftable
+      ? item.kind.vftable.functions.filter((f) => f.visibility === 'public')
+      : [];
+  const publicAssociatedFunctions =
+    item.kind.type === 'type' || item.kind.type === 'enum'
+      ? item.kind.associated_functions.filter((f) => f.visibility === 'public')
+      : [];
+  const variants = item.kind.type === 'enum' ? item.kind.variants : [];
+  const flags = item.kind.type === 'bitflags' ? item.kind.flags : [];
+
+  const hasMembers =
+    publicFields.length > 0 ||
+    publicVirtualFunctions.length > 0 ||
+    publicAssociatedFunctions.length > 0 ||
+    variants.length > 0 ||
+    flags.length > 0;
+
+  return (
+    <div>
+      <div
+        className={`flex items-center gap-1 py-1 px-2 rounded ${
+          isItemActive ? 'bg-blue-100 dark:bg-slate-700/30' : ''
+        }`}
+        style={{ paddingLeft: `${(level + 1) * 0.5 + 1.25}rem` }}
+      >
+        {hasMembers && (
+          <button
+            onClick={() => setIsItemOpen(!isItemOpen)}
+            className="p-0.5 hover:bg-gray-200 dark:hover:bg-slate-800 rounded flex-shrink-0"
+          >
+            <svg
+              className={`w-3 h-3 transition-transform ${isItemOpen ? 'rotate-90' : ''}`}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9 5l7 7-7 7"
+              />
+            </svg>
+          </button>
+        )}
+        {!hasMembers && <div className="w-3.5" />}
+        <Link
+          to={`/item/${encodeURIComponent(itemPath)}`}
+          className="flex items-center gap-2 flex-1 text-sm hover:text-blue-600 dark:hover:text-blue-400 min-w-0"
+        >
+          <Icon />
+          <span className="truncate">{itemName}</span>
+        </Link>
+      </div>
+
+      {/* Item members */}
+      {isItemOpen && hasMembers && (
+        <div className="ml-4">
+          {/* Fields */}
+          {publicFields.map((field) => (
+            <Link
+              key={`${itemPath}-field-${field.name}`}
+              to={`/item/${encodeURIComponent(itemPath)}#field-${field.name}`}
+              className="flex items-center gap-2 py-1 px-2 text-xs text-gray-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 rounded"
+              style={{ paddingLeft: `${(level + 2) * 0.5 + 1.25}rem` }}
+            >
+              <FieldIcon />
+              <span className="truncate">{field.name}</span>
+            </Link>
+          ))}
+
+          {/* Virtual Functions */}
+          {publicVirtualFunctions.map((func) => (
+            <Link
+              key={`${itemPath}-vfunc-${func.name}`}
+              to={`/item/${encodeURIComponent(itemPath)}#vfunc-${func.name}`}
+              className="flex items-center gap-2 py-1 px-2 text-xs text-gray-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 rounded"
+              style={{ paddingLeft: `${(level + 2) * 0.5 + 1.25}rem` }}
+            >
+              <FunctionIcon />
+              <span className="truncate">{func.name}</span>
+            </Link>
+          ))}
+
+          {/* Associated Functions */}
+          {publicAssociatedFunctions.map((func) => (
+            <Link
+              key={`${itemPath}-func-${func.name}`}
+              to={`/item/${encodeURIComponent(itemPath)}#func-${func.name}`}
+              className="flex items-center gap-2 py-1 px-2 text-xs text-gray-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 rounded"
+              style={{ paddingLeft: `${(level + 2) * 0.5 + 1.25}rem` }}
+            >
+              <FunctionIcon />
+              <span className="truncate">{func.name}</span>
+            </Link>
+          ))}
+
+          {/* Enum Variants */}
+          {variants.map((variant) => (
+            <Link
+              key={`${itemPath}-variant-${variant.name}`}
+              to={`/item/${encodeURIComponent(itemPath)}#variant-${variant.name}`}
+              className="flex items-center gap-2 py-1 px-2 text-xs text-gray-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 rounded"
+              style={{ paddingLeft: `${(level + 2) * 0.5 + 1.25}rem` }}
+            >
+              <EnumIcon />
+              <span className="truncate">{variant.name}</span>
+            </Link>
+          ))}
+
+          {/* Bitflags */}
+          {flags.map((flag) => (
+            <Link
+              key={`${itemPath}-flag-${flag.name}`}
+              to={`/item/${encodeURIComponent(itemPath)}#flag-${flag.name}`}
+              className="flex items-center gap-2 py-1 px-2 text-xs text-gray-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 rounded"
+              style={{ paddingLeft: `${(level + 2) * 0.5 + 1.25}rem` }}
+            >
+              <BitflagsIcon />
+              <span className="truncate">{flag.name}</span>
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ModuleTree({ name, module, path, level }: ModuleTreeProps) {
   const [isOpen, setIsOpen] = useState(level < 2); // Auto-expand first two levels
   const location = useLocation();
@@ -93,12 +264,12 @@ function ModuleTree({ name, module, path, level }: ModuleTreeProps) {
   return (
     <div>
       <div
-        className={`flex items-center gap-1 py-1 px-2 rounded ${isActive ? 'bg-blue-100 dark:bg-purple-900/30' : ''}`}
+        className={`flex items-center gap-1 py-1 px-2 rounded ${isActive ? 'bg-blue-100 dark:bg-slate-700/30' : ''}`}
       >
         {hasContent && (
           <button
             onClick={() => setIsOpen(!isOpen)}
-            className="p-0.5 hover:bg-gray-200 dark:hover:bg-purple-950 rounded"
+            className="p-0.5 hover:bg-gray-200 dark:hover:bg-slate-800 rounded"
           >
             <svg
               className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-90' : ''}`}
@@ -125,31 +296,9 @@ function ModuleTree({ name, module, path, level }: ModuleTreeProps) {
           {/* Items (types, enums, bitflags) */}
           {module.items.length > 0 &&
             documentation &&
-            module.items.map((itemPath) => {
-              const item = documentation.items[itemPath];
-              if (!item) return null;
-
-              const itemName = itemPath.split('::').pop() || itemPath;
-              const isItemActive = currentPath === itemPath;
-
-              let Icon = TypeIcon;
-              if (item.kind.type === 'enum') Icon = EnumIcon;
-              else if (item.kind.type === 'bitflags') Icon = BitflagsIcon;
-
-              return (
-                <Link
-                  key={itemPath}
-                  to={`/item/${encodeURIComponent(itemPath)}`}
-                  className={`flex items-center gap-2 py-1 px-2 text-sm hover:text-blue-600 dark:hover:text-blue-400 rounded ${
-                    isItemActive ? 'bg-blue-100 dark:bg-purple-900/30' : ''
-                  }`}
-                  style={{ paddingLeft: `${(level + 1) * 0.5 + 1.25}rem` }}
-                >
-                  <Icon />
-                  <span className="truncate">{itemName}</span>
-                </Link>
-              );
-            })}
+            module.items.map((itemPath) => (
+              <ItemTree key={itemPath} itemPath={itemPath} level={level} />
+            ))}
 
           {/* Functions */}
           {module.functions.length > 0 &&
@@ -161,7 +310,7 @@ function ModuleTree({ name, module, path, level }: ModuleTreeProps) {
                 <div
                   key={`func-${idx}`}
                   className={`flex items-center gap-2 py-1 px-2 text-sm rounded ${
-                    isFuncActive ? 'bg-blue-100 dark:bg-purple-900/30' : ''
+                    isFuncActive ? 'bg-blue-100 dark:bg-slate-700/30' : ''
                   }`}
                   style={{ paddingLeft: `${(level + 1) * 0.5 + 1.25}rem` }}
                 >
@@ -181,7 +330,7 @@ function ModuleTree({ name, module, path, level }: ModuleTreeProps) {
                 <div
                   key={`ext-${idx}`}
                   className={`flex items-center gap-2 py-1 px-2 text-sm rounded ${
-                    isExtActive ? 'bg-blue-100 dark:bg-purple-900/30' : ''
+                    isExtActive ? 'bg-blue-100 dark:bg-slate-700/30' : ''
                   }`}
                   style={{ paddingLeft: `${(level + 1) * 0.5 + 1.25}rem` }}
                 >

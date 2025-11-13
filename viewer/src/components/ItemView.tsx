@@ -61,30 +61,40 @@ function TypeView({ def, modulePath }: { def: JsonTypeDefinition; modulePath: st
       />
 
       {def.fields.length > 0 && (
-        <div className="mb-6">
+        <div id="fields" className="mb-6">
           <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-slate-200">Fields</h2>
           <FieldTable fields={def.fields} modulePath={modulePath} />
         </div>
       )}
 
       {def.vftable && def.vftable.functions.length > 0 && (
-        <div className="mb-6">
+        <div id="virtual-functions" className="mb-6">
           <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-slate-200">
             Virtual Functions
           </h2>
           {def.vftable.functions.map((func, idx) => (
-            <FunctionDisplay key={idx} func={func} modulePath={modulePath} />
+            <FunctionDisplay
+              key={idx}
+              id={`vfunc-${func.name}`}
+              func={func}
+              modulePath={modulePath}
+            />
           ))}
         </div>
       )}
 
       {def.associated_functions.length > 0 && (
-        <div className="mb-6">
+        <div id="associated-functions" className="mb-6">
           <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-slate-200">
             Associated Functions
           </h2>
           {def.associated_functions.map((func, idx) => (
-            <FunctionDisplay key={idx} func={func} modulePath={modulePath} />
+            <FunctionDisplay
+              key={idx}
+              id={`func-${func.name}`}
+              func={func}
+              modulePath={modulePath}
+            />
           ))}
         </div>
       )}
@@ -109,11 +119,11 @@ function EnumView({ def, modulePath }: { def: JsonEnumDefinition; modulePath: st
         />
       </div>
 
-      <div className="mb-6">
+      <div id="variants" className="mb-6">
         <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-slate-200">Variants</h2>
         <div className="overflow-x-auto">
           <table className="w-full border border-gray-200 dark:border-slate-800 rounded-md">
-            <thead className="bg-gray-100 dark:bg-purple-950">
+            <thead className="bg-gray-100 dark:bg-slate-800">
               <tr>
                 <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-slate-200">
                   Name
@@ -125,7 +135,11 @@ function EnumView({ def, modulePath }: { def: JsonEnumDefinition; modulePath: st
             </thead>
             <tbody>
               {def.variants.map((variant, idx) => (
-                <tr key={idx} className="border-b border-gray-200 dark:border-slate-800">
+                <tr
+                  key={idx}
+                  id={`variant-${variant.name}`}
+                  className="border-b border-gray-200 dark:border-slate-800"
+                >
                   <td className="px-4 py-2 font-mono text-sm text-gray-900 dark:text-slate-200">
                     {variant.name}
                     {def.default === idx && <SmallBadge variant="purple">default</SmallBadge>}
@@ -141,12 +155,17 @@ function EnumView({ def, modulePath }: { def: JsonEnumDefinition; modulePath: st
       </div>
 
       {def.associated_functions.length > 0 && (
-        <div className="mb-6">
+        <div id="associated-functions" className="mb-6">
           <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-slate-200">
             Associated Functions
           </h2>
           {def.associated_functions.map((func, idx) => (
-            <FunctionDisplay key={idx} func={func} modulePath={modulePath} />
+            <FunctionDisplay
+              key={idx}
+              id={`func-${func.name}`}
+              func={func}
+              modulePath={modulePath}
+            />
           ))}
         </div>
       )}
@@ -171,11 +190,11 @@ function BitflagsView({ def, modulePath }: { def: JsonBitflagsDefinition; module
         />
       </div>
 
-      <div className="mb-6">
+      <div id="flags" className="mb-6">
         <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-slate-200">Flags</h2>
         <div className="overflow-x-auto">
           <table className="w-full border border-gray-200 dark:border-slate-800 rounded-md">
-            <thead className="bg-gray-100 dark:bg-purple-950">
+            <thead className="bg-gray-100 dark:bg-slate-800">
               <tr>
                 <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-slate-200">
                   Name
@@ -193,7 +212,11 @@ function BitflagsView({ def, modulePath }: { def: JsonBitflagsDefinition; module
             </thead>
             <tbody>
               {def.flags.map((flag, idx) => (
-                <tr key={idx} className="border-b border-gray-200 dark:border-slate-800">
+                <tr
+                  key={idx}
+                  id={`flag-${flag.name}`}
+                  className="border-b border-gray-200 dark:border-slate-800"
+                >
                   <td className="px-4 py-2 font-mono text-sm text-gray-900 dark:text-slate-200">
                     {flag.name}
                     {def.default === idx && <SmallBadge variant="purple">default</SmallBadge>}
@@ -256,7 +279,7 @@ export function ItemView() {
         </div>
         <h1 className="text-3xl font-bold mb-2 text-gray-900 dark:text-slate-200">{itemName}</h1>
         <div className="flex items-center gap-3 text-sm text-gray-600 dark:text-slate-400">
-          <span className="px-2 py-1 bg-gray-100 dark:bg-purple-950 rounded capitalize">
+          <span className="px-2 py-1 bg-gray-100 dark:bg-slate-800 rounded capitalize">
             {item.kind.type}
           </span>
           <span>Size: {item.size} bytes</span>

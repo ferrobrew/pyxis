@@ -11,7 +11,7 @@ export function FieldTable({ fields, modulePath }: FieldTableProps) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full border border-gray-200 dark:border-slate-800 rounded-md">
-        <thead className="bg-gray-100 dark:bg-purple-950">
+        <thead className="bg-gray-100 dark:bg-slate-800">
           <tr>
             <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-slate-200">
               Name
@@ -42,7 +42,11 @@ export function FieldTable({ fields, modulePath }: FieldTableProps) {
             const typeClasses = isPrivate ? 'opacity-60' : '';
 
             return (
-              <tr key={idx} className="border-b border-gray-200 dark:border-slate-800">
+              <tr
+                key={idx}
+                id={field.name ? `field-${field.name}` : undefined}
+                className="border-b border-gray-200 dark:border-slate-800"
+              >
                 <td className={nameClasses}>{field.name || '<anonymous>'}</td>
                 <td className={`px-4 py-2 font-mono text-sm ${typeClasses}`}>
                   <TypeRef type={field.type_ref} currentModule={modulePath} />
@@ -57,7 +61,7 @@ export function FieldTable({ fields, modulePath }: FieldTableProps) {
                   {field.alignment}
                 </td>
                 <td className="px-4 py-2 text-sm">
-                  {field.is_base && <SmallBadge variant="purple">base</SmallBadge>}
+                  {field.is_base && <SmallBadge variant="violet">base</SmallBadge>}
                   {field.doc && (
                     <div className="text-gray-600 dark:text-slate-400 mt-1">{field.doc}</div>
                   )}

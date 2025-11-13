@@ -4,21 +4,22 @@ import { TypeRef } from './TypeRef';
 interface FunctionDisplayProps {
   func: JsonFunction;
   modulePath: string;
+  id?: string;
 }
 
-export function FunctionDisplay({ func, modulePath }: FunctionDisplayProps) {
+export function FunctionDisplay({ func, modulePath, id }: FunctionDisplayProps) {
   const isPrivate = func.visibility === 'private';
   const containerClasses = isPrivate
-    ? 'mb-4 p-4 bg-gray-50 dark:bg-purple-950 rounded-md opacity-60'
-    : 'mb-4 p-4 bg-gray-50 dark:bg-purple-950 rounded-md';
+    ? 'mb-4 p-4 bg-gray-50 dark:bg-slate-800 rounded-md opacity-60'
+    : 'mb-4 p-4 bg-gray-50 dark:bg-slate-800 rounded-md';
   const nameClasses = isPrivate
     ? 'font-semibold text-gray-500 dark:text-slate-600'
     : 'font-semibold text-gray-900 dark:text-slate-200';
 
   return (
-    <div className={containerClasses}>
+    <div id={id} className={containerClasses}>
       <div className="flex items-start gap-2">
-        <span className="text-purple-600 dark:text-slate-500 font-mono text-sm">fn</span>
+        <span className="text-violet-600 dark:text-slate-500 font-mono text-sm">fn</span>
         <div className="flex-1">
           <div className="font-mono text-sm">
             <span className={nameClasses}>{func.name}</span>

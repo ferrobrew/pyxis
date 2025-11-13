@@ -4,6 +4,7 @@ import { findModule } from '../utils/pathUtils';
 import { Collapsible } from './Collapsible';
 import { TypeRef } from './TypeRef';
 import { FunctionDisplay } from './FunctionDisplay';
+import { CodeBlock } from './CodeBlock';
 import type { JsonExternValue, JsonBackend, JsonItem, JsonFunction } from '@pyxis/types';
 
 interface ModuleData {
@@ -19,8 +20,8 @@ interface ModuleData {
 function ExternValueItem({ extern: ext }: { extern: JsonExternValue }) {
   const isPrivate = ext.visibility === 'private';
   const containerClasses = isPrivate
-    ? 'mb-4 p-4 bg-gray-50 dark:bg-purple-950 rounded-md opacity-60'
-    : 'mb-4 p-4 bg-gray-50 dark:bg-purple-950 rounded-md';
+    ? 'mb-4 p-4 bg-gray-50 dark:bg-slate-800 rounded-md opacity-60'
+    : 'mb-4 p-4 bg-gray-50 dark:bg-slate-800 rounded-md';
   const nameClasses = isPrivate
     ? 'font-semibold text-gray-500 dark:text-slate-600'
     : 'font-semibold text-gray-900 dark:text-slate-200';
@@ -28,7 +29,7 @@ function ExternValueItem({ extern: ext }: { extern: JsonExternValue }) {
   return (
     <div className={containerClasses}>
       <div className="font-mono text-sm">
-        <span className="text-purple-600 dark:text-slate-500">extern </span>
+        <span className="text-violet-600 dark:text-slate-500">extern </span>
         <span className={nameClasses}>{ext.name}</span>
         <span className="text-gray-600 dark:text-slate-400">: </span>
         <TypeRef type={ext.type_ref} />
@@ -74,9 +75,7 @@ function PrologueSection({ backends }: BackendSectionProps) {
               {backendName}
             </h3>
             <Collapsible title="Prologue">
-              <pre className="text-sm font-mono bg-gray-100 dark:bg-slate-950 p-3 rounded overflow-x-auto">
-                {joinedPrologue}
-              </pre>
+              <CodeBlock code={joinedPrologue} language={backendName} />
             </Collapsible>
           </div>
         );
@@ -115,9 +114,7 @@ function EpilogueSection({ backends }: BackendSectionProps) {
               {backendName}
             </h3>
             <Collapsible title="Epilogue">
-              <pre className="text-sm font-mono bg-gray-100 dark:bg-slate-950 p-3 rounded overflow-x-auto">
-                {joinedEpilogue}
-              </pre>
+              <CodeBlock code={joinedEpilogue} language={backendName} />
             </Collapsible>
           </div>
         );
@@ -145,7 +142,7 @@ function ItemList({ items }: ItemListProps) {
             <Link
               key={path}
               to={`/item/${encodeURIComponent(path)}`}
-              className="block p-4 bg-gray-50 dark:bg-purple-950 rounded-md hover:bg-gray-100 dark:hover:bg-purple-900 transition-colors"
+              className="block p-4 bg-gray-50 dark:bg-slate-800 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
             >
               <div className="flex items-center justify-between">
                 <div>
@@ -194,7 +191,7 @@ function SubmoduleList({ submodules, parentPath }: SubmoduleListProps) {
             <Link
               key={name}
               to={`/module/${encodeURIComponent(subPath)}`}
-              className="block p-4 bg-gray-50 dark:bg-purple-950 rounded-md hover:bg-gray-100 dark:hover:bg-purple-900 transition-colors"
+              className="block p-4 bg-gray-50 dark:bg-slate-800 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
             >
               <div className="font-mono text-sm font-semibold text-blue-600 dark:text-blue-400">
                 {name}
