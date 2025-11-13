@@ -6,6 +6,8 @@ interface DocumentationContextType {
   setDocumentation: (doc: JsonDocumentation | null) => void;
   fileName: string | null;
   setFileName: (name: string | null) => void;
+  selectedSource: string;
+  setSelectedSource: (source: string) => void;
   predefinedTypes: Set<string>;
 }
 
@@ -29,12 +31,21 @@ const DocumentationContext = createContext<DocumentationContextType | undefined>
 export function DocumentationProvider({ children }: { children: ReactNode }) {
   const [documentation, setDocumentation] = useState<JsonDocumentation | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
+  const [selectedSource, setSelectedSource] = useState<string>('local');
 
   const predefinedTypes = useMemo(() => getPredefinedTypes(documentation), [documentation]);
 
   return (
     <DocumentationContext.Provider
-      value={{ documentation, setDocumentation, fileName, setFileName, predefinedTypes }}
+      value={{
+        documentation,
+        setDocumentation,
+        fileName,
+        setFileName,
+        selectedSource,
+        setSelectedSource,
+        predefinedTypes,
+      }}
     >
       {children}
     </DocumentationContext.Provider>

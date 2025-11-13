@@ -1,6 +1,7 @@
-import { useParams, Link } from 'react-router-dom';
+import { useEffect } from 'react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useDocumentation } from '../contexts/DocumentationContext';
-import { getModulePath, getItemName } from '../utils/pathUtils';
+import { getModulePath, getItemName, findLongestValidAncestor } from '../utils/pathUtils';
 import { TypeRef } from './TypeRef';
 import { Badge, SmallBadge } from './Badge';
 import { FunctionDisplay } from './FunctionDisplay';
@@ -244,6 +245,36 @@ function BitflagsView({ def, modulePath }: { def: JsonBitflagsDefinition; module
 export function ItemView() {
   const { itemPath = '' } = useParams();
   const { documentation } = useDocumentation();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (documentation && itemPath) {
+      const decodedPath = decodeURIComponent(itemPath);
+      const item = documentation.items[decodedPath];
+
+      if (!item) {
+        // Item doesn't exist, find the longest valid ancestor
+        const ancestorPath = findLongestValidAncestor(decodedPath, documentation, true);
+
+        if (ancestorPath === null || ancestorPath === '') {
+          // No valid ancestor found, navigate to root
+          navigate('/', { replace: true });
+        } else if (ancestorPath === decodedPath) {
+          // The item itself exists (shouldn't happen here, but handle it)
+          return;
+        } else {
+          // Check if ancestor is an item or a module
+          if (documentation.items[ancestorPath]) {
+            // Ancestor is an item, navigate to it
+            navigate(`/item/${encodeURIComponent(ancestorPath)}`, { replace: true });
+          } else {
+            // Ancestor is a module, navigate to it
+            navigate(`/module/${encodeURIComponent(ancestorPath)}`, { replace: true });
+          }
+        }
+      }
+    }
+  }, [documentation, itemPath, navigate]);
 
   if (!documentation) {
     return (
@@ -259,11 +290,8 @@ export function ItemView() {
   const item = documentation.items[decodedPath];
 
   if (!item) {
-    return (
-      <div className="p-8">
-        <div className="text-red-500">Item not found: {decodedPath}</div>
-      </div>
-    );
+    // Return null while redirecting
+    return null;
   }
 
   const modulePath = getModulePath(decodedPath);

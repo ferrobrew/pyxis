@@ -1,6 +1,7 @@
-import { useParams, Link } from 'react-router-dom';
+import { useEffect } from 'react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useDocumentation } from '../contexts/DocumentationContext';
-import { findModule } from '../utils/pathUtils';
+import { findModule, findLongestValidAncestor } from '../utils/pathUtils';
 import { Collapsible } from './Collapsible';
 import { TypeRef } from './TypeRef';
 import { FunctionDisplay } from './FunctionDisplay';
@@ -211,6 +212,31 @@ function SubmoduleList({ submodules, parentPath }: SubmoduleListProps) {
 export function ModuleView() {
   const { modulePath = '' } = useParams();
   const { documentation } = useDocumentation();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (documentation && modulePath !== undefined) {
+      const decodedPath = decodeURIComponent(modulePath);
+      // Empty path represents root, which is always valid
+      if (decodedPath === '') {
+        return;
+      }
+      const moduleRaw = findModule(documentation.modules, decodedPath);
+
+      if (!moduleRaw) {
+        // Module doesn't exist, find the longest valid ancestor
+        const ancestorPath = findLongestValidAncestor(decodedPath, documentation, false);
+
+        if (ancestorPath === null || ancestorPath === '') {
+          // No valid ancestor found, navigate to root
+          navigate('/', { replace: true });
+        } else {
+          // Navigate to the ancestor module
+          navigate(`/module/${encodeURIComponent(ancestorPath)}`, { replace: true });
+        }
+      }
+    }
+  }, [documentation, modulePath, navigate]);
 
   if (!documentation) {
     return (
@@ -226,11 +252,12 @@ export function ModuleView() {
   const moduleRaw = findModule(documentation.modules, decodedPath);
 
   if (!moduleRaw) {
-    return (
-      <div className="p-8">
-        <div className="text-red-500">Module not found: {decodedPath}</div>
-      </div>
-    );
+    // Return null while redirecting (unless it's root, which is handled above)
+    if (decodedPath === '') {
+      // This shouldn't happen, but handle it gracefully
+      return null;
+    }
+    return null;
   }
 
   const module = moduleRaw as ModuleData;

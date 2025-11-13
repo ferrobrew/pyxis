@@ -104,3 +104,44 @@ export function getAllModulePaths(modules: Record<string, unknown>, prefix = '')
 
   return paths;
 }
+
+/**
+ * Find the longest valid ancestor path for a given path.
+ * For items, checks both item existence and module existence.
+ * For modules, checks module existence.
+ * Returns the longest valid ancestor path, or null if none exists (shouldn't happen as root is always valid).
+ */
+export function findLongestValidAncestor(
+  path: string,
+  documentation: { items: Record<string, unknown>; modules: Record<string, unknown> },
+  isItem: boolean
+): string | null {
+  const segments = path.split('::').filter(Boolean);
+
+  // Try paths from longest to shortest
+  for (let i = segments.length; i >= 0; i--) {
+    const ancestorPath = segments.slice(0, i).join('::');
+
+    if (isItem && i === segments.length) {
+      // For items, first check if the full item path exists
+      if (documentation.items[path]) {
+        return path; // Return the full item path
+      }
+      // If the full item doesn't exist, continue to check module ancestors
+    }
+
+    // Check if the module path exists (for both items and modules)
+    if (ancestorPath === '') {
+      // Root is always valid
+      return '';
+    }
+
+    const module = findModule(documentation.modules, ancestorPath);
+    if (module) {
+      return ancestorPath;
+    }
+  }
+
+  // Should never reach here as root is always valid
+  return '';
+}
