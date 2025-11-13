@@ -1,0 +1,10 @@
+{
+  "name": "@pyxis/types",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "json.ts",
+  "types": "json.ts",
+  "exports": {
+    ".": "./json.ts"
+  }
+}
