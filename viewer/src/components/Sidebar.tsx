@@ -187,7 +187,7 @@ function ItemTree({ itemPath, level }: ItemTreeProps) {
           {publicFields.map((field) => (
             <Link
               key={`${itemPath}-field-${field.name}`}
-              to={`${buildItemUrl(itemPath, selectedSource)}#field-${field.name}`}
+              to={`${buildItemUrl(itemPath, selectedSource)}##field-${field.name}`}
               className="flex items-center gap-2 py-1 px-2 text-xs text-gray-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 rounded"
               style={{ paddingLeft: `${(level + 2) * 0.5 + 1.25}rem` }}
             >
@@ -200,7 +200,7 @@ function ItemTree({ itemPath, level }: ItemTreeProps) {
           {publicVirtualFunctions.map((func) => (
             <Link
               key={`${itemPath}-vfunc-${func.name}`}
-              to={`${buildItemUrl(itemPath, selectedSource)}#vfunc-${func.name}`}
+              to={`${buildItemUrl(itemPath, selectedSource)}##vfunc-${func.name}`}
               className="flex items-center gap-2 py-1 px-2 text-xs text-gray-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 rounded"
               style={{ paddingLeft: `${(level + 2) * 0.5 + 1.25}rem` }}
             >
@@ -213,7 +213,7 @@ function ItemTree({ itemPath, level }: ItemTreeProps) {
           {publicAssociatedFunctions.map((func) => (
             <Link
               key={`${itemPath}-func-${func.name}`}
-              to={`${buildItemUrl(itemPath, selectedSource)}#func-${func.name}`}
+              to={`${buildItemUrl(itemPath, selectedSource)}##func-${func.name}`}
               className="flex items-center gap-2 py-1 px-2 text-xs text-gray-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 rounded"
               style={{ paddingLeft: `${(level + 2) * 0.5 + 1.25}rem` }}
             >
@@ -226,7 +226,7 @@ function ItemTree({ itemPath, level }: ItemTreeProps) {
           {variants.map((variant) => (
             <Link
               key={`${itemPath}-variant-${variant.name}`}
-              to={`${buildItemUrl(itemPath, selectedSource)}#variant-${variant.name}`}
+              to={`${buildItemUrl(itemPath, selectedSource)}##variant-${variant.name}`}
               className="flex items-center gap-2 py-1 px-2 text-xs text-gray-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 rounded"
               style={{ paddingLeft: `${(level + 2) * 0.5 + 1.25}rem` }}
             >
@@ -239,7 +239,7 @@ function ItemTree({ itemPath, level }: ItemTreeProps) {
           {flags.map((flag) => (
             <Link
               key={`${itemPath}-flag-${flag.name}`}
-              to={`${buildItemUrl(itemPath, selectedSource)}#flag-${flag.name}`}
+              to={`${buildItemUrl(itemPath, selectedSource)}##flag-${flag.name}`}
               className="flex items-center gap-2 py-1 px-2 text-xs text-gray-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 rounded"
               style={{ paddingLeft: `${(level + 2) * 0.5 + 1.25}rem` }}
             >
@@ -345,7 +345,7 @@ function ModuleTree({ name, module, path, level }: ModuleTreeProps) {
               return (
                 <Link
                   key={`ext-${idx}`}
-                  to={`${buildModuleUrl(path, selectedSource)}#extval-${extVal.name}`}
+                  to={`${buildModuleUrl(path, selectedSource)}##extval-${extVal.name}`}
                   className={`flex items-center gap-2 py-1 px-2 text-sm rounded text-gray-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 ${
                     isExtActive ? 'bg-blue-100 dark:bg-slate-700/30' : ''
                   }`}

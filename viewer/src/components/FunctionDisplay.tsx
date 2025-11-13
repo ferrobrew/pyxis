@@ -20,6 +20,8 @@ export function FunctionDisplay({ func, modulePath, id }: FunctionDisplayProps) 
     : 'font-semibold text-gray-900 dark:text-slate-200';
 
   // Construct the link URL with anchor
+  // Use double hash: first # is for HashRouter route, second # is for anchor
+  const linkUrl = id ? `${location.pathname}##${id}` : location.pathname;
 
   const handleClick = (e: React.MouseEvent) => {
     // Only navigate if clicking directly on the function display, not on nested links
