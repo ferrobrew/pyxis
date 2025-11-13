@@ -14,13 +14,13 @@ export function FieldTable({ fields, modulePath }: FieldTableProps) {
         <thead className="bg-gray-100 dark:bg-slate-800">
           <tr>
             <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-slate-200">
+              Offset
+            </th>
+            <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-slate-200">
               Name
             </th>
             <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-slate-200">
               Type
-            </th>
-            <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-slate-200">
-              Offset
             </th>
             <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-slate-200">
               Size
@@ -47,12 +47,12 @@ export function FieldTable({ fields, modulePath }: FieldTableProps) {
                 id={field.name ? `field-${field.name}` : undefined}
                 className="border-b border-gray-200 dark:border-slate-800"
               >
+                <td className="px-4 py-2 text-sm text-gray-600 dark:text-slate-400 font-mono">
+                  0x{field.offset.toString(16).toUpperCase()}
+                </td>
                 <td className={nameClasses}>{field.name || '<anonymous>'}</td>
                 <td className={`px-4 py-2 font-mono text-sm ${typeClasses}`}>
                   <TypeRef type={field.type_ref} currentModule={modulePath} />
-                </td>
-                <td className="px-4 py-2 text-sm text-gray-600 dark:text-slate-400">
-                  0x{field.offset.toString(16)}
                 </td>
                 <td className="px-4 py-2 text-sm text-gray-600 dark:text-slate-400">
                   {field.size}
