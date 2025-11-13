@@ -16,8 +16,8 @@ function AppLayout() {
         <main className="flex-1 overflow-y-auto">
           <Routes>
             <Route path="/" element={<WelcomePage />} />
-            <Route path="/module/:source/:modulePath" element={<ModuleView />} />
-            <Route path="/item/:source/:itemPath" element={<ItemView />} />
+            <Route path="/:source/module/:modulePath" element={<ModuleView />} />
+            <Route path="/:source/item/:itemPath" element={<ItemView />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>

@@ -66,7 +66,7 @@ export function buildModuleUrl(modulePath: string, source: string): string {
   const sourceId = getSourceIdentifier(source);
   const encodedPath = modulePath ? encodeURIComponent(modulePath) : '';
   // For empty paths, we still need to include something, so use empty string encoded
-  return `/module/${sourceId}/${encodedPath}`;
+  return `/${sourceId}/module/${encodedPath}`;
 }
 
 /**
@@ -75,7 +75,7 @@ export function buildModuleUrl(modulePath: string, source: string): string {
  */
 export function buildItemUrl(itemPath: string, source: string): string {
   const sourceId = getSourceIdentifier(source);
-  return `/item/${sourceId}/${encodeURIComponent(itemPath)}`;
+  return `/${sourceId}/item/${encodeURIComponent(itemPath)}`;
 }
 
 /**

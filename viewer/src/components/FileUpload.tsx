@@ -48,9 +48,9 @@ export function FileUpload() {
       return;
     }
 
-    const pathMatch = location.pathname.match(/^\/(module|item)\/([^/]+)/);
+    const pathMatch = location.pathname.match(/^\/([^/]+)\/(module|item)\//);
     if (pathMatch && availableDocs.length > 0) {
-      const sourceId = pathMatch[2];
+      const sourceId = pathMatch[1];
       if (sourceId === 'local') {
         if (selectedSource !== 'local') {
           setSelectedSource('local');
