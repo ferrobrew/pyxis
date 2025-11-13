@@ -24,14 +24,14 @@ export function TypeRef({ type, currentModule = '' }: TypeRefProps) {
           : t.path;
         const isPredefined = predefinedTypes.has(t.path);
 
-        if (isPredefined) {
-          return <span className="text-violet-600 dark:text-slate-500">{displayPath}</span>;
-        }
-
         return (
           <Link
             to={`/item/${encodeURIComponent(t.path)}`}
-            className="text-blue-600 dark:text-blue-400 hover:underline"
+            className={
+              isPredefined
+                ? 'text-violet-600 dark:text-slate-500 hover:underline'
+                : 'text-blue-600 dark:text-blue-400 hover:underline'
+            }
           >
             {displayPath}
           </Link>
