@@ -631,8 +631,11 @@ fn build_module_hierarchy(semantic_state: &ResolvedSemanticState) -> BTreeMap<St
         if segments.is_empty() || (segments.len() == 1 && segments[0].is_empty()) {
             // Root module
             root_modules.insert("root".to_string(), json_module);
+        } else if segments.len() == 1 {
+            // Top-level module (e.g., "clock", "game")
+            root_modules.insert(segments[0].clone(), json_module);
         } else {
-            // Navigate to the right place in the hierarchy
+            // Nested module - navigate to the right place in the hierarchy
             let root_name = segments[0].clone();
             let mut current = root_modules
                 .entry(root_name.clone())
