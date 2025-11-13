@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useDocumentation } from '../contexts/DocumentationContext';
 import type { JsonModule } from '@pyxis/types';
@@ -356,30 +356,85 @@ function ModuleTree({ name, module, path, level }: ModuleTreeProps) {
 
 export function Sidebar() {
   const { documentation } = useDocumentation();
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    const saved = localStorage.getItem('sidebarWidth');
+    return saved ? parseInt(saved, 10) : 256; // Default 256px (w-64)
+  });
+  const [isResizing, setIsResizing] = useState(false);
+  const sidebarRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing) return;
+      const newWidth = e.clientX;
+      const minWidth = 200;
+      const maxWidth = 800;
+      const clampedWidth = Math.max(minWidth, Math.min(maxWidth, newWidth));
+      setSidebarWidth(clampedWidth);
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+    };
+
+    if (isResizing) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+  }, [isResizing]);
+
+  useEffect(() => {
+    localStorage.setItem('sidebarWidth', sidebarWidth.toString());
+  }, [sidebarWidth]);
+
+  const handleMouseDown = () => {
+    setIsResizing(true);
+  };
 
   if (!documentation) {
     return (
-      <aside className="w-64 border-r bg-gray-50 dark:bg-slate-950 border-gray-200 dark:border-slate-800 p-4">
-        <div className="text-sm text-gray-500 dark:text-slate-400">No documentation loaded</div>
-      </aside>
+      <div className="flex relative" style={{ width: `${sidebarWidth}px` }}>
+        <aside className="flex-1 border-r bg-gray-50 dark:bg-slate-950 border-gray-200 dark:border-slate-800 p-4">
+          <div className="text-sm text-gray-500 dark:text-slate-400">No documentation loaded</div>
+        </aside>
+        <div
+          onMouseDown={handleMouseDown}
+          className="w-1 bg-gray-200 dark:bg-slate-700 hover:bg-blue-500 dark:hover:bg-blue-600 cursor-col-resize transition-colors"
+        />
+      </div>
     );
   }
 
   return (
-    <aside className="w-64 border-r bg-gray-50 dark:bg-slate-950 border-gray-200 dark:border-slate-800 overflow-y-auto">
-      <div className="p-2">
-        <nav>
-          {Object.entries(documentation.modules).map(([name, module]) => (
-            <ModuleTree
-              key={name}
-              name={name}
-              module={module as JsonModule}
-              path={name}
-              level={0}
-            />
-          ))}
-        </nav>
-      </div>
-    </aside>
+    <div className="flex relative" ref={sidebarRef} style={{ width: `${sidebarWidth}px` }}>
+      <aside className="flex-1 border-r bg-gray-50 dark:bg-slate-950 border-gray-200 dark:border-slate-800 overflow-y-auto">
+        <div className="p-2">
+          <nav>
+            {Object.entries(documentation.modules).map(([name, module]) => (
+              <ModuleTree
+                key={name}
+                name={name}
+                module={module as JsonModule}
+                path={name}
+                level={0}
+              />
+            ))}
+          </nav>
+        </div>
+      </aside>
+      <div
+        onMouseDown={handleMouseDown}
+        className="w-1 bg-gray-200 dark:bg-slate-700 hover:bg-blue-500 dark:hover:bg-blue-600 cursor-col-resize transition-colors"
+      />
+    </div>
   );
 }
