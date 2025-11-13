@@ -1,3 +1,4 @@
+import { Link, useLocation } from 'react-router-dom';
 import type { JsonFunction } from '@pyxis/types';
 import { TypeRef } from './TypeRef';
 
@@ -8,16 +9,21 @@ interface FunctionDisplayProps {
 }
 
 export function FunctionDisplay({ func, modulePath, id }: FunctionDisplayProps) {
+  const location = useLocation();
   const isPrivate = func.visibility === 'private';
   const containerClasses = isPrivate
-    ? 'mb-4 p-4 bg-gray-50 dark:bg-slate-800 rounded-md opacity-60'
-    : 'mb-4 p-4 bg-gray-50 dark:bg-slate-800 rounded-md';
+    ? 'p-2 opacity-60 border-b border-gray-200 dark:border-slate-700 last:border-b-0'
+    : 'p-2 border-b border-gray-200 dark:border-slate-700 last:border-b-0';
   const nameClasses = isPrivate
     ? 'font-semibold text-gray-500 dark:text-slate-600'
     : 'font-semibold text-gray-900 dark:text-slate-200';
 
+  // Construct the link URL with anchor
+  const linkUrl = id ? `${location.pathname}#${id}` : location.pathname;
+
   return (
-    <div id={id} className={containerClasses}>
+    <Link to={linkUrl} className="block hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors">
+      <div id={id} className={containerClasses}>
       <div className="flex items-start gap-2">
         <span className="text-violet-600 dark:text-slate-500 font-mono text-sm">fn</span>
         <div className="flex-1">
@@ -61,6 +67,7 @@ export function FunctionDisplay({ func, modulePath, id }: FunctionDisplayProps) 
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </Link>
   );
 }

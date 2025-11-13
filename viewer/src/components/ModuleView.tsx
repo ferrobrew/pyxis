@@ -142,7 +142,7 @@ function ItemList({ items }: ItemListProps) {
   return (
     <div>
       <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-slate-200">Types</h2>
-      <div className="space-y-2">
+      <div className="bg-gray-50 dark:bg-slate-800 rounded-md overflow-hidden">
         {items.map(({ path, item }: { path: string; item: JsonItem }) => {
           if (!item) return null;
           const name = path.split('::').pop();
@@ -150,7 +150,7 @@ function ItemList({ items }: ItemListProps) {
             <Link
               key={path}
               to={buildItemUrl(path, selectedSource)}
-              className="block p-4 bg-gray-50 dark:bg-slate-800 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+              className="block p-2 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors border-b border-gray-200 dark:border-slate-700 last:border-b-0"
             >
               <div className="flex items-center justify-between">
                 <div>
@@ -364,9 +364,16 @@ export function ModuleView() {
           <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-slate-200">
             Functions
           </h2>
-          {module.functions.map((func: JsonFunction, idx: number) => (
-            <FunctionDisplay key={idx} func={func} modulePath={decodedPath} />
-          ))}
+          <div className="bg-gray-50 dark:bg-slate-800 rounded-md overflow-hidden">
+            {module.functions.map((func: JsonFunction, idx: number) => (
+              <FunctionDisplay
+                key={idx}
+                id={`func-${func.name}`}
+                func={func}
+                modulePath={decodedPath}
+              />
+            ))}
+          </div>
         </div>
       )}
 

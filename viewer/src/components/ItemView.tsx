@@ -79,14 +79,16 @@ function TypeView({ def, modulePath }: { def: JsonTypeDefinition; modulePath: st
           <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-slate-200">
             Virtual Functions
           </h2>
-          {def.vftable.functions.map((func, idx) => (
-            <FunctionDisplay
-              key={idx}
-              id={`vfunc-${func.name}`}
-              func={func}
-              modulePath={modulePath}
-            />
-          ))}
+          <div className="bg-gray-50 dark:bg-slate-800 rounded-md overflow-hidden">
+            {def.vftable.functions.map((func, idx) => (
+              <FunctionDisplay
+                key={idx}
+                id={`vfunc-${func.name}`}
+                func={func}
+                modulePath={modulePath}
+              />
+            ))}
+          </div>
         </div>
       )}
 
@@ -95,14 +97,16 @@ function TypeView({ def, modulePath }: { def: JsonTypeDefinition; modulePath: st
           <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-slate-200">
             Associated Functions
           </h2>
-          {def.associated_functions.map((func, idx) => (
-            <FunctionDisplay
-              key={idx}
-              id={`func-${func.name}`}
-              func={func}
-              modulePath={modulePath}
-            />
-          ))}
+          <div className="bg-gray-50 dark:bg-slate-800 rounded-md overflow-hidden">
+            {def.associated_functions.map((func, idx) => (
+              <FunctionDisplay
+                key={idx}
+                id={`func-${func.name}`}
+                func={func}
+                modulePath={modulePath}
+              />
+            ))}
+          </div>
         </div>
       )}
     </div>
@@ -166,14 +170,16 @@ function EnumView({ def, modulePath }: { def: JsonEnumDefinition; modulePath: st
           <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-slate-200">
             Associated Functions
           </h2>
-          {def.associated_functions.map((func, idx) => (
-            <FunctionDisplay
-              key={idx}
-              id={`func-${func.name}`}
-              func={func}
-              modulePath={modulePath}
-            />
-          ))}
+          <div className="bg-gray-50 dark:bg-slate-800 rounded-md overflow-hidden">
+            {def.associated_functions.map((func, idx) => (
+              <FunctionDisplay
+                key={idx}
+                id={`func-${func.name}`}
+                func={func}
+                modulePath={modulePath}
+              />
+            ))}
+          </div>
         </div>
       )}
     </div>
