@@ -1,4 +1,4 @@
-import { Link, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import type { JsonFunction } from '@pyxis/types';
 import { TypeRef } from './TypeRef';
 
@@ -10,6 +10,7 @@ interface FunctionDisplayProps {
 
 export function FunctionDisplay({ func, modulePath, id }: FunctionDisplayProps) {
   const location = useLocation();
+  const navigate = useNavigate();
   const isPrivate = func.visibility === 'private';
   const containerClasses = isPrivate
     ? 'p-2 opacity-60 border-b border-gray-200 dark:border-slate-700 last:border-b-0'
@@ -19,11 +20,20 @@ export function FunctionDisplay({ func, modulePath, id }: FunctionDisplayProps) 
     : 'font-semibold text-gray-900 dark:text-slate-200';
 
   // Construct the link URL with anchor
-  const linkUrl = id ? `${location.pathname}#${id}` : location.pathname;
+
+  const handleClick = (e: React.MouseEvent) => {
+    // Only navigate if clicking directly on the function display, not on nested links
+    if (e.target === e.currentTarget || (e.target as HTMLElement).closest('a') === null) {
+      navigate(linkUrl);
+    }
+  };
 
   return (
-    <Link to={linkUrl} className="block hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors">
-      <div id={id} className={containerClasses}>
+    <div
+      id={id}
+      onClick={handleClick}
+      className={`${containerClasses} cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors`}
+    >
       <div className="flex items-start gap-2">
         <span className="text-violet-600 dark:text-slate-500 font-mono text-sm">fn</span>
         <div className="flex-1">
@@ -67,7 +77,6 @@ export function FunctionDisplay({ func, modulePath, id }: FunctionDisplayProps) 
           </div>
         </div>
       </div>
-      </div>
-    </Link>
+    </div>
   );
 }
