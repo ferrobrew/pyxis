@@ -5,23 +5,23 @@
     ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
     monospace;
 
-  /* Light theme colors */
-  --color-bg-light: #fff;
-  --color-bg-secondary-light: #f5f5f5;
-  --color-border-light: #e5e5e5;
-  --color-text-light: #000;
-  --color-text-secondary-light: #666;
-  --color-link-light: #0969da;
-  --color-sidebar-light: #f9f9f9;
+  /* Light theme colors - bright white */
+  --color-bg-light: #ffffff;
+  --color-bg-secondary-light: #fafafa;
+  --color-border-light: #e5e7eb;
+  --color-text-light: #111827;
+  --color-text-secondary-light: #6b7280;
+  --color-link-light: #2563eb;
+  --color-sidebar-light: #f9fafb;
 
-  /* Dark theme colors */
-  --color-bg-dark: #0d1117;
-  --color-bg-secondary-dark: #161b22;
-  --color-border-dark: #30363d;
-  --color-text-dark: #e6edf3;
-  --color-text-secondary-dark: #8b949e;
-  --color-link-dark: #58a6ff;
-  --color-sidebar-dark: #161b22;
+  /* Dark theme colors - dark purple */
+  --color-bg-dark: #1a0f2e;
+  --color-bg-secondary-dark: #2d1b4e;
+  --color-border-dark: #463465;
+  --color-text-dark: #e9d5ff;
+  --color-text-secondary-dark: #c4b5fd;
+  --color-link-dark: #a78bfa;
+  --color-sidebar-dark: #2d1b4e;
 }
 
 :root {

@@ -34,29 +34,35 @@ export function FieldTable({ fields, modulePath }: FieldTableProps) {
           </tr>
         </thead>
         <tbody>
-          {fields.map((field, idx) => (
-            <tr key={idx} className="border-b border-gray-200 dark:border-gray-700">
-              <td className="px-4 py-2 font-mono text-sm text-gray-900 dark:text-gray-100">
-                {field.name || '<anonymous>'}
-              </td>
-              <td className="px-4 py-2 font-mono text-sm">
-                <TypeRef type={field.type_ref} currentModule={modulePath} />
-              </td>
-              <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400">
-                0x{field.offset.toString(16)}
-              </td>
-              <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400">{field.size}</td>
-              <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400">
-                {field.alignment}
-              </td>
-              <td className="px-4 py-2 text-sm">
-                {field.is_base && <SmallBadge variant="purple">base</SmallBadge>}
-                {field.doc && (
-                  <div className="text-gray-600 dark:text-gray-400 mt-1">{field.doc}</div>
-                )}
-              </td>
-            </tr>
-          ))}
+          {fields.map((field, idx) => {
+            const isPrivate = field.visibility === 'private';
+            const nameClasses = isPrivate
+              ? 'px-4 py-2 font-mono text-sm text-gray-500 dark:text-gray-600'
+              : 'px-4 py-2 font-mono text-sm text-gray-900 dark:text-gray-100';
+            const typeClasses = isPrivate ? 'opacity-60' : '';
+
+            return (
+              <tr key={idx} className="border-b border-gray-200 dark:border-gray-700">
+                <td className={nameClasses}>{field.name || '<anonymous>'}</td>
+                <td className={`px-4 py-2 font-mono text-sm ${typeClasses}`}>
+                  <TypeRef type={field.type_ref} currentModule={modulePath} />
+                </td>
+                <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400">
+                  0x{field.offset.toString(16)}
+                </td>
+                <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400">{field.size}</td>
+                <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400">
+                  {field.alignment}
+                </td>
+                <td className="px-4 py-2 text-sm">
+                  {field.is_base && <SmallBadge variant="purple">base</SmallBadge>}
+                  {field.doc && (
+                    <div className="text-gray-600 dark:text-gray-400 mt-1">{field.doc}</div>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>

@@ -85,7 +85,9 @@ export function searchDocumentation(doc: JsonDocumentation, query: string): Sear
     }
 
     if (module.submodules && typeof module.submodules === 'object') {
-      for (const [name, submodule] of Object.entries(module.submodules as Record<string, unknown>)) {
+      for (const [name, submodule] of Object.entries(
+        module.submodules as Record<string, unknown>
+      )) {
         const subPath = modulePath ? `${modulePath}::${name}` : name;
         searchFunctionsInModule(submodule as Record<string, unknown>, subPath);
       }

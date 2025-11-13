@@ -90,9 +90,20 @@ export function findModule(
   const segments = path.split('::').filter(Boolean);
   let current: Record<string, unknown> = modules;
 
-  for (const segment of segments) {
-    if (!current[segment]) return null;
-    current = current[segment] as Record<string, unknown>;
+  for (let i = 0; i < segments.length; i++) {
+    const segment = segments[i];
+
+    if (i === 0) {
+      // First segment: navigate to top-level module
+      if (!current[segment]) return null;
+      current = current[segment] as Record<string, unknown>;
+    } else {
+      // Subsequent segments: navigate through submodules
+      if (!current.submodules || typeof current.submodules !== 'object') return null;
+      const submodules = current.submodules as Record<string, unknown>;
+      if (!submodules[segment]) return null;
+      current = submodules[segment] as Record<string, unknown>;
+    }
   }
 
   return current;
