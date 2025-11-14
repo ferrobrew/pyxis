@@ -381,7 +381,12 @@ function ModuleTree({ name, module, path, level }: ModuleTreeProps) {
   );
 }
 
-export function Sidebar() {
+interface SidebarProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const { documentation } = useDocumentation();
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     const saved = localStorage.getItem('sidebarWidth');
@@ -429,39 +434,86 @@ export function Sidebar() {
 
   if (!documentation) {
     return (
-      <div className="flex relative" style={{ width: `${sidebarWidth}px` }}>
+      <div className="hidden lg:flex relative" style={{ width: `${sidebarWidth}px` }}>
         <aside className="flex-1 border-r bg-gray-50 dark:bg-slate-950 border-gray-200 dark:border-slate-800 p-4">
           <div className="text-sm text-gray-500 dark:text-slate-400">No documentation loaded</div>
         </aside>
         <div
           onMouseDown={handleMouseDown}
-          className="w-1 bg-gray-200 dark:bg-slate-700 hover:bg-blue-500 dark:hover:bg-blue-600 cursor-col-resize transition-colors"
+          className="hidden lg:block w-1 bg-gray-200 dark:bg-slate-700 hover:bg-blue-500 dark:hover:bg-blue-600 cursor-col-resize transition-colors"
         />
       </div>
     );
   }
 
   return (
-    <div className="flex relative" ref={sidebarRef} style={{ width: `${sidebarWidth}px` }}>
-      <aside className="flex-1 border-r bg-gray-50 dark:bg-slate-950 border-gray-200 dark:border-slate-800 overflow-y-auto">
-        <div className="p-2">
-          <nav>
-            {Object.entries(documentation.modules).map(([name, module]) => (
-              <ModuleTree
-                key={name}
-                name={name}
-                module={module as JsonModule}
-                path={name}
-                level={0}
-              />
-            ))}
-          </nav>
-        </div>
-      </aside>
+    <>
+      {/* Mobile backdrop overlay */}
+      {isOpen && (
+        <div
+          className="lg:hidden fixed inset-0 bg-black/50 z-40"
+          onClick={onClose}
+          aria-hidden="true"
+        />
+      )}
+
+      {/* Sidebar */}
       <div
-        onMouseDown={handleMouseDown}
-        className="w-1 bg-gray-200 dark:bg-slate-700 hover:bg-blue-500 dark:hover:bg-blue-600 cursor-col-resize transition-colors"
-      />
-    </div>
+        className={`
+          flex relative
+          lg:static lg:translate-x-0
+          fixed inset-y-0 left-0 z-50
+          transition-transform duration-300 ease-in-out
+          ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+        `}
+        ref={sidebarRef}
+        style={{ width: `${sidebarWidth}px` }}
+      >
+        <aside className="flex-1 border-r bg-gray-50 dark:bg-slate-950 border-gray-200 dark:border-slate-800 overflow-y-auto">
+          {/* Mobile close button */}
+          <div className="lg:hidden flex justify-end p-2 border-b border-gray-200 dark:border-slate-800">
+            <button
+              onClick={onClose}
+              className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-slate-800 transition-colors"
+              aria-label="Close sidebar"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              </svg>
+            </button>
+          </div>
+
+          <div className="p-2" onClick={(e) => {
+            // Close sidebar on mobile when clicking nav links
+            if ((e.target as HTMLElement).closest('a')) {
+              onClose();
+            }
+          }}>
+            <nav>
+              {Object.entries(documentation.modules).map(([name, module]) => (
+                <ModuleTree
+                  key={name}
+                  name={name}
+                  module={module as JsonModule}
+                  path={name}
+                  level={0}
+                />
+              ))}
+            </nav>
+          </div>
+        </aside>
+
+        {/* Desktop resize handle - hidden on mobile */}
+        <div
+          onMouseDown={handleMouseDown}
+          className="hidden lg:block w-1 bg-gray-200 dark:bg-slate-700 hover:bg-blue-500 dark:hover:bg-blue-600 cursor-col-resize transition-colors"
+        />
+      </div>
+    </>
   );
 }
