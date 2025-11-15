@@ -790,3 +790,130 @@ impl PfxInstance {
         panic!("Expected Definition for PfxInstance");
     }
 }
+
+// ============================================================================
+// Negative tests - parser should reject invalid syntax
+// ============================================================================
+
+#[test]
+fn should_fail_on_missing_closing_brace() {
+    let text = r#"
+        pub type TestType {
+            field1: i32
+        "#;
+
+    let err = parse_str(text).unwrap_err();
+    let err_msg = err.to_string();
+
+    // Should get "Expected identifier, found Eof" when missing closing brace
+    eprintln!("Parser error: {}", err_msg);
+    assert!(
+        err_msg.contains("Expected identifier") && err_msg.contains("Eof"),
+        "Expected 'Expected identifier, found Eof', got: {}",
+        err_msg
+    );
+}
+
+#[test]
+fn should_fail_on_missing_field_type() {
+    let text = r#"
+        pub type TestType {
+            field1:,
+        }
+        "#;
+
+    let err = parse_str(text).unwrap_err();
+    let err_msg = err.to_string();
+    eprintln!("Parser error (missing field type): {}", err_msg);
+    assert!(
+        err_msg.contains("Expected type") && err_msg.contains("Comma"),
+        "Expected 'Expected type, found Comma', got: {}",
+        err_msg
+    );
+}
+
+#[test]
+fn should_fail_on_missing_enum_type_annotation() {
+    let text = r#"
+        pub enum State {
+            Idle = 0,
+        }
+        "#;
+
+    let err = parse_str(text).unwrap_err();
+    let err_msg = err.to_string();
+    eprintln!("Parser error (missing enum type): {}", err_msg);
+    assert!(
+        err_msg.contains("Expected Colon") && err_msg.contains("LBrace"),
+        "Expected 'Expected Colon, found LBrace', got: {}",
+        err_msg
+    );
+}
+
+#[test]
+fn should_fail_on_missing_equals_in_bitflags() {
+    let text = r#"
+        pub bitflags Flags: u32 {
+            READ 0x1,
+        }
+        "#;
+
+    let err = parse_str(text).unwrap_err();
+    let err_msg = err.to_string();
+    eprintln!("Parser error (missing equals): {}", err_msg);
+    assert!(
+        err_msg.contains("Expected Eq") && err_msg.contains("IntLiteral"),
+        "Expected 'Expected Eq, found IntLiteral', got: {}",
+        err_msg
+    );
+}
+
+#[test]
+fn should_fail_on_malformed_pointer_type() {
+    let text = r#"
+        pub type TestType {
+            field: *i32,
+        }
+        "#;
+
+    let err = parse_str(text).unwrap_err();
+    let err_msg = err.to_string();
+    eprintln!("Parser error (malformed pointer): {}", err_msg);
+    assert!(
+        err_msg.contains("Expected const or mut after *"),
+        "Expected 'Expected const or mut after *', got: {}",
+        err_msg
+    );
+}
+
+#[test]
+fn should_fail_on_missing_semicolon_after_extern() {
+    let text = r#"
+        extern type TestType
+        "#;
+
+    let err = parse_str(text).unwrap_err();
+    let err_msg = err.to_string();
+    eprintln!("Parser error (missing semicolon): {}", err_msg);
+    assert!(
+        err_msg.contains("Expected Semi") && err_msg.contains("Eof"),
+        "Expected 'Expected Semi, found Eof', got: {}",
+        err_msg
+    );
+}
+
+#[test]
+fn should_fail_on_incomplete_function() {
+    let text = r#"
+        pub fn test(
+        "#;
+
+    let err = parse_str(text).unwrap_err();
+    let err_msg = err.to_string();
+    eprintln!("Parser error (incomplete function): {}", err_msg);
+    assert!(
+        err_msg.contains("Expected type, enum, or bitflags") && err_msg.contains("Fn"),
+        "Expected 'Expected type, enum, or bitflags, found Fn', got: {}",
+        err_msg
+    );
+}
