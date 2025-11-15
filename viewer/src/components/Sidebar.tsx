@@ -393,6 +393,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
     return saved ? parseInt(saved, 10) : 256; // Default 256px (w-64)
   });
   const [isResizing, setIsResizing] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(() => window.innerWidth >= 1024);
   const sidebarRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -427,6 +428,28 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
   useEffect(() => {
     localStorage.setItem('sidebarWidth', sidebarWidth.toString());
   }, [sidebarWidth]);
+
+  // Handle responsive width changes
+  useEffect(() => {
+    const handleResize = () => {
+      setIsDesktop(window.innerWidth >= 1024);
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Prevent body scroll when sidebar is open on mobile
+  useEffect(() => {
+    if (!isDesktop && isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isOpen, isDesktop]);
 
   const handleMouseDown = () => {
     setIsResizing(true);
@@ -465,9 +488,19 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           fixed inset-y-0 left-0 z-50
           transition-transform duration-300 ease-in-out
           ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+          ${!isOpen && !isDesktop ? 'pointer-events-none' : ''}
+          lg:flex-shrink-0
         `}
         ref={sidebarRef}
-        style={{ width: `${sidebarWidth}px` }}
+        style={{
+          width: isDesktop ? `${sidebarWidth}px` : isOpen ? 'min(80vw, 320px)' : '0',
+          ...(isDesktop
+            ? {}
+            : {
+                flex: '0 0 0',
+                minWidth: '0',
+              }),
+        }}
       >
         <aside className="flex-1 border-r bg-gray-50 dark:bg-slate-950 border-gray-200 dark:border-slate-800 overflow-y-auto">
           {/* Mobile close button */}
@@ -488,12 +521,15 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
             </button>
           </div>
 
-          <div className="p-2" onClick={(e) => {
-            // Close sidebar on mobile when clicking nav links
-            if ((e.target as HTMLElement).closest('a')) {
-              onClose();
-            }
-          }}>
+          <div
+            className="p-2"
+            onClick={(e) => {
+              // Close sidebar on mobile when clicking nav links
+              if ((e.target as HTMLElement).closest('a')) {
+                onClose();
+              }
+            }}
+          >
             <nav>
               {Object.entries(documentation.modules).map(([name, module]) => (
                 <ModuleTree

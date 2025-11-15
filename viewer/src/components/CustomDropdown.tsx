@@ -22,7 +22,7 @@ export function CustomDropdown({ value, onChange, options, disabled }: CustomDro
   const selectedOption = options.find((opt) => opt.value === value) || options[0];
 
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
+    const handleClickOutside = (event: MouseEvent | TouchEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsOpen(false);
         setFocusedIndex(-1);
@@ -31,7 +31,11 @@ export function CustomDropdown({ value, onChange, options, disabled }: CustomDro
 
     if (isOpen) {
       document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
+      document.addEventListener('touchstart', handleClickOutside);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+        document.removeEventListener('touchstart', handleClickOutside);
+      };
     }
   }, [isOpen]);
 
@@ -90,7 +94,7 @@ export function CustomDropdown({ value, onChange, options, disabled }: CustomDro
   };
 
   return (
-    <div className="relative w-96" ref={dropdownRef}>
+    <div className="relative w-full max-w-xs md:max-w-sm lg:w-96" ref={dropdownRef}>
       <button
         ref={buttonRef}
         type="button"
