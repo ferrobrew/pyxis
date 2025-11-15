@@ -59,20 +59,18 @@ impl PrettyPrinter {
             self.print_module_item(item);
 
             // Add blank line between regular comment and definition with both doc comments and attributes
-            if let ModuleItem::Comment(_comment) = item {
-                if let Some(next_item) = module.items.get(i + 1) {
-                    if let ModuleItem::Definition(def) = next_item {
-                        // Add blank line if definition has both doc comments and attributes
-                        let has_attrs = match &def.inner {
-                            ItemDefinitionInner::Type(td) => !td.attributes.0.is_empty(),
-                            ItemDefinitionInner::Enum(ed) => !ed.attributes.0.is_empty(),
-                            ItemDefinitionInner::Bitflags(bf) => !bf.attributes.0.is_empty(),
-                        };
+            if let ModuleItem::Comment(_comment) = item
+                && let Some(ModuleItem::Definition(def)) = module.items.get(i + 1)
+            {
+                // Add blank line if definition has both doc comments and attributes
+                let has_attrs = match &def.inner {
+                    ItemDefinitionInner::Type(td) => !td.attributes.0.is_empty(),
+                    ItemDefinitionInner::Enum(ed) => !ed.attributes.0.is_empty(),
+                    ItemDefinitionInner::Bitflags(bf) => !bf.attributes.0.is_empty(),
+                };
 
-                        if !def.doc_comments.is_empty() && has_attrs {
-                            self.writeln("");
-                        }
-                    }
+                if !def.doc_comments.is_empty() && has_attrs {
+                    self.writeln("");
                 }
             }
         }
