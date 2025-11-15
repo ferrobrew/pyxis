@@ -545,13 +545,32 @@ impl Parser {
             Attributes::default()
         };
 
-        // Collect inline comments after attributes so they can be added to the AST
+        // Remember the line where attributes ended (or where we currently are if no attributes)
+        // We need to check this before we start collecting comments
+        let attributes_end_line = if !attributes.0.is_empty() && self.pos > 0 {
+            // Get the line from the previous token (the ] that closed the attributes)
+            self.tokens[self.pos - 1].span.end.line
+        } else {
+            // No attributes, so comments can't be inline with them
+            0 // Use 0 as a sentinel value that won't match any real line
+        };
+
+        // Collect comments after attributes, separating inline from following
+        let mut inline_trailing_comments = Vec::new();
+        let mut following_comments = Vec::new();
         while matches!(
             self.peek(),
             TokenKind::Comment(_) | TokenKind::MultiLineComment(_)
         ) {
+            let comment_line = self.current().span.start.line;
             if let Some(comment) = self.collect_comment() {
-                self.pending_comments.push(comment);
+                if comment_line == attributes_end_line {
+                    // Comment is on the same line as the attributes
+                    inline_trailing_comments.push(comment);
+                } else {
+                    // Comment is on a following line
+                    following_comments.push(comment);
+                }
             }
         }
 
@@ -568,6 +587,8 @@ impl Parser {
                 let mut def = TypeDefinition {
                     items: Vec::new(),
                     attributes,
+                    inline_trailing_comments: inline_trailing_comments.clone(),
+                    following_comments: following_comments.clone(),
                 };
 
                 // Support both "type Name;" and "type Name { ... }"
@@ -603,6 +624,8 @@ impl Parser {
                         type_,
                         items,
                         attributes,
+                        inline_trailing_comments: inline_trailing_comments.clone(),
+                        following_comments: following_comments.clone(),
                     }),
                 })
             }
@@ -623,6 +646,8 @@ impl Parser {
                         type_,
                         items,
                         attributes,
+                        inline_trailing_comments,
+                        following_comments,
                     }),
                 })
             }
@@ -651,12 +676,32 @@ impl Parser {
                 break;
             }
 
-            items.push(TypeDefItem::Statement(self.parse_type_statement()?));
+            let mut stmt = self.parse_type_statement()?;
+            let statement_line = self.current().span.end.line;
 
             // Optional trailing comma
             if matches!(self.peek(), TokenKind::Comma) {
                 self.advance();
             }
+
+            // Collect trailing comments after the comma, separating inline from following
+            while matches!(
+                self.peek(),
+                TokenKind::Comment(_) | TokenKind::MultiLineComment(_)
+            ) {
+                let comment_line = self.current().span.start.line;
+                if let Some(comment) = self.collect_comment() {
+                    if comment_line == statement_line {
+                        // Comment is on the same line as the field
+                        stmt.inline_trailing_comments.push(comment);
+                    } else {
+                        // Comment is on a following line
+                        stmt.following_comments.push(comment);
+                    }
+                }
+            }
+
+            items.push(TypeDefItem::Statement(stmt));
         }
 
         Ok(items)
@@ -680,6 +725,8 @@ impl Parser {
                 field: TypeField::Vftable(functions),
                 attributes,
                 doc_comments,
+                inline_trailing_comments: Vec::new(), // Will be populated by parse_type_def_items
+                following_comments: Vec::new(),
             })
         } else {
             let visibility = self.parse_visibility()?;
@@ -691,6 +738,8 @@ impl Parser {
                 field: TypeField::Field(visibility, name, type_),
                 attributes,
                 doc_comments,
+                inline_trailing_comments: Vec::new(), // Will be populated by parse_type_def_items
+                following_comments: Vec::new(),
             })
         }
     }
@@ -713,12 +762,32 @@ impl Parser {
                 break;
             }
 
-            items.push(EnumDefItem::Statement(self.parse_enum_statement()?));
+            let mut stmt = self.parse_enum_statement()?;
+            let statement_line = self.current().span.end.line;
 
             // Optional trailing comma
             if matches!(self.peek(), TokenKind::Comma) {
                 self.advance();
             }
+
+            // Collect trailing comments after the comma, separating inline from following
+            while matches!(
+                self.peek(),
+                TokenKind::Comment(_) | TokenKind::MultiLineComment(_)
+            ) {
+                let comment_line = self.current().span.start.line;
+                if let Some(comment) = self.collect_comment() {
+                    if comment_line == statement_line {
+                        // Comment is on the same line as the enum variant
+                        stmt.inline_trailing_comments.push(comment);
+                    } else {
+                        // Comment is on a following line
+                        stmt.following_comments.push(comment);
+                    }
+                }
+            }
+
+            items.push(EnumDefItem::Statement(stmt));
         }
 
         Ok(items)
@@ -745,6 +814,8 @@ impl Parser {
             expr,
             attributes,
             doc_comments,
+            inline_trailing_comments: Vec::new(), // Will be populated by parse_enum_def_items
+            following_comments: Vec::new(),
         })
     }
 
@@ -766,12 +837,32 @@ impl Parser {
                 break;
             }
 
-            items.push(BitflagsDefItem::Statement(self.parse_bitflags_statement()?));
+            let mut stmt = self.parse_bitflags_statement()?;
+            let statement_line = self.current().span.end.line;
 
             // Optional trailing comma
             if matches!(self.peek(), TokenKind::Comma) {
                 self.advance();
             }
+
+            // Collect trailing comments after the comma, separating inline from following
+            while matches!(
+                self.peek(),
+                TokenKind::Comment(_) | TokenKind::MultiLineComment(_)
+            ) {
+                let comment_line = self.current().span.start.line;
+                if let Some(comment) = self.collect_comment() {
+                    if comment_line == statement_line {
+                        // Comment is on the same line as the bitflag
+                        stmt.inline_trailing_comments.push(comment);
+                    } else {
+                        // Comment is on a following line
+                        stmt.following_comments.push(comment);
+                    }
+                }
+            }
+
+            items.push(BitflagsDefItem::Statement(stmt));
         }
 
         Ok(items)
@@ -794,6 +885,8 @@ impl Parser {
             expr,
             attributes,
             doc_comments,
+            inline_trailing_comments: Vec::new(), // Will be populated by parse_bitflags_def_items
+            following_comments: Vec::new(),
         })
     }
 

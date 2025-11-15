@@ -5,7 +5,7 @@
 /// - Validating the AST design
 /// - Formatting/normalizing code
 /// - Testing round-trip parsing
-use crate::grammar::*;
+use crate::grammar::{ItemDefinitionInner, *};
 use std::fmt::Write;
 
 pub struct PrettyPrinter {
@@ -54,9 +54,27 @@ impl PrettyPrinter {
         // Print module-level attributes
         self.print_attributes(&module.attributes);
 
-        // Print items
-        for item in &module.items {
+        // Print items with lookahead for proper spacing
+        for (i, item) in module.items.iter().enumerate() {
             self.print_module_item(item);
+
+            // Add blank line between regular comment and definition with both doc comments and attributes
+            if let ModuleItem::Comment(_comment) = item {
+                if let Some(next_item) = module.items.get(i + 1) {
+                    if let ModuleItem::Definition(def) = next_item {
+                        // Add blank line if definition has both doc comments and attributes
+                        let has_attrs = match &def.inner {
+                            ItemDefinitionInner::Type(td) => !td.attributes.0.is_empty(),
+                            ItemDefinitionInner::Enum(ed) => !ed.attributes.0.is_empty(),
+                            ItemDefinitionInner::Bitflags(bf) => !bf.attributes.0.is_empty(),
+                        };
+
+                        if !def.doc_comments.is_empty() && has_attrs {
+                            self.writeln("");
+                        }
+                    }
+                }
+            }
         }
 
         self.output.trim().to_string()
@@ -66,34 +84,41 @@ impl PrettyPrinter {
         match item {
             ModuleItem::Comment(comment) => {
                 self.print_comment(&comment.value);
+                // Don't add blank line after comments - they group with the following item
             }
             ModuleItem::Use(path) => {
                 self.write_indent();
                 let path_str = self.format_item_path(path);
                 writeln!(&mut self.output, "use {path_str};").unwrap();
+                self.writeln("");
             }
             ModuleItem::ExternType(name, attrs, _doc) => {
                 self.print_attributes(attrs);
                 self.write_indent();
                 writeln!(&mut self.output, "extern type {name};").unwrap();
+                self.writeln("");
             }
             ModuleItem::Backend(backend) => {
                 self.print_backend(backend);
+                self.writeln("");
             }
             ModuleItem::Definition(def) => {
                 self.print_item_definition(def);
+                self.writeln("");
             }
             ModuleItem::Impl(impl_block) => {
                 self.print_impl_block(impl_block);
+                self.writeln("");
             }
             ModuleItem::ExternValue(extern_val) => {
                 self.print_extern_value(extern_val);
+                self.writeln("");
             }
             ModuleItem::Function(func) => {
                 self.print_function(func);
+                self.writeln("");
             }
         }
-        self.writeln("");
     }
 
     fn print_comment(&mut self, comment: &Comment) {
@@ -121,6 +146,32 @@ impl PrettyPrinter {
                     self.write_indent();
                     writeln!(&mut self.output, "{line}").unwrap();
                 }
+            }
+        }
+    }
+
+    fn print_comment_inline(&mut self, comment: &Comment) {
+        match comment {
+            Comment::Regular(text) => {
+                // Regular comments include the // prefix
+                write!(&mut self.output, "{text}").unwrap();
+            }
+            Comment::MultiLine(lines) => {
+                // Multiline comments - just print first line inline for now
+                if let Some(first) = lines.first() {
+                    write!(&mut self.output, "{first}").unwrap();
+                }
+                // If there are more lines, print them on separate lines
+                for line in lines.iter().skip(1) {
+                    writeln!(&mut self.output).unwrap();
+                    self.write_indent();
+                    write!(&mut self.output, "{line}").unwrap();
+                }
+            }
+            _ => {
+                // For doc comments, shouldn't appear as trailing comments
+                // but handle gracefully
+                self.print_comment(comment);
             }
         }
     }
@@ -223,13 +274,50 @@ impl PrettyPrinter {
             writeln!(&mut self.output, "///{doc}").unwrap();
         }
 
-        // Print attributes from the inner definition
-        let attributes = match &def.inner {
-            ItemDefinitionInner::Type(td) => &td.attributes,
-            ItemDefinitionInner::Enum(ed) => &ed.attributes,
-            ItemDefinitionInner::Bitflags(bf) => &bf.attributes,
+        // Print attributes and comments from the inner definition
+        let (attributes, inline_trailing_comments, following_comments) = match &def.inner {
+            ItemDefinitionInner::Type(td) => (
+                &td.attributes,
+                &td.inline_trailing_comments,
+                &td.following_comments,
+            ),
+            ItemDefinitionInner::Enum(ed) => (
+                &ed.attributes,
+                &ed.inline_trailing_comments,
+                &ed.following_comments,
+            ),
+            ItemDefinitionInner::Bitflags(bf) => (
+                &bf.attributes,
+                &bf.inline_trailing_comments,
+                &bf.following_comments,
+            ),
         };
-        self.print_attributes(attributes);
+
+        // Print attributes with inline trailing comments
+        if !attributes.0.is_empty() {
+            self.write_indent();
+            write!(&mut self.output, "#[").unwrap();
+            for (i, attr) in attributes.0.iter().enumerate() {
+                if i > 0 {
+                    write!(&mut self.output, ", ").unwrap();
+                }
+                self.print_attribute(attr);
+            }
+            write!(&mut self.output, "]").unwrap();
+
+            // Print inline trailing comments (comments on the same line as attributes)
+            for comment in inline_trailing_comments {
+                write!(&mut self.output, " ").unwrap();
+                self.print_comment_inline(&comment.value);
+            }
+
+            writeln!(&mut self.output).unwrap();
+        }
+
+        // Print following comments (comments on lines after attributes)
+        for comment in following_comments {
+            self.print_comment(&comment.value);
+        }
 
         self.write_indent();
         if def.visibility == Visibility::Public {
@@ -312,11 +400,24 @@ impl PrettyPrinter {
                 }
                 write!(&mut self.output, "{name}: ").unwrap();
                 self.print_type(type_);
-                writeln!(&mut self.output, ",").unwrap();
+                write!(&mut self.output, ",").unwrap();
+
+                // Print inline trailing comments
+                for comment in &stmt.inline_trailing_comments {
+                    write!(&mut self.output, " ").unwrap();
+                    self.print_comment_inline(&comment.value);
+                }
+
+                writeln!(&mut self.output).unwrap();
+
+                // Print following comments (comments on lines after the field)
+                for comment in &stmt.following_comments {
+                    self.print_comment(&comment.value);
+                }
             }
             TypeField::Vftable(funcs) => {
                 if funcs.is_empty() {
-                    writeln!(&mut self.output, "vftable {{}},").unwrap();
+                    write!(&mut self.output, "vftable {{}},").unwrap();
                 } else {
                     writeln!(&mut self.output, "vftable {{").unwrap();
                     self.indent();
@@ -325,9 +426,21 @@ impl PrettyPrinter {
                     }
                     self.dedent();
                     self.write_indent();
-                    writeln!(&mut self.output, "}},").unwrap();
+                    write!(&mut self.output, "}},").unwrap();
                 }
+
+                // Print inline trailing comments for vftable too
+                for comment in &stmt.inline_trailing_comments {
+                    write!(&mut self.output, " ").unwrap();
+                    self.print_comment_inline(&comment.value);
+                }
+
                 writeln!(&mut self.output).unwrap();
+
+                // Print following comments (comments on lines after vftable)
+                for comment in &stmt.following_comments {
+                    self.print_comment(&comment.value);
+                }
             }
         }
     }
@@ -346,7 +459,20 @@ impl PrettyPrinter {
             write!(&mut self.output, " = ").unwrap();
             self.print_expr(expr);
         }
-        writeln!(&mut self.output, ",").unwrap();
+        write!(&mut self.output, ",").unwrap();
+
+        // Print inline trailing comments
+        for comment in &stmt.inline_trailing_comments {
+            write!(&mut self.output, " ").unwrap();
+            self.print_comment_inline(&comment.value);
+        }
+
+        writeln!(&mut self.output).unwrap();
+
+        // Print following comments (comments on lines after the enum variant)
+        for comment in &stmt.following_comments {
+            self.print_comment(&comment.value);
+        }
     }
 
     fn print_bitflags_statement(&mut self, stmt: &BitflagsStatement) {
@@ -360,7 +486,20 @@ impl PrettyPrinter {
         self.write_indent();
         write!(&mut self.output, "{} = ", stmt.name).unwrap();
         self.print_expr(&stmt.expr);
-        writeln!(&mut self.output, ",").unwrap();
+        write!(&mut self.output, ",").unwrap();
+
+        // Print inline trailing comments
+        for comment in &stmt.inline_trailing_comments {
+            write!(&mut self.output, " ").unwrap();
+            self.print_comment_inline(&comment.value);
+        }
+
+        writeln!(&mut self.output).unwrap();
+
+        // Print following comments (comments on lines after the bitflag)
+        for comment in &stmt.following_comments {
+            self.print_comment(&comment.value);
+        }
     }
 
     fn print_type(&mut self, type_: &Type) {
@@ -475,6 +614,8 @@ pub fn pretty_print(module: &Module) -> String {
 
 #[cfg(test)]
 mod tests {
+    use pretty_assertions::assert_eq;
+
     use super::*;
     use crate::parser::parse_str;
 
@@ -496,21 +637,39 @@ mod tests {
     #[test]
     fn test_pretty_print_with_comments() {
         let text = r#"
-        // This is a regular comment
-        /// This is a doc comment
-        pub type Test {
-            // Field comment
-            field1: i32,
-            /// Doc comment for field2
-            field2: bool,
-        }
+// This is a regular comment
+/// This is a doc comment
+pub type Test {
+    // Field comment
+    field1: i32,
+    /// Doc comment for field2
+    field2: bool,
+}
 
-        #[singleton(0x1_18F_B64), size(0x40), align(16)] // 0x3C
-        pub type InputDeviceManager {
-            #[address(0x18)]
-            pub enabled: bool,
-        }
+#[singleton(0x1_18F_B64), size(0x40), align(16)] // 0x3C
+pub type InputDeviceManager {
+    #[address(0x18)]
+    pub enabled: bool,
+}
         "#;
+
+        let output = r#"
+// This is a regular comment
+/// This is a doc comment
+pub type Test {
+    // Field comment
+    field1: i32,
+    /// Doc comment for field2
+    field2: bool,
+}
+
+#[singleton(0x118FB64), size(0x40), align(0x10)] // 0x3C
+pub type InputDeviceManager {
+    #[address(0x18)]
+    pub enabled: bool,
+}
+        "#
+        .trim();
 
         let module = parse_str(text).unwrap();
         let printed = pretty_print(&module);
@@ -518,18 +677,7 @@ mod tests {
         dbg!(&module);
         dbg!(&printed);
 
-        // Check regular comment
-        assert!(printed.contains("// This is a regular comment"));
-
-        // Check doc comment
-        assert!(printed.contains("/// This is a doc comment"));
-
-        // Check inline comment after attributes
-        assert!(printed.contains("#[singleton(0x118FB64), size(0x40), align(16)] // 0x3C"));
-
-        // Check comment inside type definition
-        assert!(printed.contains("// Field comment"));
-        assert!(printed.contains("/// Doc comment for field2"));
+        assert_eq!(printed, output);
     }
 
     #[test]
@@ -549,7 +697,6 @@ pub type AnarkGui {
 #[singleton(0x118FC20), size(0x620 /* actually 0x61C */), align(0x10)]
 pub type AnarkGui {
     vftable {},
-
     #[address(0x1A0)]
     pub next_state: AnarkState,
     pub active_state: AnarkState,
@@ -560,8 +707,355 @@ pub type AnarkGui {
         let module = parse_str(text).unwrap();
         let printed = pretty_print(&module);
 
-        dbg!(&printed);
+        assert_eq!(printed, output);
+    }
 
-        pretty_assertions::assert_eq!(printed, output);
+    #[test]
+    fn test_pretty_print_multiple_trailing_comments() {
+        let text = r#"
+#[size(0x10)] // size comment
+// another comment
+pub type MultiCommentTest {
+    field: i32,
+}
+
+#[align(8)] /* block comment */
+pub type BlockCommentTest {
+    value: u64,
+}
+        "#;
+
+        let expected = r#"
+#[size(0x10)] // size comment
+// another comment
+pub type MultiCommentTest {
+    field: i32,
+}
+
+#[align(0x8)] /* block comment */
+pub type BlockCommentTest {
+    value: u64,
+}
+        "#
+        .trim();
+
+        let module = parse_str(text).unwrap();
+        let printed = pretty_print(&module);
+
+        assert_eq!(printed, expected);
+
+        // Parse again to verify round-trip
+        let module2 = parse_str(&printed).unwrap();
+        let printed2 = pretty_print(&module2);
+
+        assert_eq!(printed, printed2);
+    }
+
+    #[test]
+    fn test_pretty_print_multiple_non_inline_trailing_comments() {
+        let text = r#"
+#[size(0x10)]
+// size comment
+// another comment
+pub type MultiCommentTest {
+    field: i32,
+}
+
+#[align(8)]
+/* block comment */
+pub type BlockCommentTest {
+    value: u64,
+}
+        "#;
+
+        let expected = r#"
+#[size(0x10)]
+// size comment
+// another comment
+pub type MultiCommentTest {
+    field: i32,
+}
+
+#[align(0x8)]
+/* block comment */
+pub type BlockCommentTest {
+    value: u64,
+}
+        "#
+        .trim();
+
+        let module = parse_str(text).unwrap();
+        let printed = pretty_print(&module);
+
+        assert_eq!(printed, expected);
+
+        // Parse again to verify round-trip
+        let module2 = parse_str(&printed).unwrap();
+        let printed2 = pretty_print(&module2);
+
+        assert_eq!(printed, printed2);
+    }
+
+    #[test]
+    fn test_pretty_print_enum_with_trailing_comments() {
+        let text = r#"
+#[repr(u32)] // enum representation
+pub enum State: u32 {
+    Idle = 0,
+    // State comment
+    Active = 1,
+    Done = 2,
+}
+        "#;
+
+        let expected = r#"
+#[repr(u32)] // enum representation
+pub enum State: u32 {
+    Idle = 0x0,
+    // State comment
+    Active = 0x1,
+    Done = 0x2,
+}
+        "#
+        .trim();
+
+        let module = parse_str(text).unwrap();
+        let printed = pretty_print(&module);
+
+        assert_eq!(printed, expected);
+
+        // Parse again to verify round-trip
+        let module2 = parse_str(&printed).unwrap();
+        let printed2 = pretty_print(&module2);
+
+        assert_eq!(printed, printed2);
+    }
+
+    #[test]
+    fn test_pretty_print_bitflags_with_trailing_comments() {
+        let text = r#"
+#[repr(u32)] // flags representation
+pub bitflags Flags: u32 {
+    // Flag comment
+    READ = 0x1,
+    WRITE = 0x2,
+    EXECUTE = 0x4,
+}
+        "#;
+
+        let expected = r#"
+#[repr(u32)] // flags representation
+pub bitflags Flags: u32 {
+    // Flag comment
+    READ = 0x1,
+    WRITE = 0x2,
+    EXECUTE = 0x4,
+}
+        "#
+        .trim();
+
+        let module = parse_str(text).unwrap();
+        let printed = pretty_print(&module);
+
+        assert_eq!(printed, expected);
+
+        // Parse again to verify round-trip
+        let module2 = parse_str(&printed).unwrap();
+        let printed2 = pretty_print(&module2);
+
+        assert_eq!(printed, printed2);
+    }
+
+    #[test]
+    fn test_pretty_print_mixed_comments() {
+        let text = r#"
+// Module level comment
+
+/// Documentation for Foo
+#[size(0x20)] // Foo size
+pub type Foo {
+    // Field comment
+    /// Field documentation
+    field1: i32,
+    field2: bool, // inline field comment
+}
+
+// Separator comment
+
+/// Documentation for Bar
+#[align(16)] /* alignment */
+pub type Bar {
+    value: u64,
+}
+        "#;
+
+        let expected = r#"
+// Module level comment
+
+/// Documentation for Foo
+#[size(0x20)] // Foo size
+pub type Foo {
+    // Field comment
+    /// Field documentation
+    field1: i32,
+    field2: bool, // inline field comment
+}
+
+// Separator comment
+
+/// Documentation for Bar
+#[align(0x10)] /* alignment */
+pub type Bar {
+    value: u64,
+}
+        "#
+        .trim();
+
+        let module = parse_str(text).unwrap();
+        let printed = pretty_print(&module);
+
+        assert_eq!(printed, expected);
+
+        // Parse again to verify round-trip
+        let module2 = parse_str(&printed).unwrap();
+        let printed2 = pretty_print(&module2);
+
+        assert_eq!(printed, printed2);
+    }
+
+    #[test]
+    fn test_pretty_print_no_attributes_with_comments() {
+        let text = r#"
+// Comment before definition
+pub type SimpleType {
+    field: i32,
+}
+        "#;
+
+        let expected = r#"
+// Comment before definition
+pub type SimpleType {
+    field: i32,
+}
+        "#
+        .trim();
+
+        let module = parse_str(text).unwrap();
+        let printed = pretty_print(&module);
+
+        assert_eq!(printed, expected);
+
+        // Parse again to verify round-trip
+        let module2 = parse_str(&printed).unwrap();
+        let printed2 = pretty_print(&module2);
+
+        assert_eq!(printed, printed2);
+    }
+
+    #[test]
+    fn test_pretty_print_comment_on_separate_line_after_attributes() {
+        let text = r#"
+#[size(0x10)]
+// First comment on separate line
+// Second comment on separate line
+pub type Foo {
+    field: i32,
+}
+        "#;
+
+        let expected = r#"
+#[size(0x10)]
+// First comment on separate line
+// Second comment on separate line
+pub type Foo {
+    field: i32,
+}
+        "#
+        .trim();
+
+        let module = parse_str(text).unwrap();
+        let printed = pretty_print(&module);
+
+        assert_eq!(printed, expected);
+
+        // Parse again to verify round-trip
+        let module2 = parse_str(&printed).unwrap();
+        let printed2 = pretty_print(&module2);
+
+        assert_eq!(printed, printed2);
+    }
+
+    #[test]
+    fn test_pretty_print_multiple_inline_comments() {
+        let text = r#"
+#[size(0x10)] // comment1 // comment2
+pub type Foo {
+    field: i32,
+}
+        "#;
+
+        let expected = r#"
+#[size(0x10)] // comment1 // comment2
+pub type Foo {
+    field: i32,
+}
+        "#
+        .trim();
+
+        let module = parse_str(text).unwrap();
+        let printed = pretty_print(&module);
+
+        assert_eq!(printed, expected);
+
+        // Parse again to verify round-trip
+        let module2 = parse_str(&printed).unwrap();
+        let printed2 = pretty_print(&module2);
+
+        assert_eq!(printed, printed2);
+    }
+
+    #[test]
+    fn test_pretty_print_complex_comment_layout() {
+        let text = r#"
+#[size(0x20)] // inline comment
+// separate line comment 1
+// separate line comment 2
+pub type ComplexLayout {
+    field1: i32,
+    field2: bool, // field comment
+}
+
+#[align(8)] /* block */ /* another block */
+pub type MultipleBlocks {
+    value: u64,
+}
+        "#;
+
+        let expected = r#"
+#[size(0x20)] // inline comment
+// separate line comment 1
+// separate line comment 2
+pub type ComplexLayout {
+    field1: i32,
+    field2: bool, // field comment
+}
+
+#[align(0x8)] /* block */ /* another block */
+pub type MultipleBlocks {
+    value: u64,
+}
+        "#
+        .trim();
+
+        let module = parse_str(text).unwrap();
+        let printed = pretty_print(&module);
+
+        assert_eq!(printed, expected);
+
+        // Parse again to verify round-trip
+        let module2 = parse_str(&printed).unwrap();
+        let printed2 = pretty_print(&module2);
+
+        assert_eq!(printed, printed2);
     }
 }

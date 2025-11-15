@@ -84,6 +84,8 @@ impl StripSpans for TypeDefinition {
                 })
                 .collect(),
             attributes: self.attributes.strip_spans(),
+            inline_trailing_comments: Vec::new(), // Strip trailing comments
+            following_comments: Vec::new(),
         }
     }
 }
@@ -94,6 +96,8 @@ impl StripSpans for TypeStatement {
             field: self.field.strip_spans(),
             attributes: self.attributes.strip_spans(),
             doc_comments: self.doc_comments.clone(),
+            inline_trailing_comments: Vec::new(), // Strip trailing comments
+            following_comments: Vec::new(),
         }
     }
 }
@@ -122,6 +126,8 @@ impl StripSpans for EnumDefinition {
                 })
                 .collect(),
             attributes: self.attributes.strip_spans(),
+            inline_trailing_comments: Vec::new(), // Strip trailing comments
+            following_comments: Vec::new(),
         }
     }
 }
@@ -133,6 +139,8 @@ impl StripSpans for EnumStatement {
             expr: self.expr.clone(),
             attributes: self.attributes.strip_spans(),
             doc_comments: self.doc_comments.clone(),
+            inline_trailing_comments: Vec::new(), // Strip trailing comments
+            following_comments: Vec::new(),
         }
     }
 }
@@ -152,6 +160,8 @@ impl StripSpans for BitflagsDefinition {
                 })
                 .collect(),
             attributes: self.attributes.strip_spans(),
+            inline_trailing_comments: Vec::new(), // Strip trailing comments
+            following_comments: Vec::new(),
         }
     }
 }
@@ -163,6 +173,8 @@ impl StripSpans for BitflagsStatement {
             expr: self.expr.clone(),
             attributes: self.attributes.strip_spans(),
             doc_comments: self.doc_comments.clone(),
+            inline_trailing_comments: Vec::new(), // Strip trailing comments
+            following_comments: Vec::new(),
         }
     }
 }
