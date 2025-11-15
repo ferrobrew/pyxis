@@ -59,7 +59,7 @@ impl PrettyPrinter {
             self.print_module_item(item);
         }
 
-        self.output.clone()
+        self.output.trim().to_string()
     }
 
     fn print_module_item(&mut self, item: &ModuleItem) {
@@ -70,12 +70,12 @@ impl PrettyPrinter {
             ModuleItem::Use(path) => {
                 self.write_indent();
                 let path_str = self.format_item_path(path);
-                writeln!(&mut self.output, "use {};", path_str).unwrap();
+                writeln!(&mut self.output, "use {path_str};").unwrap();
             }
             ModuleItem::ExternType(name, attrs, _doc) => {
                 self.print_attributes(attrs);
                 self.write_indent();
-                writeln!(&mut self.output, "extern type {};", name).unwrap();
+                writeln!(&mut self.output, "extern type {name};").unwrap();
             }
             ModuleItem::Backend(backend) => {
                 self.print_backend(backend);
@@ -101,25 +101,25 @@ impl PrettyPrinter {
             Comment::DocOuter(lines) => {
                 for line in lines {
                     self.write_indent();
-                    writeln!(&mut self.output, "/// {}", line).unwrap();
+                    writeln!(&mut self.output, "/// {line}").unwrap();
                 }
             }
             Comment::DocInner(lines) => {
                 for line in lines {
                     self.write_indent();
-                    writeln!(&mut self.output, "//! {}", line).unwrap();
+                    writeln!(&mut self.output, "//! {line}").unwrap();
                 }
             }
             Comment::Regular(text) => {
                 // Regular comments include the // prefix
                 self.write_indent();
-                writeln!(&mut self.output, "{}", text).unwrap();
+                writeln!(&mut self.output, "{text}").unwrap();
             }
             Comment::MultiLine(lines) => {
                 // Multiline comments include /* and */ in the text
                 for line in lines {
                     self.write_indent();
-                    writeln!(&mut self.output, "{}", line).unwrap();
+                    writeln!(&mut self.output, "{line}").unwrap();
                 }
             }
         }
@@ -183,9 +183,9 @@ impl PrettyPrinter {
 
     fn print_expr(&mut self, expr: &Expr) {
         match expr {
-            Expr::IntLiteral(val) => write!(&mut self.output, "{}", val).unwrap(),
-            Expr::StringLiteral(s) => write!(&mut self.output, "\"{}\"", s).unwrap(),
-            Expr::Ident(name) => write!(&mut self.output, "{}", name).unwrap(),
+            Expr::IntLiteral(val) => write!(&mut self.output, "0x{val:X}").unwrap(),
+            Expr::StringLiteral(s) => write!(&mut self.output, "\"{s}\"").unwrap(),
+            Expr::Ident(name) => write!(&mut self.output, "{name}").unwrap(),
         }
     }
 
@@ -203,12 +203,12 @@ impl PrettyPrinter {
 
         if let Some(prologue) = &backend.prologue {
             self.write_indent();
-            writeln!(&mut self.output, "prologue r#\"{}\"#;", prologue).unwrap();
+            writeln!(&mut self.output, "prologue r#\"{prologue}\"#;").unwrap();
         }
 
         if let Some(epilogue) = &backend.epilogue {
             self.write_indent();
-            writeln!(&mut self.output, "epilogue r#\"{}\"#;", epilogue).unwrap();
+            writeln!(&mut self.output, "epilogue r#\"{epilogue}\"#;").unwrap();
         }
 
         self.dedent();
@@ -220,7 +220,7 @@ impl PrettyPrinter {
         // Print doc comments (they already include the space after ///)
         for doc in &def.doc_comments {
             self.write_indent();
-            writeln!(&mut self.output, "///{}", doc).unwrap();
+            writeln!(&mut self.output, "///{doc}").unwrap();
         }
 
         // Print attributes from the inner definition
@@ -299,7 +299,7 @@ impl PrettyPrinter {
         // Print doc comments (they already include the space after ///)
         for doc in &stmt.doc_comments {
             self.write_indent();
-            writeln!(&mut self.output, "///{}", doc).unwrap();
+            writeln!(&mut self.output, "///{doc}").unwrap();
         }
 
         self.print_attributes(&stmt.attributes);
@@ -310,19 +310,24 @@ impl PrettyPrinter {
                 if *vis == Visibility::Public {
                     write!(&mut self.output, "pub ").unwrap();
                 }
-                write!(&mut self.output, "{}: ", name).unwrap();
+                write!(&mut self.output, "{name}: ").unwrap();
                 self.print_type(type_);
                 writeln!(&mut self.output, ",").unwrap();
             }
             TypeField::Vftable(funcs) => {
-                writeln!(&mut self.output, "vftable {{").unwrap();
-                self.indent();
-                for func in funcs {
-                    self.print_function(func);
+                if funcs.is_empty() {
+                    writeln!(&mut self.output, "vftable {{}},").unwrap();
+                } else {
+                    writeln!(&mut self.output, "vftable {{").unwrap();
+                    self.indent();
+                    for func in funcs {
+                        self.print_function(func);
+                    }
+                    self.dedent();
+                    self.write_indent();
+                    writeln!(&mut self.output, "}},").unwrap();
                 }
-                self.dedent();
-                self.write_indent();
-                writeln!(&mut self.output, "}},").unwrap();
+                writeln!(&mut self.output).unwrap();
             }
         }
     }
@@ -331,7 +336,7 @@ impl PrettyPrinter {
         // Print doc comments (they already include the space after ///)
         for doc in &stmt.doc_comments {
             self.write_indent();
-            writeln!(&mut self.output, "///{}", doc).unwrap();
+            writeln!(&mut self.output, "///{doc}").unwrap();
         }
 
         self.print_attributes(&stmt.attributes);
@@ -348,7 +353,7 @@ impl PrettyPrinter {
         // Print doc comments (they already include the space after ///)
         for doc in &stmt.doc_comments {
             self.write_indent();
-            writeln!(&mut self.output, "///{}", doc).unwrap();
+            writeln!(&mut self.output, "///{doc}").unwrap();
         }
 
         self.print_attributes(&stmt.attributes);
@@ -360,7 +365,7 @@ impl PrettyPrinter {
 
     fn print_type(&mut self, type_: &Type) {
         match type_ {
-            Type::Ident(name, _) => write!(&mut self.output, "{}", name).unwrap(),
+            Type::Ident(name, _) => write!(&mut self.output, "{name}").unwrap(),
             Type::ConstPointer(inner) => {
                 write!(&mut self.output, "*const ").unwrap();
                 self.print_type(inner);
@@ -372,10 +377,10 @@ impl PrettyPrinter {
             Type::Array(inner, size) => {
                 write!(&mut self.output, "[").unwrap();
                 self.print_type(inner);
-                write!(&mut self.output, "; {}]", size).unwrap();
+                write!(&mut self.output, "; {size}]").unwrap();
             }
             Type::Unknown(size) => {
-                write!(&mut self.output, "unknown<{}>", size).unwrap();
+                write!(&mut self.output, "unknown<{size}>").unwrap();
             }
         }
     }
@@ -417,7 +422,7 @@ impl PrettyPrinter {
         // Print doc comments (they already include the space after ///)
         for doc in &func.doc_comments {
             self.write_indent();
-            writeln!(&mut self.output, "///{}", doc).unwrap();
+            writeln!(&mut self.output, "///{doc}").unwrap();
         }
 
         self.print_attributes(&func.attributes);
@@ -447,7 +452,7 @@ impl PrettyPrinter {
     fn print_argument(&mut self, arg: &Argument) {
         match arg {
             Argument::Named(name, type_) => {
-                write!(&mut self.output, "{}: ", name).unwrap();
+                write!(&mut self.output, "{name}: ").unwrap();
                 self.print_type(type_);
             }
             Argument::ConstSelf => write!(&mut self.output, "&self").unwrap(),
@@ -510,6 +515,9 @@ mod tests {
         let module = parse_str(text).unwrap();
         let printed = pretty_print(&module);
 
+        dbg!(&module);
+        dbg!(&printed);
+
         // Check regular comment
         assert!(printed.contains("// This is a regular comment"));
 
@@ -517,7 +525,7 @@ mod tests {
         assert!(printed.contains("/// This is a doc comment"));
 
         // Check inline comment after attributes
-        assert!(printed.contains("// 0x3C"));
+        assert!(printed.contains("#[singleton(0x118FB64), size(0x40), align(16)] // 0x3C"));
 
         // Check comment inside type definition
         assert!(printed.contains("// Field comment"));
@@ -537,18 +545,23 @@ pub type AnarkGui {
 }
         "#;
 
+        let output = r#"
+#[singleton(0x118FC20), size(0x620 /* actually 0x61C */), align(0x10)]
+pub type AnarkGui {
+    vftable {},
+
+    #[address(0x1A0)]
+    pub next_state: AnarkState,
+    pub active_state: AnarkState,
+}
+        "#
+        .trim();
+
         let module = parse_str(text).unwrap();
         let printed = pretty_print(&module);
 
-        // Check that the comment inside the attribute is preserved
-        assert!(
-            printed.contains("/* actually 0x61C */"),
-            "Comment should be preserved in attribute"
-        );
-        // The hex number might be printed as decimal, but the comment should be there
-        assert!(
-            printed.contains("size(") && printed.contains("/* actually 0x61C */"),
-            "Comment should appear inside size attribute"
-        );
+        dbg!(&printed);
+
+        pretty_assertions::assert_eq!(printed, output);
     }
 }
