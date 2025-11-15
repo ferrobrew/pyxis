@@ -45,8 +45,8 @@ impl Region {
         self.is_base = true;
         self
     }
-    pub fn with_doc(mut self, doc: Vec<String>) -> Self {
-        self.doc = doc;
+    pub fn with_doc(mut self, doc: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        self.doc = doc.into_iter().map(|s| s.into()).collect();
         self
     }
     pub fn size(&self, type_registry: &TypeRegistry) -> Option<usize> {
@@ -74,8 +74,8 @@ impl TypeDefinition {
         self.regions = regions.into();
         self
     }
-    pub fn with_doc(mut self, doc: Vec<String>) -> Self {
-        self.doc = doc;
+    pub fn with_doc(mut self, doc: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        self.doc = doc.into_iter().map(|s| s.into()).collect();
         self
     }
     pub fn with_associated_functions(

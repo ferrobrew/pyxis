@@ -205,8 +205,8 @@ impl Function {
         self.body = body;
         self
     }
-    pub fn with_doc(mut self, doc: Vec<String>) -> Self {
-        self.doc = doc;
+    pub fn with_doc(mut self, doc: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        self.doc = doc.into_iter().map(|s| s.into()).collect();
         self
     }
     pub fn is_internal(&self) -> bool {

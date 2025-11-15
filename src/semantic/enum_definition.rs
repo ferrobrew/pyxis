@@ -32,8 +32,8 @@ impl EnumDefinition {
             default: None,
         }
     }
-    pub fn with_doc(mut self, doc: Vec<String>) -> Self {
-        self.doc = doc;
+    pub fn with_doc(mut self, doc: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        self.doc = doc.into_iter().map(|s| s.into()).collect();
         self
     }
     pub fn with_fields<'a>(mut self, fields: impl IntoIterator<Item = (&'a str, isize)>) -> Self {
