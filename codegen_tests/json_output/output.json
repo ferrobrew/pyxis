@@ -618,7 +618,7 @@
           {
             "visibility": "public",
             "name": "field_1",
-            "doc": null,
+            "doc": " This is a field doc comment",
             "type_ref": {
               "type": "raw",
               "path": "u64"
@@ -633,7 +633,7 @@
           {
             "visibility": "public",
             "name": "test_func",
-            "doc": null,
+            "doc": " My test func!\n\n And its second line! :)",
             "body": {
               "type": "address",
               "address": 291
@@ -652,7 +652,7 @@
             {
               "visibility": "public",
               "name": "test_vfunc",
-              "doc": null,
+              "doc": " My test vfunc!",
               "body": {
                 "type": "vftable",
                 "function_name": "test_vfunc"
@@ -687,7 +687,7 @@
           {
             "visibility": "public",
             "name": "test_vfunc",
-            "doc": null,
+            "doc": " My test vfunc!",
             "type_ref": {
               "type": "function",
               "calling_convention": "system",
