@@ -47,9 +47,10 @@ pub fn convert_grammar_functions_to_semantic_functions(
     for function in functions {
         let mut index = None;
         for attribute in &function.attributes {
-            let grammar::Attribute::Function(ident, exprs) = attribute else {
+            let grammar::Attribute::Function(ident, items) = attribute else {
                 continue;
             };
+            let exprs = grammar::AttributeItem::extract_exprs(items);
             match (ident.as_str(), exprs.as_slice()) {
                 ("index", [grammar::Expr::IntLiteral(index_)]) => {
                     index = Some(*index_ as usize);
@@ -82,7 +83,7 @@ pub fn convert_grammar_functions_to_semantic_functions(
             output.push(Function {
                 visibility: Visibility::Private,
                 name: name.clone(),
-                doc: None,
+                doc: vec![],
                 arguments: vec![Argument::MutSelf],
                 return_type: None,
                 body: FunctionBody::Vftable {
@@ -166,7 +167,7 @@ pub fn build(
             let region = Region {
                 visibility: Visibility::Private,
                 name: Some("vftable".to_string()),
-                doc: None,
+                doc: vec![],
                 type_ref: vftable_pointer_type.clone(),
                 is_base: false,
             };
@@ -224,7 +225,7 @@ fn build_type(
             alignment: type_registry.pointer_size(),
             inner: TypeDefinition {
                 regions,
-                doc: None,
+                doc: vec![],
                 associated_functions: vec![],
                 vftable: None,
                 singleton: None,

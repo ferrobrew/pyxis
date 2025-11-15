@@ -89,7 +89,7 @@ impl TypeRegistry {
             grammar::Type::Array(t, size) => self
                 .resolve_grammar_type(scope, t.as_ref())
                 .map(|t| Type::Array(Box::new(t), *size)),
-            grammar::Type::Ident(ident) => self.resolve_string(scope, ident.as_str()),
+            grammar::Type::Ident(ident, _args) => self.resolve_string(scope, ident.as_str()),
             grammar::Type::Unknown(size) => Some(self.padding_type(*size)),
         }
     }

@@ -62,31 +62,25 @@ impl SemanticState {
 
     // todo: define an actual error type
     pub fn add_file(&mut self, base_path: &Path, path: &Path) -> anyhow::Result<()> {
+        let source = std::fs::read_to_string(path)?;
+        let filename = path.display().to_string();
         self.add_module(
-            &parser::parse_str(&std::fs::read_to_string(path)?).map_err(|e| {
-                let proc_macro2::LineColumn { line, column } = e.span().start();
-                anyhow::Error::new(e).context(format!(
-                    "failed to parse {}:{}:{}",
-                    path.display(),
-                    line,
-                    column + 1
-                ))
-            })?,
+            &parser::parse_str_with_filename(&source, &filename)?,
             &ItemPath::from_path(path.strip_prefix(base_path).unwrap_or(path)),
         )
     }
 
     pub fn add_module(&mut self, module: &grammar::Module, path: &ItemPath) -> anyhow::Result<()> {
         let extern_values = module
-            .extern_values
-            .iter()
+            .extern_values()
             .map(|ev| {
                 let name = &ev.name;
                 let mut address = None;
                 for attribute in &ev.attributes {
-                    let Some((ident, exprs)) = attribute.function() else {
+                    let Some((ident, items)) = attribute.function() else {
                         continue;
                     };
+                    let exprs = grammar::AttributeItem::extract_exprs(items);
                     if let ("address", [grammar::Expr::IntLiteral(addr)]) =
                         (ident.as_str(), &exprs[..])
                     {
@@ -110,18 +104,21 @@ impl SemanticState {
             })
             .collect::<anyhow::Result<Vec<_>>>()?;
 
+        let impls: Vec<_> = module.impls().cloned().collect();
+        let backends: Vec<_> = module.backends().cloned().collect();
+
         self.modules.insert(
             path.clone(),
             Module::new(
                 path.clone(),
                 module.clone(),
                 extern_values,
-                &module.impls,
-                &module.backends,
+                &impls,
+                &backends,
             )?,
         );
 
-        for definition in &module.definitions {
+        for definition in module.definitions().collect::<Vec<_>>() {
             let new_path = path.join(definition.name.as_str().into());
             self.add_item(ItemDefinition {
                 visibility: definition.visibility.into(),
@@ -132,13 +129,14 @@ impl SemanticState {
             })?;
         }
 
-        for (extern_path, attributes) in &module.extern_types {
+        for (extern_path, attributes) in module.extern_types().collect::<Vec<_>>() {
             let mut size = None;
             let mut alignment = None;
             for attribute in attributes {
-                let Some((ident, exprs)) = attribute.function() else {
+                let Some((ident, items)) = attribute.function() else {
                     continue;
                 };
+                let exprs = grammar::AttributeItem::extract_exprs(items);
                 match (ident.as_str(), &exprs[..]) {
                     ("size", [grammar::Expr::IntLiteral(size_)]) => {
                         size = Some(
@@ -219,15 +217,22 @@ impl SemanticState {
                 let visibility: Visibility = definition.visibility.into();
 
                 let item = match &definition.inner {
-                    grammar::ItemDefinitionInner::Type(ty) => {
-                        type_definition::build(&mut self, resolvee_path, visibility, ty)?
-                    }
+                    grammar::ItemDefinitionInner::Type(ty) => type_definition::build(
+                        &mut self,
+                        resolvee_path,
+                        visibility,
+                        ty,
+                        &definition.doc_comments,
+                    )?,
                     grammar::ItemDefinitionInner::Enum(e) => {
-                        enum_definition::build(&self, resolvee_path, e)?
+                        enum_definition::build(&self, resolvee_path, e, &definition.doc_comments)?
                     }
-                    grammar::ItemDefinitionInner::Bitflags(b) => {
-                        bitflags_definition::build(&self, resolvee_path, b)?
-                    }
+                    grammar::ItemDefinitionInner::Bitflags(b) => bitflags_definition::build(
+                        &self,
+                        resolvee_path,
+                        b,
+                        &definition.doc_comments,
+                    )?,
                 };
 
                 let Some(item) = item else { continue };

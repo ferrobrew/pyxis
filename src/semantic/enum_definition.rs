@@ -11,7 +11,7 @@ use crate::{
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]
 pub struct EnumDefinition {
     pub type_: Type,
-    pub doc: Option<String>,
+    pub doc: Vec<String>,
     pub fields: Vec<(String, isize)>,
     pub associated_functions: Vec<Function>,
     pub singleton: Option<usize>,
@@ -23,7 +23,7 @@ impl EnumDefinition {
     pub fn new(type_: Type) -> Self {
         EnumDefinition {
             type_,
-            doc: None,
+            doc: vec![],
             fields: Vec::new(),
             associated_functions: Vec::new(),
             singleton: None,
@@ -32,8 +32,8 @@ impl EnumDefinition {
             default: None,
         }
     }
-    pub fn with_doc(mut self, doc: impl Into<String>) -> Self {
-        self.doc = Some(doc.into());
+    pub fn with_doc(mut self, doc: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        self.doc = doc.into_iter().map(|s| s.into()).collect();
         self
     }
     pub fn with_fields<'a>(mut self, fields: impl IntoIterator<Item = (&'a str, isize)>) -> Self {
@@ -66,8 +66,8 @@ impl EnumDefinition {
         self.default = Some(default);
         self
     }
-    pub fn doc(&self) -> Option<&str> {
-        self.doc.as_deref()
+    pub fn doc(&self) -> &[String] {
+        &self.doc
     }
 }
 
@@ -75,6 +75,7 @@ pub fn build(
     semantic: &SemanticState,
     resolvee_path: &ItemPath,
     definition: &grammar::EnumDefinition,
+    doc_comments: &[String],
 ) -> anyhow::Result<Option<ItemStateResolved>> {
     let module = semantic
         .get_module_for_path(resolvee_path)
@@ -95,11 +96,12 @@ pub fn build(
     let mut fields: Vec<(String, isize)> = vec![];
     let mut last_field = 0;
     let mut default = None;
-    for statement in &definition.statements {
+    for statement in definition.statements() {
         let grammar::EnumStatement {
             name,
             expr,
             attributes,
+            ..
         } = statement;
         let value = match expr {
             Some(grammar::Expr::IntLiteral(value)) => *value,
@@ -129,7 +131,7 @@ pub fn build(
     let mut copyable = false;
     let mut cloneable = false;
     let mut defaultable = false;
-    let doc = definition.attributes.doc(resolvee_path)?;
+    let doc = doc_comments.to_vec();
     for attribute in &definition.attributes {
         match attribute {
             grammar::Attribute::Ident(ident) => match ident.as_str() {
@@ -141,7 +143,8 @@ pub fn build(
                 "defaultable" => defaultable = true,
                 _ => {}
             },
-            grammar::Attribute::Function(ident, exprs) => {
+            grammar::Attribute::Function(ident, items) => {
+                let exprs = grammar::AttributeItem::extract_exprs(items);
                 if let ("singleton", [grammar::Expr::IntLiteral(value)]) =
                     (ident.as_str(), exprs.as_slice())
                 {
@@ -167,7 +170,7 @@ pub fn build(
     // Handle associated functions
     let mut associated_functions = vec![];
     if let Some(enum_impl) = module.impls.get(resolvee_path) {
-        for function in &enum_impl.functions {
+        for function in enum_impl.functions().collect::<Vec<_>>() {
             let function = crate::semantic::function::build(
                 &semantic.type_registry,
                 &module.scope(),

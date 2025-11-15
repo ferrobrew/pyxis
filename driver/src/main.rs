@@ -22,6 +22,14 @@ enum Command {
         #[clap(default_value = "out")]
         out_dir: PathBuf,
     },
+    /// Dump AST with span information for a Pyxis file
+    AstDump {
+        /// The Pyxis file to parse and dump
+        file: PathBuf,
+        /// Pretty print the AST instead of debug format
+        #[clap(short, long)]
+        pretty: bool,
+    },
     /// Generate TypeScript type definitions from JSON backend types
     GenTypes {
         /// Output file path for TypeScript definitions
@@ -56,6 +64,21 @@ fn main() -> anyhow::Result<()> {
         } => {
             std::fs::create_dir_all(&out_dir)?;
             pyxis::build(&in_dir, &out_dir, backend.into())
+        }
+        Command::AstDump { file, pretty } => {
+            let content = std::fs::read_to_string(&file)?;
+            let filename = file.display().to_string();
+            let module = pyxis::parser::parse_str_with_filename(&content, &filename)?;
+
+            if pretty {
+                // Use pretty printer
+                println!("{}", pyxis::pretty_print::pretty_print(&module));
+            } else {
+                // Dump full AST with spans
+                println!("{:#?}", module);
+            }
+
+            Ok(())
         }
         Command::GenTypes { output } => {
             println!("Exporting TypeScript definitions to {output:?}");

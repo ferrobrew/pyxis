@@ -18,7 +18,7 @@ pub struct Module {
     pub(crate) functions: Vec<Function>,
     pub(crate) impls: BTreeMap<ItemPath, grammar::FunctionBlock>,
     pub(crate) backends: BTreeMap<String, Vec<Backend>>,
-    pub(crate) doc: Option<String>,
+    pub(crate) doc: Vec<String>,
 }
 
 impl Default for Module {
@@ -60,7 +60,7 @@ impl Module {
                 });
         }
 
-        let doc = ast.attributes.doc(&path)?;
+        let doc = ast.doc_comments.clone();
         Ok(Self {
             path,
             ast,
@@ -73,8 +73,8 @@ impl Module {
         })
     }
 
-    pub fn uses(&self) -> &[ItemPath] {
-        &self.ast.uses
+    pub fn uses(&self) -> Vec<ItemPath> {
+        self.ast.uses().cloned().collect()
     }
 
     pub fn definition_paths(&self) -> &BTreeSet<ItemPath> {
@@ -119,7 +119,7 @@ impl Module {
     ) -> anyhow::Result<()> {
         let scope = self.scope();
 
-        for function in &self.ast.functions {
+        for function in self.ast.functions().collect::<Vec<_>>() {
             let semantic_function = crate::semantic::function::build(
                 type_registry,
                 &scope,
@@ -132,8 +132,8 @@ impl Module {
         Ok(())
     }
 
-    pub fn doc(&self) -> Option<&str> {
-        self.doc.as_deref()
+    pub fn doc(&self) -> &[String] {
+        &self.doc
     }
 
     pub fn functions(&self) -> &[Function] {
