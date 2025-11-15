@@ -12,17 +12,14 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
-          profile: minimal
           toolchain: stable
-          override: true
-          target: i686-pc-windows-msvc
 
       - run: rustup component add clippy
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.x'
+          python-version: "3.x"
 
       - name: Run tests, clippy, and fmt
         run: python test.py
