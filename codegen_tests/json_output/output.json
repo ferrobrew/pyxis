@@ -3044,52 +3044,127 @@
   "modules": {
     "bitflags": {
       "doc": null,
-      "items": [],
+      "items": [
+        "bitflags::TestBitflags",
+        "bitflags::TestBitflags2"
+      ],
       "submodules": {},
       "extern_values": [],
-      "functions": []
+      "functions": [],
+      "backends": {}
     },
     "diamond_inheritance": {
       "doc": null,
-      "items": [],
+      "items": [
+        "diamond_inheritance::Base",
+        "diamond_inheritance::BaseA",
+        "diamond_inheritance::BaseAVftable",
+        "diamond_inheritance::BaseB",
+        "diamond_inheritance::BaseBVftable",
+        "diamond_inheritance::BaseVftable",
+        "diamond_inheritance::Derived",
+        "diamond_inheritance::DerivedVftable"
+      ],
       "submodules": {},
       "extern_values": [],
-      "functions": []
+      "functions": [],
+      "backends": {}
     },
     "doc_comments": {
-      "doc": null,
-      "items": [],
+      "doc": " This is a module doc comment\n\n The best of its kind",
+      "items": [
+        "doc_comments::TestType",
+        "doc_comments::TestTypeVftable"
+      ],
       "submodules": {},
       "extern_values": [],
-      "functions": []
+      "functions": [],
+      "backends": {}
     },
     "enums": {
       "doc": null,
-      "items": [],
+      "items": [
+        "enums::TestEnum"
+      ],
       "submodules": {},
       "extern_values": [],
-      "functions": []
+      "functions": [],
+      "backends": {}
     },
     "freestanding_functions": {
       "doc": null,
-      "items": [],
+      "items": [
+        "freestanding_functions::A"
+      ],
       "submodules": {},
       "extern_values": [],
-      "functions": []
+      "functions": [
+        {
+          "visibility": "public",
+          "name": "freestanding",
+          "doc": null,
+          "body": {
+            "type": "address",
+            "address": 1110
+          },
+          "arguments": [],
+          "return_type": null,
+          "calling_convention": "system"
+        },
+        {
+          "visibility": "private",
+          "name": "another_freestanding",
+          "doc": null,
+          "body": {
+            "type": "address",
+            "address": 1929
+          },
+          "arguments": [
+            {
+              "type": "field",
+              "name": "arg1",
+              "type_ref": {
+                "type": "raw",
+                "path": "i32"
+              }
+            }
+          ],
+          "return_type": {
+            "type": "raw",
+            "path": "i32"
+          },
+          "calling_convention": "system"
+        }
+      ],
+      "backends": {}
     },
     "min_size": {
       "doc": null,
-      "items": [],
+      "items": [
+        "min_size::RoundedType",
+        "min_size::TestType"
+      ],
       "submodules": {},
       "extern_values": [],
-      "functions": []
+      "functions": [],
+      "backends": {}
     },
     "multiple_levels": {
       "doc": null,
-      "items": [],
+      "items": [
+        "multiple_levels::Base",
+        "multiple_levels::BaseVftable",
+        "multiple_levels::Derived",
+        "multiple_levels::DerivedDerived",
+        "multiple_levels::DerivedDerivedDerived",
+        "multiple_levels::DerivedDerivedDerivedVftable",
+        "multiple_levels::DerivedDerivedVftable",
+        "multiple_levels::DerivedVftable"
+      ],
       "submodules": {},
       "extern_values": [],
-      "functions": []
+      "functions": [],
+      "backends": {}
     },
     "root": {
       "doc": null,
@@ -3111,21 +3186,33 @@
       ],
       "submodules": {},
       "extern_values": [],
-      "functions": []
+      "functions": [],
+      "backends": {}
     },
     "singleton": {
       "doc": null,
-      "items": [],
+      "items": [
+        "singleton::TestType"
+      ],
       "submodules": {},
       "extern_values": [],
-      "functions": []
+      "functions": [],
+      "backends": {}
     },
     "two_base_classes": {
       "doc": null,
-      "items": [],
+      "items": [
+        "two_base_classes::BaseA",
+        "two_base_classes::BaseAVftable",
+        "two_base_classes::BaseB",
+        "two_base_classes::BaseBVftable",
+        "two_base_classes::Derived",
+        "two_base_classes::DerivedVftable"
+      ],
       "submodules": {},
       "extern_values": [],
-      "functions": []
+      "functions": [],
+      "backends": {}
     }
   }
 }
