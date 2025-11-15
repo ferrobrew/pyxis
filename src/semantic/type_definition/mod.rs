@@ -232,7 +232,7 @@ pub fn build(
     let mut vftable_functions = None;
     for (idx, statement) in definition.statements().enumerate() {
         let grammar::TypeStatement {
-            field, attributes, ..
+            field, attributes, doc_comments, ..
         } = statement;
 
         match field {
@@ -240,7 +240,12 @@ pub fn build(
                 // Extract address attribute
                 let mut address: Option<usize> = None;
                 let mut is_base = false;
-                let doc: Option<String> = attributes.doc(resolvee_path)?;
+                // Use doc_comments from TypeStatement, or fall back to attributes
+                let doc: Option<String> = if !doc_comments.is_empty() {
+                    Some(doc_comments.join("\n"))
+                } else {
+                    attributes.doc(resolvee_path)?
+                };
                 for attribute in attributes {
                     match attribute {
                         grammar::Attribute::Ident(ident) if ident.as_str() == "base" => {
