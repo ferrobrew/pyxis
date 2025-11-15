@@ -133,7 +133,7 @@ impl FunctionBody {
 pub struct Function {
     pub visibility: Visibility,
     pub name: String,
-    pub doc: Option<String>,
+    pub doc: Vec<String>,
     pub body: FunctionBody,
     pub arguments: Vec<Argument>,
     pub return_type: Option<Type>,
@@ -141,7 +141,8 @@ pub struct Function {
 }
 impl fmt::Display for Function {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if let Some(doc) = &self.doc {
+        if !self.doc.is_empty() {
+            let doc = self.doc.join("\n");
             write!(f, "#[doc = r#{doc:?}#] ")?;
         }
         match self.visibility {
@@ -181,7 +182,7 @@ impl Function {
         Function {
             visibility,
             name: name.into(),
-            doc: None,
+            doc: vec![],
             body,
             arguments: Vec::new(),
             return_type: None,
@@ -204,8 +205,8 @@ impl Function {
         self.body = body;
         self
     }
-    pub fn with_doc(mut self, doc: impl Into<String>) -> Self {
-        self.doc = Some(doc.into());
+    pub fn with_doc(mut self, doc: Vec<String>) -> Self {
+        self.doc = doc;
         self
     }
     pub fn is_internal(&self) -> bool {
@@ -225,11 +226,7 @@ pub fn build(
     let mut body = is_vfunc.then(|| FunctionBody::Vftable {
         function_name: function.name.0.clone(),
     });
-    let doc = if !function.doc_comments.is_empty() {
-        Some(function.doc_comments.join("\n"))
-    } else {
-        None
-    };
+    let doc = function.doc_comments.clone();
     let mut calling_convention = None;
     for attribute in &function.attributes {
         let Some((ident, items)) = attribute.function() else {

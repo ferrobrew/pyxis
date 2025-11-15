@@ -435,7 +435,11 @@ fn convert_function(func: &Function) -> JsonFunction {
     JsonFunction {
         visibility: func.visibility.into(),
         name: func.name.clone(),
-        doc: func.doc.clone(),
+        doc: if !func.doc.is_empty() {
+            Some(func.doc.join("\n"))
+        } else {
+            None
+        },
         body: convert_function_body(&func.body),
         arguments: func.arguments.iter().map(convert_argument).collect(),
         return_type: func.return_type.as_ref().map(convert_type),
@@ -450,7 +454,11 @@ fn convert_region(region: &Region, type_registry: &TypeRegistry, offset: usize) 
     JsonRegion {
         visibility: region.visibility.into(),
         name: region.name.clone(),
-        doc: region.doc.clone(),
+        doc: if !region.doc.is_empty() {
+            Some(region.doc.join("\n"))
+        } else {
+            None
+        },
         type_ref: convert_type(&region.type_ref),
         offset,
         size,
@@ -482,7 +490,11 @@ fn convert_type_definition(
         .collect();
 
     JsonTypeDefinition {
-        doc: td.doc.clone(),
+        doc: if !td.doc.is_empty() {
+            Some(td.doc.join("\n"))
+        } else {
+            None
+        },
         fields,
         associated_functions: td
             .associated_functions
@@ -500,7 +512,11 @@ fn convert_type_definition(
 
 fn convert_enum_definition(ed: &EnumDefinition) -> JsonEnumDefinition {
     JsonEnumDefinition {
-        doc: ed.doc.clone(),
+        doc: if !ed.doc.is_empty() {
+            Some(ed.doc.join("\n"))
+        } else {
+            None
+        },
         underlying_type: convert_type(&ed.type_),
         variants: ed
             .fields
@@ -524,7 +540,11 @@ fn convert_enum_definition(ed: &EnumDefinition) -> JsonEnumDefinition {
 
 fn convert_bitflags_definition(bd: &BitflagsDefinition) -> JsonBitflagsDefinition {
     JsonBitflagsDefinition {
-        doc: bd.doc.clone(),
+        doc: if !bd.doc.is_empty() {
+            Some(bd.doc.join("\n"))
+        } else {
+            None
+        },
         underlying_type: convert_type(&bd.type_),
         flags: bd
             .fields
@@ -619,7 +639,11 @@ fn build_module_hierarchy(semantic_state: &ResolvedSemanticState) -> BTreeMap<St
             .collect();
 
         let json_module = JsonModule {
-            doc: module.doc().map(|s| s.to_string()),
+            doc: if !module.doc().is_empty() {
+                Some(module.doc().join("\n"))
+            } else {
+                None
+            },
             items,
             submodules: BTreeMap::new(),
             extern_values,

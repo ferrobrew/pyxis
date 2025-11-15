@@ -18,7 +18,7 @@ pub struct Module {
     pub(crate) functions: Vec<Function>,
     pub(crate) impls: BTreeMap<ItemPath, grammar::FunctionBlock>,
     pub(crate) backends: BTreeMap<String, Vec<Backend>>,
-    pub(crate) doc: Option<String>,
+    pub(crate) doc: Vec<String>,
 }
 
 impl Default for Module {
@@ -60,11 +60,7 @@ impl Module {
                 });
         }
 
-        let doc = if !ast.doc_comments.is_empty() {
-            Some(ast.doc_comments.join("\n"))
-        } else {
-            None
-        };
+        let doc = ast.doc_comments.clone();
         Ok(Self {
             path,
             ast,
@@ -136,8 +132,8 @@ impl Module {
         Ok(())
     }
 
-    pub fn doc(&self) -> Option<&str> {
-        self.doc.as_deref()
+    pub fn doc(&self) -> &[String] {
+        &self.doc
     }
 
     pub fn functions(&self) -> &[Function] {

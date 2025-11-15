@@ -218,11 +218,16 @@ impl ItemDefinitionInner {
             ItemDefinitionInner::Bitflags(_) => "a bitflags",
         }
     }
-    pub fn doc(&self) -> Option<&str> {
-        match self {
+    pub fn doc(&self) -> Option<String> {
+        let docs = match self {
             ItemDefinitionInner::Type(t) => t.doc(),
             ItemDefinitionInner::Enum(e) => e.doc(),
             ItemDefinitionInner::Bitflags(b) => b.doc(),
+        };
+        if docs.is_empty() {
+            None
+        } else {
+            Some(docs.join("\n"))
         }
     }
 }

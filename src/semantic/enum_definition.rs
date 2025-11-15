@@ -11,7 +11,7 @@ use crate::{
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]
 pub struct EnumDefinition {
     pub type_: Type,
-    pub doc: Option<String>,
+    pub doc: Vec<String>,
     pub fields: Vec<(String, isize)>,
     pub associated_functions: Vec<Function>,
     pub singleton: Option<usize>,
@@ -23,7 +23,7 @@ impl EnumDefinition {
     pub fn new(type_: Type) -> Self {
         EnumDefinition {
             type_,
-            doc: None,
+            doc: vec![],
             fields: Vec::new(),
             associated_functions: Vec::new(),
             singleton: None,
@@ -32,8 +32,8 @@ impl EnumDefinition {
             default: None,
         }
     }
-    pub fn with_doc(mut self, doc: impl Into<String>) -> Self {
-        self.doc = Some(doc.into());
+    pub fn with_doc(mut self, doc: Vec<String>) -> Self {
+        self.doc = doc;
         self
     }
     pub fn with_fields<'a>(mut self, fields: impl IntoIterator<Item = (&'a str, isize)>) -> Self {
@@ -66,8 +66,8 @@ impl EnumDefinition {
         self.default = Some(default);
         self
     }
-    pub fn doc(&self) -> Option<&str> {
-        self.doc.as_deref()
+    pub fn doc(&self) -> &[String] {
+        &self.doc
     }
 }
 
@@ -131,11 +131,7 @@ pub fn build(
     let mut copyable = false;
     let mut cloneable = false;
     let mut defaultable = false;
-    let doc = if !doc_comments.is_empty() {
-        Some(doc_comments.join("\n"))
-    } else {
-        None
-    };
+    let doc = doc_comments.to_vec();
     for attribute in &definition.attributes {
         match attribute {
             grammar::Attribute::Ident(ident) => match ident.as_str() {
