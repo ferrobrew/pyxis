@@ -1,0 +1,74 @@
+name: Deploy Viewer
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "types/**"
+      - "viewer/**"
+      - ".github/workflows/deploy-viewer.yml"
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    name: Build and Deploy Viewer
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout source repository
+        uses: actions/checkout@v4
+        with:
+          path: source
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        working-directory: source
+        run: npm install
+
+      - name: Build viewer
+        working-directory: source/viewer
+        run: npm run build
+
+      - name: Checkout GitHub Pages repository
+        uses: actions/checkout@v4
+        with:
+          repository: ferrobrew/ferrobrew.github.io
+          path: pages
+          token: ${{ secrets.PAGES_DEPLOY_TOKEN }}
+
+      - name: Deploy to GitHub Pages
+        working-directory: pages
+        run: |
+          # Create target directory if it doesn't exist
+          mkdir -p pyxis
+
+          # Remove old files
+          rm -rf pyxis/*
+
+          # Copy new build
+          cp -r ../source/viewer/dist/* pyxis/
+
+          # Configure git
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Commit and push
+          git add pyxis
+          if git diff --staged --quiet; then
+            echo "No changes to deploy"
+          else
+            git commit -m "Deploy pyxis viewer
+
+            Automated deployment from ferrobrew/pyxis@${{ github.sha }}"
+            git push
+          fi
+
+      - name: Deployment complete
+        run: |
+          echo "✓ Viewer deployed successfully!"
+          echo "🌐 Available at: https://ferrobrew.github.io/pyxis/"

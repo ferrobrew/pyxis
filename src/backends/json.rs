@@ -42,6 +42,17 @@ pub struct JsonModule {
     pub extern_values: Vec<JsonExternValue>,
     /// Freestanding functions
     pub functions: Vec<JsonFunction>,
+    /// Backend configurations (prologue/epilogue for code generation)
+    pub backends: BTreeMap<String, Vec<JsonBackend>>,
+}
+
+/// Backend configuration with prologue and epilogue
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+pub struct JsonBackend {
+    /// Prologue code inserted at the beginning of generated output
+    pub prologue: Option<String>,
+    /// Epilogue code inserted at the end of generated output
+    pub epilogue: Option<String>,
 }
 
 /// An item (type, enum, or bitflags) in the documentation
@@ -562,6 +573,13 @@ fn convert_extern_value(ev: &ExternValue) -> JsonExternValue {
     }
 }
 
+fn convert_backend(backend: &crate::semantic::types::Backend) -> JsonBackend {
+    JsonBackend {
+        prologue: backend.prologue.clone(),
+        epilogue: backend.epilogue.clone(),
+    }
+}
+
 /// Build the module hierarchy from a flat list of modules
 fn build_module_hierarchy(semantic_state: &ResolvedSemanticState) -> BTreeMap<String, JsonModule> {
     let mut root_modules: BTreeMap<String, JsonModule> = BTreeMap::new();
@@ -588,20 +606,36 @@ fn build_module_hierarchy(semantic_state: &ResolvedSemanticState) -> BTreeMap<St
         let functions: Vec<JsonFunction> =
             module.functions().iter().map(convert_function).collect();
 
+        // Convert backends
+        let backends: BTreeMap<String, Vec<JsonBackend>> = module
+            .backends
+            .iter()
+            .map(|(name, backend_list)| {
+                (
+                    name.clone(),
+                    backend_list.iter().map(convert_backend).collect(),
+                )
+            })
+            .collect();
+
         let json_module = JsonModule {
             doc: module.doc().map(|s| s.to_string()),
             items,
             submodules: BTreeMap::new(),
             extern_values,
             functions,
+            backends,
         };
 
         // Insert into hierarchy
         if segments.is_empty() || (segments.len() == 1 && segments[0].is_empty()) {
             // Root module
             root_modules.insert("root".to_string(), json_module);
+        } else if segments.len() == 1 {
+            // Top-level module (e.g., "clock", "game")
+            root_modules.insert(segments[0].clone(), json_module);
         } else {
-            // Navigate to the right place in the hierarchy
+            // Nested module - navigate to the right place in the hierarchy
             let root_name = segments[0].clone();
             let mut current = root_modules
                 .entry(root_name.clone())
@@ -611,6 +645,7 @@ fn build_module_hierarchy(semantic_state: &ResolvedSemanticState) -> BTreeMap<St
                     submodules: BTreeMap::new(),
                     extern_values: vec![],
                     functions: vec![],
+                    backends: BTreeMap::new(),
                 });
 
             for (i, segment) in segments.iter().enumerate().skip(1) {
@@ -631,6 +666,7 @@ fn build_module_hierarchy(semantic_state: &ResolvedSemanticState) -> BTreeMap<St
                             submodules: BTreeMap::new(),
                             extern_values: vec![],
                             functions: vec![],
+                            backends: BTreeMap::new(),
                         });
                 }
             }

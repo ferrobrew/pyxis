@@ -33,7 +33,7 @@ enum Command {
     /// Generate TypeScript type definitions from JSON backend types
     GenTypes {
         /// Output file path for TypeScript definitions
-        #[clap(default_value = "src/backends/json.ts")]
+        #[clap(default_value = "types/json.ts")]
         output: PathBuf,
     },
 }
