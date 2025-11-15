@@ -166,11 +166,10 @@ pub fn build(
     let mut defaultable = false;
     let mut packed = false;
     let mut align = None;
-    // Use doc_comments from ItemDefinition, or fall back to attributes
     let doc = if !doc_comments.is_empty() {
         Some(doc_comments.join("\n"))
     } else {
-        definition.attributes.doc(resolvee_path)?
+        None
     };
     for attribute in &definition.attributes {
         match attribute {
@@ -232,7 +231,10 @@ pub fn build(
     let mut vftable_functions = None;
     for (idx, statement) in definition.statements().enumerate() {
         let grammar::TypeStatement {
-            field, attributes, doc_comments, ..
+            field,
+            attributes,
+            doc_comments,
+            ..
         } = statement;
 
         match field {
@@ -240,11 +242,10 @@ pub fn build(
                 // Extract address attribute
                 let mut address: Option<usize> = None;
                 let mut is_base = false;
-                // Use doc_comments from TypeStatement, or fall back to attributes
                 let doc: Option<String> = if !doc_comments.is_empty() {
                     Some(doc_comments.join("\n"))
                 } else {
-                    attributes.doc(resolvee_path)?
+                    None
                 };
                 for attribute in attributes {
                     match attribute {

@@ -136,11 +136,10 @@ pub fn build(
     let mut copyable = false;
     let mut cloneable = false;
     let mut defaultable = false;
-    // Use doc_comments from ItemDefinition, or fall back to attributes
     let doc = if !doc_comments.is_empty() {
         Some(doc_comments.join("\n"))
     } else {
-        definition.attributes.doc(resolvee_path)?
+        None
     };
     for attribute in &definition.attributes {
         match attribute {

@@ -234,15 +234,10 @@ impl Parser {
             }
         }
 
-        // Convert module doc comments to attributes
-        let mut attributes = Vec::new();
-        for comment in module_doc_comments {
-            attributes.push(Attribute::doc(&comment));
-        }
-
         Ok(Module {
             items,
-            attributes: Attributes(attributes),
+            attributes: Attributes::default(),
+            doc_comments: module_doc_comments,
         })
     }
 

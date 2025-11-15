@@ -60,7 +60,11 @@ impl Module {
                 });
         }
 
-        let doc = ast.attributes.doc(&path)?;
+        let doc = if !ast.doc_comments.is_empty() {
+            Some(ast.doc_comments.join("\n"))
+        } else {
+            None
+        };
         Ok(Self {
             path,
             ast,

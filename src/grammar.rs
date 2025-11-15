@@ -319,12 +319,6 @@ impl Attribute {
             _ => None,
         }
     }
-    pub fn doc(doc: &str) -> Self {
-        Attribute::Assign(
-            "doc".into(),
-            vec![AttributeItem::Expr(Expr::StringLiteral(doc.into()))],
-        )
-    }
 }
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub struct Attributes(pub Vec<Attribute>);
@@ -357,31 +351,6 @@ impl<'a> IntoIterator for &'a Attributes {
 impl FromIterator<Attribute> for Attributes {
     fn from_iter<I: IntoIterator<Item = Attribute>>(iter: I) -> Self {
         Attributes(iter.into_iter().collect())
-    }
-}
-impl Attributes {
-    pub fn doc(&self, path: &ItemPath) -> anyhow::Result<Option<String>> {
-        let mut doc = None;
-        for attr in &self.0 {
-            let Some((key, items)) = attr.assign() else {
-                continue;
-            };
-            if key.as_str() != "doc" {
-                continue;
-            }
-
-            let exprs = AttributeItem::extract_exprs(items);
-            let Some(value) = exprs.first().and_then(|e| e.string_literal()) else {
-                anyhow::bail!("doc attribute for `{path}` must be a string literal");
-            };
-
-            let doc = doc.get_or_insert_with(String::new);
-            if !doc.is_empty() {
-                doc.push('\n');
-            }
-            doc.push_str(value);
-        }
-        Ok(doc)
     }
 }
 
@@ -852,6 +821,7 @@ pub enum ModuleItem {
 pub struct Module {
     pub items: Vec<ModuleItem>,
     pub attributes: Attributes,
+    pub doc_comments: Vec<String>,
 }
 impl Module {
     pub fn new() -> Self {
@@ -902,6 +872,10 @@ impl Module {
     }
     pub fn with_attributes(mut self, attributes: impl Into<Attributes>) -> Self {
         self.attributes = attributes.into();
+        self
+    }
+    pub fn with_doc_comments(mut self, doc_comments: Vec<String>) -> Self {
+        self.doc_comments = doc_comments;
         self
     }
 

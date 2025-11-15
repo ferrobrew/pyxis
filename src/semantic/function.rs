@@ -225,15 +225,10 @@ pub fn build(
     let mut body = is_vfunc.then(|| FunctionBody::Vftable {
         function_name: function.name.0.clone(),
     });
-    // TODO: This ItemPath is not correct, but this should be fixed another time - preferably
-    // once error handling is improved
-    // Use doc_comments from Function, or fall back to attributes
     let doc = if !function.doc_comments.is_empty() {
         Some(function.doc_comments.join("\n"))
     } else {
-        function
-            .attributes
-            .doc(&ItemPath::from_iter([function.name.0.clone().into()]))?
+        None
     };
     let mut calling_convention = None;
     for attribute in &function.attributes {

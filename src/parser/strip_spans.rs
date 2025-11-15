@@ -10,21 +10,6 @@ pub trait StripSpans {
 use crate::grammar::*;
 use crate::span::Spanned;
 
-/// Convert doc comments to doc attributes (prepends them to existing attributes)
-fn doc_comments_to_attributes(doc_comments: &[String], attrs: Attributes) -> Attributes {
-    let mut new_attrs = Vec::new();
-
-    // Add doc comments first
-    for comment in doc_comments {
-        new_attrs.push(Attribute::doc(comment));
-    }
-
-    // Then add existing attributes
-    new_attrs.extend(attrs.0);
-
-    Attributes(new_attrs)
-}
-
 impl<T: Clone> StripSpans for Spanned<T> {
     fn strip_spans(&self) -> Self {
         // Return a synthetic version with the same value but no real span
@@ -44,6 +29,7 @@ impl StripSpans for Module {
                 })
                 .collect(),
             attributes: self.attributes.strip_spans(),
+            doc_comments: self.doc_comments.clone(),
         }
     }
 }
@@ -67,25 +53,11 @@ impl StripSpans for ModuleItem {
 
 impl StripSpans for ItemDefinition {
     fn strip_spans(&self) -> Self {
-        // Transfer doc_comments to the inner definition's attributes
-        let mut inner = self.inner.strip_spans();
-        match &mut inner {
-            ItemDefinitionInner::Type(t) => {
-                t.attributes = doc_comments_to_attributes(&self.doc_comments, t.attributes.clone());
-            }
-            ItemDefinitionInner::Enum(e) => {
-                e.attributes = doc_comments_to_attributes(&self.doc_comments, e.attributes.clone());
-            }
-            ItemDefinitionInner::Bitflags(b) => {
-                b.attributes = doc_comments_to_attributes(&self.doc_comments, b.attributes.clone());
-            }
-        }
-
         ItemDefinition {
             visibility: self.visibility,
             name: self.name.clone(),
-            doc_comments: vec![], // Strip doc comments for comparison
-            inner,
+            doc_comments: self.doc_comments.clone(),
+            inner: self.inner.strip_spans(),
         }
     }
 }
@@ -120,11 +92,8 @@ impl StripSpans for TypeStatement {
     fn strip_spans(&self) -> Self {
         TypeStatement {
             field: self.field.strip_spans(),
-            attributes: doc_comments_to_attributes(
-                &self.doc_comments,
-                self.attributes.strip_spans(),
-            ),
-            doc_comments: vec![], // Strip doc comments for comparison
+            attributes: self.attributes.strip_spans(),
+            doc_comments: self.doc_comments.clone(),
         }
     }
 }
@@ -162,11 +131,8 @@ impl StripSpans for EnumStatement {
         EnumStatement {
             name: self.name.clone(),
             expr: self.expr.clone(),
-            attributes: doc_comments_to_attributes(
-                &self.doc_comments,
-                self.attributes.strip_spans(),
-            ),
-            doc_comments: vec![], // Strip doc comments for comparison
+            attributes: self.attributes.strip_spans(),
+            doc_comments: self.doc_comments.clone(),
         }
     }
 }
@@ -195,11 +161,8 @@ impl StripSpans for BitflagsStatement {
         BitflagsStatement {
             name: self.name.clone(),
             expr: self.expr.clone(),
-            attributes: doc_comments_to_attributes(
-                &self.doc_comments,
-                self.attributes.strip_spans(),
-            ),
-            doc_comments: vec![], // Strip doc comments for comparison
+            attributes: self.attributes.strip_spans(),
+            doc_comments: self.doc_comments.clone(),
         }
     }
 }
@@ -226,11 +189,8 @@ impl StripSpans for Function {
         Function {
             visibility: self.visibility,
             name: self.name.clone(),
-            attributes: doc_comments_to_attributes(
-                &self.doc_comments,
-                self.attributes.strip_spans(),
-            ),
-            doc_comments: vec![], // Strip doc comments for comparison
+            attributes: self.attributes.strip_spans(),
+            doc_comments: self.doc_comments.clone(),
             arguments: self.arguments.clone(),
             return_type: self.return_type.clone(),
         }
@@ -243,11 +203,8 @@ impl StripSpans for ExternValue {
             visibility: self.visibility,
             name: self.name.clone(),
             type_: self.type_.clone(),
-            attributes: doc_comments_to_attributes(
-                &self.doc_comments,
-                self.attributes.strip_spans(),
-            ),
-            doc_comments: vec![], // Strip doc comments for comparison
+            attributes: self.attributes.strip_spans(),
+            doc_comments: self.doc_comments.clone(),
         }
     }
 }

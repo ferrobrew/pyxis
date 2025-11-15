@@ -1015,20 +1015,23 @@ fn can_propagate_doc_comments() {
                 (V::Private, "TestType"),
                 TD::new([
                     TS::vftable([F::new((V::Private, "test_vfunc"), [Ar::ConstSelf])
-                        .with_attributes([A::doc(" My test vfunc!")])]),
+                        .with_doc_comments(vec![" My test vfunc!".to_string()])]),
                     TS::field((V::Private, "field_1"), T::ident("u64"))
-                        .with_attributes([A::doc(" This is a field doc comment"), A::address(8)]),
+                        .with_doc_comments(vec![" This is a field doc comment".to_string()])
+                        .with_attributes([A::address(8)]),
                 ])
-                .with_attributes([A::doc(" This is a doc comment"), A::align(8)]),
-            )])
+                .with_attributes([A::align(8)]),
+            )
+            .with_doc_comments(vec![" This is a doc comment".to_string()])])
             .with_impls([FB::new(
                 "TestType",
                 [F::new((V::Private, "test_func"), [Ar::ConstSelf])
-                    .with_attributes([A::doc(" My test func!"), A::address(0x123)])],
+                    .with_doc_comments(vec![" My test func!".to_string()])
+                    .with_attributes([A::address(0x123)])],
             )])
-            .with_attributes([
-                A::doc(" This is a module doc comment"),
-                A::doc(" The best of its kind"),
+            .with_doc_comments(vec![
+                " This is a module doc comment".to_string(),
+                " The best of its kind".to_string(),
             ]),
         [
             SID::defined_resolved(
