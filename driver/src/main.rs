@@ -36,6 +36,12 @@ enum Command {
         #[clap(default_value = "types/json.ts")]
         output: PathBuf,
     },
+    /// Format all .pyxis files recursively in the current directory
+    Fmt {
+        /// Check if files are formatted without modifying them
+        #[clap(long)]
+        check: bool,
+    },
 }
 
 #[derive(Copy, Clone, ValueEnum)]
@@ -89,5 +95,100 @@ fn main() -> anyhow::Result<()> {
 
             Ok(())
         }
+        Command::Fmt { check } => {
+            let cwd = std::env::current_dir()?;
+            let pyxis_files = find_pyxis_files(&cwd)?;
+
+            if pyxis_files.is_empty() {
+                println!("No .pyxis files found in {}", cwd.display());
+                return Ok(());
+            }
+
+            let mut formatted_count = 0;
+            let mut error_count = 0;
+            let mut needs_formatting = Vec::new();
+
+            for file in &pyxis_files {
+                match format_file(file, check) {
+                    Ok(was_formatted) => {
+                        if was_formatted {
+                            formatted_count += 1;
+                            if check {
+                                needs_formatting.push(file);
+                            } else {
+                                println!("Formatted: {}", file.display());
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("Error formatting {}: {}", file.display(), e);
+                        error_count += 1;
+                    }
+                }
+            }
+
+            if check {
+                if !needs_formatting.is_empty() {
+                    println!("\nThe following files need formatting:");
+                    for file in needs_formatting {
+                        println!("  {}", file.display());
+                    }
+                    println!("\nRun 'pyxis fmt' to format these files.");
+                    std::process::exit(1);
+                } else {
+                    println!("All {} file(s) are properly formatted.", pyxis_files.len());
+                }
+            } else {
+                println!(
+                    "\nFormatted {} file(s), {} error(s)",
+                    formatted_count, error_count
+                );
+            }
+
+            Ok(())
+        }
+    }
+}
+
+/// Recursively find all .pyxis files in the given directory
+fn find_pyxis_files(dir: &PathBuf) -> anyhow::Result<Vec<PathBuf>> {
+    let mut files = Vec::new();
+    find_pyxis_files_recursive(dir, &mut files)?;
+    files.sort();
+    Ok(files)
+}
+
+fn find_pyxis_files_recursive(
+    dir: &PathBuf,
+    files: &mut Vec<PathBuf>,
+) -> anyhow::Result<()> {
+    if dir.is_dir() {
+        for entry in std::fs::read_dir(dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.is_dir() {
+                find_pyxis_files_recursive(&path, files)?;
+            } else if path.extension().and_then(|s| s.to_str()) == Some("pyxis") {
+                files.push(path);
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Format a single file. Returns true if the file was modified (or needs formatting in check mode)
+fn format_file(file: &PathBuf, check: bool) -> anyhow::Result<bool> {
+    let content = std::fs::read_to_string(file)?;
+    let filename = file.display().to_string();
+    let module = pyxis::parser::parse_str_with_filename(&content, &filename)?;
+    let formatted = pyxis::pretty_print::pretty_print(&module);
+
+    if content != formatted {
+        if !check {
+            std::fs::write(file, formatted)?;
+        }
+        Ok(true)
+    } else {
+        Ok(false)
     }
 }
