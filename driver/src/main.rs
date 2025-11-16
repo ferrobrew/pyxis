@@ -53,7 +53,7 @@ impl From<Backend> for pyxis::Backend {
     }
 }
 
-fn main() -> anyhow::Result<()> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
 
     match args.command {
@@ -63,7 +63,8 @@ fn main() -> anyhow::Result<()> {
             out_dir,
         } => {
             std::fs::create_dir_all(&out_dir)?;
-            pyxis::build(&in_dir, &out_dir, backend.into()).map_err(|e| anyhow::anyhow!("{}", e))
+            pyxis::build(&in_dir, &out_dir, backend.into())?;
+            Ok(())
         }
         Command::AstDump { file, pretty } => {
             let content = std::fs::read_to_string(&file)?;

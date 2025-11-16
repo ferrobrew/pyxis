@@ -1,6 +1,6 @@
 use std::path::Path;
 
-fn main() -> anyhow::Result<()> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let root = Path::new("codegen_tests");
     let output_dir = root.join("output");
     let json_output_dir = root.join("json_output");
@@ -23,7 +23,7 @@ fn main() -> anyhow::Result<()> {
         .current_dir(&output_dir)
         .status()?;
     if !status.success() {
-        anyhow::bail!("cargo clippy failed");
+        return Err("cargo clippy failed".into());
     }
 
     // Generate JSON backend output
@@ -33,7 +33,7 @@ fn main() -> anyhow::Result<()> {
     // Verify JSON output exists and is valid
     let json_output_file = json_output_dir.join("output.json");
     if !json_output_file.exists() {
-        anyhow::bail!("JSON output file was not created");
+        return Err("JSON output file was not created".into());
     }
 
     // Parse JSON to verify it's valid

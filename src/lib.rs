@@ -25,20 +25,20 @@ pub enum Backend {
 #[derive(Debug)]
 pub enum BuildError {
     Semantic(semantic::SemanticError),
-    Config(String),
+    Config(config::ConfigError),
     Glob(glob::PatternError),
     Io(std::io::Error),
-    Backend(String),
+    Backend(backends::BackendError),
 }
 
 impl std::fmt::Display for BuildError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             BuildError::Semantic(err) => write!(f, "{}", err),
-            BuildError::Config(msg) => write!(f, "Config error: {}", msg),
+            BuildError::Config(err) => write!(f, "{}", err),
             BuildError::Glob(err) => write!(f, "Glob pattern error: {}", err),
             BuildError::Io(err) => write!(f, "IO error: {}", err),
-            BuildError::Backend(msg) => write!(f, "Backend error: {}", msg),
+            BuildError::Backend(err) => write!(f, "{}", err),
         }
     }
 }
@@ -48,6 +48,12 @@ impl std::error::Error for BuildError {}
 impl From<semantic::SemanticError> for BuildError {
     fn from(err: semantic::SemanticError) -> Self {
         BuildError::Semantic(err)
+    }
+}
+
+impl From<config::ConfigError> for BuildError {
+    fn from(err: config::ConfigError) -> Self {
+        BuildError::Config(err)
     }
 }
 
@@ -63,15 +69,14 @@ impl From<std::io::Error> for BuildError {
     }
 }
 
-impl From<anyhow::Error> for BuildError {
-    fn from(err: anyhow::Error) -> Self {
-        BuildError::Backend(err.to_string())
+impl From<backends::BackendError> for BuildError {
+    fn from(err: backends::BackendError) -> Self {
+        BuildError::Backend(err)
     }
 }
 
 pub fn build(in_dir: &Path, out_dir: &Path, backend: Backend) -> Result<(), BuildError> {
-    let config = config::Config::load(&in_dir.join("pyxis.toml"))
-        .map_err(|e| BuildError::Config(e.to_string()))?;
+    let config = config::Config::load(&in_dir.join("pyxis.toml"))?;
     let mut semantic_state = semantic::SemanticState::new(config.project.pointer_size);
 
     for path in glob::glob(&format!("{}/**/*.pyxis", in_dir.display()))?.filter_map(Result::ok) {
@@ -105,7 +110,9 @@ pub fn build_script(in_dir: &Path, out_dir: Option<&Path>) -> Result<(), BuildEr
                 .ok()
                 .map(|s| Path::new(&s).to_path_buf())
         })
-        .ok_or_else(|| BuildError::Config("OUT_DIR not set".to_string()))?;
+        .ok_or_else(|| {
+            BuildError::Config(config::ConfigError::Other("OUT_DIR not set".to_string()))
+        })?;
 
     build(in_dir, &out_dir, Backend::Rust)
 }

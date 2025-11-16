@@ -1,6 +1,7 @@
 use std::{collections::HashMap, fmt::Write as _, path::Path, str::FromStr};
 
 use crate::{
+    backends::{BackendError, Result},
     grammar::ItemPath,
     semantic::{
         Module, ResolvedSemanticState, TypeRegistry,
@@ -12,7 +13,6 @@ use crate::{
     },
 };
 
-use anyhow::Context;
 use quote::{ToTokens, quote};
 
 pub fn write_module(
@@ -20,7 +20,7 @@ pub fn write_module(
     key: &ItemPath,
     semantic_state: &ResolvedSemanticState,
     module: &Module,
-) -> anyhow::Result<()> {
+) -> Result<()> {
     const FORMAT_OUTPUT: bool = true;
 
     if key.is_empty() {
@@ -88,7 +88,7 @@ pub fn write_module(
         .iter()
         .filter(|f| !f.is_internal())
         .map(build_function)
-        .collect::<anyhow::Result<Vec<_>>>()?;
+        .collect::<Result<Vec<_>>>()?;
     for func in freestanding_functions {
         writeln!(raw_output, "{}", func)?;
     }
@@ -127,10 +127,10 @@ pub fn write_module(
         raw_output
     };
 
-    std::fs::write(&path, output).context("failed to write file")?;
+    std::fs::write(&path, output)?;
 
     if let Some(error) = error {
-        anyhow::bail!("{error}");
+        return Err(BackendError::Formatting(error));
     }
 
     Ok(())
@@ -139,12 +139,14 @@ pub fn write_module(
 fn build_item(
     type_registry: &TypeRegistry,
     definition: &ItemDefinition,
-) -> anyhow::Result<proc_macro2::TokenStream> {
+) -> Result<proc_macro2::TokenStream> {
     let ItemStateResolved {
         size,
         inner,
         alignment,
-    } = &definition.resolved().context("type was not resolved")?;
+    } = &definition
+        .resolved()
+        .ok_or_else(|| BackendError::CodeGen("type was not resolved".to_string()))?;
     let visibility = definition.visibility;
     let path = &definition.path;
 
@@ -167,8 +169,10 @@ fn build_type(
     alignment: usize,
     visibility: Visibility,
     type_definition: &TypeDefinition,
-) -> anyhow::Result<proc_macro2::TokenStream> {
-    let name = path.last().context("failed to get last of item path")?;
+) -> Result<proc_macro2::TokenStream> {
+    let name = path
+        .last()
+        .ok_or_else(|| BackendError::CodeGen("failed to get last of item path".to_string()))?;
 
     let TypeDefinition {
         singleton,
@@ -194,7 +198,9 @@ fn build_type(
                 type_ref,
                 is_base: _,
             } = r;
-            let field_name = field.as_deref().context("field name not present")?;
+            let field_name = field
+                .as_deref()
+                .ok_or_else(|| BackendError::CodeGen("field name not present".to_string()))?;
             let field_ident = str_to_ident(field_name);
             let visibility = visibility_to_tokens(*visibility);
             let syn_type = sa_type_to_syn_type(type_ref)?;
@@ -204,7 +210,7 @@ fn build_type(
                 #visibility #field_ident: #syn_type
             })
         })
-        .collect::<anyhow::Result<Vec<_>>>()?;
+        .collect::<Result<Vec<_>>>()?;
 
     let name_ident = str_to_ident(name.as_str());
     let size_check_ident = quote::format_ident!("_{}_size_check", name.as_str());
@@ -235,7 +241,7 @@ fn build_type(
 
     let vftable_fn_impl = vftable
         .as_ref()
-        .map(|v| {
+        .map(|v| -> Result<proc_macro2::TokenStream> {
             let accessor = if let Some(field) = &v.base_field {
                 let field = str_to_ident(field);
                 quote! { #field . vftable() }
@@ -243,7 +249,7 @@ fn build_type(
                 quote! { vftable }
             };
             let vftable_type = sa_type_to_syn_type(&v.type_)?;
-            anyhow::Ok(quote! {
+            Ok(quote! {
                 pub fn vftable(&self) -> #vftable_type {
                     self. #accessor as #vftable_type
                 }
@@ -257,7 +263,7 @@ fn build_type(
         .iter()
         .filter(|f| !f.is_internal())
         .map(build_function)
-        .collect::<anyhow::Result<Vec<_>>>()?;
+        .collect::<Result<Vec<_>>>()?;
 
     let vftable_function_impl = vftable
         .as_ref()
@@ -266,7 +272,7 @@ fn build_type(
                 .iter()
                 .filter(|f| !f.is_internal())
                 .map(build_function)
-                .collect::<anyhow::Result<Vec<_>>>()
+                .collect::<Result<Vec<_>>>()
         })
         .transpose()?
         .unwrap_or_default();
@@ -309,7 +315,7 @@ fn build_type(
 
                 Ok((type_, field_path))
             })
-            .collect::<anyhow::Result<Vec<_>>>()?;
+            .collect::<Result<Vec<_>>>()?;
 
         let types_to_field_paths_vec: HashMap<_, Vec<_>> =
             types_to_field_paths
@@ -417,8 +423,10 @@ fn build_enum(
     size: usize,
     visibility: Visibility,
     enum_definition: &EnumDefinition,
-) -> anyhow::Result<proc_macro2::TokenStream> {
-    let name = path.last().context("failed to get last of item path")?;
+) -> Result<proc_macro2::TokenStream> {
+    let name = path
+        .last()
+        .ok_or_else(|| BackendError::CodeGen("failed to get last of item path".to_string()))?;
 
     let EnumDefinition {
         singleton,
@@ -495,7 +503,7 @@ fn build_enum(
         .iter()
         .filter(|f| !f.is_internal())
         .map(build_function)
-        .collect::<anyhow::Result<Vec<_>>>()?;
+        .collect::<Result<Vec<_>>>()?;
 
     let associated_impl = if !associated_functions_impl.is_empty() {
         Some(quote! {
@@ -525,8 +533,10 @@ fn build_bitflags(
     size: usize,
     visibility: Visibility,
     bitflags_definition: &BitflagsDefinition,
-) -> anyhow::Result<proc_macro2::TokenStream> {
-    let name = path.last().context("failed to get last of item path")?;
+) -> Result<proc_macro2::TokenStream> {
+    let name = path
+        .last()
+        .ok_or_else(|| BackendError::CodeGen("failed to get last of item path".to_string()))?;
 
     let BitflagsDefinition {
         singleton,
@@ -610,7 +620,7 @@ fn build_bitflags(
     })
 }
 
-fn build_function(function: &Function) -> Result<proc_macro2::TokenStream, anyhow::Error> {
+fn build_function(function: &Function) -> Result<proc_macro2::TokenStream> {
     let name = str_to_ident(&function.name);
     let doc = doc_to_tokens(false, &function.doc);
 
@@ -630,7 +640,7 @@ fn build_function(function: &Function) -> Result<proc_macro2::TokenStream, anyho
                 }
             })
         })
-        .collect::<anyhow::Result<Vec<_>>>()?;
+        .collect::<Result<Vec<_>>>()?;
 
     let lambda_arguments = function
         .arguments
@@ -648,7 +658,7 @@ fn build_function(function: &Function) -> Result<proc_macro2::TokenStream, anyho
                 }
             })
         })
-        .collect::<anyhow::Result<Vec<_>>>()?;
+        .collect::<Result<Vec<_>>>()?;
 
     let is_field_function = function.body.is_field();
     let call_arguments = function
@@ -669,7 +679,7 @@ fn build_function(function: &Function) -> Result<proc_macro2::TokenStream, anyho
     let return_type = function
         .return_type
         .as_ref()
-        .map(|type_ref| -> anyhow::Result<proc_macro2::TokenStream> {
+        .map(|type_ref| -> Result<proc_macro2::TokenStream> {
             let syn_type = sa_type_to_syn_type(type_ref)?;
             Ok(quote! { -> #syn_type })
         })
@@ -717,7 +727,7 @@ fn build_function(function: &Function) -> Result<proc_macro2::TokenStream, anyho
     })
 }
 
-fn build_extern_value(ev: &ExternValue) -> anyhow::Result<proc_macro2::TokenStream> {
+fn build_extern_value(ev: &ExternValue) -> Result<proc_macro2::TokenStream> {
     let visibility = visibility_to_tokens(ev.visibility);
     let function_ident = quote::format_ident!("get_{}", ev.name);
     let type_ = sa_type_to_syn_type(&ev.type_)?;
@@ -734,7 +744,10 @@ fn str_to_ident(s: &str) -> syn::Ident {
     quote::format_ident!("{}", s)
 }
 
-fn fully_qualified_type_ref_impl(out: &mut String, type_ref: &Type) -> Result<(), std::fmt::Error> {
+fn fully_qualified_type_ref_impl(
+    out: &mut String,
+    type_ref: &Type,
+) -> std::result::Result<(), std::fmt::Error> {
     use std::fmt::Write;
 
     match type_ref {
@@ -780,13 +793,13 @@ fn fully_qualified_type_ref_impl(out: &mut String, type_ref: &Type) -> Result<()
     }
 }
 
-fn fully_qualified_type_ref(type_ref: &Type) -> Result<String, std::fmt::Error> {
+fn fully_qualified_type_ref(type_ref: &Type) -> std::result::Result<String, std::fmt::Error> {
     let mut out = String::new();
     fully_qualified_type_ref_impl(&mut out, type_ref)?;
     Ok(out)
 }
 
-fn sa_type_to_syn_type(type_ref: &Type) -> anyhow::Result<syn::Type> {
+fn sa_type_to_syn_type(type_ref: &Type) -> Result<syn::Type> {
     Ok(syn::parse_str(&fully_qualified_type_ref(type_ref)?)?)
 }
 

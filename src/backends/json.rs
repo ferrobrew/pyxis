@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, path::Path};
 
-use anyhow::Context;
+use crate::backends::Result;
 use serde::{Deserialize, Serialize};
 
 use crate::semantic::{
@@ -330,7 +330,7 @@ pub fn build(
     out_dir: &Path,
     semantic_state: &ResolvedSemanticState,
     project_name: &str,
-) -> anyhow::Result<()> {
+) -> Result<()> {
     let type_registry = semantic_state.type_registry();
 
     // Build items map
@@ -356,10 +356,18 @@ pub fn build(
 
     // Write to file
     let output_path = out_dir.join("output.json");
-    let json_string = serde_json::to_string_pretty(&documentation)
-        .context("Failed to serialize JSON documentation")?;
-    std::fs::write(&output_path, json_string)
-        .context(format!("Failed to write JSON to {:?}", output_path))?;
+    let json_string = serde_json::to_string_pretty(&documentation).map_err(|e| {
+        crate::backends::BackendError::CodeGen(format!(
+            "Failed to serialize JSON documentation: {}",
+            e
+        ))
+    })?;
+    std::fs::write(&output_path, json_string).map_err(|e| {
+        crate::backends::BackendError::CodeGen(format!(
+            "Failed to write JSON to {:?}: {}",
+            output_path, e
+        ))
+    })?;
 
     Ok(())
 }
