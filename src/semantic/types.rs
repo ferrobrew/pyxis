@@ -309,13 +309,42 @@ predefined_items! {
     (F64, "f64", 8),
 }
 
-#[derive(PartialEq, Eq, Debug, Clone, Hash)]
+#[derive(Debug, Clone)]
 pub struct ItemDefinition {
     pub visibility: Visibility,
     pub path: ItemPath,
     pub state: ItemState,
     pub category: ItemCategory,
     pub predefined: Option<PredefinedItem>,
+    #[allow(dead_code)]
+    pub span: Option<crate::span::Span>,
+    #[allow(dead_code)]
+    pub filename: Option<Box<str>>,
+}
+
+// Implement PartialEq and Hash manually to exclude span and filename (for tests)
+impl PartialEq for ItemDefinition {
+    fn eq(&self, other: &Self) -> bool {
+        self.visibility == other.visibility
+            && self.path == other.path
+            && self.state == other.state
+            && self.category == other.category
+            && self.predefined == other.predefined
+        // span and filename are intentionally excluded
+    }
+}
+
+impl Eq for ItemDefinition {}
+
+impl std::hash::Hash for ItemDefinition {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.visibility.hash(state);
+        self.path.hash(state);
+        self.state.hash(state);
+        self.category.hash(state);
+        self.predefined.hash(state);
+        // span and filename are intentionally excluded
+    }
 }
 impl ItemDefinition {
     pub fn category_resolved(
@@ -329,6 +358,8 @@ impl ItemDefinition {
             state: ItemState::Resolved(resolved),
             category,
             predefined: None,
+            span: None,
+            filename: None,
         }
     }
     pub fn defined_resolved(

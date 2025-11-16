@@ -55,6 +55,8 @@ impl SemanticState {
                     }),
                     category: ItemCategory::Predefined,
                     predefined: Some(*predefined_item),
+                    span: None,
+                    filename: None,
                 })
                 .expect("failed to add predefined type");
         }
@@ -76,6 +78,18 @@ impl SemanticState {
             &parser::parse_str_with_filename(&source, &filename)?,
             &ItemPath::from_path(path.strip_prefix(base_path).unwrap_or(path)),
         )
+    }
+
+    /// Attach span and source information to a semantic error if available
+    pub fn enhance_error(&self, error: SemanticError, item_path: &ItemPath) -> SemanticError {
+        if let Some(item_def) = self.type_registry.get(item_path) {
+            if let (Some(span), Some(filename)) = (&item_def.span, &item_def.filename) {
+                if let Some(source) = self.source_cache.get(filename.as_ref()) {
+                    return error.with_span_and_source(span.clone(), filename.as_ref(), source);
+                }
+            }
+        }
+        error
     }
 
     pub fn add_module(&mut self, module: &grammar::Module, path: &ItemPath) -> Result<()> {
@@ -129,12 +143,22 @@ impl SemanticState {
 
         for definition in module.definitions().collect::<Vec<_>>() {
             let new_path = path.join(definition.name.as_str().into());
+            // Get filename from source cache for this module
+            let filename_for_path = path.to_string().replace("::", "/") + ".pyxis";
+            let filename = self
+                .source_cache
+                .keys()
+                .find(|k| k.ends_with(&filename_for_path))
+                .map(|s| s.as_str().into());
+
             self.add_item(ItemDefinition {
                 visibility: definition.visibility.into(),
                 path: new_path,
                 state: ItemState::Unresolved(definition.clone()),
                 category: ItemCategory::Defined,
                 predefined: None,
+                span: Some(definition.span.clone()),
+                filename,
             })?;
         }
 
@@ -195,6 +219,8 @@ impl SemanticState {
                 }),
                 category: ItemCategory::Extern,
                 predefined: None,
+                span: None,
+                filename: None,
             })?;
         }
 

@@ -1,3 +1,5 @@
+#![allow(clippy::result_large_err)]
+
 use crate::grammar::ItemPath;
 use crate::span::Span;
 use ariadne::{Color, Label, Report, ReportKind, Source};
@@ -23,7 +25,7 @@ pub enum SemanticError {
         attribute_name: String,
         item_kind: String,
         item_path: ItemPath,
-        span: Option<Span>,
+        span: Option<Box<Span>>,
         filename: Option<Box<str>>,
         source: Option<Box<str>>,
     },
@@ -32,7 +34,7 @@ pub enum SemanticError {
         attribute_name: String,
         expected_type: String,
         item_path: ItemPath,
-        span: Option<Span>,
+        span: Option<Box<Span>>,
         filename: Option<Box<str>>,
         source: Option<Box<str>>,
     },
@@ -41,7 +43,7 @@ pub enum SemanticError {
         attr1: String,
         attr2: String,
         item_path: ItemPath,
-        span: Option<Span>,
+        span: Option<Box<Span>>,
         filename: Option<Box<str>>,
         source: Option<Box<str>>,
     },
@@ -58,7 +60,7 @@ pub enum SemanticError {
         found: String,
         item_path: ItemPath,
         context: String,
-        span: Option<Span>,
+        span: Option<Box<Span>>,
         filename: Option<Box<str>>,
         source: Option<Box<str>>,
     },
@@ -67,7 +69,7 @@ pub enum SemanticError {
         field_name: String,
         item_path: ItemPath,
         message: String,
-        span: Option<Span>,
+        span: Option<Box<Span>>,
         filename: Option<Box<str>>,
         source: Option<Box<str>>,
     },
@@ -77,7 +79,7 @@ pub enum SemanticError {
         actual: usize,
         item_path: ItemPath,
         is_min_size: bool,
-        span: Option<Span>,
+        span: Option<Box<Span>>,
         filename: Option<Box<str>>,
         source: Option<Box<str>>,
     },
@@ -85,7 +87,7 @@ pub enum SemanticError {
     AlignmentError {
         item_path: ItemPath,
         message: String,
-        span: Option<Span>,
+        span: Option<Box<Span>>,
         filename: Option<Box<str>>,
         source: Option<Box<str>>,
     },
@@ -113,7 +115,7 @@ pub enum SemanticError {
     EnumError {
         item_path: ItemPath,
         message: String,
-        span: Option<Span>,
+        span: Option<Box<Span>>,
         filename: Option<Box<str>>,
         source: Option<Box<str>>,
     },
@@ -122,7 +124,7 @@ pub enum SemanticError {
         field_name: String,
         item_path: ItemPath,
         message: String,
-        span: Option<Span>,
+        span: Option<Box<Span>>,
         filename: Option<Box<str>>,
         source: Option<Box<str>>,
     },
@@ -414,47 +416,69 @@ impl SemanticError {
         let source_box = Some(source.into().into_boxed_str());
 
         match &mut self {
-            SemanticError::ModuleNotFound { filename, source, .. } => {
+            SemanticError::ModuleNotFound {
+                filename, source, ..
+            } => {
                 *filename = filename_box;
                 *source = source_box;
             }
-            SemanticError::TypeNotFound { filename, source, .. } => {
+            SemanticError::TypeNotFound {
+                filename, source, ..
+            } => {
                 *filename = filename_box;
                 *source = source_box;
             }
-            SemanticError::MissingAttribute { filename, source, .. } => {
+            SemanticError::MissingAttribute {
+                filename, source, ..
+            } => {
                 *filename = filename_box;
                 *source = source_box;
             }
-            SemanticError::InvalidAttributeValue { filename, source, .. } => {
+            SemanticError::InvalidAttributeValue {
+                filename, source, ..
+            } => {
                 *filename = filename_box;
                 *source = source_box;
             }
-            SemanticError::ConflictingAttributes { filename, source, .. } => {
+            SemanticError::ConflictingAttributes {
+                filename, source, ..
+            } => {
                 *filename = filename_box;
                 *source = source_box;
             }
-            SemanticError::InvalidType { filename, source, .. } => {
+            SemanticError::InvalidType {
+                filename, source, ..
+            } => {
                 *filename = filename_box;
                 *source = source_box;
             }
-            SemanticError::FieldError { filename, source, .. } => {
+            SemanticError::FieldError {
+                filename, source, ..
+            } => {
                 *filename = filename_box;
                 *source = source_box;
             }
-            SemanticError::SizeMismatch { filename, source, .. } => {
+            SemanticError::SizeMismatch {
+                filename, source, ..
+            } => {
                 *filename = filename_box;
                 *source = source_box;
             }
-            SemanticError::AlignmentError { filename, source, .. } => {
+            SemanticError::AlignmentError {
+                filename, source, ..
+            } => {
                 *filename = filename_box;
                 *source = source_box;
             }
-            SemanticError::EnumError { filename, source, .. } => {
+            SemanticError::EnumError {
+                filename, source, ..
+            } => {
                 *filename = filename_box;
                 *source = source_box;
             }
-            SemanticError::DefaultableError { filename, source, .. } => {
+            SemanticError::DefaultableError {
+                filename, source, ..
+            } => {
                 *filename = filename_box;
                 *source = source_box;
             }
@@ -471,60 +495,109 @@ impl SemanticError {
         filename: impl Into<String>,
         source: impl Into<String>,
     ) -> Self {
-        let span_opt = Some(span);
+        let span_opt = Some(Box::new(span));
         let filename_box = Some(filename.into().into_boxed_str());
         let source_box = Some(source.into().into_boxed_str());
 
         match &mut self {
-            SemanticError::ModuleNotFound { filename, source, .. } => {
+            SemanticError::ModuleNotFound {
+                filename, source, ..
+            } => {
                 *filename = filename_box;
                 *source = source_box;
             }
-            SemanticError::TypeNotFound { filename, source, .. } => {
+            SemanticError::TypeNotFound {
+                filename, source, ..
+            } => {
                 *filename = filename_box;
                 *source = source_box;
             }
-            SemanticError::MissingAttribute { span, filename, source, .. } => {
+            SemanticError::MissingAttribute {
+                span,
+                filename,
+                source,
+                ..
+            } => {
                 *span = span_opt;
                 *filename = filename_box;
                 *source = source_box;
             }
-            SemanticError::InvalidAttributeValue { span, filename, source, .. } => {
+            SemanticError::InvalidAttributeValue {
+                span,
+                filename,
+                source,
+                ..
+            } => {
                 *span = span_opt;
                 *filename = filename_box;
                 *source = source_box;
             }
-            SemanticError::ConflictingAttributes { span, filename, source, .. } => {
+            SemanticError::ConflictingAttributes {
+                span,
+                filename,
+                source,
+                ..
+            } => {
                 *span = span_opt;
                 *filename = filename_box;
                 *source = source_box;
             }
-            SemanticError::InvalidType { span, filename, source, .. } => {
+            SemanticError::InvalidType {
+                span,
+                filename,
+                source,
+                ..
+            } => {
                 *span = span_opt;
                 *filename = filename_box;
                 *source = source_box;
             }
-            SemanticError::FieldError { span, filename, source, .. } => {
+            SemanticError::FieldError {
+                span,
+                filename,
+                source,
+                ..
+            } => {
                 *span = span_opt;
                 *filename = filename_box;
                 *source = source_box;
             }
-            SemanticError::SizeMismatch { span, filename, source, .. } => {
+            SemanticError::SizeMismatch {
+                span,
+                filename,
+                source,
+                ..
+            } => {
                 *span = span_opt;
                 *filename = filename_box;
                 *source = source_box;
             }
-            SemanticError::AlignmentError { span, filename, source, .. } => {
+            SemanticError::AlignmentError {
+                span,
+                filename,
+                source,
+                ..
+            } => {
                 *span = span_opt;
                 *filename = filename_box;
                 *source = source_box;
             }
-            SemanticError::EnumError { span, filename, source, .. } => {
+            SemanticError::EnumError {
+                span,
+                filename,
+                source,
+                ..
+            } => {
                 *span = span_opt;
                 *filename = filename_box;
                 *source = source_box;
             }
-            SemanticError::DefaultableError { span, filename, source, .. } => {
+            SemanticError::DefaultableError {
+                span,
+                filename,
+                source,
+                ..
+            } => {
                 *span = span_opt;
                 *filename = filename_box;
                 *source = source_box;
@@ -539,7 +612,11 @@ impl SemanticError {
 impl fmt::Display for SemanticError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            SemanticError::ModuleNotFound { path, filename, source } => {
+            SemanticError::ModuleNotFound {
+                path,
+                filename,
+                source,
+            } => {
                 if let (Some(filename), Some(source)) = (filename, source) {
                     let offset = 0; // Module-level error
                     let report = Report::build(ReportKind::Error, filename.as_ref(), offset)
@@ -553,16 +630,28 @@ impl fmt::Display for SemanticError {
 
                     let mut buffer = Vec::new();
                     report
-                        .write((filename.as_ref(), Source::from(source.as_ref())), &mut buffer)
+                        .write(
+                            (filename.as_ref(), Source::from(source.as_ref())),
+                            &mut buffer,
+                        )
                         .map_err(|_| fmt::Error)?;
                     write!(f, "{}", String::from_utf8_lossy(&buffer))
                 } else {
                     write!(f, "Module not found: `{}`", path)
                 }
             }
-            SemanticError::TypeNotFound { path, filename, source } => {
+            SemanticError::TypeNotFound {
+                path,
+                filename,
+                source,
+            } => {
                 if let (Some(filename), Some(source)) = (filename, source) {
-                    let item_name = path.to_string().split("::").last().unwrap_or(&path.to_string()).to_string();
+                    let item_name = path
+                        .to_string()
+                        .split("::")
+                        .last()
+                        .unwrap_or(&path.to_string())
+                        .to_string();
                     let offset = Self::find_item_in_source(source, &item_name);
                     let report = Report::build(ReportKind::Error, filename.as_ref(), offset)
                         .with_message(format!("Type not found: `{}`", path))
@@ -575,7 +664,10 @@ impl fmt::Display for SemanticError {
 
                     let mut buffer = Vec::new();
                     report
-                        .write((filename.as_ref(), Source::from(source.as_ref())), &mut buffer)
+                        .write(
+                            (filename.as_ref(), Source::from(source.as_ref())),
+                            &mut buffer,
+                        )
                         .map_err(|_| fmt::Error)?;
                     write!(f, "{}", String::from_utf8_lossy(&buffer))
                 } else {
@@ -591,36 +683,48 @@ impl fmt::Display for SemanticError {
                 source,
             } => {
                 if let (Some(span), Some(filename), Some(source)) = (span, filename, source) {
-                    let offset = Self::span_to_offset(source, span);
-                    let length = Self::span_length(source, span);
+                    let offset = Self::span_to_offset(source, span.as_ref());
+                    let length = Self::span_length(source, span.as_ref());
 
                     let path_str = item_path.to_string();
                     let message = if let Some(module_name) = path_str.split("::").next() {
                         if item_kind.contains("extern") {
                             let type_name = path_str.split("::").last().unwrap_or(&path_str);
-                            format!("failed to find `{}` attribute for {} `{}` in module `{}`",
-                                attribute_name, item_kind, type_name, module_name)
+                            format!(
+                                "failed to find `{}` attribute for {} `{}` in module `{}`",
+                                attribute_name, item_kind, type_name, module_name
+                            )
                         } else {
-                            format!("Missing required attribute `{}` for {} `{}`",
-                                attribute_name, item_kind, item_path)
+                            format!(
+                                "Missing required attribute `{}` for {} `{}`",
+                                attribute_name, item_kind, item_path
+                            )
                         }
                     } else {
-                        format!("Missing required attribute `{}` for {} `{}`",
-                            attribute_name, item_kind, item_path)
+                        format!(
+                            "Missing required attribute `{}` for {} `{}`",
+                            attribute_name, item_kind, item_path
+                        )
                     };
 
                     let report = Report::build(ReportKind::Error, filename.as_ref(), offset)
                         .with_message(message.clone())
                         .with_label(
                             Label::new((filename.as_ref(), offset..offset + length.max(1)))
-                                .with_message(format!("missing `{}` attribute here", attribute_name))
+                                .with_message(format!(
+                                    "missing `{}` attribute here",
+                                    attribute_name
+                                ))
                                 .with_color(Color::Red),
                         )
                         .finish();
 
                     let mut buffer = Vec::new();
                     report
-                        .write((filename.as_ref(), Source::from(source.as_ref())), &mut buffer)
+                        .write(
+                            (filename.as_ref(), Source::from(source.as_ref())),
+                            &mut buffer,
+                        )
                         .map_err(|_| fmt::Error)?;
                     write!(f, "{}", String::from_utf8_lossy(&buffer))
                 } else {
@@ -763,7 +867,9 @@ impl fmt::Display for SemanticError {
                     )
                 }
             }
-            SemanticError::AlignmentError { item_path, message, .. } => {
+            SemanticError::AlignmentError {
+                item_path, message, ..
+            } => {
                 // Check for specific alignment error patterns and format accordingly
                 if message.contains("not a multiple") {
                     write!(f, "{}", message.replace("{path}", &item_path.to_string()))
@@ -816,7 +922,9 @@ impl fmt::Display for SemanticError {
                     attribute_name, context
                 )
             }
-            SemanticError::EnumError { item_path, message, .. } => {
+            SemanticError::EnumError {
+                item_path, message, ..
+            } => {
                 // Check if this is for an enum or bitflags based on message content
                 // "variant" indicates enum, "value" indicates bitflags
                 if message.contains("variant") || message.contains("enum") {
@@ -893,4 +1001,5 @@ impl From<std::io::Error> for SemanticError {
 }
 
 /// Result type for semantic analysis
+#[allow(clippy::result_large_err)]
 pub type Result<T> = std::result::Result<T, SemanticError>;

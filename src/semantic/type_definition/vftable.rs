@@ -240,6 +240,8 @@ fn build_type(
         }),
         category: ItemCategory::Defined,
         predefined: None,
+        span: None,
+        filename: None,
     })
 }
 

@@ -1,3 +1,6 @@
+#![allow(clippy::result_large_err)]
+#![allow(clippy::collapsible_if)]
+
 use std::path::Path;
 
 pub mod backends;

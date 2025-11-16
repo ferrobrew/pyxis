@@ -520,11 +520,14 @@ pub fn build(
 
         // Ensure that the alignment is at least the minimum required alignment.
         if required_alignment > alignment {
-            return Err(SemanticError::alignment_error(
-                resolvee_path.clone(),
-                format!(
-                    "alignment {alignment} is less than minimum required alignment {required_alignment} for type `{resolvee_path}`"
+            return Err(semantic.enhance_error(
+                SemanticError::alignment_error(
+                    resolvee_path.clone(),
+                    format!(
+                        "alignment {alignment} is less than minimum required alignment {required_alignment} for type `{resolvee_path}`"
+                    ),
                 ),
+                resolvee_path,
             ));
         }
 
@@ -535,12 +538,15 @@ pub fn build(
                 let name = &region.name.as_deref().unwrap_or("unnamed");
                 let alignment = region.type_ref.alignment(&semantic.type_registry).unwrap();
                 if last_address % alignment != 0 {
-                    return Err(SemanticError::alignment_error(
-                        resolvee_path.clone(),
-                        format!(
-                            "field `{name}` of type `{}` is located at {:#x}, which is not divisible by {alignment} (the alignment of the type of the field)",
-                            resolvee_path, last_address
+                    return Err(semantic.enhance_error(
+                        SemanticError::alignment_error(
+                            resolvee_path.clone(),
+                            format!(
+                                "field `{name}` of type `{}` is located at {:#x}, which is not divisible by {alignment} (the alignment of the type of the field)",
+                                resolvee_path, last_address
+                            ),
                         ),
+                        resolvee_path,
                     ));
                 }
                 last_address += region.size(&semantic.type_registry).unwrap();
@@ -710,21 +716,17 @@ fn resolve_regions(
         if is_min_size {
             // For min_size, the final size should be >= target_size (which was already rounded)
             if size < target_size {
-                return Err(SemanticError::size_mismatch(
-                    target_size,
-                    size,
-                    resolvee_path.clone(),
-                    true,
+                return Err(semantic.enhance_error(
+                    SemanticError::size_mismatch(target_size, size, resolvee_path.clone(), true),
+                    resolvee_path,
                 ));
             }
         } else {
             // For exact size, the final size must equal target_size
             if size != target_size {
-                return Err(SemanticError::size_mismatch(
-                    target_size,
-                    size,
-                    resolvee_path.clone(),
-                    false,
+                return Err(semantic.enhance_error(
+                    SemanticError::size_mismatch(target_size, size, resolvee_path.clone(), false),
+                    resolvee_path,
                 ));
             }
         }

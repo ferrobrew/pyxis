@@ -995,7 +995,11 @@ impl Parser {
                     name,
                     doc_comments,
                     inner: ItemDefinitionInner::Type(def),
-                    span: crate::span::Span { start: start_pos, end: end_pos, text: String::new() },
+                    span: crate::span::Span {
+                        start: start_pos,
+                        end: end_pos,
+                        text: String::new(),
+                    },
                 })
             }
             TokenKind::Enum => {
@@ -1025,7 +1029,11 @@ impl Parser {
                         inline_trailing_comments: inline_trailing_comments.clone(),
                         following_comments: following_comments.clone(),
                     }),
-                    span: crate::span::Span { start: start_pos, end: end_pos, text: String::new() },
+                    span: crate::span::Span {
+                        start: start_pos,
+                        end: end_pos,
+                        text: String::new(),
+                    },
                 })
             }
             TokenKind::Bitflags => {
@@ -1055,7 +1063,11 @@ impl Parser {
                         inline_trailing_comments,
                         following_comments,
                     }),
-                    span: crate::span::Span { start: start_pos, end: end_pos, text: String::new() },
+                    span: crate::span::Span {
+                        start: start_pos,
+                        end: end_pos,
+                        text: String::new(),
+                    },
                 })
             }
             _ => Err(ParseError::ExpectedItemDefinition {
