@@ -1129,6 +1129,8 @@ impl Parser {
     }
 
     fn parse_type_statement(&mut self) -> Result<TypeStatement, ParseError> {
+        let start_pos = self.current().span.start;
+
         let doc_comments = self.collect_doc_comments();
         let attributes = if matches!(self.peek(), TokenKind::Hash) {
             self.parse_attributes()?
@@ -1142,12 +1144,23 @@ impl Parser {
             let functions = self.parse_functions_in_block()?;
             self.expect(TokenKind::RBrace)?;
 
+            let end_pos = if self.pos > 0 {
+                self.tokens[self.pos - 1].span.end
+            } else {
+                self.current().span.end
+            };
+
             Ok(TypeStatement {
                 field: TypeField::Vftable(functions),
                 attributes,
                 doc_comments,
                 inline_trailing_comments: Vec::new(), // Will be populated by parse_type_def_items
                 following_comments: Vec::new(),
+                span: crate::span::Span {
+                    start: start_pos,
+                    end: end_pos,
+                    text: String::new(),
+                },
             })
         } else {
             let visibility = self.parse_visibility()?;
@@ -1155,12 +1168,23 @@ impl Parser {
             self.expect(TokenKind::Colon)?;
             let type_ = self.parse_type()?;
 
+            let end_pos = if self.pos > 0 {
+                self.tokens[self.pos - 1].span.end
+            } else {
+                self.current().span.end
+            };
+
             Ok(TypeStatement {
                 field: TypeField::Field(visibility, name, type_),
                 attributes,
                 doc_comments,
                 inline_trailing_comments: Vec::new(), // Will be populated by parse_type_def_items
                 following_comments: Vec::new(),
+                span: crate::span::Span {
+                    start: start_pos,
+                    end: end_pos,
+                    text: String::new(),
+                },
             })
         }
     }
@@ -1215,6 +1239,8 @@ impl Parser {
     }
 
     fn parse_enum_statement(&mut self) -> Result<EnumStatement, ParseError> {
+        let start_pos = self.current().span.start;
+
         let doc_comments = self.collect_doc_comments();
         let attributes = if matches!(self.peek(), TokenKind::Hash) {
             self.parse_attributes()?
@@ -1230,6 +1256,12 @@ impl Parser {
             None
         };
 
+        let end_pos = if self.pos > 0 {
+            self.tokens[self.pos - 1].span.end
+        } else {
+            self.current().span.end
+        };
+
         Ok(EnumStatement {
             name,
             expr,
@@ -1237,6 +1269,11 @@ impl Parser {
             doc_comments,
             inline_trailing_comments: Vec::new(), // Will be populated by parse_enum_def_items
             following_comments: Vec::new(),
+            span: crate::span::Span {
+                start: start_pos,
+                end: end_pos,
+                text: String::new(),
+            },
         })
     }
 
@@ -1290,6 +1327,8 @@ impl Parser {
     }
 
     fn parse_bitflags_statement(&mut self) -> Result<BitflagsStatement, ParseError> {
+        let start_pos = self.current().span.start;
+
         let doc_comments = self.collect_doc_comments();
         let attributes = if matches!(self.peek(), TokenKind::Hash) {
             self.parse_attributes()?
@@ -1301,6 +1340,12 @@ impl Parser {
         self.expect(TokenKind::Eq)?;
         let expr = self.parse_expr()?;
 
+        let end_pos = if self.pos > 0 {
+            self.tokens[self.pos - 1].span.end
+        } else {
+            self.current().span.end
+        };
+
         Ok(BitflagsStatement {
             name,
             expr,
@@ -1308,6 +1353,11 @@ impl Parser {
             doc_comments,
             inline_trailing_comments: Vec::new(), // Will be populated by parse_bitflags_def_items
             following_comments: Vec::new(),
+            span: crate::span::Span {
+                start: start_pos,
+                end: end_pos,
+                text: String::new(),
+            },
         })
     }
 

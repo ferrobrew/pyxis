@@ -99,6 +99,7 @@ impl StripSpans for TypeStatement {
             doc_comments: self.doc_comments.clone(),
             inline_trailing_comments: Vec::new(), // Strip trailing comments
             following_comments: Vec::new(),
+            span: crate::span::Span::synthetic(),
         }
     }
 }
@@ -142,6 +143,7 @@ impl StripSpans for EnumStatement {
             doc_comments: self.doc_comments.clone(),
             inline_trailing_comments: Vec::new(), // Strip trailing comments
             following_comments: Vec::new(),
+            span: crate::span::Span::synthetic(),
         }
     }
 }
@@ -176,6 +178,7 @@ impl StripSpans for BitflagsStatement {
             doc_comments: self.doc_comments.clone(),
             inline_trailing_comments: Vec::new(), // Strip trailing comments
             following_comments: Vec::new(),
+            span: crate::span::Span::synthetic(),
         }
     }
 }
