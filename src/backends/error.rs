@@ -1,7 +1,7 @@
 use std::fmt;
 
-use ariadne::{Color, Label, Report, ReportKind, Source};
 use crate::{grammar::ItemPath, semantic::SemanticError, span::Span};
+use ariadne::{Color, Label, Report, ReportKind, Source};
 
 /// Backend code generation errors
 #[derive(Debug)]
@@ -67,7 +67,12 @@ impl BackendError {
             let middle_lines_len: usize = source
                 .lines()
                 .skip(span.start.line)
-                .take(span.end.line.saturating_sub(span.start.line).saturating_sub(1))
+                .take(
+                    span.end
+                        .line
+                        .saturating_sub(span.start.line)
+                        .saturating_sub(1),
+                )
                 .map(|line| line.len() + 1)
                 .sum();
             let last_line_len = span.end.column.saturating_sub(1);
@@ -107,7 +112,10 @@ impl fmt::Display for BackendError {
 
                     let mut buffer = Vec::new();
                     report
-                        .write((filename.as_ref(), Source::from(source.as_ref())), &mut buffer)
+                        .write(
+                            (filename.as_ref(), Source::from(source.as_ref())),
+                            &mut buffer,
+                        )
                         .map_err(|_| fmt::Error)?;
                     write!(f, "{}", String::from_utf8_lossy(&buffer))
                 } else {
@@ -144,7 +152,10 @@ impl fmt::Display for BackendError {
 
                     let mut buffer = Vec::new();
                     report
-                        .write((filename.as_ref(), Source::from(source.as_ref())), &mut buffer)
+                        .write(
+                            (filename.as_ref(), Source::from(source.as_ref())),
+                            &mut buffer,
+                        )
                         .map_err(|_| fmt::Error)?;
                     write!(f, "{}", String::from_utf8_lossy(&buffer))
                 } else {
@@ -180,7 +191,10 @@ impl fmt::Display for BackendError {
 
                     let mut buffer = Vec::new();
                     report
-                        .write((filename.as_ref(), Source::from(source.as_ref())), &mut buffer)
+                        .write(
+                            (filename.as_ref(), Source::from(source.as_ref())),
+                            &mut buffer,
+                        )
                         .map_err(|_| fmt::Error)?;
                     write!(f, "{}", String::from_utf8_lossy(&buffer))
                 } else {

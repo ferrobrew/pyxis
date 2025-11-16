@@ -184,15 +184,13 @@ fn build_type(
     visibility: Visibility,
     type_definition: &TypeDefinition,
 ) -> Result<proc_macro2::TokenStream> {
-    let name = path
-        .last()
-        .ok_or_else(|| BackendError::TypeCodeGenFailed {
-            type_path: path.clone(),
-            reason: "failed to get last component of item path".to_string(),
-            span: None,
-            filename: None,
-            source: None,
-        })?;
+    let name = path.last().ok_or_else(|| BackendError::TypeCodeGenFailed {
+        type_path: path.clone(),
+        reason: "failed to get last component of item path".to_string(),
+        span: None,
+        filename: None,
+        source: None,
+    })?;
 
     let TypeDefinition {
         singleton,
@@ -452,15 +450,13 @@ fn build_enum(
     visibility: Visibility,
     enum_definition: &EnumDefinition,
 ) -> Result<proc_macro2::TokenStream> {
-    let name = path
-        .last()
-        .ok_or_else(|| BackendError::TypeCodeGenFailed {
-            type_path: path.clone(),
-            reason: "failed to get last component of item path".to_string(),
-            span: None,
-            filename: None,
-            source: None,
-        })?;
+    let name = path.last().ok_or_else(|| BackendError::TypeCodeGenFailed {
+        type_path: path.clone(),
+        reason: "failed to get last component of item path".to_string(),
+        span: None,
+        filename: None,
+        source: None,
+    })?;
 
     let EnumDefinition {
         singleton,
@@ -568,15 +564,13 @@ fn build_bitflags(
     visibility: Visibility,
     bitflags_definition: &BitflagsDefinition,
 ) -> Result<proc_macro2::TokenStream> {
-    let name = path
-        .last()
-        .ok_or_else(|| BackendError::TypeCodeGenFailed {
-            type_path: path.clone(),
-            reason: "failed to get last component of item path".to_string(),
-            span: None,
-            filename: None,
-            source: None,
-        })?;
+    let name = path.last().ok_or_else(|| BackendError::TypeCodeGenFailed {
+        type_path: path.clone(),
+        reason: "failed to get last component of item path".to_string(),
+        span: None,
+        filename: None,
+        source: None,
+    })?;
 
     let BitflagsDefinition {
         singleton,

@@ -844,7 +844,10 @@ impl fmt::Display for SemanticError {
 
                     let mut buffer = Vec::new();
                     report
-                        .write((filename.as_ref(), Source::from(source.as_ref())), &mut buffer)
+                        .write(
+                            (filename.as_ref(), Source::from(source.as_ref())),
+                            &mut buffer,
+                        )
                         .map_err(|_| fmt::Error)?;
                     write!(f, "{}", String::from_utf8_lossy(&buffer))
                 } else {
@@ -970,7 +973,10 @@ impl fmt::Display for SemanticError {
 
                     let mut buffer = Vec::new();
                     report
-                        .write((filename.as_ref(), Source::from(source.as_ref())), &mut buffer)
+                        .write(
+                            (filename.as_ref(), Source::from(source.as_ref())),
+                            &mut buffer,
+                        )
                         .map_err(|_| fmt::Error)?;
                     write!(f, "{}", String::from_utf8_lossy(&buffer))
                 } else {
@@ -1004,7 +1010,10 @@ impl fmt::Display for SemanticError {
 
                     let mut buffer = Vec::new();
                     report
-                        .write((filename.as_ref(), Source::from(source.as_ref())), &mut buffer)
+                        .write(
+                            (filename.as_ref(), Source::from(source.as_ref())),
+                            &mut buffer,
+                        )
                         .map_err(|_| fmt::Error)?;
                     write!(f, "{}", String::from_utf8_lossy(&buffer))
                 } else {
@@ -1026,7 +1035,10 @@ impl fmt::Display for SemanticError {
                     let length = Self::span_length(source, span.as_ref());
 
                     let report = Report::build(ReportKind::Error, filename.as_ref(), offset)
-                        .with_message(format!("Function `{}` has no implementation", function_name))
+                        .with_message(format!(
+                            "Function `{}` has no implementation",
+                            function_name
+                        ))
                         .with_label(
                             Label::new((filename.as_ref(), offset..offset + length.max(1)))
                                 .with_message("missing address attribute?")
@@ -1036,7 +1048,10 @@ impl fmt::Display for SemanticError {
 
                     let mut buffer = Vec::new();
                     report
-                        .write((filename.as_ref(), Source::from(source.as_ref())), &mut buffer)
+                        .write(
+                            (filename.as_ref(), Source::from(source.as_ref())),
+                            &mut buffer,
+                        )
                         .map_err(|_| fmt::Error)?;
                     write!(f, "{}", String::from_utf8_lossy(&buffer))
                 } else {
@@ -1072,7 +1087,10 @@ impl fmt::Display for SemanticError {
 
                     let mut buffer = Vec::new();
                     report
-                        .write((filename.as_ref(), Source::from(source.as_ref())), &mut buffer)
+                        .write(
+                            (filename.as_ref(), Source::from(source.as_ref())),
+                            &mut buffer,
+                        )
                         .map_err(|_| fmt::Error)?;
                     write!(f, "{}", String::from_utf8_lossy(&buffer))
                 } else {
@@ -1095,7 +1113,10 @@ impl fmt::Display for SemanticError {
                     let length = Self::span_length(source, span.as_ref());
 
                     let report = Report::build(ReportKind::Error, filename.as_ref(), offset)
-                        .with_message(format!("Attribute `{}` is not supported for {}", attribute_name, context))
+                        .with_message(format!(
+                            "Attribute `{}` is not supported for {}",
+                            attribute_name, context
+                        ))
                         .with_label(
                             Label::new((filename.as_ref(), offset..offset + length.max(1)))
                                 .with_message("unsupported attribute")
@@ -1105,7 +1126,10 @@ impl fmt::Display for SemanticError {
 
                     let mut buffer = Vec::new();
                     report
-                        .write((filename.as_ref(), Source::from(source.as_ref())), &mut buffer)
+                        .write(
+                            (filename.as_ref(), Source::from(source.as_ref())),
+                            &mut buffer,
+                        )
                         .map_err(|_| fmt::Error)?;
                     write!(f, "{}", String::from_utf8_lossy(&buffer))
                 } else {
@@ -1158,14 +1182,20 @@ impl fmt::Display for SemanticError {
                         .with_message(format!("Failed to convert `{}` to {}", value, target_type))
                         .with_label(
                             Label::new((filename.as_ref(), offset..offset + length.max(1)))
-                                .with_message(format!("cannot convert to {} in {}", target_type, context))
+                                .with_message(format!(
+                                    "cannot convert to {} in {}",
+                                    target_type, context
+                                ))
                                 .with_color(Color::Red),
                         )
                         .finish();
 
                     let mut buffer = Vec::new();
                     report
-                        .write((filename.as_ref(), Source::from(source.as_ref())), &mut buffer)
+                        .write(
+                            (filename.as_ref(), Source::from(source.as_ref())),
+                            &mut buffer,
+                        )
                         .map_err(|_| fmt::Error)?;
                     write!(f, "{}", String::from_utf8_lossy(&buffer))
                 } else {
@@ -1203,7 +1233,10 @@ impl fmt::Display for SemanticError {
 
                     let mut buffer = Vec::new();
                     report
-                        .write((filename.as_ref(), Source::from(source.as_ref())), &mut buffer)
+                        .write(
+                            (filename.as_ref(), Source::from(source.as_ref())),
+                            &mut buffer,
+                        )
                         .map_err(|_| fmt::Error)?;
                     write!(f, "{}", String::from_utf8_lossy(&buffer))
                 } else {

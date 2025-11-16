@@ -3,11 +3,11 @@ use std::collections::HashSet;
 use crate::{
     grammar::{self, ItemPath},
     semantic::{
+        SemanticState,
         error::{Result, SemanticError},
         function,
         type_registry::TypeRegistry,
         types::{Function, FunctionBody, ItemState, ItemStateResolved, Type, Visibility},
-        SemanticState,
     },
     span::Span,
     util,
@@ -589,7 +589,11 @@ pub fn build(
                         if let Some(item_def) = semantic.type_registry.get(resolvee_path) {
                             if let Some(ref filename) = item_def.filename {
                                 if let Some(source) = semantic.source_cache.get(filename.as_ref()) {
-                                    error = error.with_span_and_source(span.clone(), filename.as_ref(), source);
+                                    error = error.with_span_and_source(
+                                        span.clone(),
+                                        filename.as_ref(),
+                                        source,
+                                    );
                                 }
                             }
                         }
