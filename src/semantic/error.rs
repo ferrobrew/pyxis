@@ -48,7 +48,13 @@ pub enum SemanticError {
         source: Option<Box<str>>,
     },
     /// Type resolution failed
-    TypeResolutionFailed { type_name: String, context: String },
+    TypeResolutionFailed {
+        type_name: String,
+        context: String,
+        span: Option<Box<Span>>,
+        filename: Option<Box<str>>,
+        source: Option<Box<str>>,
+    },
     /// Type resolution stalled (circular dependency or missing type)
     TypeResolutionStalled {
         unresolved_types: Vec<String>,
@@ -92,24 +98,43 @@ pub enum SemanticError {
         source: Option<Box<str>>,
     },
     /// Vftable must be first field
-    VftableMustBeFirst { item_path: ItemPath },
+    VftableMustBeFirst {
+        item_path: ItemPath,
+        span: Option<Box<Span>>,
+        filename: Option<Box<str>>,
+        source: Option<Box<str>>,
+    },
     /// Duplicate definition
     DuplicateDefinition {
         name: String,
         item_path: ItemPath,
         context: String,
+        span: Option<Box<Span>>,
+        filename: Option<Box<str>>,
+        source: Option<Box<str>>,
     },
     /// Function missing implementation
-    FunctionMissingImplementation { function_name: String },
+    FunctionMissingImplementation {
+        function_name: String,
+        span: Option<Box<Span>>,
+        filename: Option<Box<str>>,
+        source: Option<Box<str>>,
+    },
     /// Invalid calling convention
     InvalidCallingConvention {
         convention: String,
         function_name: String,
+        span: Option<Box<Span>>,
+        filename: Option<Box<str>>,
+        source: Option<Box<str>>,
     },
     /// Attribute not supported in context
     AttributeNotSupported {
         attribute_name: String,
         context: String,
+        span: Option<Box<Span>>,
+        filename: Option<Box<str>>,
+        source: Option<Box<str>>,
     },
     /// Enum or bitflags error
     EnumError {
@@ -133,6 +158,9 @@ pub enum SemanticError {
         value: String,
         target_type: String,
         context: String,
+        span: Option<Box<Span>>,
+        filename: Option<Box<str>>,
+        source: Option<Box<str>>,
     },
     /// Overlapping regions
     OverlappingRegions {
@@ -140,6 +168,9 @@ pub enum SemanticError {
         region_name: String,
         address: usize,
         existing_end: usize,
+        span: Option<Box<Span>>,
+        filename: Option<Box<str>>,
+        source: Option<Box<str>>,
     },
     /// IO error
     Io {
@@ -219,6 +250,9 @@ impl SemanticError {
         Self::TypeResolutionFailed {
             type_name: type_name.into(),
             context: context.into(),
+            span: None,
+            filename: None,
+            source: None,
         }
     }
 
@@ -290,6 +324,9 @@ impl SemanticError {
             name: name.into(),
             item_path,
             context: context.into(),
+            span: None,
+            filename: None,
+            source: None,
         }
     }
 
@@ -312,6 +349,9 @@ impl SemanticError {
             value: value.into(),
             target_type: target_type.into(),
             context: context.into(),
+            span: None,
+            filename: None,
+            source: None,
         }
     }
 
@@ -322,6 +362,9 @@ impl SemanticError {
         Self::AttributeNotSupported {
             attribute_name: attribute_name.into(),
             context: context.into(),
+            span: None,
+            filename: None,
+            source: None,
         }
     }
 
@@ -779,8 +822,34 @@ impl fmt::Display for SemanticError {
                     attr1, attr2, item_path
                 )
             }
-            SemanticError::TypeResolutionFailed { type_name, context } => {
-                write!(f, "Failed to resolve type `{}`: {}", type_name, context)
+            SemanticError::TypeResolutionFailed {
+                type_name,
+                context,
+                span,
+                filename,
+                source,
+            } => {
+                if let (Some(span), Some(filename), Some(source)) = (span, filename, source) {
+                    let offset = Self::span_to_offset(source, span.as_ref());
+                    let length = Self::span_length(source, span.as_ref());
+
+                    let report = Report::build(ReportKind::Error, filename.as_ref(), offset)
+                        .with_message(format!("Failed to resolve type `{}`", type_name))
+                        .with_label(
+                            Label::new((filename.as_ref(), offset..offset + length.max(1)))
+                                .with_message(context)
+                                .with_color(Color::Red),
+                        )
+                        .finish();
+
+                    let mut buffer = Vec::new();
+                    report
+                        .write((filename.as_ref(), Source::from(source.as_ref())), &mut buffer)
+                        .map_err(|_| fmt::Error)?;
+                    write!(f, "{}", String::from_utf8_lossy(&buffer))
+                } else {
+                    write!(f, "Failed to resolve type `{}`: {}", type_name, context)
+                }
             }
             SemanticError::TypeResolutionStalled {
                 unresolved_types,
@@ -877,50 +946,175 @@ impl fmt::Display for SemanticError {
                     write!(f, "{}", message)
                 }
             }
-            SemanticError::VftableMustBeFirst { item_path } => {
-                write!(
-                    f,
-                    "Vftable field must be the first field in type `{}`",
-                    item_path
-                )
+            SemanticError::VftableMustBeFirst {
+                item_path,
+                span,
+                filename,
+                source,
+            } => {
+                if let (Some(span), Some(filename), Some(source)) = (span, filename, source) {
+                    let offset = Self::span_to_offset(source, span.as_ref());
+                    let length = Self::span_length(source, span.as_ref());
+
+                    let report = Report::build(ReportKind::Error, filename.as_ref(), offset)
+                        .with_message(format!(
+                            "Vftable field must be the first field in type `{}`",
+                            item_path
+                        ))
+                        .with_label(
+                            Label::new((filename.as_ref(), offset..offset + length.max(1)))
+                                .with_message("vftable must be the first field")
+                                .with_color(Color::Red),
+                        )
+                        .finish();
+
+                    let mut buffer = Vec::new();
+                    report
+                        .write((filename.as_ref(), Source::from(source.as_ref())), &mut buffer)
+                        .map_err(|_| fmt::Error)?;
+                    write!(f, "{}", String::from_utf8_lossy(&buffer))
+                } else {
+                    write!(
+                        f,
+                        "Vftable field must be the first field in type `{}`",
+                        item_path
+                    )
+                }
             }
             SemanticError::DuplicateDefinition {
                 name,
                 item_path,
                 context,
+                span,
+                filename,
+                source,
             } => {
-                write!(
-                    f,
-                    "Duplicate definition of `{}` in `{}` ({})",
-                    name, item_path, context
-                )
+                if let (Some(span), Some(filename), Some(source)) = (span, filename, source) {
+                    let offset = Self::span_to_offset(source, span.as_ref());
+                    let length = Self::span_length(source, span.as_ref());
+
+                    let report = Report::build(ReportKind::Error, filename.as_ref(), offset)
+                        .with_message(format!("Duplicate definition of `{}`", name))
+                        .with_label(
+                            Label::new((filename.as_ref(), offset..offset + length.max(1)))
+                                .with_message(format!("duplicate {} in `{}`", context, item_path))
+                                .with_color(Color::Red),
+                        )
+                        .finish();
+
+                    let mut buffer = Vec::new();
+                    report
+                        .write((filename.as_ref(), Source::from(source.as_ref())), &mut buffer)
+                        .map_err(|_| fmt::Error)?;
+                    write!(f, "{}", String::from_utf8_lossy(&buffer))
+                } else {
+                    write!(
+                        f,
+                        "Duplicate definition of `{}` in `{}` ({})",
+                        name, item_path, context
+                    )
+                }
             }
-            SemanticError::FunctionMissingImplementation { function_name } => {
-                write!(
-                    f,
-                    "Function `{}` has no implementation (missing address attribute?)",
-                    function_name
-                )
+            SemanticError::FunctionMissingImplementation {
+                function_name,
+                span,
+                filename,
+                source,
+            } => {
+                if let (Some(span), Some(filename), Some(source)) = (span, filename, source) {
+                    let offset = Self::span_to_offset(source, span.as_ref());
+                    let length = Self::span_length(source, span.as_ref());
+
+                    let report = Report::build(ReportKind::Error, filename.as_ref(), offset)
+                        .with_message(format!("Function `{}` has no implementation", function_name))
+                        .with_label(
+                            Label::new((filename.as_ref(), offset..offset + length.max(1)))
+                                .with_message("missing address attribute?")
+                                .with_color(Color::Red),
+                        )
+                        .finish();
+
+                    let mut buffer = Vec::new();
+                    report
+                        .write((filename.as_ref(), Source::from(source.as_ref())), &mut buffer)
+                        .map_err(|_| fmt::Error)?;
+                    write!(f, "{}", String::from_utf8_lossy(&buffer))
+                } else {
+                    write!(
+                        f,
+                        "Function `{}` has no implementation (missing address attribute?)",
+                        function_name
+                    )
+                }
             }
             SemanticError::InvalidCallingConvention {
                 convention,
                 function_name,
+                span,
+                filename,
+                source,
             } => {
-                write!(
-                    f,
-                    "Invalid calling convention `{}` for function `{}`",
-                    convention, function_name
-                )
+                if let (Some(span), Some(filename), Some(source)) = (span, filename, source) {
+                    let offset = Self::span_to_offset(source, span.as_ref());
+                    let length = Self::span_length(source, span.as_ref());
+
+                    let report = Report::build(ReportKind::Error, filename.as_ref(), offset)
+                        .with_message(format!(
+                            "Invalid calling convention `{}` for function `{}`",
+                            convention, function_name
+                        ))
+                        .with_label(
+                            Label::new((filename.as_ref(), offset..offset + length.max(1)))
+                                .with_message("unsupported calling convention")
+                                .with_color(Color::Red),
+                        )
+                        .finish();
+
+                    let mut buffer = Vec::new();
+                    report
+                        .write((filename.as_ref(), Source::from(source.as_ref())), &mut buffer)
+                        .map_err(|_| fmt::Error)?;
+                    write!(f, "{}", String::from_utf8_lossy(&buffer))
+                } else {
+                    write!(
+                        f,
+                        "Invalid calling convention `{}` for function `{}`",
+                        convention, function_name
+                    )
+                }
             }
             SemanticError::AttributeNotSupported {
                 attribute_name,
                 context,
+                span,
+                filename,
+                source,
             } => {
-                write!(
-                    f,
-                    "Attribute `{}` is not supported for {}",
-                    attribute_name, context
-                )
+                if let (Some(span), Some(filename), Some(source)) = (span, filename, source) {
+                    let offset = Self::span_to_offset(source, span.as_ref());
+                    let length = Self::span_length(source, span.as_ref());
+
+                    let report = Report::build(ReportKind::Error, filename.as_ref(), offset)
+                        .with_message(format!("Attribute `{}` is not supported for {}", attribute_name, context))
+                        .with_label(
+                            Label::new((filename.as_ref(), offset..offset + length.max(1)))
+                                .with_message("unsupported attribute")
+                                .with_color(Color::Red),
+                        )
+                        .finish();
+
+                    let mut buffer = Vec::new();
+                    report
+                        .write((filename.as_ref(), Source::from(source.as_ref())), &mut buffer)
+                        .map_err(|_| fmt::Error)?;
+                    write!(f, "{}", String::from_utf8_lossy(&buffer))
+                } else {
+                    write!(
+                        f,
+                        "Attribute `{}` is not supported for {}",
+                        attribute_name, context
+                    )
+                }
             }
             SemanticError::EnumError {
                 item_path, message, ..
@@ -952,24 +1146,73 @@ impl fmt::Display for SemanticError {
                 value,
                 target_type,
                 context,
+                span,
+                filename,
+                source,
             } => {
-                write!(
-                    f,
-                    "Failed to convert `{}` to {} in {}",
-                    value, target_type, context
-                )
+                if let (Some(span), Some(filename), Some(source)) = (span, filename, source) {
+                    let offset = Self::span_to_offset(source, span.as_ref());
+                    let length = Self::span_length(source, span.as_ref());
+
+                    let report = Report::build(ReportKind::Error, filename.as_ref(), offset)
+                        .with_message(format!("Failed to convert `{}` to {}", value, target_type))
+                        .with_label(
+                            Label::new((filename.as_ref(), offset..offset + length.max(1)))
+                                .with_message(format!("cannot convert to {} in {}", target_type, context))
+                                .with_color(Color::Red),
+                        )
+                        .finish();
+
+                    let mut buffer = Vec::new();
+                    report
+                        .write((filename.as_ref(), Source::from(source.as_ref())), &mut buffer)
+                        .map_err(|_| fmt::Error)?;
+                    write!(f, "{}", String::from_utf8_lossy(&buffer))
+                } else {
+                    write!(
+                        f,
+                        "Failed to convert `{}` to {} in {}",
+                        value, target_type, context
+                    )
+                }
             }
             SemanticError::OverlappingRegions {
                 item_path,
                 region_name,
                 address,
                 existing_end,
+                span,
+                filename,
+                source,
             } => {
-                write!(
-                    f,
-                    "Overlapping regions in `{}`: attempted to insert padding at {:#x}, but overlapped with existing region `{}` that ends at {:#x}",
-                    item_path, address, region_name, existing_end
-                )
+                if let (Some(span), Some(filename), Some(source)) = (span, filename, source) {
+                    let offset = Self::span_to_offset(source, span.as_ref());
+                    let length = Self::span_length(source, span.as_ref());
+
+                    let report = Report::build(ReportKind::Error, filename.as_ref(), offset)
+                        .with_message(format!("Overlapping regions in `{}`", item_path))
+                        .with_label(
+                            Label::new((filename.as_ref(), offset..offset + length.max(1)))
+                                .with_message(format!(
+                                    "attempted to insert padding at {:#x}, but overlapped with existing region `{}` that ends at {:#x}",
+                                    address, region_name, existing_end
+                                ))
+                                .with_color(Color::Red),
+                        )
+                        .finish();
+
+                    let mut buffer = Vec::new();
+                    report
+                        .write((filename.as_ref(), Source::from(source.as_ref())), &mut buffer)
+                        .map_err(|_| fmt::Error)?;
+                    write!(f, "{}", String::from_utf8_lossy(&buffer))
+                } else {
+                    write!(
+                        f,
+                        "Overlapping regions in `{}`: attempted to insert padding at {:#x}, but overlapped with existing region `{}` that ends at {:#x}",
+                        item_path, address, region_name, existing_end
+                    )
+                }
             }
             SemanticError::Io { message, path } => {
                 if let Some(path) = path {

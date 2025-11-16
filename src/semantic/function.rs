@@ -267,6 +267,9 @@ pub fn build(
                             .map_err(|_| SemanticError::InvalidCallingConvention {
                                 convention: cc.clone(),
                                 function_name: function.name.0.clone(),
+                                span: None,
+                                filename: None,
+                                source: None,
                             })?,
                     );
             }
@@ -277,6 +280,9 @@ pub fn build(
     if !is_vfunc && body.is_none() {
         return Err(SemanticError::FunctionMissingImplementation {
             function_name: function.name.0.clone(),
+            span: None,
+            filename: None,
+            source: None,
         });
     }
 

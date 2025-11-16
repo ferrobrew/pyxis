@@ -338,6 +338,9 @@ pub fn build(
                 if idx != 0 {
                     return Err(SemanticError::VftableMustBeFirst {
                         item_path: resolvee_path.clone(),
+                        span: None,
+                        filename: None,
+                        source: None,
                     });
                 }
 
@@ -698,6 +701,9 @@ fn resolve_regions(
                     region_name: existing_region,
                     address: offset,
                     existing_end: resolved.last_address,
+                    span: None,
+                    filename: None,
+                    source: None,
                 });
             };
             let padding_region = Region::unnamed_field(semantic.type_registry.padding_type(size));

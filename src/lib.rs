@@ -30,7 +30,10 @@ pub enum BuildError {
     Semantic(semantic::SemanticError),
     Config(config::ConfigError),
     Glob(glob::PatternError),
-    Io(std::io::Error),
+    Io {
+        error: std::io::Error,
+        context: String,
+    },
     Backend(backends::BackendError),
 }
 
@@ -40,7 +43,7 @@ impl std::fmt::Display for BuildError {
             BuildError::Semantic(err) => write!(f, "{}", err),
             BuildError::Config(err) => write!(f, "{}", err),
             BuildError::Glob(err) => write!(f, "Glob pattern error: {}", err),
-            BuildError::Io(err) => write!(f, "IO error: {}", err),
+            BuildError::Io { error, context } => write!(f, "IO error: {} ({})", error, context),
             BuildError::Backend(err) => write!(f, "{}", err),
         }
     }
@@ -63,12 +66,6 @@ impl From<config::ConfigError> for BuildError {
 impl From<glob::PatternError> for BuildError {
     fn from(err: glob::PatternError) -> Self {
         BuildError::Glob(err)
-    }
-}
-
-impl From<std::io::Error> for BuildError {
-    fn from(err: std::io::Error) -> Self {
-        BuildError::Io(err)
     }
 }
 

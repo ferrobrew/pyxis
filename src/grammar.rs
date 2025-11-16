@@ -1,6 +1,6 @@
 use std::{fmt, path::Path};
 
-use crate::span::Spanned;
+use crate::span::{Span, Spanned};
 
 pub mod test_aliases {
     pub type M = super::Module;
@@ -464,7 +464,7 @@ pub struct TypeStatement {
     pub doc_comments: Vec<String>,
     pub inline_trailing_comments: Vec<Spanned<Comment>>, // Comments on same line as field
     pub following_comments: Vec<Spanned<Comment>>,       // Comments on lines after field
-    pub span: crate::span::Span,
+    pub span: Span,
 }
 impl TypeStatement {
     pub fn field((visibility, name): (Visibility, &str), type_: Type) -> TypeStatement {
@@ -474,7 +474,7 @@ impl TypeStatement {
             doc_comments: vec![],
             inline_trailing_comments: Vec::new(),
             following_comments: Vec::new(),
-            span: crate::span::Span::synthetic(),
+            span: Span::synthetic(),
         }
     }
     pub fn vftable(functions: impl IntoIterator<Item = Function>) -> TypeStatement {
@@ -484,10 +484,10 @@ impl TypeStatement {
             doc_comments: vec![],
             inline_trailing_comments: Vec::new(),
             following_comments: Vec::new(),
-            span: crate::span::Span::synthetic(),
+            span: Span::synthetic(),
         }
     }
-    pub fn with_span(mut self, span: crate::span::Span) -> Self {
+    pub fn with_span(mut self, span: Span) -> Self {
         self.span = span;
         self
     }
@@ -572,7 +572,7 @@ pub struct EnumStatement {
     pub doc_comments: Vec<String>,
     pub inline_trailing_comments: Vec<Spanned<Comment>>, // Comments on same line as enum variant
     pub following_comments: Vec<Spanned<Comment>>,       // Comments on lines after enum variant
-    pub span: crate::span::Span,
+    pub span: Span,
 }
 impl EnumStatement {
     pub fn new(name: Ident, expr: Option<Expr>) -> EnumStatement {
@@ -583,7 +583,7 @@ impl EnumStatement {
             doc_comments: vec![],
             inline_trailing_comments: Vec::new(),
             following_comments: Vec::new(),
-            span: crate::span::Span::synthetic(),
+            span: Span::synthetic(),
         }
     }
     pub fn field(name: &str) -> EnumStatement {
@@ -592,7 +592,7 @@ impl EnumStatement {
     pub fn field_with_expr(name: &str, expr: Expr) -> EnumStatement {
         Self::new(name.into(), Some(expr))
     }
-    pub fn with_span(mut self, span: crate::span::Span) -> Self {
+    pub fn with_span(mut self, span: Span) -> Self {
         self.span = span;
         self
     }
@@ -683,7 +683,7 @@ pub struct BitflagsStatement {
     pub doc_comments: Vec<String>,
     pub inline_trailing_comments: Vec<Spanned<Comment>>, // Comments on same line as bitflag
     pub following_comments: Vec<Spanned<Comment>>,       // Comments on lines after bitflag
-    pub span: crate::span::Span,
+    pub span: Span,
 }
 impl BitflagsStatement {
     pub fn new(name: Ident, expr: Expr) -> BitflagsStatement {
@@ -694,13 +694,13 @@ impl BitflagsStatement {
             doc_comments: vec![],
             inline_trailing_comments: Vec::new(),
             following_comments: Vec::new(),
-            span: crate::span::Span::synthetic(),
+            span: Span::synthetic(),
         }
     }
     pub fn field(name: &str, expr: Expr) -> BitflagsStatement {
         Self::new(name.into(), expr)
     }
-    pub fn with_span(mut self, span: crate::span::Span) -> Self {
+    pub fn with_span(mut self, span: Span) -> Self {
         self.span = span;
         self
     }
@@ -804,7 +804,7 @@ pub struct ItemDefinition {
     pub name: Ident,
     pub doc_comments: Vec<String>,
     pub inner: ItemDefinitionInner,
-    pub span: crate::span::Span,
+    pub span: Span,
 }
 impl ItemDefinition {
     pub fn new(
@@ -816,11 +816,11 @@ impl ItemDefinition {
             name: name.into(),
             doc_comments: vec![],
             inner: inner.into(),
-            span: crate::span::Span::synthetic(),
+            span: Span::synthetic(),
         }
     }
 
-    pub fn with_span(mut self, span: crate::span::Span) -> Self {
+    pub fn with_span(mut self, span: Span) -> Self {
         self.span = span;
         self
     }

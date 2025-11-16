@@ -995,7 +995,7 @@ impl Parser {
                     name,
                     doc_comments,
                     inner: ItemDefinitionInner::Type(def),
-                    span: crate::span::Span {
+                    span: Span {
                         start: start_pos,
                         end: end_pos,
                         text: String::new(),
@@ -1029,7 +1029,7 @@ impl Parser {
                         inline_trailing_comments: inline_trailing_comments.clone(),
                         following_comments: following_comments.clone(),
                     }),
-                    span: crate::span::Span {
+                    span: Span {
                         start: start_pos,
                         end: end_pos,
                         text: String::new(),
@@ -1063,7 +1063,7 @@ impl Parser {
                         inline_trailing_comments,
                         following_comments,
                     }),
-                    span: crate::span::Span {
+                    span: Span {
                         start: start_pos,
                         end: end_pos,
                         text: String::new(),
@@ -1156,7 +1156,7 @@ impl Parser {
                 doc_comments,
                 inline_trailing_comments: Vec::new(), // Will be populated by parse_type_def_items
                 following_comments: Vec::new(),
-                span: crate::span::Span {
+                span: Span {
                     start: start_pos,
                     end: end_pos,
                     text: String::new(),
@@ -1180,7 +1180,7 @@ impl Parser {
                 doc_comments,
                 inline_trailing_comments: Vec::new(), // Will be populated by parse_type_def_items
                 following_comments: Vec::new(),
-                span: crate::span::Span {
+                span: Span {
                     start: start_pos,
                     end: end_pos,
                     text: String::new(),
@@ -1269,7 +1269,7 @@ impl Parser {
             doc_comments,
             inline_trailing_comments: Vec::new(), // Will be populated by parse_enum_def_items
             following_comments: Vec::new(),
-            span: crate::span::Span {
+            span: Span {
                 start: start_pos,
                 end: end_pos,
                 text: String::new(),
@@ -1353,7 +1353,7 @@ impl Parser {
             doc_comments,
             inline_trailing_comments: Vec::new(), // Will be populated by parse_bitflags_def_items
             following_comments: Vec::new(),
-            span: crate::span::Span {
+            span: Span {
                 start: start_pos,
                 end: end_pos,
                 text: String::new(),

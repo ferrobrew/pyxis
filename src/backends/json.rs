@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, path::Path};
 
-use crate::backends::Result;
+use crate::backends::{BackendError, Result};
 use serde::{Deserialize, Serialize};
 
 use crate::semantic::{
@@ -357,12 +357,15 @@ pub fn build(
     // Write to file
     let output_path = out_dir.join("output.json");
     let json_string = serde_json::to_string_pretty(&documentation).map_err(|e| {
-        crate::backends::BackendError::Formatting(format!(
+        BackendError::Formatting(format!(
             "Failed to serialize JSON documentation: {}",
             e
         ))
     })?;
-    std::fs::write(&output_path, json_string)?;
+    std::fs::write(&output_path, &json_string).map_err(|e| BackendError::Io {
+        error: e,
+        context: format!("Failed to write JSON output to {}", output_path.display()),
+    })?;
 
     Ok(())
 }

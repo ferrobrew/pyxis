@@ -34,7 +34,10 @@ pub fn write_module(
     path.set_extension("rs");
 
     let directory_path = path.parent().map(|p| p.to_path_buf()).unwrap_or_default();
-    std::fs::create_dir_all(directory_path)?;
+    std::fs::create_dir_all(&directory_path).map_err(|e| BackendError::Io {
+        error: e,
+        context: format!("Failed to create directory {}", directory_path.display()),
+    })?;
 
     let mut raw_output = String::new();
 
@@ -127,7 +130,10 @@ pub fn write_module(
         raw_output
     };
 
-    std::fs::write(&path, output)?;
+    std::fs::write(&path, &output).map_err(|e| BackendError::Io {
+        error: e,
+        context: format!("Failed to write Rust output to {}", path.display()),
+    })?;
 
     if let Some(error) = error {
         return Err(BackendError::Formatting(error));
@@ -144,6 +150,9 @@ fn build_item(
         BackendError::TypeCodeGenFailed {
             type_path: definition.path.clone(),
             reason: "type was not resolved".to_string(),
+            span: definition.span.clone(),
+            filename: definition.filename.clone(),
+            source: None, // Backend doesn't have access to source cache
         }
     })?;
 
@@ -180,6 +189,9 @@ fn build_type(
         .ok_or_else(|| BackendError::TypeCodeGenFailed {
             type_path: path.clone(),
             reason: "failed to get last component of item path".to_string(),
+            span: None,
+            filename: None,
+            source: None,
         })?;
 
     let TypeDefinition {
@@ -213,6 +225,9 @@ fn build_type(
                     type_path: path.clone(),
                     field_name: "unnamed".to_string(),
                     reason: "field name not present".to_string(),
+                    span: None,
+                    filename: None,
+                    source: None,
                 })?;
             let field_ident = str_to_ident(field_name);
             let visibility = visibility_to_tokens(*visibility);
@@ -442,6 +457,9 @@ fn build_enum(
         .ok_or_else(|| BackendError::TypeCodeGenFailed {
             type_path: path.clone(),
             reason: "failed to get last component of item path".to_string(),
+            span: None,
+            filename: None,
+            source: None,
         })?;
 
     let EnumDefinition {
@@ -555,6 +573,9 @@ fn build_bitflags(
         .ok_or_else(|| BackendError::TypeCodeGenFailed {
             type_path: path.clone(),
             reason: "failed to get last component of item path".to_string(),
+            span: None,
+            filename: None,
+            source: None,
         })?;
 
     let BitflagsDefinition {
