@@ -437,7 +437,8 @@ pub fn build(
                 ));
             }
 
-            let function = function::build(&semantic.type_registry, &module.scope(), false, function)?;
+            let function =
+                function::build(&semantic.type_registry, &module.scope(), false, function)?;
             associated_functions_used_names.insert(function.name.clone());
             associated_functions.push(function);
         }
@@ -462,11 +463,11 @@ pub fn build(
                     _ => None,
                 }
             }
-            let Some(path) = get_defaultable_type_path(&type_ref) else {
+            let Some(path) = get_defaultable_type_path(type_ref) else {
                 return Err(SemanticError::defaultable_error(
                     name,
                     resolvee_path.clone(),
-                    "field type is not defaultable (pointer or function?)",
+                    "is not a defaultable type (pointer or function?)",
                 ));
             };
 
@@ -485,7 +486,7 @@ pub fn build(
                 return Err(SemanticError::defaultable_error(
                     name,
                     resolvee_path.clone(),
-                    "field type is not defaultable",
+                    "is not a defaultable type",
                 ));
             }
         }
@@ -522,7 +523,7 @@ pub fn build(
             return Err(SemanticError::alignment_error(
                 resolvee_path.clone(),
                 format!(
-                    "alignment {alignment} is less than minimum required alignment {required_alignment}"
+                    "alignment {alignment} is less than minimum required alignment {required_alignment} for type `{resolvee_path}`"
                 ),
             ));
         }
@@ -537,8 +538,8 @@ pub fn build(
                     return Err(SemanticError::alignment_error(
                         resolvee_path.clone(),
                         format!(
-                            "field `{name}` is located at {:#x}, which is not divisible by {alignment} (the alignment of the type of the field)",
-                            last_address
+                            "field `{name}` of type `{}` is located at {:#x}, which is not divisible by {alignment} (the alignment of the type of the field)",
+                            resolvee_path, last_address
                         ),
                     ));
                 }
@@ -550,7 +551,10 @@ pub fn build(
         if size % alignment != 0 {
             return Err(SemanticError::alignment_error(
                 resolvee_path.clone(),
-                format!("size {size} is not a multiple of alignment {alignment}"),
+                format!(
+                    "the type `{}` has a size of {}, which is not a multiple of its alignment {}",
+                    resolvee_path, size, alignment
+                ),
             ));
         }
 

@@ -257,7 +257,12 @@ impl SemanticState {
                 // Bail from the loop.
                 return Err(SemanticError::TypeResolutionStalled {
                     unresolved_types: to_resolve.iter().map(|s| s.to_string()).collect(),
-                    resolved_types: self.type_registry.resolved().iter().map(|s| s.to_string()).collect(),
+                    resolved_types: self
+                        .type_registry
+                        .resolved()
+                        .iter()
+                        .map(|s| s.to_string())
+                        .collect(),
                 });
             }
         }

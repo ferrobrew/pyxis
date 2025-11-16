@@ -261,12 +261,14 @@ pub fn build(
                 }
             }
             ("calling_convention", [grammar::Expr::StringLiteral(cc)]) => {
-                calling_convention = Some(cc.parse().map_err(|_| {
-                    SemanticError::InvalidCallingConvention {
-                        convention: cc.clone(),
-                        function_name: function.name.0.clone(),
-                    }
-                })?);
+                calling_convention =
+                    Some(
+                        cc.parse()
+                            .map_err(|_| SemanticError::InvalidCallingConvention {
+                                convention: cc.clone(),
+                                function_name: function.name.0.clone(),
+                            })?,
+                    );
             }
             _ => {}
         }
@@ -293,12 +295,14 @@ pub fn build(
             grammar::Argument::MutSelf => Ok(Argument::MutSelf),
             grammar::Argument::Named(name, type_) => Ok(Argument::Field(
                 name.0.clone(),
-                type_registry.resolve_grammar_type(scope, type_).ok_or_else(|| {
-                    SemanticError::type_resolution_failed(
-                        format!("{:?}", type_),
-                        format!("argument `{}` in function `{}`", name, function.name),
-                    )
-                })?,
+                type_registry
+                    .resolve_grammar_type(scope, type_)
+                    .ok_or_else(|| {
+                        SemanticError::type_resolution_failed(
+                            format!("{:?}", type_),
+                            format!("argument `{}` in function `{}`", name, function.name),
+                        )
+                    })?,
             )),
         })
         .collect::<Result<Vec<_>>>()?;

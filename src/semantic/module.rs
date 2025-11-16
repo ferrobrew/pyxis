@@ -105,12 +105,14 @@ impl Module {
 
         for ev in &mut self.extern_values {
             if let Type::Unresolved(type_ref) = &ev.type_ {
-                ev.type_ = type_registry.resolve_grammar_type(&scope, type_ref).ok_or_else(|| {
-                    SemanticError::type_resolution_failed(
-                        format!("{:?}", type_ref),
-                        format!("extern value {}", ev.name),
-                    )
-                })?;
+                ev.type_ = type_registry
+                    .resolve_grammar_type(&scope, type_ref)
+                    .ok_or_else(|| {
+                        SemanticError::type_resolution_failed(
+                            format!("{:?}", type_ref),
+                            format!("extern value {}", ev.name),
+                        )
+                    })?;
             }
         }
 

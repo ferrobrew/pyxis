@@ -149,8 +149,8 @@ pub fn build(
                         "vftable",
                         resolvee_path.clone(),
                         format!(
-                            "has function `{}` at index {} but base class `{}` has function `{}`",
-                            derived_vfunc, idx, base_name, base_vfunc
+                            "vftable for `{}` has function `{}` at index {} but base class `{}` has function `{}`",
+                            resolvee_path, derived_vfunc, idx, base_name, base_vfunc
                         ),
                     ));
                 }

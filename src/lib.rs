@@ -100,7 +100,11 @@ pub fn build_script(in_dir: &Path, out_dir: Option<&Path>) -> Result<(), BuildEr
 
     let out_dir = out_dir
         .map(|p| p.to_path_buf())
-        .or_else(|| std::env::var("OUT_DIR").ok().map(|s| Path::new(&s).to_path_buf()))
+        .or_else(|| {
+            std::env::var("OUT_DIR")
+                .ok()
+                .map(|s| Path::new(&s).to_path_buf())
+        })
         .ok_or_else(|| BuildError::Config("OUT_DIR not set".to_string()))?;
 
     build(in_dir, &out_dir, Backend::Rust)

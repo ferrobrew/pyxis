@@ -22,7 +22,10 @@ pub fn pointer_size() -> usize {
     })
 }
 
-pub fn build_state(module: &M, module_path: &IP) -> anyhow::Result<ResolvedSemanticState> {
+pub fn build_state(
+    module: &M,
+    module_path: &IP,
+) -> crate::semantic::error::Result<ResolvedSemanticState> {
     let mut semantic_state = SemanticState::new(pointer_size());
     semantic_state.add_module(module, module_path)?;
     semantic_state.build()
@@ -54,13 +57,7 @@ pub fn assert_ast_produces_type_definitions(
 #[track_caller]
 pub fn assert_ast_produces_failure(module: M, failure: &str) {
     let err = build_state(&module, &IP::from("test")).unwrap_err();
-    let mut msg = err.to_string();
-    let mut next_err = err.source();
-    while let Some(next) = next_err {
-        msg.push('\n');
-        msg.push_str(&next.to_string());
-        next_err = next.source();
-    }
+    let msg = err.to_string();
     assert_eq!(msg, failure);
 }
 

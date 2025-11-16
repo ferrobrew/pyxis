@@ -122,7 +122,7 @@ pub fn build(
                 return Err(SemanticError::enum_error(
                     resolvee_path.clone(),
                     format!("unsupported bitflags value for case `{name}`: {:?}", expr),
-                ))
+                ));
             }
         };
         fields.push((
@@ -196,14 +196,12 @@ pub fn build(
 
     Ok(Some(ItemStateResolved {
         size,
-        alignment: ty
-            .alignment(&semantic.type_registry)
-            .ok_or_else(|| {
-                SemanticError::type_resolution_failed(
-                    format!("{:?}", ty),
-                    format!("alignment for base type of bitflags `{resolvee_path}`"),
-                )
-            })?,
+        alignment: ty.alignment(&semantic.type_registry).ok_or_else(|| {
+            SemanticError::type_resolution_failed(
+                format!("{:?}", ty),
+                format!("alignment for base type of bitflags `{resolvee_path}`"),
+            )
+        })?,
         inner: BitflagsDefinition {
             type_: ty,
             doc,

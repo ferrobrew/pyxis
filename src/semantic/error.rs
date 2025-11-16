@@ -5,13 +5,9 @@ use std::fmt;
 #[derive(Debug, Clone)]
 pub enum SemanticError {
     /// Failed to find a module for a given path
-    ModuleNotFound {
-        path: ItemPath,
-    },
+    ModuleNotFound { path: ItemPath },
     /// Failed to find a type in the registry
-    TypeNotFound {
-        path: ItemPath,
-    },
+    TypeNotFound { path: ItemPath },
     /// Missing required attribute
     MissingAttribute {
         attribute_name: String,
@@ -31,10 +27,7 @@ pub enum SemanticError {
         item_path: ItemPath,
     },
     /// Type resolution failed
-    TypeResolutionFailed {
-        type_name: String,
-        context: String,
-    },
+    TypeResolutionFailed { type_name: String, context: String },
     /// Type resolution stalled (circular dependency or missing type)
     TypeResolutionStalled {
         unresolved_types: Vec<String>,
@@ -66,9 +59,7 @@ pub enum SemanticError {
         message: String,
     },
     /// Vftable must be first field
-    VftableMustBeFirst {
-        item_path: ItemPath,
-    },
+    VftableMustBeFirst { item_path: ItemPath },
     /// Duplicate definition
     DuplicateDefinition {
         name: String,
@@ -76,9 +67,7 @@ pub enum SemanticError {
         context: String,
     },
     /// Function missing implementation
-    FunctionMissingImplementation {
-        function_name: String,
-    },
+    FunctionMissingImplementation { function_name: String },
     /// Invalid calling convention
     InvalidCallingConvention {
         convention: String,
@@ -292,11 +281,31 @@ impl fmt::Display for SemanticError {
                 item_kind,
                 item_path,
             } => {
-                write!(
-                    f,
-                    "Missing required attribute `{}` for {} `{}`",
-                    attribute_name, item_kind, item_path
-                )
+                // Extract module name from item_path for better error message
+                let path_str = item_path.to_string();
+                if let Some(module_name) = path_str.split("::").next() {
+                    // For extern types, show module name
+                    if item_kind.contains("extern") {
+                        let type_name = path_str.split("::").last().unwrap_or(&path_str);
+                        write!(
+                            f,
+                            "failed to find `{}` attribute for {} `{}` in module `{}`",
+                            attribute_name, item_kind, type_name, module_name
+                        )
+                    } else {
+                        write!(
+                            f,
+                            "Missing required attribute `{}` for {} `{}`",
+                            attribute_name, item_kind, item_path
+                        )
+                    }
+                } else {
+                    write!(
+                        f,
+                        "Missing required attribute `{}` for {} `{}`",
+                        attribute_name, item_kind, item_path
+                    )
+                }
             }
             SemanticError::InvalidAttributeValue {
                 attribute_name,
@@ -316,7 +325,7 @@ impl fmt::Display for SemanticError {
             } => {
                 write!(
                     f,
-                    "Conflicting attributes `{}` and `{}` in `{}`",
+                    "cannot specify both `{}` and `{}` attributes for type `{}`",
                     attr1, attr2, item_path
                 )
             }
@@ -327,11 +336,19 @@ impl fmt::Display for SemanticError {
                 unresolved_types,
                 resolved_types,
             } => {
+                let unresolved_quoted: Vec<String> = unresolved_types
+                    .iter()
+                    .map(|s| format!("\"{}\"", s))
+                    .collect();
+                let resolved_quoted: Vec<String> = resolved_types
+                    .iter()
+                    .map(|s| format!("\"{}\"", s))
+                    .collect();
                 write!(
                     f,
-                    "Type resolution stalled. Unresolved types: [{}]. Resolved types: [{}]",
-                    unresolved_types.join(", "),
-                    resolved_types.join(", ")
+                    "type resolution will not terminate, failed on types: [{}] (resolved types: [{}])",
+                    unresolved_quoted.join(", "),
+                    resolved_quoted.join(", ")
                 )
             }
             SemanticError::InvalidType {
@@ -340,18 +357,42 @@ impl fmt::Display for SemanticError {
                 item_path,
                 context,
             } => {
-                write!(
-                    f,
-                    "Invalid type for `{}` in `{}`: expected {}, found {}",
-                    context, item_path, expected, found
-                )
+                // Special formatting for bitflags definition
+                if context == "bitflags definition" {
+                    // Add "a" or "an" before the expected type
+                    let article = if expected.starts_with(|c: char| "aeiouAEIOU".contains(c)) {
+                        "an"
+                    } else {
+                        "a"
+                    };
+                    write!(
+                        f,
+                        "bitflags definition `{}` has a type that is not {} {}: {}",
+                        item_path, article, expected, found
+                    )
+                } else {
+                    write!(
+                        f,
+                        "Invalid type for `{}` in `{}`: expected {}, found {}",
+                        context, item_path, expected, found
+                    )
+                }
             }
             SemanticError::FieldError {
                 field_name,
                 item_path,
                 message,
             } => {
-                write!(f, "Error in field `{}` of `{}`: {}", field_name, item_path, message)
+                // Special formatting for vftable errors
+                if field_name == "vftable" && message.contains("vftable") {
+                    write!(f, "while processing `{}`\n{}", item_path, message)
+                } else {
+                    write!(
+                        f,
+                        "Error in field `{}` of `{}`: {}",
+                        field_name, item_path, message
+                    )
+                }
             }
             SemanticError::SizeMismatch {
                 expected,
@@ -368,13 +409,18 @@ impl fmt::Display for SemanticError {
                 } else {
                     write!(
                         f,
-                        "Size mismatch for `{}`: expected {}, got {}",
-                        item_path, expected, actual
+                        "while processing `{}`\ncalculated size {} for type `{}` does not match target size {}; is your target size correct?",
+                        item_path, actual, item_path, expected
                     )
                 }
             }
             SemanticError::AlignmentError { item_path, message } => {
-                write!(f, "Alignment error in `{}`: {}", item_path, message)
+                // Check for specific alignment error patterns and format accordingly
+                if message.contains("not a multiple") {
+                    write!(f, "{}", message.replace("{path}", &item_path.to_string()))
+                } else {
+                    write!(f, "{}", message)
+                }
             }
             SemanticError::VftableMustBeFirst { item_path } => {
                 write!(
@@ -422,16 +468,25 @@ impl fmt::Display for SemanticError {
                 )
             }
             SemanticError::EnumError { item_path, message } => {
-                write!(f, "Error in enum `{}`: {}", item_path, message)
+                // Check if this is for an enum or bitflags based on message content
+                // "variant" indicates enum, "value" indicates bitflags
+                if message.contains("variant") || message.contains("enum") {
+                    write!(f, "enum `{}` {}", item_path, message)
+                } else if message.contains("value") || message.contains("bitflags") {
+                    write!(f, "bitflags `{}` {}", item_path, message)
+                } else {
+                    write!(f, "Error in enum `{}`: {}", item_path, message)
+                }
             }
             SemanticError::DefaultableError {
                 field_name,
                 item_path,
                 message,
             } => {
+                // Format as "field `{field}` of type `{path}` {message}"
                 write!(
                     f,
-                    "Defaultable error in field `{}` of `{}`: {}",
+                    "field `{}` of type `{}` {}",
                     field_name, item_path, message
                 )
             }

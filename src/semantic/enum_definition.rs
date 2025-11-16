@@ -108,7 +108,7 @@ pub fn build(
                 return Err(SemanticError::enum_error(
                     resolvee_path.clone(),
                     format!("unsupported enum value for case `{name}`: {:?}", expr),
-                ))
+                ));
             }
             None => last_field,
         };
@@ -178,22 +178,24 @@ pub fn build(
     let mut associated_functions = vec![];
     if let Some(enum_impl) = module.impls.get(resolvee_path) {
         for function in enum_impl.functions().collect::<Vec<_>>() {
-            let function =
-                crate::semantic::function::build(&semantic.type_registry, &module.scope(), false, function)?;
+            let function = crate::semantic::function::build(
+                &semantic.type_registry,
+                &module.scope(),
+                false,
+                function,
+            )?;
             associated_functions.push(function);
         }
     }
 
     Ok(Some(ItemStateResolved {
         size,
-        alignment: ty
-            .alignment(&semantic.type_registry)
-            .ok_or_else(|| {
-                SemanticError::type_resolution_failed(
-                    format!("{:?}", ty),
-                    format!("alignment for base type of enum `{resolvee_path}`"),
-                )
-            })?,
+        alignment: ty.alignment(&semantic.type_registry).ok_or_else(|| {
+            SemanticError::type_resolution_failed(
+                format!("{:?}", ty),
+                format!("alignment for base type of enum `{resolvee_path}`"),
+            )
+        })?,
         inner: EnumDefinition {
             type_: ty,
             doc,
