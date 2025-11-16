@@ -1,5 +1,8 @@
 use crate::{
-    grammar::{ItemDefinitionInner, ModuleItem, TypeDefItem, Visibility, test_aliases::*},
+    grammar::{
+        ItemDefinitionInner, ModuleItem, TypeDefItem, Visibility,
+        test_aliases::{int_literal, *},
+    },
     parser::{ParseError, parse_str, strip_spans::StripSpans},
     tokenizer::TokenKind,
 };
@@ -342,10 +345,10 @@ fn can_parse_enum() {
         ED::new(
             T::ident("u32"),
             [
-                ES::field_with_expr("Item0", E::IntLiteral(-5)),
+                ES::field_with_expr("Item0", int_literal(-5)),
                 ES::field("Item1").with_attributes([A::default()]),
                 ES::field("Item2"),
-                ES::field_with_expr("Item3", E::IntLiteral(10)),
+                ES::field_with_expr("Item3", int_literal(10)),
                 ES::field("Item4"),
             ],
             [A::singleton(0x1234)],
@@ -373,10 +376,10 @@ fn can_parse_bitflags() {
         BFD::new(
             T::ident("u32"),
             [
-                BFS::field("Item1", E::IntLiteral(0b0001)).with_attributes([A::default()]),
-                BFS::field("Item2", E::IntLiteral(0b0010)),
-                BFS::field("Item3", E::IntLiteral(0b0100)),
-                BFS::field("Item4", E::IntLiteral(0b1000)),
+                BFS::field("Item1", int_literal(0b0001)).with_attributes([A::default()]),
+                BFS::field("Item2", int_literal(0b0010)),
+                BFS::field("Item3", int_literal(0b0100)),
+                BFS::field("Item4", int_literal(0b1000)),
             ],
             [A::singleton(0x1234)],
         ),

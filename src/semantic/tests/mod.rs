@@ -1,5 +1,5 @@
 use crate::{
-    grammar::test_aliases::*,
+    grammar::test_aliases::{int_literal, *},
     semantic::{semantic_state::SemanticState, types::test_aliases::*},
 };
 
@@ -658,10 +658,10 @@ fn can_resolve_enum() {
             ED::new(
                 T::ident("u32"),
                 [
-                    ES::field_with_expr("Item0", E::IntLiteral(-2)),
+                    ES::field_with_expr("Item0", int_literal(-2)),
                     ES::field("Item1"),
                     ES::field("Item2"),
-                    ES::field_with_expr("Item3", E::IntLiteral(10)),
+                    ES::field_with_expr("Item3", int_literal(10)),
                     ES::field("Item4"),
                 ],
                 [A::singleton(0x1234)],
@@ -1104,10 +1104,10 @@ fn can_resolve_bitflags() {
             BFD::new(
                 T::ident("u32"),
                 [
-                    BFS::field("Item1", E::IntLiteral(0b0001)),
-                    BFS::field("Item2", E::IntLiteral(0b0010)),
-                    BFS::field("Item3", E::IntLiteral(0b0100)),
-                    BFS::field("Item4", E::IntLiteral(0b1000)),
+                    BFS::field("Item1", int_literal(0b0001)),
+                    BFS::field("Item2", int_literal(0b0010)),
+                    BFS::field("Item3", int_literal(0b0100)),
+                    BFS::field("Item4", int_literal(0b1000)),
                 ],
                 [A::singleton(0x1234)],
             ),
@@ -1137,8 +1137,8 @@ fn bitflags_handle_defaultable_correctly() {
             BFD::new(
                 T::ident("u32"),
                 [
-                    BFS::field("Item1", E::IntLiteral(0b0001)),
-                    BFS::field("Item2", E::IntLiteral(0b0010)),
+                    BFS::field("Item1", int_literal(0b0001)),
+                    BFS::field("Item2", int_literal(0b0010)),
                 ],
                 [],
             )
@@ -1153,8 +1153,8 @@ fn bitflags_handle_defaultable_correctly() {
             BFD::new(
                 T::ident("u32"),
                 [
-                    BFS::field("Item1", E::IntLiteral(0b0001)),
-                    BFS::field("Item2", E::IntLiteral(0b0010)).with_attributes([A::default()]),
+                    BFS::field("Item1", int_literal(0b0001)),
+                    BFS::field("Item2", int_literal(0b0010)).with_attributes([A::default()]),
                 ],
                 [],
             )
@@ -1169,8 +1169,8 @@ fn bitflags_handle_defaultable_correctly() {
             BFD::new(
                 T::ident("u32"),
                 [
-                    BFS::field("Item1", E::IntLiteral(0b0001)),
-                    BFS::field("Item2", E::IntLiteral(0b0010)).with_attributes([A::default()]),
+                    BFS::field("Item1", int_literal(0b0001)),
+                    BFS::field("Item2", int_literal(0b0010)).with_attributes([A::default()]),
                 ],
                 [],
             )
@@ -1199,8 +1199,8 @@ fn bitflags_with_invalid_underlying_type_are_rejected() {
                     BFD::new(
                         T::ident(invalid_type),
                         [
-                            BFS::field("Item1", E::IntLiteral(0b0001)),
-                            BFS::field("Item2", E::IntLiteral(0b0010)),
+                            BFS::field("Item1", int_literal(0b0001)),
+                            BFS::field("Item2", int_literal(0b0010)),
                         ],
                         [],
                     ),
@@ -1222,8 +1222,8 @@ fn bitflags_with_invalid_underlying_type_are_rejected() {
             BFD::new(
                 T::ident("u32"),
                 [
-                    BFS::field("Item1", E::IntLiteral(0b0001)),
-                    BFS::field("Item2", E::IntLiteral(0b0010)),
+                    BFS::field("Item1", int_literal(0b0001)),
+                    BFS::field("Item2", int_literal(0b0010)),
                 ],
                 [],
             ),

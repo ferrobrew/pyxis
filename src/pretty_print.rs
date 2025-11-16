@@ -248,8 +248,8 @@ impl PrettyPrinter {
 
                             // Format with underscores for address/singleton
                             if needs_underscore {
-                                if let Expr::IntLiteral(val) = expr {
-                                    let formatted = self.format_hex_with_underscores(*val);
+                                if let Expr::IntLiteral(spanned) = expr {
+                                    let formatted = self.format_hex_with_underscores(spanned.value);
                                     write!(&mut self.output, "{}", formatted).unwrap();
                                 } else {
                                     self.print_expr(expr);
@@ -286,16 +286,23 @@ impl PrettyPrinter {
     }
 
     fn print_expr(&mut self, expr: &Expr) {
+        // Use the original text from the span if available and non-empty to preserve literal formatting
+        if let Some(original_text) = expr.original_text()
+            && !original_text.is_empty()
+        {
+            write!(&mut self.output, "{}", original_text).unwrap();
+            return;
+        }
+
+        // Fallback for identifiers and synthetic spans (empty text)
         match expr {
-            Expr::IntLiteral(val) => {
-                // Use decimal for vftable indices, preserve sign for negative numbers, otherwise use hex
-                if self.in_vftable_index || *val < 0 {
-                    write!(&mut self.output, "{val}").unwrap();
-                } else {
-                    write!(&mut self.output, "0x{val:X}").unwrap();
-                }
+            Expr::IntLiteral(spanned) => {
+                // Format as decimal (for synthetic spans or when original text is empty)
+                write!(&mut self.output, "{}", spanned.value).unwrap();
             }
-            Expr::StringLiteral(s) => write!(&mut self.output, "\"{s}\"").unwrap(),
+            Expr::StringLiteral(spanned) => {
+                write!(&mut self.output, "\"{}\"", spanned.value).unwrap();
+            }
             Expr::Ident(name) => write!(&mut self.output, "{name}").unwrap(),
         }
     }
@@ -803,7 +810,7 @@ pub type Test {
     field2: bool,
 }
 
-#[singleton(0x1_18F_B64), size(0x40), align(0x10)] // 0x3C
+#[singleton(0x1_18F_B64), size(0x40), align(16)] // 0x3C
 pub type InputDeviceManager {
     #[address(0x18)]
     pub enabled: bool,
@@ -834,7 +841,7 @@ pub type AnarkGui {
         "#;
 
         let output = r#"
-#[singleton(0x1_18F_C20), size(0x620 /* actually 0x61C */), align(0x10)]
+#[singleton(0x1_18F_C20), size(0x620 /* actually 0x61C */), align(16)]
 pub type AnarkGui {
     vftable {},
 
@@ -873,7 +880,7 @@ pub type MultiCommentTest {
     field: i32,
 }
 
-#[align(0x8)] /* block comment */
+#[align(8)] /* block comment */
 pub type BlockCommentTest {
     value: u64,
 }
@@ -917,7 +924,7 @@ pub type MultiCommentTest {
     field: i32,
 }
 
-#[align(0x8)]
+#[align(8)]
 /* block comment */
 pub type BlockCommentTest {
     value: u64,
@@ -952,10 +959,10 @@ pub enum State: u32 {
         let expected = r#"
 #[repr(u32)] // enum representation
 pub enum State: u32 {
-    Idle = 0x0,
+    Idle = 0,
     // State comment
-    Active = 0x1,
-    Done = 0x2,
+    Active = 1,
+    Done = 2,
 }
         "#
         .trim();
@@ -1045,7 +1052,7 @@ pub type Foo {
 // Separator comment
 
 /// Documentation for Bar
-#[align(0x10)] /* alignment */
+#[align(16)] /* alignment */
 pub type Bar {
     value: u64,
 }
@@ -1181,7 +1188,7 @@ pub type ComplexLayout {
     field2: bool, // field comment
 }
 
-#[align(0x8)] /* block */ /* another block */
+#[align(8)] /* block */ /* another block */
 pub type MultipleBlocks {
     value: u64,
 }

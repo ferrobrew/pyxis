@@ -3,6 +3,8 @@ use std::{fmt, path::Path};
 use crate::span::Spanned;
 
 pub mod test_aliases {
+    use crate::span::{Span, Spanned};
+
     pub type M = super::Module;
     pub type ID = super::ItemDefinition;
     pub type TS = super::TypeStatement;
@@ -23,6 +25,16 @@ pub mod test_aliases {
     pub type B = super::Backend;
     pub type V = super::Visibility;
     pub type EV = super::ExternValue;
+
+    /// Helper to create an IntLiteral expression with a synthetic span
+    pub fn int_literal(value: isize) -> E {
+        E::IntLiteral(Spanned::new(value, Span::synthetic()))
+    }
+
+    /// Helper to create a StringLiteral expression with a synthetic span
+    pub fn string_literal(value: impl Into<String>) -> E {
+        E::StringLiteral(Spanned::new(value.into(), Span::synthetic()))
+    }
 }
 
 /// Comment node types
@@ -204,21 +216,30 @@ impl From<&str> for ItemPath {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Expr {
-    IntLiteral(isize),
-    StringLiteral(String),
+    IntLiteral(Spanned<isize>),
+    StringLiteral(Spanned<String>),
     Ident(Ident),
 }
 impl Expr {
     pub fn int_literal(&self) -> Option<isize> {
         match self {
-            Expr::IntLiteral(value) => Some(*value),
+            Expr::IntLiteral(spanned) => Some(spanned.value),
             _ => None,
         }
     }
     pub fn string_literal(&self) -> Option<&str> {
         match self {
-            Expr::StringLiteral(value) => Some(value.as_str()),
+            Expr::StringLiteral(spanned) => Some(spanned.value.as_str()),
             _ => None,
+        }
+    }
+
+    /// Get the original text from the span, if this is a literal
+    pub fn original_text(&self) -> Option<&str> {
+        match self {
+            Expr::IntLiteral(spanned) => Some(&spanned.span.text),
+            Expr::StringLiteral(spanned) => Some(&spanned.span.text),
+            Expr::Ident(_) => None,
         }
     }
 }
@@ -284,7 +305,10 @@ impl Attribute {
     pub fn integer_fn(name: &str, value: isize) -> Self {
         Attribute::Function(
             name.into(),
-            vec![AttributeItem::Expr(Expr::IntLiteral(value))],
+            vec![AttributeItem::Expr(Expr::IntLiteral(Spanned::new(
+                value,
+                crate::span::Span::synthetic(),
+            )))],
         )
     }
     pub fn address(address: usize) -> Self {
@@ -308,7 +332,10 @@ impl Attribute {
     pub fn calling_convention(name: &str) -> Self {
         Attribute::Function(
             "calling_convention".into(),
-            vec![AttributeItem::Expr(Expr::StringLiteral(name.into()))],
+            vec![AttributeItem::Expr(Expr::StringLiteral(Spanned::new(
+                name.into(),
+                crate::span::Span::synthetic(),
+            )))],
         )
     }
 

@@ -1682,12 +1682,14 @@ impl Parser {
     fn parse_expr(&mut self) -> Result<Expr, ParseError> {
         match self.peek() {
             TokenKind::IntLiteral(_) => {
+                let token = self.current().clone();
                 let value = self.parse_int_literal()?;
-                Ok(Expr::IntLiteral(value))
+                Ok(Expr::IntLiteral(Spanned::new(value, token.span)))
             }
             TokenKind::StringLiteral(_) => {
+                let token = self.current().clone();
                 let value = self.parse_string_literal()?;
-                Ok(Expr::StringLiteral(value))
+                Ok(Expr::StringLiteral(Spanned::new(value, token.span)))
             }
             TokenKind::Ident(_) => {
                 let (ident, _) = self.expect_ident()?;
