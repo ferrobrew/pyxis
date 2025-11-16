@@ -158,10 +158,7 @@ fn find_pyxis_files(dir: &PathBuf) -> anyhow::Result<Vec<PathBuf>> {
     Ok(files)
 }
 
-fn find_pyxis_files_recursive(
-    dir: &PathBuf,
-    files: &mut Vec<PathBuf>,
-) -> anyhow::Result<()> {
+fn find_pyxis_files_recursive(dir: &PathBuf, files: &mut Vec<PathBuf>) -> anyhow::Result<()> {
     if dir.is_dir() {
         for entry in std::fs::read_dir(dir)? {
             let entry = entry?;
