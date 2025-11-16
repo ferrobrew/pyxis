@@ -862,13 +862,13 @@ impl Parser {
                 match self.peek() {
                     TokenKind::Prologue => {
                         self.advance();
-                        let string = self.parse_string_literal()?.trim().to_string();
+                        let string = self.parse_string_literal()?;
                         self.expect(TokenKind::Semi)?;
                         prologue = Some(string);
                     }
                     TokenKind::Epilogue => {
                         self.advance();
-                        let string = self.parse_string_literal()?.trim().to_string();
+                        let string = self.parse_string_literal()?;
                         self.expect(TokenKind::Semi)?;
                         epilogue = Some(string);
                     }
@@ -889,13 +889,13 @@ impl Parser {
             match self.peek() {
                 TokenKind::Prologue => {
                     self.advance();
-                    let string = self.parse_string_literal()?.trim().to_string();
+                    let string = self.parse_string_literal()?;
                     self.expect(TokenKind::Semi)?;
                     prologue = Some(string);
                 }
                 TokenKind::Epilogue => {
                     self.advance();
-                    let string = self.parse_string_literal()?.trim().to_string();
+                    let string = self.parse_string_literal()?;
                     self.expect(TokenKind::Semi)?;
                     epilogue = Some(string);
                 }

@@ -335,8 +335,17 @@ impl Attribute {
             })],
         )
     }
+    fn integer_fn_hex(name: &str, value: isize) -> Self {
+        Attribute::Function(
+            name.into(),
+            vec![AttributeItem::Expr(Expr::IntLiteral {
+                value,
+                format: IntFormat::Hex,
+            })],
+        )
+    }
     pub fn address(address: usize) -> Self {
-        Self::integer_fn("address", address as isize)
+        Self::integer_fn_hex("address", address as isize)
     }
     pub fn size(size: usize) -> Self {
         Self::integer_fn("size", size as isize)
@@ -348,10 +357,10 @@ impl Attribute {
         Self::integer_fn("align", align as isize)
     }
     pub fn singleton(address: usize) -> Self {
-        Self::integer_fn("singleton", address as isize)
+        Self::integer_fn_hex("singleton", address as isize)
     }
     pub fn index(index: usize) -> Self {
-        Self::integer_fn("index", index as isize)
+        Self::integer_fn_hex("index", index as isize)
     }
     pub fn calling_convention(name: &str) -> Self {
         Attribute::Function(
