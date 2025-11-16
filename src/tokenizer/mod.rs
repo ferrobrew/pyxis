@@ -73,7 +73,7 @@ impl Token {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct LexError {
     pub message: String,
     pub location: Location,

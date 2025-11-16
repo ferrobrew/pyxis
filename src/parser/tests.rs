@@ -1,6 +1,7 @@
 use crate::{
     grammar::{ItemDefinitionInner, ModuleItem, TypeDefItem, Visibility, test_aliases::*},
-    parser::{parse_str, strip_spans::StripSpans},
+    parser::{ParseError, parse_str, strip_spans::StripSpans},
+    tokenizer::TokenKind,
 };
 
 use pretty_assertions::assert_eq;
@@ -222,10 +223,10 @@ fn will_die_on_super_for_now() {
         use super::TestType<Hey>;
         "#;
 
-    let error = parse_str(text).err().unwrap().to_string();
+    let error = parse_str(text).err().unwrap();
     assert!(
-        error.contains("super not supported"),
-        "Expected error about 'super not supported', got: {}",
+        matches!(error, ParseError::SuperNotSupported { .. }),
+        "Expected SuperNotSupported error, got: {:?}",
         error
     );
 }
@@ -803,14 +804,16 @@ fn should_fail_on_missing_closing_brace() {
         "#;
 
     let err = parse_str(text).unwrap_err();
-    let err_msg = err.to_string();
-
-    // Should get "Expected identifier, found Eof" when missing closing brace
-    eprintln!("Parser error: {}", err_msg);
     assert!(
-        err_msg.contains("Expected identifier") && err_msg.contains("Eof"),
-        "Expected 'Expected identifier, found Eof', got: {}",
-        err_msg
+        matches!(
+            err,
+            ParseError::ExpectedIdentifier {
+                found: TokenKind::Eof,
+                ..
+            }
+        ),
+        "Expected ExpectedIdentifier with Eof, got: {:?}",
+        err
     );
 }
 
@@ -823,12 +826,16 @@ fn should_fail_on_missing_field_type() {
         "#;
 
     let err = parse_str(text).unwrap_err();
-    let err_msg = err.to_string();
-    eprintln!("Parser error (missing field type): {}", err_msg);
     assert!(
-        err_msg.contains("Expected type") && err_msg.contains("Comma"),
-        "Expected 'Expected type, found Comma', got: {}",
-        err_msg
+        matches!(
+            err,
+            ParseError::ExpectedType {
+                found: TokenKind::Comma,
+                ..
+            }
+        ),
+        "Expected ExpectedType with Comma, got: {:?}",
+        err
     );
 }
 
@@ -841,12 +848,17 @@ fn should_fail_on_missing_enum_type_annotation() {
         "#;
 
     let err = parse_str(text).unwrap_err();
-    let err_msg = err.to_string();
-    eprintln!("Parser error (missing enum type): {}", err_msg);
     assert!(
-        err_msg.contains("Expected Colon") && err_msg.contains("LBrace"),
-        "Expected 'Expected Colon, found LBrace', got: {}",
-        err_msg
+        matches!(
+            err,
+            ParseError::ExpectedToken {
+                expected: TokenKind::Colon,
+                found: TokenKind::LBrace,
+                ..
+            }
+        ),
+        "Expected ExpectedToken with Colon/LBrace, got: {:?}",
+        err
     );
 }
 
@@ -859,12 +871,17 @@ fn should_fail_on_missing_equals_in_bitflags() {
         "#;
 
     let err = parse_str(text).unwrap_err();
-    let err_msg = err.to_string();
-    eprintln!("Parser error (missing equals): {}", err_msg);
     assert!(
-        err_msg.contains("Expected Eq") && err_msg.contains("IntLiteral"),
-        "Expected 'Expected Eq, found IntLiteral', got: {}",
-        err_msg
+        matches!(
+            err,
+            ParseError::ExpectedToken {
+                expected: TokenKind::Eq,
+                found: TokenKind::IntLiteral(_),
+                ..
+            }
+        ),
+        "Expected ExpectedToken with Eq/IntLiteral, got: {:?}",
+        err
     );
 }
 
@@ -877,12 +894,10 @@ fn should_fail_on_malformed_pointer_type() {
         "#;
 
     let err = parse_str(text).unwrap_err();
-    let err_msg = err.to_string();
-    eprintln!("Parser error (malformed pointer): {}", err_msg);
     assert!(
-        err_msg.contains("Expected const or mut after *"),
-        "Expected 'Expected const or mut after *', got: {}",
-        err_msg
+        matches!(err, ParseError::MissingPointerQualifier { .. }),
+        "Expected MissingPointerQualifier error, got: {:?}",
+        err
     );
 }
 
@@ -893,12 +908,17 @@ fn should_fail_on_missing_semicolon_after_extern() {
         "#;
 
     let err = parse_str(text).unwrap_err();
-    let err_msg = err.to_string();
-    eprintln!("Parser error (missing semicolon): {}", err_msg);
     assert!(
-        err_msg.contains("Expected Semi") && err_msg.contains("Eof"),
-        "Expected 'Expected Semi, found Eof', got: {}",
-        err_msg
+        matches!(
+            err,
+            ParseError::ExpectedToken {
+                expected: TokenKind::Semi,
+                found: TokenKind::Eof,
+                ..
+            }
+        ),
+        "Expected ExpectedToken with Semi/Eof, got: {:?}",
+        err
     );
 }
 
@@ -909,11 +929,15 @@ fn should_fail_on_incomplete_function() {
         "#;
 
     let err = parse_str(text).unwrap_err();
-    let err_msg = err.to_string();
-    eprintln!("Parser error (incomplete function): {}", err_msg);
     assert!(
-        err_msg.contains("Expected type, enum, or bitflags") && err_msg.contains("Fn"),
-        "Expected 'Expected type, enum, or bitflags, found Fn', got: {}",
-        err_msg
+        matches!(
+            err,
+            ParseError::ExpectedItemDefinition {
+                found: TokenKind::Fn,
+                ..
+            }
+        ),
+        "Expected ExpectedItemDefinition with Fn, got: {:?}",
+        err
     );
 }

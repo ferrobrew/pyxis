@@ -1,71 +1,22 @@
 pub mod strip_spans;
 
-use crate::grammar::Module;
+use crate::{
+    grammar::*,
+    span::{Location, Span, Spanned},
+    tokenizer::{LexError, Token, TokenKind},
+};
+use ariadne::{Color, Label, Report, ReportKind, Source};
 
 #[cfg(test)]
 mod tests;
 
-#[derive(Debug, Clone)]
-pub struct ParseError {
-    pub message: String,
-    pub location: Location,
-    pub filename: String,
-    pub source: String,
-}
-impl ParseError {
-    /// Convert a Location to a byte offset in the source text
-    fn location_to_offset(&self, location: Location) -> usize {
-        let mut offset = 0;
-        let mut current_line = 1;
-
-        for ch in self.source.chars() {
-            if current_line == location.line {
-                // We're on the target line, add column offset (1-indexed)
-                return offset + (location.column - 1);
-            }
-            if ch == '\n' {
-                current_line += 1;
-            }
-            offset += ch.len_utf8();
-        }
-
-        // If we reached the end, return the offset
-        offset
-    }
-}
-impl std::fmt::Display for ParseError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let offset = self.location_to_offset(self.location);
-
-        let report = Report::build(ReportKind::Error, &self.filename, offset)
-            .with_message(&self.message)
-            .with_label(
-                Label::new((&self.filename, offset..offset + 1))
-                    .with_message(&self.message)
-                    .with_color(Color::Red),
-            )
-            .finish();
-
-        // Write the report to a string buffer
-        let mut buffer = Vec::new();
-        report
-            .write((&self.filename, Source::from(&self.source)), &mut buffer)
-            .map_err(|_| std::fmt::Error)?;
-
-        // Convert to string and write to formatter
-        let output = String::from_utf8_lossy(&buffer);
-        write!(f, "{}", output)
-    }
-}
-impl std::error::Error for ParseError {}
-
 /// Parse a Pyxis module from a string
-pub fn parse_str(input: &str) -> anyhow::Result<Module> {
+pub fn parse_str(input: &str) -> Result<Module, ParseError> {
     parse_str_with_filename(input, "<input>")
 }
 
 /// Parse a Pyxis module from a string with a specific filename for error reporting
-pub fn parse_str_with_filename(input: &str, filename: &str) -> anyhow::Result<Module> {
+pub fn parse_str_with_filename(input: &str, filename: &str) -> Result<Module, ParseError> {
     // First tokenize
     let tokens = crate::tokenizer::tokenize_with_filename(input.to_string(), filename.to_string())?;
 
@@ -76,10 +27,438 @@ pub fn parse_str_with_filename(input: &str, filename: &str) -> anyhow::Result<Mo
     Ok(module)
 }
 
-use crate::grammar::*;
-use crate::span::{Location, Span, Spanned};
-use crate::tokenizer::{Token, TokenKind};
-use ariadne::{Color, Label, Report, ReportKind, Source};
+#[derive(Debug, Clone, PartialEq)]
+pub enum ParseError {
+    ExpectedToken {
+        expected: TokenKind,
+        found: TokenKind,
+        location: Location,
+        filename: Box<str>,
+        source: Box<str>,
+    },
+    ExpectedIdentifier {
+        found: TokenKind,
+        location: Location,
+        filename: Box<str>,
+        source: Box<str>,
+    },
+    ExpectedType {
+        found: TokenKind,
+        location: Location,
+        filename: Box<str>,
+        source: Box<str>,
+    },
+    ExpectedExpression {
+        found: TokenKind,
+        location: Location,
+        filename: Box<str>,
+        source: Box<str>,
+    },
+    ExpectedIntLiteral {
+        found: TokenKind,
+        location: Location,
+        filename: Box<str>,
+        source: Box<str>,
+    },
+    ExpectedStringLiteral {
+        found: TokenKind,
+        location: Location,
+        filename: Box<str>,
+        source: Box<str>,
+    },
+    InvalidIntLiteral {
+        kind: String,
+        value: String,
+        location: Location,
+        filename: Box<str>,
+        source: Box<str>,
+    },
+    MissingPointerQualifier {
+        location: Location,
+        filename: Box<str>,
+        source: Box<str>,
+    },
+    SuperNotSupported {
+        location: Location,
+        filename: Box<str>,
+        source: Box<str>,
+    },
+    UnexpectedModuleToken {
+        found: TokenKind,
+        location: Location,
+        filename: Box<str>,
+        source: Box<str>,
+    },
+    UnexpectedTokenAfterAttributes {
+        found: TokenKind,
+        location: Location,
+        filename: Box<str>,
+        source: Box<str>,
+    },
+    ExpectedItemDefinition {
+        found: TokenKind,
+        location: Location,
+        filename: Box<str>,
+        source: Box<str>,
+    },
+    ExpectedBackendContent {
+        found: TokenKind,
+        location: Location,
+        filename: Box<str>,
+        source: Box<str>,
+    },
+    ExpectedPrologueOrEpilogue {
+        found: TokenKind,
+        location: Location,
+        filename: Box<str>,
+        source: Box<str>,
+    },
+    Tokenizer(LexError),
+}
+impl ParseError {
+    fn location_to_offset(location: Location, source: &str) -> usize {
+        let mut offset = 0;
+        let mut current_line = 1;
+
+        for ch in source.chars() {
+            if current_line == location.line {
+                return offset + (location.column - 1);
+            }
+            if ch == '\n' {
+                current_line += 1;
+            }
+            offset += ch.len_utf8();
+        }
+        offset
+    }
+}
+impl std::fmt::Display for ParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ParseError::ExpectedToken {
+                expected,
+                found,
+                location,
+                filename,
+                source,
+            } => {
+                let offset = Self::location_to_offset(*location, source);
+                let report = Report::build(ReportKind::Error, filename, offset)
+                    .with_message(format!("Expected {:?}, found {:?}", expected, found))
+                    .with_label(
+                        Label::new((filename, offset..offset + 1))
+                            .with_message(format!("expected {:?} here", expected))
+                            .with_color(Color::Red),
+                    )
+                    .finish();
+
+                let mut buffer = Vec::new();
+                report
+                    .write((filename, Source::from(source)), &mut buffer)
+                    .map_err(|_| std::fmt::Error)?;
+                write!(f, "{}", String::from_utf8_lossy(&buffer))
+            }
+            ParseError::ExpectedIdentifier {
+                found,
+                location,
+                filename,
+                source,
+            } => {
+                let offset = Self::location_to_offset(*location, source);
+                let report = Report::build(ReportKind::Error, filename, offset)
+                    .with_message(format!("Expected identifier, found {:?}", found))
+                    .with_label(
+                        Label::new((filename, offset..offset + 1))
+                            .with_message("expected identifier here")
+                            .with_color(Color::Red),
+                    )
+                    .finish();
+
+                let mut buffer = Vec::new();
+                report
+                    .write((filename, Source::from(source)), &mut buffer)
+                    .map_err(|_| std::fmt::Error)?;
+                write!(f, "{}", String::from_utf8_lossy(&buffer))
+            }
+            ParseError::ExpectedType {
+                found,
+                location,
+                filename,
+                source,
+            } => {
+                let offset = Self::location_to_offset(*location, source);
+                let report = Report::build(ReportKind::Error, filename, offset)
+                    .with_message(format!("Expected type, found {:?}", found))
+                    .with_label(
+                        Label::new((filename, offset..offset + 1))
+                            .with_message("expected type here")
+                            .with_color(Color::Red),
+                    )
+                    .finish();
+
+                let mut buffer = Vec::new();
+                report
+                    .write((filename, Source::from(source)), &mut buffer)
+                    .map_err(|_| std::fmt::Error)?;
+                write!(f, "{}", String::from_utf8_lossy(&buffer))
+            }
+            ParseError::ExpectedExpression {
+                found,
+                location,
+                filename,
+                source,
+            } => {
+                let offset = Self::location_to_offset(*location, source);
+                let report = Report::build(ReportKind::Error, filename, offset)
+                    .with_message(format!("Expected expression, found {:?}", found))
+                    .with_label(
+                        Label::new((filename, offset..offset + 1))
+                            .with_message("expected expression here")
+                            .with_color(Color::Red),
+                    )
+                    .finish();
+
+                let mut buffer = Vec::new();
+                report
+                    .write((filename, Source::from(source)), &mut buffer)
+                    .map_err(|_| std::fmt::Error)?;
+                write!(f, "{}", String::from_utf8_lossy(&buffer))
+            }
+            ParseError::ExpectedIntLiteral {
+                found,
+                location,
+                filename,
+                source,
+            } => {
+                let offset = Self::location_to_offset(*location, source);
+                let report = Report::build(ReportKind::Error, filename, offset)
+                    .with_message(format!("Expected integer literal, found {:?}", found))
+                    .with_label(
+                        Label::new((filename, offset..offset + 1))
+                            .with_message("expected integer literal here")
+                            .with_color(Color::Red),
+                    )
+                    .finish();
+
+                let mut buffer = Vec::new();
+                report
+                    .write((filename, Source::from(source)), &mut buffer)
+                    .map_err(|_| std::fmt::Error)?;
+                write!(f, "{}", String::from_utf8_lossy(&buffer))
+            }
+            ParseError::ExpectedStringLiteral {
+                found,
+                location,
+                filename,
+                source,
+            } => {
+                let offset = Self::location_to_offset(*location, source);
+                let report = Report::build(ReportKind::Error, filename, offset)
+                    .with_message(format!("Expected string literal, found {:?}", found))
+                    .with_label(
+                        Label::new((filename, offset..offset + 1))
+                            .with_message("expected string literal here")
+                            .with_color(Color::Red),
+                    )
+                    .finish();
+
+                let mut buffer = Vec::new();
+                report
+                    .write((filename, Source::from(source)), &mut buffer)
+                    .map_err(|_| std::fmt::Error)?;
+                write!(f, "{}", String::from_utf8_lossy(&buffer))
+            }
+            ParseError::InvalidIntLiteral {
+                kind,
+                value,
+                location,
+                filename,
+                source,
+            } => {
+                let offset = Self::location_to_offset(*location, source);
+                let report = Report::build(ReportKind::Error, filename, offset)
+                    .with_message(format!("Invalid {} literal: {}", kind, value))
+                    .with_label(
+                        Label::new((filename, offset..offset + 1))
+                            .with_message("invalid literal")
+                            .with_color(Color::Red),
+                    )
+                    .finish();
+
+                let mut buffer = Vec::new();
+                report
+                    .write((filename, Source::from(source)), &mut buffer)
+                    .map_err(|_| std::fmt::Error)?;
+                write!(f, "{}", String::from_utf8_lossy(&buffer))
+            }
+            ParseError::MissingPointerQualifier {
+                location,
+                filename,
+                source,
+            } => {
+                let offset = Self::location_to_offset(*location, source);
+                let report = Report::build(ReportKind::Error, filename, offset)
+                    .with_message("Expected const or mut after *")
+                    .with_label(
+                        Label::new((filename, offset..offset + 1))
+                            .with_message("expected 'const' or 'mut' here")
+                            .with_color(Color::Red),
+                    )
+                    .finish();
+
+                let mut buffer = Vec::new();
+                report
+                    .write((filename, Source::from(source)), &mut buffer)
+                    .map_err(|_| std::fmt::Error)?;
+                write!(f, "{}", String::from_utf8_lossy(&buffer))
+            }
+            ParseError::SuperNotSupported {
+                location,
+                filename,
+                source,
+            } => {
+                let offset = Self::location_to_offset(*location, source);
+                let report = Report::build(ReportKind::Error, filename, offset)
+                    .with_message("super not supported")
+                    .with_label(
+                        Label::new((filename, offset..offset + 1))
+                            .with_message("super keyword not supported")
+                            .with_color(Color::Red),
+                    )
+                    .finish();
+
+                let mut buffer = Vec::new();
+                report
+                    .write((filename, Source::from(source)), &mut buffer)
+                    .map_err(|_| std::fmt::Error)?;
+                write!(f, "{}", String::from_utf8_lossy(&buffer))
+            }
+            ParseError::UnexpectedModuleToken {
+                found,
+                location,
+                filename,
+                source,
+            } => {
+                let offset = Self::location_to_offset(*location, source);
+                let report = Report::build(ReportKind::Error, filename, offset)
+                    .with_message(format!("Unexpected token at module level: {:?}", found))
+                    .with_label(
+                        Label::new((filename, offset..offset + 1))
+                            .with_message("unexpected token")
+                            .with_color(Color::Red),
+                    )
+                    .finish();
+
+                let mut buffer = Vec::new();
+                report
+                    .write((filename, Source::from(source)), &mut buffer)
+                    .map_err(|_| std::fmt::Error)?;
+                write!(f, "{}", String::from_utf8_lossy(&buffer))
+            }
+            ParseError::UnexpectedTokenAfterAttributes {
+                found,
+                location,
+                filename,
+                source,
+            } => {
+                let offset = Self::location_to_offset(*location, source);
+                let report = Report::build(ReportKind::Error, filename, offset)
+                    .with_message(format!("Unexpected token after attributes: {:?}", found))
+                    .with_label(
+                        Label::new((filename, offset..offset + 1))
+                            .with_message("unexpected token after attributes")
+                            .with_color(Color::Red),
+                    )
+                    .finish();
+
+                let mut buffer = Vec::new();
+                report
+                    .write((filename, Source::from(source)), &mut buffer)
+                    .map_err(|_| std::fmt::Error)?;
+                write!(f, "{}", String::from_utf8_lossy(&buffer))
+            }
+            ParseError::ExpectedItemDefinition {
+                found,
+                location,
+                filename,
+                source,
+            } => {
+                let offset = Self::location_to_offset(*location, source);
+                let report = Report::build(ReportKind::Error, filename, offset)
+                    .with_message(format!(
+                        "Expected type, enum, or bitflags, found {:?}",
+                        found
+                    ))
+                    .with_label(
+                        Label::new((filename, offset..offset + 1))
+                            .with_message("expected type, enum, or bitflags here")
+                            .with_color(Color::Red),
+                    )
+                    .finish();
+
+                let mut buffer = Vec::new();
+                report
+                    .write((filename, Source::from(source)), &mut buffer)
+                    .map_err(|_| std::fmt::Error)?;
+                write!(f, "{}", String::from_utf8_lossy(&buffer))
+            }
+            ParseError::ExpectedBackendContent {
+                found,
+                location,
+                filename,
+                source,
+            } => {
+                let offset = Self::location_to_offset(*location, source);
+                let report = Report::build(ReportKind::Error, filename, offset)
+                    .with_message(format!(
+                        "Expected LBrace, Prologue, or Epilogue, found {:?}",
+                        found
+                    ))
+                    .with_label(
+                        Label::new((filename, offset..offset + 1))
+                            .with_message("expected backend content here")
+                            .with_color(Color::Red),
+                    )
+                    .finish();
+
+                let mut buffer = Vec::new();
+                report
+                    .write((filename, Source::from(source)), &mut buffer)
+                    .map_err(|_| std::fmt::Error)?;
+                write!(f, "{}", String::from_utf8_lossy(&buffer))
+            }
+            ParseError::ExpectedPrologueOrEpilogue {
+                found,
+                location,
+                filename,
+                source,
+            } => {
+                let offset = Self::location_to_offset(*location, source);
+                let report = Report::build(ReportKind::Error, filename, offset)
+                    .with_message(format!("Expected prologue or epilogue, found {:?}", found))
+                    .with_label(
+                        Label::new((filename, offset..offset + 1))
+                            .with_message("expected prologue or epilogue here")
+                            .with_color(Color::Red),
+                    )
+                    .finish();
+
+                let mut buffer = Vec::new();
+                report
+                    .write((filename, Source::from(source)), &mut buffer)
+                    .map_err(|_| std::fmt::Error)?;
+                write!(f, "{}", String::from_utf8_lossy(&buffer))
+            }
+            ParseError::Tokenizer(err) => write!(f, "{}", err),
+        }
+    }
+}
+impl std::error::Error for ParseError {}
+impl From<LexError> for ParseError {
+    fn from(err: LexError) -> Self {
+        ParseError::Tokenizer(err)
+    }
+}
 
 pub struct Parser {
     tokens: Vec<Token>,
@@ -97,16 +476,6 @@ impl Parser {
             pending_comments: Vec::new(),
             filename,
             source,
-        }
-    }
-
-    /// Helper to create a ParseError with filename and source context
-    fn error(&self, message: String, location: Location) -> ParseError {
-        ParseError {
-            message,
-            location,
-            filename: self.filename.clone(),
-            source: self.source.clone(),
         }
     }
 
@@ -135,10 +504,13 @@ impl Parser {
         if std::mem::discriminant(self.peek()) == std::mem::discriminant(&kind) {
             Ok(self.advance())
         } else {
-            Err(self.error(
-                format!("Expected {:?}, found {:?}", kind, self.peek()),
-                self.current().span.start,
-            ))
+            Err(ParseError::ExpectedToken {
+                expected: kind,
+                found: self.peek().clone(),
+                location: self.current().span.start,
+                filename: self.filename.clone().into(),
+                source: self.source.clone().into(),
+            })
         }
     }
 
@@ -161,10 +533,12 @@ impl Parser {
                 let token = self.advance();
                 Ok((Ident("unknown".to_string()), token.span))
             }
-            _ => Err(self.error(
-                format!("Expected identifier, found {:?}", self.peek()),
-                self.current().span.start,
-            )),
+            _ => Err(ParseError::ExpectedIdentifier {
+                found: self.peek().clone(),
+                location: self.current().span.start,
+                filename: self.filename.clone().into(),
+                source: self.source.clone().into(),
+            }),
         }
     }
 
@@ -339,13 +713,12 @@ impl Parser {
                     }
                     TokenKind::Impl => self.parse_impl_block().map(ModuleItem::Impl),
                     TokenKind::Fn => self.parse_function().map(ModuleItem::Function),
-                    _ => Err(self.error(
-                        format!(
-                            "Unexpected token after attributes: {:?}",
-                            self.tokens[pos].kind
-                        ),
-                        self.tokens[pos].span.start,
-                    )),
+                    _ => Err(ParseError::UnexpectedTokenAfterAttributes {
+                        found: self.tokens[pos].kind.clone(),
+                        location: self.tokens[pos].span.start,
+                        filename: self.filename.clone().into(),
+                        source: self.source.clone().into(),
+                    }),
                 }
             }
             TokenKind::DocOuter(_)
@@ -358,10 +731,12 @@ impl Parser {
                 // Freestanding function with attributes
                 self.parse_function().map(ModuleItem::Function)
             }
-            _ => Err(self.error(
-                format!("Unexpected token at module level: {:?}", self.peek()),
-                self.current().span.start,
-            )),
+            _ => Err(ParseError::UnexpectedModuleToken {
+                found: self.peek().clone(),
+                location: self.current().span.start,
+                filename: self.filename.clone().into(),
+                source: self.source.clone().into(),
+            }),
         }
     }
 
@@ -372,7 +747,11 @@ impl Parser {
         if let TokenKind::Ident(name) = self.peek()
             && name == "super"
         {
-            return Err(self.error("super not supported".to_string(), self.current().span.start));
+            return Err(ParseError::SuperNotSupported {
+                location: self.current().span.start,
+                filename: self.filename.clone().into(),
+                source: self.source.clone().into(),
+            });
         }
 
         let path = self.parse_item_path()?;
@@ -494,10 +873,12 @@ impl Parser {
                         epilogue = Some(string);
                     }
                     _ => {
-                        return Err(self.error(
-                            format!("Expected prologue or epilogue, found {:?}", self.peek()),
-                            self.current().span.start,
-                        ));
+                        return Err(ParseError::ExpectedPrologueOrEpilogue {
+                            found: self.peek().clone(),
+                            location: self.current().span.start,
+                            filename: self.filename.clone().into(),
+                            source: self.source.clone().into(),
+                        });
                     }
                 }
             }
@@ -519,13 +900,12 @@ impl Parser {
                     epilogue = Some(string);
                 }
                 _ => {
-                    return Err(self.error(
-                        format!(
-                            "Expected LBrace, Prologue, or Epilogue, found {:?}",
-                            self.peek()
-                        ),
-                        self.current().span.start,
-                    ));
+                    return Err(ParseError::ExpectedBackendContent {
+                        found: self.peek().clone(),
+                        location: self.current().span.start,
+                        filename: self.filename.clone().into(),
+                        source: self.source.clone().into(),
+                    });
                 }
             }
         }
@@ -651,10 +1031,12 @@ impl Parser {
                     }),
                 })
             }
-            _ => Err(self.error(
-                format!("Expected type, enum, or bitflags, found {:?}", self.peek()),
-                self.current().span.start,
-            )),
+            _ => Err(ParseError::ExpectedItemDefinition {
+                found: self.peek().clone(),
+                location: self.current().span.start,
+                filename: self.filename.clone().into(),
+                source: self.source.clone().into(),
+            }),
         }
     }
 
@@ -1228,10 +1610,11 @@ impl Parser {
                     self.advance();
                     Ok(Type::MutPointer(Box::new(self.parse_type()?)))
                 } else {
-                    Err(self.error(
-                        "Expected const or mut after *".to_string(),
-                        self.current().span.start,
-                    ))
+                    Err(ParseError::MissingPointerQualifier {
+                        location: self.current().span.start,
+                        filename: self.filename.clone().into(),
+                        source: self.source.clone().into(),
+                    })
                 }
             }
             TokenKind::LBracket => {
@@ -1287,10 +1670,12 @@ impl Parser {
 
                 Ok(Type::Ident(ident, vec![]))
             }
-            _ => Err(self.error(
-                format!("Expected type, found {:?}", self.peek()),
-                self.current().span.start,
-            )),
+            _ => Err(ParseError::ExpectedType {
+                found: self.peek().clone(),
+                location: self.current().span.start,
+                filename: self.filename.clone().into(),
+                source: self.source.clone().into(),
+            }),
         }
     }
 
@@ -1308,10 +1693,12 @@ impl Parser {
                 let (ident, _) = self.expect_ident()?;
                 Ok(Expr::Ident(ident))
             }
-            _ => Err(self.error(
-                format!("Expected expression, found {:?}", self.peek()),
-                self.current().span.start,
-            )),
+            _ => Err(ParseError::ExpectedExpression {
+                found: self.peek().clone(),
+                location: self.current().span.start,
+                filename: self.filename.clone().into(),
+                source: self.source.clone().into(),
+            }),
         }
     }
 
@@ -1334,8 +1721,12 @@ impl Parser {
 
                         i64::from_str_radix(hex_str, 16)
                             .map(|v| (v * sign) as isize)
-                            .map_err(|_| {
-                                self.error(format!("Invalid hex literal: {}", s), token.span.start)
+                            .map_err(|_| ParseError::InvalidIntLiteral {
+                                kind: "hex".to_string(),
+                                value: s.clone(),
+                                location: token.span.start,
+                                filename: self.filename.clone().into(),
+                                source: self.source.clone().into(),
                             })
                     } else if s.starts_with("0b") || s.starts_with("-0b") {
                         // Binary
@@ -1347,11 +1738,12 @@ impl Parser {
 
                         i64::from_str_radix(bin_str, 2)
                             .map(|v| (v * sign) as isize)
-                            .map_err(|_| {
-                                self.error(
-                                    format!("Invalid binary literal: {}", s),
-                                    token.span.start,
-                                )
+                            .map_err(|_| ParseError::InvalidIntLiteral {
+                                kind: "binary".to_string(),
+                                value: s.clone(),
+                                location: token.span.start,
+                                filename: self.filename.clone().into(),
+                                source: self.source.clone().into(),
                             })
                     } else if s.starts_with("0o") || s.starts_with("-0o") {
                         // Octal
@@ -1363,26 +1755,34 @@ impl Parser {
 
                         i64::from_str_radix(oct_str, 8)
                             .map(|v| (v * sign) as isize)
-                            .map_err(|_| {
-                                self.error(
-                                    format!("Invalid octal literal: {}", s),
-                                    token.span.start,
-                                )
+                            .map_err(|_| ParseError::InvalidIntLiteral {
+                                kind: "octal".to_string(),
+                                value: s.clone(),
+                                location: token.span.start,
+                                filename: self.filename.clone().into(),
+                                source: self.source.clone().into(),
                             })
                     } else {
                         // Decimal
-                        s.parse::<isize>().map_err(|_| {
-                            self.error(format!("Invalid integer literal: {}", s), token.span.start)
-                        })
+                        s.parse::<isize>()
+                            .map_err(|_| ParseError::InvalidIntLiteral {
+                                kind: "integer".to_string(),
+                                value: s.clone(),
+                                location: token.span.start,
+                                filename: self.filename.clone().into(),
+                                source: self.source.clone().into(),
+                            })
                     }
                 } else {
                     unreachable!()
                 }
             }
-            _ => Err(self.error(
-                format!("Expected integer literal, found {:?}", self.peek()),
-                self.current().span.start,
-            )),
+            _ => Err(ParseError::ExpectedIntLiteral {
+                found: self.peek().clone(),
+                location: self.current().span.start,
+                filename: self.filename.clone().into(),
+                source: self.source.clone().into(),
+            }),
         }
     }
 
@@ -1396,10 +1796,12 @@ impl Parser {
                     unreachable!()
                 }
             }
-            _ => Err(self.error(
-                format!("Expected string literal, found {:?}", self.peek()),
-                self.current().span.start,
-            )),
+            _ => Err(ParseError::ExpectedStringLiteral {
+                found: self.peek().clone(),
+                location: self.current().span.start,
+                filename: self.filename.clone().into(),
+                source: self.source.clone().into(),
+            }),
         }
     }
 }
