@@ -1,7 +1,7 @@
 use crate::{
     grammar::{
-        ItemDefinitionInner, ModuleItem, TypeDefItem, Visibility,
-        test_aliases::{int_literal, *},
+        IntFormat, ItemDefinitionInner, ModuleItem, StringFormat, TypeDefItem, Visibility,
+        test_aliases::{int_literal, int_literal_with_format, *},
     },
     parser::{ParseError, parse_str, strip_spans::StripSpans},
     tokenizer::TokenKind,
@@ -376,10 +376,11 @@ fn can_parse_bitflags() {
         BFD::new(
             T::ident("u32"),
             [
-                BFS::field("Item1", int_literal(0b0001)).with_attributes([A::default()]),
-                BFS::field("Item2", int_literal(0b0010)),
-                BFS::field("Item3", int_literal(0b0100)),
-                BFS::field("Item4", int_literal(0b1000)),
+                BFS::field("Item1", int_literal_with_format(1, IntFormat::Binary))
+                    .with_attributes([A::default()]),
+                BFS::field("Item2", int_literal_with_format(2, IntFormat::Binary)),
+                BFS::field("Item3", int_literal_with_format(4, IntFormat::Binary)),
+                BFS::field("Item4", int_literal_with_format(8, IntFormat::Binary)),
             ],
             [A::singleton(0x1234)],
         ),

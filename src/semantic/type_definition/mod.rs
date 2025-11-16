@@ -172,29 +172,29 @@ pub fn build(
             grammar::Attribute::Function(ident, items) => {
                 let exprs = grammar::AttributeItem::extract_exprs(items);
                 match (ident.as_str(), exprs.as_slice()) {
-                    ("size", [grammar::Expr::IntLiteral(spanned)]) => {
+                    ("size", [grammar::Expr::IntLiteral { value, .. }]) => {
                         target_size = Some(
-                            spanned.value
+                            (*value)
                                 .try_into()
                                 .with_context(|| format!("failed to convert `size` attribute into usize for type `{resolvee_path}`"))?,
                         );
                     }
-                    ("min_size", [grammar::Expr::IntLiteral(spanned)]) => {
+                    ("min_size", [grammar::Expr::IntLiteral { value, .. }]) => {
                         min_size = Some(
-                            spanned.value
+                            (*value)
                                 .try_into()
                                 .with_context(|| format!("failed to convert `min_size` attribute into usize for type `{resolvee_path}`"))?,
                         );
                     }
-                    ("singleton", [grammar::Expr::IntLiteral(spanned)]) => {
-                        singleton = Some(spanned.value.try_into().with_context(|| {
+                    ("singleton", [grammar::Expr::IntLiteral { value, .. }]) => {
+                        singleton = Some((*value).try_into().with_context(|| {
                             format!(
                                 "failed to convert `singleton` attribute into usize for type `{resolvee_path}`"
                             )
                         })?);
                     }
-                    ("align", [grammar::Expr::IntLiteral(spanned)]) => {
-                        align = Some(spanned.value.try_into().with_context(|| {
+                    ("align", [grammar::Expr::IntLiteral { value, .. }]) => {
+                        align = Some((*value).try_into().with_context(|| {
                             format!("failed to convert `align` attribute into usize for type `{resolvee_path}`")
                         })?);
                     }
@@ -246,11 +246,11 @@ pub fn build(
                         }
                         grammar::Attribute::Function(ident, items) => {
                             let exprs = grammar::AttributeItem::extract_exprs(items);
-                            if let ("address", [grammar::Expr::IntLiteral(spanned)]) =
+                            if let ("address", [grammar::Expr::IntLiteral { value, .. }]) =
                                 (ident.as_str(), &exprs[..])
                             {
                                 address = Some(
-                                    spanned.value
+                                    (*value)
                                         .try_into()
                                         .with_context(|| format!("failed to convert `address` attribute into usize for field `{ident}` of type `{resolvee_path}`"))?,
                                 );
@@ -297,10 +297,10 @@ pub fn build(
                         continue;
                     };
                     let exprs = grammar::AttributeItem::extract_exprs(items);
-                    if let ("size", [grammar::Expr::IntLiteral(spanned)]) =
+                    if let ("size", [grammar::Expr::IntLiteral { value, .. }]) =
                         (ident.as_str(), exprs.as_slice())
                     {
-                        size = Some(spanned.value as usize);
+                        size = Some(*value as usize);
                     }
                 }
 

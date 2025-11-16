@@ -248,8 +248,8 @@ impl PrettyPrinter {
 
                             // Format with underscores for address/singleton
                             if needs_underscore {
-                                if let Expr::IntLiteral(spanned) = expr {
-                                    let formatted = self.format_hex_with_underscores(spanned.value);
+                                if let Expr::IntLiteral { value, .. } = expr {
+                                    let formatted = self.format_hex_with_underscores(*value);
                                     write!(&mut self.output, "{}", formatted).unwrap();
                                 } else {
                                     self.print_expr(expr);
@@ -286,25 +286,62 @@ impl PrettyPrinter {
     }
 
     fn print_expr(&mut self, expr: &Expr) {
-        // Use the original text from the span if available and non-empty to preserve literal formatting
-        if let Some(original_text) = expr.original_text()
-            && !original_text.is_empty()
-        {
-            write!(&mut self.output, "{}", original_text).unwrap();
-            return;
-        }
-
-        // Fallback for identifiers and synthetic spans (empty text)
         match expr {
-            Expr::IntLiteral(spanned) => {
-                // Format as decimal (for synthetic spans or when original text is empty)
-                write!(&mut self.output, "{}", spanned.value).unwrap();
-            }
-            Expr::StringLiteral(spanned) => {
-                write!(&mut self.output, "\"{}\"", spanned.value).unwrap();
+            Expr::IntLiteral { value, format } => match format {
+                IntFormat::Hex => write!(&mut self.output, "0x{:X}", value).unwrap(),
+                IntFormat::Binary => write!(&mut self.output, "0b{:b}", value).unwrap(),
+                IntFormat::Octal => write!(&mut self.output, "0o{:o}", value).unwrap(),
+                IntFormat::Decimal => write!(&mut self.output, "{}", value).unwrap(),
+            },
+            Expr::StringLiteral { value, format } => {
+                match format {
+                    StringFormat::Raw => {
+                        // Determine the number of # needed
+                        let hash_count = self.count_hashes_needed(value);
+                        let hashes = "#".repeat(hash_count);
+                        write!(&mut self.output, "r{hashes}\"{value}\"{hashes}").unwrap();
+                    }
+                    StringFormat::Regular => {
+                        // Escape special characters for regular strings
+                        write!(&mut self.output, "\"").unwrap();
+                        for ch in value.chars() {
+                            match ch {
+                                '"' => write!(&mut self.output, "\\\"").unwrap(),
+                                '\\' => write!(&mut self.output, "\\\\").unwrap(),
+                                '\n' => write!(&mut self.output, "\\n").unwrap(),
+                                '\r' => write!(&mut self.output, "\\r").unwrap(),
+                                '\t' => write!(&mut self.output, "\\t").unwrap(),
+                                _ => write!(&mut self.output, "{}", ch).unwrap(),
+                            }
+                        }
+                        write!(&mut self.output, "\"").unwrap();
+                    }
+                }
             }
             Expr::Ident(name) => write!(&mut self.output, "{name}").unwrap(),
         }
+    }
+
+    /// Count how many # characters are needed for a raw string
+    fn count_hashes_needed(&self, s: &str) -> usize {
+        let mut max_consecutive = 0;
+        let mut current_consecutive = 0;
+        let mut after_quote = false;
+
+        for ch in s.chars() {
+            if ch == '"' {
+                after_quote = true;
+                current_consecutive = 0;
+            } else if after_quote && ch == '#' {
+                current_consecutive += 1;
+                max_consecutive = max_consecutive.max(current_consecutive);
+            } else {
+                after_quote = false;
+                current_consecutive = 0;
+            }
+        }
+
+        max_consecutive + 1
     }
 
     fn format_item_path(&self, path: &ItemPath) -> String {

@@ -1684,12 +1684,30 @@ impl Parser {
             TokenKind::IntLiteral(_) => {
                 let token = self.current().clone();
                 let value = self.parse_int_literal()?;
-                Ok(Expr::IntLiteral(Spanned::new(value, token.span)))
+                // Detect format from the original token text
+                let format = if token.span.text.starts_with("0x")
+                    || token.span.text.starts_with("-0x")
+                {
+                    IntFormat::Hex
+                } else if token.span.text.starts_with("0b") || token.span.text.starts_with("-0b") {
+                    IntFormat::Binary
+                } else if token.span.text.starts_with("0o") || token.span.text.starts_with("-0o") {
+                    IntFormat::Octal
+                } else {
+                    IntFormat::Decimal
+                };
+                Ok(Expr::IntLiteral { value, format })
             }
             TokenKind::StringLiteral(_) => {
                 let token = self.current().clone();
                 let value = self.parse_string_literal()?;
-                Ok(Expr::StringLiteral(Spanned::new(value, token.span)))
+                // Detect if this was a raw string from the original token text
+                let format = if token.span.text.starts_with('r') {
+                    StringFormat::Raw
+                } else {
+                    StringFormat::Regular
+                };
+                Ok(Expr::StringLiteral { value, format })
             }
             TokenKind::Ident(_) => {
                 let (ident, _) = self.expect_ident()?;

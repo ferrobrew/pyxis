@@ -104,7 +104,7 @@ pub fn build(
             ..
         } = statement;
         let value = match expr {
-            Some(grammar::Expr::IntLiteral(spanned)) => spanned.value,
+            Some(grammar::Expr::IntLiteral { value, .. }) => *value,
             Some(_) => anyhow::bail!(
                 "unsupported enum value for case `{name}` of enum `{resolvee_path}`: {expr:?}"
             ),
@@ -145,10 +145,10 @@ pub fn build(
             },
             grammar::Attribute::Function(ident, items) => {
                 let exprs = grammar::AttributeItem::extract_exprs(items);
-                if let ("singleton", [grammar::Expr::IntLiteral(spanned)]) =
+                if let ("singleton", [grammar::Expr::IntLiteral { value, .. }]) =
                     (ident.as_str(), exprs.as_slice())
                 {
-                    singleton = Some(spanned.value as usize);
+                    singleton = Some(*value as usize);
                 }
             }
             grammar::Attribute::Assign(_ident, _expr) => {}

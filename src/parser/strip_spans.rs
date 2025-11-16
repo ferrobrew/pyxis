@@ -134,11 +134,8 @@ impl StripSpans for EnumDefinition {
 
 impl StripSpans for Expr {
     fn strip_spans(&self) -> Self {
-        match self {
-            Expr::IntLiteral(spanned) => Expr::IntLiteral(spanned.strip_spans()),
-            Expr::StringLiteral(spanned) => Expr::StringLiteral(spanned.strip_spans()),
-            Expr::Ident(ident) => Expr::Ident(ident.clone()),
-        }
+        // Expr already doesn't contain spans, just clone it
+        self.clone()
     }
 }
 

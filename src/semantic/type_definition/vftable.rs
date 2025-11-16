@@ -52,8 +52,8 @@ pub fn convert_grammar_functions_to_semantic_functions(
             };
             let exprs = grammar::AttributeItem::extract_exprs(items);
             match (ident.as_str(), exprs.as_slice()) {
-                ("index", [grammar::Expr::IntLiteral(spanned)]) => {
-                    index = Some(spanned.value as usize);
+                ("index", [grammar::Expr::IntLiteral { value, .. }]) => {
+                    index = Some(*value as usize);
                 }
                 _ => continue,
             }

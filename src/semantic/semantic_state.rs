@@ -81,10 +81,10 @@ impl SemanticState {
                         continue;
                     };
                     let exprs = grammar::AttributeItem::extract_exprs(items);
-                    if let ("address", [grammar::Expr::IntLiteral(spanned)]) =
+                    if let ("address", [grammar::Expr::IntLiteral { value, .. }]) =
                         (ident.as_str(), &exprs[..])
                     {
-                        address = Some(spanned.value as usize);
+                        address = Some(*value as usize);
                     }
                 }
 
@@ -138,16 +138,16 @@ impl SemanticState {
                 };
                 let exprs = grammar::AttributeItem::extract_exprs(items);
                 match (ident.as_str(), &exprs[..]) {
-                    ("size", [grammar::Expr::IntLiteral(spanned)]) => {
+                    ("size", [grammar::Expr::IntLiteral { value, .. }]) => {
                         size = Some(
-                            spanned.value
+                            (*value)
                                 .try_into()
                                 .with_context(|| format!("failed to convert `size` attribute into usize for extern type `{extern_path}` in module `{path}`"))?,
                         );
                     }
-                    ("align", [grammar::Expr::IntLiteral(spanned)]) => {
+                    ("align", [grammar::Expr::IntLiteral { value, .. }]) => {
                         alignment = Some(
-                            spanned.value
+                            (*value)
                                 .try_into()
                                 .with_context(|| format!("failed to convert `align` attribute into usize for extern type `{extern_path}` in module `{path}`"))?,
                         );

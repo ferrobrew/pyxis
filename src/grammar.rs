@@ -2,9 +2,23 @@ use std::{fmt, path::Path};
 
 use crate::span::Spanned;
 
-pub mod test_aliases {
-    use crate::span::{Span, Spanned};
+/// Format information for integer literals
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum IntFormat {
+    Decimal,
+    Hex,
+    Binary,
+    Octal,
+}
 
+/// Format information for string literals
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum StringFormat {
+    Regular,
+    Raw,
+}
+
+pub mod test_aliases {
     pub type M = super::Module;
     pub type ID = super::ItemDefinition;
     pub type TS = super::TypeStatement;
@@ -26,14 +40,33 @@ pub mod test_aliases {
     pub type V = super::Visibility;
     pub type EV = super::ExternValue;
 
-    /// Helper to create an IntLiteral expression with a synthetic span
+    /// Helper to create an IntLiteral expression (defaults to decimal format)
     pub fn int_literal(value: isize) -> E {
-        E::IntLiteral(Spanned::new(value, Span::synthetic()))
+        E::IntLiteral {
+            value,
+            format: super::IntFormat::Decimal,
+        }
     }
 
-    /// Helper to create a StringLiteral expression with a synthetic span
+    /// Helper to create an IntLiteral expression with a specific format
+    pub fn int_literal_with_format(value: isize, format: super::IntFormat) -> E {
+        E::IntLiteral { value, format }
+    }
+
+    /// Helper to create a StringLiteral expression (defaults to regular format)
     pub fn string_literal(value: impl Into<String>) -> E {
-        E::StringLiteral(Spanned::new(value.into(), Span::synthetic()))
+        E::StringLiteral {
+            value: value.into(),
+            format: super::StringFormat::Regular,
+        }
+    }
+
+    /// Helper to create a StringLiteral expression with a specific format
+    pub fn string_literal_with_format(value: impl Into<String>, format: super::StringFormat) -> E {
+        E::StringLiteral {
+            value: value.into(),
+            format,
+        }
     }
 }
 
@@ -216,30 +249,21 @@ impl From<&str> for ItemPath {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Expr {
-    IntLiteral(Spanned<isize>),
-    StringLiteral(Spanned<String>),
+    IntLiteral { value: isize, format: IntFormat },
+    StringLiteral { value: String, format: StringFormat },
     Ident(Ident),
 }
 impl Expr {
     pub fn int_literal(&self) -> Option<isize> {
         match self {
-            Expr::IntLiteral(spanned) => Some(spanned.value),
+            Expr::IntLiteral { value, .. } => Some(*value),
             _ => None,
         }
     }
     pub fn string_literal(&self) -> Option<&str> {
         match self {
-            Expr::StringLiteral(spanned) => Some(spanned.value.as_str()),
+            Expr::StringLiteral { value, .. } => Some(value.as_str()),
             _ => None,
-        }
-    }
-
-    /// Get the original text from the span, if this is a literal
-    pub fn original_text(&self) -> Option<&str> {
-        match self {
-            Expr::IntLiteral(spanned) => Some(&spanned.span.text),
-            Expr::StringLiteral(spanned) => Some(&spanned.span.text),
-            Expr::Ident(_) => None,
         }
     }
 }
@@ -305,10 +329,10 @@ impl Attribute {
     pub fn integer_fn(name: &str, value: isize) -> Self {
         Attribute::Function(
             name.into(),
-            vec![AttributeItem::Expr(Expr::IntLiteral(Spanned::new(
+            vec![AttributeItem::Expr(Expr::IntLiteral {
                 value,
-                crate::span::Span::synthetic(),
-            )))],
+                format: IntFormat::Decimal,
+            })],
         )
     }
     pub fn address(address: usize) -> Self {
@@ -332,10 +356,10 @@ impl Attribute {
     pub fn calling_convention(name: &str) -> Self {
         Attribute::Function(
             "calling_convention".into(),
-            vec![AttributeItem::Expr(Expr::StringLiteral(Spanned::new(
-                name.into(),
-                crate::span::Span::synthetic(),
-            )))],
+            vec![AttributeItem::Expr(Expr::StringLiteral {
+                value: name.into(),
+                format: StringFormat::Regular,
+            })],
         )
     }
 
