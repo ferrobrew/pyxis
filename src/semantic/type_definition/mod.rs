@@ -3,7 +3,9 @@ use std::collections::HashSet;
 use crate::{
     grammar::{self, ItemPath},
     semantic::{
-        SemanticState, function,
+        SemanticState,
+        error::{Result, SemanticError},
+        function,
         type_registry::TypeRegistry,
         types::{Function, FunctionBody, ItemState, ItemStateResolved, Type, Visibility},
     },
@@ -11,7 +13,6 @@ use crate::{
 };
 
 mod vftable;
-use anyhow::Context;
 pub use vftable::TypeVftable;
 
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]
@@ -115,7 +116,7 @@ impl TypeDefinition {
         type_registry: &TypeRegistry,
         type_path: &ItemPath,
         fields: &[&str],
-    ) -> anyhow::Result<Vec<(Vec<String>, Type)>> {
+    ) -> Result<Vec<(Vec<String>, Type)>> {
         let mut output = vec![];
         for region in &self.regions {
             if !region.is_base {
@@ -152,10 +153,10 @@ pub fn build(
     visibility: Visibility,
     definition: &grammar::TypeDefinition,
     doc_comments: &[String],
-) -> anyhow::Result<Option<ItemStateResolved>> {
+) -> Result<Option<ItemStateResolved>> {
     let module = semantic
         .get_module_for_path(resolvee_path)
-        .with_context(|| format!("failed to get module for path `{resolvee_path}`"))?;
+        .ok_or_else(|| SemanticError::module_not_found(resolvee_path.clone()))?;
 
     // Handle attributes
     let mut target_size: Option<usize> = None;
@@ -173,29 +174,39 @@ pub fn build(
                 let exprs = grammar::AttributeItem::extract_exprs(items);
                 match (ident.as_str(), exprs.as_slice()) {
                     ("size", [grammar::Expr::IntLiteral(value)]) => {
-                        target_size = Some(
-                            (*value)
-                                .try_into()
-                                .with_context(|| format!("failed to convert `size` attribute into usize for type `{resolvee_path}`"))?,
-                        );
+                        target_size = Some((*value).try_into().map_err(|_| {
+                            SemanticError::integer_conversion(
+                                value.to_string(),
+                                "usize",
+                                format!("size attribute for type `{resolvee_path}`"),
+                            )
+                        })?);
                     }
                     ("min_size", [grammar::Expr::IntLiteral(value)]) => {
-                        min_size = Some(
-                            (*value)
-                                .try_into()
-                                .with_context(|| format!("failed to convert `min_size` attribute into usize for type `{resolvee_path}`"))?,
-                        );
+                        min_size = Some((*value).try_into().map_err(|_| {
+                            SemanticError::integer_conversion(
+                                value.to_string(),
+                                "usize",
+                                format!("min_size attribute for type `{resolvee_path}`"),
+                            )
+                        })?);
                     }
                     ("singleton", [grammar::Expr::IntLiteral(value)]) => {
-                        singleton = Some((*value).try_into().with_context(|| {
-                            format!(
-                                "failed to convert `singleton` attribute into usize for type `{resolvee_path}`"
+                        singleton = Some((*value).try_into().map_err(|_| {
+                            SemanticError::integer_conversion(
+                                value.to_string(),
+                                "usize",
+                                format!("singleton attribute for type `{resolvee_path}`"),
                             )
                         })?);
                     }
                     ("align", [grammar::Expr::IntLiteral(value)]) => {
-                        align = Some((*value).try_into().with_context(|| {
-                            format!("failed to convert `align` attribute into usize for type `{resolvee_path}`")
+                        align = Some((*value).try_into().map_err(|_| {
+                            SemanticError::integer_conversion(
+                                value.to_string(),
+                                "usize",
+                                format!("align attribute for type `{resolvee_path}`"),
+                            )
                         })?);
                     }
                     _ => {}
@@ -217,9 +228,11 @@ pub fn build(
 
     // Ensure size and min_size are mutually exclusive
     if target_size.is_some() && min_size.is_some() {
-        anyhow::bail!(
-            "cannot specify both `size` and `min_size` attributes for type `{resolvee_path}`"
-        );
+        return Err(SemanticError::conflicting_attributes(
+            "size",
+            "min_size",
+            resolvee_path.clone(),
+        ));
     }
 
     // Handle fields
@@ -249,11 +262,15 @@ pub fn build(
                             if let ("address", [grammar::Expr::IntLiteral(addr)]) =
                                 (ident.as_str(), &exprs[..])
                             {
-                                address = Some(
-                                    (*addr)
-                                        .try_into()
-                                        .with_context(|| format!("failed to convert `address` attribute into usize for field `{ident}` of type `{resolvee_path}`"))?,
-                                );
+                                address = Some((*addr).try_into().map_err(|_| {
+                                    SemanticError::integer_conversion(
+                                        addr.to_string(),
+                                        "usize",
+                                        format!(
+                                            "address attribute for field `{ident}` of type `{resolvee_path}`"
+                                        ),
+                                    )
+                                })?);
                             }
                         }
                         _ => {}
@@ -285,9 +302,9 @@ pub fn build(
                 // thought about the presence of vftables in their type. we do not actually
                 // count it as a region; the type will be generated with a vftable field later on
                 if idx != 0 {
-                    anyhow::bail!(
-                        "vftable field of type `{resolvee_path}` must be the first field"
-                    );
+                    return Err(SemanticError::VftableMustBeFirst {
+                        item_path: resolvee_path.clone(),
+                    });
                 }
 
                 // Extract size attribute
@@ -304,17 +321,12 @@ pub fn build(
                     }
                 }
 
-                vftable_functions = Some(
-                    vftable::convert_grammar_functions_to_semantic_functions(
-                        &semantic.type_registry,
-                        module,
-                        size,
-                        functions,
-                    )
-                    .with_context(|| {
-                        format!("while building vftable for type `{resolvee_path}`")
-                    })?,
-                );
+                vftable_functions = Some(vftable::convert_grammar_functions_to_semantic_functions(
+                    &semantic.type_registry,
+                    module,
+                    size,
+                    functions,
+                )?);
             }
         }
     }
@@ -367,8 +379,7 @@ pub fn build(
         min_size.is_some(),
         pending_regions,
         vftable_functions,
-    )
-    .with_context(|| format!("while processing `{resolvee_path}`"))?
+    )?
     else {
         return Ok(None);
     };
@@ -419,21 +430,14 @@ pub fn build(
     if let Some(type_impl) = module.impls.get(resolvee_path) {
         for function in type_impl.functions().collect::<Vec<_>>() {
             if associated_functions_used_names.contains(&function.name.0) {
-                anyhow::bail!(
-                    "function `{}` is already defined in type `{}` (or a base type)",
-                    function.name,
-                    resolvee_path
-                );
+                return Err(SemanticError::duplicate_definition(
+                    function.name.0.clone(),
+                    resolvee_path.clone(),
+                    "function already defined in type or base type",
+                ));
             }
 
-            let function =
-                function::build(&semantic.type_registry, &module.scope(), false, function)
-                    .with_context(|| {
-                        format!(
-                            "while building impl function `{}` for type `{resolvee_path}`",
-                            function.name
-                        )
-                    })?;
+            let function = function::build(&semantic.type_registry, &module.scope(), false, function)?;
             associated_functions_used_names.insert(function.name.clone());
             associated_functions.push(function);
         }
@@ -458,20 +462,18 @@ pub fn build(
                     _ => None,
                 }
             }
-            let Some(path) = get_defaultable_type_path(type_ref) else {
-                anyhow::bail!(
-                    "field `{name}` of type `{resolvee_path}` is not a defaultable type (pointer or function?)"
-                );
+            let Some(path) = get_defaultable_type_path(&type_ref) else {
+                return Err(SemanticError::defaultable_error(
+                    name,
+                    resolvee_path.clone(),
+                    "field type is not defaultable (pointer or function?)",
+                ));
             };
 
             let item = semantic
                 .type_registry
                 .get(path)
-                .with_context(|| {
-                    format!(
-                        "failed to get type `{path}` for field `{name}` of type `{resolvee_path}`"
-                    )
-                })?
+                .ok_or_else(|| SemanticError::type_not_found(path.clone()))?
                 .state
                 .clone();
 
@@ -480,16 +482,22 @@ pub fn build(
             };
 
             if !inner.defaultable() {
-                anyhow::bail!("field `{name}` of type `{resolvee_path}` is not a defaultable type");
+                return Err(SemanticError::defaultable_error(
+                    name,
+                    resolvee_path.clone(),
+                    "field type is not defaultable",
+                ));
             }
         }
     }
 
     let alignment = if packed {
         if align.is_some() {
-            anyhow::bail!(
-                "cannot specify both `packed` and `align` attributes for type `{resolvee_path}`"
-            );
+            return Err(SemanticError::conflicting_attributes(
+                "packed",
+                "align",
+                resolvee_path.clone(),
+            ));
         }
 
         1
@@ -511,9 +519,12 @@ pub fn build(
 
         // Ensure that the alignment is at least the minimum required alignment.
         if required_alignment > alignment {
-            anyhow::bail!(
-                "alignment {alignment} is less than minimum required alignment {required_alignment} for type `{resolvee_path}`"
-            );
+            return Err(SemanticError::alignment_error(
+                resolvee_path.clone(),
+                format!(
+                    "alignment {alignment} is less than minimum required alignment {required_alignment}"
+                ),
+            ));
         }
 
         // Ensure that all fields are aligned.
@@ -523,9 +534,13 @@ pub fn build(
                 let name = &region.name.as_deref().unwrap_or("unnamed");
                 let alignment = region.type_ref.alignment(&semantic.type_registry).unwrap();
                 if last_address % alignment != 0 {
-                    anyhow::bail!(
-                        "field `{name}` of type `{resolvee_path}` is located at 0x{last_address:X}, which is not divisible by {alignment} (the alignment of the type of the field)"
-                    );
+                    return Err(SemanticError::alignment_error(
+                        resolvee_path.clone(),
+                        format!(
+                            "field `{name}` is located at {:#x}, which is not divisible by {alignment} (the alignment of the type of the field)",
+                            last_address
+                        ),
+                    ));
                 }
                 last_address += region.size(&semantic.type_registry).unwrap();
             }
@@ -533,9 +548,10 @@ pub fn build(
 
         // Ensure that the size is a multiple of the alignment.
         if size % alignment != 0 {
-            anyhow::bail!(
-                "the type `{resolvee_path}` has a size of {size}, which is not a multiple of its alignment {alignment}"
-            );
+            return Err(SemanticError::alignment_error(
+                resolvee_path.clone(),
+                format!("size {size} is not a multiple of alignment {alignment}"),
+            ));
         }
 
         alignment
@@ -568,7 +584,7 @@ fn resolve_regions(
     is_min_size: bool,
     regions: Vec<(Option<usize>, Region)>,
     vftable_functions: Option<Vec<Function>>,
-) -> anyhow::Result<Option<(Vec<Region>, Option<TypeVftable>, usize)>> {
+) -> Result<Option<(Vec<Region>, Option<TypeVftable>, usize)>> {
     // this resolution algorithm is very simple and doesn't handle overlapping regions
     // or regions that are out of order
     #[derive(Default)]
@@ -618,11 +634,14 @@ fn resolve_regions(
                     .unwrap()
                     .name
                     .as_deref()
-                    .unwrap_or_default();
-                anyhow::bail!(
-                    "attempted to insert padding at 0x{offset:X}, but overlapped with existing region `{existing_region}` that ends at 0x{:X}",
-                    resolved.last_address
-                );
+                    .unwrap_or_default()
+                    .to_string();
+                return Err(SemanticError::OverlappingRegions {
+                    item_path: resolvee_path.clone(),
+                    region_name: existing_region,
+                    address: offset,
+                    existing_end: resolved.last_address,
+                });
             };
             let padding_region = Region::unnamed_field(semantic.type_registry.padding_type(size));
             if resolved
@@ -687,16 +706,22 @@ fn resolve_regions(
         if is_min_size {
             // For min_size, the final size should be >= target_size (which was already rounded)
             if size < target_size {
-                anyhow::bail!(
-                    "calculated size {size} for type `{resolvee_path}` is less than minimum size {target_size}"
-                );
+                return Err(SemanticError::size_mismatch(
+                    target_size,
+                    size,
+                    resolvee_path.clone(),
+                    true,
+                ));
             }
         } else {
             // For exact size, the final size must equal target_size
             if size != target_size {
-                anyhow::bail!(
-                    "calculated size {size} for type `{resolvee_path}` does not match target size {target_size}; is your target size correct?"
-                );
+                return Err(SemanticError::size_mismatch(
+                    target_size,
+                    size,
+                    resolvee_path.clone(),
+                    false,
+                ));
             }
         }
     }
@@ -709,36 +734,36 @@ fn get_region_name_and_type_definition<'a>(
     type_registry: &'a TypeRegistry,
     type_path: &ItemPath,
     region: &Region,
-) -> anyhow::Result<Option<(String, &'a TypeDefinition)>> {
+) -> Result<Option<(String, &'a TypeDefinition)>> {
     let region_name = region
         .name
         .clone()
         .expect("region had no name, this shouldn't be possible");
 
     let Type::Raw(path) = &region.type_ref else {
-        anyhow::bail!(
-            "expected region field `{}` of type `{}` to be a raw type, but it was a {}",
-            region_name,
-            type_path,
-            region.type_ref.human_friendly_type()
-        );
+        return Err(SemanticError::invalid_type(
+            "raw type",
+            region.type_ref.human_friendly_type(),
+            type_path.clone(),
+            format!("region field `{}`", region_name),
+        ));
     };
 
     let region_type = type_registry
         .get(path)
-        .with_context(|| format!("failed to get region type `{path}` for type `{type_path}`"))?;
+        .ok_or_else(|| SemanticError::type_not_found(path.clone()))?;
 
     let Some(region_type) = region_type.resolved() else {
         return Ok(None);
     };
 
     let Some(region_type) = region_type.inner.as_type() else {
-        anyhow::bail!(
-            "expected region field `{}` of type `{}` to be a type, but it was a {}",
-            region_name,
-            type_path,
-            region_type.inner.human_friendly_type()
-        );
+        return Err(SemanticError::invalid_type(
+            "type",
+            region_type.inner.human_friendly_type(),
+            type_path.clone(),
+            format!("region field `{}`", region_name),
+        ));
     };
 
     Ok(Some((region_name, region_type)))

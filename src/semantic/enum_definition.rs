@@ -1,9 +1,8 @@
-use anyhow::Context;
-
 use crate::{
     grammar::{self, ItemPath},
     semantic::{
         SemanticState,
+        error::{Result, SemanticError},
         types::{Function, ItemStateResolved, Type},
     },
 };
@@ -76,10 +75,10 @@ pub fn build(
     resolvee_path: &ItemPath,
     definition: &grammar::EnumDefinition,
     doc_comments: &[String],
-) -> anyhow::Result<Option<ItemStateResolved>> {
+) -> Result<Option<ItemStateResolved>> {
     let module = semantic
         .get_module_for_path(resolvee_path)
-        .with_context(|| format!("failed to get module for path `{resolvee_path}`"))?;
+        .ok_or_else(|| SemanticError::module_not_found(resolvee_path.clone()))?;
 
     let Some(ty) = semantic
         .type_registry
@@ -105,9 +104,12 @@ pub fn build(
         } = statement;
         let value = match expr {
             Some(grammar::Expr::IntLiteral(value)) => *value,
-            Some(_) => anyhow::bail!(
-                "unsupported enum value for case `{name}` of enum `{resolvee_path}`: {expr:?}"
-            ),
+            Some(_) => {
+                return Err(SemanticError::enum_error(
+                    resolvee_path.clone(),
+                    format!("unsupported enum value for case `{name}`: {:?}", expr),
+                ))
+            }
             None => last_field,
         };
         fields.push((name.0.clone(), value));
@@ -116,7 +118,10 @@ pub fn build(
             match attribute {
                 grammar::Attribute::Ident(ident) if ident.as_str() == "default" => {
                     if default.is_some() {
-                        anyhow::bail!("enum {resolvee_path} has multiple default variants");
+                        return Err(SemanticError::enum_error(
+                            resolvee_path.clone(),
+                            "enum has multiple default variants",
+                        ));
                     }
                     default = Some(fields.len() - 1);
                 }
@@ -156,42 +161,39 @@ pub fn build(
     }
 
     if !defaultable && default.is_some() {
-        anyhow::bail!(
-            "enum `{resolvee_path}` has a default variant set but is not marked as defaultable"
-        );
+        return Err(SemanticError::enum_error(
+            resolvee_path.clone(),
+            "has a default variant set but is not marked as defaultable",
+        ));
     }
 
     if defaultable && default.is_none() {
-        anyhow::bail!(
-            "enum `{resolvee_path}` is marked as defaultable but has no default variant set"
-        );
+        return Err(SemanticError::enum_error(
+            resolvee_path.clone(),
+            "is marked as defaultable but has no default variant set",
+        ));
     }
 
     // Handle associated functions
     let mut associated_functions = vec![];
     if let Some(enum_impl) = module.impls.get(resolvee_path) {
         for function in enum_impl.functions().collect::<Vec<_>>() {
-            let function = crate::semantic::function::build(
-                &semantic.type_registry,
-                &module.scope(),
-                false,
-                function,
-            )
-            .with_context(|| {
-                format!(
-                    "while building impl function `{}` for enum `{resolvee_path}`",
-                    function.name
-                )
-            })?;
+            let function =
+                crate::semantic::function::build(&semantic.type_registry, &module.scope(), false, function)?;
             associated_functions.push(function);
         }
     }
 
     Ok(Some(ItemStateResolved {
         size,
-        alignment: ty.alignment(&semantic.type_registry).with_context(|| {
-            format!("failed to get alignment for base type of enum `{resolvee_path}`")
-        })?,
+        alignment: ty
+            .alignment(&semantic.type_registry)
+            .ok_or_else(|| {
+                SemanticError::type_resolution_failed(
+                    format!("{:?}", ty),
+                    format!("alignment for base type of enum `{resolvee_path}`"),
+                )
+            })?,
         inner: EnumDefinition {
             type_: ty,
             doc,

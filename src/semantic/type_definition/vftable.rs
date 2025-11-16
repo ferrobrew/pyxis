@@ -1,9 +1,9 @@
-use anyhow::Context;
-
 use crate::{
     grammar::{self, ItemPath},
     semantic::{
-        SemanticState, function,
+        SemanticState,
+        error::{Result, SemanticError},
+        function,
         module::Module,
         type_definition::get_region_name_and_type_definition,
         type_registry::TypeRegistry,
@@ -40,7 +40,7 @@ pub fn convert_grammar_functions_to_semantic_functions(
     module: &Module,
     size: Option<usize>,
     functions: &[grammar::Function],
-) -> anyhow::Result<Vec<Function>> {
+) -> Result<Vec<Function>> {
     // Insert function, with padding if necessary
     let mut output = vec![];
     let calling_convention = CallingConvention::for_member_function(type_registry.pointer_size());
@@ -62,8 +62,7 @@ pub fn convert_grammar_functions_to_semantic_functions(
         if let Some(index) = index {
             make_padding_functions(&mut output, index, calling_convention);
         }
-        let function = function::build(type_registry, &module.scope(), true, function)
-            .with_context(|| format!("while building vftable function `{}`", function.name))?;
+        let function = function::build(type_registry, &module.scope(), true, function)?;
         output.push(function);
     }
 
@@ -103,7 +102,7 @@ pub fn build(
     visibility: Visibility,
     first_base: Option<&Region>,
     vftable_functions: Option<Vec<Function>>,
-) -> anyhow::Result<(Option<TypeVftable>, Option<Region>)> {
+) -> Result<(Option<TypeVftable>, Option<Region>)> {
     if let Some(vftable_functions) = vftable_functions {
         // There are functions defined for this vftable.
         let vftable_item = build_type(
@@ -130,11 +129,14 @@ pub fn build(
 
             // Ensure that all of the base classes's vfuncs are included in the derived class's vftable
             if vftable_functions.len() < base_vftable.functions.len() {
-                anyhow::bail!(
-                    "vftable for `{}` is missing functions from base class `{}`",
-                    resolvee_path,
-                    base_name
-                );
+                return Err(SemanticError::field_error(
+                    "vftable",
+                    resolvee_path.clone(),
+                    format!(
+                        "vftable is missing functions from base class `{}`",
+                        base_name
+                    ),
+                ));
             }
             for (idx, (base_vfunc, derived_vfunc)) in base_vftable
                 .functions
@@ -143,14 +145,14 @@ pub fn build(
                 .enumerate()
             {
                 if base_vfunc != derived_vfunc {
-                    anyhow::bail!(
-                        "vftable for `{}` has function `{}` at index {} but base class `{}` has function `{}`",
-                        resolvee_path,
-                        derived_vfunc,
-                        idx,
-                        base_name,
-                        base_vfunc
-                    );
+                    return Err(SemanticError::field_error(
+                        "vftable",
+                        resolvee_path.clone(),
+                        format!(
+                            "has function `{}` at index {} but base class `{}` has function `{}`",
+                            derived_vfunc, idx, base_name, base_vfunc
+                        ),
+                    ));
                 }
             }
 
@@ -276,7 +278,7 @@ fn get_optional_region_name_and_vftable<'a>(
     type_registry: &'a TypeRegistry,
     resolvee_path: &ItemPath,
     region: Option<&Region>,
-) -> anyhow::Result<Option<(String, &'a TypeVftable)>> {
+) -> Result<Option<(String, &'a TypeVftable)>> {
     Ok(region
         .map(|b| get_region_name_and_vftable(type_registry, resolvee_path, b))
         .transpose()?
@@ -288,7 +290,7 @@ fn get_region_name_and_vftable<'a>(
     type_registry: &'a TypeRegistry,
     resolvee_path: &ItemPath,
     region: &Region,
-) -> anyhow::Result<Option<(String, &'a TypeVftable)>> {
+) -> Result<Option<(String, &'a TypeVftable)>> {
     Ok(
         get_region_name_and_type_definition(type_registry, resolvee_path, region)?
             .and_then(|(name, td)| td.vftable.as_ref().map(|vftable| (name, vftable))),

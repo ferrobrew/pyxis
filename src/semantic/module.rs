@@ -3,6 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::{
     grammar::{self, ItemPath},
     semantic::{
+        error::{Result, SemanticError},
         function::Function,
         type_registry,
         types::{Backend, ExternValue, ItemDefinition, Type},
@@ -43,7 +44,7 @@ impl Module {
         extern_values: Vec<ExternValue>,
         impls: &[grammar::FunctionBlock],
         backends: &[grammar::Backend],
-    ) -> anyhow::Result<Self> {
+    ) -> Result<Self> {
         let impls = impls
             .iter()
             .map(|f| (path.join(f.name.as_str().into()), f.clone()))
@@ -99,14 +100,17 @@ impl Module {
     pub(crate) fn resolve_extern_values(
         &mut self,
         type_registry: &mut type_registry::TypeRegistry,
-    ) -> anyhow::Result<()> {
+    ) -> Result<()> {
         let scope = self.scope();
 
         for ev in &mut self.extern_values {
             if let Type::Unresolved(type_ref) = &ev.type_ {
-                ev.type_ = type_registry
-                    .resolve_grammar_type(&scope, type_ref)
-                    .ok_or_else(|| anyhow::anyhow!("failed to resolve type for {}", ev.name))?;
+                ev.type_ = type_registry.resolve_grammar_type(&scope, type_ref).ok_or_else(|| {
+                    SemanticError::type_resolution_failed(
+                        format!("{:?}", type_ref),
+                        format!("extern value {}", ev.name),
+                    )
+                })?;
             }
         }
 
@@ -116,7 +120,7 @@ impl Module {
     pub(crate) fn resolve_functions(
         &mut self,
         type_registry: &type_registry::TypeRegistry,
-    ) -> anyhow::Result<()> {
+    ) -> Result<()> {
         let scope = self.scope();
 
         for function in self.ast.functions().collect::<Vec<_>>() {

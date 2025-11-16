@@ -63,7 +63,7 @@ fn main() -> anyhow::Result<()> {
             out_dir,
         } => {
             std::fs::create_dir_all(&out_dir)?;
-            pyxis::build(&in_dir, &out_dir, backend.into())
+            pyxis::build(&in_dir, &out_dir, backend.into()).map_err(|e| anyhow::anyhow!("{}", e))
         }
         Command::AstDump { file, pretty } => {
             let content = std::fs::read_to_string(&file)?;

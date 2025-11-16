@@ -1,10 +1,9 @@
 use std::{fmt, str::FromStr};
 
-use anyhow::Context;
-
 use crate::{
     grammar::{self, ItemPath},
     semantic::{
+        error::{Result, SemanticError},
         type_registry::TypeRegistry,
         types::{Type, Visibility},
     },
@@ -75,7 +74,7 @@ impl fmt::Display for CallingConvention {
 }
 impl FromStr for CallingConvention {
     type Err = ();
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         match s {
             "C" => Ok(CallingConvention::C),
             "cdecl" => Ok(CallingConvention::Cdecl),
@@ -222,7 +221,7 @@ pub fn build(
     scope: &[ItemPath],
     is_vfunc: bool,
     function: &grammar::Function,
-) -> Result<Function, anyhow::Error> {
+) -> Result<Function> {
     let mut body = is_vfunc.then(|| FunctionBody::Vftable {
         function_name: function.name.0.clone(),
     });
@@ -236,17 +235,18 @@ pub fn build(
         match (ident.as_str(), &exprs[..]) {
             ("address", [grammar::Expr::IntLiteral(addr)]) => {
                 if is_vfunc {
-                    anyhow::bail!(
-                        "address attribute is not supported for virtual function `{}`",
-                        function.name
-                    );
+                    return Err(SemanticError::attribute_not_supported(
+                        "address",
+                        format!("virtual function `{}`", function.name),
+                    ));
                 }
 
                 body = Some(FunctionBody::Address {
-                    address: (*addr).try_into().with_context(|| {
-                        format!(
-                            "failed to convert `address` attribute into usize for function `{}`",
-                            function.name
+                    address: (*addr).try_into().map_err(|_| {
+                        SemanticError::integer_conversion(
+                            addr.to_string(),
+                            "usize",
+                            format!("address attribute for function `{}`", function.name),
                         )
                     })?,
                 });
@@ -254,18 +254,18 @@ pub fn build(
             ("index", _) => {
                 // ignore index attribute, this is handled by vftable construction
                 if !is_vfunc {
-                    anyhow::bail!(
-                        "index attribute is only supported for virtual functions, not `{}`",
-                        function.name
-                    );
+                    return Err(SemanticError::attribute_not_supported(
+                        "index",
+                        format!("non-virtual function `{}`", function.name),
+                    ));
                 }
             }
             ("calling_convention", [grammar::Expr::StringLiteral(cc)]) => {
                 calling_convention = Some(cc.parse().map_err(|_| {
-                    anyhow::anyhow!(
-                        "invalid calling convention for function `{}`: {cc}",
-                        function.name
-                    )
+                    SemanticError::InvalidCallingConvention {
+                        convention: cc.clone(),
+                        function_name: function.name.0.clone(),
+                    }
                 })?);
             }
             _ => {}
@@ -273,10 +273,9 @@ pub fn build(
     }
 
     if !is_vfunc && body.is_none() {
-        anyhow::bail!(
-            "function `{}` has no implementation available; did you forget to assign an `address` attribute?",
-            function.name,
-        );
+        return Err(SemanticError::FunctionMissingImplementation {
+            function_name: function.name.0.clone(),
+        });
     }
 
     let Some(body) = body else {
@@ -294,18 +293,15 @@ pub fn build(
             grammar::Argument::MutSelf => Ok(Argument::MutSelf),
             grammar::Argument::Named(name, type_) => Ok(Argument::Field(
                 name.0.clone(),
-                type_registry
-                    .resolve_grammar_type(scope, type_)
-                    .ok_or_else(|| {
-                        anyhow::anyhow!(
-                            "failed to resolve type of field `{:?}` ({:?})",
-                            name,
-                            type_
-                        )
-                    })?,
+                type_registry.resolve_grammar_type(scope, type_).ok_or_else(|| {
+                    SemanticError::type_resolution_failed(
+                        format!("{:?}", type_),
+                        format!("argument `{}` in function `{}`", name, function.name),
+                    )
+                })?,
             )),
         })
-        .collect::<anyhow::Result<Vec<_>>>()?;
+        .collect::<Result<Vec<_>>>()?;
 
     let return_type = function
         .return_type
