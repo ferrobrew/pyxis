@@ -1,5 +1,7 @@
 use std::{fmt, path::Path};
 
+use crate::span::Spanned;
+
 pub mod test_aliases {
     pub type M = super::Module;
     pub type ID = super::ItemDefinition;
@@ -21,6 +23,19 @@ pub mod test_aliases {
     pub type B = super::Backend;
     pub type V = super::Visibility;
     pub type EV = super::ExternValue;
+}
+
+/// Comment node types
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum Comment {
+    /// Doc comment for outer items (///)
+    DocOuter(Vec<String>),
+    /// Doc comment for inner items (//!)
+    DocInner(Vec<String>),
+    /// Regular comment (//)
+    Regular(String),
+    /// Multiline comment (/* */)
+    MultiLine(Vec<String>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -51,17 +66,21 @@ pub enum Type {
     ConstPointer(Box<Type>),
     MutPointer(Box<Type>),
     Array(Box<Type>, usize),
-    Ident(Ident),
+    Ident(Ident, Vec<Type>), // Added generics support
     Unknown(usize),
 }
 impl Type {
     pub fn ident(ident: &str) -> Type {
-        Type::Ident(ident.into())
+        Type::Ident(ident.into(), vec![])
+    }
+
+    pub fn ident_with_args(ident: &str, args: Vec<Type>) -> Type {
+        Type::Ident(ident.into(), args)
     }
 
     pub fn as_ident(&self) -> Option<&Ident> {
         match self {
-            Type::Ident(ident) => Some(ident),
+            Type::Ident(ident, _) => Some(ident),
             _ => None,
         }
     }
@@ -84,7 +103,7 @@ impl Type {
 }
 impl From<&str> for Type {
     fn from(item: &str) -> Self {
-        Type::Ident(item.into())
+        Type::Ident(item.into(), vec![])
     }
 }
 
@@ -205,10 +224,33 @@ impl Expr {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum AttributeItem {
+    Expr(Expr),
+    Comment(String),
+}
+
+impl AttributeItem {
+    /// Helper to extract just the expressions from a list of attribute items
+    pub fn extract_exprs(items: &[AttributeItem]) -> Vec<&Expr> {
+        items
+            .iter()
+            .filter_map(|item| match item {
+                AttributeItem::Expr(expr) => Some(expr),
+                AttributeItem::Comment(_) => None,
+            })
+            .collect()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Attribute {
     Ident(Ident),
-    Function(Ident, Vec<Expr>),
-    Assign(Ident, Expr),
+    /// Function attribute with expressions and comments
+    /// Example: size(0x620 /* actually 0x61C */)
+    Function(Ident, Vec<AttributeItem>),
+    /// Assign attribute with expression and optional comments
+    /// Example: foo = bar /* comment */
+    Assign(Ident, Vec<AttributeItem>),
 }
 impl Attribute {
     // Ident attributes
@@ -233,14 +275,17 @@ impl Attribute {
     }
 
     // Function attributes
-    pub fn function(&self) -> Option<(&Ident, &Vec<Expr>)> {
+    pub fn function(&self) -> Option<(&Ident, &Vec<AttributeItem>)> {
         match self {
-            Attribute::Function(ident, exprs) => Some((ident, exprs)),
+            Attribute::Function(ident, items) => Some((ident, items)),
             _ => None,
         }
     }
     pub fn integer_fn(name: &str, value: isize) -> Self {
-        Attribute::Function(name.into(), vec![Expr::IntLiteral(value)])
+        Attribute::Function(
+            name.into(),
+            vec![AttributeItem::Expr(Expr::IntLiteral(value))],
+        )
     }
     pub fn address(address: usize) -> Self {
         Self::integer_fn("address", address as isize)
@@ -263,19 +308,16 @@ impl Attribute {
     pub fn calling_convention(name: &str) -> Self {
         Attribute::Function(
             "calling_convention".into(),
-            vec![Expr::StringLiteral(name.into())],
+            vec![AttributeItem::Expr(Expr::StringLiteral(name.into()))],
         )
     }
 
     // Assign attributes
-    pub fn assign(&self) -> Option<(&Ident, &Expr)> {
+    pub fn assign(&self) -> Option<(&Ident, &Vec<AttributeItem>)> {
         match self {
-            Attribute::Assign(ident, expr) => Some((ident, expr)),
+            Attribute::Assign(ident, items) => Some((ident, items)),
             _ => None,
         }
-    }
-    pub fn doc(doc: &str) -> Self {
-        Attribute::Assign("doc".into(), Expr::StringLiteral(doc.into()))
     }
 }
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
@@ -311,30 +353,6 @@ impl FromIterator<Attribute> for Attributes {
         Attributes(iter.into_iter().collect())
     }
 }
-impl Attributes {
-    pub fn doc(&self, path: &ItemPath) -> anyhow::Result<Option<String>> {
-        let mut doc = None;
-        for attr in &self.0 {
-            let Some((key, value)) = attr.assign() else {
-                continue;
-            };
-            if key.as_str() != "doc" {
-                continue;
-            }
-
-            let Some(value) = value.string_literal() else {
-                anyhow::bail!("doc attribute for `{path}` must be a string literal");
-            };
-
-            let doc = doc.get_or_insert_with(String::new);
-            if !doc.is_empty() {
-                doc.push('\n');
-            }
-            doc.push_str(value);
-        }
-        Ok(doc)
-    }
-}
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum Visibility {
@@ -359,6 +377,7 @@ pub struct Function {
     pub visibility: Visibility,
     pub name: Ident,
     pub attributes: Attributes,
+    pub doc_comments: Vec<String>,
     pub arguments: Vec<Argument>,
     pub return_type: Option<Type>,
 }
@@ -371,12 +390,17 @@ impl Function {
             visibility,
             name: name.into(),
             attributes: Default::default(),
+            doc_comments: vec![],
             arguments: arguments.into(),
             return_type: None,
         }
     }
     pub fn with_attributes(mut self, attributes: impl Into<Attributes>) -> Self {
         self.attributes = attributes.into();
+        self
+    }
+    pub fn with_doc_comments(mut self, doc_comments: Vec<String>) -> Self {
+        self.doc_comments = doc_comments;
         self
     }
     pub fn with_return_type(mut self, return_type: impl Into<Type>) -> Self {
@@ -425,53 +449,122 @@ impl TypeField {
         matches!(self, TypeField::Vftable(_))
     }
 }
+
+/// Items in a type definition body (preserves ordering and comments)
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum TypeDefItem {
+    Comment(Spanned<Comment>),
+    Statement(TypeStatement),
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TypeStatement {
     pub field: TypeField,
     pub attributes: Attributes,
+    pub doc_comments: Vec<String>,
+    pub inline_trailing_comments: Vec<Spanned<Comment>>, // Comments on same line as field
+    pub following_comments: Vec<Spanned<Comment>>,       // Comments on lines after field
 }
 impl TypeStatement {
     pub fn field((visibility, name): (Visibility, &str), type_: Type) -> TypeStatement {
         TypeStatement {
             field: TypeField::Field(visibility, name.into(), type_),
             attributes: Default::default(),
+            doc_comments: vec![],
+            inline_trailing_comments: Vec::new(),
+            following_comments: Vec::new(),
         }
     }
     pub fn vftable(functions: impl IntoIterator<Item = Function>) -> TypeStatement {
         TypeStatement {
             field: TypeField::vftable(functions),
             attributes: Default::default(),
+            doc_comments: vec![],
+            inline_trailing_comments: Vec::new(),
+            following_comments: Vec::new(),
         }
     }
     pub fn with_attributes(mut self, attributes: impl Into<Attributes>) -> Self {
         self.attributes = attributes.into();
+        self
+    }
+    pub fn with_doc_comments(mut self, doc_comments: Vec<String>) -> Self {
+        self.doc_comments = doc_comments;
+        self
+    }
+    pub fn with_inline_trailing_comments(
+        mut self,
+        inline_trailing_comments: Vec<Spanned<Comment>>,
+    ) -> Self {
+        self.inline_trailing_comments = inline_trailing_comments;
+        self
+    }
+    pub fn with_following_comments(mut self, following_comments: Vec<Spanned<Comment>>) -> Self {
+        self.following_comments = following_comments;
         self
     }
 }
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TypeDefinition {
-    pub statements: Vec<TypeStatement>,
+    pub items: Vec<TypeDefItem>,
     pub attributes: Attributes,
+    pub inline_trailing_comments: Vec<Spanned<Comment>>, // Comments on same line as attributes
+    pub following_comments: Vec<Spanned<Comment>>,       // Comments on lines after attributes
 }
 impl TypeDefinition {
     pub fn new(statements: impl Into<Vec<TypeStatement>>) -> Self {
         Self {
-            statements: statements.into(),
+            items: statements
+                .into()
+                .into_iter()
+                .map(TypeDefItem::Statement)
+                .collect(),
             attributes: Default::default(),
+            inline_trailing_comments: Vec::new(),
+            following_comments: Vec::new(),
         }
     }
     pub fn with_attributes(mut self, attributes: impl Into<Attributes>) -> Self {
         self.attributes = attributes.into();
         self
     }
+    pub fn with_inline_trailing_comments(
+        mut self,
+        inline_trailing_comments: Vec<Spanned<Comment>>,
+    ) -> Self {
+        self.inline_trailing_comments = inline_trailing_comments;
+        self
+    }
+    pub fn with_following_comments(mut self, following_comments: Vec<Spanned<Comment>>) -> Self {
+        self.following_comments = following_comments;
+        self
+    }
+
+    /// Helper to extract just the statements (for compatibility)
+    pub fn statements(&self) -> impl Iterator<Item = &TypeStatement> {
+        self.items.iter().filter_map(|item| match item {
+            TypeDefItem::Statement(stmt) => Some(stmt),
+            _ => None,
+        })
+    }
 }
 
 // enums
+/// Items in an enum definition (preserves ordering and comments)
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum EnumDefItem {
+    Comment(Spanned<Comment>),
+    Statement(EnumStatement),
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct EnumStatement {
     pub name: Ident,
     pub expr: Option<Expr>,
     pub attributes: Attributes,
+    pub doc_comments: Vec<String>,
+    pub inline_trailing_comments: Vec<Spanned<Comment>>, // Comments on same line as enum variant
+    pub following_comments: Vec<Spanned<Comment>>,       // Comments on lines after enum variant
 }
 impl EnumStatement {
     pub fn new(name: Ident, expr: Option<Expr>) -> EnumStatement {
@@ -479,6 +572,9 @@ impl EnumStatement {
             name,
             expr,
             attributes: Default::default(),
+            doc_comments: vec![],
+            inline_trailing_comments: Vec::new(),
+            following_comments: Vec::new(),
         }
     }
     pub fn field(name: &str) -> EnumStatement {
@@ -491,12 +587,29 @@ impl EnumStatement {
         self.attributes = attributes.into();
         self
     }
+    pub fn with_doc_comments(mut self, doc_comments: Vec<String>) -> Self {
+        self.doc_comments = doc_comments;
+        self
+    }
+    pub fn with_inline_trailing_comments(
+        mut self,
+        inline_trailing_comments: Vec<Spanned<Comment>>,
+    ) -> Self {
+        self.inline_trailing_comments = inline_trailing_comments;
+        self
+    }
+    pub fn with_following_comments(mut self, following_comments: Vec<Spanned<Comment>>) -> Self {
+        self.following_comments = following_comments;
+        self
+    }
 }
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct EnumDefinition {
     pub type_: Type,
-    pub statements: Vec<EnumStatement>,
+    pub items: Vec<EnumDefItem>,
     pub attributes: Attributes,
+    pub inline_trailing_comments: Vec<Spanned<Comment>>, // Comments on same line as attributes
+    pub following_comments: Vec<Spanned<Comment>>,       // Comments on lines after attributes
 }
 impl EnumDefinition {
     pub fn new(
@@ -506,22 +619,57 @@ impl EnumDefinition {
     ) -> Self {
         Self {
             type_,
-            statements: statements.into(),
+            items: statements
+                .into()
+                .into_iter()
+                .map(EnumDefItem::Statement)
+                .collect(),
             attributes: attributes.into(),
+            inline_trailing_comments: Vec::new(),
+            following_comments: Vec::new(),
         }
     }
     pub fn with_attributes(mut self, attributes: impl Into<Attributes>) -> Self {
         self.attributes = attributes.into();
         self
     }
+    pub fn with_inline_trailing_comments(
+        mut self,
+        inline_trailing_comments: Vec<Spanned<Comment>>,
+    ) -> Self {
+        self.inline_trailing_comments = inline_trailing_comments;
+        self
+    }
+    pub fn with_following_comments(mut self, following_comments: Vec<Spanned<Comment>>) -> Self {
+        self.following_comments = following_comments;
+        self
+    }
+
+    /// Helper to extract just the statements (for compatibility)
+    pub fn statements(&self) -> impl Iterator<Item = &EnumStatement> {
+        self.items.iter().filter_map(|item| match item {
+            EnumDefItem::Statement(stmt) => Some(stmt),
+            _ => None,
+        })
+    }
 }
 
 // bitflags
+/// Items in a bitflags definition (preserves ordering and comments)
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum BitflagsDefItem {
+    Comment(Spanned<Comment>),
+    Statement(BitflagsStatement),
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct BitflagsStatement {
     pub name: Ident,
     pub expr: Expr,
     pub attributes: Attributes,
+    pub doc_comments: Vec<String>,
+    pub inline_trailing_comments: Vec<Spanned<Comment>>, // Comments on same line as bitflag
+    pub following_comments: Vec<Spanned<Comment>>,       // Comments on lines after bitflag
 }
 impl BitflagsStatement {
     pub fn new(name: Ident, expr: Expr) -> BitflagsStatement {
@@ -529,6 +677,9 @@ impl BitflagsStatement {
             name,
             expr,
             attributes: Default::default(),
+            doc_comments: vec![],
+            inline_trailing_comments: Vec::new(),
+            following_comments: Vec::new(),
         }
     }
     pub fn field(name: &str, expr: Expr) -> BitflagsStatement {
@@ -538,12 +689,29 @@ impl BitflagsStatement {
         self.attributes = attributes.into();
         self
     }
+    pub fn with_doc_comments(mut self, doc_comments: Vec<String>) -> Self {
+        self.doc_comments = doc_comments;
+        self
+    }
+    pub fn with_inline_trailing_comments(
+        mut self,
+        inline_trailing_comments: Vec<Spanned<Comment>>,
+    ) -> Self {
+        self.inline_trailing_comments = inline_trailing_comments;
+        self
+    }
+    pub fn with_following_comments(mut self, following_comments: Vec<Spanned<Comment>>) -> Self {
+        self.following_comments = following_comments;
+        self
+    }
 }
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct BitflagsDefinition {
     pub type_: Type,
-    pub statements: Vec<BitflagsStatement>,
+    pub items: Vec<BitflagsDefItem>,
     pub attributes: Attributes,
+    pub inline_trailing_comments: Vec<Spanned<Comment>>, // Comments on same line as attributes
+    pub following_comments: Vec<Spanned<Comment>>,       // Comments on lines after attributes
 }
 impl BitflagsDefinition {
     pub fn new(
@@ -553,13 +721,38 @@ impl BitflagsDefinition {
     ) -> Self {
         Self {
             type_,
-            statements: statements.into(),
+            items: statements
+                .into()
+                .into_iter()
+                .map(BitflagsDefItem::Statement)
+                .collect(),
             attributes: attributes.into(),
+            inline_trailing_comments: Vec::new(),
+            following_comments: Vec::new(),
         }
     }
     pub fn with_attributes(mut self, attributes: impl Into<Attributes>) -> Self {
         self.attributes = attributes.into();
         self
+    }
+    pub fn with_inline_trailing_comments(
+        mut self,
+        inline_trailing_comments: Vec<Spanned<Comment>>,
+    ) -> Self {
+        self.inline_trailing_comments = inline_trailing_comments;
+        self
+    }
+    pub fn with_following_comments(mut self, following_comments: Vec<Spanned<Comment>>) -> Self {
+        self.following_comments = following_comments;
+        self
+    }
+
+    /// Helper to extract just the statements (for compatibility)
+    pub fn statements(&self) -> impl Iterator<Item = &BitflagsStatement> {
+        self.items.iter().filter_map(|item| match item {
+            BitflagsDefItem::Statement(stmt) => Some(stmt),
+            _ => None,
+        })
     }
 }
 
@@ -590,6 +783,7 @@ impl From<BitflagsDefinition> for ItemDefinitionInner {
 pub struct ItemDefinition {
     pub visibility: Visibility,
     pub name: Ident,
+    pub doc_comments: Vec<String>,
     pub inner: ItemDefinitionInner,
 }
 impl ItemDefinition {
@@ -600,28 +794,52 @@ impl ItemDefinition {
         Self {
             visibility,
             name: name.into(),
+            doc_comments: vec![],
             inner: inner.into(),
         }
     }
+    pub fn with_doc_comments(mut self, doc_comments: Vec<String>) -> Self {
+        self.doc_comments = doc_comments;
+        self
+    }
+}
+
+/// Items in an impl block (preserves ordering and comments)
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ImplItem {
+    Comment(Spanned<Comment>),
+    Function(Function),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FunctionBlock {
     pub name: Ident,
-    pub functions: Vec<Function>,
+    pub items: Vec<ImplItem>,
     pub attributes: Attributes,
 }
 impl FunctionBlock {
     pub fn new(name: impl Into<Ident>, functions: impl Into<Vec<Function>>) -> Self {
         Self {
             name: name.into(),
-            functions: functions.into(),
+            items: functions
+                .into()
+                .into_iter()
+                .map(ImplItem::Function)
+                .collect(),
             attributes: Default::default(),
         }
     }
     pub fn with_attributes(mut self, attributes: impl Into<Attributes>) -> Self {
         self.attributes = attributes.into();
         self
+    }
+
+    /// Helper to extract just the functions (for compatibility)
+    pub fn functions(&self) -> impl Iterator<Item = &Function> {
+        self.items.iter().filter_map(|item| match item {
+            ImplItem::Function(func) => Some(func),
+            _ => None,
+        })
     }
 }
 
@@ -655,6 +873,7 @@ pub struct ExternValue {
     pub name: Ident,
     pub type_: Type,
     pub attributes: Attributes,
+    pub doc_comments: Vec<String>,
 }
 impl ExternValue {
     pub fn new(
@@ -668,20 +887,33 @@ impl ExternValue {
             name: name.into(),
             type_,
             attributes: attributes.into(),
+            doc_comments: vec![],
         }
     }
+    pub fn with_doc_comments(mut self, doc_comments: Vec<String>) -> Self {
+        self.doc_comments = doc_comments;
+        self
+    }
+}
+
+/// Module-level items (preserves ordering and comments)
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ModuleItem {
+    Comment(Spanned<Comment>),
+    Use(ItemPath),
+    ExternType(Ident, Attributes, Vec<String>), // name, attributes, doc_comments
+    Backend(Backend),
+    Definition(ItemDefinition),
+    Impl(FunctionBlock),
+    ExternValue(ExternValue),
+    Function(Function),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Module {
-    pub uses: Vec<ItemPath>,
-    pub extern_types: Vec<(Ident, Attributes)>,
-    pub extern_values: Vec<ExternValue>,
-    pub functions: Vec<Function>,
-    pub definitions: Vec<ItemDefinition>,
-    pub impls: Vec<FunctionBlock>,
-    pub backends: Vec<Backend>,
+    pub items: Vec<ModuleItem>,
     pub attributes: Attributes,
+    pub doc_comments: Vec<String>,
 }
 impl Module {
     pub fn new() -> Self {
@@ -689,35 +921,109 @@ impl Module {
     }
 
     pub fn with_uses(mut self, uses: impl Into<Vec<ItemPath>>) -> Self {
-        self.uses = uses.into();
+        for use_path in uses.into() {
+            self.items.push(ModuleItem::Use(use_path));
+        }
         self
     }
     pub fn with_extern_types(mut self, extern_types: impl Into<Vec<(Ident, Attributes)>>) -> Self {
-        self.extern_types = extern_types.into();
+        for (name, attrs) in extern_types.into() {
+            self.items.push(ModuleItem::ExternType(name, attrs, vec![]));
+        }
         self
     }
     pub fn with_extern_values(mut self, extern_values: impl Into<Vec<ExternValue>>) -> Self {
-        self.extern_values = extern_values.into();
+        for extern_value in extern_values.into() {
+            self.items.push(ModuleItem::ExternValue(extern_value));
+        }
         self
     }
     pub fn with_functions(mut self, functions: impl Into<Vec<Function>>) -> Self {
-        self.functions = functions.into();
+        for function in functions.into() {
+            self.items.push(ModuleItem::Function(function));
+        }
         self
     }
     pub fn with_definitions(mut self, definitions: impl Into<Vec<ItemDefinition>>) -> Self {
-        self.definitions = definitions.into();
+        for definition in definitions.into() {
+            self.items.push(ModuleItem::Definition(definition));
+        }
         self
     }
     pub fn with_impls(mut self, impls: impl Into<Vec<FunctionBlock>>) -> Self {
-        self.impls = impls.into();
+        for impl_block in impls.into() {
+            self.items.push(ModuleItem::Impl(impl_block));
+        }
         self
     }
     pub fn with_backends(mut self, backends: impl Into<Vec<Backend>>) -> Self {
-        self.backends = backends.into();
+        for backend in backends.into() {
+            self.items.push(ModuleItem::Backend(backend));
+        }
         self
     }
     pub fn with_attributes(mut self, attributes: impl Into<Attributes>) -> Self {
         self.attributes = attributes.into();
         self
+    }
+    pub fn with_doc_comments(mut self, doc_comments: Vec<String>) -> Self {
+        self.doc_comments = doc_comments;
+        self
+    }
+
+    /// Helper to extract uses (for compatibility)
+    pub fn uses(&self) -> impl Iterator<Item = &ItemPath> {
+        self.items.iter().filter_map(|item| match item {
+            ModuleItem::Use(path) => Some(path),
+            _ => None,
+        })
+    }
+
+    /// Helper to extract extern_types (for compatibility)
+    pub fn extern_types(&self) -> impl Iterator<Item = (&Ident, &Attributes)> {
+        self.items.iter().filter_map(|item| match item {
+            ModuleItem::ExternType(name, attrs, _) => Some((name, attrs)),
+            _ => None,
+        })
+    }
+
+    /// Helper to extract extern_values (for compatibility)
+    pub fn extern_values(&self) -> impl Iterator<Item = &ExternValue> {
+        self.items.iter().filter_map(|item| match item {
+            ModuleItem::ExternValue(ev) => Some(ev),
+            _ => None,
+        })
+    }
+
+    /// Helper to extract functions (for compatibility)
+    pub fn functions(&self) -> impl Iterator<Item = &Function> {
+        self.items.iter().filter_map(|item| match item {
+            ModuleItem::Function(func) => Some(func),
+            _ => None,
+        })
+    }
+
+    /// Helper to extract definitions (for compatibility)
+    pub fn definitions(&self) -> impl Iterator<Item = &ItemDefinition> {
+        self.items.iter().filter_map(|item| match item {
+            ModuleItem::Definition(def) => Some(def),
+            _ => None,
+        })
+    }
+
+    /// Helper to extract impls (for compatibility)
+    pub fn impls(&self) -> impl Iterator<Item = &FunctionBlock> {
+        self.items.iter().filter_map(|item| match item {
+            ModuleItem::Impl(impl_block) => Some(impl_block),
+            _ => None,
+        })
+    }
+
+    /// Helper to extract backends (for compatibility)
+    pub fn backends(&self) -> impl Iterator<Item = &Backend> {
+        self.items.iter().filter_map(|item| match item {
+            ModuleItem::Backend(backend) => Some(backend),
+            _ => None,
+        })
     }
 }

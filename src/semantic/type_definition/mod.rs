@@ -18,7 +18,7 @@ pub use vftable::TypeVftable;
 pub struct Region {
     pub visibility: Visibility,
     pub name: Option<String>,
-    pub doc: Option<String>,
+    pub doc: Vec<String>,
     pub type_ref: Type,
     pub is_base: bool,
 }
@@ -27,7 +27,7 @@ impl Region {
         Region {
             visibility,
             name: Some(name.into()),
-            doc: None,
+            doc: vec![],
             type_ref,
             is_base: false,
         }
@@ -36,7 +36,7 @@ impl Region {
         Region {
             visibility: Visibility::Private,
             name: None,
-            doc: None,
+            doc: vec![],
             type_ref,
             is_base: false,
         }
@@ -45,8 +45,8 @@ impl Region {
         self.is_base = true;
         self
     }
-    pub fn with_doc(mut self, doc: impl Into<String>) -> Self {
-        self.doc = Some(doc.into());
+    pub fn with_doc(mut self, doc: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        self.doc = doc.into_iter().map(|s| s.into()).collect();
         self
     }
     pub fn size(&self, type_registry: &TypeRegistry) -> Option<usize> {
@@ -57,7 +57,7 @@ impl Region {
 #[derive(PartialEq, Eq, Debug, Clone, Default, Hash)]
 pub struct TypeDefinition {
     pub regions: Vec<Region>,
-    pub doc: Option<String>,
+    pub doc: Vec<String>,
     pub associated_functions: Vec<Function>,
     pub vftable: Option<TypeVftable>,
     pub singleton: Option<usize>,
@@ -74,8 +74,8 @@ impl TypeDefinition {
         self.regions = regions.into();
         self
     }
-    pub fn with_doc(mut self, doc: impl Into<String>) -> Self {
-        self.doc = Some(doc.into());
+    pub fn with_doc(mut self, doc: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        self.doc = doc.into_iter().map(|s| s.into()).collect();
         self
     }
     pub fn with_associated_functions(
@@ -141,8 +141,8 @@ impl TypeDefinition {
 
         Ok(output)
     }
-    pub fn doc(&self) -> Option<&str> {
-        self.doc.as_deref()
+    pub fn doc(&self) -> &[String] {
+        &self.doc
     }
 }
 
@@ -151,6 +151,7 @@ pub fn build(
     resolvee_path: &ItemPath,
     visibility: Visibility,
     definition: &grammar::TypeDefinition,
+    doc_comments: &[String],
 ) -> anyhow::Result<Option<ItemStateResolved>> {
     let module = semantic
         .get_module_for_path(resolvee_path)
@@ -165,10 +166,11 @@ pub fn build(
     let mut defaultable = false;
     let mut packed = false;
     let mut align = None;
-    let doc = definition.attributes.doc(resolvee_path)?;
+    let doc = doc_comments.to_vec();
     for attribute in &definition.attributes {
         match attribute {
-            grammar::Attribute::Function(ident, exprs) => {
+            grammar::Attribute::Function(ident, items) => {
+                let exprs = grammar::AttributeItem::extract_exprs(items);
                 match (ident.as_str(), exprs.as_slice()) {
                     ("size", [grammar::Expr::IntLiteral(value)]) => {
                         target_size = Some(
@@ -223,21 +225,27 @@ pub fn build(
     // Handle fields
     let mut pending_regions: Vec<(Option<usize>, Region)> = vec![];
     let mut vftable_functions = None;
-    for (idx, statement) in definition.statements.iter().enumerate() {
-        let grammar::TypeStatement { field, attributes } = statement;
+    for (idx, statement) in definition.statements().enumerate() {
+        let grammar::TypeStatement {
+            field,
+            attributes,
+            doc_comments,
+            ..
+        } = statement;
 
         match field {
             grammar::TypeField::Field(visibility, ident, type_) => {
                 // Extract address attribute
                 let mut address: Option<usize> = None;
                 let mut is_base = false;
-                let doc: Option<String> = attributes.doc(resolvee_path)?;
+                let doc = doc_comments.to_vec();
                 for attribute in attributes {
                     match attribute {
                         grammar::Attribute::Ident(ident) if ident.as_str() == "base" => {
                             is_base = true
                         }
-                        grammar::Attribute::Function(ident, exprs) => {
+                        grammar::Attribute::Function(ident, items) => {
+                            let exprs = grammar::AttributeItem::extract_exprs(items);
                             if let ("address", [grammar::Expr::IntLiteral(addr)]) =
                                 (ident.as_str(), &exprs[..])
                             {
@@ -285,9 +293,10 @@ pub fn build(
                 // Extract size attribute
                 let mut size = None;
                 for attribute in attributes {
-                    let grammar::Attribute::Function(ident, exprs) = attribute else {
+                    let grammar::Attribute::Function(ident, items) = attribute else {
                         continue;
                     };
+                    let exprs = grammar::AttributeItem::extract_exprs(items);
                     if let ("size", [grammar::Expr::IntLiteral(size_)]) =
                         (ident.as_str(), exprs.as_slice())
                     {
@@ -408,7 +417,7 @@ pub fn build(
         }
     }
     if let Some(type_impl) = module.impls.get(resolvee_path) {
-        for function in &type_impl.functions {
+        for function in type_impl.functions().collect::<Vec<_>>() {
             if associated_functions_used_names.contains(&function.name.0) {
                 anyhow::bail!(
                     "function `{}` is already defined in type `{}` (or a base type)",
@@ -664,7 +673,7 @@ fn resolve_regions(
             *region = Region {
                 visibility: Visibility::Private,
                 name: Some(format!("_field_{size:x}")),
-                doc: None,
+                doc: vec![],
                 type_ref: type_ref.clone(),
                 is_base: false,
             };

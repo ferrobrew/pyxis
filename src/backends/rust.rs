@@ -183,7 +183,7 @@ fn build_type(
     } = type_definition;
 
     let visibility = visibility_to_tokens(visibility);
-    let doc = doc_to_tokens(false, doc.as_deref());
+    let doc = doc_to_tokens(false, doc);
     let fields = regions
         .iter()
         .map(|r| {
@@ -198,7 +198,7 @@ fn build_type(
             let field_ident = str_to_ident(field_name);
             let visibility = visibility_to_tokens(*visibility);
             let syn_type = sa_type_to_syn_type(type_ref)?;
-            let doc = doc_to_tokens(false, doc.as_deref());
+            let doc = doc_to_tokens(false, doc);
             Ok(quote! {
                 #doc
                 #visibility #field_ident: #syn_type
@@ -343,7 +343,12 @@ fn build_type(
                         );
                         conflicting_impl_message.push_str("`\n");
                     }
-                    let conflicting_impl_doc = doc_to_tokens(false, Some(conflicting_impl_message.trim()));
+                    let conflicting_impl_doc_lines: Vec<String> = conflicting_impl_message
+                        .trim()
+                        .lines()
+                        .map(|s| s.to_string())
+                        .collect();
+                    let conflicting_impl_doc = doc_to_tokens(false, &conflicting_impl_doc_lines);
                     let conflicting_impl_ident = quote::format_ident!(
                         "_CONFLICTING_{}_{}",
                         name.as_str().to_uppercase(),
@@ -430,7 +435,7 @@ fn build_enum(
     let name_ident = str_to_ident(name.as_str());
 
     let visibility = visibility_to_tokens(visibility);
-    let doc = doc_to_tokens(false, doc.as_deref());
+    let doc = doc_to_tokens(false, doc);
 
     let size_check_ident = quote::format_ident!("_{}_size_check", name.as_str());
     let size_check_impl = (size > 0).then(|| {
@@ -537,7 +542,7 @@ fn build_bitflags(
     let name_ident = str_to_ident(name.as_str());
 
     let visibility = visibility_to_tokens(visibility);
-    let doc = doc_to_tokens(false, doc.as_deref());
+    let doc = doc_to_tokens(false, doc);
 
     let size_check_ident = quote::format_ident!("_{}_size_check", name.as_str());
     let size_check_impl = (size > 0).then(|| {
@@ -607,7 +612,7 @@ fn build_bitflags(
 
 fn build_function(function: &Function) -> Result<proc_macro2::TokenStream, anyhow::Error> {
     let name = str_to_ident(&function.name);
-    let doc = doc_to_tokens(false, function.doc.as_deref());
+    let doc = doc_to_tokens(false, &function.doc);
 
     let arguments = function
         .arguments
@@ -792,11 +797,11 @@ fn visibility_to_tokens(visibility: Visibility) -> proc_macro2::TokenStream {
     }
 }
 
-fn doc_to_tokens(is_module_doc: bool, doc: Option<&str>) -> proc_macro2::TokenStream {
-    let Some(doc) = doc else {
+fn doc_to_tokens(is_module_doc: bool, doc: &[String]) -> proc_macro2::TokenStream {
+    if doc.is_empty() {
         return proc_macro2::TokenStream::new();
     };
-    let doc_attrs = doc.lines().map(|line| {
+    let doc_attrs = doc.iter().map(|line| {
         if is_module_doc {
             quote! { #![doc = #line] }
         } else {

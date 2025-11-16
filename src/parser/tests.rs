@@ -1,4 +1,8 @@
-use crate::{grammar::test_aliases::*, parser::parse_str};
+use crate::{
+    grammar::{ItemDefinitionInner, ModuleItem, TypeDefItem, Visibility, test_aliases::*},
+    parser::{ParseError, parse_str, strip_spans::StripSpans},
+    tokenizer::TokenKind,
+};
 
 use pretty_assertions::assert_eq;
 
@@ -19,7 +23,7 @@ fn can_parse_basic_struct() {
         ]),
     )]);
 
-    assert_eq!(parse_str(text).unwrap(), ast);
+    assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
 }
 
 #[test]
@@ -42,7 +46,7 @@ fn can_parse_vftable() {
         .with_attributes([A::size(4)])]),
     )]);
 
-    assert_eq!(parse_str(text).unwrap(), ast);
+    assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
 }
 
 #[test]
@@ -88,7 +92,7 @@ fn can_parse_vehicle_types() {
         ]),
     )]);
 
-    assert_eq!(parse_str(text).unwrap(), ast);
+    assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
 }
 
 #[test]
@@ -171,7 +175,7 @@ fn can_parse_spawn_manager() {
             ],
         )]);
 
-    assert_eq!(parse_str(text).unwrap(), ast);
+    assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
 }
 
 #[test]
@@ -191,7 +195,7 @@ fn can_parse_address_field() {
         ]),
     )]);
 
-    assert_eq!(parse_str(text).unwrap(), ast);
+    assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
 }
 
 #[test]
@@ -210,7 +214,7 @@ fn can_parse_use() {
             TD::new([TS::field((V::Private, "test"), T::ident("TestType<Hey>"))]),
         )]);
 
-    assert_eq!(parse_str(text).unwrap(), ast);
+    assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
 }
 
 #[test]
@@ -219,9 +223,11 @@ fn will_die_on_super_for_now() {
         use super::TestType<Hey>;
         "#;
 
-    assert_eq!(
-        parse_str(text).err().unwrap().to_string(),
-        "super not supported"
+    let error = parse_str(text).err().unwrap();
+    assert!(
+        matches!(error, ParseError::SuperNotSupported { .. }),
+        "Expected SuperNotSupported error, got: {:?}",
+        error
     );
 }
 
@@ -242,7 +248,38 @@ fn can_parse_extern() {
             TD::new([TS::field((V::Private, "test"), T::ident("TestType<Hey>"))]),
         )]);
 
-    assert_eq!(parse_str(text).unwrap(), ast);
+    assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
+}
+
+#[test]
+fn can_parse_extern_with_multiline_doc_comment() {
+    let text = r#"
+#[size(8), align(4)]
+/// `ManuallyDrop<SharedPtr<u32>>` is used instead of `SharedPtr<u32>` to avoid
+/// the `Drop` implementation of `SharedPtr<u32>` being called when the `RenderBlock`
+/// is dropped. The destructor, which we call in `drop`, will decrement the refcount
+/// for us.
+extern type ManuallyDrop<SharedPtr<u32>>;
+    "#;
+
+    let module = parse_str(text).unwrap().strip_spans();
+
+    // Verify we have one extern type item
+    assert_eq!(module.items.len(), 1);
+
+    // Verify it's an ExternType with the correct attributes and doc comments
+    match &module.items[0] {
+        ModuleItem::ExternType(name, attrs, doc_comments) => {
+            assert_eq!(name.0, "ManuallyDrop<SharedPtr<u32>>");
+            assert_eq!(attrs.0.len(), 2);
+            assert_eq!(doc_comments.len(), 4); // 4 lines of doc comment
+            assert!(doc_comments[0].contains("ManuallyDrop<SharedPtr<u32>>"));
+            assert!(doc_comments[1].contains("Drop` implementation"));
+            assert!(doc_comments[2].contains("dropped"));
+            assert!(doc_comments[3].contains("for us"));
+        }
+        _ => panic!("Expected ExternType"),
+    }
 }
 
 #[test]
@@ -252,7 +289,7 @@ fn can_parse_an_empty_type() {
         "#;
 
     let ast = M::new().with_definitions([ID::new((V::Private, "Test"), TD::new([]))]);
-    assert_eq!(parse_str(text).unwrap(), ast);
+    assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
 }
 
 #[test]
@@ -283,7 +320,7 @@ fn can_parse_extern_value() {
             ),
         ]);
 
-    assert_eq!(parse_str(text).unwrap(), ast);
+    assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
 }
 
 #[test]
@@ -315,7 +352,7 @@ fn can_parse_enum() {
         ),
     )]);
 
-    assert_eq!(parse_str(text).unwrap(), ast);
+    assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
 }
 
 #[test]
@@ -345,7 +382,7 @@ fn can_parse_bitflags() {
         ),
     )]);
 
-    assert_eq!(parse_str(text).unwrap(), ast);
+    assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
 }
 
 #[test]
@@ -361,7 +398,7 @@ fn can_parse_array_field() {
         TD::new([TS::field((V::Private, "field_1"), T::ident("i32").array(4))]),
     )]);
 
-    assert_eq!(parse_str(text).unwrap(), ast);
+    assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
 }
 
 #[test]
@@ -427,7 +464,23 @@ backend rust epilogue r#"
         ),
     ]);
 
-    assert_eq!(parse_str(text).unwrap(), ast);
+    assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
+}
+
+#[test]
+fn can_parse_backend_with_multiline_prologue() {
+    let text = r#"
+backend rust prologue "
+    use crate::shared_ptr::*;
+    use std::mem::ManuallyDrop;
+";
+    "#;
+
+    let ast = M::new()
+        .with_backends([B::new("rust")
+            .with_prologue("use crate::shared_ptr::*;\n    use std::mem::ManuallyDrop;")]);
+
+    assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
 }
 
 #[test]
@@ -445,7 +498,7 @@ fn can_parse_ident_attributes() {
             .with_attributes([A::copyable(), A::cloneable()]),
     )]);
 
-    assert_eq!(parse_str(text).unwrap(), ast);
+    assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
 }
 
 #[test]
@@ -475,23 +528,24 @@ fn can_parse_doc_comments() {
             (V::Private, "TestType"),
             TD::new([
                 TS::vftable([F::new((V::Private, "test_vfunc"), [Ar::ConstSelf])
-                    .with_attributes([A::doc(" My test vfunc!")])]),
+                    .with_doc_comments(vec![" My test vfunc!".to_string()])]),
                 TS::field((V::Private, "field_1"), T::ident("i32"))
-                    .with_attributes([A::doc(" This is a field doc comment")]),
-            ])
-            .with_attributes([A::doc(" This is a doc comment")]),
-        )])
+                    .with_doc_comments(vec![" This is a field doc comment".to_string()]),
+            ]),
+        )
+        .with_doc_comments(vec![" This is a doc comment".to_string()])])
         .with_impls([FB::new(
             "TestType",
             [F::new((V::Private, "test_func"), [Ar::ConstSelf])
-                .with_attributes([A::doc(" My test func!"), A::address(0x123)])],
+                .with_doc_comments(vec![" My test func!".to_string()])
+                .with_attributes([A::address(0x123)])],
         )])
-        .with_attributes([
-            A::doc(" This is a module doc comment"),
-            A::doc(" The best of its kind"),
+        .with_doc_comments(vec![
+            " This is a module doc comment".to_string(),
+            " The best of its kind".to_string(),
         ]);
 
-    assert_eq!(parse_str(text).unwrap(), ast);
+    assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
 }
 
 #[test]
@@ -526,5 +580,364 @@ fn can_parse_freestanding_functions() {
             .with_return_type(T::ident("i32")),
         ]);
 
-    assert_eq!(parse_str(text).unwrap(), ast);
+    assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
+}
+
+#[test]
+fn can_parse_multiple_attributes_with_underscored_literals() {
+    let text = r#"
+        #[singleton(0x1_18F_B64), size(0x40), align(16)] // 0x3C
+        pub type InputDeviceManager {
+            #[address(0x18)]
+            pub enabled: bool,
+
+            #[address(0x38)]
+            pub in_focus: bool,
+        }
+        "#;
+
+    let ast = M::new().with_definitions([ID::new(
+        (V::Public, "InputDeviceManager"),
+        TD::new([
+            TS::field((V::Public, "enabled"), T::ident("bool")).with_attributes([A::address(0x18)]),
+            TS::field((V::Public, "in_focus"), T::ident("bool"))
+                .with_attributes([A::address(0x38)]),
+        ])
+        .with_attributes([A::singleton(0x118FB64), A::size(0x40), A::align(16)]),
+    )]);
+
+    assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
+}
+
+#[test]
+fn can_parse_pfx_instance_with_vftable_and_impl() {
+    let text = r#"
+        #[size(0x10)]
+        /// `CPfxInstance` in original game
+        pub type PfxInstance {
+            vftable {},
+            pub instance: SharedPtr<PfxInstanceInterface>,
+        }
+        impl PfxInstance {
+            #[address(0x6B7C40)]
+            pub fn set_game_object(&mut self, game_object: *mut PfxGameObject);
+        }
+        "#;
+
+    let ast = M::new()
+        .with_definitions([ID::new(
+            (V::Public, "PfxInstance"),
+            TD::new([
+                TS::vftable([]),
+                TS::field(
+                    (V::Public, "instance"),
+                    T::ident("SharedPtr<PfxInstanceInterface>"),
+                ),
+            ])
+            .with_attributes([A::size(0x10)]),
+        )
+        .with_doc_comments(vec![" `CPfxInstance` in original game".to_string()])])
+        .with_impls([FB::new(
+            "PfxInstance",
+            [F::new(
+                (V::Public, "set_game_object"),
+                [
+                    Ar::MutSelf,
+                    Ar::named("game_object", T::ident("PfxGameObject").mut_pointer()),
+                ],
+            )
+            .with_attributes([A::address(0x6B7C40)])],
+        )]);
+
+    assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
+}
+
+#[test]
+fn can_parse_raycast_result_with_pointers_and_arrays() {
+    let text = r#"
+        #[size(0x2C)]
+        pub type RayCastResult {
+            game_object: *mut u32,
+            pub normal: Vector3,
+            pub distance: f32,
+            rigid_body: *mut u32,
+            shape: *mut u32,
+            unknown: [u32; 4],
+        }
+        "#;
+
+    let ast = M::new().with_definitions([ID::new(
+        (V::Public, "RayCastResult"),
+        TD::new([
+            TS::field((V::Private, "game_object"), T::ident("u32").mut_pointer()),
+            TS::field((V::Public, "normal"), T::ident("Vector3")),
+            TS::field((V::Public, "distance"), T::ident("f32")),
+            TS::field((V::Private, "rigid_body"), T::ident("u32").mut_pointer()),
+            TS::field((V::Private, "shape"), T::ident("u32").mut_pointer()),
+            TS::field((V::Private, "unknown"), T::array(T::ident("u32"), 4)),
+        ])
+        .with_attributes([A::size(0x2C)]),
+    )]);
+
+    assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
+}
+
+#[test]
+fn can_parse_type_with_comment_in_attribute() {
+    let text = r#"
+#[singleton(0x1_18F_C20), size(0x620 /* actually 0x61C */), align(16)]
+pub type AnarkGui {
+    vftable {},
+
+    #[address(0x1A0)]
+    pub next_state: AnarkState,
+    pub active_state: AnarkState,
+}
+    "#;
+
+    let module = parse_str(text).unwrap().strip_spans();
+
+    // Verify we have one type definition
+    assert_eq!(module.items.len(), 1);
+
+    // Verify it's the correct type with attributes and fields
+    match &module.items[0] {
+        ModuleItem::Definition(def) => {
+            assert_eq!(def.name.0, "AnarkGui");
+            assert_eq!(def.visibility, Visibility::Public);
+
+            // Check the type has attributes
+            if let ItemDefinitionInner::Type(td) = &def.inner {
+                assert_eq!(td.attributes.0.len(), 3); // singleton, size, align
+
+                // Verify we have vftable and two fields
+                // vftable + 2 fields = 3 statements
+                let statement_count = td
+                    .items
+                    .iter()
+                    .filter(|item| matches!(item, TypeDefItem::Statement(_)))
+                    .count();
+                assert_eq!(statement_count, 3);
+            } else {
+                panic!("Expected Type definition");
+            }
+        }
+        _ => panic!("Expected Definition"),
+    }
+}
+
+#[test]
+fn can_parse_doc_comments_after_attributes() {
+    let text = r#"
+#[size(8), align(4)]
+extern type SharedPtr<PfxInstanceInterface>;
+
+/// `IPfxInstance` in original game
+pub type PfxInstanceInterface {
+    vftable {}
+}
+
+#[size(0x10)]
+/// `CPfxInstance` in original game
+pub type PfxInstance {
+    vftable {},
+    pub instance: SharedPtr<PfxInstanceInterface>,
+}
+impl PfxInstance {
+    #[address(0x6B7C40)]
+    pub fn set_game_object(&mut self, game_object: *mut PfxGameObject);
+}
+    "#;
+
+    // Don't use strip_spans() - it empties doc_comments and converts them to attributes
+    let module = parse_str(text).unwrap();
+
+    // Check extern type has no doc comments (doc comes after, not before)
+    if let ModuleItem::ExternType(_name, _attrs, doc_comments) = &module.items[0] {
+        assert_eq!(
+            doc_comments.len(),
+            0,
+            "Extern type should have no doc comments"
+        );
+    } else {
+        panic!("Expected ExternType");
+    }
+
+    // Check first type definition has doc comments
+    if let ModuleItem::Definition(def) = &module.items[1] {
+        assert_eq!(def.name.0, "PfxInstanceInterface");
+        assert_eq!(
+            def.doc_comments.len(),
+            1,
+            "PfxInstanceInterface should have 1 doc comment, got: {:?}",
+            def.doc_comments
+        );
+        assert!(def.doc_comments[0].contains("IPfxInstance"));
+    } else {
+        panic!("Expected Definition for PfxInstanceInterface");
+    }
+
+    // Check second type definition has doc comments (after attributes)
+    if let ModuleItem::Definition(def) = &module.items[2] {
+        assert_eq!(def.name.0, "PfxInstance");
+        assert_eq!(
+            def.doc_comments.len(),
+            1,
+            "PfxInstance should have 1 doc comment, got: {:?}",
+            def.doc_comments
+        );
+        assert!(def.doc_comments[0].contains("CPfxInstance"));
+    } else {
+        panic!("Expected Definition for PfxInstance");
+    }
+}
+
+// ============================================================================
+// Negative tests - parser should reject invalid syntax
+// ============================================================================
+
+#[test]
+fn should_fail_on_missing_closing_brace() {
+    let text = r#"
+        pub type TestType {
+            field1: i32
+        "#;
+
+    let err = parse_str(text).unwrap_err();
+    assert!(
+        matches!(
+            err,
+            ParseError::ExpectedIdentifier {
+                found: TokenKind::Eof,
+                ..
+            }
+        ),
+        "Expected ExpectedIdentifier with Eof, got: {:?}",
+        err
+    );
+}
+
+#[test]
+fn should_fail_on_missing_field_type() {
+    let text = r#"
+        pub type TestType {
+            field1:,
+        }
+        "#;
+
+    let err = parse_str(text).unwrap_err();
+    assert!(
+        matches!(
+            err,
+            ParseError::ExpectedType {
+                found: TokenKind::Comma,
+                ..
+            }
+        ),
+        "Expected ExpectedType with Comma, got: {:?}",
+        err
+    );
+}
+
+#[test]
+fn should_fail_on_missing_enum_type_annotation() {
+    let text = r#"
+        pub enum State {
+            Idle = 0,
+        }
+        "#;
+
+    let err = parse_str(text).unwrap_err();
+    assert!(
+        matches!(
+            err,
+            ParseError::ExpectedToken {
+                expected: TokenKind::Colon,
+                found: TokenKind::LBrace,
+                ..
+            }
+        ),
+        "Expected ExpectedToken with Colon/LBrace, got: {:?}",
+        err
+    );
+}
+
+#[test]
+fn should_fail_on_missing_equals_in_bitflags() {
+    let text = r#"
+        pub bitflags Flags: u32 {
+            READ 0x1,
+        }
+        "#;
+
+    let err = parse_str(text).unwrap_err();
+    assert!(
+        matches!(
+            err,
+            ParseError::ExpectedToken {
+                expected: TokenKind::Eq,
+                found: TokenKind::IntLiteral(_),
+                ..
+            }
+        ),
+        "Expected ExpectedToken with Eq/IntLiteral, got: {:?}",
+        err
+    );
+}
+
+#[test]
+fn should_fail_on_malformed_pointer_type() {
+    let text = r#"
+        pub type TestType {
+            field: *i32,
+        }
+        "#;
+
+    let err = parse_str(text).unwrap_err();
+    assert!(
+        matches!(err, ParseError::MissingPointerQualifier { .. }),
+        "Expected MissingPointerQualifier error, got: {:?}",
+        err
+    );
+}
+
+#[test]
+fn should_fail_on_missing_semicolon_after_extern() {
+    let text = r#"
+        extern type TestType
+        "#;
+
+    let err = parse_str(text).unwrap_err();
+    assert!(
+        matches!(
+            err,
+            ParseError::ExpectedToken {
+                expected: TokenKind::Semi,
+                found: TokenKind::Eof,
+                ..
+            }
+        ),
+        "Expected ExpectedToken with Semi/Eof, got: {:?}",
+        err
+    );
+}
+
+#[test]
+fn should_fail_on_incomplete_function() {
+    let text = r#"
+        pub fn test(
+        "#;
+
+    let err = parse_str(text).unwrap_err();
+    assert!(
+        matches!(
+            err,
+            ParseError::ExpectedItemDefinition {
+                found: TokenKind::Fn,
+                ..
+            }
+        ),
+        "Expected ExpectedItemDefinition with Fn, got: {:?}",
+        err
+    );
 }
