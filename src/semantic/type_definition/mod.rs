@@ -3,25 +3,51 @@ use std::collections::HashSet;
 use crate::{
     grammar::{self, ItemPath},
     semantic::{
-        SemanticState,
         error::{Result, SemanticError},
         function,
         type_registry::TypeRegistry,
         types::{Function, FunctionBody, ItemState, ItemStateResolved, Type, Visibility},
+        SemanticState,
     },
+    span::Span,
     util,
 };
 
 mod vftable;
 pub use vftable::TypeVftable;
 
-#[derive(PartialEq, Eq, Debug, Clone, Hash)]
+#[derive(Eq, Debug, Clone)]
 pub struct Region {
     pub visibility: Visibility,
     pub name: Option<String>,
     pub doc: Vec<String>,
     pub type_ref: Type,
     pub is_base: bool,
+    pub span: Option<Span>,
+}
+
+// Custom PartialEq to exclude span for test compatibility
+impl PartialEq for Region {
+    fn eq(&self, other: &Self) -> bool {
+        self.visibility == other.visibility
+            && self.name == other.name
+            && self.doc == other.doc
+            && self.type_ref == other.type_ref
+            && self.is_base == other.is_base
+        // span intentionally excluded
+    }
+}
+
+// Custom Hash to match PartialEq
+impl std::hash::Hash for Region {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.visibility.hash(state);
+        self.name.hash(state);
+        self.doc.hash(state);
+        self.type_ref.hash(state);
+        self.is_base.hash(state);
+        // span intentionally excluded
+    }
 }
 impl Region {
     pub fn field((visibility, name): (Visibility, impl Into<String>), type_ref: Type) -> Self {
@@ -31,6 +57,7 @@ impl Region {
             doc: vec![],
             type_ref,
             is_base: false,
+            span: None,
         }
     }
     pub fn unnamed_field(type_ref: Type) -> Self {
@@ -40,6 +67,7 @@ impl Region {
             doc: vec![],
             type_ref,
             is_base: false,
+            span: None,
         }
     }
     pub fn marked_as_base(mut self) -> Self {
@@ -48,6 +76,10 @@ impl Region {
     }
     pub fn with_doc(mut self, doc: impl IntoIterator<Item = impl Into<String>>) -> Self {
         self.doc = doc.into_iter().map(|s| s.into()).collect();
+        self
+    }
+    pub fn with_span(mut self, span: Span) -> Self {
+        self.span = Some(span);
         self
     }
     pub fn size(&self, type_registry: &TypeRegistry) -> Option<usize> {
@@ -243,6 +275,7 @@ pub fn build(
             field,
             attributes,
             doc_comments,
+            span,
             ..
         } = statement;
 
@@ -294,6 +327,7 @@ pub fn build(
                         doc,
                         type_ref: type_,
                         is_base,
+                        span: Some(span.clone()),
                     },
                 ));
             }
@@ -454,6 +488,7 @@ pub fn build(
                 doc: _,
                 type_ref,
                 is_base: _,
+                span: _,
             } = region;
             let name = name.as_deref().unwrap_or("unnamed");
             fn get_defaultable_type_path(type_ref: &Type) -> Option<&ItemPath> {
@@ -538,16 +573,28 @@ pub fn build(
                 let name = &region.name.as_deref().unwrap_or("unnamed");
                 let alignment = region.type_ref.alignment(&semantic.type_registry).unwrap();
                 if last_address % alignment != 0 {
-                    return Err(semantic.enhance_error(
-                        SemanticError::alignment_error(
-                            resolvee_path.clone(),
-                            format!(
-                                "field `{name}` of type `{}` is located at {:#x}, which is not divisible by {alignment} (the alignment of the type of the field)",
-                                resolvee_path, last_address
-                            ),
+                    let mut error = SemanticError::alignment_error(
+                        resolvee_path.clone(),
+                        format!(
+                            "field `{name}` of type `{}` is located at {:#x}, which is not divisible by {alignment} (the alignment of the type of the field)",
+                            resolvee_path, last_address
                         ),
-                        resolvee_path,
-                    ));
+                    );
+
+                    // Use the field's specific span if available
+                    if let Some(span) = &region.span {
+                        if let Some(item_def) = semantic.type_registry.get(resolvee_path) {
+                            if let Some(ref filename) = item_def.filename {
+                                if let Some(source) = semantic.source_cache.get(filename.as_ref()) {
+                                    error = error.with_span_and_source(span.clone(), filename.as_ref(), source);
+                                }
+                            }
+                        }
+                    } else {
+                        error = semantic.enhance_error(error, resolvee_path);
+                    }
+
+                    return Err(error);
                 }
                 last_address += region.size(&semantic.type_registry).unwrap();
             }
@@ -697,6 +744,7 @@ fn resolve_regions(
             doc: _,
             type_ref,
             is_base: _,
+            span,
         } = region
         {
             *region = Region {
@@ -705,6 +753,7 @@ fn resolve_regions(
                 doc: vec![],
                 type_ref: type_ref.clone(),
                 is_base: false,
+                span: span.clone(),
             };
         }
 

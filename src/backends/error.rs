@@ -1,5 +1,7 @@
 use std::fmt;
 
+use crate::{grammar::ItemPath, semantic::SemanticError};
+
 /// Backend code generation errors
 #[derive(Debug)]
 pub enum BackendError {
@@ -7,10 +9,26 @@ pub enum BackendError {
     Io(std::io::Error),
     /// Formatting error (e.g., rustfmt failed)
     Formatting(String),
-    /// Code generation error
-    CodeGen(String),
     /// Syntax error in generated code
     Syntax(syn::Error),
+    /// Semantic analysis error (with full context preserved)
+    Semantic(SemanticError),
+    /// Failed to generate code for a specific type
+    TypeCodeGenFailed {
+        type_path: ItemPath,
+        reason: String,
+    },
+    /// Failed to generate code for a specific field
+    FieldCodeGenFailed {
+        type_path: ItemPath,
+        field_name: String,
+        reason: String,
+    },
+    /// Failed to generate vftable code
+    VftableCodeGenFailed {
+        type_path: ItemPath,
+        reason: String,
+    },
 }
 
 impl fmt::Display for BackendError {
@@ -18,8 +36,29 @@ impl fmt::Display for BackendError {
         match self {
             BackendError::Io(err) => write!(f, "IO error: {}", err),
             BackendError::Formatting(msg) => write!(f, "Formatting error: {}", msg),
-            BackendError::CodeGen(msg) => write!(f, "Code generation error: {}", msg),
             BackendError::Syntax(err) => write!(f, "Syntax error: {}", err),
+            BackendError::Semantic(err) => write!(f, "{}", err),
+            BackendError::TypeCodeGenFailed { type_path, reason } => {
+                write!(f, "Failed to generate code for type `{}`: {}", type_path, reason)
+            }
+            BackendError::FieldCodeGenFailed {
+                type_path,
+                field_name,
+                reason,
+            } => {
+                write!(
+                    f,
+                    "Failed to generate code for field `{}` of type `{}`: {}",
+                    field_name, type_path, reason
+                )
+            }
+            BackendError::VftableCodeGenFailed { type_path, reason } => {
+                write!(
+                    f,
+                    "Failed to generate vftable code for type `{}`: {}",
+                    type_path, reason
+                )
+            }
         }
     }
 }
@@ -44,9 +83,9 @@ impl From<std::fmt::Error> for BackendError {
     }
 }
 
-impl From<crate::semantic::SemanticError> for BackendError {
-    fn from(err: crate::semantic::SemanticError) -> Self {
-        BackendError::CodeGen(err.to_string())
+impl From<SemanticError> for BackendError {
+    fn from(err: SemanticError) -> Self {
+        BackendError::Semantic(err)
     }
 }
 

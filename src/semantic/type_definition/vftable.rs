@@ -172,6 +172,7 @@ pub fn build(
                 doc: vec![],
                 type_ref: vftable_pointer_type.clone(),
                 is_base: false,
+                span: None,
             };
 
             Ok((
@@ -272,6 +273,7 @@ fn function_to_region(resolvee_path: &ItemPath, function: &Function) -> Region {
         doc: function.doc.clone(),
         type_ref: Type::Function(function.calling_convention, arguments, return_type),
         is_base: false,
+        span: None,
     }
 }
 

@@ -20,7 +20,7 @@ pub struct SemanticState {
     modules: BTreeMap<ItemPath, Module>,
     pub(crate) type_registry: TypeRegistry,
     /// Cache of source files for error reporting
-    source_cache: BTreeMap<String, String>,
+    pub(crate) source_cache: BTreeMap<String, String>,
 }
 
 impl SemanticState {

@@ -357,17 +357,12 @@ pub fn build(
     // Write to file
     let output_path = out_dir.join("output.json");
     let json_string = serde_json::to_string_pretty(&documentation).map_err(|e| {
-        crate::backends::BackendError::CodeGen(format!(
+        crate::backends::BackendError::Formatting(format!(
             "Failed to serialize JSON documentation: {}",
             e
         ))
     })?;
-    std::fs::write(&output_path, json_string).map_err(|e| {
-        crate::backends::BackendError::CodeGen(format!(
-            "Failed to write JSON to {:?}: {}",
-            output_path, e
-        ))
-    })?;
+    std::fs::write(&output_path, json_string)?;
 
     Ok(())
 }

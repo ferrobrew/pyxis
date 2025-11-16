@@ -140,13 +140,18 @@ fn build_item(
     type_registry: &TypeRegistry,
     definition: &ItemDefinition,
 ) -> Result<proc_macro2::TokenStream> {
+    let resolved = definition.resolved().ok_or_else(|| {
+        BackendError::TypeCodeGenFailed {
+            type_path: definition.path.clone(),
+            reason: "type was not resolved".to_string(),
+        }
+    })?;
+
     let ItemStateResolved {
         size,
         inner,
         alignment,
-    } = &definition
-        .resolved()
-        .ok_or_else(|| BackendError::CodeGen("type was not resolved".to_string()))?;
+    } = resolved;
     let visibility = definition.visibility;
     let path = &definition.path;
 
@@ -172,7 +177,10 @@ fn build_type(
 ) -> Result<proc_macro2::TokenStream> {
     let name = path
         .last()
-        .ok_or_else(|| BackendError::CodeGen("failed to get last of item path".to_string()))?;
+        .ok_or_else(|| BackendError::TypeCodeGenFailed {
+            type_path: path.clone(),
+            reason: "failed to get last component of item path".to_string(),
+        })?;
 
     let TypeDefinition {
         singleton,
@@ -197,10 +205,15 @@ fn build_type(
                 doc,
                 type_ref,
                 is_base: _,
+                span: _,
             } = r;
             let field_name = field
                 .as_deref()
-                .ok_or_else(|| BackendError::CodeGen("field name not present".to_string()))?;
+                .ok_or_else(|| BackendError::FieldCodeGenFailed {
+                    type_path: path.clone(),
+                    field_name: "unnamed".to_string(),
+                    reason: "field name not present".to_string(),
+                })?;
             let field_ident = str_to_ident(field_name);
             let visibility = visibility_to_tokens(*visibility);
             let syn_type = sa_type_to_syn_type(type_ref)?;
@@ -426,7 +439,10 @@ fn build_enum(
 ) -> Result<proc_macro2::TokenStream> {
     let name = path
         .last()
-        .ok_or_else(|| BackendError::CodeGen("failed to get last of item path".to_string()))?;
+        .ok_or_else(|| BackendError::TypeCodeGenFailed {
+            type_path: path.clone(),
+            reason: "failed to get last component of item path".to_string(),
+        })?;
 
     let EnumDefinition {
         singleton,
@@ -536,7 +552,10 @@ fn build_bitflags(
 ) -> Result<proc_macro2::TokenStream> {
     let name = path
         .last()
-        .ok_or_else(|| BackendError::CodeGen("failed to get last of item path".to_string()))?;
+        .ok_or_else(|| BackendError::TypeCodeGenFailed {
+            type_path: path.clone(),
+            reason: "failed to get last component of item path".to_string(),
+        })?;
 
     let BitflagsDefinition {
         singleton,
