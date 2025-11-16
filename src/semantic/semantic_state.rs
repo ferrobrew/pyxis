@@ -19,6 +19,8 @@ use crate::{
 pub struct SemanticState {
     modules: BTreeMap<ItemPath, Module>,
     pub(crate) type_registry: TypeRegistry,
+    /// Cache of source files for error reporting
+    source_cache: BTreeMap<String, String>,
 }
 
 impl SemanticState {
@@ -26,6 +28,7 @@ impl SemanticState {
         let mut semantic_state = Self {
             modules: BTreeMap::new(),
             type_registry: TypeRegistry::new(pointer_size),
+            source_cache: BTreeMap::new(),
         };
 
         // Insert the empty root module.
@@ -65,6 +68,10 @@ impl SemanticState {
             path: Some(path.display().to_string()),
         })?;
         let filename = path.display().to_string();
+
+        // Cache the source for error reporting
+        self.source_cache.insert(filename.clone(), source.clone());
+
         self.add_module(
             &parser::parse_str_with_filename(&source, &filename)?,
             &ItemPath::from_path(path.strip_prefix(base_path).unwrap_or(path)),

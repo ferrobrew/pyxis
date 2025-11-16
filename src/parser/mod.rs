@@ -918,6 +918,9 @@ impl Parser {
     }
 
     fn parse_item_definition(&mut self) -> Result<ItemDefinition, ParseError> {
+        // Capture the start position
+        let start_pos = self.current().span.start;
+
         let mut doc_comments = self.collect_doc_comments();
         let attributes = if matches!(self.peek(), TokenKind::Hash) {
             self.parse_attributes()?
@@ -980,11 +983,19 @@ impl Parser {
                     self.expect(TokenKind::RBrace)?;
                 }
 
+                // Capture the end position
+                let end_pos = if self.pos > 0 {
+                    self.tokens[self.pos - 1].span.end
+                } else {
+                    self.current().span.end
+                };
+
                 Ok(ItemDefinition {
                     visibility,
                     name,
                     doc_comments,
                     inner: ItemDefinitionInner::Type(def),
+                    span: crate::span::Span { start: start_pos, end: end_pos, text: String::new() },
                 })
             }
             TokenKind::Enum => {
@@ -995,6 +1006,13 @@ impl Parser {
                 self.expect(TokenKind::LBrace)?;
                 let items = self.parse_enum_def_items()?;
                 self.expect(TokenKind::RBrace)?;
+
+                // Capture the end position
+                let end_pos = if self.pos > 0 {
+                    self.tokens[self.pos - 1].span.end
+                } else {
+                    self.current().span.end
+                };
 
                 Ok(ItemDefinition {
                     visibility,
@@ -1007,6 +1025,7 @@ impl Parser {
                         inline_trailing_comments: inline_trailing_comments.clone(),
                         following_comments: following_comments.clone(),
                     }),
+                    span: crate::span::Span { start: start_pos, end: end_pos, text: String::new() },
                 })
             }
             TokenKind::Bitflags => {
@@ -1017,6 +1036,13 @@ impl Parser {
                 self.expect(TokenKind::LBrace)?;
                 let items = self.parse_bitflags_def_items()?;
                 self.expect(TokenKind::RBrace)?;
+
+                // Capture the end position
+                let end_pos = if self.pos > 0 {
+                    self.tokens[self.pos - 1].span.end
+                } else {
+                    self.current().span.end
+                };
 
                 Ok(ItemDefinition {
                     visibility,
@@ -1029,6 +1055,7 @@ impl Parser {
                         inline_trailing_comments,
                         following_comments,
                     }),
+                    span: crate::span::Span { start: start_pos, end: end_pos, text: String::new() },
                 })
             }
             _ => Err(ParseError::ExpectedItemDefinition {

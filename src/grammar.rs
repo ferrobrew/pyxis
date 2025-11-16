@@ -785,6 +785,7 @@ pub struct ItemDefinition {
     pub name: Ident,
     pub doc_comments: Vec<String>,
     pub inner: ItemDefinitionInner,
+    pub span: crate::span::Span,
 }
 impl ItemDefinition {
     pub fn new(
@@ -796,7 +797,13 @@ impl ItemDefinition {
             name: name.into(),
             doc_comments: vec![],
             inner: inner.into(),
+            span: crate::span::Span::synthetic(),
         }
+    }
+
+    pub fn with_span(mut self, span: crate::span::Span) -> Self {
+        self.span = span;
+        self
     }
     pub fn with_doc_comments(mut self, doc_comments: Vec<String>) -> Self {
         self.doc_comments = doc_comments;

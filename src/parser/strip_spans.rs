@@ -58,6 +58,7 @@ impl StripSpans for ItemDefinition {
             name: self.name.clone(),
             doc_comments: self.doc_comments.clone(),
             inner: self.inner.strip_spans(),
+            span: crate::span::Span::synthetic(),
         }
     }
 }
