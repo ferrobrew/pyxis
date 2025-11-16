@@ -180,9 +180,16 @@ fn format_file(file: &PathBuf, check: bool) -> anyhow::Result<bool> {
     let module = pyxis::parser::parse_str_with_filename(&content, &filename)?;
     let formatted = pyxis::pretty_print::pretty_print(&module);
 
-    if content != formatted {
+    // Ensure the formatted output ends with a newline
+    let formatted_with_newline = if formatted.ends_with('\n') {
+        formatted
+    } else {
+        format!("{}\n", formatted)
+    };
+
+    if content != formatted_with_newline {
         if !check {
-            std::fs::write(file, formatted)?;
+            std::fs::write(file, &formatted_with_newline)?;
         }
         Ok(true)
     } else {

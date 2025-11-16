@@ -201,14 +201,37 @@ impl PrettyPrinter {
         writeln!(&mut self.output, "]").unwrap();
     }
 
+    /// Format a hex number with underscores every 3 digits from the right
+    /// e.g., 0x142ED0E78 -> 0x142_ED0_E78
+    fn format_hex_with_underscores(&self, val: isize) -> String {
+        if val < 0 {
+            return format!("{}", val);
+        }
+
+        let hex_str = format!("{:X}", val);
+        let mut result = String::from("0x");
+        let len = hex_str.len();
+
+        for (i, ch) in hex_str.chars().enumerate() {
+            if i > 0 && (len - i) % 3 == 0 {
+                result.push('_');
+            }
+            result.push(ch);
+        }
+
+        result
+    }
+
     fn print_attribute(&mut self, attr: &Attribute) {
         match attr {
             Attribute::Ident(name) => {
                 write!(&mut self.output, "{}", name).unwrap();
             }
             Attribute::Function(name, items) => {
-                // Check if this is an index attribute to print value as decimal
+                // Check special formatting requirements
                 let is_index = name.as_str() == "index";
+                let needs_underscore = matches!(name.as_str(), "address" | "singleton");
+
                 if is_index {
                     self.in_vftable_index = true;
                 }
@@ -222,7 +245,18 @@ impl PrettyPrinter {
                                 write!(&mut self.output, ", ").unwrap();
                             }
                             first_expr = false;
-                            self.print_expr(expr);
+
+                            // Format with underscores for address/singleton
+                            if needs_underscore {
+                                if let Expr::IntLiteral(val) = expr {
+                                    let formatted = self.format_hex_with_underscores(*val);
+                                    write!(&mut self.output, "{}", formatted).unwrap();
+                                } else {
+                                    self.print_expr(expr);
+                                }
+                            } else {
+                                self.print_expr(expr);
+                            }
                         }
                         AttributeItem::Comment(comment) => {
                             write!(&mut self.output, " {}", comment).unwrap();
@@ -273,6 +307,16 @@ impl PrettyPrinter {
             .join("::")
     }
 
+    /// Format a string literal, choosing between " and r#" based on content
+    fn format_string_literal(&self, s: &str) -> String {
+        // Use raw string if it contains newlines or double quotes
+        if s.contains('\n') || s.contains('"') {
+            format!("r#\"{s}\"#")
+        } else {
+            format!("\"{s}\"")
+        }
+    }
+
     fn print_backend(&mut self, backend: &Backend) {
         self.write_indent();
 
@@ -282,18 +326,20 @@ impl PrettyPrinter {
 
         if has_only_prologue {
             let prologue = backend.prologue.as_ref().unwrap();
+            let prologue_str = self.format_string_literal(prologue);
             writeln!(
                 &mut self.output,
-                "backend {} prologue r#\"{prologue}\"#;",
-                backend.name
+                "backend {} prologue {};",
+                backend.name, prologue_str
             )
             .unwrap();
         } else if has_only_epilogue {
             let epilogue = backend.epilogue.as_ref().unwrap();
+            let epilogue_str = self.format_string_literal(epilogue);
             writeln!(
                 &mut self.output,
-                "backend {} epilogue r#\"{epilogue}\"#;",
-                backend.name
+                "backend {} epilogue {};",
+                backend.name, epilogue_str
             )
             .unwrap();
         } else {
@@ -303,12 +349,14 @@ impl PrettyPrinter {
 
             if let Some(prologue) = &backend.prologue {
                 self.write_indent();
-                writeln!(&mut self.output, "prologue r#\"{prologue}\"#;").unwrap();
+                let prologue_str = self.format_string_literal(prologue);
+                writeln!(&mut self.output, "prologue {};", prologue_str).unwrap();
             }
 
             if let Some(epilogue) = &backend.epilogue {
                 self.write_indent();
-                writeln!(&mut self.output, "epilogue r#\"{epilogue}\"#;").unwrap();
+                let epilogue_str = self.format_string_literal(epilogue);
+                writeln!(&mut self.output, "epilogue {};", epilogue_str).unwrap();
             }
 
             self.dedent();
@@ -441,13 +489,14 @@ impl PrettyPrinter {
         }
     }
 
-    fn print_type_statement(&mut self, stmt: &TypeStatement, _next_item: Option<&TypeDefItem>) {
+    fn print_type_statement(&mut self, stmt: &TypeStatement, next_item: Option<&TypeDefItem>) {
         // Add blank line before this statement if it has index/address attribute and it's not the first item
+        // But don't add if we already have a blank line (e.g., from vftable)
         let has_index_or_address = stmt.attributes.0.iter().any(|attr| {
             matches!(attr, Attribute::Function(name, _) if name.as_str() == "index" || name.as_str() == "address")
         });
 
-        if has_index_or_address && !self.output.ends_with("{\n") {
+        if has_index_or_address && !self.output.ends_with("{\n") && !self.output.ends_with("\n\n") {
             self.writeln("");
         }
 
@@ -514,6 +563,11 @@ impl PrettyPrinter {
                 // Print following comments (comments on lines after vftable)
                 for comment in &stmt.following_comments {
                     self.print_comment(&comment.value);
+                }
+
+                // Add blank line after vftable if there's a field following
+                if let Some(TypeDefItem::Statement(_)) = next_item {
+                    self.writeln("");
                 }
             }
         }
@@ -597,7 +651,8 @@ impl PrettyPrinter {
                 write!(&mut self.output, "; {size}]").unwrap();
             }
             Type::Unknown(size) => {
-                write!(&mut self.output, "unknown<{size}>").unwrap();
+                // Format unknown sizes as hex
+                write!(&mut self.output, "unknown<0x{size:X}>").unwrap();
             }
         }
     }
@@ -608,12 +663,19 @@ impl PrettyPrinter {
         writeln!(&mut self.output, "impl {} {{", impl_block.name).unwrap();
         self.indent();
 
-        for item in &impl_block.items {
+        for (i, item) in impl_block.items.iter().enumerate() {
             match item {
                 ImplItem::Comment(comment) => {
                     self.print_comment(&comment.value);
                 }
                 ImplItem::Function(func) => {
+                    // Add blank line before function if it has address attribute and it's not the first
+                    let has_address = func.attributes.0.iter().any(|attr| {
+                        matches!(attr, Attribute::Function(name, _) if name.as_str() == "address")
+                    });
+                    if has_address && i > 0 {
+                        self.writeln("");
+                    }
                     self.print_function(func);
                 }
             }
@@ -741,7 +803,7 @@ pub type Test {
     field2: bool,
 }
 
-#[singleton(0x118FB64), size(0x40), align(0x10)] // 0x3C
+#[singleton(0x1_18F_B64), size(0x40), align(0x10)] // 0x3C
 pub type InputDeviceManager {
     #[address(0x18)]
     pub enabled: bool,
@@ -772,7 +834,7 @@ pub type AnarkGui {
         "#;
 
         let output = r#"
-#[singleton(0x118FC20), size(0x620 /* actually 0x61C */), align(0x10)]
+#[singleton(0x1_18F_C20), size(0x620 /* actually 0x61C */), align(0x10)]
 pub type AnarkGui {
     vftable {},
 
