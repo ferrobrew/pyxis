@@ -273,7 +273,7 @@ export function ModuleView() {
     })) || [];
 
   return (
-    <div className="p-8 max-w-6xl">
+    <div className="p-4 md:p-6 lg:p-8 max-w-6xl">
       <Breadcrumbs path={decodedPath} />
 
       {module.doc && (

@@ -18,7 +18,7 @@ export function WelcomePage() {
   }, [documentation, navigate, selectedSource]);
 
   return (
-    <div className="flex items-center justify-center h-full p-8">
+    <div className="flex items-center justify-center h-full p-4 md:p-8">
       <div className="max-w-2xl text-center">
         <h1 className="text-4xl font-bold mb-4 text-gray-900 dark:text-slate-200">pyxisdoc</h1>
         <p className="text-lg text-gray-600 dark:text-slate-400 mb-8">
