@@ -907,22 +907,44 @@ impl FunctionBlock {
 pub struct Backend {
     pub name: Ident,
     pub prologue: Option<String>,
+    pub prologue_format: StringFormat,
     pub epilogue: Option<String>,
+    pub epilogue_format: StringFormat,
 }
 impl Backend {
     pub fn new(name: &str) -> Self {
         Self {
             name: name.into(),
             prologue: None,
+            prologue_format: StringFormat::Regular,
             epilogue: None,
+            epilogue_format: StringFormat::Regular,
         }
     }
     pub fn with_prologue(mut self, prologue: impl Into<String>) -> Self {
         self.prologue = Some(prologue.into());
         self
     }
+    pub fn with_prologue_format(
+        mut self,
+        prologue: impl Into<String>,
+        format: StringFormat,
+    ) -> Self {
+        self.prologue = Some(prologue.into());
+        self.prologue_format = format;
+        self
+    }
     pub fn with_epilogue(mut self, epilogue: impl Into<String>) -> Self {
         self.epilogue = Some(epilogue.into());
+        self
+    }
+    pub fn with_epilogue_format(
+        mut self,
+        epilogue: impl Into<String>,
+        format: StringFormat,
+    ) -> Self {
+        self.epilogue = Some(epilogue.into());
+        self.epilogue_format = format;
         self
     }
 }

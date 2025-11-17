@@ -14,6 +14,8 @@ pub struct PrettyPrinter {
     indent_string: String,
     /// Context for determining how to format expressions
     in_vftable_index: bool,
+    /// Width in bits for binary literal formatting (None means default to 32)
+    binary_literal_width: Option<usize>,
 }
 
 impl PrettyPrinter {
@@ -23,6 +25,7 @@ impl PrettyPrinter {
             indent_level: 0,
             indent_string: "    ".to_string(), // 4 spaces
             in_vftable_index: false,
+            binary_literal_width: None,
         }
     }
 
@@ -32,6 +35,7 @@ impl PrettyPrinter {
             indent_level: 0,
             indent_string: indent.to_string(),
             in_vftable_index: false,
+            binary_literal_width: None,
         }
     }
 
@@ -55,6 +59,16 @@ impl PrettyPrinter {
     }
 
     pub fn print_module(&mut self, module: &Module) -> String {
+        // Print module-level doc comments
+        for doc in &module.doc_comments {
+            writeln!(&mut self.output, "//!{doc}").unwrap();
+        }
+
+        // Add blank line after module doc comments if there are any
+        if !module.doc_comments.is_empty() {
+            self.writeln("");
+        }
+
         // Print module-level attributes
         self.print_attributes(&module.attributes);
 
@@ -98,7 +112,12 @@ impl PrettyPrinter {
                     self.writeln("");
                 }
             }
-            ModuleItem::ExternType(name, attrs, _doc) => {
+            ModuleItem::ExternType(name, attrs, doc_comments) => {
+                // Print doc comments
+                for doc in doc_comments {
+                    self.write_indent();
+                    writeln!(&mut self.output, "///{doc}").unwrap();
+                }
                 self.print_attributes(attrs);
                 self.write_indent();
                 writeln!(&mut self.output, "extern type {name};").unwrap();
@@ -222,6 +241,50 @@ impl PrettyPrinter {
         result
     }
 
+    /// Format a binary number with padding and underscores every 4 bits
+    /// e.g., for u8: 1 -> 0b0000_0001
+    /// e.g., for u32: 1 -> 0b0000_0000_0000_0000_0000_0000_0000_0001
+    fn format_binary_with_padding(&self, val: isize) -> String {
+        if val < 0 {
+            return format!("0b{:b}", val);
+        }
+
+        // Determine width based on context or default to 32
+        let width = self.binary_literal_width.unwrap_or(32);
+
+        // Format as binary and pad to width
+        let bin_str = format!("{:b}", val);
+        let padding = width.saturating_sub(bin_str.len());
+        let padded = "0".repeat(padding) + &bin_str;
+
+        // Add underscores every 4 bits from the right
+        let mut result = String::from("0b");
+        for (i, ch) in padded.chars().enumerate() {
+            if i > 0 && (padded.len() - i) % 4 == 0 {
+                result.push('_');
+            }
+            result.push(ch);
+        }
+
+        result
+    }
+
+    /// Get the bit width from a type (e.g., u8 -> 8, u32 -> 32)
+    fn get_type_bit_width(&self, type_: &Type) -> Option<usize> {
+        if let Type::Ident(ident, _) = type_ {
+            match ident.as_str() {
+                "u8" | "i8" => Some(8),
+                "u16" | "i16" => Some(16),
+                "u32" | "i32" => Some(32),
+                "u64" | "i64" => Some(64),
+                "u128" | "i128" => Some(128),
+                _ => None,
+            }
+        } else {
+            None
+        }
+    }
+
     fn print_attribute(&mut self, attr: &Attribute) {
         match attr {
             Attribute::Ident(name) => {
@@ -289,7 +352,10 @@ impl PrettyPrinter {
         match expr {
             Expr::IntLiteral { value, format } => match format {
                 IntFormat::Hex => write!(&mut self.output, "0x{:X}", value).unwrap(),
-                IntFormat::Binary => write!(&mut self.output, "0b{:b}", value).unwrap(),
+                IntFormat::Binary => {
+                    let formatted = self.format_binary_with_padding(*value);
+                    write!(&mut self.output, "{}", formatted).unwrap();
+                }
                 IntFormat::Octal => write!(&mut self.output, "0o{:o}", value).unwrap(),
                 IntFormat::Decimal => write!(&mut self.output, "{}", value).unwrap(),
             },
@@ -351,13 +417,31 @@ impl PrettyPrinter {
             .join("::")
     }
 
-    /// Format a string literal, choosing between " and r#" based on content
-    fn format_string_literal(&self, s: &str) -> String {
-        // Use raw string if it contains newlines or double quotes
-        if s.contains('\n') || s.contains('"') {
-            format!("r#\"{s}\"#")
-        } else {
-            format!("\"{s}\"")
+    /// Format a string literal with the specified format
+    fn format_string_with_format(&self, s: &str, format: StringFormat) -> String {
+        match format {
+            StringFormat::Raw => {
+                // Determine the number of # needed
+                let hash_count = self.count_hashes_needed(s);
+                let hashes = "#".repeat(hash_count);
+                format!("r{hashes}\"{s}\"{hashes}")
+            }
+            StringFormat::Regular => {
+                // Escape special characters for regular strings
+                let mut result = String::from("\"");
+                for ch in s.chars() {
+                    match ch {
+                        '"' => result.push_str("\\\""),
+                        '\\' => result.push_str("\\\\"),
+                        '\n' => result.push_str("\\n"),
+                        '\r' => result.push_str("\\r"),
+                        '\t' => result.push_str("\\t"),
+                        _ => result.push(ch),
+                    }
+                }
+                result.push('"');
+                result
+            }
         }
     }
 
@@ -370,7 +454,7 @@ impl PrettyPrinter {
 
         if has_only_prologue {
             let prologue = backend.prologue.as_ref().unwrap();
-            let prologue_str = self.format_string_literal(prologue);
+            let prologue_str = self.format_string_with_format(prologue, backend.prologue_format);
             writeln!(
                 &mut self.output,
                 "backend {} prologue {};",
@@ -379,7 +463,7 @@ impl PrettyPrinter {
             .unwrap();
         } else if has_only_epilogue {
             let epilogue = backend.epilogue.as_ref().unwrap();
-            let epilogue_str = self.format_string_literal(epilogue);
+            let epilogue_str = self.format_string_with_format(epilogue, backend.epilogue_format);
             writeln!(
                 &mut self.output,
                 "backend {} epilogue {};",
@@ -393,13 +477,15 @@ impl PrettyPrinter {
 
             if let Some(prologue) = &backend.prologue {
                 self.write_indent();
-                let prologue_str = self.format_string_literal(prologue);
+                let prologue_str =
+                    self.format_string_with_format(prologue, backend.prologue_format);
                 writeln!(&mut self.output, "prologue {};", prologue_str).unwrap();
             }
 
             if let Some(epilogue) = &backend.epilogue {
                 self.write_indent();
-                let epilogue_str = self.format_string_literal(epilogue);
+                let epilogue_str =
+                    self.format_string_with_format(epilogue, backend.epilogue_format);
                 writeln!(&mut self.output, "epilogue {};", epilogue_str).unwrap();
             }
 
@@ -495,6 +581,9 @@ impl PrettyPrinter {
                 self.print_type(&ed.type_);
                 writeln!(&mut self.output, " {{").unwrap();
                 self.indent();
+                // Set binary literal width based on enum type
+                let old_width = self.binary_literal_width;
+                self.binary_literal_width = self.get_type_bit_width(&ed.type_);
                 for (i, item) in ed.items.iter().enumerate() {
                     let next_item = ed.items.get(i + 1);
                     match item {
@@ -506,6 +595,7 @@ impl PrettyPrinter {
                         }
                     }
                 }
+                self.binary_literal_width = old_width;
                 self.dedent();
                 self.write_indent();
                 writeln!(&mut self.output, "}}").unwrap();
@@ -515,6 +605,9 @@ impl PrettyPrinter {
                 self.print_type(&bf.type_);
                 writeln!(&mut self.output, " {{").unwrap();
                 self.indent();
+                // Set binary literal width based on bitflags type
+                let old_width = self.binary_literal_width;
+                self.binary_literal_width = self.get_type_bit_width(&bf.type_);
                 for (i, item) in bf.items.iter().enumerate() {
                     let next_item = bf.items.get(i + 1);
                     match item {
@@ -526,6 +619,7 @@ impl PrettyPrinter {
                         }
                     }
                 }
+                self.binary_literal_width = old_width;
                 self.dedent();
                 self.write_indent();
                 writeln!(&mut self.output, "}}").unwrap();
@@ -1242,5 +1336,160 @@ pub type MultipleBlocks {
         let printed2 = pretty_print(&module2);
 
         assert_eq!(printed, printed2);
+    }
+
+    #[test]
+    fn test_preserve_regular_string_format_in_backend() {
+        let text = r#"
+backend rust prologue "
+    use crate::shared_ptr::*;
+    use std::mem::ManuallyDrop;
+";
+        "#;
+
+        let module = parse_str(text).unwrap();
+        let printed = pretty_print(&module);
+
+        // Verify the backend is present and format is correct
+        assert!(printed.contains("backend rust prologue"));
+        // Verify it's not using raw string syntax
+        assert!(!printed.contains("r#\""));
+        // Verify the content is present with escaped newlines
+        assert!(printed.contains("\\n"));
+    }
+
+    #[test]
+    fn test_preserve_raw_string_format_in_backend() {
+        let text = r##"
+backend rust prologue r#"
+    use crate::shared_ptr::*;
+    use std::mem::ManuallyDrop;
+"#;
+        "##;
+
+        let expected = r##"
+backend rust prologue r#"
+    use crate::shared_ptr::*;
+    use std::mem::ManuallyDrop;
+"#;
+        "##
+        .trim();
+
+        let module = parse_str(text).unwrap();
+        let printed = pretty_print(&module);
+
+        assert_eq!(printed, expected);
+    }
+
+    #[test]
+    fn test_preserve_module_doc_comments() {
+        let text = r#"
+//! This is a render block.
+
+#[size(8), align(4)]
+pub type RenderBlock {
+    field: u32,
+}
+        "#;
+
+        let expected = r#"
+//! This is a render block.
+
+#[size(8), align(4)]
+pub type RenderBlock {
+    field: u32,
+}
+        "#
+        .trim();
+
+        let module = parse_str(text).unwrap();
+        let printed = pretty_print(&module);
+
+        assert_eq!(printed, expected);
+    }
+
+    #[test]
+    fn test_preserve_extern_type_doc_comments() {
+        let text = r#"
+/// `ManuallyDrop<SharedPtr<u32>>` is used instead of `SharedPtr<u32>` to avoid
+/// the `Drop` implementation of `SharedPtr<u32>` being called when the `RenderBlock`
+/// is dropped. The destructor, which we call in `drop`, will decrement the refcount
+/// for us.
+#[size(8), align(4)]
+extern type ManuallyDrop<SharedPtr<u32>>;
+        "#;
+
+        let expected = r#"
+/// `ManuallyDrop<SharedPtr<u32>>` is used instead of `SharedPtr<u32>` to avoid
+/// the `Drop` implementation of `SharedPtr<u32>` being called when the `RenderBlock`
+/// is dropped. The destructor, which we call in `drop`, will decrement the refcount
+/// for us.
+#[size(8), align(4)]
+extern type ManuallyDrop<SharedPtr<u32>>;
+        "#
+        .trim();
+
+        let module = parse_str(text).unwrap();
+        let printed = pretty_print(&module);
+
+        assert_eq!(printed, expected);
+    }
+
+    #[test]
+    fn test_binary_literal_formatting_u8() {
+        let text = r#"
+#[copyable]
+pub bitflags CameraState: u8 {
+    m_UseOffCenter = 0b0000_0001,
+    m_ScreenshotSeriesRunning = 0b0000_0010,
+    m_Ortho = 0b0000_0100,
+    m_ComputeView = 0b0000_1000,
+    m_DirtyProjection = 0b0001_0000,
+    m_IsRenderCamera = 0b0010_0000,
+}
+        "#;
+
+        let expected = r#"
+#[copyable]
+pub bitflags CameraState: u8 {
+    m_UseOffCenter = 0b0000_0001,
+    m_ScreenshotSeriesRunning = 0b0000_0010,
+    m_Ortho = 0b0000_0100,
+    m_ComputeView = 0b0000_1000,
+    m_DirtyProjection = 0b0001_0000,
+    m_IsRenderCamera = 0b0010_0000,
+}
+        "#
+        .trim();
+
+        let module = parse_str(text).unwrap();
+        let printed = pretty_print(&module);
+
+        assert_eq!(printed, expected);
+    }
+
+    #[test]
+    fn test_binary_literal_formatting_u32() {
+        let text = r#"
+pub bitflags TestFlags: u32 {
+    FLAG_1 = 0b0000_0000_0000_0000_0000_0000_0000_0001,
+    FLAG_2 = 0b0000_0000_0000_0000_0000_0000_0000_0010,
+    FLAG_BIG = 0b1000_0000_0000_0000_0000_0000_0000_0000,
+}
+        "#;
+
+        let expected = r#"
+pub bitflags TestFlags: u32 {
+    FLAG_1 = 0b0000_0000_0000_0000_0000_0000_0000_0001,
+    FLAG_2 = 0b0000_0000_0000_0000_0000_0000_0000_0010,
+    FLAG_BIG = 0b1000_0000_0000_0000_0000_0000_0000_0000,
+}
+        "#
+        .trim();
+
+        let module = parse_str(text).unwrap();
+        let printed = pretty_print(&module);
+
+        assert_eq!(printed, expected);
     }
 }
