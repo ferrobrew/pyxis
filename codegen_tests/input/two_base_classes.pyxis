@@ -3,7 +3,8 @@ type BaseA {
     vftable {
         pub fn base_a_vfunc(&self, a: i32) -> i32;
     },
-    #[address(8)]
+
+    #[address(0x8)]
     pub field_a: u64,
 }
 impl BaseA {
@@ -16,7 +17,8 @@ type BaseB {
     vftable {
         pub fn base_b_vfunc(&self, a: i32) -> i32;
     },
-    #[address(8)]
+
+    #[address(0x8)]
     pub field_b: u64,
 }
 impl BaseB {
@@ -30,6 +32,7 @@ type Derived {
         pub fn base_a_vfunc(&self, a: i32) -> i32;
         pub fn derived_vfunc(&self, a: i32) -> i32;
     },
+
     #[base]
     pub base_a: BaseA,
     #[base]

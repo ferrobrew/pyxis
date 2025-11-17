@@ -2,6 +2,22 @@ use std::{fmt, path::Path};
 
 use crate::span::Spanned;
 
+/// Format information for integer literals
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum IntFormat {
+    Decimal,
+    Hex,
+    Binary,
+    Octal,
+}
+
+/// Format information for string literals
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum StringFormat {
+    Regular,
+    Raw,
+}
+
 pub mod test_aliases {
     pub type M = super::Module;
     pub type ID = super::ItemDefinition;
@@ -23,6 +39,35 @@ pub mod test_aliases {
     pub type B = super::Backend;
     pub type V = super::Visibility;
     pub type EV = super::ExternValue;
+
+    /// Helper to create an IntLiteral expression (defaults to decimal format)
+    pub fn int_literal(value: isize) -> E {
+        E::IntLiteral {
+            value,
+            format: super::IntFormat::Decimal,
+        }
+    }
+
+    /// Helper to create an IntLiteral expression with a specific format
+    pub fn int_literal_with_format(value: isize, format: super::IntFormat) -> E {
+        E::IntLiteral { value, format }
+    }
+
+    /// Helper to create a StringLiteral expression (defaults to regular format)
+    pub fn string_literal(value: impl Into<String>) -> E {
+        E::StringLiteral {
+            value: value.into(),
+            format: super::StringFormat::Regular,
+        }
+    }
+
+    /// Helper to create a StringLiteral expression with a specific format
+    pub fn string_literal_with_format(value: impl Into<String>, format: super::StringFormat) -> E {
+        E::StringLiteral {
+            value: value.into(),
+            format,
+        }
+    }
 }
 
 /// Comment node types
@@ -204,20 +249,20 @@ impl From<&str> for ItemPath {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Expr {
-    IntLiteral(isize),
-    StringLiteral(String),
+    IntLiteral { value: isize, format: IntFormat },
+    StringLiteral { value: String, format: StringFormat },
     Ident(Ident),
 }
 impl Expr {
     pub fn int_literal(&self) -> Option<isize> {
         match self {
-            Expr::IntLiteral(value) => Some(*value),
+            Expr::IntLiteral { value, .. } => Some(*value),
             _ => None,
         }
     }
     pub fn string_literal(&self) -> Option<&str> {
         match self {
-            Expr::StringLiteral(value) => Some(value.as_str()),
+            Expr::StringLiteral { value, .. } => Some(value.as_str()),
             _ => None,
         }
     }
@@ -284,11 +329,23 @@ impl Attribute {
     pub fn integer_fn(name: &str, value: isize) -> Self {
         Attribute::Function(
             name.into(),
-            vec![AttributeItem::Expr(Expr::IntLiteral(value))],
+            vec![AttributeItem::Expr(Expr::IntLiteral {
+                value,
+                format: IntFormat::Decimal,
+            })],
+        )
+    }
+    fn integer_fn_hex(name: &str, value: isize) -> Self {
+        Attribute::Function(
+            name.into(),
+            vec![AttributeItem::Expr(Expr::IntLiteral {
+                value,
+                format: IntFormat::Hex,
+            })],
         )
     }
     pub fn address(address: usize) -> Self {
-        Self::integer_fn("address", address as isize)
+        Self::integer_fn_hex("address", address as isize)
     }
     pub fn size(size: usize) -> Self {
         Self::integer_fn("size", size as isize)
@@ -300,15 +357,18 @@ impl Attribute {
         Self::integer_fn("align", align as isize)
     }
     pub fn singleton(address: usize) -> Self {
-        Self::integer_fn("singleton", address as isize)
+        Self::integer_fn_hex("singleton", address as isize)
     }
     pub fn index(index: usize) -> Self {
-        Self::integer_fn("index", index as isize)
+        Self::integer_fn_hex("index", index as isize)
     }
     pub fn calling_convention(name: &str) -> Self {
         Attribute::Function(
             "calling_convention".into(),
-            vec![AttributeItem::Expr(Expr::StringLiteral(name.into()))],
+            vec![AttributeItem::Expr(Expr::StringLiteral {
+                value: name.into(),
+                format: StringFormat::Regular,
+            })],
         )
     }
 

@@ -107,7 +107,7 @@ pub fn build(
             ..
         } = statement;
         let value = match expr {
-            grammar::Expr::IntLiteral(value) => *value,
+            grammar::Expr::IntLiteral { value, .. } => *value,
             _ => anyhow::bail!(
                 "unsupported bitflags value for case `{name}` of bitflags `{resolvee_path}`: {expr:?}"
             ),
@@ -150,7 +150,7 @@ pub fn build(
             },
             grammar::Attribute::Function(ident, items) => {
                 let exprs = grammar::AttributeItem::extract_exprs(items);
-                if let ("singleton", [grammar::Expr::IntLiteral(value)]) =
+                if let ("singleton", [grammar::Expr::IntLiteral { value, .. }]) =
                     (ident.as_str(), exprs.as_slice())
                 {
                     singleton = Some(*value as usize);

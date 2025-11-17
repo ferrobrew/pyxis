@@ -5,9 +5,6 @@
     clippy::unnecessary_cast
 )]
 #![cfg_attr(any(), rustfmt::skip)]
-//! This is a module doc comment
-//!
-//! The best of its kind
 #[repr(C, align(8))]
 /// This is a doc comment
 pub struct TestType {

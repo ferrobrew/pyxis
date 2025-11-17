@@ -234,7 +234,7 @@ pub fn build(
         };
         let exprs = grammar::AttributeItem::extract_exprs(items);
         match (ident.as_str(), &exprs[..]) {
-            ("address", [grammar::Expr::IntLiteral(addr)]) => {
+            ("address", [grammar::Expr::IntLiteral { value, .. }]) => {
                 if is_vfunc {
                     anyhow::bail!(
                         "address attribute is not supported for virtual function `{}`",
@@ -243,7 +243,7 @@ pub fn build(
                 }
 
                 body = Some(FunctionBody::Address {
-                    address: (*addr).try_into().with_context(|| {
+                    address: (*value).try_into().with_context(|| {
                         format!(
                             "failed to convert `address` attribute into usize for function `{}`",
                             function.name
@@ -260,7 +260,8 @@ pub fn build(
                     );
                 }
             }
-            ("calling_convention", [grammar::Expr::StringLiteral(cc)]) => {
+            ("calling_convention", [grammar::Expr::StringLiteral { value, .. }]) => {
+                let cc = &value;
                 calling_convention = Some(cc.parse().map_err(|_| {
                     anyhow::anyhow!(
                         "invalid calling convention for function `{}`: {cc}",
