@@ -1,6 +1,7 @@
 use crate::{
     grammar::{
-        AttributeItem, IntFormat, ItemDefinitionInner, ModuleItem, TypeDefItem, Visibility,
+        AttributeItem, IntFormat, ItemDefinitionInner, ModuleItem, StringFormat, TypeDefItem,
+        Visibility,
         test_aliases::{int_literal, int_literal_with_format, *},
     },
     parser::{ParseError, parse_str, strip_spans::StripSpans},
@@ -445,31 +446,35 @@ backend rust epilogue r#"
 
     let ast = M::new().with_backends([
         B::new("rust")
-            .with_prologue(
+            .with_prologue_format(
                 r#"
         use std::ffi::CString;
         use std::os::raw::c_char;
     "#,
+                StringFormat::Raw,
             )
-            .with_epilogue(
+            .with_epilogue_format(
                 r#"
         fn main() {
             println!("Hello, world!");
         }
     "#,
+                StringFormat::Raw,
             ),
-        B::new("rust").with_prologue(
+        B::new("rust").with_prologue_format(
             r#"
     use std::ffi::CString;
     use std::os::raw::c_char;
 "#,
+            StringFormat::Raw,
         ),
-        B::new("rust").with_epilogue(
+        B::new("rust").with_epilogue_format(
             r#"
     fn main() {
         println!("Hello, world!");
     }
 "#,
+            StringFormat::Raw,
         ),
     ]);
 
