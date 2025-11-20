@@ -2,7 +2,7 @@
 
 use crate::grammar::ItemPath;
 use crate::source_store::SourceStore;
-use crate::span::{ErrorContext, Span};
+use crate::span::{ErrorContext, ErrorLabelColor, Span};
 use ariadne::{Color, Label, Report, ReportKind, Source};
 use std::fmt;
 
@@ -147,6 +147,16 @@ pub enum SemanticError {
 }
 
 impl SemanticError {
+    /// Convert ErrorLabelColor to ariadne Color
+    fn label_color_to_ariadne(color: ErrorLabelColor) -> Color {
+        match color {
+            ErrorLabelColor::Red => Color::Red,
+            ErrorLabelColor::Yellow => Color::Yellow,
+            ErrorLabelColor::Blue => Color::Blue,
+            ErrorLabelColor::Cyan => Color::Cyan,
+        }
+    }
+
     /// Format location prefix for error messages
     fn format_location(context: &ErrorContext) -> String {
         match (&context.filename, &context.span) {
@@ -413,14 +423,37 @@ impl SemanticError {
                     let offset = Self::span_to_offset(source, span);
                     let length = Self::span_length(source, span);
 
-                    let report = Report::build(ReportKind::Error, filename.as_ref(), offset)
+                    // Build the report with the primary label
+                    let mut report_builder = Report::build(ReportKind::Error, filename.as_ref(), offset)
                         .with_message(self.to_string())
                         .with_label(
                             Label::new((filename.as_ref(), offset..offset + length))
                                 .with_message("error occurred here")
                                 .with_color(Color::Red),
-                        )
-                        .finish();
+                        );
+
+                    // Add additional labels if present
+                    for label in &ctx.labels {
+                        let label_offset = Self::span_to_offset(source, &label.span);
+                        let label_length = Self::span_length(source, &label.span);
+                        report_builder = report_builder.with_label(
+                            Label::new((filename.as_ref(), label_offset..label_offset + label_length))
+                                .with_message(&label.message)
+                                .with_color(Self::label_color_to_ariadne(label.color)),
+                        );
+                    }
+
+                    // Add notes if present
+                    for note in &ctx.notes {
+                        report_builder = report_builder.with_note(note);
+                    }
+
+                    // Add help text if present
+                    if let Some(help) = &ctx.help {
+                        report_builder = report_builder.with_help(help);
+                    }
+
+                    let report = report_builder.finish();
 
                     let mut buffer = Vec::new();
                     if report.write((filename.as_ref(), Source::from(source)), &mut buffer).is_ok() {

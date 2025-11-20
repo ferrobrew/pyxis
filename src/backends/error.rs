@@ -1,7 +1,7 @@
 use std::fmt;
 
 use ariadne::{Color, Label, Report, ReportKind, Source};
-use crate::{grammar::ItemPath, semantic::SemanticError, source_store::SourceStore, span::{ErrorContext, Span}};
+use crate::{grammar::ItemPath, semantic::SemanticError, source_store::SourceStore, span::{ErrorContext, ErrorLabelColor, Span}};
 
 /// Backend code generation errors
 #[derive(Debug)]
@@ -39,6 +39,16 @@ pub enum BackendError {
 }
 
 impl BackendError {
+    /// Convert ErrorLabelColor to ariadne Color
+    fn label_color_to_ariadne(color: ErrorLabelColor) -> Color {
+        match color {
+            ErrorLabelColor::Red => Color::Red,
+            ErrorLabelColor::Yellow => Color::Yellow,
+            ErrorLabelColor::Blue => Color::Blue,
+            ErrorLabelColor::Cyan => Color::Cyan,
+        }
+    }
+
     /// Format location prefix for error messages
     fn format_location(context: &ErrorContext) -> String {
         match (&context.filename, &context.span) {
@@ -96,14 +106,36 @@ impl BackendError {
                         let offset = Self::span_to_offset(source, span);
                         let length = Self::span_length(source, span);
 
-                        let report = Report::build(ReportKind::Error, filename.as_ref(), offset)
+                        let mut report_builder = Report::build(ReportKind::Error, filename.as_ref(), offset)
                             .with_message(format!("Failed to generate code for type `{}`: {}", type_path, reason))
                             .with_label(
                                 Label::new((filename.as_ref(), offset..offset + length))
                                     .with_message("error occurred here")
                                     .with_color(Color::Red),
-                            )
-                            .finish();
+                            );
+
+                        // Add additional labels if present
+                        for label in &context.labels {
+                            let label_offset = Self::span_to_offset(source, &label.span);
+                            let label_length = Self::span_length(source, &label.span);
+                            report_builder = report_builder.with_label(
+                                Label::new((filename.as_ref(), label_offset..label_offset + label_length))
+                                    .with_message(&label.message)
+                                    .with_color(Self::label_color_to_ariadne(label.color)),
+                            );
+                        }
+
+                        // Add notes if present
+                        for note in &context.notes {
+                            report_builder = report_builder.with_note(note);
+                        }
+
+                        // Add help text if present
+                        if let Some(help) = &context.help {
+                            report_builder = report_builder.with_help(help);
+                        }
+
+                        let report = report_builder.finish();
 
                         let mut buffer = Vec::new();
                         if report.write((filename.as_ref(), Source::from(source)), &mut buffer).is_ok() {
@@ -120,14 +152,36 @@ impl BackendError {
                         let offset = Self::span_to_offset(source, span);
                         let length = Self::span_length(source, span);
 
-                        let report = Report::build(ReportKind::Error, filename.as_ref(), offset)
+                        let mut report_builder = Report::build(ReportKind::Error, filename.as_ref(), offset)
                             .with_message(format!("Failed to generate code for field `{}` of type `{}`: {}", field_name, type_path, reason))
                             .with_label(
                                 Label::new((filename.as_ref(), offset..offset + length))
                                     .with_message("error occurred here")
                                     .with_color(Color::Red),
-                            )
-                            .finish();
+                            );
+
+                        // Add additional labels if present
+                        for label in &context.labels {
+                            let label_offset = Self::span_to_offset(source, &label.span);
+                            let label_length = Self::span_length(source, &label.span);
+                            report_builder = report_builder.with_label(
+                                Label::new((filename.as_ref(), label_offset..label_offset + label_length))
+                                    .with_message(&label.message)
+                                    .with_color(Self::label_color_to_ariadne(label.color)),
+                            );
+                        }
+
+                        // Add notes if present
+                        for note in &context.notes {
+                            report_builder = report_builder.with_note(note);
+                        }
+
+                        // Add help text if present
+                        if let Some(help) = &context.help {
+                            report_builder = report_builder.with_help(help);
+                        }
+
+                        let report = report_builder.finish();
 
                         let mut buffer = Vec::new();
                         if report.write((filename.as_ref(), Source::from(source)), &mut buffer).is_ok() {
@@ -144,14 +198,36 @@ impl BackendError {
                         let offset = Self::span_to_offset(source, span);
                         let length = Self::span_length(source, span);
 
-                        let report = Report::build(ReportKind::Error, filename.as_ref(), offset)
+                        let mut report_builder = Report::build(ReportKind::Error, filename.as_ref(), offset)
                             .with_message(format!("Failed to generate vftable code for type `{}`: {}", type_path, reason))
                             .with_label(
                                 Label::new((filename.as_ref(), offset..offset + length))
                                     .with_message("error occurred here")
                                     .with_color(Color::Red),
-                            )
-                            .finish();
+                            );
+
+                        // Add additional labels if present
+                        for label in &context.labels {
+                            let label_offset = Self::span_to_offset(source, &label.span);
+                            let label_length = Self::span_length(source, &label.span);
+                            report_builder = report_builder.with_label(
+                                Label::new((filename.as_ref(), label_offset..label_offset + label_length))
+                                    .with_message(&label.message)
+                                    .with_color(Self::label_color_to_ariadne(label.color)),
+                            );
+                        }
+
+                        // Add notes if present
+                        for note in &context.notes {
+                            report_builder = report_builder.with_note(note);
+                        }
+
+                        // Add help text if present
+                        if let Some(help) = &context.help {
+                            report_builder = report_builder.with_help(help);
+                        }
+
+                        let report = report_builder.finish();
 
                         let mut buffer = Vec::new();
                         if report.write((filename.as_ref(), Source::from(source)), &mut buffer).is_ok() {

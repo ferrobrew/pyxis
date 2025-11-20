@@ -161,17 +161,29 @@ pub fn build(
     }
 
     if !defaultable && default.is_some() {
-        return Err(SemanticError::enum_error(
+        let mut error = SemanticError::enum_error(
             resolvee_path.clone(),
             "has a default variant set but is not marked as defaultable",
-        ));
+        );
+        if let SemanticError::EnumError { context, .. } = &mut error {
+            *context = context.clone()
+                .with_help("Add the #[defaultable] attribute to the enum declaration")
+                .with_note("Only enums marked as defaultable can have default variants");
+        }
+        return Err(error);
     }
 
     if defaultable && default.is_none() {
-        return Err(SemanticError::enum_error(
+        let mut error = SemanticError::enum_error(
             resolvee_path.clone(),
             "is marked as defaultable but has no default variant set",
-        ));
+        );
+        if let SemanticError::EnumError { context, .. } = &mut error {
+            *context = context.clone()
+                .with_help("Add the #[default] attribute to one of the enum variants")
+                .with_note("Defaultable enums must have exactly one variant marked with #[default]");
+        }
+        return Err(error);
     }
 
     // Handle associated functions

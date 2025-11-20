@@ -266,10 +266,29 @@ pub fn build(
                     Some(
                         value
                             .parse()
-                            .map_err(|_| SemanticError::InvalidCallingConvention {
-                                convention: value.clone(),
-                                function_name: function.name.0.clone(),
-                                context: ErrorContext::new(),
+                            .map_err(|_| {
+                                // Generate list of valid calling conventions dynamically
+                                let valid_conventions = [
+                                    CallingConvention::C,
+                                    CallingConvention::Cdecl,
+                                    CallingConvention::Stdcall,
+                                    CallingConvention::Fastcall,
+                                    CallingConvention::Thiscall,
+                                    CallingConvention::Vectorcall,
+                                    CallingConvention::System,
+                                ];
+                                let valid_list = valid_conventions
+                                    .iter()
+                                    .map(|cc| cc.as_str())
+                                    .collect::<Vec<_>>()
+                                    .join(", ");
+
+                                SemanticError::InvalidCallingConvention {
+                                    convention: value.clone(),
+                                    function_name: function.name.0.clone(),
+                                    context: ErrorContext::new()
+                                        .with_help(format!("Valid calling conventions are: {}", valid_list)),
+                                }
                             })?,
                     );
             }

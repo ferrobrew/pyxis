@@ -98,12 +98,30 @@ pub fn build(
         ));
     };
     if !predefined_item.is_unsigned_integer() {
-        return Err(SemanticError::invalid_type(
+        let mut error = SemanticError::invalid_type(
             "unsigned integer",
             format!("{}", ty),
             resolvee_path.clone(),
             "bitflags definition",
-        ));
+        );
+
+        // Add helpful context
+        if let SemanticError::InvalidType { context, .. } = &mut error {
+            // Generate list of unsigned integer types dynamically
+            use crate::semantic::types::PredefinedItem;
+            let unsigned_types = PredefinedItem::ALL
+                .iter()
+                .filter(|item| item.is_unsigned_integer())
+                .map(|item| item.name())
+                .collect::<Vec<_>>()
+                .join(", ");
+
+            *context = context.clone()
+                .with_help(format!("Bitflags must be based on an unsigned integer type: {}", unsigned_types))
+                .with_note(format!("The type `{}` is not an unsigned integer", ty));
+        }
+
+        return Err(error);
     }
     let size = predefined_item.size();
 
@@ -181,17 +199,29 @@ pub fn build(
     }
 
     if !defaultable && default.is_some() {
-        return Err(SemanticError::enum_error(
+        let mut error = SemanticError::enum_error(
             resolvee_path.clone(),
             "has a default value set but is not marked as defaultable",
-        ));
+        );
+        if let SemanticError::EnumError { context, .. } = &mut error {
+            *context = context.clone()
+                .with_help("Add the #[defaultable] attribute to the bitflags declaration")
+                .with_note("Only bitflags marked as defaultable can have default values");
+        }
+        return Err(error);
     }
 
     if defaultable && default.is_none() {
-        return Err(SemanticError::enum_error(
+        let mut error = SemanticError::enum_error(
             resolvee_path.clone(),
             "is marked as defaultable but has no default value set",
-        ));
+        );
+        if let SemanticError::EnumError { context, .. } = &mut error {
+            *context = context.clone()
+                .with_help("Add the #[default] attribute to one of the bitflags values")
+                .with_note("Defaultable bitflags must have exactly one value marked with #[default]");
+        }
+        return Err(error);
     }
 
     Ok(Some(ItemStateResolved {

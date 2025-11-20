@@ -99,11 +99,54 @@ impl<T: std::fmt::Display> std::fmt::Display for Spanned<T> {
     }
 }
 
+/// Label for additional span highlighting in error reports
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ErrorLabel {
+    /// The span to highlight
+    pub span: Span,
+    /// Message to show for this label
+    pub message: String,
+    /// Label color (for terminal output)
+    pub color: ErrorLabelColor,
+}
+
+/// Color for error labels in terminal output
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ErrorLabelColor {
+    Red,
+    Yellow,
+    Blue,
+    Cyan,
+}
+
+impl ErrorLabel {
+    pub fn new(span: Span, message: impl Into<String>) -> Self {
+        Self {
+            span,
+            message: message.into(),
+            color: ErrorLabelColor::Red,
+        }
+    }
+
+    pub fn with_color(mut self, color: ErrorLabelColor) -> Self {
+        self.color = color;
+        self
+    }
+}
+
 /// Context information for error reporting (filename and span)
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ErrorContext {
+    /// Primary source file where the error occurred
     pub filename: Option<Box<str>>,
+    /// Primary span to highlight
     pub span: Option<Span>,
+    /// Help text suggesting how to fix the error
+    pub help: Option<String>,
+    /// Additional notes providing context
+    pub notes: Vec<String>,
+    /// Additional labeled spans to show related locations
+    pub labels: Vec<ErrorLabel>,
 }
 
 impl ErrorContext {
@@ -111,6 +154,9 @@ impl ErrorContext {
         Self {
             filename: None,
             span: None,
+            help: None,
+            notes: Vec::new(),
+            labels: Vec::new(),
         }
     }
 
@@ -121,6 +167,26 @@ impl ErrorContext {
 
     pub fn with_span(mut self, span: Span) -> Self {
         self.span = Some(span);
+        self
+    }
+
+    pub fn with_help(mut self, help: impl Into<String>) -> Self {
+        self.help = Some(help.into());
+        self
+    }
+
+    pub fn with_note(mut self, note: impl Into<String>) -> Self {
+        self.notes.push(note.into());
+        self
+    }
+
+    pub fn with_label(mut self, label: ErrorLabel) -> Self {
+        self.labels.push(label);
+        self
+    }
+
+    pub fn with_labels(mut self, labels: impl IntoIterator<Item = ErrorLabel>) -> Self {
+        self.labels.extend(labels);
         self
     }
 }
