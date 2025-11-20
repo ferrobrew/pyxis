@@ -19,8 +19,6 @@ use crate::{
 pub struct SemanticState {
     modules: BTreeMap<ItemPath, Module>,
     pub(crate) type_registry: TypeRegistry,
-    /// Cache of source files for error reporting
-    pub(crate) source_cache: BTreeMap<String, String>,
 }
 
 impl SemanticState {
@@ -28,7 +26,6 @@ impl SemanticState {
         let mut semantic_state = Self {
             modules: BTreeMap::new(),
             type_registry: TypeRegistry::new(pointer_size),
-            source_cache: BTreeMap::new(),
         };
 
         // Insert the empty root module.
@@ -64,20 +61,12 @@ impl SemanticState {
         semantic_state
     }
 
-    /// Get a reference to the source cache
-    pub fn source_cache(&self) -> &BTreeMap<String, String> {
-        &self.source_cache
-    }
-
     pub fn add_file(&mut self, base_path: &Path, path: &Path) -> Result<()> {
         let source = std::fs::read_to_string(path).map_err(|e| SemanticError::Io {
             message: e.to_string(),
             path: Some(path.display().to_string()),
         })?;
         let filename = path.display().to_string();
-
-        // Cache the source for error reporting
-        self.source_cache.insert(filename.clone(), source.clone());
 
         self.add_module(
             &parser::parse_str_with_filename(&source, &filename)?,
@@ -143,13 +132,6 @@ impl SemanticState {
 
         for definition in module.definitions().collect::<Vec<_>>() {
             let new_path = path.join(definition.name.as_str().into());
-            // Get filename from source cache for this module
-            let filename_for_path = path.to_string().replace("::", "/") + ".pyxis";
-            let filename = self
-                .source_cache
-                .keys()
-                .find(|k| k.ends_with(&filename_for_path))
-                .map(|s| s.as_str().into());
 
             self.add_item(ItemDefinition {
                 visibility: definition.visibility.into(),
@@ -158,7 +140,7 @@ impl SemanticState {
                 category: ItemCategory::Defined,
                 predefined: None,
                 span: Some(definition.span.clone()),
-                filename,
+                filename: None,
             })?;
         }
 
@@ -314,7 +296,6 @@ impl SemanticState {
         Ok(ResolvedSemanticState {
             modules: self.modules,
             type_registry: self.type_registry,
-            source_cache: self.source_cache,
         })
     }
 }
@@ -329,7 +310,6 @@ impl SemanticState {
 pub struct ResolvedSemanticState {
     type_registry: TypeRegistry,
     modules: BTreeMap<ItemPath, Module>,
-    source_cache: BTreeMap<String, String>,
 }
 
 impl ResolvedSemanticState {
@@ -339,9 +319,5 @@ impl ResolvedSemanticState {
 
     pub fn modules(&self) -> &BTreeMap<ItemPath, Module> {
         &self.modules
-    }
-
-    pub fn source_cache(&self) -> &BTreeMap<String, String> {
-        &self.source_cache
     }
 }

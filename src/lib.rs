@@ -52,16 +52,6 @@ impl std::fmt::Display for BuildError {
 
 impl std::error::Error for BuildError {}
 
-impl BuildError {
-    /// Format the error using ariadne with the provided source store
-    pub fn format_with_ariadne(&self, source_store: &mut dyn source_store::SourceStore) -> String {
-        match self {
-            BuildError::Semantic(err) => err.format_with_ariadne(source_store),
-            _ => self.to_string(),
-        }
-    }
-}
-
 impl From<semantic::SemanticError> for BuildError {
     fn from(err: semantic::SemanticError) -> Self {
         BuildError::Semantic(err)
@@ -86,53 +76,32 @@ impl From<backends::BackendError> for BuildError {
     }
 }
 
-/// Build result that includes source cache for error reporting
-pub type BuildResult = Result<std::collections::BTreeMap<String, String>, (BuildError, std::collections::BTreeMap<String, String>)>;
-
-pub fn build(in_dir: &Path, out_dir: &Path, backend: Backend) -> BuildResult {
-    let config = match config::Config::load(&in_dir.join("pyxis.toml")) {
-        Ok(c) => c,
-        Err(e) => return Err((e.into(), std::collections::BTreeMap::new())),
-    };
+pub fn build(in_dir: &Path, out_dir: &Path, backend: Backend) -> Result<(), BuildError> {
+    let config = config::Config::load(&in_dir.join("pyxis.toml"))?;
 
     let mut semantic_state = semantic::SemanticState::new(config.project.pointer_size);
 
-    for path in glob::glob(&format!("{}/**/*.pyxis", in_dir.display()))
-        .map_err(|e| (BuildError::from(e), std::collections::BTreeMap::new()))?
+    for path in glob::glob(&format!("{}/**/*.pyxis", in_dir.display()))?
         .filter_map(Result::ok)
     {
-        if let Err(e) = semantic_state.add_file(in_dir, &path) {
-            // Clone source cache before returning error
-            let source_cache = semantic_state.source_cache().clone();
-            return Err((e.into(), source_cache));
-        }
+        semantic_state.add_file(in_dir, &path)?;
     }
 
-    // Clone the source cache before building (which consumes semantic_state)
-    let source_cache = semantic_state.source_cache().clone();
+    let resolved_semantic_state = semantic_state.build()?;
 
-    let resolved_semantic_state = match semantic_state.build() {
-        Ok(state) => state,
-        Err(e) => return Err((e.into(), source_cache)),
-    };
-
-    let result = match backend {
+    match backend {
         Backend::Rust => {
             for (key, module) in resolved_semantic_state.modules() {
-                if let Err(e) = backends::rust::write_module(out_dir, key, &resolved_semantic_state, module) {
-                    return Err((e.into(), source_cache));
-                }
+                backends::rust::write_module(out_dir, key, &resolved_semantic_state, module)?;
             }
             Ok(())
         }
         #[cfg(feature = "json")]
         Backend::Json => {
-            backends::json::build(out_dir, &resolved_semantic_state, &config.project.name)
-                .map_err(|e| (e.into(), source_cache.clone()))
+            backends::json::build(out_dir, &resolved_semantic_state, &config.project.name)?;
+            Ok(())
         }
-    };
-
-    result.map(|_| source_cache)
+    }
 }
 
 /// Helper for running Pyxis against `in_dir` to produce `out_dir`. If `out_dir` is not provided, it will default to `OUT_DIR`.
@@ -151,11 +120,16 @@ pub fn build_script(in_dir: &Path, out_dir: Option<&Path>) -> Result<(), BuildEr
         })?;
 
     match build(in_dir, &out_dir, Backend::Rust) {
-        Ok(_) => Ok(()),
-        Err((err, mut source_cache)) => {
-            // Format error with ariadne before returning
-            let formatted = err.format_with_ariadne(&mut source_cache);
-            eprintln!("{}", formatted);
+        Ok(()) => Ok(()),
+        Err(err) => {
+            // Format semantic errors with ariadne before returning
+            if let BuildError::Semantic(semantic_err) = &err {
+                let mut store = source_store::FilesystemSourceStore::new();
+                let formatted = semantic_err.format_with_ariadne(&mut store);
+                eprintln!("{}", formatted);
+            } else {
+                eprintln!("{}", err);
+            }
             Err(err)
         }
     }
