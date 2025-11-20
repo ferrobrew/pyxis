@@ -261,15 +261,18 @@ pub fn build(
                 }
             }
             ("calling_convention", [grammar::Expr::StringLiteral { value, .. }]) => {
-                calling_convention = Some(value.parse().map_err(|_| {
-                    SemanticError::InvalidCallingConvention {
-                        convention: value.clone(),
-                        function_name: function.name.0.clone(),
-                        span: None,
-                        filename: None,
-                        source: None,
-                    }
-                })?);
+                calling_convention =
+                    Some(
+                        value
+                            .parse()
+                            .map_err(|_| SemanticError::InvalidCallingConvention {
+                                convention: value.clone(),
+                                function_name: function.name.0.clone(),
+                                span: None,
+                                filename: None,
+                                source: None,
+                            })?,
+                    );
             }
             _ => {}
         }
