@@ -1,12 +1,22 @@
 use std::path::Path;
 
-fn main() -> anyhow::Result<()> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let root = Path::new("codegen_tests");
     let output_dir = root.join("output");
     let json_output_dir = root.join("json_output");
 
     // Generate Rust backend output
-    pyxis::build(&root.join("input"), &output_dir, pyxis::Backend::Rust)?;
+    if let Err(err) = pyxis::build(&root.join("input"), &output_dir, pyxis::Backend::Rust) {
+        // Format semantic errors with ariadne before displaying
+        if let pyxis::BuildError::Semantic(semantic_err) = &err {
+            let mut store = pyxis::source_store::FilesystemSourceStore::new();
+            let formatted = semantic_err.format_with_ariadne(&mut store);
+            eprintln!("{}", formatted);
+        } else {
+            eprintln!("{}", err);
+        }
+        return Err(err.into());
+    }
 
     let mut module_decls = std::fs::read_dir(&output_dir)?
         .filter_map(|entry| Some(entry.ok()?.path()))
@@ -23,17 +33,27 @@ fn main() -> anyhow::Result<()> {
         .current_dir(&output_dir)
         .status()?;
     if !status.success() {
-        anyhow::bail!("cargo clippy failed");
+        return Err("cargo clippy failed".into());
     }
 
     // Generate JSON backend output
     std::fs::create_dir_all(&json_output_dir)?;
-    pyxis::build(&root.join("input"), &json_output_dir, pyxis::Backend::Json)?;
+    if let Err(err) = pyxis::build(&root.join("input"), &json_output_dir, pyxis::Backend::Json) {
+        // Format semantic errors with ariadne before displaying
+        if let pyxis::BuildError::Semantic(semantic_err) = &err {
+            let mut store = pyxis::source_store::FilesystemSourceStore::new();
+            let formatted = semantic_err.format_with_ariadne(&mut store);
+            eprintln!("{}", formatted);
+        } else {
+            eprintln!("{}", err);
+        }
+        return Err(err.into());
+    }
 
     // Verify JSON output exists and is valid
     let json_output_file = json_output_dir.join("output.json");
     if !json_output_file.exists() {
-        anyhow::bail!("JSON output file was not created");
+        return Err("JSON output file was not created".into());
     }
 
     // Parse JSON to verify it's valid

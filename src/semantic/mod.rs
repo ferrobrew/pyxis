@@ -1,3 +1,4 @@
+pub mod error;
 pub mod types;
 
 mod bitflags_definition;
@@ -11,6 +12,7 @@ mod type_registry;
 #[cfg(test)]
 mod tests;
 
+pub use error::{Result, SemanticError};
 pub use module::Module;
 pub use semantic_state::{ResolvedSemanticState, SemanticState};
 pub use type_registry::TypeRegistry;

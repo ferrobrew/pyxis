@@ -1,13 +1,13 @@
 use std::{fmt, str::FromStr};
 
-use anyhow::Context;
-
 use crate::{
     grammar::{self, ItemPath},
     semantic::{
+        error::{Result, SemanticError},
         type_registry::TypeRegistry,
         types::{Type, Visibility},
     },
+    span::ErrorContext,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -75,7 +75,7 @@ impl fmt::Display for CallingConvention {
 }
 impl FromStr for CallingConvention {
     type Err = ();
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         match s {
             "C" => Ok(CallingConvention::C),
             "cdecl" => Ok(CallingConvention::Cdecl),
@@ -222,7 +222,7 @@ pub fn build(
     scope: &[ItemPath],
     is_vfunc: bool,
     function: &grammar::Function,
-) -> Result<Function, anyhow::Error> {
+) -> Result<Function> {
     let mut body = is_vfunc.then(|| FunctionBody::Vftable {
         function_name: function.name.0.clone(),
     });
@@ -236,17 +236,18 @@ pub fn build(
         match (ident.as_str(), &exprs[..]) {
             ("address", [grammar::Expr::IntLiteral { value, .. }]) => {
                 if is_vfunc {
-                    anyhow::bail!(
-                        "address attribute is not supported for virtual function `{}`",
-                        function.name
-                    );
+                    return Err(SemanticError::attribute_not_supported(
+                        "address",
+                        format!("virtual function `{}`", function.name),
+                    ));
                 }
 
                 body = Some(FunctionBody::Address {
-                    address: (*value).try_into().with_context(|| {
-                        format!(
-                            "failed to convert `address` attribute into usize for function `{}`",
-                            function.name
+                    address: (*value).try_into().map_err(|_| {
+                        SemanticError::integer_conversion(
+                            value.to_string(),
+                            "usize",
+                            format!("address attribute for function `{}`", function.name),
                         )
                     })?,
                 });
@@ -254,30 +255,52 @@ pub fn build(
             ("index", _) => {
                 // ignore index attribute, this is handled by vftable construction
                 if !is_vfunc {
-                    anyhow::bail!(
-                        "index attribute is only supported for virtual functions, not `{}`",
-                        function.name
-                    );
+                    return Err(SemanticError::attribute_not_supported(
+                        "index",
+                        format!("non-virtual function `{}`", function.name),
+                    ));
                 }
             }
             ("calling_convention", [grammar::Expr::StringLiteral { value, .. }]) => {
-                let cc = &value;
-                calling_convention = Some(cc.parse().map_err(|_| {
-                    anyhow::anyhow!(
-                        "invalid calling convention for function `{}`: {cc}",
-                        function.name
-                    )
-                })?);
+                calling_convention =
+                    Some(
+                        value
+                            .parse()
+                            .map_err(|_| {
+                                // Generate list of valid calling conventions dynamically
+                                let valid_conventions = [
+                                    CallingConvention::C,
+                                    CallingConvention::Cdecl,
+                                    CallingConvention::Stdcall,
+                                    CallingConvention::Fastcall,
+                                    CallingConvention::Thiscall,
+                                    CallingConvention::Vectorcall,
+                                    CallingConvention::System,
+                                ];
+                                let valid_list = valid_conventions
+                                    .iter()
+                                    .map(|cc| cc.as_str())
+                                    .collect::<Vec<_>>()
+                                    .join(", ");
+
+                                SemanticError::InvalidCallingConvention {
+                                    convention: value.clone(),
+                                    function_name: function.name.0.clone(),
+                                    context: ErrorContext::new()
+                                        .with_help(format!("Valid calling conventions are: {}", valid_list)),
+                                }
+                            })?,
+                    );
             }
             _ => {}
         }
     }
 
     if !is_vfunc && body.is_none() {
-        anyhow::bail!(
-            "function `{}` has no implementation available; did you forget to assign an `address` attribute?",
-            function.name,
-        );
+        return Err(SemanticError::FunctionMissingImplementation {
+            function_name: function.name.0.clone(),
+            context: ErrorContext::new(),
+        });
     }
 
     let Some(body) = body else {
@@ -298,15 +321,14 @@ pub fn build(
                 type_registry
                     .resolve_grammar_type(scope, type_)
                     .ok_or_else(|| {
-                        anyhow::anyhow!(
-                            "failed to resolve type of field `{:?}` ({:?})",
-                            name,
-                            type_
+                        SemanticError::type_resolution_failed(
+                            format!("{:?}", type_),
+                            format!("argument `{}` in function `{}`", name, function.name),
                         )
                     })?,
             )),
         })
-        .collect::<anyhow::Result<Vec<_>>>()?;
+        .collect::<Result<Vec<_>>>()?;
 
     let return_type = function
         .return_type

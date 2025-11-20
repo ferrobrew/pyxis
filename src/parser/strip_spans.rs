@@ -8,12 +8,12 @@ pub trait StripSpans {
 // we need to strip spans from Spanned<T> wrappers and remove comments for comparison
 
 use crate::grammar::*;
-use crate::span::Spanned;
+use crate::span::{Span, Spanned};
 
 impl<T: Clone> StripSpans for Spanned<T> {
     fn strip_spans(&self) -> Self {
         // Return a synthetic version with the same value but no real span
-        Spanned::new(self.value.clone(), crate::span::Span::synthetic())
+        Spanned::new(self.value.clone(), Span::synthetic())
     }
 }
 
@@ -58,6 +58,7 @@ impl StripSpans for ItemDefinition {
             name: self.name.clone(),
             doc_comments: self.doc_comments.clone(),
             inner: self.inner.strip_spans(),
+            span: Span::synthetic(),
         }
     }
 }
@@ -98,6 +99,7 @@ impl StripSpans for TypeStatement {
             doc_comments: self.doc_comments.clone(),
             inline_trailing_comments: Vec::new(), // Strip trailing comments
             following_comments: Vec::new(),
+            span: Span::synthetic(),
         }
     }
 }
@@ -148,6 +150,7 @@ impl StripSpans for EnumStatement {
             doc_comments: self.doc_comments.clone(),
             inline_trailing_comments: Vec::new(), // Strip trailing comments
             following_comments: Vec::new(),
+            span: Span::synthetic(),
         }
     }
 }
@@ -182,6 +185,7 @@ impl StripSpans for BitflagsStatement {
             doc_comments: self.doc_comments.clone(),
             inline_trailing_comments: Vec::new(), // Strip trailing comments
             following_comments: Vec::new(),
+            span: Span::synthetic(),
         }
     }
 }

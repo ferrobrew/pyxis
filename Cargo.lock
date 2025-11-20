@@ -58,12 +58,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "anyhow"
-version = "1.0.92"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "74f37166d7d48a0284b99dd824694c26119c700b53bf0d1540cdb147dbdaaf13"
-
-[[package]]
 name = "ariadne"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -254,7 +248,6 @@ dependencies = [
 name = "pyxis"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "ariadne",
  "glob",
  "pretty_assertions",
@@ -272,7 +265,6 @@ dependencies = [
 name = "pyxis-driver"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "clap",
  "pyxis",
  "specta-typescript",

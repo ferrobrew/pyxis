@@ -3,7 +3,6 @@ use crate::{
     semantic::{semantic_state::SemanticState, types::test_aliases::*},
 };
 
-use anyhow::Context;
 use pretty_assertions::assert_eq;
 
 mod alignment;
@@ -213,8 +212,7 @@ fn can_use_type_from_another_module() {
         .type_registry()
         .get(&path)
         .cloned()
-        .context("failed to get type")
-        .unwrap();
+        .expect("failed to get type");
     assert_eq!(
         resolved_type,
         SID::defined_resolved(

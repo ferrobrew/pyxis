@@ -1,9 +1,8 @@
-use anyhow::Context;
-
 use crate::{
     grammar::{self, ItemPath},
     semantic::{
         SemanticState,
+        error::{Result, SemanticError},
         types::{ItemStateResolved, Type},
     },
 };
@@ -67,10 +66,10 @@ pub fn build(
     resolvee_path: &ItemPath,
     definition: &grammar::BitflagsDefinition,
     doc_comments: &[String],
-) -> anyhow::Result<Option<ItemStateResolved>> {
+) -> Result<Option<ItemStateResolved>> {
     let module = semantic
         .get_module_for_path(resolvee_path)
-        .with_context(|| format!("failed to get module for path `{resolvee_path}`"))?;
+        .ok_or_else(|| SemanticError::module_not_found(resolvee_path.clone()))?;
 
     // Retrieve the type for this bitflags, and validate it, before getting its size
     let Some(ty) = semantic
@@ -79,21 +78,50 @@ pub fn build(
     else {
         return Ok(None);
     };
-    let ty_raw_path = ty.as_raw().with_context(|| {
-        format!("bitflags definition `{resolvee_path}` has a type that is not a raw type: {ty}")
+    let ty_raw_path = ty.as_raw().ok_or_else(|| {
+        SemanticError::invalid_type(
+            "raw type",
+            format!("{}", ty),
+            resolvee_path.clone(),
+            "bitflags definition",
+        )
     })?;
     let Some(ty_item) = semantic.type_registry.get(ty_raw_path) else {
         return Ok(None);
     };
     let Some(predefined_item) = ty_item.predefined else {
-        anyhow::bail!(
-            "bitflags definition `{resolvee_path}` has a type that is not a predefined type: {ty}"
-        );
+        return Err(SemanticError::invalid_type(
+            "predefined type",
+            format!("{}", ty),
+            resolvee_path.clone(),
+            "bitflags definition",
+        ));
     };
     if !predefined_item.is_unsigned_integer() {
-        anyhow::bail!(
-            "bitflags definition `{resolvee_path}` has a type that is not an unsigned integer: {ty}"
+        let mut error = SemanticError::invalid_type(
+            "unsigned integer",
+            format!("{}", ty),
+            resolvee_path.clone(),
+            "bitflags definition",
         );
+
+        // Add helpful context
+        if let SemanticError::InvalidType { context, .. } = &mut error {
+            // Generate list of unsigned integer types dynamically
+            use crate::semantic::types::PredefinedItem;
+            let unsigned_types = PredefinedItem::ALL
+                .iter()
+                .filter(|item| item.is_unsigned_integer())
+                .map(|item| item.name())
+                .collect::<Vec<_>>()
+                .join(", ");
+
+            *context = context.clone()
+                .with_help(format!("Bitflags must be based on an unsigned integer type: {}", unsigned_types))
+                .with_note(format!("The type `{}` is not an unsigned integer", ty));
+        }
+
+        return Err(error);
     }
     let size = predefined_item.size();
 
@@ -108,14 +136,21 @@ pub fn build(
         } = statement;
         let value = match expr {
             grammar::Expr::IntLiteral { value, .. } => *value,
-            _ => anyhow::bail!(
-                "unsupported bitflags value for case `{name}` of bitflags `{resolvee_path}`: {expr:?}"
-            ),
+            _ => {
+                return Err(SemanticError::enum_error(
+                    resolvee_path.clone(),
+                    format!("unsupported bitflags value for case `{name}`: {:?}", expr),
+                ));
+            }
         };
         fields.push((
             name.0.clone(),
-            value.try_into().with_context(|| {
-                format!("bitflags value `{value}` is too large for `{name}` of `{resolvee_path}`")
+            value.try_into().map_err(|_| {
+                SemanticError::integer_conversion(
+                    value.to_string(),
+                    "usize",
+                    format!("bitflags value for `{name}` of `{resolvee_path}`"),
+                )
             })?,
         ));
 
@@ -123,7 +158,10 @@ pub fn build(
             match attribute {
                 grammar::Attribute::Ident(ident) if ident.as_str() == "default" => {
                     if default.is_some() {
-                        anyhow::bail!("bitflags {resolvee_path} has multiple default values");
+                        return Err(SemanticError::enum_error(
+                            resolvee_path.clone(),
+                            "bitflags has multiple default values",
+                        ));
                     }
                     default = Some(fields.len() - 1);
                 }
@@ -161,21 +199,38 @@ pub fn build(
     }
 
     if !defaultable && default.is_some() {
-        anyhow::bail!(
-            "bitflags `{resolvee_path}` has a default value set but is not marked as defaultable"
+        let mut error = SemanticError::enum_error(
+            resolvee_path.clone(),
+            "has a default value set but is not marked as defaultable",
         );
+        if let SemanticError::EnumError { context, .. } = &mut error {
+            *context = context.clone()
+                .with_help("Add the #[defaultable] attribute to the bitflags declaration")
+                .with_note("Only bitflags marked as defaultable can have default values");
+        }
+        return Err(error);
     }
 
     if defaultable && default.is_none() {
-        anyhow::bail!(
-            "bitflags `{resolvee_path}` is marked as defaultable but has no default value set"
+        let mut error = SemanticError::enum_error(
+            resolvee_path.clone(),
+            "is marked as defaultable but has no default value set",
         );
+        if let SemanticError::EnumError { context, .. } = &mut error {
+            *context = context.clone()
+                .with_help("Add the #[default] attribute to one of the bitflags values")
+                .with_note("Defaultable bitflags must have exactly one value marked with #[default]");
+        }
+        return Err(error);
     }
 
     Ok(Some(ItemStateResolved {
         size,
-        alignment: ty.alignment(&semantic.type_registry).with_context(|| {
-            format!("failed to get alignment for base type of bitflags `{resolvee_path}`")
+        alignment: ty.alignment(&semantic.type_registry).ok_or_else(|| {
+            SemanticError::type_resolution_failed(
+                format!("{:?}", ty),
+                format!("alignment for base type of bitflags `{resolvee_path}`"),
+            )
         })?,
         inner: BitflagsDefinition {
             type_: ty,

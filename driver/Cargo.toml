@@ -6,7 +6,6 @@ edition = "2024"
 [dependencies]
 pyxis = { path = "../", features = ["json"] }
 clap = { version = "4.5", features = ["derive"] }
-anyhow = { workspace = true }
 specta-typescript = { workspace = true }
 
 [[bin]]
