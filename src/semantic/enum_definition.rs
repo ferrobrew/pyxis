@@ -103,7 +103,7 @@ pub fn build(
             ..
         } = statement;
         let value = match expr {
-            Some(grammar::Expr::IntLiteral(value)) => *value,
+            Some(grammar::Expr::IntLiteral { value, .. }) => *value,
             Some(_) => {
                 return Err(SemanticError::enum_error(
                     resolvee_path.clone(),
@@ -150,7 +150,7 @@ pub fn build(
             },
             grammar::Attribute::Function(ident, items) => {
                 let exprs = grammar::AttributeItem::extract_exprs(items);
-                if let ("singleton", [grammar::Expr::IntLiteral(value)]) =
+                if let ("singleton", [grammar::Expr::IntLiteral { value, .. }]) =
                     (ident.as_str(), exprs.as_slice())
                 {
                     singleton = Some(*value as usize);

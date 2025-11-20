@@ -233,7 +233,7 @@ pub fn build(
         };
         let exprs = grammar::AttributeItem::extract_exprs(items);
         match (ident.as_str(), &exprs[..]) {
-            ("address", [grammar::Expr::IntLiteral(addr)]) => {
+            ("address", [grammar::Expr::IntLiteral { value, .. }]) => {
                 if is_vfunc {
                     return Err(SemanticError::attribute_not_supported(
                         "address",
@@ -242,9 +242,9 @@ pub fn build(
                 }
 
                 body = Some(FunctionBody::Address {
-                    address: (*addr).try_into().map_err(|_| {
+                    address: (*value).try_into().map_err(|_| {
                         SemanticError::integer_conversion(
-                            addr.to_string(),
+                            value.to_string(),
                             "usize",
                             format!("address attribute for function `{}`", function.name),
                         )
@@ -260,18 +260,16 @@ pub fn build(
                     ));
                 }
             }
-            ("calling_convention", [grammar::Expr::StringLiteral(cc)]) => {
-                calling_convention =
-                    Some(
-                        cc.parse()
-                            .map_err(|_| SemanticError::InvalidCallingConvention {
-                                convention: cc.clone(),
-                                function_name: function.name.0.clone(),
-                                span: None,
-                                filename: None,
-                                source: None,
-                            })?,
-                    );
+            ("calling_convention", [grammar::Expr::StringLiteral { value, .. }]) => {
+                calling_convention = Some(value.parse().map_err(|_| {
+                    SemanticError::InvalidCallingConvention {
+                        convention: value.clone(),
+                        function_name: function.name.0.clone(),
+                        span: None,
+                        filename: None,
+                        source: None,
+                    }
+                })?);
             }
             _ => {}
         }

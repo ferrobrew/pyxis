@@ -134,11 +134,18 @@ impl StripSpans for EnumDefinition {
     }
 }
 
+impl StripSpans for Expr {
+    fn strip_spans(&self) -> Self {
+        // Expr already doesn't contain spans, just clone it
+        self.clone()
+    }
+}
+
 impl StripSpans for EnumStatement {
     fn strip_spans(&self) -> Self {
         EnumStatement {
             name: self.name.clone(),
-            expr: self.expr.clone(),
+            expr: self.expr.as_ref().map(|e| e.strip_spans()),
             attributes: self.attributes.strip_spans(),
             doc_comments: self.doc_comments.clone(),
             inline_trailing_comments: Vec::new(), // Strip trailing comments
@@ -173,7 +180,7 @@ impl StripSpans for BitflagsStatement {
     fn strip_spans(&self) -> Self {
         BitflagsStatement {
             name: self.name.clone(),
-            expr: self.expr.clone(),
+            expr: self.expr.strip_spans(),
             attributes: self.attributes.strip_spans(),
             doc_comments: self.doc_comments.clone(),
             inline_trailing_comments: Vec::new(), // Strip trailing comments
@@ -225,8 +232,36 @@ impl StripSpans for ExternValue {
     }
 }
 
+impl StripSpans for Attribute {
+    fn strip_spans(&self) -> Self {
+        match self {
+            Attribute::Ident(i) => Attribute::Ident(i.clone()),
+            Attribute::Function(name, items) => Attribute::Function(
+                name.clone(),
+                items
+                    .iter()
+                    .map(|item| match item {
+                        AttributeItem::Expr(e) => AttributeItem::Expr(e.strip_spans()),
+                        AttributeItem::Comment(c) => AttributeItem::Comment(c.clone()),
+                    })
+                    .collect(),
+            ),
+            Attribute::Assign(name, items) => Attribute::Assign(
+                name.clone(),
+                items
+                    .iter()
+                    .map(|item| match item {
+                        AttributeItem::Expr(e) => AttributeItem::Expr(e.strip_spans()),
+                        AttributeItem::Comment(c) => AttributeItem::Comment(c.clone()),
+                    })
+                    .collect(),
+            ),
+        }
+    }
+}
+
 impl StripSpans for Attributes {
     fn strip_spans(&self) -> Self {
-        Attributes(self.0.clone())
+        Attributes(self.0.iter().map(|a| a.strip_spans()).collect())
     }
 }

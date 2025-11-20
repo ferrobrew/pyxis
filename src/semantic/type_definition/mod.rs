@@ -205,7 +205,7 @@ pub fn build(
             grammar::Attribute::Function(ident, items) => {
                 let exprs = grammar::AttributeItem::extract_exprs(items);
                 match (ident.as_str(), exprs.as_slice()) {
-                    ("size", [grammar::Expr::IntLiteral(value)]) => {
+                    ("size", [grammar::Expr::IntLiteral { value, .. }]) => {
                         target_size = Some((*value).try_into().map_err(|_| {
                             SemanticError::integer_conversion(
                                 value.to_string(),
@@ -214,7 +214,7 @@ pub fn build(
                             )
                         })?);
                     }
-                    ("min_size", [grammar::Expr::IntLiteral(value)]) => {
+                    ("min_size", [grammar::Expr::IntLiteral { value, .. }]) => {
                         min_size = Some((*value).try_into().map_err(|_| {
                             SemanticError::integer_conversion(
                                 value.to_string(),
@@ -223,7 +223,7 @@ pub fn build(
                             )
                         })?);
                     }
-                    ("singleton", [grammar::Expr::IntLiteral(value)]) => {
+                    ("singleton", [grammar::Expr::IntLiteral { value, .. }]) => {
                         singleton = Some((*value).try_into().map_err(|_| {
                             SemanticError::integer_conversion(
                                 value.to_string(),
@@ -232,7 +232,7 @@ pub fn build(
                             )
                         })?);
                     }
-                    ("align", [grammar::Expr::IntLiteral(value)]) => {
+                    ("align", [grammar::Expr::IntLiteral { value, .. }]) => {
                         align = Some((*value).try_into().map_err(|_| {
                             SemanticError::integer_conversion(
                                 value.to_string(),
@@ -292,12 +292,12 @@ pub fn build(
                         }
                         grammar::Attribute::Function(ident, items) => {
                             let exprs = grammar::AttributeItem::extract_exprs(items);
-                            if let ("address", [grammar::Expr::IntLiteral(addr)]) =
+                            if let ("address", [grammar::Expr::IntLiteral { value, .. }]) =
                                 (ident.as_str(), &exprs[..])
                             {
-                                address = Some((*addr).try_into().map_err(|_| {
+                                address = Some((*value).try_into().map_err(|_| {
                                     SemanticError::integer_conversion(
-                                        addr.to_string(),
+                                        value.to_string(),
                                         "usize",
                                         format!(
                                             "address attribute for field `{ident}` of type `{resolvee_path}`"
@@ -351,10 +351,10 @@ pub fn build(
                         continue;
                     };
                     let exprs = grammar::AttributeItem::extract_exprs(items);
-                    if let ("size", [grammar::Expr::IntLiteral(size_)]) =
+                    if let ("size", [grammar::Expr::IntLiteral { value, .. }]) =
                         (ident.as_str(), exprs.as_slice())
                     {
-                        size = Some(*size_ as usize);
+                        size = Some(*value as usize);
                     }
                 }
 

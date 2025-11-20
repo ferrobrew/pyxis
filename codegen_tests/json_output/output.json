@@ -3071,7 +3071,7 @@
       "backends": {}
     },
     "doc_comments": {
-      "doc": " This is a module doc comment\n\n The best of its kind",
+      "doc": null,
       "items": [
         "doc_comments::TestType",
         "doc_comments::TestTypeVftable"

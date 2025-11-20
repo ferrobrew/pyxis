@@ -103,10 +103,10 @@ impl SemanticState {
                         continue;
                     };
                     let exprs = grammar::AttributeItem::extract_exprs(items);
-                    if let ("address", [grammar::Expr::IntLiteral(addr)]) =
+                    if let ("address", [grammar::Expr::IntLiteral { value, .. }]) =
                         (ident.as_str(), &exprs[..])
                     {
-                        address = Some(*addr as usize);
+                        address = Some(*value as usize);
                     }
                 }
 
@@ -171,19 +171,19 @@ impl SemanticState {
                 };
                 let exprs = grammar::AttributeItem::extract_exprs(items);
                 match (ident.as_str(), &exprs[..]) {
-                    ("size", [grammar::Expr::IntLiteral(size_)]) => {
-                        size = Some((*size_).try_into().map_err(|_| {
+                    ("size", [grammar::Expr::IntLiteral { value, .. }]) => {
+                        size = Some((*value).try_into().map_err(|_| {
                             SemanticError::integer_conversion(
-                                size_.to_string(),
+                                value.to_string(),
                                 "usize",
                                 format!("size attribute for extern type `{extern_path}` in module `{path}`"),
                             )
                         })?);
                     }
-                    ("align", [grammar::Expr::IntLiteral(alignment_)]) => {
-                        alignment = Some((*alignment_).try_into().map_err(|_| {
+                    ("align", [grammar::Expr::IntLiteral { value, .. }]) => {
+                        alignment = Some((*value).try_into().map_err(|_| {
                             SemanticError::integer_conversion(
-                                alignment_.to_string(),
+                                value.to_string(),
                                 "usize",
                                 format!("align attribute for extern type `{extern_path}` in module `{path}`"),
                             )

@@ -1,5 +1,9 @@
 use crate::{
-    grammar::{ItemDefinitionInner, ModuleItem, TypeDefItem, Visibility, test_aliases::*},
+    grammar::{
+        AttributeItem, IntFormat, ItemDefinitionInner, ModuleItem, StringFormat, TypeDefItem,
+        Visibility,
+        test_aliases::{int_literal, int_literal_with_format, *},
+    },
     parser::{ParseError, parse_str, strip_spans::StripSpans},
     tokenizer::TokenKind,
 };
@@ -144,7 +148,16 @@ fn can_parse_spawn_manager() {
                 TS::field((V::Public, "character_types"), T::unknown(0x74)),
                 TS::field((V::Public, "vehicle_types"), T::ident("VehicleTypes")),
             ])
-            .with_attributes([A::size(0x1754), A::singleton(0x1_191_918)]),
+            .with_attributes([
+                A::Function(
+                    "size".into(),
+                    vec![AttributeItem::Expr(int_literal_with_format(
+                        0x1754,
+                        IntFormat::Hex,
+                    ))],
+                ),
+                A::singleton(0x1_191_918),
+            ]),
         )])
         .with_impls([FB::new(
             "SpawnManager",
@@ -342,10 +355,10 @@ fn can_parse_enum() {
         ED::new(
             T::ident("u32"),
             [
-                ES::field_with_expr("Item0", E::IntLiteral(-5)),
+                ES::field_with_expr("Item0", int_literal(-5)),
                 ES::field("Item1").with_attributes([A::default()]),
                 ES::field("Item2"),
-                ES::field_with_expr("Item3", E::IntLiteral(10)),
+                ES::field_with_expr("Item3", int_literal(10)),
                 ES::field("Item4"),
             ],
             [A::singleton(0x1234)],
@@ -373,10 +386,11 @@ fn can_parse_bitflags() {
         BFD::new(
             T::ident("u32"),
             [
-                BFS::field("Item1", E::IntLiteral(0b0001)).with_attributes([A::default()]),
-                BFS::field("Item2", E::IntLiteral(0b0010)),
-                BFS::field("Item3", E::IntLiteral(0b0100)),
-                BFS::field("Item4", E::IntLiteral(0b1000)),
+                BFS::field("Item1", int_literal_with_format(1, IntFormat::Binary))
+                    .with_attributes([A::default()]),
+                BFS::field("Item2", int_literal_with_format(2, IntFormat::Binary)),
+                BFS::field("Item3", int_literal_with_format(4, IntFormat::Binary)),
+                BFS::field("Item4", int_literal_with_format(8, IntFormat::Binary)),
             ],
             [A::singleton(0x1234)],
         ),
@@ -432,35 +446,35 @@ backend rust epilogue r#"
 
     let ast = M::new().with_backends([
         B::new("rust")
-            .with_prologue(
+            .with_prologue_format(
                 r#"
         use std::ffi::CString;
         use std::os::raw::c_char;
-    "#
-                .trim(),
+    "#,
+                StringFormat::Raw,
             )
-            .with_epilogue(
+            .with_epilogue_format(
                 r#"
         fn main() {
             println!("Hello, world!");
         }
-    "#
-                .trim(),
+    "#,
+                StringFormat::Raw,
             ),
-        B::new("rust").with_prologue(
+        B::new("rust").with_prologue_format(
             r#"
     use std::ffi::CString;
     use std::os::raw::c_char;
-"#
-            .trim(),
+"#,
+            StringFormat::Raw,
         ),
-        B::new("rust").with_epilogue(
+        B::new("rust").with_epilogue_format(
             r#"
     fn main() {
         println!("Hello, world!");
     }
-"#
-            .trim(),
+"#,
+            StringFormat::Raw,
         ),
     ]);
 
@@ -476,9 +490,8 @@ backend rust prologue "
 ";
     "#;
 
-    let ast = M::new()
-        .with_backends([B::new("rust")
-            .with_prologue("use crate::shared_ptr::*;\n    use std::mem::ManuallyDrop;")]);
+    let ast = M::new().with_backends([B::new("rust")
+        .with_prologue("\n    use crate::shared_ptr::*;\n    use std::mem::ManuallyDrop;\n")]);
 
     assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
 }
@@ -603,7 +616,17 @@ fn can_parse_multiple_attributes_with_underscored_literals() {
             TS::field((V::Public, "in_focus"), T::ident("bool"))
                 .with_attributes([A::address(0x38)]),
         ])
-        .with_attributes([A::singleton(0x118FB64), A::size(0x40), A::align(16)]),
+        .with_attributes([
+            A::singleton(0x118FB64),
+            A::Function(
+                "size".into(),
+                vec![AttributeItem::Expr(int_literal_with_format(
+                    0x40,
+                    IntFormat::Hex,
+                ))],
+            ),
+            A::align(16),
+        ]),
     )]);
 
     assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
@@ -634,7 +657,13 @@ fn can_parse_pfx_instance_with_vftable_and_impl() {
                     T::ident("SharedPtr<PfxInstanceInterface>"),
                 ),
             ])
-            .with_attributes([A::size(0x10)]),
+            .with_attributes([A::Function(
+                "size".into(),
+                vec![AttributeItem::Expr(int_literal_with_format(
+                    0x10,
+                    IntFormat::Hex,
+                ))],
+            )]),
         )
         .with_doc_comments(vec![" `CPfxInstance` in original game".to_string()])])
         .with_impls([FB::new(
@@ -676,7 +705,13 @@ fn can_parse_raycast_result_with_pointers_and_arrays() {
             TS::field((V::Private, "shape"), T::ident("u32").mut_pointer()),
             TS::field((V::Private, "unknown"), T::array(T::ident("u32"), 4)),
         ])
-        .with_attributes([A::size(0x2C)]),
+        .with_attributes([A::Function(
+            "size".into(),
+            vec![AttributeItem::Expr(int_literal_with_format(
+                0x2C,
+                IntFormat::Hex,
+            ))],
+        )]),
     )]);
 
     assert_eq!(parse_str(text).unwrap().strip_spans(), ast);

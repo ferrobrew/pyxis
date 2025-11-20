@@ -721,11 +721,53 @@ impl Parser {
                     }),
                 }
             }
-            TokenKind::DocOuter(_)
-            | TokenKind::Pub
-            | TokenKind::Type
-            | TokenKind::Enum
-            | TokenKind::Bitflags => self.parse_item_definition().map(ModuleItem::Definition),
+            TokenKind::DocOuter(_) => {
+                // Peek ahead to see what comes after doc comments
+                let mut pos = self.pos;
+                while matches!(
+                    self.tokens.get(pos).map(|t| &t.kind),
+                    Some(TokenKind::DocOuter(_))
+                ) {
+                    pos += 1;
+                }
+
+                // Check if this is an extern type
+                if matches!(self.tokens.get(pos).map(|t| &t.kind), Some(TokenKind::Hash)) {
+                    // Skip attributes
+                    while matches!(self.tokens[pos].kind, TokenKind::Hash) {
+                        pos += 1; // skip #
+                        if matches!(self.tokens[pos].kind, TokenKind::LBracket) {
+                            pos += 1; // skip [
+                            // Skip until ]
+                            let mut depth = 1;
+                            while depth > 0 && pos < self.tokens.len() {
+                                match &self.tokens[pos].kind {
+                                    TokenKind::LBracket => depth += 1,
+                                    TokenKind::RBracket => depth -= 1,
+                                    _ => {}
+                                }
+                                pos += 1;
+                            }
+                        }
+                    }
+                }
+
+                // Now check what comes after doc comments (and possibly attributes)
+                if matches!(
+                    self.tokens.get(pos).map(|t| &t.kind),
+                    Some(TokenKind::Extern)
+                ) && matches!(
+                    self.tokens.get(pos + 1).map(|t| &t.kind),
+                    Some(TokenKind::Type)
+                ) {
+                    self.parse_extern_type()
+                } else {
+                    self.parse_item_definition().map(ModuleItem::Definition)
+                }
+            }
+            TokenKind::Pub | TokenKind::Type | TokenKind::Enum | TokenKind::Bitflags => {
+                self.parse_item_definition().map(ModuleItem::Definition)
+            }
             TokenKind::Impl => self.parse_impl_block().map(ModuleItem::Impl),
             TokenKind::Fn => {
                 // Freestanding function with attributes
@@ -851,7 +893,9 @@ impl Parser {
         let (name, _) = self.expect_ident()?;
 
         let mut prologue = None;
+        let mut prologue_format = StringFormat::Regular;
         let mut epilogue = None;
+        let mut epilogue_format = StringFormat::Regular;
 
         // Check if we have braces or direct prologue/epilogue
         if matches!(self.peek(), TokenKind::LBrace) {
@@ -862,15 +906,35 @@ impl Parser {
                 match self.peek() {
                     TokenKind::Prologue => {
                         self.advance();
-                        let string = self.parse_string_literal()?.trim().to_string();
+                        let expr = self.parse_expr()?;
+                        if let Expr::StringLiteral { value, format } = expr {
+                            prologue = Some(value);
+                            prologue_format = format;
+                        } else {
+                            return Err(ParseError::ExpectedStringLiteral {
+                                found: self.peek().clone(),
+                                location: self.current().span.start,
+                                filename: self.filename.clone().into(),
+                                source: self.source.clone().into(),
+                            });
+                        }
                         self.expect(TokenKind::Semi)?;
-                        prologue = Some(string);
                     }
                     TokenKind::Epilogue => {
                         self.advance();
-                        let string = self.parse_string_literal()?.trim().to_string();
+                        let expr = self.parse_expr()?;
+                        if let Expr::StringLiteral { value, format } = expr {
+                            epilogue = Some(value);
+                            epilogue_format = format;
+                        } else {
+                            return Err(ParseError::ExpectedStringLiteral {
+                                found: self.peek().clone(),
+                                location: self.current().span.start,
+                                filename: self.filename.clone().into(),
+                                source: self.source.clone().into(),
+                            });
+                        }
                         self.expect(TokenKind::Semi)?;
-                        epilogue = Some(string);
                     }
                     _ => {
                         return Err(ParseError::ExpectedPrologueOrEpilogue {
@@ -889,15 +953,35 @@ impl Parser {
             match self.peek() {
                 TokenKind::Prologue => {
                     self.advance();
-                    let string = self.parse_string_literal()?.trim().to_string();
+                    let expr = self.parse_expr()?;
+                    if let Expr::StringLiteral { value, format } = expr {
+                        prologue = Some(value);
+                        prologue_format = format;
+                    } else {
+                        return Err(ParseError::ExpectedStringLiteral {
+                            found: self.peek().clone(),
+                            location: self.current().span.start,
+                            filename: self.filename.clone().into(),
+                            source: self.source.clone().into(),
+                        });
+                    }
                     self.expect(TokenKind::Semi)?;
-                    prologue = Some(string);
                 }
                 TokenKind::Epilogue => {
                     self.advance();
-                    let string = self.parse_string_literal()?.trim().to_string();
+                    let expr = self.parse_expr()?;
+                    if let Expr::StringLiteral { value, format } = expr {
+                        epilogue = Some(value);
+                        epilogue_format = format;
+                    } else {
+                        return Err(ParseError::ExpectedStringLiteral {
+                            found: self.peek().clone(),
+                            location: self.current().span.start,
+                            filename: self.filename.clone().into(),
+                            source: self.source.clone().into(),
+                        });
+                    }
                     self.expect(TokenKind::Semi)?;
-                    epilogue = Some(string);
                 }
                 _ => {
                     return Err(ParseError::ExpectedBackendContent {
@@ -913,7 +997,9 @@ impl Parser {
         Ok(Backend {
             name,
             prologue,
+            prologue_format,
             epilogue,
+            epilogue_format,
         })
     }
 
@@ -1771,12 +1857,32 @@ impl Parser {
     fn parse_expr(&mut self) -> Result<Expr, ParseError> {
         match self.peek() {
             TokenKind::IntLiteral(_) => {
+                let token = self.current().clone();
                 let value = self.parse_int_literal()?;
-                Ok(Expr::IntLiteral(value))
+                // Detect format from the original token text
+                let format = if token.span.text.starts_with("0x")
+                    || token.span.text.starts_with("-0x")
+                {
+                    IntFormat::Hex
+                } else if token.span.text.starts_with("0b") || token.span.text.starts_with("-0b") {
+                    IntFormat::Binary
+                } else if token.span.text.starts_with("0o") || token.span.text.starts_with("-0o") {
+                    IntFormat::Octal
+                } else {
+                    IntFormat::Decimal
+                };
+                Ok(Expr::IntLiteral { value, format })
             }
             TokenKind::StringLiteral(_) => {
+                let token = self.current().clone();
                 let value = self.parse_string_literal()?;
-                Ok(Expr::StringLiteral(value))
+                // Detect if this was a raw string from the original token text
+                let format = if token.span.text.starts_with('r') {
+                    StringFormat::Raw
+                } else {
+                    StringFormat::Regular
+                };
+                Ok(Expr::StringLiteral { value, format })
             }
             TokenKind::Ident(_) => {
                 let (ident, _) = self.expect_ident()?;
