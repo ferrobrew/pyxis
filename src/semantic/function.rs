@@ -7,6 +7,7 @@ use crate::{
         type_registry::TypeRegistry,
         types::{Type, Visibility},
     },
+    span::ErrorContext,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -268,9 +269,7 @@ pub fn build(
                             .map_err(|_| SemanticError::InvalidCallingConvention {
                                 convention: value.clone(),
                                 function_name: function.name.0.clone(),
-                                span: None,
-                                filename: None,
-                                source: None,
+                                context: ErrorContext::new(),
                             })?,
                     );
             }
@@ -281,9 +280,7 @@ pub fn build(
     if !is_vfunc && body.is_none() {
         return Err(SemanticError::FunctionMissingImplementation {
             function_name: function.name.0.clone(),
-            span: None,
-            filename: None,
-            source: None,
+            context: ErrorContext::new(),
         });
     }
 

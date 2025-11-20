@@ -98,3 +98,35 @@ impl<T: std::fmt::Display> std::fmt::Display for Spanned<T> {
         write!(f, "{}", self.value)
     }
 }
+
+/// Context information for error reporting (filename and span)
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ErrorContext {
+    pub filename: Option<Box<str>>,
+    pub span: Option<Span>,
+}
+
+impl ErrorContext {
+    pub fn new() -> Self {
+        Self {
+            filename: None,
+            span: None,
+        }
+    }
+
+    pub fn with_filename(mut self, filename: impl Into<String>) -> Self {
+        self.filename = Some(filename.into().into_boxed_str());
+        self
+    }
+
+    pub fn with_span(mut self, span: Span) -> Self {
+        self.span = Some(span);
+        self
+    }
+}
+
+impl Default for ErrorContext {
+    fn default() -> Self {
+        Self::new()
+    }
+}

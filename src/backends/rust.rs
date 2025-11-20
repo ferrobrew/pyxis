@@ -11,6 +11,7 @@ use crate::{
             TypeDefinition, Visibility,
         },
     },
+    span::ErrorContext,
 };
 
 use quote::{ToTokens, quote};
@@ -147,12 +148,17 @@ fn build_item(
     definition: &ItemDefinition,
 ) -> Result<proc_macro2::TokenStream> {
     let resolved = definition.resolved().ok_or_else(|| {
+        let mut context = ErrorContext::new();
+        if let Some(filename) = &definition.filename {
+            context = context.with_filename(filename.as_ref());
+        }
+        if let Some(span) = &definition.span {
+            context = context.with_span(span.clone());
+        }
         BackendError::TypeCodeGenFailed {
             type_path: definition.path.clone(),
             reason: "type was not resolved".to_string(),
-            span: definition.span.clone(),
-            filename: definition.filename.clone(),
-            source: None, // Backend doesn't have access to source cache
+            context,
         }
     })?;
 
@@ -187,9 +193,7 @@ fn build_type(
     let name = path.last().ok_or_else(|| BackendError::TypeCodeGenFailed {
         type_path: path.clone(),
         reason: "failed to get last component of item path".to_string(),
-        span: None,
-        filename: None,
-        source: None,
+        context: ErrorContext::new(),
     })?;
 
     let TypeDefinition {
@@ -223,9 +227,7 @@ fn build_type(
                     type_path: path.clone(),
                     field_name: "unnamed".to_string(),
                     reason: "field name not present".to_string(),
-                    span: None,
-                    filename: None,
-                    source: None,
+                    context: ErrorContext::new(),
                 })?;
             let field_ident = str_to_ident(field_name);
             let visibility = visibility_to_tokens(*visibility);
@@ -453,9 +455,7 @@ fn build_enum(
     let name = path.last().ok_or_else(|| BackendError::TypeCodeGenFailed {
         type_path: path.clone(),
         reason: "failed to get last component of item path".to_string(),
-        span: None,
-        filename: None,
-        source: None,
+        context: ErrorContext::new(),
     })?;
 
     let EnumDefinition {
@@ -567,9 +567,7 @@ fn build_bitflags(
     let name = path.last().ok_or_else(|| BackendError::TypeCodeGenFailed {
         type_path: path.clone(),
         reason: "failed to get last component of item path".to_string(),
-        span: None,
-        filename: None,
-        source: None,
+        context: ErrorContext::new(),
     })?;
 
     let BitflagsDefinition {

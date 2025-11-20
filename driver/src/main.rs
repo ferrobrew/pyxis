@@ -69,8 +69,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             out_dir,
         } => {
             std::fs::create_dir_all(&out_dir)?;
-            pyxis::build(&in_dir, &out_dir, backend.into())?;
-            Ok(())
+            match pyxis::build(&in_dir, &out_dir, backend.into()) {
+                Ok(_) => Ok(()),
+                Err((err, mut source_cache)) => {
+                    // Format error with ariadne before displaying
+                    let formatted = err.format_with_ariadne(&mut source_cache);
+                    eprintln!("{}", formatted);
+                    Err(err.into())
+                }
+            }
         }
         Command::AstDump { file, pretty } => {
             let content = std::fs::read_to_string(&file)?;

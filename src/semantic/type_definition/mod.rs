@@ -9,7 +9,7 @@ use crate::{
         type_registry::TypeRegistry,
         types::{Function, FunctionBody, ItemState, ItemStateResolved, Type, Visibility},
     },
-    span::Span,
+    span::{ErrorContext, Span},
     util,
 };
 
@@ -338,9 +338,7 @@ pub fn build(
                 if idx != 0 {
                     return Err(SemanticError::VftableMustBeFirst {
                         item_path: resolvee_path.clone(),
-                        span: None,
-                        filename: None,
-                        source: None,
+                        context: ErrorContext::new(),
                     });
                 }
 
@@ -584,20 +582,9 @@ pub fn build(
                         ),
                     );
 
-                    // Use the field's specific span if available
-                    if let Some(span) = &region.span {
-                        if let Some(item_def) = semantic.type_registry.get(resolvee_path) {
-                            if let Some(ref filename) = item_def.filename {
-                                if let Some(source) = semantic.source_cache.get(filename.as_ref()) {
-                                    error = error.with_span_and_source(
-                                        span.clone(),
-                                        filename.as_ref(),
-                                        source,
-                                    );
-                                }
-                            }
-                        }
-                    } else {
+                    // Note: Span and source enhancement removed as part of refactoring
+                    // to eliminate source fields from error types
+                    if false {
                         error = semantic.enhance_error(error, resolvee_path);
                     }
 
@@ -705,9 +692,7 @@ fn resolve_regions(
                     region_name: existing_region,
                     address: offset,
                     existing_end: resolved.last_address,
-                    span: None,
-                    filename: None,
-                    source: None,
+                    context: ErrorContext::new(),
                 });
             };
             let padding_region = Region::unnamed_field(semantic.type_registry.padding_type(size));

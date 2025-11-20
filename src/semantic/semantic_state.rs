@@ -64,6 +64,11 @@ impl SemanticState {
         semantic_state
     }
 
+    /// Get a reference to the source cache
+    pub fn source_cache(&self) -> &BTreeMap<String, String> {
+        &self.source_cache
+    }
+
     pub fn add_file(&mut self, base_path: &Path, path: &Path) -> Result<()> {
         let source = std::fs::read_to_string(path).map_err(|e| SemanticError::Io {
             message: e.to_string(),
@@ -81,14 +86,9 @@ impl SemanticState {
     }
 
     /// Attach span and source information to a semantic error if available
-    pub fn enhance_error(&self, error: SemanticError, item_path: &ItemPath) -> SemanticError {
-        if let Some(item_def) = self.type_registry.get(item_path) {
-            if let (Some(span), Some(filename)) = (&item_def.span, &item_def.filename) {
-                if let Some(source) = self.source_cache.get(filename.as_ref()) {
-                    return error.with_span_and_source(span.clone(), filename.as_ref(), source);
-                }
-            }
-        }
+    pub fn enhance_error(&self, error: SemanticError, _item_path: &ItemPath) -> SemanticError {
+        // Note: with_span_and_source method was removed as part of refactoring
+        // to eliminate source fields from error types
         error
     }
 
@@ -314,6 +314,7 @@ impl SemanticState {
         Ok(ResolvedSemanticState {
             modules: self.modules,
             type_registry: self.type_registry,
+            source_cache: self.source_cache,
         })
     }
 }
@@ -328,6 +329,7 @@ impl SemanticState {
 pub struct ResolvedSemanticState {
     type_registry: TypeRegistry,
     modules: BTreeMap<ItemPath, Module>,
+    source_cache: BTreeMap<String, String>,
 }
 
 impl ResolvedSemanticState {
@@ -337,5 +339,9 @@ impl ResolvedSemanticState {
 
     pub fn modules(&self) -> &BTreeMap<ItemPath, Module> {
         &self.modules
+    }
+
+    pub fn source_cache(&self) -> &BTreeMap<String, String> {
+        &self.source_cache
     }
 }

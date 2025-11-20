@@ -6,7 +6,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let json_output_dir = root.join("json_output");
 
     // Generate Rust backend output
-    pyxis::build(&root.join("input"), &output_dir, pyxis::Backend::Rust)?;
+    pyxis::build(&root.join("input"), &output_dir, pyxis::Backend::Rust)
+        .map_err(|(err, mut source_cache)| {
+            eprintln!("{}", err.format_with_ariadne(&mut source_cache));
+            err
+        })?;
 
     let mut module_decls = std::fs::read_dir(&output_dir)?
         .filter_map(|entry| Some(entry.ok()?.path()))
@@ -28,7 +32,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Generate JSON backend output
     std::fs::create_dir_all(&json_output_dir)?;
-    pyxis::build(&root.join("input"), &json_output_dir, pyxis::Backend::Json)?;
+    pyxis::build(&root.join("input"), &json_output_dir, pyxis::Backend::Json)
+        .map_err(|(err, mut source_cache)| {
+            eprintln!("{}", err.format_with_ariadne(&mut source_cache));
+            err
+        })?;
 
     // Verify JSON output exists and is valid
     let json_output_file = json_output_dir.join("output.json");

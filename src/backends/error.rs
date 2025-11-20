@@ -1,7 +1,7 @@
 use std::fmt;
 
-use crate::{grammar::ItemPath, semantic::SemanticError, span::Span};
 use ariadne::{Color, Label, Report, ReportKind, Source};
+use crate::{grammar::ItemPath, semantic::SemanticError, source_store::SourceStore, span::{ErrorContext, Span}};
 
 /// Backend code generation errors
 #[derive(Debug)]
@@ -21,30 +21,33 @@ pub enum BackendError {
     TypeCodeGenFailed {
         type_path: ItemPath,
         reason: String,
-        span: Option<Span>,
-        filename: Option<Box<str>>,
-        source: Option<Box<str>>,
+        context: ErrorContext,
     },
     /// Failed to generate code for a specific field
     FieldCodeGenFailed {
         type_path: ItemPath,
         field_name: String,
         reason: String,
-        span: Option<Span>,
-        filename: Option<Box<str>>,
-        source: Option<Box<str>>,
+        context: ErrorContext,
     },
     /// Failed to generate vftable code
     VftableCodeGenFailed {
         type_path: ItemPath,
         reason: String,
-        span: Option<Span>,
-        filename: Option<Box<str>>,
-        source: Option<Box<str>>,
+        context: ErrorContext,
     },
 }
 
 impl BackendError {
+    /// Format location prefix for error messages
+    fn format_location(context: &ErrorContext) -> String {
+        match (&context.filename, &context.span) {
+            (Some(f), Some(s)) => format!("Error at {}:{}:{}: ", f, s.start.line, s.start.column),
+            (Some(f), None) => format!("Error in {}: ", f),
+            _ => String::new(),
+        }
+    }
+
     fn span_to_offset(source: &str, span: &Span) -> usize {
         source
             .lines()
@@ -79,6 +82,90 @@ impl BackendError {
             first_line_len + middle_lines_len + last_line_len
         }
     }
+
+    /// Format the error using ariadne with the provided source store
+    pub fn format_with_ariadne(&self, source_store: &mut dyn SourceStore) -> String {
+        match self {
+            // For semantic errors, delegate to SemanticError's format_with_ariadne
+            BackendError::Semantic(err) => err.format_with_ariadne(source_store),
+
+            // For backend-specific errors with filename and span
+            BackendError::TypeCodeGenFailed { type_path, reason, context } => {
+                if let (Some(filename), Some(span)) = (&context.filename, &context.span) {
+                    if let Some(source) = source_store.get(filename.as_ref()) {
+                        let offset = Self::span_to_offset(source, span);
+                        let length = Self::span_length(source, span);
+
+                        let report = Report::build(ReportKind::Error, filename.as_ref(), offset)
+                            .with_message(format!("Failed to generate code for type `{}`: {}", type_path, reason))
+                            .with_label(
+                                Label::new((filename.as_ref(), offset..offset + length))
+                                    .with_message("error occurred here")
+                                    .with_color(Color::Red),
+                            )
+                            .finish();
+
+                        let mut buffer = Vec::new();
+                        if report.write((filename.as_ref(), Source::from(source)), &mut buffer).is_ok() {
+                            return String::from_utf8_lossy(&buffer).to_string();
+                        }
+                    }
+                }
+                self.to_string()
+            }
+
+            BackendError::FieldCodeGenFailed { type_path, field_name, reason, context } => {
+                if let (Some(filename), Some(span)) = (&context.filename, &context.span) {
+                    if let Some(source) = source_store.get(filename.as_ref()) {
+                        let offset = Self::span_to_offset(source, span);
+                        let length = Self::span_length(source, span);
+
+                        let report = Report::build(ReportKind::Error, filename.as_ref(), offset)
+                            .with_message(format!("Failed to generate code for field `{}` of type `{}`: {}", field_name, type_path, reason))
+                            .with_label(
+                                Label::new((filename.as_ref(), offset..offset + length))
+                                    .with_message("error occurred here")
+                                    .with_color(Color::Red),
+                            )
+                            .finish();
+
+                        let mut buffer = Vec::new();
+                        if report.write((filename.as_ref(), Source::from(source)), &mut buffer).is_ok() {
+                            return String::from_utf8_lossy(&buffer).to_string();
+                        }
+                    }
+                }
+                self.to_string()
+            }
+
+            BackendError::VftableCodeGenFailed { type_path, reason, context } => {
+                if let (Some(filename), Some(span)) = (&context.filename, &context.span) {
+                    if let Some(source) = source_store.get(filename.as_ref()) {
+                        let offset = Self::span_to_offset(source, span);
+                        let length = Self::span_length(source, span);
+
+                        let report = Report::build(ReportKind::Error, filename.as_ref(), offset)
+                            .with_message(format!("Failed to generate vftable code for type `{}`: {}", type_path, reason))
+                            .with_label(
+                                Label::new((filename.as_ref(), offset..offset + length))
+                                    .with_message("error occurred here")
+                                    .with_color(Color::Red),
+                            )
+                            .finish();
+
+                        let mut buffer = Vec::new();
+                        if report.write((filename.as_ref(), Source::from(source)), &mut buffer).is_ok() {
+                            return String::from_utf8_lossy(&buffer).to_string();
+                        }
+                    }
+                }
+                self.to_string()
+            }
+
+            // For other errors without span/filename, fall back to Display
+            _ => self.to_string(),
+        }
+    }
 }
 
 impl fmt::Display for BackendError {
@@ -93,117 +180,39 @@ impl fmt::Display for BackendError {
             BackendError::TypeCodeGenFailed {
                 type_path,
                 reason,
-                span,
-                filename,
-                source,
+                context,
             } => {
-                if let (Some(span), Some(filename), Some(source)) = (span, filename, source) {
-                    let offset = Self::span_to_offset(source, span);
-                    let length = Self::span_length(source, span);
-
-                    let report = Report::build(ReportKind::Error, filename.as_ref(), offset)
-                        .with_message(format!("Failed to generate code for type `{}`", type_path))
-                        .with_label(
-                            Label::new((filename.as_ref(), offset..offset + length.max(1)))
-                                .with_message(reason)
-                                .with_color(Color::Red),
-                        )
-                        .finish();
-
-                    let mut buffer = Vec::new();
-                    report
-                        .write(
-                            (filename.as_ref(), Source::from(source.as_ref())),
-                            &mut buffer,
-                        )
-                        .map_err(|_| fmt::Error)?;
-                    write!(f, "{}", String::from_utf8_lossy(&buffer))
-                } else {
-                    write!(
-                        f,
-                        "Failed to generate code for type `{}`: {}",
-                        type_path, reason
-                    )
-                }
+                write!(
+                    f,
+                    "{}Failed to generate code for type `{}`: {}",
+                    Self::format_location(context),
+                    type_path, reason
+                )
             }
             BackendError::FieldCodeGenFailed {
                 type_path,
                 field_name,
                 reason,
-                span,
-                filename,
-                source,
+                context,
             } => {
-                if let (Some(span), Some(filename), Some(source)) = (span, filename, source) {
-                    let offset = Self::span_to_offset(source, span);
-                    let length = Self::span_length(source, span);
-
-                    let report = Report::build(ReportKind::Error, filename.as_ref(), offset)
-                        .with_message(format!(
-                            "Failed to generate code for field `{}` of type `{}`",
-                            field_name, type_path
-                        ))
-                        .with_label(
-                            Label::new((filename.as_ref(), offset..offset + length.max(1)))
-                                .with_message(reason)
-                                .with_color(Color::Red),
-                        )
-                        .finish();
-
-                    let mut buffer = Vec::new();
-                    report
-                        .write(
-                            (filename.as_ref(), Source::from(source.as_ref())),
-                            &mut buffer,
-                        )
-                        .map_err(|_| fmt::Error)?;
-                    write!(f, "{}", String::from_utf8_lossy(&buffer))
-                } else {
-                    write!(
-                        f,
-                        "Failed to generate code for field `{}` of type `{}`: {}",
-                        field_name, type_path, reason
-                    )
-                }
+                write!(
+                    f,
+                    "{}Failed to generate code for field `{}` of type `{}`: {}",
+                    Self::format_location(context),
+                    field_name, type_path, reason
+                )
             }
             BackendError::VftableCodeGenFailed {
                 type_path,
                 reason,
-                span,
-                filename,
-                source,
+                context,
             } => {
-                if let (Some(span), Some(filename), Some(source)) = (span, filename, source) {
-                    let offset = Self::span_to_offset(source, span);
-                    let length = Self::span_length(source, span);
-
-                    let report = Report::build(ReportKind::Error, filename.as_ref(), offset)
-                        .with_message(format!(
-                            "Failed to generate vftable code for type `{}`",
-                            type_path
-                        ))
-                        .with_label(
-                            Label::new((filename.as_ref(), offset..offset + length.max(1)))
-                                .with_message(reason)
-                                .with_color(Color::Red),
-                        )
-                        .finish();
-
-                    let mut buffer = Vec::new();
-                    report
-                        .write(
-                            (filename.as_ref(), Source::from(source.as_ref())),
-                            &mut buffer,
-                        )
-                        .map_err(|_| fmt::Error)?;
-                    write!(f, "{}", String::from_utf8_lossy(&buffer))
-                } else {
-                    write!(
-                        f,
-                        "Failed to generate vftable code for type `{}`: {}",
-                        type_path, reason
-                    )
-                }
+                write!(
+                    f,
+                    "{}Failed to generate vftable code for type `{}`: {}",
+                    Self::format_location(context),
+                    type_path, reason
+                )
             }
         }
     }
