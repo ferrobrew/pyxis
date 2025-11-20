@@ -171,7 +171,7 @@ impl Lexer {
                 let loc = self.current_location();
                 tokens.push(Token::new(
                     TokenKind::Eof,
-                    Span::new(loc, loc, String::new()),
+                    Span::new(loc, loc),
                 ));
                 break;
             }
@@ -283,15 +283,13 @@ impl Lexer {
                 if self.peek() == Some(':') {
                     self.advance();
                     let end = self.current_location();
-                    let text = self.input[start_pos..self.pos].to_string();
                     Ok(Token::new(
                         TokenKind::ColonColon,
-                        Span::new(start, end, text),
+                        Span::new(start, end),
                     ))
                 } else {
                     let end = self.current_location();
-                    let text = self.input[start_pos..self.pos].to_string();
-                    Ok(Token::new(TokenKind::Colon, Span::new(start, end, text)))
+                    Ok(Token::new(TokenKind::Colon, Span::new(start, end)))
                 }
             }
             '-' => {
@@ -299,8 +297,7 @@ impl Lexer {
                 if self.peek() == Some('>') {
                     self.advance();
                     let end = self.current_location();
-                    let text = self.input[start_pos..self.pos].to_string();
-                    Ok(Token::new(TokenKind::Arrow, Span::new(start, end, text)))
+                    Ok(Token::new(TokenKind::Arrow, Span::new(start, end)))
                 } else {
                     // Could be negative number
                     if let Some(ch) = self.peek()
@@ -314,92 +311,77 @@ impl Lexer {
             '&' => {
                 self.advance();
                 let end = self.current_location();
-                let text = self.input[start_pos..self.pos].to_string();
-                Ok(Token::new(TokenKind::Amp, Span::new(start, end, text)))
+                Ok(Token::new(TokenKind::Amp, Span::new(start, end)))
             }
             '*' => {
                 self.advance();
                 let end = self.current_location();
-                let text = self.input[start_pos..self.pos].to_string();
-                Ok(Token::new(TokenKind::Star, Span::new(start, end, text)))
+                Ok(Token::new(TokenKind::Star, Span::new(start, end)))
             }
             '[' => {
                 self.advance();
                 let end = self.current_location();
-                let text = self.input[start_pos..self.pos].to_string();
-                Ok(Token::new(TokenKind::LBracket, Span::new(start, end, text)))
+                Ok(Token::new(TokenKind::LBracket, Span::new(start, end)))
             }
             ']' => {
                 self.advance();
                 let end = self.current_location();
-                let text = self.input[start_pos..self.pos].to_string();
-                Ok(Token::new(TokenKind::RBracket, Span::new(start, end, text)))
+                Ok(Token::new(TokenKind::RBracket, Span::new(start, end)))
             }
             '{' => {
                 self.advance();
                 let end = self.current_location();
-                let text = self.input[start_pos..self.pos].to_string();
-                Ok(Token::new(TokenKind::LBrace, Span::new(start, end, text)))
+                Ok(Token::new(TokenKind::LBrace, Span::new(start, end)))
             }
             '}' => {
                 self.advance();
                 let end = self.current_location();
-                let text = self.input[start_pos..self.pos].to_string();
-                Ok(Token::new(TokenKind::RBrace, Span::new(start, end, text)))
+                Ok(Token::new(TokenKind::RBrace, Span::new(start, end)))
             }
             '(' => {
                 self.advance();
                 let end = self.current_location();
-                let text = self.input[start_pos..self.pos].to_string();
-                Ok(Token::new(TokenKind::LParen, Span::new(start, end, text)))
+                Ok(Token::new(TokenKind::LParen, Span::new(start, end)))
             }
             ')' => {
                 self.advance();
                 let end = self.current_location();
-                let text = self.input[start_pos..self.pos].to_string();
-                Ok(Token::new(TokenKind::RParen, Span::new(start, end, text)))
+                Ok(Token::new(TokenKind::RParen, Span::new(start, end)))
             }
             '<' => {
                 self.advance();
                 let end = self.current_location();
-                let text = self.input[start_pos..self.pos].to_string();
-                Ok(Token::new(TokenKind::Lt, Span::new(start, end, text)))
+                Ok(Token::new(TokenKind::Lt, Span::new(start, end)))
             }
             '>' => {
                 self.advance();
                 let end = self.current_location();
-                let text = self.input[start_pos..self.pos].to_string();
-                Ok(Token::new(TokenKind::Gt, Span::new(start, end, text)))
+                Ok(Token::new(TokenKind::Gt, Span::new(start, end)))
             }
             '=' => {
                 self.advance();
                 let end = self.current_location();
-                let text = self.input[start_pos..self.pos].to_string();
-                Ok(Token::new(TokenKind::Eq, Span::new(start, end, text)))
+                Ok(Token::new(TokenKind::Eq, Span::new(start, end)))
             }
             ';' => {
                 self.advance();
                 let end = self.current_location();
-                let text = self.input[start_pos..self.pos].to_string();
-                Ok(Token::new(TokenKind::Semi, Span::new(start, end, text)))
+                Ok(Token::new(TokenKind::Semi, Span::new(start, end)))
             }
             ',' => {
                 self.advance();
                 let end = self.current_location();
-                let text = self.input[start_pos..self.pos].to_string();
-                Ok(Token::new(TokenKind::Comma, Span::new(start, end, text)))
+                Ok(Token::new(TokenKind::Comma, Span::new(start, end)))
             }
             '!' => {
                 self.advance();
                 let end = self.current_location();
-                let text = self.input[start_pos..self.pos].to_string();
-                Ok(Token::new(TokenKind::Bang, Span::new(start, end, text)))
+                Ok(Token::new(TokenKind::Bang, Span::new(start, end)))
             }
             '#' => {
                 self.advance();
                 let end = self.current_location();
-                let text = self.input[start_pos..self.pos].to_string();
-                Ok(Token::new(TokenKind::Hash, Span::new(start, end, text)))
+                Ok(Token::new(TokenKind::Hash, Span::new(start, end)))
             }
             _ => Err(self.error(format!("Unexpected character: '{}'", ch), start)),
         }
@@ -438,7 +420,7 @@ impl Lexer {
             TokenKind::Comment(text.clone())
         };
 
-        Ok(Token::new(kind, Span::new(start, end, text)))
+        Ok(Token::new(kind, Span::new(start, end)))
     }
 
     fn lex_multiline_comment(
@@ -474,7 +456,7 @@ impl Lexer {
 
         Ok(Token::new(
             TokenKind::MultiLineComment(text.clone()),
-            Span::new(start, end, text),
+            Span::new(start, end),
         ))
     }
 
@@ -518,7 +500,7 @@ impl Lexer {
             _ => TokenKind::Ident(text.clone()),
         };
 
-        Ok(Token::new(kind, Span::new(start, end, text)))
+        Ok(Token::new(kind, Span::new(start, end)))
     }
 
     fn lex_number(&mut self, start: Location, start_pos: usize) -> Result<Token, LexError> {
@@ -593,14 +575,14 @@ impl Lexer {
 
         Ok(Token::new(
             TokenKind::IntLiteral(text.clone()),
-            Span::new(start, end, text),
+            Span::new(start, end),
         ))
     }
 
     fn lex_string(
         &mut self,
         start: Location,
-        start_pos: usize,
+        _start_pos: usize,
         _hash_count: usize,
     ) -> Result<Token, LexError> {
         self.advance(); // consume opening '"'
@@ -643,15 +625,14 @@ impl Lexer {
         }
 
         let end = self.current_location();
-        let text = self.input[start_pos..self.pos].to_string();
 
         Ok(Token::new(
             TokenKind::StringLiteral(value),
-            Span::new(start, end, text),
+            Span::new(start, end),
         ))
     }
 
-    fn lex_raw_string(&mut self, start: Location, start_pos: usize) -> Result<Token, LexError> {
+    fn lex_raw_string(&mut self, start: Location, _start_pos: usize) -> Result<Token, LexError> {
         self.advance(); // consume 'r'
 
         // Count the number of '#' characters
@@ -705,15 +686,14 @@ impl Lexer {
         }
 
         let end = self.current_location();
-        let text = self.input[start_pos..self.pos].to_string();
 
         Ok(Token::new(
             TokenKind::StringLiteral(value),
-            Span::new(start, end, text),
+            Span::new(start, end),
         ))
     }
 
-    fn lex_char(&mut self, start: Location, start_pos: usize) -> Result<Token, LexError> {
+    fn lex_char(&mut self, start: Location, _start_pos: usize) -> Result<Token, LexError> {
         self.advance(); // consume opening '\''
 
         let ch = if self.peek() == Some('\\') {
@@ -761,11 +741,10 @@ impl Lexer {
         self.advance(); // consume closing '\''
 
         let end = self.current_location();
-        let text = self.input[start_pos..self.pos].to_string();
 
         Ok(Token::new(
             TokenKind::CharLiteral(ch),
-            Span::new(start, end, text),
+            Span::new(start, end),
         ))
     }
 }

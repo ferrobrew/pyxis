@@ -479,6 +479,37 @@ impl Parser {
         }
     }
 
+    /// Extract text from a span using the source
+    fn span_text(&self, span: &Span) -> &str {
+        let start_offset = self.source
+            .lines()
+            .take(span.start.line.saturating_sub(1))
+            .map(|line| line.len() + 1)
+            .sum::<usize>()
+            + span.start.column.saturating_sub(1);
+
+        let end_offset = if span.start.line == span.end.line {
+            start_offset + (span.end.column.saturating_sub(span.start.column))
+        } else {
+            let first_line_len = self.source
+                .lines()
+                .nth(span.start.line.saturating_sub(1))
+                .map(|line| line.len())
+                .unwrap_or(0)
+                .saturating_sub(span.start.column.saturating_sub(1));
+            let middle_lines_len: usize = self.source
+                .lines()
+                .skip(span.start.line)
+                .take(span.end.line.saturating_sub(span.start.line).saturating_sub(1))
+                .map(|line| line.len() + 1)
+                .sum();
+            let last_line_len = span.end.column.saturating_sub(1);
+            start_offset + first_line_len + middle_lines_len + last_line_len
+        };
+
+        &self.source[start_offset..end_offset.min(self.source.len())]
+    }
+
     fn current(&self) -> &Token {
         &self.tokens[self.pos.min(self.tokens.len() - 1)]
     }
@@ -1084,7 +1115,6 @@ impl Parser {
                     span: Span {
                         start: start_pos,
                         end: end_pos,
-                        text: String::new(),
                     },
                 })
             }
@@ -1118,7 +1148,6 @@ impl Parser {
                     span: Span {
                         start: start_pos,
                         end: end_pos,
-                        text: String::new(),
                     },
                 })
             }
@@ -1152,7 +1181,6 @@ impl Parser {
                     span: Span {
                         start: start_pos,
                         end: end_pos,
-                        text: String::new(),
                     },
                 })
             }
@@ -1245,7 +1273,6 @@ impl Parser {
                 span: Span {
                     start: start_pos,
                     end: end_pos,
-                    text: String::new(),
                 },
             })
         } else {
@@ -1269,7 +1296,6 @@ impl Parser {
                 span: Span {
                     start: start_pos,
                     end: end_pos,
-                    text: String::new(),
                 },
             })
         }
@@ -1358,7 +1384,6 @@ impl Parser {
             span: Span {
                 start: start_pos,
                 end: end_pos,
-                text: String::new(),
             },
         })
     }
@@ -1442,7 +1467,6 @@ impl Parser {
             span: Span {
                 start: start_pos,
                 end: end_pos,
-                text: String::new(),
             },
         })
     }
@@ -1762,7 +1786,7 @@ impl Parser {
         // Reconstruct the string from tokens
         let mut result = String::new();
         for i in start_pos..end_pos {
-            result.push_str(&self.tokens[i].span.text);
+            result.push_str(self.span_text(&self.tokens[i].span));
         }
         Ok(result)
     }
@@ -1860,13 +1884,14 @@ impl Parser {
                 let token = self.current().clone();
                 let value = self.parse_int_literal()?;
                 // Detect format from the original token text
-                let format = if token.span.text.starts_with("0x")
-                    || token.span.text.starts_with("-0x")
+                let text = self.span_text(&token.span);
+                let format = if text.starts_with("0x")
+                    || text.starts_with("-0x")
                 {
                     IntFormat::Hex
-                } else if token.span.text.starts_with("0b") || token.span.text.starts_with("-0b") {
+                } else if text.starts_with("0b") || text.starts_with("-0b") {
                     IntFormat::Binary
-                } else if token.span.text.starts_with("0o") || token.span.text.starts_with("-0o") {
+                } else if text.starts_with("0o") || text.starts_with("-0o") {
                     IntFormat::Octal
                 } else {
                     IntFormat::Decimal
@@ -1877,7 +1902,8 @@ impl Parser {
                 let token = self.current().clone();
                 let value = self.parse_string_literal()?;
                 // Detect if this was a raw string from the original token text
-                let format = if token.span.text.starts_with('r') {
+                let text = self.span_text(&token.span);
+                let format = if text.starts_with('r') {
                     StringFormat::Raw
                 } else {
                     StringFormat::Regular

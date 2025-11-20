@@ -26,13 +26,11 @@ pub struct Span {
     pub start: Location,
     /// End location (exclusive)
     pub end: Location,
-    /// The source text covered by this span
-    pub text: String,
 }
 
 impl Span {
-    pub fn new(start: Location, end: Location, text: String) -> Self {
-        Self { start, end, text }
+    pub fn new(start: Location, end: Location) -> Self {
+        Self { start, end }
     }
 
     /// Create a synthetic span (for generated or missing content)
@@ -40,7 +38,6 @@ impl Span {
         Self {
             start: Location::new(0, 0),
             end: Location::new(0, 0),
-            text: String::new(),
         }
     }
 
@@ -48,11 +45,7 @@ impl Span {
     pub fn merge(&self, other: &Span) -> Span {
         let start = self.start.min(other.start);
         let end = self.end.max(other.end);
-        Span {
-            start,
-            end,
-            text: format!("{}{}", self.text, other.text),
-        }
+        Span { start, end }
     }
 }
 
