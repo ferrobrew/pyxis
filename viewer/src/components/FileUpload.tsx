@@ -285,13 +285,15 @@ export function FileUpload() {
   ];
 
   return (
-    <div className="flex items-center gap-2 md:gap-3 flex-wrap">
-      <CustomDropdown
-        value={selectedSource}
-        onChange={handleSourceChange}
-        options={dropdownOptions}
-        disabled={isLoading}
-      />
+    <div className="flex items-stretch gap-2 flex-nowrap">
+      <div className="min-w-0 flex-1 lg:flex-initial">
+        <CustomDropdown
+          value={selectedSource}
+          onChange={handleSourceChange}
+          options={dropdownOptions}
+          disabled={isLoading}
+        />
+      </div>
 
       {selectedSource === 'local' && (
         <>
@@ -304,14 +306,14 @@ export function FileUpload() {
           />
           <button
             onClick={handleButtonClick}
-            className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 transition-colors"
+            className="px-3 py-2 text-sm font-medium border border-gray-300 dark:border-slate-700 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex-shrink-0 whitespace-nowrap"
           >
             Browse
           </button>
         </>
       )}
 
-      {isLoading && <span className="text-sm text-gray-600 dark:text-slate-400">Loading...</span>}
+      {isLoading && <span className="text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap self-center">Loading...</span>}
     </div>
   );
 }

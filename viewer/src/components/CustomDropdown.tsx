@@ -94,7 +94,7 @@ export function CustomDropdown({ value, onChange, options, disabled }: CustomDro
   };
 
   return (
-    <div className="relative w-full max-w-xs md:max-w-sm lg:w-96" ref={dropdownRef}>
+    <div className="relative w-full lg:w-100" ref={dropdownRef}>
       <button
         ref={buttonRef}
         type="button"
@@ -139,7 +139,9 @@ export function CustomDropdown({ value, onChange, options, disabled }: CustomDro
               } ${option.value === value ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
             >
               <div className="flex flex-col min-w-0">
-                <span className="text-sm text-gray-900 dark:text-slate-100 truncate">{option.label}</span>
+                <span className="text-sm text-gray-900 dark:text-slate-100 truncate">
+                  {option.label}
+                </span>
                 {option.datetime && (
                   <span className="text-xs text-gray-500 dark:text-slate-400 mt-0.5 truncate">
                     {option.datetime}
@@ -153,4 +155,3 @@ export function CustomDropdown({ value, onChange, options, disabled }: CustomDro
     </div>
   );
 }
-

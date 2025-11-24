@@ -14,32 +14,36 @@ export function Header({ isSidebarOpen, onToggleSidebar }: HeaderProps) {
 
   return (
     <header className="sticky top-0 z-50 border-b bg-white dark:bg-slate-950 border-gray-200 dark:border-slate-800">
-      <div className="flex items-center justify-between px-3 md:px-6 py-3 gap-2">
-        <div className="flex items-center gap-2 md:gap-6">
-          {documentation && (
-            <button
-              onClick={onToggleSidebar}
-              className="lg:hidden p-2 rounded-md hover:bg-gray-100 dark:hover:bg-slate-900 transition-colors"
-              aria-label="Toggle sidebar"
-            >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d={isSidebarOpen ? "M6 18L18 6M6 6l12 12" : "M4 6h16M4 12h16M4 18h16"}
-                />
-              </svg>
-            </button>
-          )}
+      <div className="flex items-stretch px-3 md:px-6 py-3 gap-2">
+        {/* Sidebar toggle button (mobile only) */}
+        {documentation && (
+          <button
+            onClick={onToggleSidebar}
+            className="lg:hidden p-2 rounded-md border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex-shrink-0"
+            aria-label="Toggle sidebar"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d={isSidebarOpen ? "M6 18L18 6M6 6l12 12" : "M4 6h16M4 12h16M4 18h16"}
+              />
+            </svg>
+          </button>
+        )}
+
+        {/* FileUpload with constrained width on mobile */}
+        <div className="flex-1 min-w-0 lg:flex-initial lg:flex-shrink-0">
           <FileUpload />
         </div>
 
-        <div className="flex items-center gap-2 md:gap-4 flex-1 justify-end">
+        {/* Right side: Search + Theme toggle */}
+        <div className="flex items-stretch gap-2 flex-shrink-0 lg:flex-1 lg:min-w-0">
           {documentation && <SearchBar />}
           <button
             onClick={toggleTheme}
-            className="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-slate-900 transition-colors flex-shrink-0"
+            className="p-2 rounded-md border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex-shrink-0"
             aria-label="Toggle theme"
           >
             {theme === 'light' ? (
