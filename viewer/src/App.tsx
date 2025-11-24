@@ -46,7 +46,7 @@ function AppLayout() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-white dark:bg-slate-950 text-gray-900 dark:text-slate-200">
+    <div className="min-h-screen bg-white dark:bg-slate-950 text-gray-900 dark:text-slate-200 pt-[60px]">
       <Header
         isSidebarOpen={isSidebarOpen}
         onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
