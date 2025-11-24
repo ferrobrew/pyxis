@@ -439,18 +439,6 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Prevent body scroll when sidebar is open on mobile
-  useEffect(() => {
-    if (!isDesktop && isOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
-    return () => {
-      document.body.style.overflow = '';
-    };
-  }, [isOpen, isDesktop]);
-
   const handleMouseDown = () => {
     setIsResizing(true);
   };
@@ -470,86 +458,44 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
   }
 
   return (
-    <>
-      {/* Mobile backdrop overlay */}
-      {isOpen && (
+    <div
+      className="flex relative"
+      ref={sidebarRef}
+      style={{
+        width: isDesktop ? `${sidebarWidth}px` : '100%',
+      }}
+    >
+      <aside className="flex-1 border-r bg-gray-50 dark:bg-slate-950 border-gray-200 dark:border-slate-800 overflow-y-auto">
         <div
-          className="lg:hidden fixed inset-0 bg-black/50 z-40"
-          onClick={onClose}
-          aria-hidden="true"
-        />
-      )}
+          className="p-2"
+          onClick={(e) => {
+            // Close sidebar on mobile when clicking nav links
+            if (!isDesktop && (e.target as HTMLElement).closest('a')) {
+              onClose();
+            }
+          }}
+        >
+          <nav>
+            {Object.entries(documentation.modules).map(([name, module]) => (
+              <ModuleTree
+                key={name}
+                name={name}
+                module={module as JsonModule}
+                path={name}
+                level={0}
+              />
+            ))}
+          </nav>
+        </div>
+      </aside>
 
-      {/* Sidebar */}
-      <div
-        className={`
-          flex relative
-          lg:static lg:translate-x-0
-          fixed inset-y-0 left-0 z-50
-          transition-transform duration-300 ease-in-out
-          ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
-          ${!isOpen && !isDesktop ? 'pointer-events-none' : ''}
-          lg:flex-shrink-0
-        `}
-        ref={sidebarRef}
-        style={{
-          width: isDesktop ? `${sidebarWidth}px` : isOpen ? 'min(80vw, 320px)' : '0',
-          ...(isDesktop
-            ? {}
-            : {
-                flex: '0 0 0',
-                minWidth: '0',
-              }),
-        }}
-      >
-        <aside className="flex-1 border-r bg-gray-50 dark:bg-slate-950 border-gray-200 dark:border-slate-800 overflow-y-auto">
-          {/* Mobile close button */}
-          <div className="lg:hidden flex justify-end p-2 border-b border-gray-200 dark:border-slate-800">
-            <button
-              onClick={onClose}
-              className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-slate-800 transition-colors"
-              aria-label="Close sidebar"
-            >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-            </button>
-          </div>
-
-          <div
-            className="p-2"
-            onClick={(e) => {
-              // Close sidebar on mobile when clicking nav links
-              if ((e.target as HTMLElement).closest('a')) {
-                onClose();
-              }
-            }}
-          >
-            <nav>
-              {Object.entries(documentation.modules).map(([name, module]) => (
-                <ModuleTree
-                  key={name}
-                  name={name}
-                  module={module as JsonModule}
-                  path={name}
-                  level={0}
-                />
-              ))}
-            </nav>
-          </div>
-        </aside>
-
-        {/* Desktop resize handle - hidden on mobile */}
+      {/* Desktop resize handle */}
+      {isDesktop && (
         <div
           onMouseDown={handleMouseDown}
-          className="hidden lg:block w-1 bg-gray-200 dark:bg-slate-700 hover:bg-blue-500 dark:hover:bg-blue-600 cursor-col-resize transition-colors"
+          className="w-1 bg-gray-200 dark:bg-slate-700 hover:bg-blue-500 dark:hover:bg-blue-600 cursor-col-resize transition-colors"
         />
-      </div>
-    </>
+      )}
+    </div>
   );
 }
