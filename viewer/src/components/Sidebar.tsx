@@ -381,13 +381,18 @@ function ModuleTree({ name, module, path, level }: ModuleTreeProps) {
   );
 }
 
-export function Sidebar() {
+interface SidebarProps {
+  onClose: () => void;
+}
+
+export function Sidebar({ onClose }: SidebarProps) {
   const { documentation } = useDocumentation();
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     const saved = localStorage.getItem('sidebarWidth');
     return saved ? parseInt(saved, 10) : 256; // Default 256px (w-64)
   });
   const [isResizing, setIsResizing] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(() => window.innerWidth >= 1024);
   const sidebarRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -423,28 +428,52 @@ export function Sidebar() {
     localStorage.setItem('sidebarWidth', sidebarWidth.toString());
   }, [sidebarWidth]);
 
+  // Handle responsive width changes
+  useEffect(() => {
+    const handleResize = () => {
+      setIsDesktop(window.innerWidth >= 1024);
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   const handleMouseDown = () => {
     setIsResizing(true);
   };
 
   if (!documentation) {
     return (
-      <div className="flex relative" style={{ width: `${sidebarWidth}px` }}>
+      <div className="hidden lg:flex relative" style={{ width: `${sidebarWidth}px` }}>
         <aside className="flex-1 border-r bg-gray-50 dark:bg-slate-950 border-gray-200 dark:border-slate-800 p-4">
           <div className="text-sm text-gray-500 dark:text-slate-400">No documentation loaded</div>
         </aside>
         <div
           onMouseDown={handleMouseDown}
-          className="w-1 bg-gray-200 dark:bg-slate-700 hover:bg-blue-500 dark:hover:bg-blue-600 cursor-col-resize transition-colors"
+          className="hidden lg:block w-1 bg-gray-200 dark:bg-slate-700 hover:bg-blue-500 dark:hover:bg-blue-600 cursor-col-resize transition-colors"
         />
       </div>
     );
   }
 
   return (
-    <div className="flex relative" ref={sidebarRef} style={{ width: `${sidebarWidth}px` }}>
+    <div
+      className="flex relative"
+      ref={sidebarRef}
+      style={{
+        width: isDesktop ? `${sidebarWidth}px` : '100%',
+      }}
+    >
       <aside className="flex-1 border-r bg-gray-50 dark:bg-slate-950 border-gray-200 dark:border-slate-800 overflow-y-auto">
-        <div className="p-2">
+        <div
+          className="p-2"
+          onClick={(e) => {
+            // Close sidebar on mobile when clicking nav links
+            if (!isDesktop && (e.target as HTMLElement).closest('a')) {
+              onClose();
+            }
+          }}
+        >
           <nav>
             {Object.entries(documentation.modules).map(([name, module]) => (
               <ModuleTree
@@ -458,10 +487,14 @@ export function Sidebar() {
           </nav>
         </div>
       </aside>
-      <div
-        onMouseDown={handleMouseDown}
-        className="w-1 bg-gray-200 dark:bg-slate-700 hover:bg-blue-500 dark:hover:bg-blue-600 cursor-col-resize transition-colors"
-      />
+
+      {/* Desktop resize handle */}
+      {isDesktop && (
+        <div
+          onMouseDown={handleMouseDown}
+          className="w-1 bg-gray-200 dark:bg-slate-700 hover:bg-blue-500 dark:hover:bg-blue-600 cursor-col-resize transition-colors"
+        />
+      )}
     </div>
   );
 }

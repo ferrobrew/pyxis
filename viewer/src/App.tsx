@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { DocumentationProvider } from './contexts/DocumentationContext';
@@ -12,6 +12,7 @@ import { useDocumentation } from './contexts/DocumentationContext';
 function AppLayout() {
   const location = useLocation();
   const { documentation } = useDocumentation();
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // Handle anchor scrolling
   useEffect(() => {
@@ -33,19 +34,39 @@ function AppLayout() {
     }
   }, [location, documentation]);
 
+  const [isDesktop, setIsDesktop] = useState(() => window.innerWidth >= 1024);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsDesktop(window.innerWidth >= 1024);
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   return (
-    <div className="min-h-screen bg-white dark:bg-slate-950 text-gray-900 dark:text-slate-200">
-      <Header />
+    <div className="min-h-screen bg-white dark:bg-slate-950 text-gray-900 dark:text-slate-200 pt-[60px]">
+      <Header
+        isSidebarOpen={isSidebarOpen}
+        onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+      />
       <div className="flex h-[calc(100vh-60px)]">
-        <Sidebar />
-        <main className="flex-1 overflow-y-auto">
-          <Routes>
-            <Route path="/" element={<WelcomePage />} />
-            <Route path="/:source/module/:modulePath" element={<ModuleView />} />
-            <Route path="/:source/item/:itemPath" element={<ItemView />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </main>
+        {/* Desktop: always show sidebar */}
+        {isDesktop && <Sidebar onClose={() => {}} />}
+        {/* Mobile: show sidebar OR content, not both */}
+        {!isDesktop && isSidebarOpen ? (
+          <Sidebar onClose={() => setIsSidebarOpen(false)} />
+        ) : (
+          <main className="flex-1 overflow-y-auto">
+            <Routes>
+              <Route path="/" element={<WelcomePage />} />
+              <Route path="/:source/module/:modulePath" element={<ModuleView />} />
+              <Route path="/:source/item/:itemPath" element={<ItemView />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </main>
+        )}
       </div>
     </div>
   );
