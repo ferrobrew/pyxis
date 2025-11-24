@@ -53,18 +53,10 @@ function AppLayout() {
       />
       <div className="flex h-[calc(100vh-60px)]">
         {/* Desktop: always show sidebar */}
-        {isDesktop && (
-          <Sidebar
-            isOpen={true}
-            onClose={() => {}}
-          />
-        )}
+        {isDesktop && <Sidebar onClose={() => {}} />}
         {/* Mobile: show sidebar OR content, not both */}
         {!isDesktop && isSidebarOpen ? (
-          <Sidebar
-            isOpen={true}
-            onClose={() => setIsSidebarOpen(false)}
-          />
+          <Sidebar onClose={() => setIsSidebarOpen(false)} />
         ) : (
           <main className="flex-1 overflow-y-auto">
             <Routes>

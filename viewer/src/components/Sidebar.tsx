@@ -382,11 +382,10 @@ function ModuleTree({ name, module, path, level }: ModuleTreeProps) {
 }
 
 interface SidebarProps {
-  isOpen: boolean;
   onClose: () => void;
 }
 
-export function Sidebar({ isOpen, onClose }: SidebarProps) {
+export function Sidebar({ onClose }: SidebarProps) {
   const { documentation } = useDocumentation();
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     const saved = localStorage.getItem('sidebarWidth');
