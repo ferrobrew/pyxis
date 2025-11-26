@@ -310,9 +310,9 @@ export function ItemView() {
   else if (item.kind.type === 'bitflags') itemType = 'bitflags';
 
   return (
-    <div className="p-8 max-w-6xl">
+    <div className="p-4 md:p-6 lg:p-8 max-w-6xl">
       <Breadcrumbs path={decodedPath} isItem={true} itemType={itemType} />
-      <div className="mb-4 flex items-center gap-3 text-sm text-gray-600 dark:text-slate-400">
+      <div className="mb-4 flex flex-wrap items-center gap-2 md:gap-3 text-sm text-gray-600 dark:text-slate-400">
         <span className="px-2 py-1 bg-gray-100 dark:bg-slate-800 rounded capitalize">
           {item.kind.type}
         </span>
