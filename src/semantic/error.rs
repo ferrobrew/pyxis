@@ -4,7 +4,7 @@ use crate::{
     grammar::{self, ItemPath},
     semantic::types::{CallingConvention, Type as SemanticType},
     source_store::SourceStore,
-    span::{self, ErrorContext, ItemLocation, Span},
+    span::{self, ItemLocation, Span},
 };
 use ariadne::{Label, Report, ReportKind, Source};
 use std::fmt;
@@ -193,12 +193,12 @@ pub enum SemanticError {
     /// Failed to find a module for a given path
     ModuleNotFound {
         path: ItemPath,
-        context: ErrorContext,
+        location: ItemLocation,
     },
     /// Failed to find a type in the registry
     TypeNotFound {
         path: ItemPath,
-        context: ErrorContext,
+        location: ItemLocation,
     },
     /// Missing required attribute for extern type
     MissingExternAttribute {
@@ -206,34 +206,34 @@ pub enum SemanticError {
         extern_kind: String,
         type_name: String,
         module_name: String,
-        context: ErrorContext,
+        location: ItemLocation,
     },
     /// Missing required attribute (generic)
     MissingAttribute {
         attribute_name: String,
         item_kind: String,
         item_path: ItemPath,
-        context: ErrorContext,
+        location: ItemLocation,
     },
     /// Invalid attribute value
     InvalidAttributeValue {
         attribute_name: String,
         expected_type: String,
         item_path: ItemPath,
-        context: ErrorContext,
+        location: ItemLocation,
     },
     /// Conflicting attributes
     ConflictingAttributes {
         attr1: String,
         attr2: String,
         item_path: ItemPath,
-        context: ErrorContext,
+        location: ItemLocation,
     },
     /// Type resolution failed
     TypeResolutionFailed {
         type_: grammar::Type,
         resolution_context: TypeResolutionContext,
-        context: ErrorContext,
+        location: ItemLocation,
     },
     /// Type resolution stalled (circular dependency or missing type)
     TypeResolutionStalled {
@@ -245,7 +245,7 @@ pub enum SemanticError {
         expected: BitflagsExpectedType,
         found: SemanticType,
         item_path: ItemPath,
-        context: ErrorContext,
+        location: ItemLocation,
     },
     /// Invalid type for context (generic)
     InvalidType {
@@ -253,7 +253,7 @@ pub enum SemanticError {
         found: String,
         item_path: ItemPath,
         context_description: String,
-        context: ErrorContext,
+        location: ItemLocation,
     },
     /// Vftable is missing functions from base class
     VftableMissingFunctions {
@@ -261,7 +261,7 @@ pub enum SemanticError {
         base_name: String,
         expected_count: usize,
         actual_count: usize,
-        context: ErrorContext,
+        location: ItemLocation,
     },
     /// Vftable function mismatch with base class
     VftableFunctionMismatch {
@@ -270,35 +270,35 @@ pub enum SemanticError {
         index: usize,
         derived_function: String,
         base_function: String,
-        context: ErrorContext,
+        location: ItemLocation,
     },
     /// Field or region error (generic)
     FieldError {
         field_name: String,
         item_path: ItemPath,
         message: String,
-        context: ErrorContext,
+        location: ItemLocation,
     },
     /// Calculated size is below minimum required size
     SizeBelowMinimum {
         minimum_size: usize,
         actual_size: usize,
         item_path: ItemPath,
-        context: ErrorContext,
+        location: ItemLocation,
     },
     /// Calculated size doesn't match target size
     SizeMismatch {
         expected: usize,
         actual: usize,
         item_path: ItemPath,
-        context: ErrorContext,
+        location: ItemLocation,
     },
     /// Type alignment is below minimum required alignment
     AlignmentBelowMinimum {
         alignment: usize,
         required_alignment: usize,
         item_path: ItemPath,
-        context: ErrorContext,
+        location: ItemLocation,
     },
     /// Field is not properly aligned
     FieldNotAligned {
@@ -306,99 +306,99 @@ pub enum SemanticError {
         item_path: ItemPath,
         address: usize,
         required_alignment: usize,
-        context: ErrorContext,
+        location: ItemLocation,
     },
     /// Type size is not a multiple of its alignment
     SizeNotAlignmentMultiple {
         size: usize,
         alignment: usize,
         item_path: ItemPath,
-        context: ErrorContext,
+        location: ItemLocation,
     },
     /// Vftable must be first field
     VftableMustBeFirst {
         item_path: ItemPath,
-        context: ErrorContext,
+        location: ItemLocation,
     },
     /// Duplicate definition
     DuplicateDefinition {
         name: String,
         item_path: ItemPath,
         message: String,
-        context: ErrorContext,
+        location: ItemLocation,
     },
     /// Function missing implementation
     FunctionMissingImplementation {
         function_name: String,
-        context: ErrorContext,
+        location: ItemLocation,
     },
     /// Invalid calling convention
     InvalidCallingConvention {
         convention: String,
         function_name: String,
-        context: ErrorContext,
+        location: ItemLocation,
     },
     /// Attribute not supported in context
     AttributeNotSupported {
         attribute_name: String,
         attribute_context: AttributeNotSupportedContext,
-        context: ErrorContext,
+        location: ItemLocation,
     },
     /// Unsupported enum value for a case
     EnumUnsupportedValue {
         item_path: ItemPath,
         case_name: String,
-        context: ErrorContext,
+        location: ItemLocation,
     },
     /// Enum has multiple default variants
     EnumMultipleDefaults {
         item_path: ItemPath,
-        context: ErrorContext,
+        location: ItemLocation,
     },
     /// Enum has a default variant set but is not marked as defaultable
     EnumDefaultWithoutDefaultable {
         item_path: ItemPath,
-        context: ErrorContext,
+        location: ItemLocation,
     },
     /// Enum is marked as defaultable but has no default variant set
     EnumDefaultableMissingDefault {
         item_path: ItemPath,
-        context: ErrorContext,
+        location: ItemLocation,
     },
     /// Unsupported bitflags value for a case
     BitflagsUnsupportedValue {
         item_path: ItemPath,
         case_name: String,
-        context: ErrorContext,
+        location: ItemLocation,
     },
     /// Bitflags has multiple default values
     BitflagsMultipleDefaults {
         item_path: ItemPath,
-        context: ErrorContext,
+        location: ItemLocation,
     },
     /// Bitflags has a default value set but is not marked as defaultable
     BitflagsDefaultWithoutDefaultable {
         item_path: ItemPath,
-        context: ErrorContext,
+        location: ItemLocation,
     },
     /// Bitflags is marked as defaultable but has no default value set
     BitflagsDefaultableMissingDefault {
         item_path: ItemPath,
-        context: ErrorContext,
+        location: ItemLocation,
     },
     /// Defaultable type error
     DefaultableError {
         field_name: String,
         item_path: ItemPath,
         message: String,
-        context: ErrorContext,
+        location: ItemLocation,
     },
     /// Integer conversion error
     IntegerConversion {
         value: String,
         target_type: String,
         conversion_context: IntegerConversionContext,
-        context: ErrorContext,
+        location: ItemLocation,
     },
     /// Overlapping regions
     OverlappingRegions {
@@ -406,23 +406,17 @@ pub enum SemanticError {
         region_name: String,
         address: usize,
         existing_end: usize,
-        context: ErrorContext,
+        location: ItemLocation,
     },
 }
 
 impl SemanticError {
     pub fn module_not_found(path: ItemPath, location: ItemLocation) -> Self {
-        Self::ModuleNotFound {
-            path,
-            context: location.into(),
-        }
+        Self::ModuleNotFound { path, location }
     }
 
     pub fn type_not_found(path: ItemPath, location: ItemLocation) -> Self {
-        Self::TypeNotFound {
-            path,
-            context: location.into(),
-        }
+        Self::TypeNotFound { path, location }
     }
 
     pub fn missing_extern_attribute(
@@ -437,7 +431,7 @@ impl SemanticError {
             extern_kind: extern_kind.into(),
             type_name: type_name.into(),
             module_name: module_name.into(),
-            context: location.into(),
+            location,
         }
     }
 
@@ -451,7 +445,7 @@ impl SemanticError {
             attribute_name: attribute_name.into(),
             item_kind: item_kind.into(),
             item_path,
-            context: location.into(),
+            location,
         }
     }
 
@@ -465,7 +459,7 @@ impl SemanticError {
             attribute_name: attribute_name.into(),
             expected_type: expected_type.into(),
             item_path,
-            context: location.into(),
+            location,
         }
     }
 
@@ -479,7 +473,7 @@ impl SemanticError {
             attr1: attr1.into(),
             attr2: attr2.into(),
             item_path,
-            context: location.into(),
+            location,
         }
     }
 
@@ -491,7 +485,7 @@ impl SemanticError {
         Self::TypeResolutionFailed {
             type_,
             resolution_context,
-            context: location.into(),
+            location,
         }
     }
 
@@ -505,7 +499,7 @@ impl SemanticError {
             expected,
             found,
             item_path,
-            context: location.into(),
+            location,
         }
     }
 
@@ -521,7 +515,7 @@ impl SemanticError {
             found: found.into(),
             item_path,
             context_description: context_description.into(),
-            context: location.into(),
+            location,
         }
     }
 
@@ -537,7 +531,7 @@ impl SemanticError {
             base_name: base_name.into(),
             expected_count,
             actual_count,
-            context: location.into(),
+            location,
         }
     }
 
@@ -555,7 +549,7 @@ impl SemanticError {
             index,
             derived_function: derived_function.into(),
             base_function: base_function.into(),
-            context: location.into(),
+            location,
         }
     }
 
@@ -569,7 +563,7 @@ impl SemanticError {
             field_name: field_name.into(),
             item_path,
             message: message.into(),
-            context: location.into(),
+            location,
         }
     }
 
@@ -583,7 +577,7 @@ impl SemanticError {
             minimum_size,
             actual_size,
             item_path,
-            context: location.into(),
+            location,
         }
     }
 
@@ -597,7 +591,7 @@ impl SemanticError {
             expected,
             actual,
             item_path,
-            context: location.into(),
+            location,
         }
     }
 
@@ -611,7 +605,7 @@ impl SemanticError {
             alignment,
             required_alignment,
             item_path,
-            context: location.into(),
+            location,
         }
     }
 
@@ -627,7 +621,7 @@ impl SemanticError {
             item_path,
             address,
             required_alignment,
-            context: location.into(),
+            location,
         }
     }
 
@@ -641,7 +635,7 @@ impl SemanticError {
             size,
             alignment,
             item_path,
-            context: location.into(),
+            location,
         }
     }
 
@@ -655,7 +649,7 @@ impl SemanticError {
             name: name.into(),
             item_path,
             message: message.into(),
-            context: location.into(),
+            location,
         }
     }
 
@@ -667,28 +661,28 @@ impl SemanticError {
         Self::EnumUnsupportedValue {
             item_path,
             case_name: case_name.into(),
-            context: location.into(),
+            location,
         }
     }
 
     pub fn enum_multiple_defaults(item_path: ItemPath, location: ItemLocation) -> Self {
         Self::EnumMultipleDefaults {
             item_path,
-            context: location.into(),
+            location,
         }
     }
 
     pub fn enum_default_without_defaultable(item_path: ItemPath, location: ItemLocation) -> Self {
         Self::EnumDefaultWithoutDefaultable {
             item_path,
-            context: ErrorContext::from(location),
+            location,
         }
     }
 
     pub fn enum_defaultable_missing_default(item_path: ItemPath, location: ItemLocation) -> Self {
         Self::EnumDefaultableMissingDefault {
             item_path,
-            context: ErrorContext::from(location),
+            location,
         }
     }
 
@@ -700,14 +694,14 @@ impl SemanticError {
         Self::BitflagsUnsupportedValue {
             item_path,
             case_name: case_name.into(),
-            context: location.into(),
+            location,
         }
     }
 
     pub fn bitflags_multiple_defaults(item_path: ItemPath, location: ItemLocation) -> Self {
         Self::BitflagsMultipleDefaults {
             item_path,
-            context: location.into(),
+            location,
         }
     }
 
@@ -717,7 +711,7 @@ impl SemanticError {
     ) -> Self {
         Self::BitflagsDefaultWithoutDefaultable {
             item_path,
-            context: ErrorContext::from(location),
+            location,
         }
     }
 
@@ -727,7 +721,7 @@ impl SemanticError {
     ) -> Self {
         Self::BitflagsDefaultableMissingDefault {
             item_path,
-            context: ErrorContext::from(location),
+            location,
         }
     }
 
@@ -741,7 +735,7 @@ impl SemanticError {
             value: value.into(),
             target_type: target_type.into(),
             conversion_context,
-            context: location.into(),
+            location,
         }
     }
 
@@ -753,7 +747,7 @@ impl SemanticError {
         Self::AttributeNotSupported {
             attribute_name: attribute_name.into(),
             attribute_context,
-            context: location.into(),
+            location,
         }
     }
 
@@ -767,7 +761,7 @@ impl SemanticError {
             field_name: field_name.into(),
             item_path,
             message: message.into(),
-            context: location.into(),
+            location,
         }
     }
 
@@ -777,7 +771,7 @@ impl SemanticError {
     ) -> Self {
         Self::FunctionMissingImplementation {
             function_name: function_name.into(),
-            context: location.into(),
+            location,
         }
     }
 
@@ -789,14 +783,14 @@ impl SemanticError {
         Self::InvalidCallingConvention {
             convention: convention.into(),
             function_name: function_name.into(),
-            context: ErrorContext::from(location),
+            location,
         }
     }
 
     pub fn vftable_must_be_first(item_path: ItemPath, location: ItemLocation) -> Self {
         Self::VftableMustBeFirst {
             item_path,
-            context: location.into(),
+            location,
         }
     }
 
@@ -812,7 +806,7 @@ impl SemanticError {
             region_name: region_name.into(),
             address,
             existing_end,
-            context: location.into(),
+            location,
         }
     }
 
@@ -1187,43 +1181,42 @@ impl SemanticError {
         }
     }
 
-    /// Extract the error context if available
-    fn error_context(&self) -> Option<&ErrorContext> {
+    fn location(&self) -> Option<&ItemLocation> {
         match self {
-            SemanticError::ModuleNotFound { context, .. } => Some(context),
-            SemanticError::TypeNotFound { context, .. } => Some(context),
-            SemanticError::MissingExternAttribute { context, .. } => Some(context),
-            SemanticError::MissingAttribute { context, .. } => Some(context),
-            SemanticError::InvalidAttributeValue { context, .. } => Some(context),
-            SemanticError::ConflictingAttributes { context, .. } => Some(context),
-            SemanticError::TypeResolutionFailed { context, .. } => Some(context),
+            SemanticError::ModuleNotFound { location, .. } => Some(location),
+            SemanticError::TypeNotFound { location, .. } => Some(location),
+            SemanticError::MissingExternAttribute { location, .. } => Some(location),
+            SemanticError::MissingAttribute { location, .. } => Some(location),
+            SemanticError::InvalidAttributeValue { location, .. } => Some(location),
+            SemanticError::ConflictingAttributes { location, .. } => Some(location),
+            SemanticError::TypeResolutionFailed { location, .. } => Some(location),
             SemanticError::TypeResolutionStalled { .. } => None,
-            SemanticError::BitflagsInvalidType { context, .. } => Some(context),
-            SemanticError::InvalidType { context, .. } => Some(context),
-            SemanticError::VftableMissingFunctions { context, .. } => Some(context),
-            SemanticError::VftableFunctionMismatch { context, .. } => Some(context),
-            SemanticError::FieldError { context, .. } => Some(context),
-            SemanticError::SizeBelowMinimum { context, .. } => Some(context),
-            SemanticError::SizeMismatch { context, .. } => Some(context),
-            SemanticError::AlignmentBelowMinimum { context, .. } => Some(context),
-            SemanticError::FieldNotAligned { context, .. } => Some(context),
-            SemanticError::SizeNotAlignmentMultiple { context, .. } => Some(context),
-            SemanticError::VftableMustBeFirst { context, .. } => Some(context),
-            SemanticError::DuplicateDefinition { context, .. } => Some(context),
-            SemanticError::FunctionMissingImplementation { context, .. } => Some(context),
-            SemanticError::InvalidCallingConvention { context, .. } => Some(context),
-            SemanticError::AttributeNotSupported { context, .. } => Some(context),
-            SemanticError::EnumUnsupportedValue { context, .. } => Some(context),
-            SemanticError::EnumMultipleDefaults { context, .. } => Some(context),
-            SemanticError::EnumDefaultWithoutDefaultable { context, .. } => Some(context),
-            SemanticError::EnumDefaultableMissingDefault { context, .. } => Some(context),
-            SemanticError::BitflagsUnsupportedValue { context, .. } => Some(context),
-            SemanticError::BitflagsMultipleDefaults { context, .. } => Some(context),
-            SemanticError::BitflagsDefaultWithoutDefaultable { context, .. } => Some(context),
-            SemanticError::BitflagsDefaultableMissingDefault { context, .. } => Some(context),
-            SemanticError::DefaultableError { context, .. } => Some(context),
-            SemanticError::IntegerConversion { context, .. } => Some(context),
-            SemanticError::OverlappingRegions { context, .. } => Some(context),
+            SemanticError::BitflagsInvalidType { location, .. } => Some(location),
+            SemanticError::InvalidType { location, .. } => Some(location),
+            SemanticError::VftableMissingFunctions { location, .. } => Some(location),
+            SemanticError::VftableFunctionMismatch { location, .. } => Some(location),
+            SemanticError::FieldError { location, .. } => Some(location),
+            SemanticError::SizeBelowMinimum { location, .. } => Some(location),
+            SemanticError::SizeMismatch { location, .. } => Some(location),
+            SemanticError::AlignmentBelowMinimum { location, .. } => Some(location),
+            SemanticError::FieldNotAligned { location, .. } => Some(location),
+            SemanticError::SizeNotAlignmentMultiple { location, .. } => Some(location),
+            SemanticError::VftableMustBeFirst { location, .. } => Some(location),
+            SemanticError::DuplicateDefinition { location, .. } => Some(location),
+            SemanticError::FunctionMissingImplementation { location, .. } => Some(location),
+            SemanticError::InvalidCallingConvention { location, .. } => Some(location),
+            SemanticError::AttributeNotSupported { location, .. } => Some(location),
+            SemanticError::EnumUnsupportedValue { location, .. } => Some(location),
+            SemanticError::EnumMultipleDefaults { location, .. } => Some(location),
+            SemanticError::EnumDefaultWithoutDefaultable { location, .. } => Some(location),
+            SemanticError::EnumDefaultableMissingDefault { location, .. } => Some(location),
+            SemanticError::BitflagsUnsupportedValue { location, .. } => Some(location),
+            SemanticError::BitflagsMultipleDefaults { location, .. } => Some(location),
+            SemanticError::BitflagsDefaultWithoutDefaultable { location, .. } => Some(location),
+            SemanticError::BitflagsDefaultableMissingDefault { location, .. } => Some(location),
+            SemanticError::DefaultableError { location, .. } => Some(location),
+            SemanticError::IntegerConversion { location, .. } => Some(location),
+            SemanticError::OverlappingRegions { location, .. } => Some(location),
         }
     }
 
@@ -1231,16 +1224,15 @@ impl SemanticError {
     /// Always produces an ariadne-formatted error, even without source code.
     pub fn format_with_ariadne(&self, source_store: &mut dyn SourceStore) -> String {
         let message = self.error_message();
-        let context = self.error_context();
+        let location = self.location();
 
-        let (offset, length, location, source) = if let Some(ctx) = context
-            && let Some(source) = source_store.get(ctx.location.filename.as_ref())
+        let (offset, length, location, source) = if let Some(location) = location
+            && let Some(source) = source_store.get(location.filename.as_ref())
         {
-            let location = ctx.location.clone();
             (
                 span::span_to_offset(source, &location.span),
                 span::span_length(source, &location.span),
-                location,
+                location.clone(),
                 source,
             )
         } else {
@@ -1331,8 +1323,8 @@ impl SemanticError {
 impl fmt::Display for SemanticError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // Get the location prefix if available
-        if let Some(ctx) = self.error_context() {
-            write!(f, "{}", span::format_error_location(ctx))?;
+        if let Some(location) = self.location() {
+            write!(f, "{location}")?;
         }
         // Write the core message
         write!(f, "{}", self.error_message())

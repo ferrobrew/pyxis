@@ -4,7 +4,7 @@ use crate::{
     grammar::ItemPath,
     semantic::SemanticError,
     source_store::SourceStore,
-    span::{self, ErrorContext, ItemLocation},
+    span::{self, ItemLocation},
 };
 use ariadne::{Label, Report, ReportKind, Source};
 
@@ -26,23 +26,47 @@ pub enum BackendError {
     TypeCodeGenFailed {
         type_path: ItemPath,
         reason: String,
-        context: ErrorContext,
+        location: ItemLocation,
     },
     /// Failed to generate code for a specific field
     FieldCodeGenFailed {
         type_path: ItemPath,
         field_name: String,
         reason: String,
-        context: ErrorContext,
+        location: ItemLocation,
     },
     /// Failed to generate vftable code
     VftableCodeGenFailed {
         type_path: ItemPath,
         reason: String,
-        context: ErrorContext,
+        location: ItemLocation,
     },
 }
-
+impl fmt::Display for BackendError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Add location prefix if available
+        if let Some(location) = self.location() {
+            write!(f, "{location}")?;
+        }
+        write!(f, "{}", self.error_message())
+    }
+}
+impl std::error::Error for BackendError {}
+impl From<syn::Error> for BackendError {
+    fn from(err: syn::Error) -> Self {
+        BackendError::Syntax(err)
+    }
+}
+impl From<std::fmt::Error> for BackendError {
+    fn from(err: std::fmt::Error) -> Self {
+        BackendError::Formatting(err.to_string())
+    }
+}
+impl From<SemanticError> for BackendError {
+    fn from(err: SemanticError) -> Self {
+        BackendError::Semantic(err)
+    }
+}
 impl BackendError {
     /// Returns the core error message without location prefix
     fn error_message(&self) -> String {
@@ -83,12 +107,17 @@ impl BackendError {
         }
     }
 
-    /// Returns the error context if available
-    fn error_context(&self) -> Option<&ErrorContext> {
+    fn location(&self) -> Option<&ItemLocation> {
         match self {
-            BackendError::TypeCodeGenFailed { context, .. }
-            | BackendError::FieldCodeGenFailed { context, .. }
-            | BackendError::VftableCodeGenFailed { context, .. } => Some(context),
+            BackendError::TypeCodeGenFailed {
+                location: context, ..
+            }
+            | BackendError::FieldCodeGenFailed {
+                location: context, ..
+            }
+            | BackendError::VftableCodeGenFailed {
+                location: context, ..
+            } => Some(context),
             _ => None,
         }
     }
@@ -102,111 +131,34 @@ impl BackendError {
 
         let message = self.error_message();
 
-        // Get context if available
-        let context = match self.error_context() {
-            Some(ctx) => ctx,
-            None => {
-                // No location info - create simple report
-                return format_ariadne_simple(&message);
-            }
+        let (filename, offset, length, source) = if let Some(location) = self.location()
+            && let Some(source) = source_store.get(location.filename.as_ref())
+        {
+            (
+                location.filename.as_ref(),
+                span::span_to_offset(source, &location.span),
+                span::span_length(source, &location.span),
+                source,
+            )
+        } else {
+            ("<unknown>", 0, 0, "")
         };
 
-        let location = &context.location;
-
-        // Try to get source
-        if let Some(source) = source_store.get(location.filename.as_ref()) {
-            format_ariadne_with_source(location, source, &message)
-        } else {
-            format_ariadne_without_source(location, &message)
-        }
-    }
-}
-
-/// Format an Ariadne report with source code available
-fn format_ariadne_with_source(location: &ItemLocation, source: &str, message: &str) -> String {
-    let offset = span::span_to_offset(source, &location.span);
-    let length = span::span_length(source, &location.span);
-
-    let report_builder = Report::build(ReportKind::Error, location.filename.as_ref(), offset)
-        .with_message(message)
-        .with_label(
-            Label::new((location.filename.as_ref(), offset..offset + length))
-                .with_message("error occurred here")
-                .with_color(ariadne::Color::Red),
-        );
-
-    let report = report_builder.finish();
-
-    let mut buffer = Vec::new();
-    report
-        .write(
-            (location.filename.as_ref(), Source::from(source)),
-            &mut buffer,
-        )
-        .expect("writing to Vec should not fail");
-    String::from_utf8_lossy(&buffer).to_string()
-}
-
-/// Format an Ariadne report without source code (just location note)
-fn format_ariadne_without_source(location: &ItemLocation, message: &str) -> String {
-    let placeholder_filename = location.filename.as_ref();
-    let report_builder =
-        Report::<(&str, std::ops::Range<usize>)>::build(ReportKind::Error, placeholder_filename, 0)
+        let report_builder = Report::build(ReportKind::Error, filename, offset)
             .with_message(message)
-            .with_note(format!(
-                "Error location: {}:{}:{}",
-                location.filename, location.span.start.line, location.span.start.column
-            ));
+            .with_label(
+                Label::new((filename, offset..offset + length))
+                    .with_message("error occurred here")
+                    .with_color(ariadne::Color::Red),
+            );
 
-    let report = report_builder.finish();
+        let report = report_builder.finish();
 
-    let mut buffer = Vec::new();
-    report
-        .write((placeholder_filename, Source::from("")), &mut buffer)
-        .expect("writing to Vec should not fail");
-    String::from_utf8_lossy(&buffer).to_string()
-}
-
-/// Format an Ariadne report with no location information at all
-fn format_ariadne_simple(message: &str) -> String {
-    let report = Report::<(&str, std::ops::Range<usize>)>::build(ReportKind::Error, "", 0)
-        .with_message(message)
-        .finish();
-
-    let mut buffer = Vec::new();
-    report
-        .write(("", Source::from("")), &mut buffer)
-        .expect("writing to Vec should not fail");
-    String::from_utf8_lossy(&buffer).to_string()
-}
-
-impl fmt::Display for BackendError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // Add location prefix if available
-        if let Some(context) = self.error_context() {
-            write!(f, "{}", span::format_error_location(context))?;
-        }
-        write!(f, "{}", self.error_message())
-    }
-}
-
-impl std::error::Error for BackendError {}
-
-impl From<syn::Error> for BackendError {
-    fn from(err: syn::Error) -> Self {
-        BackendError::Syntax(err)
-    }
-}
-
-impl From<std::fmt::Error> for BackendError {
-    fn from(err: std::fmt::Error) -> Self {
-        BackendError::Formatting(err.to_string())
-    }
-}
-
-impl From<SemanticError> for BackendError {
-    fn from(err: SemanticError) -> Self {
-        BackendError::Semantic(err)
+        let mut buffer = Vec::new();
+        report
+            .write((filename, Source::from(source)), &mut buffer)
+            .expect("writing to Vec should not fail");
+        String::from_utf8_lossy(&buffer).to_string()
     }
 }
 

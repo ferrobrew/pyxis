@@ -11,7 +11,7 @@ use crate::{
             TypeDefinition, Visibility,
         },
     },
-    span::{ErrorContext, ItemLocation},
+    span::ItemLocation,
 };
 
 use quote::{ToTokens, quote};
@@ -147,14 +147,13 @@ fn build_item(
     type_registry: &TypeRegistry,
     definition: &ItemDefinition,
 ) -> Result<proc_macro2::TokenStream> {
-    let resolved = definition.resolved().ok_or_else(|| {
-        let context = ErrorContext::new(definition.location.clone());
-        BackendError::TypeCodeGenFailed {
+    let resolved = definition
+        .resolved()
+        .ok_or_else(|| BackendError::TypeCodeGenFailed {
             type_path: definition.path.clone(),
             reason: "type was not resolved".to_string(),
-            context,
-        }
-    })?;
+            location: definition.location.clone(),
+        })?;
 
     let ItemStateResolved {
         size,
@@ -197,7 +196,7 @@ fn build_type(
     let name = path.last().ok_or_else(|| BackendError::TypeCodeGenFailed {
         type_path: path.clone(),
         reason: "failed to get last component of item path".to_string(),
-        context: ErrorContext::new(location.clone()),
+        location: location.clone(),
     })?;
 
     let TypeDefinition {
@@ -231,7 +230,7 @@ fn build_type(
                     type_path: path.clone(),
                     field_name: "unnamed".to_string(),
                     reason: "field name not present".to_string(),
-                    context: ErrorContext::new(field_location.clone()),
+                    location: field_location.clone(),
                 })?;
             let field_ident = str_to_ident(field_name);
             let visibility = visibility_to_tokens(*visibility);
@@ -460,7 +459,7 @@ fn build_enum(
     let name = path.last().ok_or_else(|| BackendError::TypeCodeGenFailed {
         type_path: path.clone(),
         reason: "failed to get last component of item path".to_string(),
-        context: ErrorContext::new(location.clone()),
+        location: location.clone(),
     })?;
 
     let EnumDefinition {
@@ -573,7 +572,7 @@ fn build_bitflags(
     let name = path.last().ok_or_else(|| BackendError::TypeCodeGenFailed {
         type_path: path.clone(),
         reason: "failed to get last component of item path".to_string(),
-        context: ErrorContext::new(location.clone()),
+        location: location.clone(),
     })?;
 
     let BitflagsDefinition {

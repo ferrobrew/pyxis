@@ -9,7 +9,7 @@ use crate::{
         type_registry::TypeRegistry,
         types::{Function, FunctionBody, ItemState, ItemStateResolved, Type, Visibility},
     },
-    span::{ErrorContext, ItemLocation},
+    span::ItemLocation,
     util,
 };
 
@@ -338,7 +338,7 @@ pub fn build(
                 if idx != 0 {
                     return Err(SemanticError::VftableMustBeFirst {
                         item_path: resolvee_path.clone(),
-                        context: ErrorContext::new(location.clone()),
+                        location: location.clone(),
                     });
                 }
 
@@ -695,7 +695,7 @@ fn resolve_regions(
                     region_name: existing_region,
                     address: offset,
                     existing_end: resolved.last_address,
-                    context: ErrorContext::new(region.location.clone()),
+                    location: region.location.clone(),
                 });
             };
             let padding_region = Region::unnamed_field(

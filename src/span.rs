@@ -134,30 +134,6 @@ impl std::fmt::Display for ItemLocation {
     }
 }
 
-/// Context information for error reporting
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ErrorContext {
-    /// Primary location where the error occurred
-    pub location: ItemLocation,
-}
-
-impl ErrorContext {
-    /// Create a new ErrorContext with the given location
-    pub fn new(location: ItemLocation) -> Self {
-        Self { location }
-    }
-
-    pub fn with_location(mut self, location: ItemLocation) -> Self {
-        self.location = location;
-        self
-    }
-
-    /// Helper to get filename and span from location
-    pub fn filename_and_span(&self) -> (&str, &Span) {
-        (self.location.filename.as_ref(), &self.location.span)
-    }
-}
-
 // Helper functions for span manipulation and ariadne integration
 
 /// Convert a Span to a byte offset in the source string
@@ -194,22 +170,6 @@ pub fn span_length(source: &str, span: &Span) -> usize {
             .sum();
         let last_line_len = span.end.column.saturating_sub(1);
         first_line_len + middle_lines_len + last_line_len
-    }
-}
-
-/// Format location prefix for error messages
-pub fn format_error_location(context: &ErrorContext) -> String {
-    format!(
-        "Error at {}:{}:{}: ",
-        context.location.filename,
-        context.location.span.start.line,
-        context.location.span.start.column
-    )
-}
-
-impl From<ItemLocation> for ErrorContext {
-    fn from(location: ItemLocation) -> Self {
-        Self::new(location)
     }
 }
 
