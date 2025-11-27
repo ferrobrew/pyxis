@@ -90,39 +90,19 @@ pub enum ParseError {
     Tokenizer(LexError),
 }
 impl ParseError {
-    /// Helper to format ariadne report without source code (creates report with location note)
-    fn format_ariadne_without_source(location: &ItemLocation, message: &str) -> String {
-        let placeholder_filename = location.filename.as_ref();
-        let report = Report::<(&str, std::ops::Range<usize>)>::build(
-            ReportKind::Error,
-            placeholder_filename,
-            0,
-        )
-        .with_message(message)
-        .with_note(format!(
-            "Error location: {}:{}:{}",
-            location.filename, location.span.start.line, location.span.start.column
-        ))
-        .finish();
-
-        let mut buffer = Vec::new();
-        if report
-            .write((placeholder_filename, Source::from("")), &mut buffer)
-            .is_ok()
-        {
-            return String::from_utf8_lossy(&buffer).to_string();
-        }
-        message.to_string()
-    }
-
     /// Helper to build ariadne report with source
     fn format_ariadne_with_source(
         location: &ItemLocation,
-        source: &str,
+        source_store: &mut dyn SourceStore,
         message: &str,
         label_message: &str,
     ) -> String {
-        let offset = crate::span::span_to_offset(source, &location.span);
+        let (offset, source) = if let Some(source) = source_store.get(location.filename.as_ref()) {
+            (crate::span::span_to_offset(source, &location.span), source)
+        } else {
+            (0, "")
+        };
+
         let report = Report::build(ReportKind::Error, location.filename.as_ref(), offset)
             .with_message(message)
             .with_label(
@@ -133,30 +113,13 @@ impl ParseError {
             .finish();
 
         let mut buffer = Vec::new();
-        if report
+        report
             .write(
                 (location.filename.as_ref(), Source::from(source)),
                 &mut buffer,
             )
-            .is_ok()
-        {
-            return String::from_utf8_lossy(&buffer).to_string();
-        }
-        message.to_string()
-    }
-
-    /// Helper to format ariadne report with optional source code
-    fn format_ariadne_with_optional_source(
-        location: &ItemLocation,
-        source_store: &mut dyn SourceStore,
-        message: &str,
-        label_message: &str,
-    ) -> String {
-        if let Some(source) = source_store.get(location.filename.as_ref()) {
-            Self::format_ariadne_with_source(location, source, message, label_message)
-        } else {
-            Self::format_ariadne_without_source(location, message)
-        }
+            .expect("writing to Vec should not fail");
+        String::from_utf8_lossy(&buffer).to_string()
     }
 
     /// Format error with ariadne using a source store. Always produces ariadne-formatted output.
@@ -166,57 +129,41 @@ impl ParseError {
                 expected,
                 found,
                 location,
-            } => {
-                let message = format!("Expected {expected:?}, found {found:?}");
-                let label = format!("expected {expected:?} here");
-                if let Some(source) = source_store.get(location.filename.as_ref()) {
-                    Self::format_ariadne_with_source(location, source, &message, &label)
-                } else {
-                    Self::format_ariadne_without_source(location, &message)
-                }
-            }
-            ParseError::ExpectedIdentifier { found, location } => {
-                let message = format!("Expected identifier, found {found:?}");
-                Self::format_ariadne_with_optional_source(
-                    location,
-                    source_store,
-                    &message,
-                    "expected identifier here",
-                )
-            }
-            ParseError::ExpectedType { found, location } => {
-                let message = format!("Expected type, found {found:?}");
-                Self::format_ariadne_with_optional_source(
-                    location,
-                    source_store,
-                    &message,
-                    "expected type here",
-                )
-            }
-            ParseError::ExpectedExpression { found, location } => {
-                let message = format!("Expected expression, found {found:?}");
-                Self::format_ariadne_with_optional_source(
-                    location,
-                    source_store,
-                    &message,
-                    "expected expression here",
-                )
-            }
-            ParseError::ExpectedIntLiteral { found, location } => {
-                let message = format!("Expected integer literal, found {found:?}");
-                Self::format_ariadne_with_optional_source(
-                    location,
-                    source_store,
-                    &message,
-                    "expected integer literal here",
-                )
-            }
+            } => Self::format_ariadne_with_source(
+                location,
+                source_store,
+                &format!("Expected {expected:?}, found {found:?}"),
+                &format!("expected {expected:?} here"),
+            ),
+            ParseError::ExpectedIdentifier { found, location } => Self::format_ariadne_with_source(
+                location,
+                source_store,
+                &format!("Expected identifier, found {found:?}"),
+                "expected identifier here",
+            ),
+            ParseError::ExpectedType { found, location } => Self::format_ariadne_with_source(
+                location,
+                source_store,
+                &format!("Expected type, found {found:?}"),
+                "expected type here",
+            ),
+            ParseError::ExpectedExpression { found, location } => Self::format_ariadne_with_source(
+                location,
+                source_store,
+                &format!("Expected expression, found {found:?}"),
+                "expected expression here",
+            ),
+            ParseError::ExpectedIntLiteral { found, location } => Self::format_ariadne_with_source(
+                location,
+                source_store,
+                &format!("Expected integer literal, found {found:?}"),
+                "expected integer literal here",
+            ),
             ParseError::ExpectedStringLiteral { found, location } => {
-                let message = format!("Expected string literal, found {found:?}");
-                Self::format_ariadne_with_optional_source(
+                Self::format_ariadne_with_source(
                     location,
                     source_store,
-                    &message,
+                    &format!("Expected string literal, found {found:?}"),
                     "expected string literal here",
                 )
             }
@@ -224,73 +171,61 @@ impl ParseError {
                 kind,
                 value,
                 location,
-            } => {
-                let message = format!("Invalid {kind} literal: {value}");
-                Self::format_ariadne_with_optional_source(
-                    location,
-                    source_store,
-                    &message,
-                    "invalid literal",
-                )
-            }
-            ParseError::MissingPointerQualifier { location } => {
-                Self::format_ariadne_with_optional_source(
-                    location,
-                    source_store,
-                    "Expected const or mut after *",
-                    "expected 'const' or 'mut' here",
-                )
-            }
-            ParseError::SuperNotSupported { location } => {
-                Self::format_ariadne_with_optional_source(
-                    location,
-                    source_store,
-                    "super not supported",
-                    "super keyword not supported",
-                )
-            }
+            } => Self::format_ariadne_with_source(
+                location,
+                source_store,
+                &format!("Invalid {kind} literal: {value}"),
+                "invalid literal",
+            ),
+            ParseError::MissingPointerQualifier { location } => Self::format_ariadne_with_source(
+                location,
+                source_store,
+                "Expected const or mut after *",
+                "expected 'const' or 'mut' here",
+            ),
+            ParseError::SuperNotSupported { location } => Self::format_ariadne_with_source(
+                location,
+                source_store,
+                "super not supported",
+                "super keyword not supported",
+            ),
             ParseError::UnexpectedModuleToken { found, location } => {
-                let message = format!("Unexpected token at module level: {found:?}");
-                Self::format_ariadne_with_optional_source(
+                Self::format_ariadne_with_source(
                     location,
                     source_store,
-                    &message,
+                    &format!("Unexpected token at module level: {found:?}"),
                     "unexpected token",
                 )
             }
             ParseError::UnexpectedTokenAfterAttributes { found, location } => {
-                let message = format!("Unexpected token after attributes: {found:?}");
-                Self::format_ariadne_with_optional_source(
+                Self::format_ariadne_with_source(
                     location,
                     source_store,
-                    &message,
+                    &format!("Unexpected token after attributes: {found:?}"),
                     "unexpected token after attributes",
                 )
             }
             ParseError::ExpectedItemDefinition { found, location } => {
-                let message = format!("Expected type, enum, or bitflags, found {found:?}");
-                Self::format_ariadne_with_optional_source(
+                Self::format_ariadne_with_source(
                     location,
                     source_store,
-                    &message,
+                    &format!("Expected type, enum, or bitflags, found {found:?}"),
                     "expected type, enum, or bitflags here",
                 )
             }
             ParseError::ExpectedBackendContent { found, location } => {
-                let message = format!("Expected LBrace, Prologue, or Epilogue, found {found:?}");
-                Self::format_ariadne_with_optional_source(
+                Self::format_ariadne_with_source(
                     location,
                     source_store,
-                    &message,
+                    &format!("Expected LBrace, Prologue, or Epilogue, found {found:?}"),
                     "expected backend content here",
                 )
             }
             ParseError::ExpectedPrologueOrEpilogue { found, location } => {
-                let message = format!("Expected prologue or epilogue, found {found:?}");
-                Self::format_ariadne_with_optional_source(
+                Self::format_ariadne_with_source(
                     location,
                     source_store,
-                    &message,
+                    &format!("Expected prologue or epilogue, found {found:?}"),
                     "expected prologue or epilogue here",
                 )
             }
