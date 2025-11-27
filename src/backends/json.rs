@@ -599,7 +599,7 @@ fn convert_item(item: &ItemDefinition, type_registry: &TypeRegistry) -> Option<J
     })
 }
 
-fn convert_extern_value(ev: &ExternValue) -> JsonExternValue {
+fn convert_extern_value(ev: Located<&ExternValue>) -> JsonExternValue {
     JsonExternValue {
         visibility: ev.visibility.into(),
         name: ev.name.clone(),
@@ -636,7 +636,7 @@ fn build_module_hierarchy(semantic_state: &ResolvedSemanticState) -> BTreeMap<St
         let extern_values: Vec<JsonExternValue> = module
             .extern_values
             .iter()
-            .map(convert_extern_value)
+            .map(|ev| convert_extern_value(ev.as_ref()))
             .collect();
         let functions: Vec<JsonFunction> = module
             .functions()

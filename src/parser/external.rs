@@ -1,6 +1,6 @@
 use crate::{
     grammar::{Attributes, Backend, Expr, ExternValue, Ident, ItemPath, ModuleItem, StringFormat},
-    span::{ItemLocation, Span},
+    span::{ItemLocation, Located, Span},
     tokenizer::TokenKind,
 };
 
@@ -95,7 +95,7 @@ impl Parser {
         ))
     }
 
-    pub(crate) fn parse_extern_value(&mut self) -> Result<ExternValue, ParseError> {
+    pub(crate) fn parse_extern_value(&mut self) -> Result<Located<ExternValue>, ParseError> {
         let start_pos = self.current().location.span.start;
         let mut doc_comments = self.collect_doc_comments();
         let attributes = if matches!(self.peek(), TokenKind::Hash) {
@@ -121,14 +121,16 @@ impl Parser {
         };
         let location = self.item_location_from_locations(start_pos, end_pos);
 
-        Ok(ExternValue {
-            visibility,
-            name,
-            type_,
-            attributes,
-            doc_comments,
+        Ok(Located::new(
+            ExternValue {
+                visibility,
+                name,
+                type_,
+                attributes,
+                doc_comments,
+            },
             location,
-        })
+        ))
     }
 
     pub(crate) fn parse_backend(&mut self) -> Result<Backend, ParseError> {

@@ -15,7 +15,7 @@ use crate::{
             PredefinedItem, Type, TypeDefinition, Visibility,
         },
     },
-    span::ItemLocation,
+    span::{ItemLocation, Located},
 };
 
 pub struct SemanticState {
@@ -113,13 +113,15 @@ impl SemanticState {
                     location: ev.location.clone(),
                 })?;
 
-                Ok(ExternValue {
-                    visibility: Visibility::from(ev.visibility),
-                    name: name.as_str().to_owned(),
-                    type_: Type::Unresolved(ev.type_.clone()),
-                    address,
-                    location: ev.location.clone(),
-                })
+                Ok(Located::new(
+                    ExternValue {
+                        visibility: Visibility::from(ev.visibility),
+                        name: name.as_str().to_owned(),
+                        type_: Type::Unresolved(ev.type_.clone()),
+                        address,
+                    },
+                    ev.location.clone(),
+                ))
             })
             .collect::<Result<Vec<_>>>()?;
 

@@ -16,7 +16,7 @@ pub struct Module {
     pub(crate) path: ItemPath,
     pub(crate) ast: grammar::Module,
     pub(crate) definition_paths: BTreeSet<ItemPath>,
-    pub(crate) extern_values: Vec<ExternValue>,
+    pub(crate) extern_values: Vec<Located<ExternValue>>,
     pub(crate) functions: Vec<Located<Function>>,
     pub(crate) impls: BTreeMap<ItemPath, grammar::FunctionBlock>,
     pub(crate) backends: BTreeMap<String, Vec<Backend>>,
@@ -42,7 +42,7 @@ impl Module {
     pub(crate) fn new(
         path: ItemPath,
         ast: grammar::Module,
-        extern_values: Vec<ExternValue>,
+        extern_values: Vec<Located<ExternValue>>,
         impls: &[grammar::FunctionBlock],
         backends: &[grammar::Backend],
     ) -> Result<Self> {

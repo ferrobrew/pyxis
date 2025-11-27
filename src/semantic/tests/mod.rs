@@ -652,13 +652,12 @@ fn can_define_extern_value() {
         .unwrap();
 
     assert_eq!(
-        extern_value,
+        &extern_value.value,
         &SEV {
             visibility: SV::Public,
             name: "test".into(),
             type_: ST::raw("u32").mut_pointer(),
             address: 0x1337,
-            location: ItemLocation::test(),
         }
     );
 }

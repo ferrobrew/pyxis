@@ -55,29 +55,21 @@ pub mod test_aliases {
     pub type B = super::Backend;
     pub type V = super::Visibility;
     pub type EV = super::ExternValue;
-
-    /// Helper to create an IntLiteral expression (defaults to decimal format)
     pub fn int_literal(value: isize) -> E {
         E::IntLiteral {
             value,
             format: super::IntFormat::Decimal,
         }
     }
-
-    /// Helper to create an IntLiteral expression with a specific format
     pub fn int_literal_with_format(value: isize, format: super::IntFormat) -> E {
         E::IntLiteral { value, format }
     }
-
-    /// Helper to create a StringLiteral expression (defaults to regular format)
     pub fn string_literal(value: impl Into<String>) -> E {
         E::StringLiteral {
             value: value.into(),
             format: super::StringFormat::Regular,
         }
     }
-
-    /// Helper to create a StringLiteral expression with a specific format
     pub fn string_literal_with_format(value: impl Into<String>, format: super::StringFormat) -> E {
         E::StringLiteral {
             value: value.into(),
@@ -397,7 +389,6 @@ impl StripLocations for AttributeItem {
 }
 
 impl AttributeItem {
-    /// Helper to extract just the expressions from a list of attribute items
     pub fn extract_exprs(items: &[AttributeItem]) -> Vec<&Expr> {
         items
             .iter()
@@ -836,8 +827,6 @@ impl TypeDefinition {
         self.following_comments = following_comments;
         self
     }
-
-    /// Helper to extract just the statements (for compatibility)
     pub fn statements(&self) -> impl Iterator<Item = &TypeStatement> {
         self.items.iter().filter_map(|item| match item {
             TypeDefItem::Statement(stmt) => Some(stmt),
@@ -1129,7 +1118,6 @@ impl BitflagsDefinition {
     }
 }
 impl BitflagsDefinition {
-    /// Helper to extract just the statements (for compatibility)
     pub fn statements(&self) -> impl Iterator<Item = &BitflagsStatement> {
         self.items.iter().filter_map(|item| match item {
             BitflagsDefItem::Statement(stmt) => Some(stmt),
@@ -1279,7 +1267,6 @@ impl FunctionBlock {
     }
 }
 impl FunctionBlock {
-    /// Helper to extract just the functions (for compatibility)
     pub fn functions(&self) -> impl Iterator<Item = Located<&Function>> {
         self.items.iter().filter_map(|item| {
             item.as_ref()
@@ -1357,7 +1344,6 @@ pub struct ExternValue {
     pub type_: Located<Type>,
     pub attributes: Attributes,
     pub doc_comments: Vec<String>,
-    pub location: ItemLocation,
 }
 #[cfg(test)]
 impl StripLocations for ExternValue {
@@ -1368,7 +1354,6 @@ impl StripLocations for ExternValue {
             type_: self.type_.strip_locations(),
             attributes: self.attributes.strip_locations(),
             doc_comments: self.doc_comments.strip_locations(),
-            location: self.location.strip_locations(),
         }
     }
 }
@@ -1386,15 +1371,10 @@ impl ExternValue {
             type_: Located::test(type_),
             attributes: attributes.into(),
             doc_comments: vec![],
-            location: ItemLocation::test(),
         }
     }
     pub fn with_doc_comments(mut self, doc_comments: Vec<String>) -> Self {
         self.doc_comments = doc_comments;
-        self
-    }
-    pub fn with_location(mut self, location: ItemLocation) -> Self {
-        self.location = location;
         self
     }
 }
@@ -1408,7 +1388,7 @@ pub enum ModuleItem {
     Backend(Backend),
     Definition(ItemDefinition),
     Impl(FunctionBlock),
-    ExternValue(ExternValue),
+    ExternValue(Located<ExternValue>),
     Function(Located<Function>),
 }
 #[cfg(test)]
@@ -1479,8 +1459,11 @@ impl Module {
         }
         self
     }
-    pub fn with_extern_values(mut self, extern_values: impl Into<Vec<ExternValue>>) -> Self {
-        for extern_value in extern_values.into() {
+    pub fn with_extern_values(
+        mut self,
+        extern_values: impl IntoIterator<Item = ExternValue>,
+    ) -> Self {
+        for extern_value in extern_values.into_iter().map(Located::test) {
             self.items.push(ModuleItem::ExternValue(extern_value));
         }
         self
@@ -1519,55 +1502,42 @@ impl Module {
     }
 }
 impl Module {
-    /// Helper to extract uses (for compatibility)
     pub fn uses(&self) -> impl Iterator<Item = &ItemPath> {
         self.items.iter().filter_map(|item| match item {
             ModuleItem::Use(path) => Some(path),
             _ => None,
         })
     }
-
-    /// Helper to extract extern_types (for compatibility)
     pub fn extern_types(&self) -> impl Iterator<Item = (&Ident, &Attributes, &ItemLocation)> {
         self.items.iter().filter_map(|item| match item {
             ModuleItem::ExternType(name, attrs, _, location) => Some((name, attrs, location)),
             _ => None,
         })
     }
-
-    /// Helper to extract extern_values (for compatibility)
-    pub fn extern_values(&self) -> impl Iterator<Item = &ExternValue> {
+    pub fn extern_values(&self) -> impl Iterator<Item = Located<&ExternValue>> {
         self.items.iter().filter_map(|item| match item {
-            ModuleItem::ExternValue(ev) => Some(ev),
+            ModuleItem::ExternValue(ev) => Some(ev.as_ref()),
             _ => None,
         })
     }
-
-    /// Helper to extract functions (for compatibility)
     pub fn functions(&self) -> impl Iterator<Item = Located<&Function>> {
         self.items.iter().filter_map(|item| match item {
             ModuleItem::Function(func) => Some(func.as_ref()),
             _ => None,
         })
     }
-
-    /// Helper to extract definitions (for compatibility)
     pub fn definitions(&self) -> impl Iterator<Item = &ItemDefinition> {
         self.items.iter().filter_map(|item| match item {
             ModuleItem::Definition(def) => Some(def),
             _ => None,
         })
     }
-
-    /// Helper to extract impls (for compatibility)
     pub fn impls(&self) -> impl Iterator<Item = &FunctionBlock> {
         self.items.iter().filter_map(|item| match item {
             ModuleItem::Impl(impl_block) => Some(impl_block),
             _ => None,
         })
     }
-
-    /// Helper to extract backends (for compatibility)
     pub fn backends(&self) -> impl Iterator<Item = &Backend> {
         self.items.iter().filter_map(|item| match item {
             ModuleItem::Backend(backend) => Some(backend),
