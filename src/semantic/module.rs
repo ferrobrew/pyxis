@@ -5,7 +5,7 @@ use crate::{
     semantic::{
         error::{Result, SemanticError, TypeResolutionContext},
         function::Function,
-        type_registry,
+        type_registry::TypeRegistry,
         types::{Backend, ExternValue, ItemDefinition, Type},
     },
     span::ItemLocation,
@@ -85,7 +85,7 @@ impl Module {
 
     pub fn definitions<'a>(
         &'a self,
-        type_registry: &'a type_registry::TypeRegistry,
+        type_registry: &'a TypeRegistry,
     ) -> impl Iterator<Item = &'a ItemDefinition> {
         self.definition_paths()
             .iter()
@@ -98,10 +98,7 @@ impl Module {
             .collect()
     }
 
-    pub(crate) fn resolve_extern_values(
-        &mut self,
-        type_registry: &mut type_registry::TypeRegistry,
-    ) -> Result<()> {
+    pub(crate) fn resolve_extern_values(&mut self, type_registry: &mut TypeRegistry) -> Result<()> {
         let scope = self.scope();
 
         for ev in &mut self.extern_values {
@@ -121,10 +118,7 @@ impl Module {
         Ok(())
     }
 
-    pub(crate) fn resolve_functions(
-        &mut self,
-        type_registry: &type_registry::TypeRegistry,
-    ) -> Result<()> {
+    pub(crate) fn resolve_functions(&mut self, type_registry: &TypeRegistry) -> Result<()> {
         let scope = self.scope();
 
         for function in self.ast.functions().collect::<Vec<_>>() {

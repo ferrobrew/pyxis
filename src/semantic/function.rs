@@ -22,6 +22,20 @@ pub enum Argument {
     MutSelf(ItemLocation),
     Field(String, Type, ItemLocation),
 }
+#[cfg(test)]
+impl StripLocations for Argument {
+    fn strip_locations(&self) -> Self {
+        match self {
+            Argument::ConstSelf(l) => Argument::ConstSelf(l.strip_locations()),
+            Argument::MutSelf(l) => Argument::MutSelf(l.strip_locations()),
+            Argument::Field(name, ty, l) => Argument::Field(
+                name.strip_locations(),
+                ty.strip_locations(),
+                l.strip_locations(),
+            ),
+        }
+    }
+}
 impl fmt::Display for Argument {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -68,6 +82,12 @@ pub enum CallingConvention {
     Thiscall,
     Vectorcall,
     System,
+}
+#[cfg(test)]
+impl StripLocations for CallingConvention {
+    fn strip_locations(&self) -> Self {
+        *self
+    }
 }
 impl CallingConvention {
     pub const ALL: &'static [CallingConvention] = &[
@@ -143,7 +163,26 @@ pub enum FunctionBody {
         function_name: String,
     },
 }
-
+#[cfg(test)]
+impl StripLocations for FunctionBody {
+    fn strip_locations(&self) -> Self {
+        match self {
+            FunctionBody::Address { address } => FunctionBody::Address {
+                address: address.strip_locations(),
+            },
+            FunctionBody::Field {
+                field,
+                function_name,
+            } => FunctionBody::Field {
+                field: field.strip_locations(),
+                function_name: function_name.strip_locations(),
+            },
+            FunctionBody::Vftable { function_name } => FunctionBody::Vftable {
+                function_name: function_name.strip_locations(),
+            },
+        }
+    }
+}
 impl FunctionBody {
     pub fn address(address: usize) -> Self {
         FunctionBody::Address { address }
@@ -230,6 +269,21 @@ impl Function {
     }
 }
 #[cfg(test)]
+impl StripLocations for Function {
+    fn strip_locations(&self) -> Self {
+        Function {
+            visibility: self.visibility.strip_locations(),
+            name: self.name.strip_locations(),
+            doc: self.doc.strip_locations(),
+            body: self.body.strip_locations(),
+            arguments: self.arguments.strip_locations(),
+            return_type: self.return_type.strip_locations(),
+            calling_convention: self.calling_convention.strip_locations(),
+            location: self.location.strip_locations(),
+        }
+    }
+}
+#[cfg(test)]
 impl Function {
     pub fn new(
         (visibility, name): (Visibility, impl Into<String>),
@@ -266,22 +320,6 @@ impl Function {
     pub fn with_doc(mut self, doc: impl IntoIterator<Item = impl Into<String>>) -> Self {
         self.doc = doc.into_iter().map(|s| s.into()).collect();
         self
-    }
-}
-
-#[cfg(test)]
-impl StripLocations for Function {
-    fn strip_locations(&self) -> Self {
-        Function {
-            visibility: self.visibility,
-            name: self.name.clone(),
-            doc: self.doc.clone(),
-            body: self.body.clone(),
-            arguments: self.arguments.clone(),
-            return_type: self.return_type.clone(),
-            calling_convention: self.calling_convention,
-            location: ItemLocation::test(),
-        }
     }
 }
 

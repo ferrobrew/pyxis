@@ -40,8 +40,8 @@ impl crate::span::StripLocations for TypeVftable {
     fn strip_locations(&self) -> Self {
         TypeVftable {
             functions: self.functions.strip_locations(),
-            base_field: self.base_field.clone(),
-            type_: self.type_.clone(),
+            base_field: self.base_field.strip_locations(),
+            type_: self.type_.strip_locations(),
         }
     }
 }

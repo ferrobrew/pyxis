@@ -28,6 +28,19 @@ pub struct Region {
     pub is_base: bool,
     pub location: ItemLocation,
 }
+#[cfg(test)]
+impl StripLocations for Region {
+    fn strip_locations(&self) -> Self {
+        Region {
+            visibility: self.visibility.strip_locations(),
+            name: self.name.strip_locations(),
+            doc: self.doc.strip_locations(),
+            type_ref: self.type_ref.strip_locations(),
+            is_base: self.is_base.strip_locations(),
+            location: self.location.strip_locations(),
+        }
+    }
+}
 impl Region {
     #[cfg(test)]
     /// Test-only constructor for field that uses a synthetic location
@@ -82,6 +95,22 @@ pub struct TypeDefinition {
     pub cloneable: bool,
     pub defaultable: bool,
     pub packed: bool,
+}
+#[cfg(test)]
+impl StripLocations for TypeDefinition {
+    fn strip_locations(&self) -> Self {
+        TypeDefinition {
+            regions: self.regions.strip_locations(),
+            doc: self.doc.strip_locations(),
+            associated_functions: self.associated_functions.strip_locations(),
+            vftable: self.vftable.strip_locations(),
+            singleton: self.singleton.strip_locations(),
+            copyable: self.copyable.strip_locations(),
+            cloneable: self.cloneable.strip_locations(),
+            defaultable: self.defaultable.strip_locations(),
+            packed: self.packed.strip_locations(),
+        }
+    }
 }
 impl TypeDefinition {
     pub fn new() -> Self {
@@ -831,35 +860,4 @@ fn get_region_name_and_type_definition<'a>(
     };
 
     Ok(Some((region_name, region_type)))
-}
-
-#[cfg(test)]
-impl StripLocations for Region {
-    fn strip_locations(&self) -> Self {
-        Region {
-            visibility: self.visibility,
-            name: self.name.clone(),
-            doc: self.doc.clone(),
-            type_ref: self.type_ref.clone(),
-            is_base: self.is_base,
-            location: ItemLocation::test(),
-        }
-    }
-}
-
-#[cfg(test)]
-impl StripLocations for TypeDefinition {
-    fn strip_locations(&self) -> Self {
-        TypeDefinition {
-            regions: self.regions.strip_locations(),
-            doc: self.doc.clone(),
-            associated_functions: self.associated_functions.strip_locations(),
-            vftable: self.vftable.as_ref().map(|v| v.strip_locations()),
-            singleton: self.singleton,
-            copyable: self.copyable,
-            cloneable: self.cloneable,
-            defaultable: self.defaultable,
-            packed: self.packed,
-        }
-    }
 }

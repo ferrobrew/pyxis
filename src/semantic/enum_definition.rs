@@ -1,3 +1,5 @@
+#[cfg(test)]
+use crate::span::StripLocations;
 use crate::{
     grammar::{self, ItemPath},
     semantic::{
@@ -19,6 +21,22 @@ pub struct EnumDefinition {
     pub cloneable: bool,
     pub default: Option<usize>,
 }
+#[cfg(test)]
+impl StripLocations for EnumDefinition {
+    fn strip_locations(&self) -> Self {
+        EnumDefinition {
+            type_: self.type_.strip_locations(),
+            doc: self.doc.strip_locations(),
+            fields: self.fields.strip_locations(),
+            associated_functions: self.associated_functions.strip_locations(),
+            singleton: self.singleton.strip_locations(),
+            copyable: self.copyable.strip_locations(),
+            cloneable: self.cloneable.strip_locations(),
+            default: self.default.strip_locations(),
+        }
+    }
+}
+#[cfg(test)]
 impl EnumDefinition {
     pub fn new(type_: Type) -> Self {
         EnumDefinition {

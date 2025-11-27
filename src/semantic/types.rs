@@ -43,6 +43,12 @@ pub enum Visibility {
     Public,
     Private,
 }
+#[cfg(test)]
+impl StripLocations for Visibility {
+    fn strip_locations(&self) -> Self {
+        *self
+    }
+}
 impl From<grammar::Visibility> for Visibility {
     fn from(v: grammar::Visibility) -> Self {
         match v {
@@ -64,6 +70,23 @@ pub enum Type {
         Vec<(String, Box<Type>)>,
         Option<Box<Type>>,
     ),
+}
+#[cfg(test)]
+impl StripLocations for Type {
+    fn strip_locations(&self) -> Self {
+        match self {
+            Type::Unresolved(located) => Type::Unresolved(located.strip_locations()),
+            Type::Raw(item_path) => Type::Raw(item_path.strip_locations()),
+            Type::ConstPointer(t) => Type::ConstPointer(t.strip_locations()),
+            Type::MutPointer(t) => Type::MutPointer(t.strip_locations()),
+            Type::Array(t, n) => Type::Array(t.strip_locations(), n.strip_locations()),
+            Type::Function(calling_convention, items, return_type) => Type::Function(
+                calling_convention.strip_locations(),
+                items.strip_locations(),
+                return_type.strip_locations(),
+            ),
+        }
+    }
 }
 impl Type {
     /// Returns `None` if this type is unresolved
@@ -186,6 +209,18 @@ pub enum ItemDefinitionInner {
     Enum(EnumDefinition),
     Bitflags(BitflagsDefinition),
 }
+#[cfg(test)]
+impl StripLocations for ItemDefinitionInner {
+    fn strip_locations(&self) -> Self {
+        match self {
+            ItemDefinitionInner::Type(td) => ItemDefinitionInner::Type(td.strip_locations()),
+            ItemDefinitionInner::Enum(ed) => ItemDefinitionInner::Enum(ed.strip_locations()),
+            ItemDefinitionInner::Bitflags(bd) => {
+                ItemDefinitionInner::Bitflags(bd.strip_locations())
+            }
+        }
+    }
+}
 impl From<TypeDefinition> for ItemDefinitionInner {
     fn from(td: TypeDefinition) -> Self {
         ItemDefinitionInner::Type(td)
@@ -228,18 +263,6 @@ impl ItemDefinitionInner {
             ItemDefinitionInner::Bitflags(_) => "a bitflags",
         }
     }
-    pub fn doc(&self) -> Option<String> {
-        let docs = match self {
-            ItemDefinitionInner::Type(t) => t.doc(),
-            ItemDefinitionInner::Enum(e) => e.doc(),
-            ItemDefinitionInner::Bitflags(b) => b.doc(),
-        };
-        if docs.is_empty() {
-            None
-        } else {
-            Some(docs.join("\n"))
-        }
-    }
 }
 
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]
@@ -247,6 +270,16 @@ pub struct ItemStateResolved {
     pub size: usize,
     pub alignment: usize,
     pub inner: ItemDefinitionInner,
+}
+#[cfg(test)]
+impl StripLocations for ItemStateResolved {
+    fn strip_locations(&self) -> Self {
+        ItemStateResolved {
+            size: self.size.strip_locations(),
+            alignment: self.alignment.strip_locations(),
+            inner: self.inner.strip_locations(),
+        }
+    }
 }
 impl From<ItemStateResolved> for ItemState {
     fn from(isr: ItemStateResolved) -> Self {
@@ -268,6 +301,15 @@ pub enum ItemState {
     Unresolved(grammar::ItemDefinition),
     Resolved(ItemStateResolved),
 }
+#[cfg(test)]
+impl StripLocations for ItemState {
+    fn strip_locations(&self) -> Self {
+        match self {
+            ItemState::Unresolved(def) => ItemState::Unresolved(def.strip_locations()),
+            ItemState::Resolved(resolved) => ItemState::Resolved(resolved.strip_locations()),
+        }
+    }
+}
 
 #[derive(PartialEq, Eq, Debug, Copy, Clone, Hash)]
 pub enum ItemCategory {
@@ -275,12 +317,23 @@ pub enum ItemCategory {
     Predefined,
     Extern,
 }
-
+#[cfg(test)]
+impl StripLocations for ItemCategory {
+    fn strip_locations(&self) -> Self {
+        *self
+    }
+}
 macro_rules! predefined_items {
     ($(($variant:ident, $name:expr, $size:expr)),* $(,)?) => {
         #[derive(PartialEq, Eq, Debug, Copy, Clone, Hash)]
         pub enum PredefinedItem {
             $($variant),*
+        }
+        #[cfg(test)]
+        impl StripLocations for PredefinedItem {
+            fn strip_locations(&self) -> Self {
+                *self
+            }
         }
         impl PredefinedItem {
             pub const ALL: &'static [PredefinedItem] = &[
@@ -327,6 +380,20 @@ pub struct ItemDefinition {
     pub category: ItemCategory,
     pub predefined: Option<PredefinedItem>,
     pub location: ItemLocation,
+}
+#[cfg(test)]
+// StripSpans implementations for testing
+impl StripLocations for ItemDefinition {
+    fn strip_locations(&self) -> Self {
+        ItemDefinition {
+            visibility: self.visibility.strip_locations(),
+            path: self.path.strip_locations(),
+            state: self.state.strip_locations(),
+            category: self.category.strip_locations(),
+            predefined: self.predefined.strip_locations(),
+            location: self.location.strip_locations(),
+        }
+    }
 }
 impl ItemDefinition {
     /// Test-only constructor for category_resolved that uses a synthetic location
@@ -406,51 +473,4 @@ pub struct ExternValue {
     pub type_: Type,
     pub address: usize,
     pub location: ItemLocation,
-}
-
-#[cfg(test)]
-// StripSpans implementations for testing
-impl StripLocations for ItemDefinition {
-    fn strip_locations(&self) -> Self {
-        ItemDefinition {
-            visibility: self.visibility,
-            path: self.path.clone(),
-            state: self.state.strip_locations(),
-            category: self.category,
-            predefined: self.predefined,
-            location: ItemLocation::test(),
-        }
-    }
-}
-
-#[cfg(test)]
-impl StripLocations for ItemState {
-    fn strip_locations(&self) -> Self {
-        match self {
-            ItemState::Unresolved(def) => ItemState::Unresolved(def.clone()),
-            ItemState::Resolved(resolved) => ItemState::Resolved(resolved.strip_locations()),
-        }
-    }
-}
-
-#[cfg(test)]
-impl StripLocations for ItemStateResolved {
-    fn strip_locations(&self) -> Self {
-        ItemStateResolved {
-            size: self.size,
-            alignment: self.alignment,
-            inner: self.inner.strip_locations(),
-        }
-    }
-}
-
-#[cfg(test)]
-impl StripLocations for ItemDefinitionInner {
-    fn strip_locations(&self) -> Self {
-        match self {
-            ItemDefinitionInner::Type(td) => ItemDefinitionInner::Type(td.strip_locations()),
-            ItemDefinitionInner::Enum(ed) => ItemDefinitionInner::Enum(ed.clone()),
-            ItemDefinitionInner::Bitflags(bd) => ItemDefinitionInner::Bitflags(bd.clone()),
-        }
-    }
 }
