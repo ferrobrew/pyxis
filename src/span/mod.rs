@@ -180,6 +180,11 @@ impl<T, E> Located<Result<T, E>> {
         self.value.map(|value| Located::new(value, self.location))
     }
 }
+impl<T> Located<Option<T>> {
+    pub fn transpose(self) -> Option<Located<T>> {
+        self.value.map(|value| Located::new(value, self.location))
+    }
+}
 
 // Helper functions for span manipulation and ariadne integration
 

@@ -7,7 +7,7 @@ use crate::{
         error::{Result, SemanticError, TypeResolutionContext},
         types::{Function, ItemStateResolved, Type},
     },
-    span::ItemLocation,
+    span::{ItemLocation, Located},
 };
 
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]
@@ -15,7 +15,7 @@ pub struct EnumDefinition {
     pub type_: Type,
     pub doc: Vec<String>,
     pub fields: Vec<(String, isize)>,
-    pub associated_functions: Vec<Function>,
+    pub associated_functions: Vec<Located<Function>>,
     pub singleton: Option<usize>,
     pub copyable: bool,
     pub cloneable: bool,
@@ -63,9 +63,12 @@ impl EnumDefinition {
     }
     pub fn with_associated_functions(
         mut self,
-        associated_functions: impl Into<Vec<Function>>,
+        associated_functions: impl IntoIterator<Item = Function>,
     ) -> Self {
-        self.associated_functions = associated_functions.into();
+        self.associated_functions = associated_functions
+            .into_iter()
+            .map(Located::test)
+            .collect();
         self
     }
     pub fn with_singleton(mut self, singleton: usize) -> Self {

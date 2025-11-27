@@ -608,7 +608,6 @@ pub struct Function {
     pub doc_comments: Vec<String>,
     pub arguments: Vec<Located<Argument>>,
     pub return_type: Option<Located<Type>>,
-    pub location: ItemLocation,
 }
 #[cfg(test)]
 impl StripLocations for Function {
@@ -620,7 +619,6 @@ impl StripLocations for Function {
             doc_comments: self.doc_comments.strip_locations(),
             arguments: self.arguments.strip_locations(),
             return_type: self.return_type.strip_locations(),
-            location: self.location.strip_locations(),
         }
     }
 }
@@ -637,7 +635,6 @@ impl Function {
             doc_comments: vec![],
             arguments: arguments.into_iter().map(Located::test).collect(),
             return_type: None,
-            location: ItemLocation::test(),
         }
     }
     pub fn with_attributes(mut self, attributes: impl Into<Attributes>) -> Self {
@@ -650,10 +647,6 @@ impl Function {
     }
     pub fn with_return_type(mut self, return_type: impl Into<Type>) -> Self {
         self.return_type = Some(Located::test(return_type.into()));
-        self
-    }
-    pub fn with_location(mut self, location: ItemLocation) -> Self {
-        self.location = location;
         self
     }
 }
@@ -679,7 +672,7 @@ impl From<(Ident, Expr)> for ExprField {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TypeField {
     Field(Visibility, Ident, Located<Type>),
-    Vftable(Vec<Function>),
+    Vftable(Vec<Located<Function>>),
 }
 #[cfg(test)]
 impl StripLocations for TypeField {
@@ -706,7 +699,7 @@ impl TypeField {
     }
 
     pub fn vftable(functions: impl IntoIterator<Item = Function>) -> TypeField {
-        TypeField::Vftable(functions.into_iter().collect())
+        TypeField::Vftable(functions.into_iter().map(Located::test).collect())
     }
 }
 impl TypeField {
@@ -1226,14 +1219,23 @@ impl ItemDefinition {
 /// Items in an impl block (preserves ordering and comments)
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ImplItem {
-    Comment(Located<Comment>),
+    Comment(Comment),
     Function(Function),
+}
+#[cfg(test)]
+impl StripLocations for ImplItem {
+    fn strip_locations(&self) -> Self {
+        match self {
+            ImplItem::Comment(c) => ImplItem::Comment(c.strip_locations()),
+            ImplItem::Function(f) => ImplItem::Function(f.strip_locations()),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FunctionBlock {
     pub name: Ident,
-    pub items: Vec<ImplItem>,
+    pub items: Vec<Located<ImplItem>>,
     pub attributes: Attributes,
 }
 #[cfg(test)]
@@ -1244,24 +1246,29 @@ impl StripLocations for FunctionBlock {
             items: self
                 .items
                 .iter()
-                .filter_map(|item| match item {
-                    ImplItem::Comment(_) => None, // Filter out comments
-                    ImplItem::Function(f) => Some(ImplItem::Function(f.strip_locations())),
+                .filter_map(|item| {
+                    item.as_ref()
+                        .map(|item| match item {
+                            ImplItem::Comment(_) => None, // Filter out comments
+                            ImplItem::Function(f) => Some(ImplItem::Function(f.strip_locations())),
+                        })
+                        .strip_locations()
+                        .transpose()
                 })
                 .collect(),
             attributes: self.attributes.strip_locations(),
         }
     }
 }
-
+#[cfg(test)]
 impl FunctionBlock {
-    pub fn new(name: impl Into<Ident>, functions: impl Into<Vec<Function>>) -> Self {
+    pub fn new(name: impl Into<Ident>, functions: impl IntoIterator<Item = Function>) -> Self {
         Self {
             name: name.into(),
             items: functions
-                .into()
                 .into_iter()
                 .map(ImplItem::Function)
+                .map(Located::test)
                 .collect(),
             attributes: Default::default(),
         }
@@ -1270,12 +1277,17 @@ impl FunctionBlock {
         self.attributes = attributes.into();
         self
     }
-
+}
+impl FunctionBlock {
     /// Helper to extract just the functions (for compatibility)
-    pub fn functions(&self) -> impl Iterator<Item = &Function> {
-        self.items.iter().filter_map(|item| match item {
-            ImplItem::Function(func) => Some(func),
-            _ => None,
+    pub fn functions(&self) -> impl Iterator<Item = Located<&Function>> {
+        self.items.iter().filter_map(|item| {
+            item.as_ref()
+                .map(|item| match item {
+                    ImplItem::Function(func) => Some(func),
+                    _ => None,
+                })
+                .transpose()
         })
     }
 }
@@ -1397,7 +1409,7 @@ pub enum ModuleItem {
     Definition(ItemDefinition),
     Impl(FunctionBlock),
     ExternValue(ExternValue),
-    Function(Function),
+    Function(Located<Function>),
 }
 #[cfg(test)]
 impl StripLocations for ModuleItem {
@@ -1473,8 +1485,8 @@ impl Module {
         }
         self
     }
-    pub fn with_functions(mut self, functions: impl Into<Vec<Function>>) -> Self {
-        for function in functions.into() {
+    pub fn with_functions(mut self, functions: impl IntoIterator<Item = Function>) -> Self {
+        for function in functions.into_iter().map(Located::test) {
             self.items.push(ModuleItem::Function(function));
         }
         self
@@ -1532,9 +1544,9 @@ impl Module {
     }
 
     /// Helper to extract functions (for compatibility)
-    pub fn functions(&self) -> impl Iterator<Item = &Function> {
+    pub fn functions(&self) -> impl Iterator<Item = Located<&Function>> {
         self.items.iter().filter_map(|item| match item {
-            ModuleItem::Function(func) => Some(func),
+            ModuleItem::Function(func) => Some(func.as_ref()),
             _ => None,
         })
     }

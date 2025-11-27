@@ -9,7 +9,7 @@ use crate::{
         type_registry::TypeRegistry,
         types::{Function, FunctionBody, ItemState, ItemStateResolved, Type, Visibility},
     },
-    span::ItemLocation,
+    span::{ItemLocation, Located},
     util,
 };
 
@@ -26,7 +26,6 @@ pub struct Region {
     pub doc: Vec<String>,
     pub type_ref: Type,
     pub is_base: bool,
-    pub location: ItemLocation,
 }
 #[cfg(test)]
 impl StripLocations for Region {
@@ -37,7 +36,6 @@ impl StripLocations for Region {
             doc: self.doc.strip_locations(),
             type_ref: self.type_ref.strip_locations(),
             is_base: self.is_base.strip_locations(),
-            location: self.location.strip_locations(),
         }
     }
 }
@@ -52,18 +50,16 @@ impl Region {
             doc: vec![],
             type_ref,
             is_base: false,
-            location: ItemLocation::test(),
         }
     }
 
-    pub fn unnamed_field(type_ref: Type, location: ItemLocation) -> Self {
+    pub fn unnamed_field(type_ref: Type) -> Self {
         Region {
             visibility: Visibility::Private,
             name: None,
             doc: vec![],
             type_ref,
             is_base: false,
-            location,
         }
     }
 
@@ -75,10 +71,6 @@ impl Region {
         self.doc = doc.into_iter().map(|s| s.into()).collect();
         self
     }
-    pub fn with_location(mut self, location: ItemLocation) -> Self {
-        self.location = location;
-        self
-    }
     pub fn size(&self, type_registry: &TypeRegistry) -> Option<usize> {
         self.type_ref.size(type_registry)
     }
@@ -86,9 +78,9 @@ impl Region {
 
 #[derive(PartialEq, Eq, Debug, Clone, Default, Hash)]
 pub struct TypeDefinition {
-    pub regions: Vec<Region>,
+    pub regions: Vec<Located<Region>>,
     pub doc: Vec<String>,
-    pub associated_functions: Vec<Function>,
+    pub associated_functions: Vec<Located<Function>>,
     pub vftable: Option<TypeVftable>,
     pub singleton: Option<usize>,
     pub copyable: bool,
@@ -112,12 +104,13 @@ impl StripLocations for TypeDefinition {
         }
     }
 }
+#[cfg(test)]
 impl TypeDefinition {
     pub fn new() -> Self {
         Default::default()
     }
-    pub fn with_regions(mut self, regions: impl Into<Vec<Region>>) -> Self {
-        self.regions = regions.into();
+    pub fn with_regions(mut self, regions: impl IntoIterator<Item = Region>) -> Self {
+        self.regions = regions.into_iter().map(Located::test).collect();
         self
     }
     pub fn with_doc(mut self, doc: impl IntoIterator<Item = impl Into<String>>) -> Self {
@@ -126,9 +119,12 @@ impl TypeDefinition {
     }
     pub fn with_associated_functions(
         mut self,
-        associated_functions: impl Into<Vec<Function>>,
+        associated_functions: impl IntoIterator<Item = Function>,
     ) -> Self {
-        self.associated_functions = associated_functions.into();
+        self.associated_functions = associated_functions
+            .into_iter()
+            .map(Located::test)
+            .collect();
         self
     }
     pub fn with_vftable(mut self, vftable: TypeVftable) -> Self {
@@ -155,6 +151,8 @@ impl TypeDefinition {
         self.packed = packed;
         self
     }
+}
+impl TypeDefinition {
     /// Returns the fields and types of everything in this type's hierarchy, starting from the top
     pub fn dfs_hierarchy(
         &self,
@@ -169,7 +167,7 @@ impl TypeDefinition {
             }
 
             let Some((field_name, type_definition)) =
-                get_region_name_and_type_definition(type_registry, type_path, region)?
+                get_region_name_and_type_definition(type_registry, type_path, region.as_ref())?
             else {
                 continue;
             };
@@ -295,7 +293,7 @@ pub fn build(
     }
 
     // Handle fields
-    let mut pending_regions: Vec<(Option<usize>, Region)> = vec![];
+    let mut pending_regions: Vec<(Option<usize>, Located<Region>)> = vec![];
     let mut vftable_functions = None;
     for (idx, statement) in definition.statements().enumerate() {
         let grammar::TypeStatement {
@@ -351,14 +349,16 @@ pub fn build(
                 let ident = (field_ident.0 != "_").then(|| field_ident.0.clone());
                 pending_regions.push((
                     address,
-                    Region {
-                        visibility: (*visibility).into(),
-                        name: ident,
-                        doc,
-                        type_ref: type_,
-                        is_base,
-                        location: location.clone(),
-                    },
+                    Located::new(
+                        Region {
+                            visibility: (*visibility).into(),
+                            name: ident,
+                            doc,
+                            type_ref: type_,
+                            is_base,
+                        },
+                        location.clone(),
+                    ),
                 ));
             }
             grammar::TypeField::Vftable(functions) => {
@@ -465,13 +465,13 @@ pub fn build(
         let Some((base_name, base_type)) = get_region_name_and_type_definition(
             &semantic.type_registry,
             resolvee_path,
-            base_region,
+            base_region.as_ref(),
         )?
         else {
             continue;
         };
 
-        let mut add_functions = |functions: &[Function]| {
+        let mut add_functions = |functions: &[Located<Function>]| {
             for function in functions.iter().filter(|f| f.is_public()) {
                 let mut function = function.clone();
                 let original_name = function.name.clone();
@@ -525,8 +525,7 @@ pub fn build(
                 doc: _,
                 type_ref,
                 is_base: _,
-                location: region_location,
-            } = region;
+            } = &region.value;
             let name = name.as_deref().unwrap_or("unnamed");
             fn get_defaultable_type_path(type_ref: &Type) -> Option<&ItemPath> {
                 match type_ref {
@@ -540,13 +539,13 @@ pub fn build(
                     field_name: name.into(),
                     item_path: resolvee_path.clone(),
                     message: "is not a defaultable type (pointer or function?)".into(),
-                    location: region_location.clone(),
+                    location: region.location.clone(),
                 });
             };
 
             let item = semantic
                 .type_registry
-                .get(path, region_location)?
+                .get(path, &region.location)?
                 .state
                 .clone();
 
@@ -559,7 +558,7 @@ pub fn build(
                     field_name: name.into(),
                     item_path: resolvee_path.clone(),
                     message: "is not a defaultable type".into(),
-                    location: region_location.clone(),
+                    location: region.location.clone(),
                 });
             }
         }
@@ -659,19 +658,19 @@ fn resolve_regions(
     visibility: Visibility,
     target_size: Option<usize>,
     is_min_size: bool,
-    regions: Vec<(Option<usize>, Region)>,
-    vftable_functions: Option<Vec<Function>>,
+    regions: Vec<(Option<usize>, Located<Region>)>,
+    vftable_functions: Option<Vec<Located<Function>>>,
     type_location: &ItemLocation,
-) -> Result<Option<(Vec<Region>, Option<TypeVftable>, usize)>> {
+) -> Result<Option<(Vec<Located<Region>>, Option<TypeVftable>, usize)>> {
     // this resolution algorithm is very simple and doesn't handle overlapping regions
     // or regions that are out of order
     #[derive(Default)]
     struct Regions {
-        regions: Vec<Region>,
+        regions: Vec<Located<Region>>,
         last_address: usize,
     }
     impl Regions {
-        fn push(&mut self, type_registry: &TypeRegistry, region: Region) -> Option<()> {
+        fn push(&mut self, type_registry: &TypeRegistry, region: Located<Region>) -> Option<()> {
             let size = region.size(type_registry)?;
             if size == 0 && region.type_ref.is_array() {
                 // zero-sized regions that are arrays are ignored
@@ -723,8 +722,8 @@ fn resolve_regions(
                     location: region.location.clone(),
                 });
             };
-            let padding_region = Region::unnamed_field(
-                semantic.type_registry.padding_type(size),
+            let padding_region = Located::new(
+                Region::unnamed_field(semantic.type_registry.padding_type(size)),
                 region.location.clone(),
             );
             if resolved
@@ -744,10 +743,12 @@ fn resolve_regions(
     if let Some(target_size) = target_size
         && resolved.last_address < target_size
     {
-        let padding_region = Region::unnamed_field(
-            semantic
-                .type_registry
-                .padding_type(target_size - resolved.last_address),
+        let padding_region = Located::new(
+            Region::unnamed_field(
+                semantic
+                    .type_registry
+                    .padding_type(target_size - resolved.last_address),
+            ),
             type_location.clone(),
         );
         if resolved
@@ -771,16 +772,14 @@ fn resolve_regions(
             doc: _,
             type_ref,
             is_base: _,
-            location,
-        } = region
+        } = &region.value
         {
-            *region = Region {
+            region.value = Region {
                 visibility: Visibility::Private,
                 name: Some(format!("_field_{size:x}")),
                 doc: vec![],
                 type_ref: type_ref.clone(),
                 is_base: false,
-                location: location.clone(),
             };
         }
 
@@ -825,7 +824,7 @@ fn resolve_regions(
 fn get_region_name_and_type_definition<'a>(
     type_registry: &'a TypeRegistry,
     type_path: &ItemPath,
-    region: &Region,
+    region: Located<&Region>,
 ) -> Result<Option<(String, &'a TypeDefinition)>> {
     let region_name = region
         .name

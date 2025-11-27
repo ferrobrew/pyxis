@@ -11,7 +11,7 @@ use crate::{
             TypeDefinition, Visibility,
         },
     },
-    span::ItemLocation,
+    span::{ItemLocation, Located},
 };
 
 use quote::{ToTokens, quote};
@@ -91,7 +91,7 @@ pub fn write_module(
         .functions()
         .iter()
         .filter(|f| !f.is_internal())
-        .map(build_function)
+        .map(|f| build_function(f.as_ref()))
         .collect::<Result<Vec<_>>>()?;
     for func in freestanding_functions {
         writeln!(raw_output, "{func}")?;
@@ -222,15 +222,14 @@ fn build_type(
                 doc,
                 type_ref,
                 is_base: _,
-                location: field_location,
-            } = r;
+            } = &r.value;
             let field_name = field
                 .as_deref()
                 .ok_or_else(|| BackendError::FieldCodeGenFailed {
                     type_path: path.clone(),
                     field_name: "unnamed".to_string(),
                     reason: "field name not present".to_string(),
-                    location: field_location.clone(),
+                    location: r.location.clone(),
                 })?;
             let field_ident = str_to_ident(field_name);
             let visibility = visibility_to_tokens(*visibility);
@@ -293,7 +292,7 @@ fn build_type(
     let associated_functions_impl = associated_functions
         .iter()
         .filter(|f| !f.is_internal())
-        .map(build_function)
+        .map(|f| build_function(f.as_ref()))
         .collect::<Result<Vec<_>>>()?;
 
     let vftable_function_impl = vftable
@@ -302,7 +301,7 @@ fn build_type(
             v.functions
                 .iter()
                 .filter(|f| !f.is_internal())
-                .map(build_function)
+                .map(|f| build_function(f.as_ref()))
                 .collect::<Result<Vec<_>>>()
         })
         .transpose()?
@@ -536,7 +535,7 @@ fn build_enum(
     let associated_functions_impl = associated_functions
         .iter()
         .filter(|f| !f.is_internal())
-        .map(build_function)
+        .map(|f| build_function(f.as_ref()))
         .collect::<Result<Vec<_>>>()?;
 
     let associated_impl = if !associated_functions_impl.is_empty() {
@@ -657,7 +656,7 @@ fn build_bitflags(
     })
 }
 
-fn build_function(function: &Function) -> Result<proc_macro2::TokenStream> {
+fn build_function(function: Located<&Function>) -> Result<proc_macro2::TokenStream> {
     let name = str_to_ident(&function.name);
     let doc = doc_to_tokens(false, &function.doc);
 

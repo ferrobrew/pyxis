@@ -3,6 +3,7 @@ use std::{collections::BTreeMap, path::Path};
 use crate::{
     backends::{BackendError, Result},
     semantic::types::Type,
+    span::Located,
 };
 use serde::{Deserialize, Serialize};
 
@@ -437,7 +438,7 @@ fn convert_function_body(body: &FunctionBody) -> JsonFunctionBody {
     }
 }
 
-fn convert_function(func: &Function) -> JsonFunction {
+fn convert_function(func: Located<&Function>) -> JsonFunction {
     JsonFunction {
         visibility: func.visibility.into(),
         name: func.name.clone(),
@@ -479,7 +480,11 @@ fn convert_region(region: &Region, type_registry: &TypeRegistry, offset: usize) 
 
 fn convert_vftable(vftable: &TypeVftable) -> JsonTypeVftable {
     JsonTypeVftable {
-        functions: vftable.functions.iter().map(convert_function).collect(),
+        functions: vftable
+            .functions
+            .iter()
+            .map(|f| convert_function(f.as_ref()))
+            .collect(),
     }
 }
 
@@ -509,7 +514,7 @@ fn convert_type_definition(
         associated_functions: td
             .associated_functions
             .iter()
-            .map(convert_function)
+            .map(|f| convert_function(f.as_ref()))
             .collect(),
         vftable: td.vftable.as_ref().map(convert_vftable),
         singleton: td.singleton,
@@ -539,7 +544,7 @@ fn convert_enum_definition(ed: &EnumDefinition) -> JsonEnumDefinition {
         associated_functions: ed
             .associated_functions
             .iter()
-            .map(convert_function)
+            .map(|f| convert_function(f.as_ref()))
             .collect(),
         singleton: ed.singleton,
         copyable: ed.copyable,
@@ -633,8 +638,11 @@ fn build_module_hierarchy(semantic_state: &ResolvedSemanticState) -> BTreeMap<St
             .iter()
             .map(convert_extern_value)
             .collect();
-        let functions: Vec<JsonFunction> =
-            module.functions().iter().map(convert_function).collect();
+        let functions: Vec<JsonFunction> = module
+            .functions()
+            .iter()
+            .map(|f| convert_function(f.as_ref()))
+            .collect();
 
         // Convert backends
         let backends: BTreeMap<String, Vec<JsonBackend>> = module

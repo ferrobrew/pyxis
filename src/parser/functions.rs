@@ -26,7 +26,7 @@ impl Parser {
                 TokenKind::Comment(_) | TokenKind::MultiLineComment(_)
             ) {
                 if let Some(comment) = self.collect_comment() {
-                    items.push(ImplItem::Comment(comment));
+                    items.push(comment.map(ImplItem::Comment));
                 }
             }
 
@@ -34,7 +34,7 @@ impl Parser {
                 break;
             }
 
-            items.push(ImplItem::Function(self.parse_function()?));
+            items.push(self.parse_function()?.map(ImplItem::Function));
         }
 
         self.expect(TokenKind::RBrace)?;
@@ -46,7 +46,9 @@ impl Parser {
         })
     }
 
-    pub(crate) fn parse_functions_in_block(&mut self) -> Result<Vec<Function>, ParseError> {
+    pub(crate) fn parse_functions_in_block(
+        &mut self,
+    ) -> Result<Vec<Located<Function>>, ParseError> {
         let mut functions = Vec::new();
 
         while !matches!(self.peek(), TokenKind::RBrace) {
@@ -73,7 +75,7 @@ impl Parser {
         Ok(functions)
     }
 
-    pub(crate) fn parse_function(&mut self) -> Result<Function, ParseError> {
+    pub(crate) fn parse_function(&mut self) -> Result<Located<Function>, ParseError> {
         let start_pos = self.current().location.span.start;
         let mut doc_comments = self.collect_doc_comments();
         let attributes = if matches!(self.peek(), TokenKind::Hash) {
@@ -118,15 +120,17 @@ impl Parser {
         };
         let location = ItemLocation::new(self.filename.clone(), Span::new(start_pos, end_pos));
 
-        Ok(Function {
-            visibility,
-            name,
-            attributes,
-            doc_comments,
-            arguments,
-            return_type,
+        Ok(Located::new(
+            Function {
+                visibility,
+                name,
+                attributes,
+                doc_comments,
+                arguments,
+                return_type,
+            },
             location,
-        })
+        ))
     }
 
     pub(crate) fn parse_argument(&mut self) -> Result<Located<Argument>, ParseError> {

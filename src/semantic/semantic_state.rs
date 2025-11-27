@@ -46,11 +46,13 @@ impl SemanticState {
                     state: ItemState::Resolved(ItemStateResolved {
                         size,
                         alignment,
-                        inner: TypeDefinition::default()
-                            .with_cloneable(true)
-                            .with_copyable(true)
-                            .with_defaultable(true)
-                            .into(),
+                        inner: TypeDefinition {
+                            cloneable: true,
+                            copyable: true,
+                            defaultable: true,
+                            ..Default::default()
+                        }
+                        .into(),
                     }),
                     category: ItemCategory::Predefined,
                     predefined: Some(*predefined_item),

@@ -8,7 +8,7 @@ use crate::{
         type_registry::TypeRegistry,
         types::{Backend, ExternValue, ItemDefinition, Type},
     },
-    span::ItemLocation,
+    span::{ItemLocation, Located},
 };
 
 #[derive(Debug, Clone)]
@@ -17,7 +17,7 @@ pub struct Module {
     pub(crate) ast: grammar::Module,
     pub(crate) definition_paths: BTreeSet<ItemPath>,
     pub(crate) extern_values: Vec<ExternValue>,
-    pub(crate) functions: Vec<Function>,
+    pub(crate) functions: Vec<Located<Function>>,
     pub(crate) impls: BTreeMap<ItemPath, grammar::FunctionBlock>,
     pub(crate) backends: BTreeMap<String, Vec<Backend>>,
     pub(crate) doc: Vec<String>,
@@ -122,13 +122,12 @@ impl Module {
         let scope = self.scope();
 
         for function in self.ast.functions().collect::<Vec<_>>() {
-            let semantic_function = crate::semantic::function::build(
+            self.functions.push(crate::semantic::function::build(
                 type_registry,
                 &scope,
                 false, // is_vfunc
                 function,
-            )?;
-            self.functions.push(semantic_function);
+            )?);
         }
 
         Ok(())
@@ -138,7 +137,7 @@ impl Module {
         &self.doc
     }
 
-    pub fn functions(&self) -> &[Function] {
+    pub fn functions(&self) -> &[Located<Function>] {
         &self.functions
     }
 }

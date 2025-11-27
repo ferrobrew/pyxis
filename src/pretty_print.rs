@@ -802,9 +802,9 @@ impl PrettyPrinter {
         self.indent();
 
         for (i, item) in impl_block.items.iter().enumerate() {
-            match item {
+            match &item.value {
                 ImplItem::Comment(comment) => {
-                    self.print_comment(&comment.value);
+                    self.print_comment(comment);
                 }
                 ImplItem::Function(func) => {
                     // Add blank line before function if it has address attribute and it's not the first

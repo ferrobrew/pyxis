@@ -10,7 +10,7 @@ use crate::{
         type_registry::TypeRegistry,
         types::{Type, Visibility},
     },
-    span::{EqualsIgnoringLocations, ItemLocation, Located},
+    span::{EqualsIgnoringLocations, Located},
 };
 
 #[cfg(test)]
@@ -248,7 +248,6 @@ pub struct Function {
     pub arguments: Vec<Located<Argument>>,
     pub return_type: Option<Type>,
     pub calling_convention: CallingConvention,
-    pub location: ItemLocation,
 }
 impl fmt::Display for Function {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -317,7 +316,6 @@ impl StripLocations for Function {
             arguments: self.arguments.strip_locations(),
             return_type: self.return_type.strip_locations(),
             calling_convention: self.calling_convention.strip_locations(),
-            location: self.location.strip_locations(),
         }
     }
 }
@@ -336,7 +334,6 @@ impl Function {
             arguments: Vec::new(),
             return_type: None,
             calling_convention,
-            location: ItemLocation::test(),
         }
     }
     pub fn with_arguments(mut self, arguments: impl IntoIterator<Item = Argument>) -> Self {
@@ -365,8 +362,8 @@ pub fn build(
     type_registry: &TypeRegistry,
     scope: &[ItemPath],
     is_vfunc: bool,
-    function: &grammar::Function,
-) -> Result<Function> {
+    function: Located<&grammar::Function>,
+) -> Result<Located<Function>> {
     let mut body = is_vfunc.then(|| FunctionBody::Vftable {
         function_name: function.name.0.clone(),
     });
@@ -487,14 +484,16 @@ pub fn build(
         }
     });
 
-    Ok(Function {
-        visibility: function.visibility.into(),
-        name: function.name.0.clone(),
-        doc,
-        body,
-        arguments,
-        return_type,
-        calling_convention,
-        location: function.location.clone(),
-    })
+    Ok(Located::new(
+        Function {
+            visibility: function.visibility.into(),
+            name: function.name.0.clone(),
+            doc,
+            body,
+            arguments,
+            return_type,
+            calling_convention,
+        },
+        function.location.clone(),
+    ))
 }
