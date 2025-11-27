@@ -821,6 +821,54 @@ impl SemanticError {
         }
     }
 
+    fn augment_builder<'a, S: ariadne::Span>(
+        &self,
+        report_builder: ariadne::ReportBuilder<'a, S>,
+    ) -> ariadne::ReportBuilder<'a, S> {
+        match self {
+            Self::EnumDefaultWithoutDefaultable { .. } => report_builder
+                .with_help("Add the #[defaultable] attribute to the enum declaration")
+                .with_note("Only enums marked as defaultable can have default variants"),
+            Self::EnumDefaultableMissingDefault { .. } => report_builder
+                .with_help("Add the #[default] attribute to one of the enum variants")
+                .with_note(
+                    "Defaultable enums must have exactly one variant marked with #[default]",
+                ),
+            Self::BitflagsDefaultWithoutDefaultable { .. } => report_builder
+                .with_help("Add the #[defaultable] attribute to the bitflags declaration")
+                .with_note("Only bitflags marked as defaultable can have default values"),
+            Self::BitflagsDefaultableMissingDefault { .. } => report_builder
+                .with_help("Add the #[default] attribute to one of the bitflags values")
+                .with_note(
+                    "Defaultable bitflags must have exactly one value marked with #[default]",
+                ),
+            Self::InvalidCallingConvention { .. } => {
+                let valid_list = CallingConvention::ALL
+                    .iter()
+                    .map(|cc| cc.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                report_builder.with_help(format!("Valid calling conventions are: {valid_list}"))
+            }
+            Self::BitflagsInvalidType { found, .. } => {
+                // Generate list of unsigned integer types dynamically
+                let unsigned_types = crate::semantic::types::PredefinedItem::ALL
+                    .iter()
+                    .filter(|item| item.is_unsigned_integer())
+                    .map(|item| item.name())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+
+                report_builder
+                    .with_help(format!(
+                        "Bitflags must be based on an unsigned integer type: {unsigned_types}",
+                    ))
+                    .with_note(format!("The type `{found}` is not an unsigned integer"))
+            }
+            _ => report_builder,
+        }
+    }
+
     /// Format the error using ariadne with the provided source store.
     /// Always produces an ariadne-formatted error, even without source code.
     pub fn format_with_ariadne(&self, source_store: &mut dyn SourceStore) -> String {
@@ -850,58 +898,7 @@ impl SemanticError {
                         .with_color(ariadne::Color::Red),
                 );
 
-        // Add helpful context
-        match self {
-            Self::EnumDefaultWithoutDefaultable { .. } => {
-                report_builder = report_builder
-                    .with_help("Add the #[defaultable] attribute to the enum declaration")
-                    .with_note("Only enums marked as defaultable can have default variants")
-            }
-            Self::EnumDefaultableMissingDefault { .. } => {
-                report_builder = report_builder
-                    .with_help("Add the #[default] attribute to one of the enum variants")
-                    .with_note(
-                        "Defaultable enums must have exactly one variant marked with #[default]",
-                    )
-            }
-            Self::BitflagsDefaultWithoutDefaultable { .. } => {
-                report_builder = report_builder
-                    .with_help("Add the #[defaultable] attribute to the bitflags declaration")
-                    .with_note("Only bitflags marked as defaultable can have default values")
-            }
-            Self::BitflagsDefaultableMissingDefault { .. } => {
-                report_builder = report_builder
-                    .with_help("Add the #[default] attribute to one of the bitflags values")
-                    .with_note(
-                        "Defaultable bitflags must have exactly one value marked with #[default]",
-                    )
-            }
-            Self::InvalidCallingConvention { .. } => {
-                let valid_list = CallingConvention::ALL
-                    .iter()
-                    .map(|cc| cc.as_str())
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                report_builder =
-                    report_builder.with_help(format!("Valid calling conventions are: {valid_list}"))
-            }
-            Self::BitflagsInvalidType { found, .. } => {
-                // Generate list of unsigned integer types dynamically
-                let unsigned_types = crate::semantic::types::PredefinedItem::ALL
-                    .iter()
-                    .filter(|item| item.is_unsigned_integer())
-                    .map(|item| item.name())
-                    .collect::<Vec<_>>()
-                    .join(", ");
-
-                report_builder = report_builder
-                    .with_help(format!(
-                        "Bitflags must be based on an unsigned integer type: {unsigned_types}",
-                    ))
-                    .with_note(format!("The type `{found}` is not an unsigned integer"));
-            }
-            _ => {}
-        }
+        report_builder = self.augment_builder(report_builder);
 
         let report = report_builder.finish();
 
