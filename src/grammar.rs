@@ -18,6 +18,7 @@ pub enum StringFormat {
     Raw,
 }
 
+#[cfg(test)]
 pub mod test_aliases {
     pub type M = super::Module;
     pub type ID = super::ItemDefinition;
@@ -108,38 +109,35 @@ impl fmt::Display for Ident {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Type {
-    ConstPointer(Box<Type>),
-    MutPointer(Box<Type>),
-    Array(Box<Type>, usize),
-    Ident(Ident, Vec<Type>), // Added generics support
+    ConstPointer(Box<Located<Type>>),
+    MutPointer(Box<Located<Type>>),
+    Array(Box<Located<Type>>, usize),
+    Ident(Ident),
     Unknown(usize),
 }
+#[cfg(test)]
 impl Type {
     pub fn ident(ident: &str) -> Type {
-        Type::Ident(ident.into(), vec![])
-    }
-
-    pub fn ident_with_args(ident: &str, args: Vec<Type>) -> Type {
-        Type::Ident(ident.into(), args)
+        Type::Ident(ident.into())
     }
 
     pub fn as_ident(&self) -> Option<&Ident> {
         match self {
-            Type::Ident(ident, _) => Some(ident),
+            Type::Ident(ident) => Some(ident),
             _ => None,
         }
     }
 
     pub fn const_pointer(self) -> Type {
-        Type::ConstPointer(Box::new(self))
+        Type::ConstPointer(Box::new(Located::test(self)))
     }
 
     pub fn mut_pointer(self) -> Type {
-        Type::MutPointer(Box::new(self))
+        Type::MutPointer(Box::new(Located::test(self)))
     }
 
     pub fn array(self, size: usize) -> Type {
-        Type::Array(Box::new(self), size)
+        Type::Array(Box::new(Located::test(self)), size)
     }
 
     pub fn unknown(size: usize) -> Type {
@@ -148,7 +146,7 @@ impl Type {
 }
 impl From<&str> for Type {
     fn from(item: &str) -> Self {
-        Type::Ident(item.into(), vec![])
+        Type::Ident(item.into())
     }
 }
 
@@ -158,20 +156,7 @@ impl fmt::Display for Type {
             Type::ConstPointer(inner) => write!(f, "*const {inner}"),
             Type::MutPointer(inner) => write!(f, "*mut {inner}"),
             Type::Array(inner, size) => write!(f, "[{inner}; {size}]"),
-            Type::Ident(ident, args) => {
-                write!(f, "{ident}")?;
-                if !args.is_empty() {
-                    write!(f, "<")?;
-                    for (i, arg) in args.iter().enumerate() {
-                        if i > 0 {
-                            write!(f, ", ")?;
-                        }
-                        write!(f, "{arg}")?;
-                    }
-                    write!(f, ">")?;
-                }
-                Ok(())
-            }
+            Type::Ident(ident) => write!(f, "{ident}"),
             Type::Unknown(size) => write!(f, "unknown({size})"),
         }
     }
@@ -449,7 +434,7 @@ pub enum Visibility {
 pub enum Argument {
     ConstSelf(ItemLocation),
     MutSelf(ItemLocation),
-    Named(Ident, Type, ItemLocation),
+    Named(Ident, Located<Type>, ItemLocation),
 }
 #[cfg(test)]
 impl Argument {
@@ -460,7 +445,11 @@ impl Argument {
         Argument::MutSelf(ItemLocation::test())
     }
     pub fn named(ident: impl Into<Ident>, type_: impl Into<Type>) -> Argument {
-        Argument::Named(ident.into(), type_.into(), ItemLocation::test())
+        Argument::Named(
+            ident.into(),
+            Located::test(type_.into()),
+            ItemLocation::test(),
+        )
     }
 }
 
@@ -471,7 +460,7 @@ pub struct Function {
     pub attributes: Attributes,
     pub doc_comments: Vec<String>,
     pub arguments: Vec<Argument>,
-    pub return_type: Option<Type>,
+    pub return_type: Option<Located<Type>>,
     pub location: ItemLocation,
 }
 #[cfg(test)]
@@ -499,7 +488,7 @@ impl Function {
         self
     }
     pub fn with_return_type(mut self, return_type: impl Into<Type>) -> Self {
-        self.return_type = Some(return_type.into());
+        self.return_type = Some(Located::test(return_type.into()));
         self
     }
     pub fn with_location(mut self, location: ItemLocation) -> Self {
@@ -528,22 +517,24 @@ impl From<(Ident, Expr)> for ExprField {
 // types
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TypeField {
-    Field(Visibility, Ident, Type),
+    Field(Visibility, Ident, Located<Type>),
     Vftable(Vec<Function>),
 }
+#[cfg(test)]
 impl TypeField {
     pub fn field(
         visibility: Visibility,
         name: impl Into<Ident>,
         type_: impl Into<Type>,
     ) -> TypeField {
-        TypeField::Field(visibility, name.into(), type_.into())
+        TypeField::Field(visibility, name.into(), Located::test(type_.into()))
     }
 
     pub fn vftable(functions: impl IntoIterator<Item = Function>) -> TypeField {
         TypeField::Vftable(functions.into_iter().collect())
     }
-
+}
+impl TypeField {
     pub fn is_vftable(&self) -> bool {
         matches!(self, TypeField::Vftable(_))
     }
@@ -569,7 +560,7 @@ pub struct TypeStatement {
 impl TypeStatement {
     pub fn field((visibility, name): (Visibility, &str), type_: Type) -> TypeStatement {
         TypeStatement {
-            field: TypeField::Field(visibility, name.into(), type_),
+            field: TypeField::Field(visibility, name.into(), Located::test(type_)),
             attributes: Default::default(),
             doc_comments: vec![],
             inline_trailing_comments: Vec::new(),
@@ -719,12 +710,13 @@ impl EnumStatement {
 }
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct EnumDefinition {
-    pub type_: Type,
+    pub type_: Located<Type>,
     pub items: Vec<EnumDefItem>,
     pub attributes: Attributes,
     pub inline_trailing_comments: Vec<Located<Comment>>, // Comments on same line as attributes
     pub following_comments: Vec<Located<Comment>>,       // Comments on lines after attributes
 }
+#[cfg(test)]
 impl EnumDefinition {
     pub fn new(
         type_: Type,
@@ -732,7 +724,7 @@ impl EnumDefinition {
         attributes: impl Into<Attributes>,
     ) -> Self {
         Self {
-            type_,
+            type_: Located::test(type_),
             items: statements
                 .into()
                 .into_iter()
@@ -758,8 +750,8 @@ impl EnumDefinition {
         self.following_comments = following_comments;
         self
     }
-
-    /// Helper to extract just the statements (for compatibility)
+}
+impl EnumDefinition {
     pub fn statements(&self) -> impl Iterator<Item = &EnumStatement> {
         self.items.iter().filter_map(|item| match item {
             EnumDefItem::Statement(stmt) => Some(stmt),
@@ -828,12 +820,13 @@ impl BitflagsStatement {
 }
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct BitflagsDefinition {
-    pub type_: Type,
+    pub type_: Located<Type>,
     pub items: Vec<BitflagsDefItem>,
     pub attributes: Attributes,
     pub inline_trailing_comments: Vec<Located<Comment>>, // Comments on same line as attributes
     pub following_comments: Vec<Located<Comment>>,       // Comments on lines after attributes
 }
+#[cfg(test)]
 impl BitflagsDefinition {
     pub fn new(
         type_: Type,
@@ -841,7 +834,7 @@ impl BitflagsDefinition {
         attributes: impl Into<Attributes>,
     ) -> Self {
         Self {
-            type_,
+            type_: Located::test(type_),
             items: statements
                 .into()
                 .into_iter()
@@ -867,7 +860,8 @@ impl BitflagsDefinition {
         self.following_comments = following_comments;
         self
     }
-
+}
+impl BitflagsDefinition {
     /// Helper to extract just the statements (for compatibility)
     pub fn statements(&self) -> impl Iterator<Item = &BitflagsStatement> {
         self.items.iter().filter_map(|item| match item {
@@ -1022,7 +1016,7 @@ impl Backend {
 pub struct ExternValue {
     pub visibility: Visibility,
     pub name: Ident,
-    pub type_: Type,
+    pub type_: Located<Type>,
     pub attributes: Attributes,
     pub doc_comments: Vec<String>,
     pub location: ItemLocation,
@@ -1038,7 +1032,7 @@ impl ExternValue {
         Self {
             visibility,
             name: name.into(),
-            type_,
+            type_: Located::test(type_),
             attributes: attributes.into(),
             doc_comments: vec![],
             location: ItemLocation::test(),

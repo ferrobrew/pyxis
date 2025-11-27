@@ -1,7 +1,7 @@
 use crate::{
     grammar::*,
     source_store::SourceStore,
-    span::{ItemLocation, Located, Span},
+    span::{ItemLocation, Located, Location, Span},
     tokenizer::{LexError, Token, TokenKind},
 };
 use ariadne::{Color, Label, Report, ReportKind, Source};
@@ -827,7 +827,7 @@ impl Parser {
         } else {
             self.current().location.span.end
         };
-        let location = ItemLocation::new(self.filename.clone(), Span::new(start_pos, end_pos));
+        let location = self.item_location_from_locations(start_pos, end_pos);
 
         Ok(ExternValue {
             visibility,
@@ -1697,23 +1697,37 @@ impl Parser {
         Ok(result)
     }
 
-    fn parse_type(&mut self) -> Result<Type, ParseError> {
+    fn parse_type(&mut self) -> Result<Located<Type>, ParseError> {
         match self.peek() {
             TokenKind::Unknown => {
-                self.advance();
+                let start = self.advance();
                 self.expect(TokenKind::Lt)?;
                 let size = self.parse_int_literal()? as usize;
-                self.expect(TokenKind::Gt)?;
-                Ok(Type::Unknown(size))
+                let end = self.expect(TokenKind::Gt)?;
+
+                Ok(Located::new(
+                    Type::Unknown(size),
+                    self.item_location_from_token_range(&start, &end),
+                ))
             }
             TokenKind::Star => {
-                self.advance();
+                let start = self.advance();
                 if matches!(self.peek(), TokenKind::Const) {
                     self.advance();
-                    Ok(Type::ConstPointer(Box::new(self.parse_type()?)))
+                    let inner = self.parse_type()?;
+                    let location = self.item_location_from_locations(
+                        start.start_location(),
+                        inner.location.span.end,
+                    );
+                    Ok(Located::new(Type::ConstPointer(Box::new(inner)), location))
                 } else if matches!(self.peek(), TokenKind::Mut) {
                     self.advance();
-                    Ok(Type::MutPointer(Box::new(self.parse_type()?)))
+                    let inner = self.parse_type()?;
+                    let location = self.item_location_from_locations(
+                        start.start_location(),
+                        inner.location.span.end,
+                    );
+                    Ok(Located::new(Type::MutPointer(Box::new(inner)), location))
                 } else {
                     Err(ParseError::MissingPointerQualifier {
                         location: self.current().location.clone(),
@@ -1721,22 +1735,27 @@ impl Parser {
                 }
             }
             TokenKind::LBracket => {
-                self.advance();
+                let start = self.advance();
                 let inner = self.parse_type()?;
                 self.expect(TokenKind::Semi)?;
                 let size = self.parse_int_literal()? as usize;
-                self.expect(TokenKind::RBracket)?;
-                Ok(Type::Array(Box::new(inner), size))
+                let end = self.expect(TokenKind::RBracket)?;
+                Ok(Located::new(
+                    Type::Array(Box::new(inner), size),
+                    self.item_location_from_token_range(&start, &end),
+                ))
             }
             TokenKind::Ident(_) => {
-                let (mut ident, _) = self.expect_ident()?;
+                let (mut ident, ident_span) = self.expect_ident()?;
+                let start_pos = ident_span.start;
+                let mut end_pos = ident_span.end;
 
                 // Check for generic arguments - treat them as part of the identifier string
                 // This is needed for extern types that need exact reproduction
                 if matches!(self.peek(), TokenKind::Lt) {
                     let mut type_str = ident.0;
                     type_str.push('<');
-                    self.advance(); // consume <
+                    end_pos = self.advance().end_location(); // consume <
 
                     let mut depth = 1;
                     while depth > 0 && !matches!(self.peek(), TokenKind::Eof) {
@@ -1744,34 +1763,31 @@ impl Parser {
                             TokenKind::Lt => {
                                 type_str.push('<');
                                 depth += 1;
-                                self.advance();
                             }
                             TokenKind::Gt => {
                                 type_str.push('>');
                                 depth -= 1;
-                                self.advance();
                             }
                             TokenKind::Comma => {
                                 type_str.push_str(", ");
-                                self.advance();
                             }
                             TokenKind::Ident(name) => {
                                 type_str.push_str(&name);
-                                self.advance();
                             }
                             TokenKind::ColonColon => {
                                 type_str.push_str("::");
-                                self.advance();
                             }
-                            _ => {
-                                self.advance();
-                            }
+                            _ => {}
                         }
+                        end_pos = self.advance().end_location();
                     }
                     ident = Ident(type_str);
                 }
 
-                Ok(Type::Ident(ident, vec![]))
+                Ok(Located::new(
+                    Type::Ident(ident),
+                    self.item_location_from_locations(start_pos, end_pos),
+                ))
             }
             _ => Err(ParseError::ExpectedType {
                 found: self.peek().clone(),
@@ -1912,6 +1928,17 @@ impl Parser {
         }
     }
 }
+impl Parser {
+    fn item_location_from_locations(&self, start: Location, end: Location) -> ItemLocation {
+        ItemLocation::new(self.filename.clone(), Span::new(start, end))
+    }
+    fn item_location_from_token_range(&self, start: &Token, end: &Token) -> ItemLocation {
+        ItemLocation::new(
+            self.filename.clone(),
+            Span::new(start.location.span.start, end.location.span.end),
+        )
+    }
+}
 
 #[cfg(test)]
 impl StripLocations for Module {
@@ -1927,6 +1954,26 @@ impl StripLocations for Module {
                 .collect(),
             attributes: self.attributes.strip_locations(),
             doc_comments: self.doc_comments.clone(),
+        }
+    }
+}
+
+#[cfg(test)]
+impl StripLocations for Comment {
+    fn strip_locations(&self) -> Self {
+        self.clone()
+    }
+}
+
+#[cfg(test)]
+impl StripLocations for Type {
+    fn strip_locations(&self) -> Self {
+        match self {
+            Type::ConstPointer(located) => Type::ConstPointer(located.strip_locations()),
+            Type::MutPointer(located) => Type::MutPointer(located.strip_locations()),
+            Type::Array(located, len) => Type::Array(located.strip_locations(), *len),
+            Type::Ident(ident) => Type::Ident(ident.clone()),
+            Type::Unknown(size) => Type::Unknown(*size),
         }
     }
 }
@@ -2013,7 +2060,7 @@ impl StripLocations for TypeStatement {
 impl StripLocations for TypeField {
     fn strip_locations(&self) -> Self {
         match self {
-            TypeField::Field(v, n, t) => TypeField::Field(*v, n.clone(), t.clone()),
+            TypeField::Field(v, n, t) => TypeField::Field(*v, n.clone(), t.strip_locations()),
             TypeField::Vftable(funcs) => {
                 TypeField::Vftable(funcs.iter().map(|f| f.strip_locations()).collect())
             }
@@ -2025,7 +2072,7 @@ impl StripLocations for TypeField {
 impl StripLocations for EnumDefinition {
     fn strip_locations(&self) -> Self {
         EnumDefinition {
-            type_: self.type_.clone(),
+            type_: self.type_.strip_locations(),
             items: self
                 .items
                 .iter()
@@ -2068,7 +2115,7 @@ impl StripLocations for EnumStatement {
 impl StripLocations for BitflagsDefinition {
     fn strip_locations(&self) -> Self {
         BitflagsDefinition {
-            type_: self.type_.clone(),
+            type_: self.type_.strip_locations(),
             items: self
                 .items
                 .iter()
@@ -2128,7 +2175,7 @@ impl StripLocations for Function {
             attributes: self.attributes.strip_locations(),
             doc_comments: self.doc_comments.clone(),
             arguments: self.arguments.strip_locations(),
-            return_type: self.return_type.clone(),
+            return_type: self.return_type.strip_locations(),
             location: ItemLocation::test(),
         }
     }
@@ -2141,7 +2188,7 @@ impl StripLocations for Argument {
             Argument::ConstSelf(_) => Argument::ConstSelf(ItemLocation::test()),
             Argument::MutSelf(_) => Argument::MutSelf(ItemLocation::test()),
             Argument::Named(ident, ty, _) => {
-                Argument::Named(ident.clone(), ty.clone(), ItemLocation::test())
+                Argument::Named(ident.clone(), ty.strip_locations(), ItemLocation::test())
             }
         }
     }
@@ -2153,7 +2200,7 @@ impl StripLocations for ExternValue {
         ExternValue {
             visibility: self.visibility,
             name: self.name.clone(),
-            type_: self.type_.clone(),
+            type_: self.type_.strip_locations(),
             attributes: self.attributes.strip_locations(),
             doc_comments: self.doc_comments.clone(),
             location: ItemLocation::test(),

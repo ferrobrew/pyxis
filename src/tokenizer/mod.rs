@@ -74,9 +74,12 @@ impl Token {
         Self { kind, location }
     }
 
-    /// Legacy accessor for span (for backward compatibility during migration)
-    pub fn span(&self) -> Span {
-        self.location.span
+    pub fn start_location(&self) -> Location {
+        self.location.span.start
+    }
+
+    pub fn end_location(&self) -> Location {
+        self.location.span.end
     }
 }
 

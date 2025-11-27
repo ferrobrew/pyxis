@@ -104,15 +104,15 @@ impl TypeRegistry {
         // todo: consider building a better module import/scope system
         match type_ {
             grammar::Type::ConstPointer(t) => self
-                .resolve_grammar_type(scope, t.as_ref())
+                .resolve_grammar_type(scope, t)
                 .map(|t| Type::ConstPointer(Box::new(t))),
             grammar::Type::MutPointer(t) => self
-                .resolve_grammar_type(scope, t.as_ref())
+                .resolve_grammar_type(scope, t)
                 .map(|t| Type::MutPointer(Box::new(t))),
             grammar::Type::Array(t, size) => self
-                .resolve_grammar_type(scope, t.as_ref())
+                .resolve_grammar_type(scope, t)
                 .map(|t| Type::Array(Box::new(t), *size)),
-            grammar::Type::Ident(ident, _args) => self.resolve_string(scope, ident.as_str()),
+            grammar::Type::Ident(ident) => self.resolve_string(scope, ident.as_str()),
             grammar::Type::Unknown(size) => Some(self.padding_type(*size)),
         }
     }

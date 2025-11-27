@@ -4,7 +4,7 @@ use crate::{
     grammar::{self, ItemPath},
     semantic::types::{CallingConvention, Type as SemanticType},
     source_store::SourceStore,
-    span::{self, ItemLocation, Span},
+    span::{self, ItemLocation, Located, Span},
 };
 use ariadne::{Label, Report, ReportKind, Source};
 use std::fmt;
@@ -227,7 +227,7 @@ pub enum SemanticError {
     },
     /// Type resolution failed
     TypeResolutionFailed {
-        type_: grammar::Type,
+        type_: Located<grammar::Type>,
         resolution_context: TypeResolutionContext,
         location: ItemLocation,
     },

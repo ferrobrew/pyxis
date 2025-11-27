@@ -113,7 +113,7 @@ impl Module {
                         resolution_context: TypeResolutionContext::ExternValue {
                             extern_name: ev.name.clone(),
                         },
-                        location: ev.location.clone(),
+                        location: type_ref.location.clone(),
                     })?;
             }
         }

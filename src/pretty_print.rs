@@ -271,7 +271,7 @@ impl PrettyPrinter {
 
     /// Get the bit width from a type (e.g., u8 -> 8, u32 -> 32)
     fn get_type_bit_width(&self, type_: &Type) -> Option<usize> {
-        if let Type::Ident(ident, _) = type_ {
+        if let Type::Ident(ident) = type_ {
             match ident.as_str() {
                 "u8" | "i8" => Some(8),
                 "u16" | "i16" => Some(16),
@@ -578,12 +578,12 @@ impl PrettyPrinter {
             }
             ItemDefinitionInner::Enum(ed) => {
                 write!(&mut self.output, "enum {}: ", def.name).unwrap();
-                self.print_type(&ed.type_);
+                self.print_type(&ed.type_.value);
                 writeln!(&mut self.output, " {{").unwrap();
                 self.indent();
                 // Set binary literal width based on enum type
                 let old_width = self.binary_literal_width;
-                self.binary_literal_width = self.get_type_bit_width(&ed.type_);
+                self.binary_literal_width = self.get_type_bit_width(&ed.type_.value);
                 for (i, item) in ed.items.iter().enumerate() {
                     let next_item = ed.items.get(i + 1);
                     match item {
@@ -602,12 +602,12 @@ impl PrettyPrinter {
             }
             ItemDefinitionInner::Bitflags(bf) => {
                 write!(&mut self.output, "bitflags {}: ", def.name).unwrap();
-                self.print_type(&bf.type_);
+                self.print_type(&bf.type_.value);
                 writeln!(&mut self.output, " {{").unwrap();
                 self.indent();
                 // Set binary literal width based on bitflags type
                 let old_width = self.binary_literal_width;
-                self.binary_literal_width = self.get_type_bit_width(&bf.type_);
+                self.binary_literal_width = self.get_type_bit_width(&bf.type_.value);
                 for (i, item) in bf.items.iter().enumerate() {
                     let next_item = bf.items.get(i + 1);
                     match item {
@@ -653,7 +653,7 @@ impl PrettyPrinter {
                     write!(&mut self.output, "pub ").unwrap();
                 }
                 write!(&mut self.output, "{name}: ").unwrap();
-                self.print_type(type_);
+                self.print_type(&type_.value);
                 write!(&mut self.output, ",").unwrap();
 
                 // Print inline trailing comments
@@ -774,18 +774,18 @@ impl PrettyPrinter {
 
     fn print_type(&mut self, type_: &Type) {
         match type_ {
-            Type::Ident(name, _) => write!(&mut self.output, "{name}").unwrap(),
+            Type::Ident(ident) => write!(&mut self.output, "{ident}").unwrap(),
             Type::ConstPointer(inner) => {
                 write!(&mut self.output, "*const ").unwrap();
-                self.print_type(inner);
+                self.print_type(&inner.value);
             }
             Type::MutPointer(inner) => {
                 write!(&mut self.output, "*mut ").unwrap();
-                self.print_type(inner);
+                self.print_type(&inner.value);
             }
             Type::Array(inner, size) => {
                 write!(&mut self.output, "[").unwrap();
-                self.print_type(inner);
+                self.print_type(&inner.value);
                 write!(&mut self.output, "; {size}]").unwrap();
             }
             Type::Unknown(size) => {
@@ -831,7 +831,7 @@ impl PrettyPrinter {
             write!(&mut self.output, "pub ").unwrap();
         }
         write!(&mut self.output, "extern {}: ", extern_val.name).unwrap();
-        self.print_type(&extern_val.type_);
+        self.print_type(&extern_val.type_.value);
         writeln!(&mut self.output, ";").unwrap();
     }
 

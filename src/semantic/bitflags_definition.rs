@@ -74,6 +74,8 @@ pub fn build(
 ) -> Result<Option<ItemStateResolved>> {
     let module = semantic.get_module_for_path(resolvee_path, &location)?;
 
+    let type_location = definition.type_.location.clone();
+
     // Retrieve the type for this bitflags, and validate it, before getting its size
     let Some(ty) = semantic
         .type_registry
@@ -87,9 +89,9 @@ pub fn build(
             expected: BitflagsExpectedType::RawType,
             found: ty.clone(),
             item_path: resolvee_path.clone(),
-            location: location.clone(),
+            location: type_location.clone(),
         })?;
-    let Ok(ty_item) = semantic.type_registry.get(ty_raw_path, &location) else {
+    let Ok(ty_item) = semantic.type_registry.get(ty_raw_path, &type_location) else {
         return Ok(None);
     };
     let Some(predefined_item) = ty_item.predefined else {
@@ -98,7 +100,7 @@ pub fn build(
                 expected: BitflagsExpectedType::PredefinedType,
                 found: ty.clone(),
                 item_path: resolvee_path.clone(),
-                location: location.clone(),
+                location: type_location.clone(),
             }
         });
     };
@@ -108,11 +110,20 @@ pub fn build(
                 expected: BitflagsExpectedType::UnsignedInteger,
                 found: ty.clone(),
                 item_path: resolvee_path.clone(),
-                location: location.clone(),
+                location: type_location.clone(),
             }
         });
     }
     let size = predefined_item.size();
+    let alignment = ty_item
+        .alignment()
+        .ok_or_else(|| SemanticError::TypeResolutionFailed {
+            type_: definition.type_.clone(),
+            resolution_context: TypeResolutionContext::BitflagsBaseTypeAlignment {
+                bitflags_path: resolvee_path.clone(),
+            },
+            location: type_location.clone(),
+        })?;
 
     let mut fields: Vec<(String, usize)> = vec![];
     let mut default = None;
@@ -208,15 +219,7 @@ pub fn build(
 
     Ok(Some(ItemStateResolved {
         size,
-        alignment: ty.alignment(&semantic.type_registry).ok_or_else(|| {
-            SemanticError::TypeResolutionFailed {
-                type_: definition.type_.clone(),
-                resolution_context: TypeResolutionContext::BitflagsBaseTypeAlignment {
-                    bitflags_path: resolvee_path.clone(),
-                },
-                location: location.clone(),
-            }
-        })?,
+        alignment,
         inner: BitflagsDefinition {
             type_: ty,
             doc,

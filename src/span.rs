@@ -1,4 +1,7 @@
-use std::sync::Arc;
+use std::{
+    ops::{Deref, DerefMut},
+    sync::Arc,
+};
 
 /// A location in source code (line and column, both 1-indexed)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -63,16 +66,30 @@ pub struct Located<T> {
     pub value: T,
     pub location: ItemLocation,
 }
-
 impl<T> Located<T> {
     pub fn new(value: T, location: ItemLocation) -> Self {
         Self { value, location }
     }
-}
 
+    #[cfg(test)]
+    pub fn test(value: T) -> Self {
+        Self::new(value, ItemLocation::test())
+    }
+}
 impl<T: std::fmt::Display> std::fmt::Display for Located<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.value)
+        write!(f, "{} ({})", self.value, self.location)
+    }
+}
+impl<T> Deref for Located<T> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        &self.value
+    }
+}
+impl<T> DerefMut for Located<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.value
     }
 }
 
@@ -188,10 +205,10 @@ impl<T: StripLocations> StripLocations for Box<T> {
 }
 
 #[cfg(test)]
-impl<T: Clone> StripLocations for Located<T> {
+impl<T: StripLocations> StripLocations for Located<T> {
     fn strip_locations(&self) -> Self {
         // Return a synthetic version with the same value but no real span
-        Located::new(self.value.clone(), ItemLocation::test())
+        Located::new(self.value.strip_locations(), ItemLocation::test())
     }
 }
 

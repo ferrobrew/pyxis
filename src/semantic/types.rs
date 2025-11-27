@@ -3,7 +3,7 @@ use std::fmt;
 use crate::{
     grammar::{self, ItemPath},
     semantic::type_registry,
-    span::ItemLocation,
+    span::{ItemLocation, Located},
 };
 
 #[cfg(test)]
@@ -54,7 +54,7 @@ impl From<grammar::Visibility> for Visibility {
 
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]
 pub enum Type {
-    Unresolved(grammar::Type),
+    Unresolved(Located<grammar::Type>),
     Raw(ItemPath),
     ConstPointer(Box<Type>),
     MutPointer(Box<Type>),
