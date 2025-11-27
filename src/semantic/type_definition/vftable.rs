@@ -153,13 +153,15 @@ pub fn build(
                     .map(|f| f.location.clone())
                     .or_else(|| base_vftable.functions.first().map(|f| f.location.clone()))
                     .unwrap_or_else(|| location.clone());
-                return Err(SemanticError::vftable_missing_functions(
-                    resolvee_path.clone(),
-                    base_name,
-                    base_vftable.functions.len(),
-                    vftable_functions.len(),
-                    error_location,
-                ));
+                return Err({
+                    SemanticError::VftableMissingFunctions {
+                        item_path: resolvee_path.clone(),
+                        base_name,
+                        expected_count: base_vftable.functions.len(),
+                        actual_count: vftable_functions.len(),
+                        location: error_location,
+                    }
+                });
             }
             for (idx, (base_vfunc, derived_vfunc)) in base_vftable
                 .functions
@@ -169,14 +171,14 @@ pub fn build(
             {
                 if !base_vfunc.equals_ignoring_location(derived_vfunc) {
                     // Use the derived function's location for the error
-                    return Err(SemanticError::vftable_function_mismatch(
-                        resolvee_path.clone(),
+                    return Err(SemanticError::VftableFunctionMismatch {
+                        item_path: resolvee_path.clone(),
                         base_name,
-                        idx,
-                        derived_vfunc.to_string(),
-                        base_vfunc.to_string(),
-                        derived_vfunc.location.clone(),
-                    ));
+                        index: idx,
+                        derived_function: derived_vfunc.to_string(),
+                        base_function: base_vfunc.to_string(),
+                        location: derived_vfunc.location.clone(),
+                    });
                 }
             }
 

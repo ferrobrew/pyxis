@@ -304,58 +304,61 @@ pub fn build(
         match (ident.as_str(), &exprs[..]) {
             ("address", [grammar::Expr::IntLiteral { value, .. }]) => {
                 if is_vfunc {
-                    return Err(SemanticError::attribute_not_supported(
-                        "address",
-                        AttributeNotSupportedContext::VirtualFunction {
+                    return Err(SemanticError::AttributeNotSupported {
+                        attribute_name: "address".into(),
+                        attribute_context: AttributeNotSupportedContext::VirtualFunction {
                             function_name: function.name.0.clone(),
                         },
-                        function.location.clone(),
-                    ));
+                        location: function.location.clone(),
+                    });
                 }
 
                 body = Some(FunctionBody::Address {
-                    address: (*value).try_into().map_err(|_| {
-                        SemanticError::integer_conversion(
-                            value.to_string(),
-                            "usize",
-                            IntegerConversionContext::AddressAttribute {
+                    address: (*value)
+                        .try_into()
+                        .map_err(|_| SemanticError::IntegerConversion {
+                            value: value.to_string(),
+                            target_type: "usize".into(),
+                            conversion_context: IntegerConversionContext::AddressAttribute {
                                 function_name: function.name.0.clone(),
                             },
-                            function.location.clone(),
-                        )
-                    })?,
+                            location: function.location.clone(),
+                        })?,
                 });
             }
             ("index", _) => {
                 // ignore index attribute, this is handled by vftable construction
                 if !is_vfunc {
-                    return Err(SemanticError::attribute_not_supported(
-                        "index",
-                        AttributeNotSupportedContext::NonVirtualFunction {
+                    return Err(SemanticError::AttributeNotSupported {
+                        attribute_name: "index".into(),
+                        attribute_context: AttributeNotSupportedContext::NonVirtualFunction {
                             function_name: function.name.0.clone(),
                         },
-                        function.location.clone(),
-                    ));
+                        location: function.location.clone(),
+                    });
                 }
             }
             ("calling_convention", [grammar::Expr::StringLiteral { value, .. }]) => {
-                calling_convention = Some(value.parse().map_err(|_| {
-                    SemanticError::invalid_calling_convention(
-                        value.clone(),
-                        function.name.0.clone(),
-                        function.location.clone(),
-                    )
-                })?);
+                calling_convention =
+                    Some(
+                        value
+                            .parse()
+                            .map_err(|_| SemanticError::InvalidCallingConvention {
+                                convention: value.clone(),
+                                function_name: function.name.0.clone(),
+                                location: function.location.clone(),
+                            })?,
+                    );
             }
             _ => {}
         }
     }
 
     if !is_vfunc && body.is_none() {
-        return Err(SemanticError::function_missing_implementation(
-            function.name.0.clone(),
-            function.location.clone(),
-        ));
+        return Err(SemanticError::FunctionMissingImplementation {
+            function_name: function.name.0.clone(),
+            location: function.location.clone(),
+        });
     }
 
     let Some(body) = body else {
@@ -375,15 +378,13 @@ pub fn build(
                 name.0.clone(),
                 type_registry
                     .resolve_grammar_type(scope, type_)
-                    .ok_or_else(|| {
-                        SemanticError::type_resolution_failed(
-                            type_.clone(),
-                            TypeResolutionContext::FunctionArgument {
-                                argument_name: name.0.clone(),
-                                function_name: function.name.0.clone(),
-                            },
-                            location.clone(),
-                        )
+                    .ok_or_else(|| SemanticError::TypeResolutionFailed {
+                        type_: type_.clone(),
+                        resolution_context: TypeResolutionContext::FunctionArgument {
+                            argument_name: name.0.clone(),
+                            function_name: function.name.0.clone(),
+                        },
+                        location: location.clone(),
                     })?,
                 location.clone(),
             )),

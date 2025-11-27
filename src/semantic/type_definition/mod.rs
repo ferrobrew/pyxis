@@ -190,50 +190,50 @@ pub fn build(
                 match (ident.as_str(), exprs.as_slice()) {
                     ("size", [grammar::Expr::IntLiteral { value, .. }]) => {
                         target_size = Some((*value).try_into().map_err(|_| {
-                            SemanticError::integer_conversion(
-                                value.to_string(),
-                                "usize",
-                                IntegerConversionContext::SizeAttribute {
+                            SemanticError::IntegerConversion {
+                                value: value.to_string(),
+                                target_type: "usize".into(),
+                                conversion_context: IntegerConversionContext::SizeAttribute {
                                     type_path: resolvee_path.clone(),
                                 },
-                                location.clone(),
-                            )
+                                location: location.clone(),
+                            }
                         })?);
                     }
                     ("min_size", [grammar::Expr::IntLiteral { value, .. }]) => {
                         min_size = Some((*value).try_into().map_err(|_| {
-                            SemanticError::integer_conversion(
-                                value.to_string(),
-                                "usize",
-                                IntegerConversionContext::MinSizeAttribute {
+                            SemanticError::IntegerConversion {
+                                value: value.to_string(),
+                                target_type: "usize".into(),
+                                conversion_context: IntegerConversionContext::MinSizeAttribute {
                                     type_path: resolvee_path.clone(),
                                 },
-                                location.clone(),
-                            )
+                                location: location.clone(),
+                            }
                         })?);
                     }
                     ("singleton", [grammar::Expr::IntLiteral { value, .. }]) => {
                         singleton = Some((*value).try_into().map_err(|_| {
-                            SemanticError::integer_conversion(
-                                value.to_string(),
-                                "usize",
-                                IntegerConversionContext::SingletonAttribute {
+                            SemanticError::IntegerConversion {
+                                value: value.to_string(),
+                                target_type: "usize".into(),
+                                conversion_context: IntegerConversionContext::SingletonAttribute {
                                     type_path: resolvee_path.clone(),
                                 },
-                                location.clone(),
-                            )
+                                location: location.clone(),
+                            }
                         })?);
                     }
                     ("align", [grammar::Expr::IntLiteral { value, .. }]) => {
                         align = Some((*value).try_into().map_err(|_| {
-                            SemanticError::integer_conversion(
-                                value.to_string(),
-                                "usize",
-                                IntegerConversionContext::AlignAttribute {
+                            SemanticError::IntegerConversion {
+                                value: value.to_string(),
+                                target_type: "usize".into(),
+                                conversion_context: IntegerConversionContext::AlignAttribute {
                                     type_path: resolvee_path.clone(),
                                 },
-                                location.clone(),
-                            )
+                                location: location.clone(),
+                            }
                         })?);
                     }
                     _ => {}
@@ -255,12 +255,14 @@ pub fn build(
 
     // Ensure size and min_size are mutually exclusive
     if target_size.is_some() && min_size.is_some() {
-        return Err(SemanticError::conflicting_attributes(
-            "size",
-            "min_size",
-            resolvee_path.clone(),
-            location.clone(),
-        ));
+        return Err({
+            SemanticError::ConflictingAttributes {
+                attr1: "size".into(),
+                attr2: "min_size".into(),
+                item_path: resolvee_path.clone(),
+                location: location.clone(),
+            }
+        });
     }
 
     // Handle fields
@@ -292,15 +294,16 @@ pub fn build(
                                 (attr_ident.as_str(), &exprs[..])
                             {
                                 address = Some((*value).try_into().map_err(|_| {
-                                    SemanticError::integer_conversion(
-                                        value.to_string(),
-                                        "usize",
-                                        IntegerConversionContext::FieldAddressAttribute {
-                                            field_name: field_ident.0.clone(),
-                                            type_path: resolvee_path.clone(),
-                                        },
-                                        location.clone(),
-                                    )
+                                    SemanticError::IntegerConversion {
+                                        value: value.to_string(),
+                                        target_type: "usize".into(),
+                                        conversion_context:
+                                            IntegerConversionContext::FieldAddressAttribute {
+                                                field_name: field_ident.0.clone(),
+                                                type_path: resolvee_path.clone(),
+                                            },
+                                        location: location.clone(),
+                                    }
                                 })?);
                             }
                         }
@@ -465,12 +468,12 @@ pub fn build(
     if let Some(type_impl) = module.impls.get(resolvee_path) {
         for function in type_impl.functions().collect::<Vec<_>>() {
             if associated_functions_used_names.contains(&function.name.0) {
-                return Err(SemanticError::duplicate_definition(
-                    function.name.0.clone(),
-                    resolvee_path.clone(),
-                    "function already defined in type or base type",
-                    location.clone(),
-                ));
+                return Err(SemanticError::DuplicateDefinition {
+                    name: function.name.0.clone(),
+                    item_path: resolvee_path.clone(),
+                    message: "function already defined in type or base type".into(),
+                    location: location.clone(),
+                });
             }
 
             let function =
@@ -501,12 +504,12 @@ pub fn build(
                 }
             }
             let Some(path) = get_defaultable_type_path(type_ref) else {
-                return Err(SemanticError::defaultable_error(
-                    name,
-                    resolvee_path.clone(),
-                    "is not a defaultable type (pointer or function?)",
-                    region_location.clone(),
-                ));
+                return Err(SemanticError::DefaultableError {
+                    field_name: name.into(),
+                    item_path: resolvee_path.clone(),
+                    message: "is not a defaultable type (pointer or function?)".into(),
+                    location: region_location.clone(),
+                });
             };
 
             let item = semantic
@@ -520,24 +523,24 @@ pub fn build(
             };
 
             if !inner.defaultable() {
-                return Err(SemanticError::defaultable_error(
-                    name,
-                    resolvee_path.clone(),
-                    "is not a defaultable type",
-                    region_location.clone(),
-                ));
+                return Err(SemanticError::DefaultableError {
+                    field_name: name.into(),
+                    item_path: resolvee_path.clone(),
+                    message: "is not a defaultable type".into(),
+                    location: region_location.clone(),
+                });
             }
         }
     }
 
     let alignment = if packed {
         if align.is_some() {
-            return Err(SemanticError::conflicting_attributes(
-                "packed",
-                "align",
-                resolvee_path.clone(),
-                location.clone(),
-            ));
+            return Err(SemanticError::ConflictingAttributes {
+                attr1: "packed".into(),
+                attr2: "align".into(),
+                item_path: resolvee_path.clone(),
+                location: location.clone(),
+            });
         }
 
         1
@@ -559,15 +562,12 @@ pub fn build(
 
         // Ensure that the alignment is at least the minimum required alignment.
         if required_alignment > alignment {
-            return Err(semantic.enhance_error(
-                SemanticError::alignment_below_minimum(
-                    alignment,
-                    required_alignment,
-                    resolvee_path.clone(),
-                    location.clone(),
-                ),
-                resolvee_path,
-            ));
+            return Err(SemanticError::AlignmentBelowMinimum {
+                alignment,
+                required_alignment,
+                item_path: resolvee_path.clone(),
+                location: location.clone(),
+            });
         }
 
         // Ensure that all fields are aligned.
@@ -577,15 +577,13 @@ pub fn build(
                 let name = region.name.as_deref().unwrap_or("unnamed");
                 let field_alignment = region.type_ref.alignment(&semantic.type_registry).unwrap();
                 if last_address % field_alignment != 0 {
-                    let error = SemanticError::field_not_aligned(
-                        name,
-                        resolvee_path.clone(),
-                        last_address,
-                        field_alignment,
-                        location.clone(),
-                    );
-
-                    return Err(error);
+                    return Err(SemanticError::FieldNotAligned {
+                        field_name: name.into(),
+                        item_path: resolvee_path.clone(),
+                        address: last_address,
+                        required_alignment: field_alignment,
+                        location: location.clone(),
+                    });
                 }
                 last_address += region.size(&semantic.type_registry).unwrap();
             }
@@ -593,12 +591,12 @@ pub fn build(
 
         // Ensure that the size is a multiple of the alignment.
         if size % alignment != 0 {
-            return Err(SemanticError::size_not_alignment_multiple(
+            return Err(SemanticError::SizeNotAlignmentMultiple {
                 size,
                 alignment,
-                resolvee_path.clone(),
-                location.clone(),
-            ));
+                item_path: resolvee_path.clone(),
+                location: location.clone(),
+            });
         }
 
         alignment
@@ -768,28 +766,22 @@ fn resolve_regions(
         if is_min_size {
             // For min_size, the final size should be >= target_size (which was already rounded)
             if size < target_size {
-                return Err(semantic.enhance_error(
-                    SemanticError::size_below_minimum(
-                        target_size,
-                        size,
-                        resolvee_path.clone(),
-                        error_location.clone(),
-                    ),
-                    resolvee_path,
-                ));
+                return Err(SemanticError::SizeBelowMinimum {
+                    minimum_size: target_size,
+                    actual_size: size,
+                    item_path: resolvee_path.clone(),
+                    location: error_location.clone(),
+                });
             }
         } else {
             // For exact size, the final size must equal target_size
             if size != target_size {
-                return Err(semantic.enhance_error(
-                    SemanticError::size_mismatch(
-                        target_size,
-                        size,
-                        resolvee_path.clone(),
-                        error_location,
-                    ),
-                    resolvee_path,
-                ));
+                return Err(SemanticError::SizeMismatch {
+                    expected: target_size,
+                    actual: size,
+                    item_path: resolvee_path.clone(),
+                    location: error_location,
+                });
             }
         }
     }
@@ -809,13 +801,15 @@ fn get_region_name_and_type_definition<'a>(
         .expect("region had no name, this shouldn't be possible");
 
     let Type::Raw(path) = &region.type_ref else {
-        return Err(SemanticError::invalid_type(
-            "raw type",
-            region.type_ref.human_friendly_type(),
-            type_path.clone(),
-            format!("region field `{}`", region_name),
-            region.location.clone(),
-        ));
+        return Err({
+            SemanticError::InvalidType {
+                expected: "raw type".into(),
+                found: region.type_ref.human_friendly_type().into(),
+                item_path: type_path.clone(),
+                context_description: format!("region field `{region_name}`"),
+                location: region.location.clone(),
+            }
+        });
     };
 
     let region_type = type_registry.get(path, &region.location)?;
@@ -825,13 +819,15 @@ fn get_region_name_and_type_definition<'a>(
     };
 
     let Some(region_type) = region_type.inner.as_type() else {
-        return Err(SemanticError::invalid_type(
-            "type",
-            region_type.inner.human_friendly_type(),
-            type_path.clone(),
-            format!("region field `{}`", region_name),
-            region.location.clone(),
-        ));
+        return Err({
+            SemanticError::InvalidType {
+                expected: "type".into(),
+                found: region_type.inner.human_friendly_type().into(),
+                item_path: type_path.clone(),
+                context_description: format!("region field `{region_name}`"),
+                location: region.location.clone(),
+            }
+        });
     };
 
     Ok(Some((region_name, region_type)))

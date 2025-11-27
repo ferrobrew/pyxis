@@ -81,32 +81,36 @@ pub fn build(
     else {
         return Ok(None);
     };
-    let ty_raw_path = ty.as_raw().ok_or_else(|| {
-        SemanticError::bitflags_invalid_type(
-            BitflagsExpectedType::RawType,
-            ty.clone(),
-            resolvee_path.clone(),
-            location.clone(),
-        )
-    })?;
+    let ty_raw_path = ty
+        .as_raw()
+        .ok_or_else(|| SemanticError::BitflagsInvalidType {
+            expected: BitflagsExpectedType::RawType,
+            found: ty.clone(),
+            item_path: resolvee_path.clone(),
+            location: location.clone(),
+        })?;
     let Ok(ty_item) = semantic.type_registry.get(ty_raw_path, &location) else {
         return Ok(None);
     };
     let Some(predefined_item) = ty_item.predefined else {
-        return Err(SemanticError::bitflags_invalid_type(
-            BitflagsExpectedType::PredefinedType,
-            ty.clone(),
-            resolvee_path.clone(),
-            location.clone(),
-        ));
+        return Err({
+            SemanticError::BitflagsInvalidType {
+                expected: BitflagsExpectedType::PredefinedType,
+                found: ty.clone(),
+                item_path: resolvee_path.clone(),
+                location: location.clone(),
+            }
+        });
     };
     if !predefined_item.is_unsigned_integer() {
-        return Err(SemanticError::bitflags_invalid_type(
-            BitflagsExpectedType::UnsignedInteger,
-            ty.clone(),
-            resolvee_path.clone(),
-            location.clone(),
-        ));
+        return Err({
+            SemanticError::BitflagsInvalidType {
+                expected: BitflagsExpectedType::UnsignedInteger,
+                found: ty.clone(),
+                item_path: resolvee_path.clone(),
+                location: location.clone(),
+            }
+        });
     }
     let size = predefined_item.size();
 
@@ -122,36 +126,36 @@ pub fn build(
         let value = match expr {
             grammar::Expr::IntLiteral { value, .. } => *value,
             _ => {
-                return Err(SemanticError::bitflags_unsupported_value(
-                    resolvee_path.clone(),
-                    name.0.clone(),
-                    location.clone(),
-                ));
+                return Err(SemanticError::BitflagsUnsupportedValue {
+                    item_path: resolvee_path.clone(),
+                    case_name: name.0.clone(),
+                    location: location.clone(),
+                });
             }
         };
         fields.push((
             name.0.clone(),
-            value.try_into().map_err(|_| {
-                SemanticError::integer_conversion(
-                    value.to_string(),
-                    "usize",
-                    IntegerConversionContext::BitflagsValue {
+            value
+                .try_into()
+                .map_err(|_| SemanticError::IntegerConversion {
+                    value: value.to_string(),
+                    target_type: "usize".into(),
+                    conversion_context: IntegerConversionContext::BitflagsValue {
                         field_name: name.0.clone(),
                         type_path: resolvee_path.clone(),
                     },
-                    location.clone(),
-                )
-            })?,
+                    location: location.clone(),
+                })?,
         ));
 
         for attribute in attributes {
             match attribute {
                 grammar::Attribute::Ident(ident) if ident.as_str() == "default" => {
                     if default.is_some() {
-                        return Err(SemanticError::bitflags_multiple_defaults(
-                            resolvee_path.clone(),
-                            location.clone(),
-                        ));
+                        return Err(SemanticError::BitflagsMultipleDefaults {
+                            item_path: resolvee_path.clone(),
+                            location: location.clone(),
+                        });
                     }
                     default = Some(fields.len() - 1);
                 }
@@ -189,29 +193,29 @@ pub fn build(
     }
 
     if !defaultable && default.is_some() {
-        return Err(SemanticError::bitflags_default_without_defaultable(
-            resolvee_path.clone(),
-            location.clone(),
-        ));
+        return Err(SemanticError::BitflagsDefaultWithoutDefaultable {
+            item_path: resolvee_path.clone(),
+            location: location.clone(),
+        });
     }
 
     if defaultable && default.is_none() {
-        return Err(SemanticError::bitflags_defaultable_missing_default(
-            resolvee_path.clone(),
-            location.clone(),
-        ));
+        return Err(SemanticError::BitflagsDefaultableMissingDefault {
+            item_path: resolvee_path.clone(),
+            location: location.clone(),
+        });
     }
 
     Ok(Some(ItemStateResolved {
         size,
         alignment: ty.alignment(&semantic.type_registry).ok_or_else(|| {
-            SemanticError::type_resolution_failed(
-                definition.type_.clone(),
-                TypeResolutionContext::BitflagsBaseTypeAlignment {
+            SemanticError::TypeResolutionFailed {
+                type_: definition.type_.clone(),
+                resolution_context: TypeResolutionContext::BitflagsBaseTypeAlignment {
                     bitflags_path: resolvee_path.clone(),
                 },
-                location.clone(),
-            )
+                location: location.clone(),
+            }
         })?,
         inner: BitflagsDefinition {
             type_: ty,

@@ -81,13 +81,6 @@ impl SemanticState {
         .map_err(Into::into)
     }
 
-    /// Attach span and source information to a semantic error if available
-    pub fn enhance_error(&self, error: SemanticError, _item_path: &ItemPath) -> SemanticError {
-        // Note: with_span_and_source method was removed as part of refactoring
-        // to eliminate source fields from error types
-        error
-    }
-
     pub fn add_module(
         &mut self,
         module: &grammar::Module,
@@ -111,13 +104,11 @@ impl SemanticState {
                     }
                 }
 
-                let address = address.ok_or_else(|| {
-                    SemanticError::missing_attribute(
-                        "address",
-                        "extern value",
-                        path.join(name.as_str().into()),
-                        ev.location.clone(),
-                    )
+                let address = address.ok_or_else(|| SemanticError::MissingAttribute {
+                    attribute_name: "address".into(),
+                    item_kind: "extern value".into(),
+                    item_path: path.join(name.as_str().into()),
+                    location: ev.location.clone(),
                 })?;
 
                 Ok(ExternValue {
@@ -169,50 +160,47 @@ impl SemanticState {
                 match (ident.as_str(), &exprs[..]) {
                     ("size", [grammar::Expr::IntLiteral { value, .. }]) => {
                         size = Some((*value).try_into().map_err(|_| {
-                            SemanticError::integer_conversion(
-                                value.to_string(),
-                                "usize",
-                                IntegerConversionContext::ExternSizeAttribute {
+                            SemanticError::IntegerConversion {
+                                value: value.to_string(),
+                                target_type: "usize".into(),
+                                conversion_context: IntegerConversionContext::ExternSizeAttribute {
                                     type_name: extern_name.to_string(),
                                     module_name: path.to_string(),
                                 },
-                                extern_location.clone(),
-                            )
+                                location: extern_location.clone(),
+                            }
                         })?);
                     }
                     ("align", [grammar::Expr::IntLiteral { value, .. }]) => {
                         alignment = Some((*value).try_into().map_err(|_| {
-                            SemanticError::integer_conversion(
-                                value.to_string(),
-                                "usize",
-                                IntegerConversionContext::ExternAlignAttribute {
-                                    type_name: extern_name.to_string(),
-                                    module_name: path.to_string(),
-                                },
-                                extern_location.clone(),
-                            )
+                            SemanticError::IntegerConversion {
+                                value: value.to_string(),
+                                target_type: "usize".into(),
+                                conversion_context:
+                                    IntegerConversionContext::ExternAlignAttribute {
+                                        type_name: extern_name.to_string(),
+                                        module_name: path.to_string(),
+                                    },
+                                location: extern_location.clone(),
+                            }
                         })?);
                     }
                     _ => {}
                 }
             }
-            let size = size.ok_or_else(|| {
-                SemanticError::missing_extern_attribute(
-                    "size",
-                    "extern type",
-                    extern_name.as_str(),
-                    path.to_string(),
-                    extern_location.clone(),
-                )
+            let size = size.ok_or_else(|| SemanticError::MissingExternAttribute {
+                attribute_name: "size".into(),
+                extern_kind: "extern type".into(),
+                type_name: extern_name.as_str().into(),
+                module_name: path.to_string(),
+                location: extern_location.clone(),
             })?;
-            let alignment = alignment.ok_or_else(|| {
-                SemanticError::missing_extern_attribute(
-                    "align",
-                    "extern type",
-                    extern_name.as_str(),
-                    path.to_string(),
-                    extern_location.clone(),
-                )
+            let alignment = alignment.ok_or_else(|| SemanticError::MissingExternAttribute {
+                attribute_name: "align".into(),
+                extern_kind: "extern type".into(),
+                type_name: extern_name.as_str().into(),
+                module_name: path.to_string(),
+                location: extern_location.clone(),
             })?;
 
             let extern_path = path.join(extern_name.as_str().into());
@@ -235,17 +223,19 @@ impl SemanticState {
     }
 
     pub fn add_item(&mut self, item_definition: ItemDefinition) -> Result<()> {
-        let parent_path = &item_definition.path.parent().ok_or_else(|| {
-            let path = item_definition.path.clone();
-            let location = item_definition.location.clone();
-            SemanticError::ModuleNotFound { path, location }
-        })?;
+        let parent_path =
+            &item_definition
+                .path
+                .parent()
+                .ok_or_else(|| SemanticError::ModuleNotFound {
+                    path: item_definition.path.clone(),
+                    location: item_definition.location.clone(),
+                })?;
         self.modules
             .get_mut(parent_path)
-            .ok_or_else(|| {
-                let path = parent_path.clone();
-                let location = item_definition.location.clone();
-                SemanticError::ModuleNotFound { path, location }
+            .ok_or_else(|| SemanticError::ModuleNotFound {
+                path: parent_path.clone(),
+                location: item_definition.location.clone(),
             })?
             .definition_paths
             .insert(item_definition.path.clone());

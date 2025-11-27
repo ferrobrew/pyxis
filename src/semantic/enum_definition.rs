@@ -105,11 +105,11 @@ pub fn build(
         let value = match expr {
             Some(grammar::Expr::IntLiteral { value, .. }) => *value,
             Some(_) => {
-                return Err(SemanticError::enum_unsupported_value(
-                    resolvee_path.clone(),
-                    name.0.clone(),
-                    location.clone(),
-                ));
+                return Err(SemanticError::EnumUnsupportedValue {
+                    item_path: resolvee_path.clone(),
+                    case_name: name.0.clone(),
+                    location: location.clone(),
+                });
             }
             None => last_field,
         };
@@ -119,10 +119,10 @@ pub fn build(
             match attribute {
                 grammar::Attribute::Ident(ident) if ident.as_str() == "default" => {
                     if default.is_some() {
-                        return Err(SemanticError::enum_multiple_defaults(
-                            resolvee_path.clone(),
-                            location.clone(),
-                        ));
+                        return Err(SemanticError::EnumMultipleDefaults {
+                            item_path: resolvee_path.clone(),
+                            location: location.clone(),
+                        });
                     }
                     default = Some(fields.len() - 1);
                 }
@@ -162,17 +162,17 @@ pub fn build(
     }
 
     if !defaultable && default.is_some() {
-        return Err(SemanticError::enum_default_without_defaultable(
-            resolvee_path.clone(),
-            location.clone(),
-        ));
+        return Err(SemanticError::EnumDefaultWithoutDefaultable {
+            item_path: resolvee_path.clone(),
+            location: location.clone(),
+        });
     }
 
     if defaultable && default.is_none() {
-        return Err(SemanticError::enum_defaultable_missing_default(
-            resolvee_path.clone(),
-            location.clone(),
-        ));
+        return Err(SemanticError::EnumDefaultableMissingDefault {
+            item_path: resolvee_path.clone(),
+            location: location.clone(),
+        });
     }
 
     // Handle associated functions
@@ -192,13 +192,13 @@ pub fn build(
     Ok(Some(ItemStateResolved {
         size,
         alignment: ty.alignment(&semantic.type_registry).ok_or_else(|| {
-            SemanticError::type_resolution_failed(
-                definition.type_.clone(),
-                TypeResolutionContext::EnumBaseTypeAlignment {
+            SemanticError::TypeResolutionFailed {
+                type_: definition.type_.clone(),
+                resolution_context: TypeResolutionContext::EnumBaseTypeAlignment {
                     enum_path: resolvee_path.clone(),
                 },
-                location.clone(),
-            )
+                location: location.clone(),
+            }
         })?,
         inner: EnumDefinition {
             type_: ty,

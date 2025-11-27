@@ -108,14 +108,12 @@ impl Module {
             if let Type::Unresolved(type_ref) = &ev.type_ {
                 ev.type_ = type_registry
                     .resolve_grammar_type(&scope, type_ref)
-                    .ok_or_else(|| {
-                        SemanticError::type_resolution_failed(
-                            type_ref.clone(),
-                            TypeResolutionContext::ExternValue {
-                                extern_name: ev.name.clone(),
-                            },
-                            ev.location.clone(),
-                        )
+                    .ok_or_else(|| SemanticError::TypeResolutionFailed {
+                        type_: type_ref.clone(),
+                        resolution_context: TypeResolutionContext::ExternValue {
+                            extern_name: ev.name.clone(),
+                        },
+                        location: ev.location.clone(),
                     })?;
             }
         }
