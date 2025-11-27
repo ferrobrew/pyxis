@@ -155,24 +155,24 @@ impl From<&str> for Type {
 impl fmt::Display for Type {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Type::ConstPointer(inner) => write!(f, "*const {}", inner),
-            Type::MutPointer(inner) => write!(f, "*mut {}", inner),
-            Type::Array(inner, size) => write!(f, "[{}; {}]", inner, size),
+            Type::ConstPointer(inner) => write!(f, "*const {inner}"),
+            Type::MutPointer(inner) => write!(f, "*mut {inner}"),
+            Type::Array(inner, size) => write!(f, "[{inner}; {size}]"),
             Type::Ident(ident, args) => {
-                write!(f, "{}", ident)?;
+                write!(f, "{ident}")?;
                 if !args.is_empty() {
                     write!(f, "<")?;
                     for (i, arg) in args.iter().enumerate() {
                         if i > 0 {
                             write!(f, ", ")?;
                         }
-                        write!(f, "{}", arg)?;
+                        write!(f, "{arg}")?;
                     }
                     write!(f, ">")?;
                 }
                 Ok(())
             }
-            Type::Unknown(size) => write!(f, "unknown({})", size),
+            Type::Unknown(size) => write!(f, "unknown({size})"),
         }
     }
 }
@@ -256,7 +256,7 @@ impl fmt::Display for ItemPath {
             if index > 0 {
                 write!(f, "::")?;
             }
-            write!(f, "{}", segment)?;
+            write!(f, "{segment}")?;
         }
         Ok(())
     }

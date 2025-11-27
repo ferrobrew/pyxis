@@ -69,8 +69,7 @@ pub fn assert_ast_produces_error(module: M, predicate: impl FnOnce(&SemanticErro
     let err = build_state(&module, &IP::from("test")).unwrap_err();
     assert!(
         predicate(&err),
-        "Error did not match predicate. Got error: {:?}",
-        err
+        "Error did not match predicate. Got error: {err:?}"
     );
 }
 

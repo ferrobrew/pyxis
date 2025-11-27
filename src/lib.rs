@@ -1,5 +1,6 @@
 #![allow(clippy::result_large_err)]
 #![allow(clippy::collapsible_if)]
+#![deny(clippy::uninlined_format_args)]
 
 use std::path::Path;
 
@@ -42,12 +43,12 @@ pub enum BuildError {
 impl std::fmt::Display for BuildError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            BuildError::Semantic(err) => write!(f, "{}", err),
-            BuildError::Config(err) => write!(f, "{}", err),
-            BuildError::Glob(err) => write!(f, "Glob pattern error: {}", err),
-            BuildError::Io { error, context } => write!(f, "IO error: {} ({})", error, context),
-            BuildError::Parser(err) => write!(f, "{}", err),
-            BuildError::Backend(err) => write!(f, "{}", err),
+            BuildError::Semantic(err) => write!(f, "{err}"),
+            BuildError::Config(err) => write!(f, "{err}"),
+            BuildError::Glob(err) => write!(f, "Glob pattern error: {err}"),
+            BuildError::Io { error, context } => write!(f, "IO error: {error} ({context})"),
+            BuildError::Parser(err) => write!(f, "{err}"),
+            BuildError::Backend(err) => write!(f, "{err}"),
         }
     }
 }
@@ -90,8 +91,8 @@ impl BuildError {
         match self {
             BuildError::Semantic(err) => err.to_string(),
             BuildError::Config(err) => err.to_string(),
-            BuildError::Glob(err) => format!("Glob pattern error: {}", err),
-            BuildError::Io { error, context } => format!("IO error: {} ({})", error, context),
+            BuildError::Glob(err) => format!("Glob pattern error: {err}"),
+            BuildError::Io { error, context } => format!("IO error: {error} ({context})"),
             BuildError::Parser(err) => err.to_string(),
             BuildError::Backend(err) => err.to_string(),
         }
@@ -171,7 +172,7 @@ pub fn build_script(in_dir: &Path, out_dir: Option<&Path>) -> Result<(), BuildEr
             // Format errors with ariadne before returning
             let mut store = source_store::FilesystemSourceStore::new();
             let formatted = err.format_with_ariadne(&mut store);
-            eprintln!("{}", formatted);
+            eprintln!("{formatted}");
             Err(err)
         }
     }

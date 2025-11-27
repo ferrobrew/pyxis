@@ -72,18 +72,15 @@ impl BackendError {
     fn error_message(&self) -> String {
         match self {
             BackendError::Io { error, context } => {
-                format!("IO error: {} ({})", error, context)
+                format!("IO error: {error} ({context})")
             }
-            BackendError::Formatting(msg) => format!("Formatting error: {}", msg),
-            BackendError::Syntax(err) => format!("Syntax error: {}", err),
+            BackendError::Formatting(msg) => format!("Formatting error: {msg}"),
+            BackendError::Syntax(err) => format!("Syntax error: {err}"),
             BackendError::Semantic(err) => err.to_string(),
             BackendError::TypeCodeGenFailed {
                 type_path, reason, ..
             } => {
-                format!(
-                    "Failed to generate code for type `{}`: {}",
-                    type_path, reason
-                )
+                format!("Failed to generate code for type `{type_path}`: {reason}")
             }
             BackendError::FieldCodeGenFailed {
                 type_path,
@@ -92,17 +89,13 @@ impl BackendError {
                 ..
             } => {
                 format!(
-                    "Failed to generate code for field `{}` of type `{}`: {}",
-                    field_name, type_path, reason
+                    "Failed to generate code for field `{field_name}` of type `{type_path}`: {reason}"
                 )
             }
             BackendError::VftableCodeGenFailed {
                 type_path, reason, ..
             } => {
-                format!(
-                    "Failed to generate vftable code for type `{}`: {}",
-                    type_path, reason
-                )
+                format!("Failed to generate vftable code for type `{type_path}`: {reason}")
             }
         }
     }

@@ -94,7 +94,7 @@ pub fn write_module(
         .map(build_function)
         .collect::<Result<Vec<_>>>()?;
     for func in freestanding_functions {
-        writeln!(raw_output, "{}", func)?;
+        writeln!(raw_output, "{func}")?;
     }
 
     writeln!(raw_output, "{epilogues}")?;
@@ -788,7 +788,7 @@ fn fully_qualified_type_ref_impl(
     use std::fmt::Write;
 
     match type_ref {
-        Type::Unresolved(_) => panic!("received unresolved type {:?}", type_ref),
+        Type::Unresolved(_) => panic!("received unresolved type {type_ref:?}"),
         Type::Raw(path) => {
             if path.len() == 1 && path.last() == Some(&"void".into()) {
                 write!(out, "::std::ffi::c_void")
@@ -797,7 +797,7 @@ fn fully_qualified_type_ref_impl(
                 if path.len() > 1 {
                     write!(out, "crate::")?;
                 }
-                write!(out, "{}", path)
+                write!(out, "{path}")
             }
         }
         Type::ConstPointer(tr) => {
@@ -811,7 +811,7 @@ fn fully_qualified_type_ref_impl(
         Type::Array(tr, size) => {
             write!(out, "[")?;
             fully_qualified_type_ref_impl(out, tr.as_ref())?;
-            write!(out, "; {}]", size)
+            write!(out, "; {size}]")
         }
         Type::Function(calling_convention, args, return_type) => {
             write!(out, r#"unsafe extern "{calling_convention}" fn ("#)?;

@@ -451,7 +451,7 @@ impl Lexer {
                     ItemLocation::new(self.filename.clone(), Span::new(start, end)),
                 ))
             }
-            _ => Err(self.error(format!("Unexpected character: '{}'", ch), start)),
+            _ => Err(self.error(format!("Unexpected character: '{ch}'"), start)),
         }
     }
 
@@ -681,7 +681,7 @@ impl Lexer {
                         '0' => value.push('\0'),
                         _ => {
                             return Err(self.error(
-                                format!("Invalid escape sequence: \\{}", escaped),
+                                format!("Invalid escape sequence: \\{escaped}"),
                                 self.current_location(),
                             ));
                         }
@@ -784,7 +784,7 @@ impl Lexer {
                     '0' => '\0',
                     _ => {
                         return Err(self.error(
-                            format!("Invalid escape sequence: \\{}", escaped),
+                            format!("Invalid escape sequence: \\{escaped}"),
                             self.current_location(),
                         ));
                     }

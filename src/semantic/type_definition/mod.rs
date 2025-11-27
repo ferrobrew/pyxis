@@ -447,7 +447,7 @@ pub fn build(
                 let mut function = function.clone();
                 let original_name = function.name.clone();
                 if associated_functions_used_names.contains(&original_name) {
-                    function.name = format!("{}_{}", base_name, original_name);
+                    function.name = format!("{base_name}_{original_name}");
                 }
                 function.body = FunctionBody::field(base_name.clone(), original_name);
                 associated_functions_used_names.insert(function.name.clone());

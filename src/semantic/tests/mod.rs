@@ -619,7 +619,7 @@ fn make_vfunc(index: usize) -> SF {
 
 fn make_vfunc_region(index: usize) -> SR {
     SR::field(
-        (SV::Private, format!("_vfunc_{}", index)),
+        (SV::Private, format!("_vfunc_{index}")),
         ST::function(
             SCC::for_member_function(pointer_size()),
             [("this", ST::raw("test::TestType").mut_pointer())],

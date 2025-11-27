@@ -195,7 +195,7 @@ impl fmt::Display for Function {
         }
         write!(f, ")")?;
         if let Some(ty) = &self.return_type {
-            write!(f, " -> {}", ty)?;
+            write!(f, " -> {ty}")?;
         }
         write!(f, " = ")?;
         match &self.body {

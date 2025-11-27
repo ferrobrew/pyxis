@@ -224,10 +224,10 @@ impl PrettyPrinter {
     /// e.g., 0x142ED0E78 -> 0x142_ED0_E78
     fn format_hex_with_underscores(&self, val: isize) -> String {
         if val < 0 {
-            return format!("{}", val);
+            return format!("{val}");
         }
 
-        let hex_str = format!("{:X}", val);
+        let hex_str = format!("{val:X}");
         let mut result = String::from("0x");
         let len = hex_str.len();
 
@@ -246,14 +246,14 @@ impl PrettyPrinter {
     /// e.g., for u32: 1 -> 0b0000_0000_0000_0000_0000_0000_0000_0001
     fn format_binary_with_padding(&self, val: isize) -> String {
         if val < 0 {
-            return format!("0b{:b}", val);
+            return format!("0b{val:b}");
         }
 
         // Determine width based on context or default to 32
         let width = self.binary_literal_width.unwrap_or(32);
 
         // Format as binary and pad to width
-        let bin_str = format!("{:b}", val);
+        let bin_str = format!("{val:b}");
         let padding = width.saturating_sub(bin_str.len());
         let padded = "0".repeat(padding) + &bin_str;
 
@@ -288,7 +288,7 @@ impl PrettyPrinter {
     fn print_attribute(&mut self, attr: &Attribute) {
         match attr {
             Attribute::Ident(name) => {
-                write!(&mut self.output, "{}", name).unwrap();
+                write!(&mut self.output, "{name}").unwrap();
             }
             Attribute::Function(name, items) => {
                 // Check special formatting requirements
@@ -299,7 +299,7 @@ impl PrettyPrinter {
                     self.in_vftable_index = true;
                 }
 
-                write!(&mut self.output, "{}(", name).unwrap();
+                write!(&mut self.output, "{name}(").unwrap();
                 let mut first_expr = true;
                 for item in items {
                     match item {
@@ -313,7 +313,7 @@ impl PrettyPrinter {
                             if needs_underscore {
                                 if let Expr::IntLiteral { value, .. } = expr {
                                     let formatted = self.format_hex_with_underscores(*value);
-                                    write!(&mut self.output, "{}", formatted).unwrap();
+                                    write!(&mut self.output, "{formatted}").unwrap();
                                 } else {
                                     self.print_expr(expr);
                                 }
@@ -322,7 +322,7 @@ impl PrettyPrinter {
                             }
                         }
                         AttributeItem::Comment(comment) => {
-                            write!(&mut self.output, " {}", comment).unwrap();
+                            write!(&mut self.output, " {comment}").unwrap();
                         }
                     }
                 }
@@ -333,14 +333,14 @@ impl PrettyPrinter {
                 }
             }
             Attribute::Assign(name, items) => {
-                write!(&mut self.output, "{} = ", name).unwrap();
+                write!(&mut self.output, "{name} = ").unwrap();
                 for item in items {
                     match item {
                         AttributeItem::Expr(expr) => {
                             self.print_expr(expr);
                         }
                         AttributeItem::Comment(comment) => {
-                            write!(&mut self.output, " {}", comment).unwrap();
+                            write!(&mut self.output, " {comment}").unwrap();
                         }
                     }
                 }
@@ -351,13 +351,13 @@ impl PrettyPrinter {
     fn print_expr(&mut self, expr: &Expr) {
         match expr {
             Expr::IntLiteral { value, format } => match format {
-                IntFormat::Hex => write!(&mut self.output, "0x{:X}", value).unwrap(),
+                IntFormat::Hex => write!(&mut self.output, "0x{value:X}").unwrap(),
                 IntFormat::Binary => {
                     let formatted = self.format_binary_with_padding(*value);
-                    write!(&mut self.output, "{}", formatted).unwrap();
+                    write!(&mut self.output, "{formatted}").unwrap();
                 }
-                IntFormat::Octal => write!(&mut self.output, "0o{:o}", value).unwrap(),
-                IntFormat::Decimal => write!(&mut self.output, "{}", value).unwrap(),
+                IntFormat::Octal => write!(&mut self.output, "0o{value:o}").unwrap(),
+                IntFormat::Decimal => write!(&mut self.output, "{value}").unwrap(),
             },
             Expr::StringLiteral { value, format } => {
                 match format {
@@ -377,7 +377,7 @@ impl PrettyPrinter {
                                 '\n' => write!(&mut self.output, "\\n").unwrap(),
                                 '\r' => write!(&mut self.output, "\\r").unwrap(),
                                 '\t' => write!(&mut self.output, "\\t").unwrap(),
-                                _ => write!(&mut self.output, "{}", ch).unwrap(),
+                                _ => write!(&mut self.output, "{ch}").unwrap(),
                             }
                         }
                         write!(&mut self.output, "\"").unwrap();
@@ -479,14 +479,14 @@ impl PrettyPrinter {
                 self.write_indent();
                 let prologue_str =
                     self.format_string_with_format(prologue, backend.prologue_format);
-                writeln!(&mut self.output, "prologue {};", prologue_str).unwrap();
+                writeln!(&mut self.output, "prologue {prologue_str};").unwrap();
             }
 
             if let Some(epilogue) = &backend.epilogue {
                 self.write_indent();
                 let epilogue_str =
                     self.format_string_with_format(epilogue, backend.epilogue_format);
-                writeln!(&mut self.output, "epilogue {};", epilogue_str).unwrap();
+                writeln!(&mut self.output, "epilogue {epilogue_str};").unwrap();
             }
 
             self.dedent();

@@ -170,8 +170,8 @@ impl ParseError {
                 found,
                 location,
             } => {
-                let message = format!("Expected {:?}, found {:?}", expected, found);
-                let label = format!("expected {:?} here", expected);
+                let message = format!("Expected {expected:?}, found {found:?}");
+                let label = format!("expected {expected:?} here");
                 if let Some(source) = source_store.get(location.filename.as_ref()) {
                     Self::format_ariadne_with_source(location, source, &message, &label)
                 } else {
@@ -179,7 +179,7 @@ impl ParseError {
                 }
             }
             ParseError::ExpectedIdentifier { found, location } => {
-                let message = format!("Expected identifier, found {:?}", found);
+                let message = format!("Expected identifier, found {found:?}");
                 Self::format_ariadne_with_optional_source(
                     location,
                     source_store,
@@ -188,7 +188,7 @@ impl ParseError {
                 )
             }
             ParseError::ExpectedType { found, location } => {
-                let message = format!("Expected type, found {:?}", found);
+                let message = format!("Expected type, found {found:?}");
                 Self::format_ariadne_with_optional_source(
                     location,
                     source_store,
@@ -197,7 +197,7 @@ impl ParseError {
                 )
             }
             ParseError::ExpectedExpression { found, location } => {
-                let message = format!("Expected expression, found {:?}", found);
+                let message = format!("Expected expression, found {found:?}");
                 Self::format_ariadne_with_optional_source(
                     location,
                     source_store,
@@ -206,7 +206,7 @@ impl ParseError {
                 )
             }
             ParseError::ExpectedIntLiteral { found, location } => {
-                let message = format!("Expected integer literal, found {:?}", found);
+                let message = format!("Expected integer literal, found {found:?}");
                 Self::format_ariadne_with_optional_source(
                     location,
                     source_store,
@@ -215,7 +215,7 @@ impl ParseError {
                 )
             }
             ParseError::ExpectedStringLiteral { found, location } => {
-                let message = format!("Expected string literal, found {:?}", found);
+                let message = format!("Expected string literal, found {found:?}");
                 Self::format_ariadne_with_optional_source(
                     location,
                     source_store,
@@ -228,7 +228,7 @@ impl ParseError {
                 value,
                 location,
             } => {
-                let message = format!("Invalid {} literal: {}", kind, value);
+                let message = format!("Invalid {kind} literal: {value}");
                 Self::format_ariadne_with_optional_source(
                     location,
                     source_store,
@@ -253,7 +253,7 @@ impl ParseError {
                 )
             }
             ParseError::UnexpectedModuleToken { found, location } => {
-                let message = format!("Unexpected token at module level: {:?}", found);
+                let message = format!("Unexpected token at module level: {found:?}");
                 Self::format_ariadne_with_optional_source(
                     location,
                     source_store,
@@ -262,7 +262,7 @@ impl ParseError {
                 )
             }
             ParseError::UnexpectedTokenAfterAttributes { found, location } => {
-                let message = format!("Unexpected token after attributes: {:?}", found);
+                let message = format!("Unexpected token after attributes: {found:?}");
                 Self::format_ariadne_with_optional_source(
                     location,
                     source_store,
@@ -271,7 +271,7 @@ impl ParseError {
                 )
             }
             ParseError::ExpectedItemDefinition { found, location } => {
-                let message = format!("Expected type, enum, or bitflags, found {:?}", found);
+                let message = format!("Expected type, enum, or bitflags, found {found:?}");
                 Self::format_ariadne_with_optional_source(
                     location,
                     source_store,
@@ -280,7 +280,7 @@ impl ParseError {
                 )
             }
             ParseError::ExpectedBackendContent { found, location } => {
-                let message = format!("Expected LBrace, Prologue, or Epilogue, found {:?}", found);
+                let message = format!("Expected LBrace, Prologue, or Epilogue, found {found:?}");
                 Self::format_ariadne_with_optional_source(
                     location,
                     source_store,
@@ -289,7 +289,7 @@ impl ParseError {
                 )
             }
             ParseError::ExpectedPrologueOrEpilogue { found, location } => {
-                let message = format!("Expected prologue or epilogue, found {:?}", found);
+                let message = format!("Expected prologue or epilogue, found {found:?}");
                 Self::format_ariadne_with_optional_source(
                     location,
                     source_store,
@@ -307,49 +307,45 @@ impl std::fmt::Display for ParseError {
         match self {
             ParseError::ExpectedToken {
                 expected, found, ..
-            } => write!(f, "Expected {:?}, found {:?}", expected, found),
+            } => write!(f, "Expected {expected:?}, found {found:?}"),
             ParseError::ExpectedIdentifier { found, .. } => {
-                write!(f, "Expected identifier, found {:?}", found)
+                write!(f, "Expected identifier, found {found:?}")
             }
             ParseError::ExpectedType { found, .. } => {
-                write!(f, "Expected type, found {:?}", found)
+                write!(f, "Expected type, found {found:?}")
             }
             ParseError::ExpectedExpression { found, .. } => {
-                write!(f, "Expected expression, found {:?}", found)
+                write!(f, "Expected expression, found {found:?}")
             }
             ParseError::ExpectedIntLiteral { found, .. } => {
-                write!(f, "Expected integer literal, found {:?}", found)
+                write!(f, "Expected integer literal, found {found:?}")
             }
             ParseError::ExpectedStringLiteral { found, .. } => {
-                write!(f, "Expected string literal, found {:?}", found)
+                write!(f, "Expected string literal, found {found:?}")
             }
             ParseError::InvalidIntLiteral { kind, value, .. } => {
-                write!(f, "Invalid {} literal: {}", kind, value)
+                write!(f, "Invalid {kind} literal: {value}")
             }
             ParseError::MissingPointerQualifier { .. } => {
                 write!(f, "Expected const or mut after *")
             }
             ParseError::SuperNotSupported { .. } => write!(f, "super not supported"),
             ParseError::UnexpectedModuleToken { found, .. } => {
-                write!(f, "Unexpected token at module level: {:?}", found)
+                write!(f, "Unexpected token at module level: {found:?}")
             }
             ParseError::UnexpectedTokenAfterAttributes { found, .. } => {
-                write!(f, "Unexpected token after attributes: {:?}", found)
+                write!(f, "Unexpected token after attributes: {found:?}")
             }
             ParseError::ExpectedItemDefinition { found, .. } => {
-                write!(f, "Expected type, enum, or bitflags, found {:?}", found)
+                write!(f, "Expected type, enum, or bitflags, found {found:?}")
             }
             ParseError::ExpectedBackendContent { found, .. } => {
-                write!(
-                    f,
-                    "Expected LBrace, Prologue, or Epilogue, found {:?}",
-                    found
-                )
+                write!(f, "Expected LBrace, Prologue, or Epilogue, found {found:?}")
             }
             ParseError::ExpectedPrologueOrEpilogue { found, .. } => {
-                write!(f, "Expected prologue or epilogue, found {:?}", found)
+                write!(f, "Expected prologue or epilogue, found {found:?}")
             }
-            ParseError::Tokenizer(err) => write!(f, "{}", err),
+            ParseError::Tokenizer(err) => write!(f, "{err}"),
         }
     }
 }

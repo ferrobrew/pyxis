@@ -43,10 +43,10 @@ impl fmt::Display for AttributeNotSupportedContext {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             AttributeNotSupportedContext::VirtualFunction { function_name } => {
-                write!(f, "virtual function `{}`", function_name)
+                write!(f, "virtual function `{function_name}`")
             }
             AttributeNotSupportedContext::NonVirtualFunction { function_name } => {
-                write!(f, "non-virtual function `{}`", function_name)
+                write!(f, "non-virtual function `{function_name}`")
             }
         }
     }
@@ -72,13 +72,13 @@ impl fmt::Display for TypeResolutionContext {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             TypeResolutionContext::EnumBaseTypeAlignment { enum_path } => {
-                write!(f, "alignment for base type of enum `{}`", enum_path)
+                write!(f, "alignment for base type of enum `{enum_path}`")
             }
             TypeResolutionContext::BitflagsBaseTypeAlignment { bitflags_path } => {
-                write!(f, "alignment for base type of bitflags `{}`", bitflags_path)
+                write!(f, "alignment for base type of bitflags `{bitflags_path}`")
             }
             TypeResolutionContext::ExternValue { extern_name } => {
-                write!(f, "extern value `{}`", extern_name)
+                write!(f, "extern value `{extern_name}`")
             }
             TypeResolutionContext::FunctionArgument {
                 argument_name,
@@ -86,8 +86,7 @@ impl fmt::Display for TypeResolutionContext {
             } => {
                 write!(
                     f,
-                    "argument `{}` in function `{}`",
-                    argument_name, function_name
+                    "argument `{argument_name}` in function `{function_name}`"
                 )
             }
         }
@@ -133,7 +132,7 @@ impl fmt::Display for IntegerConversionContext {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             IntegerConversionContext::AddressAttribute { function_name } => {
-                write!(f, "address attribute for function `{}`", function_name)
+                write!(f, "address attribute for function `{function_name}`")
             }
             IntegerConversionContext::ExternSizeAttribute {
                 type_name,
@@ -141,8 +140,7 @@ impl fmt::Display for IntegerConversionContext {
             } => {
                 write!(
                     f,
-                    "size attribute for extern type `{}` in module `{}`",
-                    type_name, module_name
+                    "size attribute for extern type `{type_name}` in module `{module_name}`"
                 )
             }
             IntegerConversionContext::ExternAlignAttribute {
@@ -151,21 +149,20 @@ impl fmt::Display for IntegerConversionContext {
             } => {
                 write!(
                     f,
-                    "align attribute for extern type `{}` in module `{}`",
-                    type_name, module_name
+                    "align attribute for extern type `{type_name}` in module `{module_name}`"
                 )
             }
             IntegerConversionContext::SizeAttribute { type_path } => {
-                write!(f, "size attribute for type `{}`", type_path)
+                write!(f, "size attribute for type `{type_path}`")
             }
             IntegerConversionContext::MinSizeAttribute { type_path } => {
-                write!(f, "min_size attribute for type `{}`", type_path)
+                write!(f, "min_size attribute for type `{type_path}`")
             }
             IntegerConversionContext::SingletonAttribute { type_path } => {
-                write!(f, "singleton attribute for type `{}`", type_path)
+                write!(f, "singleton attribute for type `{type_path}`")
             }
             IntegerConversionContext::AlignAttribute { type_path } => {
-                write!(f, "align attribute for type `{}`", type_path)
+                write!(f, "align attribute for type `{type_path}`")
             }
             IntegerConversionContext::FieldAddressAttribute {
                 field_name,
@@ -173,15 +170,14 @@ impl fmt::Display for IntegerConversionContext {
             } => {
                 write!(
                     f,
-                    "address attribute for field `{}` of type `{}`",
-                    field_name, type_path
+                    "address attribute for field `{field_name}` of type `{type_path}`"
                 )
             }
             IntegerConversionContext::BitflagsValue {
                 field_name,
                 type_path,
             } => {
-                write!(f, "bitflags value for `{}` of `{}`", field_name, type_path)
+                write!(f, "bitflags value for `{field_name}` of `{type_path}`")
             }
         }
     }
@@ -415,10 +411,10 @@ impl SemanticError {
     pub fn error_message(&self) -> String {
         match self {
             SemanticError::ModuleNotFound { path, .. } => {
-                format!("Module not found: `{}`", path)
+                format!("Module not found: `{path}`")
             }
             SemanticError::TypeNotFound { path, .. } => {
-                format!("Type not found: `{}`", path)
+                format!("Type not found: `{path}`")
             }
             SemanticError::MissingExternAttribute {
                 attribute_name,
@@ -428,8 +424,7 @@ impl SemanticError {
                 ..
             } => {
                 format!(
-                    "failed to find `{}` attribute for {} `{}` in module `{}`",
-                    attribute_name, extern_kind, type_name, module_name
+                    "failed to find `{attribute_name}` attribute for {extern_kind} `{type_name}` in module `{module_name}`"
                 )
             }
             SemanticError::MissingAttribute {
@@ -439,8 +434,7 @@ impl SemanticError {
                 ..
             } => {
                 format!(
-                    "Missing required attribute `{}` for {} `{}`",
-                    attribute_name, item_kind, item_path
+                    "Missing required attribute `{attribute_name}` for {item_kind} `{item_path}`"
                 )
             }
             SemanticError::InvalidAttributeValue {
@@ -450,8 +444,7 @@ impl SemanticError {
                 ..
             } => {
                 format!(
-                    "Invalid value for attribute `{}` (expected {}) in `{}`",
-                    attribute_name, expected_type, item_path
+                    "Invalid value for attribute `{attribute_name}` (expected {expected_type}) in `{item_path}`"
                 )
             }
             SemanticError::ConflictingAttributes {
@@ -461,8 +454,7 @@ impl SemanticError {
                 ..
             } => {
                 format!(
-                    "cannot specify both `{}` and `{}` attributes for type `{}`",
-                    attr1, attr2, item_path
+                    "cannot specify both `{attr1}` and `{attr2}` attributes for type `{item_path}`"
                 )
             }
             SemanticError::TypeResolutionFailed {
@@ -470,10 +462,7 @@ impl SemanticError {
                 resolution_context,
                 ..
             } => {
-                format!(
-                    "Failed to resolve type `{}` for {}",
-                    type_, resolution_context
-                )
+                format!("Failed to resolve type `{type_}` for {resolution_context}")
             }
             SemanticError::TypeResolutionStalled {
                 unresolved_types,
@@ -481,12 +470,10 @@ impl SemanticError {
             } => {
                 let unresolved_quoted: Vec<String> = unresolved_types
                     .iter()
-                    .map(|s| format!("\"{}\"", s))
+                    .map(|s| format!("\"{s}\""))
                     .collect();
-                let resolved_quoted: Vec<String> = resolved_types
-                    .iter()
-                    .map(|s| format!("\"{}\"", s))
-                    .collect();
+                let resolved_quoted: Vec<String> =
+                    resolved_types.iter().map(|s| format!("\"{s}\"")).collect();
                 format!(
                     "type resolution will not terminate, failed on types: [{}] (resolved types: [{}])",
                     unresolved_quoted.join(", "),
@@ -500,8 +487,7 @@ impl SemanticError {
                 ..
             } => {
                 format!(
-                    "bitflags definition `{}` has a type that is not {}: {}",
-                    item_path, expected, found
+                    "bitflags definition `{item_path}` has a type that is not {expected}: {found}"
                 )
             }
             SemanticError::InvalidType {
@@ -512,8 +498,7 @@ impl SemanticError {
                 ..
             } => {
                 format!(
-                    "Invalid type for `{}` in `{}`: expected {}, found {}",
-                    context_description, item_path, expected, found
+                    "Invalid type for `{context_description}` in `{item_path}`: expected {expected}, found {found}"
                 )
             }
             SemanticError::VftableMissingFunctions {
@@ -524,8 +509,7 @@ impl SemanticError {
                 ..
             } => {
                 format!(
-                    "vftable for `{}` has {} functions but base class `{}` requires at least {}",
-                    item_path, actual_count, base_name, expected_count
+                    "vftable for `{item_path}` has {actual_count} functions but base class `{base_name}` requires at least {expected_count}"
                 )
             }
             SemanticError::VftableFunctionMismatch {
@@ -537,8 +521,7 @@ impl SemanticError {
                 ..
             } => {
                 format!(
-                    "vftable for `{}` has function `{}` at index {} but base class `{}` has function `{}`",
-                    item_path, derived_function, index, base_name, base_function
+                    "vftable for `{item_path}` has function `{derived_function}` at index {index} but base class `{base_name}` has function `{base_function}`"
                 )
             }
             SemanticError::FieldError {
@@ -547,10 +530,7 @@ impl SemanticError {
                 message,
                 ..
             } => {
-                format!(
-                    "Error in field `{}` of `{}`: {}",
-                    field_name, item_path, message
-                )
+                format!("Error in field `{field_name}` of `{item_path}`: {message}")
             }
             SemanticError::SizeBelowMinimum {
                 minimum_size,
@@ -559,8 +539,7 @@ impl SemanticError {
                 ..
             } => {
                 format!(
-                    "Size {} for `{}` is less than minimum size {}",
-                    actual_size, item_path, minimum_size
+                    "Size {actual_size} for `{item_path}` is less than minimum size {minimum_size}"
                 )
             }
             SemanticError::SizeMismatch {
@@ -570,8 +549,7 @@ impl SemanticError {
                 ..
             } => {
                 format!(
-                    "while processing `{}`\ncalculated size {} for type `{}` does not match target size {}; is your target size correct?",
-                    item_path, actual, item_path, expected
+                    "while processing `{item_path}`\ncalculated size {actual} for type `{item_path}` does not match target size {expected}; is your target size correct?"
                 )
             }
             SemanticError::AlignmentBelowMinimum {
@@ -581,8 +559,7 @@ impl SemanticError {
                 ..
             } => {
                 format!(
-                    "alignment {} is less than minimum required alignment {} for type `{}`",
-                    alignment, required_alignment, item_path
+                    "alignment {alignment} is less than minimum required alignment {required_alignment} for type `{item_path}`"
                 )
             }
             SemanticError::FieldNotAligned {
@@ -593,8 +570,7 @@ impl SemanticError {
                 ..
             } => {
                 format!(
-                    "field `{}` of type `{}` is located at {:#x}, which is not divisible by {} (the alignment of the type of the field)",
-                    field_name, item_path, address, required_alignment
+                    "field `{field_name}` of type `{item_path}` is located at {address:#x}, which is not divisible by {required_alignment} (the alignment of the type of the field)"
                 )
             }
             SemanticError::SizeNotAlignmentMultiple {
@@ -604,15 +580,11 @@ impl SemanticError {
                 ..
             } => {
                 format!(
-                    "the type `{}` has a size of {}, which is not a multiple of its alignment {}",
-                    item_path, size, alignment
+                    "the type `{item_path}` has a size of {size}, which is not a multiple of its alignment {alignment}"
                 )
             }
             SemanticError::VftableMustBeFirst { item_path, .. } => {
-                format!(
-                    "Vftable field must be the first field in type `{}`",
-                    item_path
-                )
+                format!("Vftable field must be the first field in type `{item_path}`")
             }
             SemanticError::DuplicateDefinition {
                 name,
@@ -620,15 +592,11 @@ impl SemanticError {
                 message,
                 ..
             } => {
-                format!(
-                    "Duplicate definition of `{}` in `{}` ({})",
-                    name, item_path, message
-                )
+                format!("Duplicate definition of `{name}` in `{item_path}` ({message})")
             }
             SemanticError::FunctionMissingImplementation { function_name, .. } => {
                 format!(
-                    "Function `{}` has no implementation (missing address attribute?)",
-                    function_name
+                    "Function `{function_name}` has no implementation (missing address attribute?)"
                 )
             }
             SemanticError::InvalidCallingConvention {
@@ -636,44 +604,33 @@ impl SemanticError {
                 function_name,
                 ..
             } => {
-                format!(
-                    "Invalid calling convention `{}` for function `{}`",
-                    convention, function_name
-                )
+                format!("Invalid calling convention `{convention}` for function `{function_name}`")
             }
             SemanticError::AttributeNotSupported {
                 attribute_name,
                 attribute_context,
                 ..
             } => {
-                format!(
-                    "Attribute `{}` is not supported for {}",
-                    attribute_name, attribute_context
-                )
+                format!("Attribute `{attribute_name}` is not supported for {attribute_context}")
             }
             SemanticError::EnumUnsupportedValue {
                 item_path,
                 case_name,
                 ..
             } => {
-                format!(
-                    "enum `{}` has an unsupported value for case `{}`",
-                    item_path, case_name
-                )
+                format!("enum `{item_path}` has an unsupported value for case `{case_name}`")
             }
             SemanticError::EnumMultipleDefaults { item_path, .. } => {
-                format!("enum `{}` has multiple default variants", item_path)
+                format!("enum `{item_path}` has multiple default variants")
             }
             SemanticError::EnumDefaultWithoutDefaultable { item_path, .. } => {
                 format!(
-                    "enum `{}` has a default variant set but is not marked as defaultable",
-                    item_path
+                    "enum `{item_path}` has a default variant set but is not marked as defaultable"
                 )
             }
             SemanticError::EnumDefaultableMissingDefault { item_path, .. } => {
                 format!(
-                    "enum `{}` is marked as defaultable but has no default variant set",
-                    item_path
+                    "enum `{item_path}` is marked as defaultable but has no default variant set"
                 )
             }
             SemanticError::BitflagsUnsupportedValue {
@@ -681,24 +638,19 @@ impl SemanticError {
                 case_name,
                 ..
             } => {
-                format!(
-                    "bitflags `{}` has an unsupported value for case `{}`",
-                    item_path, case_name
-                )
+                format!("bitflags `{item_path}` has an unsupported value for case `{case_name}`")
             }
             SemanticError::BitflagsMultipleDefaults { item_path, .. } => {
-                format!("bitflags `{}` has multiple default values", item_path)
+                format!("bitflags `{item_path}` has multiple default values")
             }
             SemanticError::BitflagsDefaultWithoutDefaultable { item_path, .. } => {
                 format!(
-                    "bitflags `{}` has a default value set but is not marked as defaultable",
-                    item_path
+                    "bitflags `{item_path}` has a default value set but is not marked as defaultable"
                 )
             }
             SemanticError::BitflagsDefaultableMissingDefault { item_path, .. } => {
                 format!(
-                    "bitflags `{}` is marked as defaultable but has no default value set",
-                    item_path
+                    "bitflags `{item_path}` is marked as defaultable but has no default value set"
                 )
             }
             SemanticError::DefaultableError {
@@ -707,7 +659,7 @@ impl SemanticError {
                 message,
                 ..
             } => {
-                format!("field `{}` of type `{}` {}", field_name, item_path, message)
+                format!("field `{field_name}` of type `{item_path}` {message}")
             }
             SemanticError::IntegerConversion {
                 value,
@@ -715,10 +667,7 @@ impl SemanticError {
                 conversion_context,
                 ..
             } => {
-                format!(
-                    "Failed to convert `{}` to {} in {}",
-                    value, target_type, conversion_context
-                )
+                format!("Failed to convert `{value}` to {target_type} in {conversion_context}")
             }
             SemanticError::OverlappingRegions {
                 item_path,
@@ -728,8 +677,7 @@ impl SemanticError {
                 ..
             } => {
                 format!(
-                    "Overlapping regions in `{}`: attempted to insert padding at {:#x}, but overlapped with existing region `{}` that ends at {:#x}",
-                    item_path, address, region_name, existing_end
+                    "Overlapping regions in `{item_path}`: attempted to insert padding at {address:#x}, but overlapped with existing region `{region_name}` that ends at {existing_end:#x}"
                 )
             }
         }

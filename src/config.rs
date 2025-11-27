@@ -13,9 +13,9 @@ pub enum ConfigError {
 impl std::fmt::Display for ConfigError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ConfigError::Io(err) => write!(f, "Failed to read config file: {}", err),
-            ConfigError::Parse(err) => write!(f, "Failed to parse config file: {}", err),
-            ConfigError::Other(msg) => write!(f, "{}", msg),
+            ConfigError::Io(err) => write!(f, "Failed to read config file: {err}"),
+            ConfigError::Parse(err) => write!(f, "Failed to parse config file: {err}"),
+            ConfigError::Other(msg) => write!(f, "{msg}"),
         }
     }
 }

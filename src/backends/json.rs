@@ -360,7 +360,7 @@ pub fn build(
     // Write to file
     let output_path = out_dir.join("output.json");
     let json_string = serde_json::to_string_pretty(&documentation).map_err(|e| {
-        BackendError::Formatting(format!("Failed to serialize JSON documentation: {}", e))
+        BackendError::Formatting(format!("Failed to serialize JSON documentation: {e}"))
     })?;
     std::fs::write(&output_path, &json_string).map_err(|e| BackendError::Io {
         error: e,

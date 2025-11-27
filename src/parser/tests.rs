@@ -239,8 +239,7 @@ fn will_die_on_super_for_now() {
     let error = parse_str_for_tests(text).err().unwrap();
     assert!(
         matches!(error, ParseError::SuperNotSupported { .. }),
-        "Expected SuperNotSupported error, got: {:?}",
-        error
+        "Expected SuperNotSupported error, got: {error:?}"
     );
 }
 
@@ -847,8 +846,7 @@ fn should_fail_on_missing_closing_brace() {
                 ..
             }
         ),
-        "Expected ExpectedIdentifier with Eof, got: {:?}",
-        err
+        "Expected ExpectedIdentifier with Eof, got: {err:?}"
     );
 }
 
@@ -869,8 +867,7 @@ fn should_fail_on_missing_field_type() {
                 ..
             }
         ),
-        "Expected ExpectedType with Comma, got: {:?}",
-        err
+        "Expected ExpectedType with Comma, got: {err:?}"
     );
 }
 
@@ -892,8 +889,7 @@ fn should_fail_on_missing_enum_type_annotation() {
                 ..
             }
         ),
-        "Expected ExpectedToken with Colon/LBrace, got: {:?}",
-        err
+        "Expected ExpectedToken with Colon/LBrace, got: {err:?}"
     );
 }
 
@@ -915,8 +911,7 @@ fn should_fail_on_missing_equals_in_bitflags() {
                 ..
             }
         ),
-        "Expected ExpectedToken with Eq/IntLiteral, got: {:?}",
-        err
+        "Expected ExpectedToken with Eq/IntLiteral, got: {err:?}"
     );
 }
 
@@ -931,8 +926,7 @@ fn should_fail_on_malformed_pointer_type() {
     let err = parse_str_for_tests(text).unwrap_err();
     assert!(
         matches!(err, ParseError::MissingPointerQualifier { .. }),
-        "Expected MissingPointerQualifier error, got: {:?}",
-        err
+        "Expected MissingPointerQualifier error, got: {err:?}"
     );
 }
 
@@ -952,8 +946,7 @@ fn should_fail_on_missing_semicolon_after_extern() {
                 ..
             }
         ),
-        "Expected ExpectedToken with Semi/Eof, got: {:?}",
-        err
+        "Expected ExpectedToken with Semi/Eof, got: {err:?}"
     );
 }
 
@@ -972,7 +965,6 @@ fn should_fail_on_incomplete_function() {
                 ..
             }
         ),
-        "Expected ExpectedItemDefinition with Fn, got: {:?}",
-        err
+        "Expected ExpectedItemDefinition with Fn, got: {err:?}"
     );
 }

@@ -145,8 +145,8 @@ impl Type {
 impl fmt::Display for Type {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Type::Unresolved(tr) => write!(f, "unresolved:{:?}", tr),
-            Type::Raw(path) => write!(f, "{}", path),
+            Type::Unresolved(tr) => write!(f, "unresolved:{tr:?}"),
+            Type::Raw(path) => write!(f, "{path}"),
             Type::ConstPointer(tr) => {
                 write!(f, "*const ")?;
                 tr.fmt(f)
@@ -158,7 +158,7 @@ impl fmt::Display for Type {
             Type::Array(tr, size) => {
                 write!(f, "[")?;
                 tr.fmt(f)?;
-                write!(f, "; {}]", size)
+                write!(f, "; {size}]")
             }
             Type::Function(calling_convention, args, return_type) => {
                 write!(f, "extern \"{calling_convention}\" fn (")?;
