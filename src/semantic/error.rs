@@ -856,18 +856,14 @@ impl SemanticError {
         let report = report_builder.finish();
 
         let mut buffer = Vec::new();
-        if report
+        report
             .write(
                 (location.filename.as_ref(), Source::from(source)),
                 &mut buffer,
             )
-            .is_ok()
-        {
-            return String::from_utf8_lossy(&buffer).to_string();
-        }
+            .expect("writing to Vec should not fail");
 
-        // This should never happen, but if ariadne fails completely, return the message
-        message
+        String::from_utf8_lossy(&buffer).to_string()
     }
 }
 
