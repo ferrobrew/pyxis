@@ -3,7 +3,11 @@ use std::fmt;
 use crate::{
     grammar::{self, ItemPath},
     semantic::type_registry,
+    span::ItemLocation,
 };
+
+#[cfg(test)]
+use crate::span::StripLocations;
 
 pub use crate::semantic::{
     bitflags_definition::BitflagsDefinition,
@@ -309,46 +313,20 @@ predefined_items! {
     (F64, "f64", 8),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ItemDefinition {
     pub visibility: Visibility,
     pub path: ItemPath,
     pub state: ItemState,
     pub category: ItemCategory,
     pub predefined: Option<PredefinedItem>,
-    #[allow(dead_code)]
-    pub span: Option<crate::span::Span>,
-    #[allow(dead_code)]
-    pub filename: Option<Box<str>>,
-}
-
-// Implement PartialEq and Hash manually to exclude span and filename (for tests)
-impl PartialEq for ItemDefinition {
-    fn eq(&self, other: &Self) -> bool {
-        self.visibility == other.visibility
-            && self.path == other.path
-            && self.state == other.state
-            && self.category == other.category
-            && self.predefined == other.predefined
-        // span and filename are intentionally excluded
-    }
-}
-
-impl Eq for ItemDefinition {}
-
-impl std::hash::Hash for ItemDefinition {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.visibility.hash(state);
-        self.path.hash(state);
-        self.state.hash(state);
-        self.category.hash(state);
-        self.predefined.hash(state);
-        // span and filename are intentionally excluded
-    }
+    pub location: ItemLocation,
 }
 impl ItemDefinition {
+    /// Test-only constructor for category_resolved that uses a synthetic location
+    #[cfg(test)]
     pub fn category_resolved(
-        (visibility, path): (Visibility, impl Into<ItemPath>),
+        (visibility, path): (Visibility, impl Into<crate::grammar::ItemPath>),
         resolved: ItemStateResolved,
         category: ItemCategory,
     ) -> Self {
@@ -358,16 +336,26 @@ impl ItemDefinition {
             state: ItemState::Resolved(resolved),
             category,
             predefined: None,
-            span: None,
-            filename: None,
+            location: ItemLocation::test(),
         }
     }
+
+    /// Test-only constructor for defined_resolved that uses a synthetic location
+    #[cfg(test)]
     pub fn defined_resolved(
-        (visibility, path): (Visibility, impl Into<ItemPath>),
+        (visibility, path): (Visibility, impl Into<crate::grammar::ItemPath>),
         resolved: ItemStateResolved,
     ) -> Self {
-        Self::category_resolved((visibility, path), resolved, ItemCategory::Defined)
+        ItemDefinition {
+            visibility,
+            path: path.into(),
+            state: ItemState::Resolved(resolved),
+            category: ItemCategory::Defined,
+            predefined: None,
+            location: ItemLocation::test(),
+        }
     }
+
     pub fn resolved(&self) -> Option<&ItemStateResolved> {
         match &self.state {
             ItemState::Resolved(tsr) => Some(tsr),
@@ -411,4 +399,52 @@ pub struct ExternValue {
     pub name: String,
     pub type_: Type,
     pub address: usize,
+    pub location: ItemLocation,
+}
+
+#[cfg(test)]
+// StripSpans implementations for testing
+impl StripLocations for ItemDefinition {
+    fn strip_locations(&self) -> Self {
+        ItemDefinition {
+            visibility: self.visibility,
+            path: self.path.clone(),
+            state: self.state.strip_locations(),
+            category: self.category,
+            predefined: self.predefined,
+            location: ItemLocation::test(),
+        }
+    }
+}
+
+#[cfg(test)]
+impl StripLocations for ItemState {
+    fn strip_locations(&self) -> Self {
+        match self {
+            ItemState::Unresolved(def) => ItemState::Unresolved(def.clone()),
+            ItemState::Resolved(resolved) => ItemState::Resolved(resolved.strip_locations()),
+        }
+    }
+}
+
+#[cfg(test)]
+impl StripLocations for ItemStateResolved {
+    fn strip_locations(&self) -> Self {
+        ItemStateResolved {
+            size: self.size,
+            alignment: self.alignment,
+            inner: self.inner.strip_locations(),
+        }
+    }
+}
+
+#[cfg(test)]
+impl StripLocations for ItemDefinitionInner {
+    fn strip_locations(&self) -> Self {
+        match self {
+            ItemDefinitionInner::Type(td) => ItemDefinitionInner::Type(td.strip_locations()),
+            ItemDefinitionInner::Enum(ed) => ItemDefinitionInner::Enum(ed.clone()),
+            ItemDefinitionInner::Bitflags(bd) => ItemDefinitionInner::Bitflags(bd.clone()),
+        }
+    }
 }

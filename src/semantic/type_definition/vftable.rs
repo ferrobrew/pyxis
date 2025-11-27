@@ -12,6 +12,7 @@ use crate::{
             ItemState, ItemStateResolved, Region, Type, TypeDefinition, Visibility,
         },
     },
+    span::ItemLocation,
 };
 
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]
@@ -34,12 +35,24 @@ impl TypeVftable {
     }
 }
 
+#[cfg(test)]
+impl crate::span::StripLocations for TypeVftable {
+    fn strip_locations(&self) -> Self {
+        TypeVftable {
+            functions: self.functions.strip_locations(),
+            base_field: self.base_field.clone(),
+            type_: self.type_.clone(),
+        }
+    }
+}
+
 /// Given a parsed size/list of functions, construct the list of semantic functions
 pub fn convert_grammar_functions_to_semantic_functions(
     type_registry: &TypeRegistry,
     module: &Module,
     size: Option<usize>,
     functions: &[grammar::Function],
+    location: &ItemLocation,
 ) -> Result<Vec<Function>> {
     // Insert function, with padding if necessary
     let mut output = vec![];
@@ -60,7 +73,7 @@ pub fn convert_grammar_functions_to_semantic_functions(
         }
 
         if let Some(index) = index {
-            make_padding_functions(&mut output, index, calling_convention);
+            make_padding_functions(&mut output, index, calling_convention, location);
         }
         let function = function::build(type_registry, &module.scope(), true, function)?;
         output.push(function);
@@ -68,13 +81,14 @@ pub fn convert_grammar_functions_to_semantic_functions(
 
     // Pad out to target size
     if let Some(size) = size {
-        make_padding_functions(&mut output, size, calling_convention);
+        make_padding_functions(&mut output, size, calling_convention, location);
     }
 
     fn make_padding_functions(
         output: &mut Vec<Function>,
         target_len: usize,
         calling_convention: CallingConvention,
+        location: &ItemLocation,
     ) {
         let functions_to_add = target_len.saturating_sub(output.len());
         for _ in 0..functions_to_add {
@@ -83,12 +97,13 @@ pub fn convert_grammar_functions_to_semantic_functions(
                 visibility: Visibility::Private,
                 name: name.clone(),
                 doc: vec![],
-                arguments: vec![Argument::MutSelf],
+                arguments: vec![Argument::MutSelf(location.clone())],
                 return_type: None,
                 body: FunctionBody::Vftable {
                     function_name: name,
                 },
                 calling_convention,
+                location: location.clone(),
             });
         }
     }
@@ -102,6 +117,7 @@ pub fn build(
     visibility: Visibility,
     first_base: Option<&Region>,
     vftable_functions: Option<Vec<Function>>,
+    location: &ItemLocation,
 ) -> Result<(Option<TypeVftable>, Option<Region>)> {
     if let Some(vftable_functions) = vftable_functions {
         // There are functions defined for this vftable.
@@ -110,6 +126,7 @@ pub fn build(
             resolvee_path,
             visibility,
             &vftable_functions,
+            location,
         );
 
         let Some(vftable_type) = vftable_item else {
@@ -129,13 +146,19 @@ pub fn build(
 
             // Ensure that all of the base classes's vfuncs are included in the derived class's vftable
             if vftable_functions.len() < base_vftable.functions.len() {
-                return Err(SemanticError::field_error(
-                    "vftable",
+                // Use the last derived function's location, or the first base function's location
+                // Note: We always expect at least one function in either list, so the fallback should never trigger
+                let error_location = vftable_functions
+                    .last()
+                    .map(|f| f.location.clone())
+                    .or_else(|| base_vftable.functions.first().map(|f| f.location.clone()))
+                    .unwrap_or_else(|| location.clone());
+                return Err(SemanticError::vftable_missing_functions(
                     resolvee_path.clone(),
-                    format!(
-                        "vftable is missing functions from base class `{}`",
-                        base_name
-                    ),
+                    base_name,
+                    base_vftable.functions.len(),
+                    vftable_functions.len(),
+                    error_location,
                 ));
             }
             for (idx, (base_vfunc, derived_vfunc)) in base_vftable
@@ -144,14 +167,15 @@ pub fn build(
                 .zip(vftable_functions.iter())
                 .enumerate()
             {
-                if base_vfunc != derived_vfunc {
-                    return Err(SemanticError::field_error(
-                        "vftable",
+                if !base_vfunc.equals_ignoring_location(derived_vfunc) {
+                    // Use the derived function's location for the error
+                    return Err(SemanticError::vftable_function_mismatch(
                         resolvee_path.clone(),
-                        format!(
-                            "vftable for `{}` has function `{}` at index {} but base class `{}` has function `{}`",
-                            resolvee_path, derived_vfunc, idx, base_name, base_vfunc
-                        ),
+                        base_name,
+                        idx,
+                        derived_vfunc.to_string(),
+                        base_vfunc.to_string(),
+                        derived_vfunc.location.clone(),
                     ));
                 }
             }
@@ -166,13 +190,19 @@ pub fn build(
             ))
         } else {
             // There is no base class with a vftable. Let's create a new field.
+            // Use the first vftable function's location for the generated vftable field
+            let vftable_location = vftable_functions
+                .first()
+                .map(|f| f.location.clone())
+                .unwrap_or_else(|| location.clone());
+
             let region = Region {
                 visibility: Visibility::Private,
                 name: Some("vftable".to_string()),
                 doc: vec![],
                 type_ref: vftable_pointer_type.clone(),
                 is_base: false,
-                span: None,
+                location: vftable_location,
             };
 
             Ok((
@@ -208,6 +238,7 @@ fn build_type(
     resolvee_path: &ItemPath,
     visibility: Visibility,
     functions: &[Function],
+    location: &ItemLocation,
 ) -> Option<ItemDefinition> {
     let name = resolvee_path.last()?;
 
@@ -219,6 +250,12 @@ fn build_type(
         .iter()
         .map(|f| function_to_region(resolvee_path, f))
         .collect();
+
+    // Use the first function's location for the generated vftable type
+    let vftable_type_location = functions
+        .first()
+        .map(|f| f.location.clone())
+        .unwrap_or_else(|| location.clone());
 
     Some(ItemDefinition {
         visibility,
@@ -241,8 +278,7 @@ fn build_type(
         }),
         category: ItemCategory::Defined,
         predefined: None,
-        span: None,
-        filename: None,
+        location: vftable_type_location,
     })
 }
 
@@ -252,17 +288,17 @@ fn function_to_region(resolvee_path: &ItemPath, function: &Function) -> Region {
         .arguments
         .iter()
         .map(|a| match a {
-            Argument::ConstSelf => (
+            Argument::ConstSelf(_) => (
                 "this".to_string(),
                 Box::new(Type::ConstPointer(Box::new(Type::Raw(
                     resolvee_path.clone(),
                 )))),
             ),
-            Argument::MutSelf => (
+            Argument::MutSelf(_) => (
                 "this".to_string(),
                 Box::new(Type::MutPointer(Box::new(Type::Raw(resolvee_path.clone())))),
             ),
-            Argument::Field(name, type_ref) => (name.clone(), Box::new(type_ref.clone())),
+            Argument::Field(name, type_ref, _) => (name.clone(), Box::new(type_ref.clone())),
         })
         .collect();
     let return_type = function.return_type.as_ref().map(|t| Box::new(t.clone()));
@@ -273,7 +309,8 @@ fn function_to_region(resolvee_path: &ItemPath, function: &Function) -> Region {
         doc: function.doc.clone(),
         type_ref: Type::Function(function.calling_convention, arguments, return_type),
         is_base: false,
-        span: None,
+        // Use the original function's location for traceability
+        location: function.location.clone(),
     }
 }
 

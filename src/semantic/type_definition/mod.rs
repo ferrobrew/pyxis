@@ -4,72 +4,56 @@ use crate::{
     grammar::{self, ItemPath},
     semantic::{
         SemanticState,
-        error::{Result, SemanticError},
+        error::{IntegerConversionContext, Result, SemanticError},
         function,
         type_registry::TypeRegistry,
         types::{Function, FunctionBody, ItemState, ItemStateResolved, Type, Visibility},
     },
-    span::{ErrorContext, Span},
+    span::{ErrorContext, ItemLocation},
     util,
 };
+
+#[cfg(test)]
+use crate::span::StripLocations;
 
 mod vftable;
 pub use vftable::TypeVftable;
 
-#[derive(Eq, Debug, Clone)]
+#[derive(PartialEq, Eq, Hash, Debug, Clone)]
 pub struct Region {
     pub visibility: Visibility,
     pub name: Option<String>,
     pub doc: Vec<String>,
     pub type_ref: Type,
     pub is_base: bool,
-    pub span: Option<Span>,
-}
-
-// Custom PartialEq to exclude span for test compatibility
-impl PartialEq for Region {
-    fn eq(&self, other: &Self) -> bool {
-        self.visibility == other.visibility
-            && self.name == other.name
-            && self.doc == other.doc
-            && self.type_ref == other.type_ref
-            && self.is_base == other.is_base
-        // span intentionally excluded
-    }
-}
-
-// Custom Hash to match PartialEq
-impl std::hash::Hash for Region {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.visibility.hash(state);
-        self.name.hash(state);
-        self.doc.hash(state);
-        self.type_ref.hash(state);
-        self.is_base.hash(state);
-        // span intentionally excluded
-    }
+    pub location: ItemLocation,
 }
 impl Region {
+    #[cfg(test)]
+    /// Test-only constructor for field that uses a synthetic location
     pub fn field((visibility, name): (Visibility, impl Into<String>), type_ref: Type) -> Self {
+        let (visibility, name) = (visibility, name);
         Region {
             visibility,
             name: Some(name.into()),
             doc: vec![],
             type_ref,
             is_base: false,
-            span: None,
+            location: ItemLocation::test(),
         }
     }
-    pub fn unnamed_field(type_ref: Type) -> Self {
+
+    pub fn unnamed_field(type_ref: Type, location: ItemLocation) -> Self {
         Region {
             visibility: Visibility::Private,
             name: None,
             doc: vec![],
             type_ref,
             is_base: false,
-            span: None,
+            location,
         }
     }
+
     pub fn marked_as_base(mut self) -> Self {
         self.is_base = true;
         self
@@ -78,8 +62,8 @@ impl Region {
         self.doc = doc.into_iter().map(|s| s.into()).collect();
         self
     }
-    pub fn with_span(mut self, span: Span) -> Self {
-        self.span = Some(span);
+    pub fn with_location(mut self, location: ItemLocation) -> Self {
+        self.location = location;
         self
     }
     pub fn size(&self, type_registry: &TypeRegistry) -> Option<usize> {
@@ -185,10 +169,11 @@ pub fn build(
     visibility: Visibility,
     definition: &grammar::TypeDefinition,
     doc_comments: &[String],
+    location: ItemLocation,
 ) -> Result<Option<ItemStateResolved>> {
     let module = semantic
         .get_module_for_path(resolvee_path)
-        .ok_or_else(|| SemanticError::module_not_found(resolvee_path.clone()))?;
+        .ok_or_else(|| SemanticError::module_not_found(resolvee_path.clone(), location.clone()))?;
 
     // Handle attributes
     let mut target_size: Option<usize> = None;
@@ -210,7 +195,10 @@ pub fn build(
                             SemanticError::integer_conversion(
                                 value.to_string(),
                                 "usize",
-                                format!("size attribute for type `{resolvee_path}`"),
+                                IntegerConversionContext::SizeAttribute {
+                                    type_path: resolvee_path.clone(),
+                                },
+                                location.clone(),
                             )
                         })?);
                     }
@@ -219,7 +207,10 @@ pub fn build(
                             SemanticError::integer_conversion(
                                 value.to_string(),
                                 "usize",
-                                format!("min_size attribute for type `{resolvee_path}`"),
+                                IntegerConversionContext::MinSizeAttribute {
+                                    type_path: resolvee_path.clone(),
+                                },
+                                location.clone(),
                             )
                         })?);
                     }
@@ -228,7 +219,10 @@ pub fn build(
                             SemanticError::integer_conversion(
                                 value.to_string(),
                                 "usize",
-                                format!("singleton attribute for type `{resolvee_path}`"),
+                                IntegerConversionContext::SingletonAttribute {
+                                    type_path: resolvee_path.clone(),
+                                },
+                                location.clone(),
                             )
                         })?);
                     }
@@ -237,7 +231,10 @@ pub fn build(
                             SemanticError::integer_conversion(
                                 value.to_string(),
                                 "usize",
-                                format!("align attribute for type `{resolvee_path}`"),
+                                IntegerConversionContext::AlignAttribute {
+                                    type_path: resolvee_path.clone(),
+                                },
+                                location.clone(),
                             )
                         })?);
                     }
@@ -264,6 +261,7 @@ pub fn build(
             "size",
             "min_size",
             resolvee_path.clone(),
+            location.clone(),
         ));
     }
 
@@ -275,33 +273,35 @@ pub fn build(
             field,
             attributes,
             doc_comments,
-            span,
+            location,
             ..
         } = statement;
 
         match field {
-            grammar::TypeField::Field(visibility, ident, type_) => {
+            grammar::TypeField::Field(visibility, field_ident, type_) => {
                 // Extract address attribute
                 let mut address: Option<usize> = None;
                 let mut is_base = false;
                 let doc = doc_comments.to_vec();
                 for attribute in attributes {
                     match attribute {
-                        grammar::Attribute::Ident(ident) if ident.as_str() == "base" => {
+                        grammar::Attribute::Ident(attr_ident) if attr_ident.as_str() == "base" => {
                             is_base = true
                         }
-                        grammar::Attribute::Function(ident, items) => {
+                        grammar::Attribute::Function(attr_ident, items) => {
                             let exprs = grammar::AttributeItem::extract_exprs(items);
                             if let ("address", [grammar::Expr::IntLiteral { value, .. }]) =
-                                (ident.as_str(), &exprs[..])
+                                (attr_ident.as_str(), &exprs[..])
                             {
                                 address = Some((*value).try_into().map_err(|_| {
                                     SemanticError::integer_conversion(
                                         value.to_string(),
                                         "usize",
-                                        format!(
-                                            "address attribute for field `{ident}` of type `{resolvee_path}`"
-                                        ),
+                                        IntegerConversionContext::FieldAddressAttribute {
+                                            field_name: field_ident.0.clone(),
+                                            type_path: resolvee_path.clone(),
+                                        },
+                                        location.clone(),
                                     )
                                 })?);
                             }
@@ -318,7 +318,7 @@ pub fn build(
                     return Ok(None);
                 };
 
-                let ident = (ident.0 != "_").then(|| ident.0.clone());
+                let ident = (field_ident.0 != "_").then(|| field_ident.0.clone());
                 pending_regions.push((
                     address,
                     Region {
@@ -327,7 +327,7 @@ pub fn build(
                         doc,
                         type_ref: type_,
                         is_base,
-                        span: Some(span.clone()),
+                        location: location.clone(),
                     },
                 ));
             }
@@ -338,7 +338,7 @@ pub fn build(
                 if idx != 0 {
                     return Err(SemanticError::VftableMustBeFirst {
                         item_path: resolvee_path.clone(),
-                        context: ErrorContext::new(),
+                        context: ErrorContext::new(location.clone()),
                     });
                 }
 
@@ -361,6 +361,7 @@ pub fn build(
                     module,
                     size,
                     functions,
+                    location,
                 )?);
             }
         }
@@ -414,6 +415,7 @@ pub fn build(
         min_size.is_some(),
         pending_regions,
         vftable_functions,
+        &location,
     )?
     else {
         return Ok(None);
@@ -469,6 +471,7 @@ pub fn build(
                     function.name.0.clone(),
                     resolvee_path.clone(),
                     "function already defined in type or base type",
+                    location.clone(),
                 ));
             }
 
@@ -489,7 +492,7 @@ pub fn build(
                 doc: _,
                 type_ref,
                 is_base: _,
-                span: _,
+                location: region_location,
             } = region;
             let name = name.as_deref().unwrap_or("unnamed");
             fn get_defaultable_type_path(type_ref: &Type) -> Option<&ItemPath> {
@@ -504,13 +507,16 @@ pub fn build(
                     name,
                     resolvee_path.clone(),
                     "is not a defaultable type (pointer or function?)",
+                    region_location.clone(),
                 ));
             };
 
             let item = semantic
                 .type_registry
                 .get(path)
-                .ok_or_else(|| SemanticError::type_not_found(path.clone()))?
+                .ok_or_else(|| {
+                    SemanticError::type_not_found(path.clone(), region_location.clone())
+                })?
                 .state
                 .clone();
 
@@ -523,6 +529,7 @@ pub fn build(
                     name,
                     resolvee_path.clone(),
                     "is not a defaultable type",
+                    region_location.clone(),
                 ));
             }
         }
@@ -534,6 +541,7 @@ pub fn build(
                 "packed",
                 "align",
                 resolvee_path.clone(),
+                location.clone(),
             ));
         }
 
@@ -557,11 +565,11 @@ pub fn build(
         // Ensure that the alignment is at least the minimum required alignment.
         if required_alignment > alignment {
             return Err(semantic.enhance_error(
-                SemanticError::alignment_error(
+                SemanticError::alignment_below_minimum(
+                    alignment,
+                    required_alignment,
                     resolvee_path.clone(),
-                    format!(
-                        "alignment {alignment} is less than minimum required alignment {required_alignment} for type `{resolvee_path}`"
-                    ),
+                    location.clone(),
                 ),
                 resolvee_path,
             ));
@@ -571,22 +579,16 @@ pub fn build(
         {
             let mut last_address = 0;
             for region in &regions {
-                let name = &region.name.as_deref().unwrap_or("unnamed");
-                let alignment = region.type_ref.alignment(&semantic.type_registry).unwrap();
-                if last_address % alignment != 0 {
-                    let mut error = SemanticError::alignment_error(
+                let name = region.name.as_deref().unwrap_or("unnamed");
+                let field_alignment = region.type_ref.alignment(&semantic.type_registry).unwrap();
+                if last_address % field_alignment != 0 {
+                    let error = SemanticError::field_not_aligned(
+                        name,
                         resolvee_path.clone(),
-                        format!(
-                            "field `{name}` of type `{}` is located at {:#x}, which is not divisible by {alignment} (the alignment of the type of the field)",
-                            resolvee_path, last_address
-                        ),
+                        last_address,
+                        field_alignment,
+                        location.clone(),
                     );
-
-                    // Note: Span and source enhancement removed as part of refactoring
-                    // to eliminate source fields from error types
-                    if false {
-                        error = semantic.enhance_error(error, resolvee_path);
-                    }
 
                     return Err(error);
                 }
@@ -596,12 +598,11 @@ pub fn build(
 
         // Ensure that the size is a multiple of the alignment.
         if size % alignment != 0 {
-            return Err(SemanticError::alignment_error(
+            return Err(SemanticError::size_not_alignment_multiple(
+                size,
+                alignment,
                 resolvee_path.clone(),
-                format!(
-                    "the type `{}` has a size of {}, which is not a multiple of its alignment {}",
-                    resolvee_path, size, alignment
-                ),
+                location.clone(),
             ));
         }
 
@@ -626,7 +627,7 @@ pub fn build(
     }))
 }
 
-#[allow(clippy::type_complexity)]
+#[allow(clippy::type_complexity, clippy::too_many_arguments)]
 fn resolve_regions(
     semantic: &mut SemanticState,
     resolvee_path: &ItemPath,
@@ -635,6 +636,7 @@ fn resolve_regions(
     is_min_size: bool,
     regions: Vec<(Option<usize>, Region)>,
     vftable_functions: Option<Vec<Function>>,
+    type_location: &ItemLocation,
 ) -> Result<Option<(Vec<Region>, Option<TypeVftable>, usize)>> {
     // this resolution algorithm is very simple and doesn't handle overlapping regions
     // or regions that are out of order
@@ -666,6 +668,7 @@ fn resolve_regions(
         visibility,
         first_base,
         vftable_functions,
+        type_location,
     )?;
     if let Some(vftable_region) = vftable_region
         && resolved
@@ -692,10 +695,13 @@ fn resolve_regions(
                     region_name: existing_region,
                     address: offset,
                     existing_end: resolved.last_address,
-                    context: ErrorContext::new(),
+                    context: ErrorContext::new(region.location.clone()),
                 });
             };
-            let padding_region = Region::unnamed_field(semantic.type_registry.padding_type(size));
+            let padding_region = Region::unnamed_field(
+                semantic.type_registry.padding_type(size),
+                region.location.clone(),
+            );
             if resolved
                 .push(&semantic.type_registry, padding_region)
                 .is_none()
@@ -717,6 +723,7 @@ fn resolve_regions(
             semantic
                 .type_registry
                 .padding_type(target_size - resolved.last_address),
+            type_location.clone(),
         );
         if resolved
             .push(&semantic.type_registry, padding_region)
@@ -739,7 +746,7 @@ fn resolve_regions(
             doc: _,
             type_ref,
             is_base: _,
-            span,
+            location,
         } = region
         {
             *region = Region {
@@ -748,7 +755,7 @@ fn resolve_regions(
                 doc: vec![],
                 type_ref: type_ref.clone(),
                 is_base: false,
-                span: span.clone(),
+                location: location.clone(),
             };
         }
 
@@ -757,11 +764,22 @@ fn resolve_regions(
 
     // Check that the final size is equal to the target size (or >= for min_size)
     if let Some(target_size) = target_size {
+        // Use the first region's location if available for error context, fallback to type location
+        let error_location = resolved
+            .regions
+            .first()
+            .map(|r| r.location.clone())
+            .unwrap_or_else(|| type_location.clone());
         if is_min_size {
             // For min_size, the final size should be >= target_size (which was already rounded)
             if size < target_size {
                 return Err(semantic.enhance_error(
-                    SemanticError::size_mismatch(target_size, size, resolvee_path.clone(), true),
+                    SemanticError::size_below_minimum(
+                        target_size,
+                        size,
+                        resolvee_path.clone(),
+                        error_location.clone(),
+                    ),
                     resolvee_path,
                 ));
             }
@@ -769,7 +787,12 @@ fn resolve_regions(
             // For exact size, the final size must equal target_size
             if size != target_size {
                 return Err(semantic.enhance_error(
-                    SemanticError::size_mismatch(target_size, size, resolvee_path.clone(), false),
+                    SemanticError::size_mismatch(
+                        target_size,
+                        size,
+                        resolvee_path.clone(),
+                        error_location,
+                    ),
                     resolvee_path,
                 ));
             }
@@ -796,12 +819,13 @@ fn get_region_name_and_type_definition<'a>(
             region.type_ref.human_friendly_type(),
             type_path.clone(),
             format!("region field `{}`", region_name),
+            region.location.clone(),
         ));
     };
 
     let region_type = type_registry
         .get(path)
-        .ok_or_else(|| SemanticError::type_not_found(path.clone()))?;
+        .ok_or_else(|| SemanticError::type_not_found(path.clone(), region.location.clone()))?;
 
     let Some(region_type) = region_type.resolved() else {
         return Ok(None);
@@ -813,8 +837,40 @@ fn get_region_name_and_type_definition<'a>(
             region_type.inner.human_friendly_type(),
             type_path.clone(),
             format!("region field `{}`", region_name),
+            region.location.clone(),
         ));
     };
 
     Ok(Some((region_name, region_type)))
+}
+
+#[cfg(test)]
+impl StripLocations for Region {
+    fn strip_locations(&self) -> Self {
+        Region {
+            visibility: self.visibility,
+            name: self.name.clone(),
+            doc: self.doc.clone(),
+            type_ref: self.type_ref.clone(),
+            is_base: self.is_base,
+            location: ItemLocation::test(),
+        }
+    }
+}
+
+#[cfg(test)]
+impl StripLocations for TypeDefinition {
+    fn strip_locations(&self) -> Self {
+        TypeDefinition {
+            regions: self.regions.strip_locations(),
+            doc: self.doc.clone(),
+            associated_functions: self.associated_functions.strip_locations(),
+            vftable: self.vftable.as_ref().map(|v| v.strip_locations()),
+            singleton: self.singleton,
+            copyable: self.copyable,
+            cloneable: self.cloneable,
+            defaultable: self.defaultable,
+            packed: self.packed,
+        }
+    }
 }

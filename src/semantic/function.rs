@@ -3,34 +3,59 @@ use std::{fmt, str::FromStr};
 use crate::{
     grammar::{self, ItemPath},
     semantic::{
-        error::{Result, SemanticError},
+        error::{
+            AttributeNotSupportedContext, IntegerConversionContext, Result, SemanticError,
+            TypeResolutionContext,
+        },
         type_registry::TypeRegistry,
         types::{Type, Visibility},
     },
-    span::ErrorContext,
+    span::ItemLocation,
 };
+
+#[cfg(test)]
+use crate::span::StripLocations;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Argument {
-    ConstSelf,
-    MutSelf,
-    Field(String, Type),
+    ConstSelf(ItemLocation),
+    MutSelf(ItemLocation),
+    Field(String, Type, ItemLocation),
 }
 impl fmt::Display for Argument {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Argument::ConstSelf => write!(f, "&self"),
-            Argument::MutSelf => write!(f, "&mut self"),
-            Argument::Field(name, ty) => write!(f, "{name}: {ty}"),
+            Argument::ConstSelf(_) => write!(f, "&self"),
+            Argument::MutSelf(_) => write!(f, "&mut self"),
+            Argument::Field(name, ty, _) => write!(f, "{name}: {ty}"),
         }
     }
 }
+#[cfg(test)]
 impl Argument {
-    pub fn field(name: impl Into<String>, type_ref: impl Into<Type>) -> Self {
-        Argument::Field(name.into(), type_ref.into())
+    pub fn const_self() -> Self {
+        Argument::ConstSelf(ItemLocation::test())
     }
+    pub fn mut_self() -> Self {
+        Argument::MutSelf(ItemLocation::test())
+    }
+    pub fn field(name: impl Into<String>, type_ref: impl Into<Type>) -> Self {
+        Argument::Field(name.into(), type_ref.into(), ItemLocation::test())
+    }
+}
+impl Argument {
     pub fn is_self(&self) -> bool {
-        matches!(self, Argument::ConstSelf | Argument::MutSelf)
+        matches!(self, Argument::ConstSelf(_) | Argument::MutSelf(_))
+    }
+    pub fn equals_ignoring_location(&self, other: &Argument) -> bool {
+        match (self, other) {
+            (Argument::ConstSelf(_), Argument::ConstSelf(_)) => true,
+            (Argument::MutSelf(_), Argument::MutSelf(_)) => true,
+            (Argument::Field(name1, ty1, _), Argument::Field(name2, ty2, _)) => {
+                name1 == name2 && ty1 == ty2
+            }
+            _ => false,
+        }
     }
 }
 
@@ -45,6 +70,16 @@ pub enum CallingConvention {
     System,
 }
 impl CallingConvention {
+    pub const ALL: &'static [CallingConvention] = &[
+        CallingConvention::C,
+        CallingConvention::Cdecl,
+        CallingConvention::Stdcall,
+        CallingConvention::Fastcall,
+        CallingConvention::Thiscall,
+        CallingConvention::Vectorcall,
+        CallingConvention::System,
+    ];
+
     pub fn as_str(&self) -> &'static str {
         match self {
             CallingConvention::C => "C",
@@ -138,6 +173,7 @@ pub struct Function {
     pub arguments: Vec<Argument>,
     pub return_type: Option<Type>,
     pub calling_convention: CallingConvention,
+    pub location: ItemLocation,
 }
 impl fmt::Display for Function {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -174,6 +210,27 @@ impl fmt::Display for Function {
     }
 }
 impl Function {
+    pub fn is_internal(&self) -> bool {
+        self.name.starts_with("_")
+    }
+    pub fn is_public(&self) -> bool {
+        matches!(self.visibility, Visibility::Public)
+    }
+    pub fn equals_ignoring_location(&self, other: &Function) -> bool {
+        self.visibility == other.visibility
+            && self.name == other.name
+            && self.body == other.body
+            && self
+                .arguments
+                .iter()
+                .zip(other.arguments.iter())
+                .all(|(a, b)| a.equals_ignoring_location(b))
+            && self.return_type == other.return_type
+            && self.calling_convention == other.calling_convention
+    }
+}
+#[cfg(test)]
+impl Function {
     pub fn new(
         (visibility, name): (Visibility, impl Into<String>),
         body: FunctionBody,
@@ -187,6 +244,7 @@ impl Function {
             arguments: Vec::new(),
             return_type: None,
             calling_convention,
+            location: ItemLocation::test(),
         }
     }
     pub fn with_arguments(mut self, arguments: impl Into<Vec<Argument>>) -> Self {
@@ -209,11 +267,21 @@ impl Function {
         self.doc = doc.into_iter().map(|s| s.into()).collect();
         self
     }
-    pub fn is_internal(&self) -> bool {
-        self.name.starts_with("_")
-    }
-    pub fn is_public(&self) -> bool {
-        matches!(self.visibility, Visibility::Public)
+}
+
+#[cfg(test)]
+impl StripLocations for Function {
+    fn strip_locations(&self) -> Self {
+        Function {
+            visibility: self.visibility,
+            name: self.name.clone(),
+            doc: self.doc.clone(),
+            body: self.body.clone(),
+            arguments: self.arguments.clone(),
+            return_type: self.return_type.clone(),
+            calling_convention: self.calling_convention,
+            location: ItemLocation::test(),
+        }
     }
 }
 
@@ -238,7 +306,10 @@ pub fn build(
                 if is_vfunc {
                     return Err(SemanticError::attribute_not_supported(
                         "address",
-                        format!("virtual function `{}`", function.name),
+                        AttributeNotSupportedContext::VirtualFunction {
+                            function_name: function.name.0.clone(),
+                        },
+                        function.location.clone(),
                     ));
                 }
 
@@ -247,7 +318,10 @@ pub fn build(
                         SemanticError::integer_conversion(
                             value.to_string(),
                             "usize",
-                            format!("address attribute for function `{}`", function.name),
+                            IntegerConversionContext::AddressAttribute {
+                                function_name: function.name.0.clone(),
+                            },
+                            function.location.clone(),
                         )
                     })?,
                 });
@@ -257,50 +331,31 @@ pub fn build(
                 if !is_vfunc {
                     return Err(SemanticError::attribute_not_supported(
                         "index",
-                        format!("non-virtual function `{}`", function.name),
+                        AttributeNotSupportedContext::NonVirtualFunction {
+                            function_name: function.name.0.clone(),
+                        },
+                        function.location.clone(),
                     ));
                 }
             }
             ("calling_convention", [grammar::Expr::StringLiteral { value, .. }]) => {
-                calling_convention =
-                    Some(
-                        value
-                            .parse()
-                            .map_err(|_| {
-                                // Generate list of valid calling conventions dynamically
-                                let valid_conventions = [
-                                    CallingConvention::C,
-                                    CallingConvention::Cdecl,
-                                    CallingConvention::Stdcall,
-                                    CallingConvention::Fastcall,
-                                    CallingConvention::Thiscall,
-                                    CallingConvention::Vectorcall,
-                                    CallingConvention::System,
-                                ];
-                                let valid_list = valid_conventions
-                                    .iter()
-                                    .map(|cc| cc.as_str())
-                                    .collect::<Vec<_>>()
-                                    .join(", ");
-
-                                SemanticError::InvalidCallingConvention {
-                                    convention: value.clone(),
-                                    function_name: function.name.0.clone(),
-                                    context: ErrorContext::new()
-                                        .with_help(format!("Valid calling conventions are: {}", valid_list)),
-                                }
-                            })?,
-                    );
+                calling_convention = Some(value.parse().map_err(|_| {
+                    SemanticError::invalid_calling_convention(
+                        value.clone(),
+                        function.name.0.clone(),
+                        function.location.clone(),
+                    )
+                })?);
             }
             _ => {}
         }
     }
 
     if !is_vfunc && body.is_none() {
-        return Err(SemanticError::FunctionMissingImplementation {
-            function_name: function.name.0.clone(),
-            context: ErrorContext::new(),
-        });
+        return Err(SemanticError::function_missing_implementation(
+            function.name.0.clone(),
+            function.location.clone(),
+        ));
     }
 
     let Some(body) = body else {
@@ -314,18 +369,23 @@ pub fn build(
         .arguments
         .iter()
         .map(|a| match a {
-            grammar::Argument::ConstSelf => Ok(Argument::ConstSelf),
-            grammar::Argument::MutSelf => Ok(Argument::MutSelf),
-            grammar::Argument::Named(name, type_) => Ok(Argument::Field(
+            grammar::Argument::ConstSelf(location) => Ok(Argument::ConstSelf(location.clone())),
+            grammar::Argument::MutSelf(location) => Ok(Argument::MutSelf(location.clone())),
+            grammar::Argument::Named(name, type_, location) => Ok(Argument::Field(
                 name.0.clone(),
                 type_registry
                     .resolve_grammar_type(scope, type_)
                     .ok_or_else(|| {
                         SemanticError::type_resolution_failed(
-                            format!("{:?}", type_),
-                            format!("argument `{}` in function `{}`", name, function.name),
+                            type_.clone(),
+                            TypeResolutionContext::FunctionArgument {
+                                argument_name: name.0.clone(),
+                                function_name: function.name.0.clone(),
+                            },
+                            location.clone(),
                         )
                     })?,
+                location.clone(),
             )),
         })
         .collect::<Result<Vec<_>>>()?;
@@ -338,7 +398,7 @@ pub fn build(
     let calling_convention = calling_convention.unwrap_or_else(|| {
         let has_self = arguments
             .iter()
-            .any(|a| matches!(a, Argument::ConstSelf | Argument::MutSelf));
+            .any(|a| matches!(a, Argument::ConstSelf(_) | Argument::MutSelf(_)));
         // probably a bit sus
         if has_self {
             CallingConvention::for_member_function(type_registry.pointer_size())
@@ -355,5 +415,6 @@ pub fn build(
         arguments,
         return_type,
         calling_convention,
+        location: function.location.clone(),
     })
 }

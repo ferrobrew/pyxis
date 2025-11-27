@@ -1,7 +1,12 @@
 use std::fmt;
 
-use ariadne::{Color, Label, Report, ReportKind, Source};
-use crate::{grammar::ItemPath, semantic::SemanticError, source_store::SourceStore, span::{ErrorContext, ErrorLabelColor, Span}};
+use crate::{
+    grammar::ItemPath,
+    semantic::SemanticError,
+    source_store::SourceStore,
+    span::{self, ErrorContext, ItemLocation},
+};
+use ariadne::{Label, Report, ReportKind, Source};
 
 /// Backend code generation errors
 #[derive(Debug)]
@@ -39,229 +44,20 @@ pub enum BackendError {
 }
 
 impl BackendError {
-    /// Convert ErrorLabelColor to ariadne Color
-    fn label_color_to_ariadne(color: ErrorLabelColor) -> Color {
-        match color {
-            ErrorLabelColor::Red => Color::Red,
-            ErrorLabelColor::Yellow => Color::Yellow,
-            ErrorLabelColor::Blue => Color::Blue,
-            ErrorLabelColor::Cyan => Color::Cyan,
-        }
-    }
-
-    /// Format location prefix for error messages
-    fn format_location(context: &ErrorContext) -> String {
-        match (&context.filename, &context.span) {
-            (Some(f), Some(s)) => format!("Error at {}:{}:{}: ", f, s.start.line, s.start.column),
-            (Some(f), None) => format!("Error in {}: ", f),
-            _ => String::new(),
-        }
-    }
-
-    fn span_to_offset(source: &str, span: &Span) -> usize {
-        source
-            .lines()
-            .take(span.start.line.saturating_sub(1))
-            .map(|line| line.len() + 1)
-            .sum::<usize>()
-            + span.start.column.saturating_sub(1)
-    }
-
-    fn span_length(source: &str, span: &Span) -> usize {
-        if span.start.line == span.end.line {
-            span.end.column.saturating_sub(span.start.column)
-        } else {
-            let first_line_len = source
-                .lines()
-                .nth(span.start.line.saturating_sub(1))
-                .map(|line| line.len())
-                .unwrap_or(0)
-                .saturating_sub(span.start.column.saturating_sub(1));
-            let middle_lines_len: usize = source
-                .lines()
-                .skip(span.start.line)
-                .take(
-                    span.end
-                        .line
-                        .saturating_sub(span.start.line)
-                        .saturating_sub(1),
-                )
-                .map(|line| line.len() + 1)
-                .sum();
-            let last_line_len = span.end.column.saturating_sub(1);
-            first_line_len + middle_lines_len + last_line_len
-        }
-    }
-
-    /// Format the error using ariadne with the provided source store
-    pub fn format_with_ariadne(&self, source_store: &mut dyn SourceStore) -> String {
-        match self {
-            // For semantic errors, delegate to SemanticError's format_with_ariadne
-            BackendError::Semantic(err) => err.format_with_ariadne(source_store),
-
-            // For backend-specific errors with filename and span
-            BackendError::TypeCodeGenFailed { type_path, reason, context } => {
-                if let (Some(filename), Some(span)) = (&context.filename, &context.span) {
-                    if let Some(source) = source_store.get(filename.as_ref()) {
-                        let offset = Self::span_to_offset(source, span);
-                        let length = Self::span_length(source, span);
-
-                        let mut report_builder = Report::build(ReportKind::Error, filename.as_ref(), offset)
-                            .with_message(format!("Failed to generate code for type `{}`: {}", type_path, reason))
-                            .with_label(
-                                Label::new((filename.as_ref(), offset..offset + length))
-                                    .with_message("error occurred here")
-                                    .with_color(Color::Red),
-                            );
-
-                        // Add additional labels if present
-                        for label in &context.labels {
-                            let label_offset = Self::span_to_offset(source, &label.span);
-                            let label_length = Self::span_length(source, &label.span);
-                            report_builder = report_builder.with_label(
-                                Label::new((filename.as_ref(), label_offset..label_offset + label_length))
-                                    .with_message(&label.message)
-                                    .with_color(Self::label_color_to_ariadne(label.color)),
-                            );
-                        }
-
-                        // Add notes if present
-                        for note in &context.notes {
-                            report_builder = report_builder.with_note(note);
-                        }
-
-                        // Add help text if present
-                        if let Some(help) = &context.help {
-                            report_builder = report_builder.with_help(help);
-                        }
-
-                        let report = report_builder.finish();
-
-                        let mut buffer = Vec::new();
-                        if report.write((filename.as_ref(), Source::from(source)), &mut buffer).is_ok() {
-                            return String::from_utf8_lossy(&buffer).to_string();
-                        }
-                    }
-                }
-                self.to_string()
-            }
-
-            BackendError::FieldCodeGenFailed { type_path, field_name, reason, context } => {
-                if let (Some(filename), Some(span)) = (&context.filename, &context.span) {
-                    if let Some(source) = source_store.get(filename.as_ref()) {
-                        let offset = Self::span_to_offset(source, span);
-                        let length = Self::span_length(source, span);
-
-                        let mut report_builder = Report::build(ReportKind::Error, filename.as_ref(), offset)
-                            .with_message(format!("Failed to generate code for field `{}` of type `{}`: {}", field_name, type_path, reason))
-                            .with_label(
-                                Label::new((filename.as_ref(), offset..offset + length))
-                                    .with_message("error occurred here")
-                                    .with_color(Color::Red),
-                            );
-
-                        // Add additional labels if present
-                        for label in &context.labels {
-                            let label_offset = Self::span_to_offset(source, &label.span);
-                            let label_length = Self::span_length(source, &label.span);
-                            report_builder = report_builder.with_label(
-                                Label::new((filename.as_ref(), label_offset..label_offset + label_length))
-                                    .with_message(&label.message)
-                                    .with_color(Self::label_color_to_ariadne(label.color)),
-                            );
-                        }
-
-                        // Add notes if present
-                        for note in &context.notes {
-                            report_builder = report_builder.with_note(note);
-                        }
-
-                        // Add help text if present
-                        if let Some(help) = &context.help {
-                            report_builder = report_builder.with_help(help);
-                        }
-
-                        let report = report_builder.finish();
-
-                        let mut buffer = Vec::new();
-                        if report.write((filename.as_ref(), Source::from(source)), &mut buffer).is_ok() {
-                            return String::from_utf8_lossy(&buffer).to_string();
-                        }
-                    }
-                }
-                self.to_string()
-            }
-
-            BackendError::VftableCodeGenFailed { type_path, reason, context } => {
-                if let (Some(filename), Some(span)) = (&context.filename, &context.span) {
-                    if let Some(source) = source_store.get(filename.as_ref()) {
-                        let offset = Self::span_to_offset(source, span);
-                        let length = Self::span_length(source, span);
-
-                        let mut report_builder = Report::build(ReportKind::Error, filename.as_ref(), offset)
-                            .with_message(format!("Failed to generate vftable code for type `{}`: {}", type_path, reason))
-                            .with_label(
-                                Label::new((filename.as_ref(), offset..offset + length))
-                                    .with_message("error occurred here")
-                                    .with_color(Color::Red),
-                            );
-
-                        // Add additional labels if present
-                        for label in &context.labels {
-                            let label_offset = Self::span_to_offset(source, &label.span);
-                            let label_length = Self::span_length(source, &label.span);
-                            report_builder = report_builder.with_label(
-                                Label::new((filename.as_ref(), label_offset..label_offset + label_length))
-                                    .with_message(&label.message)
-                                    .with_color(Self::label_color_to_ariadne(label.color)),
-                            );
-                        }
-
-                        // Add notes if present
-                        for note in &context.notes {
-                            report_builder = report_builder.with_note(note);
-                        }
-
-                        // Add help text if present
-                        if let Some(help) = &context.help {
-                            report_builder = report_builder.with_help(help);
-                        }
-
-                        let report = report_builder.finish();
-
-                        let mut buffer = Vec::new();
-                        if report.write((filename.as_ref(), Source::from(source)), &mut buffer).is_ok() {
-                            return String::from_utf8_lossy(&buffer).to_string();
-                        }
-                    }
-                }
-                self.to_string()
-            }
-
-            // For other errors without span/filename, fall back to Display
-            _ => self.to_string(),
-        }
-    }
-}
-
-impl fmt::Display for BackendError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    /// Returns the core error message without location prefix
+    fn error_message(&self) -> String {
         match self {
             BackendError::Io { error, context } => {
-                write!(f, "IO error: {} ({})", error, context)
+                format!("IO error: {} ({})", error, context)
             }
-            BackendError::Formatting(msg) => write!(f, "Formatting error: {}", msg),
-            BackendError::Syntax(err) => write!(f, "Syntax error: {}", err),
-            BackendError::Semantic(err) => write!(f, "{}", err),
+            BackendError::Formatting(msg) => format!("Formatting error: {}", msg),
+            BackendError::Syntax(err) => format!("Syntax error: {}", err),
+            BackendError::Semantic(err) => err.to_string(),
             BackendError::TypeCodeGenFailed {
-                type_path,
-                reason,
-                context,
+                type_path, reason, ..
             } => {
-                write!(
-                    f,
-                    "{}Failed to generate code for type `{}`: {}",
-                    Self::format_location(context),
+                format!(
+                    "Failed to generate code for type `{}`: {}",
                     type_path, reason
                 )
             }
@@ -269,28 +65,128 @@ impl fmt::Display for BackendError {
                 type_path,
                 field_name,
                 reason,
-                context,
+                ..
             } => {
-                write!(
-                    f,
-                    "{}Failed to generate code for field `{}` of type `{}`: {}",
-                    Self::format_location(context),
+                format!(
+                    "Failed to generate code for field `{}` of type `{}`: {}",
                     field_name, type_path, reason
                 )
             }
             BackendError::VftableCodeGenFailed {
-                type_path,
-                reason,
-                context,
+                type_path, reason, ..
             } => {
-                write!(
-                    f,
-                    "{}Failed to generate vftable code for type `{}`: {}",
-                    Self::format_location(context),
+                format!(
+                    "Failed to generate vftable code for type `{}`: {}",
                     type_path, reason
                 )
             }
         }
+    }
+
+    /// Returns the error context if available
+    fn error_context(&self) -> Option<&ErrorContext> {
+        match self {
+            BackendError::TypeCodeGenFailed { context, .. }
+            | BackendError::FieldCodeGenFailed { context, .. }
+            | BackendError::VftableCodeGenFailed { context, .. } => Some(context),
+            _ => None,
+        }
+    }
+
+    /// Format the error using ariadne with the provided source store
+    pub fn format_with_ariadne(&self, source_store: &mut dyn SourceStore) -> String {
+        // For semantic errors, delegate to SemanticError's format_with_ariadne
+        if let BackendError::Semantic(err) = self {
+            return err.format_with_ariadne(source_store);
+        }
+
+        let message = self.error_message();
+
+        // Get context if available
+        let context = match self.error_context() {
+            Some(ctx) => ctx,
+            None => {
+                // No location info - create simple report
+                return format_ariadne_simple(&message);
+            }
+        };
+
+        let location = &context.location;
+
+        // Try to get source
+        if let Some(source) = source_store.get(location.filename.as_ref()) {
+            format_ariadne_with_source(location, source, &message)
+        } else {
+            format_ariadne_without_source(location, &message)
+        }
+    }
+}
+
+/// Format an Ariadne report with source code available
+fn format_ariadne_with_source(location: &ItemLocation, source: &str, message: &str) -> String {
+    let offset = span::span_to_offset(source, &location.span);
+    let length = span::span_length(source, &location.span);
+
+    let report_builder = Report::build(ReportKind::Error, location.filename.as_ref(), offset)
+        .with_message(message)
+        .with_label(
+            Label::new((location.filename.as_ref(), offset..offset + length))
+                .with_message("error occurred here")
+                .with_color(ariadne::Color::Red),
+        );
+
+    let report = report_builder.finish();
+
+    let mut buffer = Vec::new();
+    report
+        .write(
+            (location.filename.as_ref(), Source::from(source)),
+            &mut buffer,
+        )
+        .expect("writing to Vec should not fail");
+    String::from_utf8_lossy(&buffer).to_string()
+}
+
+/// Format an Ariadne report without source code (just location note)
+fn format_ariadne_without_source(location: &ItemLocation, message: &str) -> String {
+    let placeholder_filename = location.filename.as_ref();
+    let report_builder =
+        Report::<(&str, std::ops::Range<usize>)>::build(ReportKind::Error, placeholder_filename, 0)
+            .with_message(message)
+            .with_note(format!(
+                "Error location: {}:{}:{}",
+                location.filename, location.span.start.line, location.span.start.column
+            ));
+
+    let report = report_builder.finish();
+
+    let mut buffer = Vec::new();
+    report
+        .write((placeholder_filename, Source::from("")), &mut buffer)
+        .expect("writing to Vec should not fail");
+    String::from_utf8_lossy(&buffer).to_string()
+}
+
+/// Format an Ariadne report with no location information at all
+fn format_ariadne_simple(message: &str) -> String {
+    let report = Report::<(&str, std::ops::Range<usize>)>::build(ReportKind::Error, "", 0)
+        .with_message(message)
+        .finish();
+
+    let mut buffer = Vec::new();
+    report
+        .write(("", Source::from("")), &mut buffer)
+        .expect("writing to Vec should not fail");
+    String::from_utf8_lossy(&buffer).to_string()
+}
+
+impl fmt::Display for BackendError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Add location prefix if available
+        if let Some(context) = self.error_context() {
+            write!(f, "{}", span::format_error_location(context))?;
+        }
+        write!(f, "{}", self.error_message())
     }
 }
 

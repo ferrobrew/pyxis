@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::{
     grammar::{self, ItemPath},
     semantic::{
-        error::{Result, SemanticError},
+        error::{Result, SemanticError, TypeResolutionContext},
         function::Function,
         type_registry,
         types::{Backend, ExternValue, ItemDefinition, Type},
@@ -109,8 +109,11 @@ impl Module {
                     .resolve_grammar_type(&scope, type_ref)
                     .ok_or_else(|| {
                         SemanticError::type_resolution_failed(
-                            format!("{:?}", type_ref),
-                            format!("extern value {}", ev.name),
+                            type_ref.clone(),
+                            TypeResolutionContext::ExternValue {
+                                extern_name: ev.name.clone(),
+                            },
+                            ev.location.clone(),
                         )
                     })?;
             }

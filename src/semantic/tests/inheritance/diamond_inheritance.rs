@@ -46,12 +46,12 @@ fn multiple_inheritance_with_vftables() {
             .with_impls([
                 FB::new(
                     "BaseA",
-                    [F::new((V::Public, "associated"), [Ar::MutSelf])
+                    [F::new((V::Public, "associated"), [Ar::mut_self()])
                         .with_attributes([A::address(0x123)])],
                 ),
                 FB::new(
                     "BaseB",
-                    [F::new((V::Public, "associated"), [Ar::MutSelf])
+                    [F::new((V::Public, "associated"), [Ar::mut_self()])
                         .with_attributes([A::address(0x123)])],
                 ),
             ]),
@@ -97,7 +97,7 @@ fn multiple_inheritance_with_vftables() {
                             SFB::address(0x123),
                             SCC::for_member_function(pointer_size()),
                         )
-                        .with_arguments([SAr::MutSelf])]),
+                        .with_arguments([SAr::mut_self()])]),
                 ),
             ),
             SID::defined_resolved(
@@ -125,7 +125,7 @@ fn multiple_inheritance_with_vftables() {
                             SFB::address(0x123),
                             SCC::for_member_function(pointer_size()),
                         )
-                        .with_arguments([SAr::MutSelf])]),
+                        .with_arguments([SAr::mut_self()])]),
                 ),
             ),
             SID::defined_resolved(
@@ -158,14 +158,14 @@ fn multiple_inheritance_with_vftables() {
                                 SFB::field("base_a", "associated"),
                                 SCC::for_member_function(pointer_size()),
                             )
-                            .with_arguments([SAr::MutSelf]),
+                            .with_arguments([SAr::mut_self()]),
                             // base_b_associated
                             SF::new(
                                 (SV::Public, "base_b_associated"),
                                 SFB::field("base_b", "associated"),
                                 SCC::for_member_function(pointer_size()),
                             )
-                            .with_arguments([SAr::MutSelf]),
+                            .with_arguments([SAr::mut_self()]),
                             // base_b_destructor
                             SF::new(
                                 (SV::Public, "base_b_destructor"),
@@ -173,7 +173,7 @@ fn multiple_inheritance_with_vftables() {
                                 SCC::for_member_function(pointer_size()),
                             )
                             .with_arguments([
-                                SAr::MutSelf,
+                                SAr::mut_self(),
                                 SAr::field("arg0", ST::raw("u32")),
                                 SAr::field("arg1", ST::raw("f32")),
                             ])

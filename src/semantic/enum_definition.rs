@@ -2,9 +2,10 @@ use crate::{
     grammar::{self, ItemPath},
     semantic::{
         SemanticState,
-        error::{Result, SemanticError},
+        error::{Result, SemanticError, TypeResolutionContext},
         types::{Function, ItemStateResolved, Type},
     },
+    span::ItemLocation,
 };
 
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]
@@ -75,10 +76,11 @@ pub fn build(
     resolvee_path: &ItemPath,
     definition: &grammar::EnumDefinition,
     doc_comments: &[String],
+    location: ItemLocation,
 ) -> Result<Option<ItemStateResolved>> {
     let module = semantic
         .get_module_for_path(resolvee_path)
-        .ok_or_else(|| SemanticError::module_not_found(resolvee_path.clone()))?;
+        .ok_or_else(|| SemanticError::module_not_found(resolvee_path.clone(), location.clone()))?;
 
     let Some(ty) = semantic
         .type_registry
@@ -105,9 +107,10 @@ pub fn build(
         let value = match expr {
             Some(grammar::Expr::IntLiteral { value, .. }) => *value,
             Some(_) => {
-                return Err(SemanticError::enum_error(
+                return Err(SemanticError::enum_unsupported_value(
                     resolvee_path.clone(),
-                    format!("unsupported enum value for case `{name}`: {:?}", expr),
+                    name.0.clone(),
+                    location.clone(),
                 ));
             }
             None => last_field,
@@ -118,9 +121,9 @@ pub fn build(
             match attribute {
                 grammar::Attribute::Ident(ident) if ident.as_str() == "default" => {
                     if default.is_some() {
-                        return Err(SemanticError::enum_error(
+                        return Err(SemanticError::enum_multiple_defaults(
                             resolvee_path.clone(),
-                            "enum has multiple default variants",
+                            location.clone(),
                         ));
                     }
                     default = Some(fields.len() - 1);
@@ -161,29 +164,17 @@ pub fn build(
     }
 
     if !defaultable && default.is_some() {
-        let mut error = SemanticError::enum_error(
+        return Err(SemanticError::enum_default_without_defaultable(
             resolvee_path.clone(),
-            "has a default variant set but is not marked as defaultable",
-        );
-        if let SemanticError::EnumError { context, .. } = &mut error {
-            *context = context.clone()
-                .with_help("Add the #[defaultable] attribute to the enum declaration")
-                .with_note("Only enums marked as defaultable can have default variants");
-        }
-        return Err(error);
+            location.clone(),
+        ));
     }
 
     if defaultable && default.is_none() {
-        let mut error = SemanticError::enum_error(
+        return Err(SemanticError::enum_defaultable_missing_default(
             resolvee_path.clone(),
-            "is marked as defaultable but has no default variant set",
-        );
-        if let SemanticError::EnumError { context, .. } = &mut error {
-            *context = context.clone()
-                .with_help("Add the #[default] attribute to one of the enum variants")
-                .with_note("Defaultable enums must have exactly one variant marked with #[default]");
-        }
-        return Err(error);
+            location.clone(),
+        ));
     }
 
     // Handle associated functions
@@ -204,8 +195,11 @@ pub fn build(
         size,
         alignment: ty.alignment(&semantic.type_registry).ok_or_else(|| {
             SemanticError::type_resolution_failed(
-                format!("{:?}", ty),
-                format!("alignment for base type of enum `{resolvee_path}`"),
+                definition.type_.clone(),
+                TypeResolutionContext::EnumBaseTypeAlignment {
+                    enum_path: resolvee_path.clone(),
+                },
+                location.clone(),
             )
         })?,
         inner: EnumDefinition {

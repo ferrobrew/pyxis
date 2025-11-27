@@ -5,17 +5,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let output_dir = root.join("output");
     let json_output_dir = root.join("json_output");
 
+    // Create a shared source store for error reporting
+    let mut store = pyxis::source_store::FilesystemSourceStore::new();
+
     // Generate Rust backend output
     if let Err(err) = pyxis::build(&root.join("input"), &output_dir, pyxis::Backend::Rust) {
-        // Format semantic errors with ariadne before displaying
-        if let pyxis::BuildError::Semantic(semantic_err) = &err {
-            let mut store = pyxis::source_store::FilesystemSourceStore::new();
-            let formatted = semantic_err.format_with_ariadne(&mut store);
-            eprintln!("{}", formatted);
-        } else {
-            eprintln!("{}", err);
-        }
-        return Err(err.into());
+        // Format errors with ariadne before displaying
+        let formatted = err.format_with_ariadne(&mut store);
+        eprintln!("{formatted}");
+        std::process::exit(1);
     }
 
     let mut module_decls = std::fs::read_dir(&output_dir)?
@@ -39,15 +37,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Generate JSON backend output
     std::fs::create_dir_all(&json_output_dir)?;
     if let Err(err) = pyxis::build(&root.join("input"), &json_output_dir, pyxis::Backend::Json) {
-        // Format semantic errors with ariadne before displaying
-        if let pyxis::BuildError::Semantic(semantic_err) = &err {
-            let mut store = pyxis::source_store::FilesystemSourceStore::new();
-            let formatted = semantic_err.format_with_ariadne(&mut store);
-            eprintln!("{}", formatted);
-        } else {
-            eprintln!("{}", err);
-        }
-        return Err(err.into());
+        // Format errors with ariadne before displaying
+        let formatted = err.format_with_ariadne(&mut store);
+        eprintln!("{formatted}");
+        std::process::exit(1);
     }
 
     // Verify JSON output exists and is valid

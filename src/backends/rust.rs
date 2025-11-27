@@ -11,7 +11,7 @@ use crate::{
             TypeDefinition, Visibility,
         },
     },
-    span::ErrorContext,
+    span::{ErrorContext, ItemLocation},
 };
 
 use quote::{ToTokens, quote};
@@ -148,13 +148,7 @@ fn build_item(
     definition: &ItemDefinition,
 ) -> Result<proc_macro2::TokenStream> {
     let resolved = definition.resolved().ok_or_else(|| {
-        let mut context = ErrorContext::new();
-        if let Some(filename) = &definition.filename {
-            context = context.with_filename(filename.as_ref());
-        }
-        if let Some(span) = &definition.span {
-            context = context.with_span(span.clone());
-        }
+        let context = ErrorContext::new(definition.location.clone());
         BackendError::TypeCodeGenFailed {
             type_path: definition.path.clone(),
             reason: "type was not resolved".to_string(),
@@ -171,11 +165,20 @@ fn build_item(
     let path = &definition.path;
 
     use ItemDefinitionInner as IDI;
+    let location = &definition.location;
     match definition.category() {
         ItemCategory::Defined => match inner {
-            IDI::Type(td) => build_type(type_registry, path, *size, *alignment, visibility, td),
-            IDI::Enum(ed) => build_enum(path, *size, visibility, ed),
-            IDI::Bitflags(bd) => build_bitflags(path, *size, visibility, bd),
+            IDI::Type(td) => build_type(
+                type_registry,
+                path,
+                *size,
+                *alignment,
+                visibility,
+                td,
+                location,
+            ),
+            IDI::Enum(ed) => build_enum(path, *size, visibility, ed, location),
+            IDI::Bitflags(bd) => build_bitflags(path, *size, visibility, bd, location),
         },
         ItemCategory::Predefined => Ok(quote! {}),
         ItemCategory::Extern => Ok(quote! {}),
@@ -189,11 +192,12 @@ fn build_type(
     alignment: usize,
     visibility: Visibility,
     type_definition: &TypeDefinition,
+    location: &ItemLocation,
 ) -> Result<proc_macro2::TokenStream> {
     let name = path.last().ok_or_else(|| BackendError::TypeCodeGenFailed {
         type_path: path.clone(),
         reason: "failed to get last component of item path".to_string(),
-        context: ErrorContext::new(),
+        context: ErrorContext::new(location.clone()),
     })?;
 
     let TypeDefinition {
@@ -219,7 +223,7 @@ fn build_type(
                 doc,
                 type_ref,
                 is_base: _,
-                span: _,
+                location: field_location,
             } = r;
             let field_name = field
                 .as_deref()
@@ -227,7 +231,7 @@ fn build_type(
                     type_path: path.clone(),
                     field_name: "unnamed".to_string(),
                     reason: "field name not present".to_string(),
-                    context: ErrorContext::new(),
+                    context: ErrorContext::new(field_location.clone()),
                 })?;
             let field_ident = str_to_ident(field_name);
             let visibility = visibility_to_tokens(*visibility);
@@ -451,11 +455,12 @@ fn build_enum(
     size: usize,
     visibility: Visibility,
     enum_definition: &EnumDefinition,
+    location: &ItemLocation,
 ) -> Result<proc_macro2::TokenStream> {
     let name = path.last().ok_or_else(|| BackendError::TypeCodeGenFailed {
         type_path: path.clone(),
         reason: "failed to get last component of item path".to_string(),
-        context: ErrorContext::new(),
+        context: ErrorContext::new(location.clone()),
     })?;
 
     let EnumDefinition {
@@ -563,11 +568,12 @@ fn build_bitflags(
     size: usize,
     visibility: Visibility,
     bitflags_definition: &BitflagsDefinition,
+    location: &ItemLocation,
 ) -> Result<proc_macro2::TokenStream> {
     let name = path.last().ok_or_else(|| BackendError::TypeCodeGenFailed {
         type_path: path.clone(),
         reason: "failed to get last component of item path".to_string(),
-        context: ErrorContext::new(),
+        context: ErrorContext::new(location.clone()),
     })?;
 
     let BitflagsDefinition {
@@ -661,9 +667,9 @@ fn build_function(function: &Function) -> Result<proc_macro2::TokenStream> {
         .iter()
         .map(|a| {
             Ok(match a {
-                Argument::ConstSelf => quote! { &self },
-                Argument::MutSelf => quote! { &mut self },
-                Argument::Field(name, type_ref) => {
+                Argument::ConstSelf(_) => quote! { &self },
+                Argument::MutSelf(_) => quote! { &mut self },
+                Argument::Field(name, type_ref, _) => {
                     let name = str_to_ident(name);
                     let syn_type = sa_type_to_syn_type(type_ref)?;
                     quote! {
@@ -679,9 +685,9 @@ fn build_function(function: &Function) -> Result<proc_macro2::TokenStream> {
         .iter()
         .map(|a| {
             Ok(match a {
-                Argument::ConstSelf => quote! { this: *const Self },
-                Argument::MutSelf => quote! { this: *mut Self },
-                Argument::Field(name, type_ref) => {
+                Argument::ConstSelf(_) => quote! { this: *const Self },
+                Argument::MutSelf(_) => quote! { this: *mut Self },
+                Argument::Field(name, type_ref, _) => {
                     let name = str_to_ident(name);
                     let syn_type = sa_type_to_syn_type(type_ref)?;
                     quote! {
@@ -699,9 +705,9 @@ fn build_function(function: &Function) -> Result<proc_macro2::TokenStream> {
         // Only pass `self` to the function if it's not a field function
         .filter(|a| !is_field_function || !a.is_self())
         .map(|a| match a {
-            Argument::ConstSelf => quote! { self as *const Self as _ },
-            Argument::MutSelf => quote! { self as *mut Self as _ },
-            Argument::Field(name, _) => {
+            Argument::ConstSelf(_) => quote! { self as *const Self as _ },
+            Argument::MutSelf(_) => quote! { self as *mut Self as _ },
+            Argument::Field(name, _, _) => {
                 let name = str_to_ident(name);
                 quote! { #name }
             }

@@ -35,6 +35,7 @@ pub enum BuildError {
         error: std::io::Error,
         context: String,
     },
+    Parser(parser::ParseError),
     Backend(backends::BackendError),
 }
 
@@ -45,6 +46,7 @@ impl std::fmt::Display for BuildError {
             BuildError::Config(err) => write!(f, "{}", err),
             BuildError::Glob(err) => write!(f, "Glob pattern error: {}", err),
             BuildError::Io { error, context } => write!(f, "IO error: {} ({})", error, context),
+            BuildError::Parser(err) => write!(f, "{}", err),
             BuildError::Backend(err) => write!(f, "{}", err),
         }
     }
@@ -76,14 +78,58 @@ impl From<backends::BackendError> for BuildError {
     }
 }
 
+impl From<parser::ParseError> for BuildError {
+    fn from(err: parser::ParseError) -> Self {
+        BuildError::Parser(err)
+    }
+}
+
+impl BuildError {
+    /// Returns the core error message without location prefix
+    fn error_message(&self) -> String {
+        match self {
+            BuildError::Semantic(err) => err.to_string(),
+            BuildError::Config(err) => err.to_string(),
+            BuildError::Glob(err) => format!("Glob pattern error: {}", err),
+            BuildError::Io { error, context } => format!("IO error: {} ({})", error, context),
+            BuildError::Parser(err) => err.to_string(),
+            BuildError::Backend(err) => err.to_string(),
+        }
+    }
+
+    /// Format the error with rich diagnostics using ariadne
+    pub fn format_with_ariadne(&self, source_store: &mut dyn source_store::SourceStore) -> String {
+        use ariadne::{Report, ReportKind, Source};
+
+        match self {
+            // Delegate to inner types that have their own ariadne formatting
+            BuildError::Semantic(err) => err.format_with_ariadne(source_store),
+            BuildError::Parser(err) => err.format_with_ariadne(source_store),
+            BuildError::Backend(err) => err.format_with_ariadne(source_store),
+            // Other error types don't have location information - create simple ariadne report
+            BuildError::Config(_) | BuildError::Glob(_) | BuildError::Io { .. } => {
+                let message = self.error_message();
+                let report =
+                    Report::<(&str, std::ops::Range<usize>)>::build(ReportKind::Error, "", 0)
+                        .with_message(&message)
+                        .finish();
+
+                let mut buffer = Vec::new();
+                report
+                    .write(("", Source::from("")), &mut buffer)
+                    .expect("writing to Vec should not fail");
+                String::from_utf8_lossy(&buffer).to_string()
+            }
+        }
+    }
+}
+
 pub fn build(in_dir: &Path, out_dir: &Path, backend: Backend) -> Result<(), BuildError> {
     let config = config::Config::load(&in_dir.join("pyxis.toml"))?;
 
     let mut semantic_state = semantic::SemanticState::new(config.project.pointer_size);
 
-    for path in glob::glob(&format!("{}/**/*.pyxis", in_dir.display()))?
-        .filter_map(Result::ok)
-    {
+    for path in glob::glob(&format!("{}/**/*.pyxis", in_dir.display()))?.filter_map(Result::ok) {
         semantic_state.add_file(in_dir, &path)?;
     }
 
@@ -122,14 +168,10 @@ pub fn build_script(in_dir: &Path, out_dir: Option<&Path>) -> Result<(), BuildEr
     match build(in_dir, &out_dir, Backend::Rust) {
         Ok(()) => Ok(()),
         Err(err) => {
-            // Format semantic errors with ariadne before returning
-            if let BuildError::Semantic(semantic_err) = &err {
-                let mut store = source_store::FilesystemSourceStore::new();
-                let formatted = semantic_err.format_with_ariadne(&mut store);
-                eprintln!("{}", formatted);
-            } else {
-                eprintln!("{}", err);
-            }
+            // Format errors with ariadne before returning
+            let mut store = source_store::FilesystemSourceStore::new();
+            let formatted = err.format_with_ariadne(&mut store);
+            eprintln!("{}", formatted);
             Err(err)
         }
     }

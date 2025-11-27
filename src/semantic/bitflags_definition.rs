@@ -2,9 +2,13 @@ use crate::{
     grammar::{self, ItemPath},
     semantic::{
         SemanticState,
-        error::{Result, SemanticError},
+        error::{
+            BitflagsExpectedType, IntegerConversionContext, Result, SemanticError,
+            TypeResolutionContext,
+        },
         types::{ItemStateResolved, Type},
     },
+    span::ItemLocation,
 };
 
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]
@@ -66,10 +70,11 @@ pub fn build(
     resolvee_path: &ItemPath,
     definition: &grammar::BitflagsDefinition,
     doc_comments: &[String],
+    location: ItemLocation,
 ) -> Result<Option<ItemStateResolved>> {
     let module = semantic
         .get_module_for_path(resolvee_path)
-        .ok_or_else(|| SemanticError::module_not_found(resolvee_path.clone()))?;
+        .ok_or_else(|| SemanticError::module_not_found(resolvee_path.clone(), location.clone()))?;
 
     // Retrieve the type for this bitflags, and validate it, before getting its size
     let Some(ty) = semantic
@@ -79,49 +84,31 @@ pub fn build(
         return Ok(None);
     };
     let ty_raw_path = ty.as_raw().ok_or_else(|| {
-        SemanticError::invalid_type(
-            "raw type",
-            format!("{}", ty),
+        SemanticError::bitflags_invalid_type(
+            BitflagsExpectedType::RawType,
+            ty.clone(),
             resolvee_path.clone(),
-            "bitflags definition",
+            location.clone(),
         )
     })?;
     let Some(ty_item) = semantic.type_registry.get(ty_raw_path) else {
         return Ok(None);
     };
     let Some(predefined_item) = ty_item.predefined else {
-        return Err(SemanticError::invalid_type(
-            "predefined type",
-            format!("{}", ty),
+        return Err(SemanticError::bitflags_invalid_type(
+            BitflagsExpectedType::PredefinedType,
+            ty.clone(),
             resolvee_path.clone(),
-            "bitflags definition",
+            location.clone(),
         ));
     };
     if !predefined_item.is_unsigned_integer() {
-        let mut error = SemanticError::invalid_type(
-            "unsigned integer",
-            format!("{}", ty),
+        return Err(SemanticError::bitflags_invalid_type(
+            BitflagsExpectedType::UnsignedInteger,
+            ty.clone(),
             resolvee_path.clone(),
-            "bitflags definition",
-        );
-
-        // Add helpful context
-        if let SemanticError::InvalidType { context, .. } = &mut error {
-            // Generate list of unsigned integer types dynamically
-            use crate::semantic::types::PredefinedItem;
-            let unsigned_types = PredefinedItem::ALL
-                .iter()
-                .filter(|item| item.is_unsigned_integer())
-                .map(|item| item.name())
-                .collect::<Vec<_>>()
-                .join(", ");
-
-            *context = context.clone()
-                .with_help(format!("Bitflags must be based on an unsigned integer type: {}", unsigned_types))
-                .with_note(format!("The type `{}` is not an unsigned integer", ty));
-        }
-
-        return Err(error);
+            location.clone(),
+        ));
     }
     let size = predefined_item.size();
 
@@ -137,9 +124,10 @@ pub fn build(
         let value = match expr {
             grammar::Expr::IntLiteral { value, .. } => *value,
             _ => {
-                return Err(SemanticError::enum_error(
+                return Err(SemanticError::bitflags_unsupported_value(
                     resolvee_path.clone(),
-                    format!("unsupported bitflags value for case `{name}`: {:?}", expr),
+                    name.0.clone(),
+                    location.clone(),
                 ));
             }
         };
@@ -149,7 +137,11 @@ pub fn build(
                 SemanticError::integer_conversion(
                     value.to_string(),
                     "usize",
-                    format!("bitflags value for `{name}` of `{resolvee_path}`"),
+                    IntegerConversionContext::BitflagsValue {
+                        field_name: name.0.clone(),
+                        type_path: resolvee_path.clone(),
+                    },
+                    location.clone(),
                 )
             })?,
         ));
@@ -158,9 +150,9 @@ pub fn build(
             match attribute {
                 grammar::Attribute::Ident(ident) if ident.as_str() == "default" => {
                     if default.is_some() {
-                        return Err(SemanticError::enum_error(
+                        return Err(SemanticError::bitflags_multiple_defaults(
                             resolvee_path.clone(),
-                            "bitflags has multiple default values",
+                            location.clone(),
                         ));
                     }
                     default = Some(fields.len() - 1);
@@ -199,37 +191,28 @@ pub fn build(
     }
 
     if !defaultable && default.is_some() {
-        let mut error = SemanticError::enum_error(
+        return Err(SemanticError::bitflags_default_without_defaultable(
             resolvee_path.clone(),
-            "has a default value set but is not marked as defaultable",
-        );
-        if let SemanticError::EnumError { context, .. } = &mut error {
-            *context = context.clone()
-                .with_help("Add the #[defaultable] attribute to the bitflags declaration")
-                .with_note("Only bitflags marked as defaultable can have default values");
-        }
-        return Err(error);
+            location.clone(),
+        ));
     }
 
     if defaultable && default.is_none() {
-        let mut error = SemanticError::enum_error(
+        return Err(SemanticError::bitflags_defaultable_missing_default(
             resolvee_path.clone(),
-            "is marked as defaultable but has no default value set",
-        );
-        if let SemanticError::EnumError { context, .. } = &mut error {
-            *context = context.clone()
-                .with_help("Add the #[default] attribute to one of the bitflags values")
-                .with_note("Defaultable bitflags must have exactly one value marked with #[default]");
-        }
-        return Err(error);
+            location.clone(),
+        ));
     }
 
     Ok(Some(ItemStateResolved {
         size,
         alignment: ty.alignment(&semantic.type_registry).ok_or_else(|| {
             SemanticError::type_resolution_failed(
-                format!("{:?}", ty),
-                format!("alignment for base type of bitflags `{resolvee_path}`"),
+                definition.type_.clone(),
+                TypeResolutionContext::BitflagsBaseTypeAlignment {
+                    bitflags_path: resolvee_path.clone(),
+                },
+                location.clone(),
             )
         })?,
         inner: BitflagsDefinition {

@@ -1,11 +1,12 @@
 use std::{collections::BTreeMap, path::Path};
 
 use crate::{
+    BuildError,
     grammar::{self, ItemPath},
     parser,
     semantic::{
         bitflags_definition, enum_definition,
-        error::{Result, SemanticError},
+        error::{IntegerConversionContext, Result, SemanticError},
         module::Module,
         type_definition,
         type_registry::TypeRegistry,
@@ -14,6 +15,7 @@ use crate::{
             PredefinedItem, Type, TypeDefinition, Visibility,
         },
     },
+    span::ItemLocation,
 };
 
 pub struct SemanticState {
@@ -52,8 +54,7 @@ impl SemanticState {
                     }),
                     category: ItemCategory::Predefined,
                     predefined: Some(*predefined_item),
-                    span: None,
-                    filename: None,
+                    location: ItemLocation::internal(),
                 })
                 .expect("failed to add predefined type");
         }
@@ -61,17 +62,23 @@ impl SemanticState {
         semantic_state
     }
 
-    pub fn add_file(&mut self, base_path: &Path, path: &Path) -> Result<()> {
-        let source = std::fs::read_to_string(path).map_err(|e| SemanticError::Io {
-            message: e.to_string(),
-            path: Some(path.display().to_string()),
+    pub fn add_file(
+        &mut self,
+        base_path: &Path,
+        path: &Path,
+    ) -> std::result::Result<(), BuildError> {
+        let source = std::fs::read_to_string(path).map_err(|e| BuildError::Io {
+            error: e,
+            context: format!("reading file {}", path.display()),
         })?;
         let filename = path.display().to_string();
 
         self.add_module(
             &parser::parse_str_with_filename(&source, &filename)?,
             &ItemPath::from_path(path.strip_prefix(base_path).unwrap_or(path)),
+            Some(filename.into()),
         )
+        .map_err(Into::into)
     }
 
     /// Attach span and source information to a semantic error if available
@@ -81,7 +88,12 @@ impl SemanticState {
         error
     }
 
-    pub fn add_module(&mut self, module: &grammar::Module, path: &ItemPath) -> Result<()> {
+    pub fn add_module(
+        &mut self,
+        module: &grammar::Module,
+        path: &ItemPath,
+        _filename: Option<std::sync::Arc<str>>,
+    ) -> Result<()> {
         let extern_values = module
             .extern_values()
             .map(|ev| {
@@ -104,6 +116,7 @@ impl SemanticState {
                         "address",
                         "extern value",
                         path.join(name.as_str().into()),
+                        ev.location.clone(),
                     )
                 })?;
 
@@ -112,6 +125,7 @@ impl SemanticState {
                     name: name.as_str().to_owned(),
                     type_: Type::Unresolved(ev.type_.clone()),
                     address,
+                    location: ev.location.clone(),
                 })
             })
             .collect::<Result<Vec<_>>>()?;
@@ -139,12 +153,12 @@ impl SemanticState {
                 state: ItemState::Unresolved(definition.clone()),
                 category: ItemCategory::Defined,
                 predefined: None,
-                span: Some(definition.span.clone()),
-                filename: None,
+                location: definition.location.clone(),
             })?;
         }
 
-        for (extern_path, attributes) in module.extern_types().collect::<Vec<_>>() {
+        for (extern_name, attributes, extern_location) in module.extern_types().collect::<Vec<_>>()
+        {
             let mut size = None;
             let mut alignment = None;
             for attribute in attributes {
@@ -158,7 +172,11 @@ impl SemanticState {
                             SemanticError::integer_conversion(
                                 value.to_string(),
                                 "usize",
-                                format!("size attribute for extern type `{extern_path}` in module `{path}`"),
+                                IntegerConversionContext::ExternSizeAttribute {
+                                    type_name: extern_name.to_string(),
+                                    module_name: path.to_string(),
+                                },
+                                extern_location.clone(),
                             )
                         })?);
                     }
@@ -167,7 +185,11 @@ impl SemanticState {
                             SemanticError::integer_conversion(
                                 value.to_string(),
                                 "usize",
-                                format!("align attribute for extern type `{extern_path}` in module `{path}`"),
+                                IntegerConversionContext::ExternAlignAttribute {
+                                    type_name: extern_name.to_string(),
+                                    module_name: path.to_string(),
+                                },
+                                extern_location.clone(),
                             )
                         })?);
                     }
@@ -175,21 +197,25 @@ impl SemanticState {
                 }
             }
             let size = size.ok_or_else(|| {
-                SemanticError::missing_attribute(
+                SemanticError::missing_extern_attribute(
                     "size",
                     "extern type",
-                    path.join(extern_path.as_str().into()),
+                    extern_name.as_str(),
+                    path.to_string(),
+                    extern_location.clone(),
                 )
             })?;
             let alignment = alignment.ok_or_else(|| {
-                SemanticError::missing_attribute(
+                SemanticError::missing_extern_attribute(
                     "align",
                     "extern type",
-                    path.join(extern_path.as_str().into()),
+                    extern_name.as_str(),
+                    path.to_string(),
+                    extern_location.clone(),
                 )
             })?;
 
-            let extern_path = path.join(extern_path.as_str().into());
+            let extern_path = path.join(extern_name.as_str().into());
 
             self.add_item(ItemDefinition {
                 visibility: Visibility::Public,
@@ -201,8 +227,7 @@ impl SemanticState {
                 }),
                 category: ItemCategory::Extern,
                 predefined: None,
-                span: None,
-                filename: None,
+                location: extern_location.clone(),
             })?;
         }
 
@@ -210,13 +235,20 @@ impl SemanticState {
     }
 
     pub fn add_item(&mut self, item_definition: ItemDefinition) -> Result<()> {
-        let parent_path = &item_definition
-            .path
-            .parent()
-            .ok_or_else(|| SemanticError::module_not_found(item_definition.path.clone()))?;
+        let parent_path = &item_definition.path.parent().ok_or_else(|| {
+            SemanticError::module_not_found(
+                item_definition.path.clone(),
+                item_definition.location.clone(),
+            )
+        })?;
         self.modules
             .get_mut(parent_path)
-            .ok_or_else(|| SemanticError::module_not_found(parent_path.clone()))?
+            .ok_or_else(|| {
+                SemanticError::module_not_found(
+                    parent_path.clone(),
+                    item_definition.location.clone(),
+                )
+            })?
             .definition_paths
             .insert(item_definition.path.clone());
         self.type_registry.add(item_definition);
@@ -231,13 +263,11 @@ impl SemanticState {
             }
 
             for resolvee_path in &to_resolve {
-                let ItemState::Unresolved(definition) = self
-                    .type_registry
-                    .get(resolvee_path)
-                    .ok_or_else(|| SemanticError::type_not_found(resolvee_path.clone()))?
-                    .state
-                    .clone()
-                else {
+                let item_def = self.type_registry.get(resolvee_path).ok_or_else(|| {
+                    SemanticError::type_not_found(resolvee_path.clone(), ItemLocation::internal())
+                })?;
+                let item_location = item_def.location.clone();
+                let ItemState::Unresolved(definition) = item_def.state.clone() else {
                     continue;
                 };
 
@@ -250,15 +280,21 @@ impl SemanticState {
                         visibility,
                         ty,
                         &definition.doc_comments,
+                        definition.location.clone(),
                     )?,
-                    grammar::ItemDefinitionInner::Enum(e) => {
-                        enum_definition::build(&self, resolvee_path, e, &definition.doc_comments)?
-                    }
+                    grammar::ItemDefinitionInner::Enum(e) => enum_definition::build(
+                        &self,
+                        resolvee_path,
+                        e,
+                        &definition.doc_comments,
+                        item_location.clone(),
+                    )?,
                     grammar::ItemDefinitionInner::Bitflags(b) => bitflags_definition::build(
                         &self,
                         resolvee_path,
                         b,
                         &definition.doc_comments,
+                        item_location.clone(),
                     )?,
                 };
 

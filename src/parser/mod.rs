@@ -1,18 +1,22 @@
-pub mod strip_spans;
-
 use crate::{
     grammar::*,
-    span::{Location, Span, Spanned},
+    source_store::SourceStore,
+    span::{ItemLocation, Span, Spanned},
     tokenizer::{LexError, Token, TokenKind},
 };
 use ariadne::{Color, Label, Report, ReportKind, Source};
+use std::sync::Arc;
 
 #[cfg(test)]
 mod tests;
 
-/// Parse a Pyxis module from a string
-pub fn parse_str(input: &str) -> Result<Module, ParseError> {
-    parse_str_with_filename(input, "<input>")
+#[cfg(test)]
+pub mod strip_spans;
+
+#[cfg(test)]
+/// Parse a Pyxis module from a string for tests, with the spans stripped out
+pub fn parse_str_for_tests(input: &str) -> Result<Module, ParseError> {
+    parse_str_with_filename(input, "<test>")
 }
 
 /// Parse a Pyxis module from a string with a specific filename for error reporting
@@ -21,7 +25,8 @@ pub fn parse_str_with_filename(input: &str, filename: &str) -> Result<Module, Pa
     let tokens = crate::tokenizer::tokenize_with_filename(input.to_string(), filename.to_string())?;
 
     // Then parse
-    let mut parser = Parser::new(tokens, filename.to_string(), input.to_string());
+    let filename_arc: Arc<str> = filename.into();
+    let mut parser = Parser::new(tokens, filename_arc, input.to_string());
     let module = parser.parse_module()?;
 
     Ok(module)
@@ -32,422 +37,317 @@ pub enum ParseError {
     ExpectedToken {
         expected: TokenKind,
         found: TokenKind,
-        location: Location,
-        filename: Box<str>,
-        source: Box<str>,
+        location: ItemLocation,
     },
     ExpectedIdentifier {
         found: TokenKind,
-        location: Location,
-        filename: Box<str>,
-        source: Box<str>,
+        location: ItemLocation,
     },
     ExpectedType {
         found: TokenKind,
-        location: Location,
-        filename: Box<str>,
-        source: Box<str>,
+        location: ItemLocation,
     },
     ExpectedExpression {
         found: TokenKind,
-        location: Location,
-        filename: Box<str>,
-        source: Box<str>,
+        location: ItemLocation,
     },
     ExpectedIntLiteral {
         found: TokenKind,
-        location: Location,
-        filename: Box<str>,
-        source: Box<str>,
+        location: ItemLocation,
     },
     ExpectedStringLiteral {
         found: TokenKind,
-        location: Location,
-        filename: Box<str>,
-        source: Box<str>,
+        location: ItemLocation,
     },
     InvalidIntLiteral {
         kind: String,
         value: String,
-        location: Location,
-        filename: Box<str>,
-        source: Box<str>,
+        location: ItemLocation,
     },
     MissingPointerQualifier {
-        location: Location,
-        filename: Box<str>,
-        source: Box<str>,
+        location: ItemLocation,
     },
     SuperNotSupported {
-        location: Location,
-        filename: Box<str>,
-        source: Box<str>,
+        location: ItemLocation,
     },
     UnexpectedModuleToken {
         found: TokenKind,
-        location: Location,
-        filename: Box<str>,
-        source: Box<str>,
+        location: ItemLocation,
     },
     UnexpectedTokenAfterAttributes {
         found: TokenKind,
-        location: Location,
-        filename: Box<str>,
-        source: Box<str>,
+        location: ItemLocation,
     },
     ExpectedItemDefinition {
         found: TokenKind,
-        location: Location,
-        filename: Box<str>,
-        source: Box<str>,
+        location: ItemLocation,
     },
     ExpectedBackendContent {
         found: TokenKind,
-        location: Location,
-        filename: Box<str>,
-        source: Box<str>,
+        location: ItemLocation,
     },
     ExpectedPrologueOrEpilogue {
         found: TokenKind,
-        location: Location,
-        filename: Box<str>,
-        source: Box<str>,
+        location: ItemLocation,
     },
     Tokenizer(LexError),
 }
 impl ParseError {
-    fn location_to_offset(location: Location, source: &str) -> usize {
-        let mut offset = 0;
-        let mut current_line = 1;
+    /// Helper to format ariadne report without source code (creates report with location note)
+    fn format_ariadne_without_source(location: &ItemLocation, message: &str) -> String {
+        let placeholder_filename = location.filename.as_ref();
+        let report = Report::<(&str, std::ops::Range<usize>)>::build(
+            ReportKind::Error,
+            placeholder_filename,
+            0,
+        )
+        .with_message(message)
+        .with_note(format!(
+            "Error location: {}:{}:{}",
+            location.filename, location.span.start.line, location.span.start.column
+        ))
+        .finish();
 
-        for ch in source.chars() {
-            if current_line == location.line {
-                return offset + (location.column - 1);
-            }
-            if ch == '\n' {
-                current_line += 1;
-            }
-            offset += ch.len_utf8();
+        let mut buffer = Vec::new();
+        if report
+            .write((placeholder_filename, Source::from("")), &mut buffer)
+            .is_ok()
+        {
+            return String::from_utf8_lossy(&buffer).to_string();
         }
-        offset
+        message.to_string()
     }
-}
-impl std::fmt::Display for ParseError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+
+    /// Helper to build ariadne report with source
+    fn format_ariadne_with_source(
+        location: &ItemLocation,
+        source: &str,
+        message: &str,
+        label_message: &str,
+    ) -> String {
+        let offset = crate::span::span_to_offset(source, &location.span);
+        let report = Report::build(ReportKind::Error, location.filename.as_ref(), offset)
+            .with_message(message)
+            .with_label(
+                Label::new((location.filename.as_ref(), offset..offset + 1))
+                    .with_message(label_message)
+                    .with_color(Color::Red),
+            )
+            .finish();
+
+        let mut buffer = Vec::new();
+        if report
+            .write(
+                (location.filename.as_ref(), Source::from(source)),
+                &mut buffer,
+            )
+            .is_ok()
+        {
+            return String::from_utf8_lossy(&buffer).to_string();
+        }
+        message.to_string()
+    }
+
+    /// Helper to format ariadne report with optional source code
+    fn format_ariadne_with_optional_source(
+        location: &ItemLocation,
+        source_store: &mut dyn SourceStore,
+        message: &str,
+        label_message: &str,
+    ) -> String {
+        if let Some(source) = source_store.get(location.filename.as_ref()) {
+            Self::format_ariadne_with_source(location, source, message, label_message)
+        } else {
+            Self::format_ariadne_without_source(location, message)
+        }
+    }
+
+    /// Format error with ariadne using a source store. Always produces ariadne-formatted output.
+    pub fn format_with_ariadne(&self, source_store: &mut dyn SourceStore) -> String {
         match self {
             ParseError::ExpectedToken {
                 expected,
                 found,
                 location,
-                filename,
-                source,
             } => {
-                let offset = Self::location_to_offset(*location, source);
-                let report = Report::build(ReportKind::Error, filename, offset)
-                    .with_message(format!("Expected {:?}, found {:?}", expected, found))
-                    .with_label(
-                        Label::new((filename, offset..offset + 1))
-                            .with_message(format!("expected {:?} here", expected))
-                            .with_color(Color::Red),
-                    )
-                    .finish();
-
-                let mut buffer = Vec::new();
-                report
-                    .write((filename, Source::from(source)), &mut buffer)
-                    .map_err(|_| std::fmt::Error)?;
-                write!(f, "{}", String::from_utf8_lossy(&buffer))
+                let message = format!("Expected {:?}, found {:?}", expected, found);
+                let label = format!("expected {:?} here", expected);
+                if let Some(source) = source_store.get(location.filename.as_ref()) {
+                    Self::format_ariadne_with_source(location, source, &message, &label)
+                } else {
+                    Self::format_ariadne_without_source(location, &message)
+                }
             }
-            ParseError::ExpectedIdentifier {
-                found,
-                location,
-                filename,
-                source,
-            } => {
-                let offset = Self::location_to_offset(*location, source);
-                let report = Report::build(ReportKind::Error, filename, offset)
-                    .with_message(format!("Expected identifier, found {:?}", found))
-                    .with_label(
-                        Label::new((filename, offset..offset + 1))
-                            .with_message("expected identifier here")
-                            .with_color(Color::Red),
-                    )
-                    .finish();
-
-                let mut buffer = Vec::new();
-                report
-                    .write((filename, Source::from(source)), &mut buffer)
-                    .map_err(|_| std::fmt::Error)?;
-                write!(f, "{}", String::from_utf8_lossy(&buffer))
+            ParseError::ExpectedIdentifier { found, location } => {
+                let message = format!("Expected identifier, found {:?}", found);
+                Self::format_ariadne_with_optional_source(
+                    location,
+                    source_store,
+                    &message,
+                    "expected identifier here",
+                )
             }
-            ParseError::ExpectedType {
-                found,
-                location,
-                filename,
-                source,
-            } => {
-                let offset = Self::location_to_offset(*location, source);
-                let report = Report::build(ReportKind::Error, filename, offset)
-                    .with_message(format!("Expected type, found {:?}", found))
-                    .with_label(
-                        Label::new((filename, offset..offset + 1))
-                            .with_message("expected type here")
-                            .with_color(Color::Red),
-                    )
-                    .finish();
-
-                let mut buffer = Vec::new();
-                report
-                    .write((filename, Source::from(source)), &mut buffer)
-                    .map_err(|_| std::fmt::Error)?;
-                write!(f, "{}", String::from_utf8_lossy(&buffer))
+            ParseError::ExpectedType { found, location } => {
+                let message = format!("Expected type, found {:?}", found);
+                Self::format_ariadne_with_optional_source(
+                    location,
+                    source_store,
+                    &message,
+                    "expected type here",
+                )
             }
-            ParseError::ExpectedExpression {
-                found,
-                location,
-                filename,
-                source,
-            } => {
-                let offset = Self::location_to_offset(*location, source);
-                let report = Report::build(ReportKind::Error, filename, offset)
-                    .with_message(format!("Expected expression, found {:?}", found))
-                    .with_label(
-                        Label::new((filename, offset..offset + 1))
-                            .with_message("expected expression here")
-                            .with_color(Color::Red),
-                    )
-                    .finish();
-
-                let mut buffer = Vec::new();
-                report
-                    .write((filename, Source::from(source)), &mut buffer)
-                    .map_err(|_| std::fmt::Error)?;
-                write!(f, "{}", String::from_utf8_lossy(&buffer))
+            ParseError::ExpectedExpression { found, location } => {
+                let message = format!("Expected expression, found {:?}", found);
+                Self::format_ariadne_with_optional_source(
+                    location,
+                    source_store,
+                    &message,
+                    "expected expression here",
+                )
             }
-            ParseError::ExpectedIntLiteral {
-                found,
-                location,
-                filename,
-                source,
-            } => {
-                let offset = Self::location_to_offset(*location, source);
-                let report = Report::build(ReportKind::Error, filename, offset)
-                    .with_message(format!("Expected integer literal, found {:?}", found))
-                    .with_label(
-                        Label::new((filename, offset..offset + 1))
-                            .with_message("expected integer literal here")
-                            .with_color(Color::Red),
-                    )
-                    .finish();
-
-                let mut buffer = Vec::new();
-                report
-                    .write((filename, Source::from(source)), &mut buffer)
-                    .map_err(|_| std::fmt::Error)?;
-                write!(f, "{}", String::from_utf8_lossy(&buffer))
+            ParseError::ExpectedIntLiteral { found, location } => {
+                let message = format!("Expected integer literal, found {:?}", found);
+                Self::format_ariadne_with_optional_source(
+                    location,
+                    source_store,
+                    &message,
+                    "expected integer literal here",
+                )
             }
-            ParseError::ExpectedStringLiteral {
-                found,
-                location,
-                filename,
-                source,
-            } => {
-                let offset = Self::location_to_offset(*location, source);
-                let report = Report::build(ReportKind::Error, filename, offset)
-                    .with_message(format!("Expected string literal, found {:?}", found))
-                    .with_label(
-                        Label::new((filename, offset..offset + 1))
-                            .with_message("expected string literal here")
-                            .with_color(Color::Red),
-                    )
-                    .finish();
-
-                let mut buffer = Vec::new();
-                report
-                    .write((filename, Source::from(source)), &mut buffer)
-                    .map_err(|_| std::fmt::Error)?;
-                write!(f, "{}", String::from_utf8_lossy(&buffer))
+            ParseError::ExpectedStringLiteral { found, location } => {
+                let message = format!("Expected string literal, found {:?}", found);
+                Self::format_ariadne_with_optional_source(
+                    location,
+                    source_store,
+                    &message,
+                    "expected string literal here",
+                )
             }
             ParseError::InvalidIntLiteral {
                 kind,
                 value,
                 location,
-                filename,
-                source,
             } => {
-                let offset = Self::location_to_offset(*location, source);
-                let report = Report::build(ReportKind::Error, filename, offset)
-                    .with_message(format!("Invalid {} literal: {}", kind, value))
-                    .with_label(
-                        Label::new((filename, offset..offset + 1))
-                            .with_message("invalid literal")
-                            .with_color(Color::Red),
-                    )
-                    .finish();
-
-                let mut buffer = Vec::new();
-                report
-                    .write((filename, Source::from(source)), &mut buffer)
-                    .map_err(|_| std::fmt::Error)?;
-                write!(f, "{}", String::from_utf8_lossy(&buffer))
+                let message = format!("Invalid {} literal: {}", kind, value);
+                Self::format_ariadne_with_optional_source(
+                    location,
+                    source_store,
+                    &message,
+                    "invalid literal",
+                )
             }
-            ParseError::MissingPointerQualifier {
-                location,
-                filename,
-                source,
-            } => {
-                let offset = Self::location_to_offset(*location, source);
-                let report = Report::build(ReportKind::Error, filename, offset)
-                    .with_message("Expected const or mut after *")
-                    .with_label(
-                        Label::new((filename, offset..offset + 1))
-                            .with_message("expected 'const' or 'mut' here")
-                            .with_color(Color::Red),
-                    )
-                    .finish();
-
-                let mut buffer = Vec::new();
-                report
-                    .write((filename, Source::from(source)), &mut buffer)
-                    .map_err(|_| std::fmt::Error)?;
-                write!(f, "{}", String::from_utf8_lossy(&buffer))
+            ParseError::MissingPointerQualifier { location } => {
+                Self::format_ariadne_with_optional_source(
+                    location,
+                    source_store,
+                    "Expected const or mut after *",
+                    "expected 'const' or 'mut' here",
+                )
             }
-            ParseError::SuperNotSupported {
-                location,
-                filename,
-                source,
-            } => {
-                let offset = Self::location_to_offset(*location, source);
-                let report = Report::build(ReportKind::Error, filename, offset)
-                    .with_message("super not supported")
-                    .with_label(
-                        Label::new((filename, offset..offset + 1))
-                            .with_message("super keyword not supported")
-                            .with_color(Color::Red),
-                    )
-                    .finish();
-
-                let mut buffer = Vec::new();
-                report
-                    .write((filename, Source::from(source)), &mut buffer)
-                    .map_err(|_| std::fmt::Error)?;
-                write!(f, "{}", String::from_utf8_lossy(&buffer))
+            ParseError::SuperNotSupported { location } => {
+                Self::format_ariadne_with_optional_source(
+                    location,
+                    source_store,
+                    "super not supported",
+                    "super keyword not supported",
+                )
             }
-            ParseError::UnexpectedModuleToken {
-                found,
-                location,
-                filename,
-                source,
-            } => {
-                let offset = Self::location_to_offset(*location, source);
-                let report = Report::build(ReportKind::Error, filename, offset)
-                    .with_message(format!("Unexpected token at module level: {:?}", found))
-                    .with_label(
-                        Label::new((filename, offset..offset + 1))
-                            .with_message("unexpected token")
-                            .with_color(Color::Red),
-                    )
-                    .finish();
-
-                let mut buffer = Vec::new();
-                report
-                    .write((filename, Source::from(source)), &mut buffer)
-                    .map_err(|_| std::fmt::Error)?;
-                write!(f, "{}", String::from_utf8_lossy(&buffer))
+            ParseError::UnexpectedModuleToken { found, location } => {
+                let message = format!("Unexpected token at module level: {:?}", found);
+                Self::format_ariadne_with_optional_source(
+                    location,
+                    source_store,
+                    &message,
+                    "unexpected token",
+                )
             }
-            ParseError::UnexpectedTokenAfterAttributes {
-                found,
-                location,
-                filename,
-                source,
-            } => {
-                let offset = Self::location_to_offset(*location, source);
-                let report = Report::build(ReportKind::Error, filename, offset)
-                    .with_message(format!("Unexpected token after attributes: {:?}", found))
-                    .with_label(
-                        Label::new((filename, offset..offset + 1))
-                            .with_message("unexpected token after attributes")
-                            .with_color(Color::Red),
-                    )
-                    .finish();
-
-                let mut buffer = Vec::new();
-                report
-                    .write((filename, Source::from(source)), &mut buffer)
-                    .map_err(|_| std::fmt::Error)?;
-                write!(f, "{}", String::from_utf8_lossy(&buffer))
+            ParseError::UnexpectedTokenAfterAttributes { found, location } => {
+                let message = format!("Unexpected token after attributes: {:?}", found);
+                Self::format_ariadne_with_optional_source(
+                    location,
+                    source_store,
+                    &message,
+                    "unexpected token after attributes",
+                )
             }
-            ParseError::ExpectedItemDefinition {
-                found,
-                location,
-                filename,
-                source,
-            } => {
-                let offset = Self::location_to_offset(*location, source);
-                let report = Report::build(ReportKind::Error, filename, offset)
-                    .with_message(format!(
-                        "Expected type, enum, or bitflags, found {:?}",
-                        found
-                    ))
-                    .with_label(
-                        Label::new((filename, offset..offset + 1))
-                            .with_message("expected type, enum, or bitflags here")
-                            .with_color(Color::Red),
-                    )
-                    .finish();
-
-                let mut buffer = Vec::new();
-                report
-                    .write((filename, Source::from(source)), &mut buffer)
-                    .map_err(|_| std::fmt::Error)?;
-                write!(f, "{}", String::from_utf8_lossy(&buffer))
+            ParseError::ExpectedItemDefinition { found, location } => {
+                let message = format!("Expected type, enum, or bitflags, found {:?}", found);
+                Self::format_ariadne_with_optional_source(
+                    location,
+                    source_store,
+                    &message,
+                    "expected type, enum, or bitflags here",
+                )
             }
-            ParseError::ExpectedBackendContent {
-                found,
-                location,
-                filename,
-                source,
-            } => {
-                let offset = Self::location_to_offset(*location, source);
-                let report = Report::build(ReportKind::Error, filename, offset)
-                    .with_message(format!(
-                        "Expected LBrace, Prologue, or Epilogue, found {:?}",
-                        found
-                    ))
-                    .with_label(
-                        Label::new((filename, offset..offset + 1))
-                            .with_message("expected backend content here")
-                            .with_color(Color::Red),
-                    )
-                    .finish();
-
-                let mut buffer = Vec::new();
-                report
-                    .write((filename, Source::from(source)), &mut buffer)
-                    .map_err(|_| std::fmt::Error)?;
-                write!(f, "{}", String::from_utf8_lossy(&buffer))
+            ParseError::ExpectedBackendContent { found, location } => {
+                let message = format!("Expected LBrace, Prologue, or Epilogue, found {:?}", found);
+                Self::format_ariadne_with_optional_source(
+                    location,
+                    source_store,
+                    &message,
+                    "expected backend content here",
+                )
             }
-            ParseError::ExpectedPrologueOrEpilogue {
-                found,
-                location,
-                filename,
-                source,
-            } => {
-                let offset = Self::location_to_offset(*location, source);
-                let report = Report::build(ReportKind::Error, filename, offset)
-                    .with_message(format!("Expected prologue or epilogue, found {:?}", found))
-                    .with_label(
-                        Label::new((filename, offset..offset + 1))
-                            .with_message("expected prologue or epilogue here")
-                            .with_color(Color::Red),
-                    )
-                    .finish();
+            ParseError::ExpectedPrologueOrEpilogue { found, location } => {
+                let message = format!("Expected prologue or epilogue, found {:?}", found);
+                Self::format_ariadne_with_optional_source(
+                    location,
+                    source_store,
+                    &message,
+                    "expected prologue or epilogue here",
+                )
+            }
+            ParseError::Tokenizer(err) => err.format_with_ariadne(source_store),
+        }
+    }
+}
 
-                let mut buffer = Vec::new();
-                report
-                    .write((filename, Source::from(source)), &mut buffer)
-                    .map_err(|_| std::fmt::Error)?;
-                write!(f, "{}", String::from_utf8_lossy(&buffer))
+impl std::fmt::Display for ParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ParseError::ExpectedToken {
+                expected, found, ..
+            } => write!(f, "Expected {:?}, found {:?}", expected, found),
+            ParseError::ExpectedIdentifier { found, .. } => {
+                write!(f, "Expected identifier, found {:?}", found)
+            }
+            ParseError::ExpectedType { found, .. } => {
+                write!(f, "Expected type, found {:?}", found)
+            }
+            ParseError::ExpectedExpression { found, .. } => {
+                write!(f, "Expected expression, found {:?}", found)
+            }
+            ParseError::ExpectedIntLiteral { found, .. } => {
+                write!(f, "Expected integer literal, found {:?}", found)
+            }
+            ParseError::ExpectedStringLiteral { found, .. } => {
+                write!(f, "Expected string literal, found {:?}", found)
+            }
+            ParseError::InvalidIntLiteral { kind, value, .. } => {
+                write!(f, "Invalid {} literal: {}", kind, value)
+            }
+            ParseError::MissingPointerQualifier { .. } => {
+                write!(f, "Expected const or mut after *")
+            }
+            ParseError::SuperNotSupported { .. } => write!(f, "super not supported"),
+            ParseError::UnexpectedModuleToken { found, .. } => {
+                write!(f, "Unexpected token at module level: {:?}", found)
+            }
+            ParseError::UnexpectedTokenAfterAttributes { found, .. } => {
+                write!(f, "Unexpected token after attributes: {:?}", found)
+            }
+            ParseError::ExpectedItemDefinition { found, .. } => {
+                write!(f, "Expected type, enum, or bitflags, found {:?}", found)
+            }
+            ParseError::ExpectedBackendContent { found, .. } => {
+                write!(
+                    f,
+                    "Expected LBrace, Prologue, or Epilogue, found {:?}",
+                    found
+                )
+            }
+            ParseError::ExpectedPrologueOrEpilogue { found, .. } => {
+                write!(f, "Expected prologue or epilogue, found {:?}", found)
             }
             ParseError::Tokenizer(err) => write!(f, "{}", err),
         }
@@ -464,24 +364,25 @@ pub struct Parser {
     tokens: Vec<Token>,
     pos: usize,
     pending_comments: Vec<Spanned<Comment>>,
-    filename: String,
+    filename: Arc<str>,
     source: String,
 }
 
 impl Parser {
-    pub fn new(tokens: Vec<Token>, filename: String, source: String) -> Self {
+    pub fn new(tokens: Vec<Token>, filename: impl Into<Arc<str>>, source: String) -> Self {
         Self {
             tokens,
             pos: 0,
             pending_comments: Vec::new(),
-            filename,
+            filename: filename.into(),
             source,
         }
     }
 
     /// Extract text from a span using the source
     fn span_text(&self, span: &Span) -> &str {
-        let start_offset = self.source
+        let start_offset = self
+            .source
             .lines()
             .take(span.start.line.saturating_sub(1))
             .map(|line| line.len() + 1)
@@ -491,16 +392,23 @@ impl Parser {
         let end_offset = if span.start.line == span.end.line {
             start_offset + (span.end.column.saturating_sub(span.start.column))
         } else {
-            let first_line_len = self.source
+            let first_line_len = self
+                .source
                 .lines()
                 .nth(span.start.line.saturating_sub(1))
                 .map(|line| line.len())
                 .unwrap_or(0)
                 .saturating_sub(span.start.column.saturating_sub(1));
-            let middle_lines_len: usize = self.source
+            let middle_lines_len: usize = self
+                .source
                 .lines()
                 .skip(span.start.line)
-                .take(span.end.line.saturating_sub(span.start.line).saturating_sub(1))
+                .take(
+                    span.end
+                        .line
+                        .saturating_sub(span.start.line)
+                        .saturating_sub(1),
+                )
                 .map(|line| line.len() + 1)
                 .sum();
             let last_line_len = span.end.column.saturating_sub(1);
@@ -538,9 +446,7 @@ impl Parser {
             Err(ParseError::ExpectedToken {
                 expected: kind,
                 found: self.peek().clone(),
-                location: self.current().span.start,
-                filename: self.filename.clone().into(),
-                source: self.source.clone().into(),
+                location: self.current().location.clone(),
             })
         }
     }
@@ -550,25 +456,23 @@ impl Parser {
             TokenKind::Ident(_) => {
                 let token = self.advance();
                 if let TokenKind::Ident(name) = token.kind {
-                    Ok((Ident(name), token.span))
+                    Ok((Ident(name), token.location.span))
                 } else {
                     unreachable!()
                 }
             }
             TokenKind::Underscore => {
                 let token = self.advance();
-                Ok((Ident("_".to_string()), token.span))
+                Ok((Ident("_".to_string()), token.location.span))
             }
             TokenKind::Unknown => {
                 // "unknown" keyword can also be used as an identifier (e.g., field name)
                 let token = self.advance();
-                Ok((Ident("unknown".to_string()), token.span))
+                Ok((Ident("unknown".to_string()), token.location.span))
             }
             _ => Err(ParseError::ExpectedIdentifier {
                 found: self.peek().clone(),
-                location: self.current().span.start,
-                filename: self.filename.clone().into(),
-                source: self.source.clone().into(),
+                location: self.current().location.clone(),
             }),
         }
     }
@@ -592,22 +496,31 @@ impl Parser {
             TokenKind::DocOuter(ref text) => {
                 let token = self.advance();
                 let content = text.strip_prefix("///").unwrap_or(text).trim().to_string();
-                Some(Spanned::new(Comment::DocOuter(vec![content]), token.span))
+                Some(Spanned::new(
+                    Comment::DocOuter(vec![content]),
+                    token.location.span,
+                ))
             }
             TokenKind::DocInner(ref text) => {
                 let token = self.advance();
                 let content = text.strip_prefix("//!").unwrap_or(text).trim().to_string();
-                Some(Spanned::new(Comment::DocInner(vec![content]), token.span))
+                Some(Spanned::new(
+                    Comment::DocInner(vec![content]),
+                    token.location.span,
+                ))
             }
             TokenKind::Comment(ref text) => {
                 let token = self.advance();
-                Some(Spanned::new(Comment::Regular(text.clone()), token.span))
+                Some(Spanned::new(
+                    Comment::Regular(text.clone()),
+                    token.location.span,
+                ))
             }
             TokenKind::MultiLineComment(ref text) => {
                 let token = self.advance();
                 // Split multiline comments into lines
                 let lines: Vec<String> = text.lines().map(|s| s.to_string()).collect();
-                Some(Spanned::new(Comment::MultiLine(lines), token.span))
+                Some(Spanned::new(Comment::MultiLine(lines), token.location.span))
             }
             _ => None,
         }
@@ -746,9 +659,7 @@ impl Parser {
                     TokenKind::Fn => self.parse_function().map(ModuleItem::Function),
                     _ => Err(ParseError::UnexpectedTokenAfterAttributes {
                         found: self.tokens[pos].kind.clone(),
-                        location: self.tokens[pos].span.start,
-                        filename: self.filename.clone().into(),
-                        source: self.source.clone().into(),
+                        location: self.tokens[pos].location.clone(),
                     }),
                 }
             }
@@ -806,9 +717,7 @@ impl Parser {
             }
             _ => Err(ParseError::UnexpectedModuleToken {
                 found: self.peek().clone(),
-                location: self.current().span.start,
-                filename: self.filename.clone().into(),
-                source: self.source.clone().into(),
+                location: self.current().location.clone(),
             }),
         }
     }
@@ -821,9 +730,7 @@ impl Parser {
             && name == "super"
         {
             return Err(ParseError::SuperNotSupported {
-                location: self.current().span.start,
-                filename: self.filename.clone().into(),
-                source: self.source.clone().into(),
+                location: self.current().location.clone(),
             });
         }
 
@@ -833,6 +740,7 @@ impl Parser {
     }
 
     fn parse_extern_type(&mut self) -> Result<ModuleItem, ParseError> {
+        let start_pos = self.current().location.span.start;
         let mut doc_comments = self.collect_doc_comments();
         let attributes = if matches!(self.peek(), TokenKind::Hash) {
             self.parse_attributes()?
@@ -888,10 +796,22 @@ impl Parser {
         }
 
         self.expect(TokenKind::Semi)?;
-        Ok(ModuleItem::ExternType(name, attributes, doc_comments))
+        let end_pos = if self.pos > 0 {
+            self.tokens[self.pos - 1].location.span.end
+        } else {
+            self.current().location.span.end
+        };
+        let location = ItemLocation::new(self.filename.clone(), Span::new(start_pos, end_pos));
+        Ok(ModuleItem::ExternType(
+            name,
+            attributes,
+            doc_comments,
+            location,
+        ))
     }
 
     fn parse_extern_value(&mut self) -> Result<ExternValue, ParseError> {
+        let start_pos = self.current().location.span.start;
         let mut doc_comments = self.collect_doc_comments();
         let attributes = if matches!(self.peek(), TokenKind::Hash) {
             self.parse_attributes()?
@@ -909,6 +829,12 @@ impl Parser {
         self.expect(TokenKind::Colon)?;
         let type_ = self.parse_type()?;
         self.expect(TokenKind::Semi)?;
+        let end_pos = if self.pos > 0 {
+            self.tokens[self.pos - 1].location.span.end
+        } else {
+            self.current().location.span.end
+        };
+        let location = ItemLocation::new(self.filename.clone(), Span::new(start_pos, end_pos));
 
         Ok(ExternValue {
             visibility,
@@ -916,6 +842,7 @@ impl Parser {
             type_,
             attributes,
             doc_comments,
+            location,
         })
     }
 
@@ -944,9 +871,7 @@ impl Parser {
                         } else {
                             return Err(ParseError::ExpectedStringLiteral {
                                 found: self.peek().clone(),
-                                location: self.current().span.start,
-                                filename: self.filename.clone().into(),
-                                source: self.source.clone().into(),
+                                location: self.current().location.clone(),
                             });
                         }
                         self.expect(TokenKind::Semi)?;
@@ -960,9 +885,7 @@ impl Parser {
                         } else {
                             return Err(ParseError::ExpectedStringLiteral {
                                 found: self.peek().clone(),
-                                location: self.current().span.start,
-                                filename: self.filename.clone().into(),
-                                source: self.source.clone().into(),
+                                location: self.current().location.clone(),
                             });
                         }
                         self.expect(TokenKind::Semi)?;
@@ -970,9 +893,7 @@ impl Parser {
                     _ => {
                         return Err(ParseError::ExpectedPrologueOrEpilogue {
                             found: self.peek().clone(),
-                            location: self.current().span.start,
-                            filename: self.filename.clone().into(),
-                            source: self.source.clone().into(),
+                            location: self.current().location.clone(),
                         });
                     }
                 }
@@ -991,9 +912,7 @@ impl Parser {
                     } else {
                         return Err(ParseError::ExpectedStringLiteral {
                             found: self.peek().clone(),
-                            location: self.current().span.start,
-                            filename: self.filename.clone().into(),
-                            source: self.source.clone().into(),
+                            location: self.current().location.clone(),
                         });
                     }
                     self.expect(TokenKind::Semi)?;
@@ -1007,9 +926,7 @@ impl Parser {
                     } else {
                         return Err(ParseError::ExpectedStringLiteral {
                             found: self.peek().clone(),
-                            location: self.current().span.start,
-                            filename: self.filename.clone().into(),
-                            source: self.source.clone().into(),
+                            location: self.current().location.clone(),
                         });
                     }
                     self.expect(TokenKind::Semi)?;
@@ -1017,9 +934,7 @@ impl Parser {
                 _ => {
                     return Err(ParseError::ExpectedBackendContent {
                         found: self.peek().clone(),
-                        location: self.current().span.start,
-                        filename: self.filename.clone().into(),
-                        source: self.source.clone().into(),
+                        location: self.current().location.clone(),
                     });
                 }
             }
@@ -1036,7 +951,7 @@ impl Parser {
 
     fn parse_item_definition(&mut self) -> Result<ItemDefinition, ParseError> {
         // Capture the start position
-        let start_pos = self.current().span.start;
+        let start_pos = self.current().location.span.start;
 
         let mut doc_comments = self.collect_doc_comments();
         let attributes = if matches!(self.peek(), TokenKind::Hash) {
@@ -1049,7 +964,7 @@ impl Parser {
         // We need to check this before we start collecting comments
         let attributes_end_line = if !attributes.0.is_empty() && self.pos > 0 {
             // Get the line from the previous token (the ] that closed the attributes)
-            self.tokens[self.pos - 1].span.end.line
+            self.tokens[self.pos - 1].location.span.end.line
         } else {
             // No attributes, so comments can't be inline with them
             0 // Use 0 as a sentinel value that won't match any real line
@@ -1062,7 +977,7 @@ impl Parser {
             self.peek(),
             TokenKind::Comment(_) | TokenKind::MultiLineComment(_)
         ) {
-            let comment_line = self.current().span.start.line;
+            let comment_line = self.current().location.span.start.line;
             if let Some(comment) = self.collect_comment() {
                 if comment_line == attributes_end_line {
                     // Comment is on the same line as the attributes
@@ -1102,9 +1017,9 @@ impl Parser {
 
                 // Capture the end position
                 let end_pos = if self.pos > 0 {
-                    self.tokens[self.pos - 1].span.end
+                    self.tokens[self.pos - 1].location.span.end
                 } else {
-                    self.current().span.end
+                    self.current().location.span.end
                 };
 
                 Ok(ItemDefinition {
@@ -1112,10 +1027,10 @@ impl Parser {
                     name,
                     doc_comments,
                     inner: ItemDefinitionInner::Type(def),
-                    span: Span {
-                        start: start_pos,
-                        end: end_pos,
-                    },
+                    location: ItemLocation::new(
+                        self.filename.clone(),
+                        Span::new(start_pos, end_pos),
+                    ),
                 })
             }
             TokenKind::Enum => {
@@ -1129,9 +1044,9 @@ impl Parser {
 
                 // Capture the end position
                 let end_pos = if self.pos > 0 {
-                    self.tokens[self.pos - 1].span.end
+                    self.tokens[self.pos - 1].location.span.end
                 } else {
-                    self.current().span.end
+                    self.current().location.span.end
                 };
 
                 Ok(ItemDefinition {
@@ -1145,10 +1060,10 @@ impl Parser {
                         inline_trailing_comments: inline_trailing_comments.clone(),
                         following_comments: following_comments.clone(),
                     }),
-                    span: Span {
-                        start: start_pos,
-                        end: end_pos,
-                    },
+                    location: ItemLocation::new(
+                        self.filename.clone(),
+                        Span::new(start_pos, end_pos),
+                    ),
                 })
             }
             TokenKind::Bitflags => {
@@ -1162,9 +1077,9 @@ impl Parser {
 
                 // Capture the end position
                 let end_pos = if self.pos > 0 {
-                    self.tokens[self.pos - 1].span.end
+                    self.tokens[self.pos - 1].location.span.end
                 } else {
-                    self.current().span.end
+                    self.current().location.span.end
                 };
 
                 Ok(ItemDefinition {
@@ -1178,17 +1093,15 @@ impl Parser {
                         inline_trailing_comments,
                         following_comments,
                     }),
-                    span: Span {
-                        start: start_pos,
-                        end: end_pos,
-                    },
+                    location: ItemLocation::new(
+                        self.filename.clone(),
+                        Span::new(start_pos, end_pos),
+                    ),
                 })
             }
             _ => Err(ParseError::ExpectedItemDefinition {
                 found: self.peek().clone(),
-                location: self.current().span.start,
-                filename: self.filename.clone().into(),
-                source: self.source.clone().into(),
+                location: self.current().location.clone(),
             }),
         }
     }
@@ -1212,7 +1125,7 @@ impl Parser {
             }
 
             let mut stmt = self.parse_type_statement()?;
-            let statement_line = self.current().span.end.line;
+            let statement_line = self.current().location.span.end.line;
 
             // Optional trailing comma
             if matches!(self.peek(), TokenKind::Comma) {
@@ -1224,7 +1137,7 @@ impl Parser {
                 self.peek(),
                 TokenKind::Comment(_) | TokenKind::MultiLineComment(_)
             ) {
-                let comment_line = self.current().span.start.line;
+                let comment_line = self.current().location.span.start.line;
                 if let Some(comment) = self.collect_comment() {
                     if comment_line == statement_line {
                         // Comment is on the same line as the field
@@ -1243,7 +1156,7 @@ impl Parser {
     }
 
     fn parse_type_statement(&mut self) -> Result<TypeStatement, ParseError> {
-        let start_pos = self.current().span.start;
+        let start_pos = self.current().location.span.start;
 
         let doc_comments = self.collect_doc_comments();
         let attributes = if matches!(self.peek(), TokenKind::Hash) {
@@ -1259,9 +1172,9 @@ impl Parser {
             self.expect(TokenKind::RBrace)?;
 
             let end_pos = if self.pos > 0 {
-                self.tokens[self.pos - 1].span.end
+                self.tokens[self.pos - 1].location.span.end
             } else {
-                self.current().span.end
+                self.current().location.span.end
             };
 
             Ok(TypeStatement {
@@ -1270,10 +1183,7 @@ impl Parser {
                 doc_comments,
                 inline_trailing_comments: Vec::new(), // Will be populated by parse_type_def_items
                 following_comments: Vec::new(),
-                span: Span {
-                    start: start_pos,
-                    end: end_pos,
-                },
+                location: ItemLocation::new(self.filename.clone(), Span::new(start_pos, end_pos)),
             })
         } else {
             let visibility = self.parse_visibility()?;
@@ -1282,9 +1192,9 @@ impl Parser {
             let type_ = self.parse_type()?;
 
             let end_pos = if self.pos > 0 {
-                self.tokens[self.pos - 1].span.end
+                self.tokens[self.pos - 1].location.span.end
             } else {
-                self.current().span.end
+                self.current().location.span.end
             };
 
             Ok(TypeStatement {
@@ -1293,10 +1203,7 @@ impl Parser {
                 doc_comments,
                 inline_trailing_comments: Vec::new(), // Will be populated by parse_type_def_items
                 following_comments: Vec::new(),
-                span: Span {
-                    start: start_pos,
-                    end: end_pos,
-                },
+                location: ItemLocation::new(self.filename.clone(), Span::new(start_pos, end_pos)),
             })
         }
     }
@@ -1320,7 +1227,7 @@ impl Parser {
             }
 
             let mut stmt = self.parse_enum_statement()?;
-            let statement_line = self.current().span.end.line;
+            let statement_line = self.current().location.span.end.line;
 
             // Optional trailing comma
             if matches!(self.peek(), TokenKind::Comma) {
@@ -1332,7 +1239,7 @@ impl Parser {
                 self.peek(),
                 TokenKind::Comment(_) | TokenKind::MultiLineComment(_)
             ) {
-                let comment_line = self.current().span.start.line;
+                let comment_line = self.current().location.span.start.line;
                 if let Some(comment) = self.collect_comment() {
                     if comment_line == statement_line {
                         // Comment is on the same line as the enum variant
@@ -1351,7 +1258,7 @@ impl Parser {
     }
 
     fn parse_enum_statement(&mut self) -> Result<EnumStatement, ParseError> {
-        let start_pos = self.current().span.start;
+        let start_pos = self.current().location.span.start;
 
         let doc_comments = self.collect_doc_comments();
         let attributes = if matches!(self.peek(), TokenKind::Hash) {
@@ -1369,9 +1276,9 @@ impl Parser {
         };
 
         let end_pos = if self.pos > 0 {
-            self.tokens[self.pos - 1].span.end
+            self.tokens[self.pos - 1].location.span.end
         } else {
-            self.current().span.end
+            self.current().location.span.end
         };
 
         Ok(EnumStatement {
@@ -1381,10 +1288,7 @@ impl Parser {
             doc_comments,
             inline_trailing_comments: Vec::new(), // Will be populated by parse_enum_def_items
             following_comments: Vec::new(),
-            span: Span {
-                start: start_pos,
-                end: end_pos,
-            },
+            location: ItemLocation::new(self.filename.clone(), Span::new(start_pos, end_pos)),
         })
     }
 
@@ -1407,7 +1311,7 @@ impl Parser {
             }
 
             let mut stmt = self.parse_bitflags_statement()?;
-            let statement_line = self.current().span.end.line;
+            let statement_line = self.current().location.span.end.line;
 
             // Optional trailing comma
             if matches!(self.peek(), TokenKind::Comma) {
@@ -1419,7 +1323,7 @@ impl Parser {
                 self.peek(),
                 TokenKind::Comment(_) | TokenKind::MultiLineComment(_)
             ) {
-                let comment_line = self.current().span.start.line;
+                let comment_line = self.current().location.span.start.line;
                 if let Some(comment) = self.collect_comment() {
                     if comment_line == statement_line {
                         // Comment is on the same line as the bitflag
@@ -1438,7 +1342,7 @@ impl Parser {
     }
 
     fn parse_bitflags_statement(&mut self) -> Result<BitflagsStatement, ParseError> {
-        let start_pos = self.current().span.start;
+        let start_pos = self.current().location.span.start;
 
         let doc_comments = self.collect_doc_comments();
         let attributes = if matches!(self.peek(), TokenKind::Hash) {
@@ -1452,9 +1356,9 @@ impl Parser {
         let expr = self.parse_expr()?;
 
         let end_pos = if self.pos > 0 {
-            self.tokens[self.pos - 1].span.end
+            self.tokens[self.pos - 1].location.span.end
         } else {
-            self.current().span.end
+            self.current().location.span.end
         };
 
         Ok(BitflagsStatement {
@@ -1464,10 +1368,7 @@ impl Parser {
             doc_comments,
             inline_trailing_comments: Vec::new(), // Will be populated by parse_bitflags_def_items
             following_comments: Vec::new(),
-            span: Span {
-                start: start_pos,
-                end: end_pos,
-            },
+            location: ItemLocation::new(self.filename.clone(), Span::new(start_pos, end_pos)),
         })
     }
 
@@ -1538,6 +1439,7 @@ impl Parser {
     }
 
     fn parse_function(&mut self) -> Result<Function, ParseError> {
+        let start_pos = self.current().location.span.start;
         let mut doc_comments = self.collect_doc_comments();
         let attributes = if matches!(self.peek(), TokenKind::Hash) {
             self.parse_attributes()?
@@ -1574,6 +1476,12 @@ impl Parser {
         };
 
         self.expect(TokenKind::Semi)?;
+        let end_pos = if self.pos > 0 {
+            self.tokens[self.pos - 1].location.span.end
+        } else {
+            self.current().location.span.end
+        };
+        let location = ItemLocation::new(self.filename.clone(), Span::new(start_pos, end_pos));
 
         Ok(Function {
             visibility,
@@ -1582,6 +1490,7 @@ impl Parser {
             doc_comments,
             arguments,
             return_type,
+            location,
         })
     }
 
@@ -1590,17 +1499,21 @@ impl Parser {
             self.advance();
             if matches!(self.peek(), TokenKind::Mut) {
                 self.advance();
-                self.expect(TokenKind::SelfValue)?;
-                Ok(Argument::MutSelf)
+                let tok = self.expect(TokenKind::SelfValue)?;
+                Ok(Argument::MutSelf(tok.location.clone()))
             } else {
-                self.expect(TokenKind::SelfValue)?;
-                Ok(Argument::ConstSelf)
+                let tok = self.expect(TokenKind::SelfValue)?;
+                Ok(Argument::ConstSelf(tok.location.clone()))
             }
         } else {
+            let start_pos = self.current().location.span.start;
             let (name, _) = self.expect_ident()?;
             self.expect(TokenKind::Colon)?;
             let type_ = self.parse_type()?;
-            Ok(Argument::Named(name, type_))
+            let end_pos = self.current().location.span.end;
+            let location = ItemLocation::new(self.filename.clone(), Span::new(start_pos, end_pos));
+
+            Ok(Argument::Named(name, type_, location))
         }
     }
 
@@ -1786,7 +1699,7 @@ impl Parser {
         // Reconstruct the string from tokens
         let mut result = String::new();
         for i in start_pos..end_pos {
-            result.push_str(self.span_text(&self.tokens[i].span));
+            result.push_str(self.span_text(&self.tokens[i].location.span));
         }
         Ok(result)
     }
@@ -1810,9 +1723,7 @@ impl Parser {
                     Ok(Type::MutPointer(Box::new(self.parse_type()?)))
                 } else {
                     Err(ParseError::MissingPointerQualifier {
-                        location: self.current().span.start,
-                        filename: self.filename.clone().into(),
-                        source: self.source.clone().into(),
+                        location: self.current().location.clone(),
                     })
                 }
             }
@@ -1871,9 +1782,7 @@ impl Parser {
             }
             _ => Err(ParseError::ExpectedType {
                 found: self.peek().clone(),
-                location: self.current().span.start,
-                filename: self.filename.clone().into(),
-                source: self.source.clone().into(),
+                location: self.current().location.clone(),
             }),
         }
     }
@@ -1884,10 +1793,8 @@ impl Parser {
                 let token = self.current().clone();
                 let value = self.parse_int_literal()?;
                 // Detect format from the original token text
-                let text = self.span_text(&token.span);
-                let format = if text.starts_with("0x")
-                    || text.starts_with("-0x")
-                {
+                let text = self.span_text(&token.location.span);
+                let format = if text.starts_with("0x") || text.starts_with("-0x") {
                     IntFormat::Hex
                 } else if text.starts_with("0b") || text.starts_with("-0b") {
                     IntFormat::Binary
@@ -1902,7 +1809,7 @@ impl Parser {
                 let token = self.current().clone();
                 let value = self.parse_string_literal()?;
                 // Detect if this was a raw string from the original token text
-                let text = self.span_text(&token.span);
+                let text = self.span_text(&token.location.span);
                 let format = if text.starts_with('r') {
                     StringFormat::Raw
                 } else {
@@ -1916,9 +1823,7 @@ impl Parser {
             }
             _ => Err(ParseError::ExpectedExpression {
                 found: self.peek().clone(),
-                location: self.current().span.start,
-                filename: self.filename.clone().into(),
-                source: self.source.clone().into(),
+                location: self.current().location.clone(),
             }),
         }
     }
@@ -1945,9 +1850,7 @@ impl Parser {
                             .map_err(|_| ParseError::InvalidIntLiteral {
                                 kind: "hex".to_string(),
                                 value: s.clone(),
-                                location: token.span.start,
-                                filename: self.filename.clone().into(),
-                                source: self.source.clone().into(),
+                                location: token.location.clone(),
                             })
                     } else if s.starts_with("0b") || s.starts_with("-0b") {
                         // Binary
@@ -1962,9 +1865,7 @@ impl Parser {
                             .map_err(|_| ParseError::InvalidIntLiteral {
                                 kind: "binary".to_string(),
                                 value: s.clone(),
-                                location: token.span.start,
-                                filename: self.filename.clone().into(),
-                                source: self.source.clone().into(),
+                                location: token.location.clone(),
                             })
                     } else if s.starts_with("0o") || s.starts_with("-0o") {
                         // Octal
@@ -1979,9 +1880,7 @@ impl Parser {
                             .map_err(|_| ParseError::InvalidIntLiteral {
                                 kind: "octal".to_string(),
                                 value: s.clone(),
-                                location: token.span.start,
-                                filename: self.filename.clone().into(),
-                                source: self.source.clone().into(),
+                                location: token.location.clone(),
                             })
                     } else {
                         // Decimal
@@ -1989,9 +1888,7 @@ impl Parser {
                             .map_err(|_| ParseError::InvalidIntLiteral {
                                 kind: "integer".to_string(),
                                 value: s.clone(),
-                                location: token.span.start,
-                                filename: self.filename.clone().into(),
-                                source: self.source.clone().into(),
+                                location: token.location.clone(),
                             })
                     }
                 } else {
@@ -2000,9 +1897,7 @@ impl Parser {
             }
             _ => Err(ParseError::ExpectedIntLiteral {
                 found: self.peek().clone(),
-                location: self.current().span.start,
-                filename: self.filename.clone().into(),
-                source: self.source.clone().into(),
+                location: self.current().location.clone(),
             }),
         }
     }
@@ -2019,9 +1914,7 @@ impl Parser {
             }
             _ => Err(ParseError::ExpectedStringLiteral {
                 found: self.peek().clone(),
-                location: self.current().span.start,
-                filename: self.filename.clone().into(),
-                source: self.source.clone().into(),
+                location: self.current().location.clone(),
             }),
         }
     }

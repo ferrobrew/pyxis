@@ -4,7 +4,7 @@ use crate::{
         Visibility,
         test_aliases::{int_literal, int_literal_with_format, *},
     },
-    parser::{ParseError, parse_str, strip_spans::StripSpans},
+    parser::{ParseError, parse_str_for_tests, strip_spans::StripSpans},
     tokenizer::TokenKind,
 };
 
@@ -27,7 +27,7 @@ fn can_parse_basic_struct() {
         ]),
     )]);
 
-    assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
+    assert_eq!(parse_str_for_tests(text).unwrap().strip_spans(), ast);
 }
 
 #[test]
@@ -45,12 +45,12 @@ fn can_parse_vftable() {
         (V::Private, "TestType"),
         TD::new([TS::vftable([F::new(
             (V::Public, "test"),
-            [Ar::MutSelf, Ar::named("test2", T::ident("i32"))],
+            [Ar::mut_self(), Ar::named("test2", T::ident("i32"))],
         )])
         .with_attributes([A::size(4)])]),
     )]);
 
-    assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
+    assert_eq!(parse_str_for_tests(text).unwrap().strip_spans(), ast);
 }
 
 #[test]
@@ -96,7 +96,7 @@ fn can_parse_vehicle_types() {
         ]),
     )]);
 
-    assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
+    assert_eq!(parse_str_for_tests(text).unwrap().strip_spans(), ast);
 }
 
 #[test]
@@ -165,7 +165,7 @@ fn can_parse_spawn_manager() {
                 F::new(
                     (V::Public, "engine_spawn_vehicle"),
                     [
-                        Ar::MutSelf,
+                        Ar::mut_self(),
                         Ar::named("vehicle", T::ident("SharedPtr<Vehicle>").mut_pointer()),
                         Ar::named("context", T::ident("i32")),
                         Ar::named("unk1", T::ident("StdString").mut_pointer()),
@@ -179,7 +179,7 @@ fn can_parse_spawn_manager() {
                 F::new(
                     (V::Public, "request_vehicle_model"),
                     [
-                        Ar::MutSelf,
+                        Ar::mut_self(),
                         Ar::named("model_id", T::ident("u32").const_pointer()),
                         Ar::named("category", T::ident("i32")),
                     ],
@@ -188,7 +188,7 @@ fn can_parse_spawn_manager() {
             ],
         )]);
 
-    assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
+    assert_eq!(parse_str_for_tests(text).unwrap().strip_spans(), ast);
 }
 
 #[test]
@@ -208,7 +208,7 @@ fn can_parse_address_field() {
         ]),
     )]);
 
-    assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
+    assert_eq!(parse_str_for_tests(text).unwrap().strip_spans(), ast);
 }
 
 #[test]
@@ -227,7 +227,7 @@ fn can_parse_use() {
             TD::new([TS::field((V::Private, "test"), T::ident("TestType<Hey>"))]),
         )]);
 
-    assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
+    assert_eq!(parse_str_for_tests(text).unwrap().strip_spans(), ast);
 }
 
 #[test]
@@ -236,7 +236,7 @@ fn will_die_on_super_for_now() {
         use super::TestType<Hey>;
         "#;
 
-    let error = parse_str(text).err().unwrap();
+    let error = parse_str_for_tests(text).err().unwrap();
     assert!(
         matches!(error, ParseError::SuperNotSupported { .. }),
         "Expected SuperNotSupported error, got: {:?}",
@@ -261,7 +261,7 @@ fn can_parse_extern() {
             TD::new([TS::field((V::Private, "test"), T::ident("TestType<Hey>"))]),
         )]);
 
-    assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
+    assert_eq!(parse_str_for_tests(text).unwrap().strip_spans(), ast);
 }
 
 #[test]
@@ -275,14 +275,14 @@ fn can_parse_extern_with_multiline_doc_comment() {
 extern type ManuallyDrop<SharedPtr<u32>>;
     "#;
 
-    let module = parse_str(text).unwrap().strip_spans();
+    let module = parse_str_for_tests(text).unwrap().strip_spans();
 
     // Verify we have one extern type item
     assert_eq!(module.items.len(), 1);
 
     // Verify it's an ExternType with the correct attributes and doc comments
     match &module.items[0] {
-        ModuleItem::ExternType(name, attrs, doc_comments) => {
+        ModuleItem::ExternType(name, attrs, doc_comments, _location) => {
             assert_eq!(name.0, "ManuallyDrop<SharedPtr<u32>>");
             assert_eq!(attrs.0.len(), 2);
             assert_eq!(doc_comments.len(), 4); // 4 lines of doc comment
@@ -302,7 +302,7 @@ fn can_parse_an_empty_type() {
         "#;
 
     let ast = M::new().with_definitions([ID::new((V::Private, "Test"), TD::new([]))]);
-    assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
+    assert_eq!(parse_str_for_tests(text).unwrap().strip_spans(), ast);
 }
 
 #[test]
@@ -333,7 +333,7 @@ fn can_parse_extern_value() {
             ),
         ]);
 
-    assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
+    assert_eq!(parse_str_for_tests(text).unwrap().strip_spans(), ast);
 }
 
 #[test]
@@ -365,7 +365,7 @@ fn can_parse_enum() {
         ),
     )]);
 
-    assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
+    assert_eq!(parse_str_for_tests(text).unwrap().strip_spans(), ast);
 }
 
 #[test]
@@ -396,7 +396,7 @@ fn can_parse_bitflags() {
         ),
     )]);
 
-    assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
+    assert_eq!(parse_str_for_tests(text).unwrap().strip_spans(), ast);
 }
 
 #[test]
@@ -412,7 +412,7 @@ fn can_parse_array_field() {
         TD::new([TS::field((V::Private, "field_1"), T::ident("i32").array(4))]),
     )]);
 
-    assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
+    assert_eq!(parse_str_for_tests(text).unwrap().strip_spans(), ast);
 }
 
 #[test]
@@ -478,7 +478,7 @@ backend rust epilogue r#"
         ),
     ]);
 
-    assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
+    assert_eq!(parse_str_for_tests(text).unwrap().strip_spans(), ast);
 }
 
 #[test]
@@ -493,7 +493,7 @@ backend rust prologue "
     let ast = M::new().with_backends([B::new("rust")
         .with_prologue("\n    use crate::shared_ptr::*;\n    use std::mem::ManuallyDrop;\n")]);
 
-    assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
+    assert_eq!(parse_str_for_tests(text).unwrap().strip_spans(), ast);
 }
 
 #[test]
@@ -511,7 +511,7 @@ fn can_parse_ident_attributes() {
             .with_attributes([A::copyable(), A::cloneable()]),
     )]);
 
-    assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
+    assert_eq!(parse_str_for_tests(text).unwrap().strip_spans(), ast);
 }
 
 #[test]
@@ -540,7 +540,7 @@ fn can_parse_doc_comments() {
         .with_definitions([ID::new(
             (V::Private, "TestType"),
             TD::new([
-                TS::vftable([F::new((V::Private, "test_vfunc"), [Ar::ConstSelf])
+                TS::vftable([F::new((V::Private, "test_vfunc"), [Ar::const_self()])
                     .with_doc_comments(vec![" My test vfunc!".to_string()])]),
                 TS::field((V::Private, "field_1"), T::ident("i32"))
                     .with_doc_comments(vec![" This is a field doc comment".to_string()]),
@@ -549,7 +549,7 @@ fn can_parse_doc_comments() {
         .with_doc_comments(vec![" This is a doc comment".to_string()])])
         .with_impls([FB::new(
             "TestType",
-            [F::new((V::Private, "test_func"), [Ar::ConstSelf])
+            [F::new((V::Private, "test_func"), [Ar::const_self()])
                 .with_doc_comments(vec![" My test func!".to_string()])
                 .with_attributes([A::address(0x123)])],
         )])
@@ -558,7 +558,7 @@ fn can_parse_doc_comments() {
             " The best of its kind".to_string(),
         ]);
 
-    assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
+    assert_eq!(parse_str_for_tests(text).unwrap().strip_spans(), ast);
 }
 
 #[test]
@@ -593,7 +593,7 @@ fn can_parse_freestanding_functions() {
             .with_return_type(T::ident("i32")),
         ]);
 
-    assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
+    assert_eq!(parse_str_for_tests(text).unwrap().strip_spans(), ast);
 }
 
 #[test]
@@ -629,7 +629,7 @@ fn can_parse_multiple_attributes_with_underscored_literals() {
         ]),
     )]);
 
-    assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
+    assert_eq!(parse_str_for_tests(text).unwrap().strip_spans(), ast);
 }
 
 #[test]
@@ -671,14 +671,14 @@ fn can_parse_pfx_instance_with_vftable_and_impl() {
             [F::new(
                 (V::Public, "set_game_object"),
                 [
-                    Ar::MutSelf,
+                    Ar::mut_self(),
                     Ar::named("game_object", T::ident("PfxGameObject").mut_pointer()),
                 ],
             )
             .with_attributes([A::address(0x6B7C40)])],
         )]);
 
-    assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
+    assert_eq!(parse_str_for_tests(text).unwrap().strip_spans(), ast);
 }
 
 #[test]
@@ -714,7 +714,7 @@ fn can_parse_raycast_result_with_pointers_and_arrays() {
         )]),
     )]);
 
-    assert_eq!(parse_str(text).unwrap().strip_spans(), ast);
+    assert_eq!(parse_str_for_tests(text).unwrap().strip_spans(), ast);
 }
 
 #[test]
@@ -730,7 +730,7 @@ pub type AnarkGui {
 }
     "#;
 
-    let module = parse_str(text).unwrap().strip_spans();
+    let module = parse_str_for_tests(text).unwrap().strip_spans();
 
     // Verify we have one type definition
     assert_eq!(module.items.len(), 1);
@@ -785,10 +785,10 @@ impl PfxInstance {
     "#;
 
     // Don't use strip_spans() - it empties doc_comments and converts them to attributes
-    let module = parse_str(text).unwrap();
+    let module = parse_str_for_tests(text).unwrap();
 
     // Check extern type has no doc comments (doc comes after, not before)
-    if let ModuleItem::ExternType(_name, _attrs, doc_comments) = &module.items[0] {
+    if let ModuleItem::ExternType(_name, _attrs, doc_comments, _location) = &module.items[0] {
         assert_eq!(
             doc_comments.len(),
             0,
@@ -838,7 +838,7 @@ fn should_fail_on_missing_closing_brace() {
             field1: i32
         "#;
 
-    let err = parse_str(text).unwrap_err();
+    let err = parse_str_for_tests(text).unwrap_err();
     assert!(
         matches!(
             err,
@@ -860,7 +860,7 @@ fn should_fail_on_missing_field_type() {
         }
         "#;
 
-    let err = parse_str(text).unwrap_err();
+    let err = parse_str_for_tests(text).unwrap_err();
     assert!(
         matches!(
             err,
@@ -882,7 +882,7 @@ fn should_fail_on_missing_enum_type_annotation() {
         }
         "#;
 
-    let err = parse_str(text).unwrap_err();
+    let err = parse_str_for_tests(text).unwrap_err();
     assert!(
         matches!(
             err,
@@ -905,7 +905,7 @@ fn should_fail_on_missing_equals_in_bitflags() {
         }
         "#;
 
-    let err = parse_str(text).unwrap_err();
+    let err = parse_str_for_tests(text).unwrap_err();
     assert!(
         matches!(
             err,
@@ -928,7 +928,7 @@ fn should_fail_on_malformed_pointer_type() {
         }
         "#;
 
-    let err = parse_str(text).unwrap_err();
+    let err = parse_str_for_tests(text).unwrap_err();
     assert!(
         matches!(err, ParseError::MissingPointerQualifier { .. }),
         "Expected MissingPointerQualifier error, got: {:?}",
@@ -942,7 +942,7 @@ fn should_fail_on_missing_semicolon_after_extern() {
         extern type TestType
         "#;
 
-    let err = parse_str(text).unwrap_err();
+    let err = parse_str_for_tests(text).unwrap_err();
     assert!(
         matches!(
             err,
@@ -963,7 +963,7 @@ fn should_fail_on_incomplete_function() {
         pub fn test(
         "#;
 
-    let err = parse_str(text).unwrap_err();
+    let err = parse_str_for_tests(text).unwrap_err();
     assert!(
         matches!(
             err,

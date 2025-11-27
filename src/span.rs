@@ -20,7 +20,7 @@ impl std::fmt::Display for Location {
 }
 
 /// A span representing a range in source code
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Span {
     /// Start location (inclusive)
     pub start: Location,
@@ -92,6 +92,48 @@ impl<T: std::fmt::Display> std::fmt::Display for Spanned<T> {
     }
 }
 
+/// Location of an item in source code (filename + span)
+/// Every grammar and semantic item should have an ItemLocation for error reporting
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ItemLocation {
+    /// Source file containing the item
+    pub filename: std::sync::Arc<str>,
+    /// Span of the item in the source file
+    pub span: Span,
+}
+
+impl ItemLocation {
+    pub fn new(filename: impl Into<std::sync::Arc<str>>, span: Span) -> Self {
+        Self {
+            filename: filename.into(),
+            span,
+        }
+    }
+
+    /// Used only for internal items that don't have a source file
+    pub fn internal() -> Self {
+        Self {
+            filename: "<internal>".into(),
+            span: Span::synthetic(),
+        }
+    }
+
+    #[cfg(test)]
+    /// Create a test location for generated/test content
+    pub fn test() -> Self {
+        Self {
+            filename: "<test>".into(),
+            span: Span::synthetic(),
+        }
+    }
+}
+
+impl std::fmt::Display for ItemLocation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}:{}", self.filename, self.span)
+    }
+}
+
 /// Label for additional span highlighting in error reports
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ErrorLabel {
@@ -99,17 +141,21 @@ pub struct ErrorLabel {
     pub span: Span,
     /// Message to show for this label
     pub message: String,
-    /// Label color (for terminal output)
-    pub color: ErrorLabelColor,
+    /// Label type/role (determines presentation)
+    pub label_type: ErrorLabelType,
 }
 
-/// Color for error labels in terminal output
+/// Type/role for error labels in terminal output (with semantic meaning)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum ErrorLabelColor {
-    Red,
-    Yellow,
-    Blue,
-    Cyan,
+pub enum ErrorLabelType {
+    /// Primary error location (red)
+    Primary,
+    /// Secondary related location (yellow)
+    Secondary,
+    /// Informational note (blue)
+    Note,
+    /// Helpful suggestion (cyan)
+    Help,
 }
 
 impl ErrorLabel {
@@ -117,59 +163,36 @@ impl ErrorLabel {
         Self {
             span,
             message: message.into(),
-            color: ErrorLabelColor::Red,
+            label_type: ErrorLabelType::Primary,
         }
     }
 
-    pub fn with_color(mut self, color: ErrorLabelColor) -> Self {
-        self.color = color;
+    pub fn with_type(mut self, label_type: ErrorLabelType) -> Self {
+        self.label_type = label_type;
         self
     }
 }
 
-/// Context information for error reporting (filename and span)
+/// Context information for error reporting
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ErrorContext {
-    /// Primary source file where the error occurred
-    pub filename: Option<Box<str>>,
-    /// Primary span to highlight
-    pub span: Option<Span>,
-    /// Help text suggesting how to fix the error
-    pub help: Option<String>,
-    /// Additional notes providing context
-    pub notes: Vec<String>,
+    /// Primary location where the error occurred
+    pub location: ItemLocation,
     /// Additional labeled spans to show related locations
     pub labels: Vec<ErrorLabel>,
 }
 
 impl ErrorContext {
-    pub fn new() -> Self {
+    /// Create a new ErrorContext with the given location
+    pub fn new(location: ItemLocation) -> Self {
         Self {
-            filename: None,
-            span: None,
-            help: None,
-            notes: Vec::new(),
+            location,
             labels: Vec::new(),
         }
     }
 
-    pub fn with_filename(mut self, filename: impl Into<String>) -> Self {
-        self.filename = Some(filename.into().into_boxed_str());
-        self
-    }
-
-    pub fn with_span(mut self, span: Span) -> Self {
-        self.span = Some(span);
-        self
-    }
-
-    pub fn with_help(mut self, help: impl Into<String>) -> Self {
-        self.help = Some(help.into());
-        self
-    }
-
-    pub fn with_note(mut self, note: impl Into<String>) -> Self {
-        self.notes.push(note.into());
+    pub fn with_location(mut self, location: ItemLocation) -> Self {
+        self.location = location;
         self
     }
 
@@ -182,10 +205,155 @@ impl ErrorContext {
         self.labels.extend(labels);
         self
     }
+
+    /// Helper to get filename and span from location
+    pub fn filename_and_span(&self) -> (&str, &Span) {
+        (self.location.filename.as_ref(), &self.location.span)
+    }
 }
 
-impl Default for ErrorContext {
-    fn default() -> Self {
-        Self::new()
+// Helper functions for span manipulation and ariadne integration
+
+/// Convert a Span to a byte offset in the source string
+pub fn span_to_offset(source: &str, span: &Span) -> usize {
+    source
+        .lines()
+        .take(span.start.line.saturating_sub(1))
+        .map(|line| line.len() + 1)
+        .sum::<usize>()
+        + span.start.column.saturating_sub(1)
+}
+
+/// Calculate the length of a span in bytes
+pub fn span_length(source: &str, span: &Span) -> usize {
+    if span.start.line == span.end.line {
+        span.end.column.saturating_sub(span.start.column)
+    } else {
+        let first_line_len = source
+            .lines()
+            .nth(span.start.line.saturating_sub(1))
+            .map(|line| line.len())
+            .unwrap_or(0)
+            .saturating_sub(span.start.column.saturating_sub(1));
+        let middle_lines_len: usize = source
+            .lines()
+            .skip(span.start.line)
+            .take(
+                span.end
+                    .line
+                    .saturating_sub(span.start.line)
+                    .saturating_sub(1),
+            )
+            .map(|line| line.len() + 1)
+            .sum();
+        let last_line_len = span.end.column.saturating_sub(1);
+        first_line_len + middle_lines_len + last_line_len
+    }
+}
+
+/// Convert ErrorLabelType to ariadne Color
+pub fn label_type_to_ariadne_color(label_type: ErrorLabelType) -> ariadne::Color {
+    match label_type {
+        ErrorLabelType::Primary => ariadne::Color::Red,
+        ErrorLabelType::Secondary => ariadne::Color::Yellow,
+        ErrorLabelType::Note => ariadne::Color::Blue,
+        ErrorLabelType::Help => ariadne::Color::Cyan,
+    }
+}
+
+/// Format location prefix for error messages
+pub fn format_error_location(context: &ErrorContext) -> String {
+    format!(
+        "Error at {}:{}:{}: ",
+        context.location.filename,
+        context.location.span.start.line,
+        context.location.span.start.column
+    )
+}
+
+impl From<ItemLocation> for ErrorContext {
+    fn from(location: ItemLocation) -> Self {
+        Self::new(location)
+    }
+}
+
+/// Trait for recursively stripping span/location information from types
+/// Used in tests to compare semantic structures without worrying about exact source positions
+pub trait StripLocations {
+    /// Strip all span and location information, returning a copy without position data
+    fn strip_locations(&self) -> Self;
+}
+
+// Default implementations for common types
+impl<T: StripLocations> StripLocations for Option<T> {
+    fn strip_locations(&self) -> Self {
+        self.as_ref().map(|v| v.strip_locations())
+    }
+}
+
+impl<T: StripLocations> StripLocations for Vec<T> {
+    fn strip_locations(&self) -> Self {
+        self.iter().map(|v| v.strip_locations()).collect()
+    }
+}
+
+impl<T: StripLocations> StripLocations for Box<T> {
+    fn strip_locations(&self) -> Self {
+        Box::new((**self).strip_locations())
+    }
+}
+
+// Primitive types don't have spans, so just clone
+impl StripLocations for String {
+    fn strip_locations(&self) -> Self {
+        self.clone()
+    }
+}
+
+impl StripLocations for bool {
+    fn strip_locations(&self) -> Self {
+        *self
+    }
+}
+
+impl StripLocations for usize {
+    fn strip_locations(&self) -> Self {
+        *self
+    }
+}
+
+impl StripLocations for u8 {
+    fn strip_locations(&self) -> Self {
+        *self
+    }
+}
+
+impl StripLocations for u16 {
+    fn strip_locations(&self) -> Self {
+        *self
+    }
+}
+
+impl StripLocations for u32 {
+    fn strip_locations(&self) -> Self {
+        *self
+    }
+}
+
+impl StripLocations for u64 {
+    fn strip_locations(&self) -> Self {
+        *self
+    }
+}
+
+impl StripLocations for i32 {
+    fn strip_locations(&self) -> Self {
+        *self
+    }
+}
+
+impl StripLocations for i64 {
+    fn strip_locations(&self) -> Self {
+        *self
     }
 }

@@ -8,12 +8,18 @@ pub trait StripSpans {
 // we need to strip spans from Spanned<T> wrappers and remove comments for comparison
 
 use crate::grammar::*;
-use crate::span::{Span, Spanned};
+use crate::span::{ItemLocation, Span, Spanned};
 
 impl<T: Clone> StripSpans for Spanned<T> {
     fn strip_spans(&self) -> Self {
         // Return a synthetic version with the same value but no real span
         Spanned::new(self.value.clone(), Span::synthetic())
+    }
+}
+
+impl<T: StripSpans> StripSpans for Vec<T> {
+    fn strip_spans(&self) -> Self {
+        self.iter().map(|v| v.strip_spans()).collect()
     }
 }
 
@@ -39,8 +45,8 @@ impl StripSpans for ModuleItem {
         match self {
             ModuleItem::Comment(c) => ModuleItem::Comment(c.strip_spans()),
             ModuleItem::Use(p) => ModuleItem::Use(p.clone()),
-            ModuleItem::ExternType(n, a, d) => {
-                ModuleItem::ExternType(n.clone(), a.strip_spans(), d.clone())
+            ModuleItem::ExternType(n, a, d, _) => {
+                ModuleItem::ExternType(n.clone(), a.strip_spans(), d.clone(), ItemLocation::test())
             }
             ModuleItem::Backend(b) => ModuleItem::Backend(b.clone()),
             ModuleItem::Definition(d) => ModuleItem::Definition(d.strip_spans()),
@@ -58,7 +64,7 @@ impl StripSpans for ItemDefinition {
             name: self.name.clone(),
             doc_comments: self.doc_comments.clone(),
             inner: self.inner.strip_spans(),
-            span: Span::synthetic(),
+            location: ItemLocation::test(),
         }
     }
 }
@@ -99,7 +105,7 @@ impl StripSpans for TypeStatement {
             doc_comments: self.doc_comments.clone(),
             inline_trailing_comments: Vec::new(), // Strip trailing comments
             following_comments: Vec::new(),
-            span: Span::synthetic(),
+            location: ItemLocation::test(),
         }
     }
 }
@@ -150,7 +156,7 @@ impl StripSpans for EnumStatement {
             doc_comments: self.doc_comments.clone(),
             inline_trailing_comments: Vec::new(), // Strip trailing comments
             following_comments: Vec::new(),
-            span: Span::synthetic(),
+            location: ItemLocation::test(),
         }
     }
 }
@@ -185,7 +191,7 @@ impl StripSpans for BitflagsStatement {
             doc_comments: self.doc_comments.clone(),
             inline_trailing_comments: Vec::new(), // Strip trailing comments
             following_comments: Vec::new(),
-            span: Span::synthetic(),
+            location: ItemLocation::test(),
         }
     }
 }
@@ -214,8 +220,21 @@ impl StripSpans for Function {
             name: self.name.clone(),
             attributes: self.attributes.strip_spans(),
             doc_comments: self.doc_comments.clone(),
-            arguments: self.arguments.clone(),
+            arguments: self.arguments.strip_spans(),
             return_type: self.return_type.clone(),
+            location: ItemLocation::test(),
+        }
+    }
+}
+
+impl StripSpans for Argument {
+    fn strip_spans(&self) -> Self {
+        match self {
+            Argument::ConstSelf(_) => Argument::ConstSelf(ItemLocation::test()),
+            Argument::MutSelf(_) => Argument::MutSelf(ItemLocation::test()),
+            Argument::Named(ident, ty, _) => {
+                Argument::Named(ident.clone(), ty.clone(), ItemLocation::test())
+            }
         }
     }
 }
@@ -228,6 +247,7 @@ impl StripSpans for ExternValue {
             type_: self.type_.clone(),
             attributes: self.attributes.strip_spans(),
             doc_comments: self.doc_comments.clone(),
+            location: ItemLocation::test(),
         }
     }
 }

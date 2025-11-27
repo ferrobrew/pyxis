@@ -1,6 +1,7 @@
 use crate::{
     grammar::test_aliases::{int_literal, *},
-    semantic::{semantic_state::SemanticState, types::test_aliases::*},
+    semantic::{error::SemanticError, semantic_state::SemanticState, types::test_aliases::*},
+    span::ItemLocation,
 };
 
 use pretty_assertions::assert_eq;
@@ -121,7 +122,7 @@ fn can_resolve_complex_type() {
                 [F::new(
                     (V::Public, "test_function"),
                     [
-                        Ar::MutSelf,
+                        Ar::mut_self(),
                         Ar::named("arg1", T::ident("TestType").mut_pointer()),
                         Ar::named("arg2", T::ident("i32")),
                         Ar::named("arg3", T::ident("u32").const_pointer()),
@@ -161,7 +162,7 @@ fn can_resolve_complex_type() {
                             SCC::for_member_function(pointer_size()),
                         )
                         .with_arguments([
-                            SAr::MutSelf,
+                            SAr::mut_self(),
                             SAr::field("arg1".to_string(), ST::raw("test::TestType").mut_pointer()),
                             SAr::field("arg2", ST::raw("i32")),
                             SAr::field("arg3", ST::raw("u32").const_pointer()),
@@ -176,12 +177,19 @@ fn can_resolve_complex_type() {
 
 #[test]
 fn will_eventually_terminate_with_an_unknown_type() {
-    assert_ast_produces_failure(
+    assert_ast_produces_error(
         M::new().with_definitions([ID::new(
             (V::Public, "TestType2"),
             TD::new([TS::field((V::Private, "field_2"), T::ident("TestType1"))]),
         )]),
-        r#"type resolution will not terminate, failed on types: ["test::TestType2"] (resolved types: [])"#,
+        |err| {
+            matches!(
+                err,
+                SemanticError::TypeResolutionStalled { unresolved_types, resolved_types }
+                if unresolved_types.contains(&"test::TestType2".to_string())
+                    && resolved_types.is_empty()
+            )
+        },
     );
 }
 
@@ -200,10 +208,10 @@ fn can_use_type_from_another_module() {
 
     let mut semantic_state = SemanticState::new(4);
     semantic_state
-        .add_module(&module1, &IP::from("module1"))
+        .add_module(&module1, &IP::from("module1"), None)
         .unwrap();
     semantic_state
-        .add_module(&module2, &IP::from("module2"))
+        .add_module(&module2, &IP::from("module2"), None)
         .unwrap();
     let semantic_state = semantic_state.build().unwrap();
 
@@ -230,9 +238,15 @@ fn can_use_type_from_another_module() {
 
 #[test]
 fn will_fail_on_an_extern_without_size() {
-    assert_ast_produces_failure(
-        M::new().with_extern_types([("TestType".into(), As::default())]),
-        "failed to find `size` attribute for extern type `TestType` in module `test`",
+    let err = build_state(
+        &M::new().with_extern_types([("TestType".into(), As::default())]),
+        &IP::from("test"),
+    )
+    .unwrap_err();
+    assert!(
+        err.to_string().contains(
+            "failed to find `size` attribute for extern type `TestType` in module `test`"
+        )
     );
 }
 
@@ -295,7 +309,7 @@ fn can_generate_vftable() {
                 F::new(
                     (V::Public, "test_function0"),
                     [
-                        Ar::MutSelf,
+                        Ar::mut_self(),
                         Ar::named("arg0", T::ident("u32")),
                         Ar::named("arg1", T::ident("f32")),
                     ],
@@ -304,7 +318,7 @@ fn can_generate_vftable() {
                 F::new(
                     (V::Public, "test_function1"),
                     [
-                        Ar::MutSelf,
+                        Ar::mut_self(),
                         Ar::named("arg0", T::ident("u32")),
                         Ar::named("arg1", T::ident("f32")),
                     ],
@@ -327,7 +341,7 @@ fn can_generate_vftable() {
                                     SCC::for_member_function(pointer_size()),
                                 )
                                 .with_arguments([
-                                    SAr::MutSelf,
+                                    SAr::mut_self(),
                                     SAr::field("arg0", ST::raw("u32")),
                                     SAr::field("arg1", ST::raw("f32")),
                                 ])
@@ -338,7 +352,7 @@ fn can_generate_vftable() {
                                     SCC::for_member_function(pointer_size()),
                                 )
                                 .with_arguments([
-                                    SAr::MutSelf,
+                                    SAr::mut_self(),
                                     SAr::field("arg0", ST::raw("u32")),
                                     SAr::field("arg1", ST::raw("f32")),
                                 ]),
@@ -399,7 +413,7 @@ fn can_generate_vftable_with_indices() {
                 F::new(
                     (V::Public, "test_function0"),
                     [
-                        Ar::MutSelf,
+                        Ar::mut_self(),
                         Ar::named("arg0", T::ident("u32")),
                         Ar::named("arg1", T::ident("f32")),
                     ],
@@ -409,7 +423,7 @@ fn can_generate_vftable_with_indices() {
                 F::new(
                     (V::Public, "test_function1"),
                     [
-                        Ar::MutSelf,
+                        Ar::mut_self(),
                         Ar::named("arg0", T::ident("u32")),
                         Ar::named("arg1", T::ident("f32")),
                     ],
@@ -436,7 +450,7 @@ fn can_generate_vftable_with_indices() {
                                     SCC::for_member_function(pointer_size()),
                                 )
                                 .with_arguments([
-                                    SAr::MutSelf,
+                                    SAr::mut_self(),
                                     SAr::field("arg0", ST::raw("u32")),
                                     SAr::field("arg1", ST::raw("f32")),
                                 ])
@@ -449,7 +463,7 @@ fn can_generate_vftable_with_indices() {
                                     SCC::for_member_function(pointer_size()),
                                 )
                                 .with_arguments([
-                                    SAr::MutSelf,
+                                    SAr::mut_self(),
                                     SAr::field("arg0", ST::raw("u32")),
                                     SAr::field("arg1", ST::raw("f32")),
                                 ]),
@@ -514,7 +528,7 @@ fn will_propagate_calling_convention_for_impl_and_vftable() {
                 TD::new([TS::vftable([F::new(
                     (V::Public, "test_function0"),
                     [
-                        Ar::MutSelf,
+                        Ar::mut_self(),
                         Ar::named("arg0", T::ident("u32")),
                         Ar::named("arg1", T::ident("f32")),
                     ],
@@ -550,7 +564,7 @@ fn will_propagate_calling_convention_for_impl_and_vftable() {
                                     SCC::for_member_function(pointer_size()),
                                 )
                                 .with_arguments([
-                                    SAr::MutSelf,
+                                    SAr::mut_self(),
                                     SAr::field("arg0", ST::raw("u32")),
                                     SAr::field("arg1", ST::raw("f32")),
                                 ])
@@ -600,7 +614,7 @@ fn make_vfunc(index: usize) -> SF {
         SFB::vftable(name),
         SCC::for_member_function(pointer_size()),
     )
-    .with_arguments([SAr::MutSelf])
+    .with_arguments([SAr::mut_self()])
 }
 
 fn make_vfunc_region(index: usize) -> SR {
@@ -625,7 +639,7 @@ fn can_define_extern_value() {
 
     let mut semantic_state = SemanticState::new(4);
     semantic_state
-        .add_module(&module1, &IP::from("module1"))
+        .add_module(&module1, &IP::from("module1"), None)
         .unwrap();
     let semantic_state = semantic_state.build().unwrap();
 
@@ -643,7 +657,8 @@ fn can_define_extern_value() {
             visibility: SV::Public,
             name: "test".into(),
             type_: ST::raw("u32").mut_pointer(),
-            address: 0x1337
+            address: 0x1337,
+            location: ItemLocation::test(),
         }
     );
 }
@@ -699,7 +714,7 @@ fn can_resolve_enum_with_associated_functions() {
                 "TestEnum",
                 [
                     F::new((V::Public, "test"), []).with_attributes([A::address(0x123)]),
-                    F::new((V::Public, "another_test"), [Ar::ConstSelf])
+                    F::new((V::Public, "another_test"), [Ar::const_self()])
                         .with_attributes([A::address(0x456)])
                         .with_return_type(T::ident("i32")),
                 ],
@@ -717,7 +732,7 @@ fn can_resolve_enum_with_associated_functions() {
                             SFB::address(0x456),
                             SCC::for_member_function(pointer_size()),
                         )
-                        .with_arguments([SAr::ConstSelf])
+                        .with_arguments([SAr::const_self()])
                         .with_return_type(ST::raw("i32")),
                     ]),
             ),
@@ -875,8 +890,8 @@ fn can_handle_defaultable_on_primitive_types() {
 
 #[test]
 fn will_reject_defaultable_on_pointer() {
-    assert_ast_produces_failure(
-        M::new().with_definitions([ID::new(
+    let err = build_state(
+        &M::new().with_definitions([ID::new(
             (V::Public, "TestType"),
             TD::new([TS::field(
                 (V::Private, "field_1"),
@@ -884,14 +899,18 @@ fn will_reject_defaultable_on_pointer() {
             )])
             .with_attributes([A::defaultable()]),
         )]),
-        "field `field_1` of type `test::TestType` is not a defaultable type (pointer or function?)",
-    );
+        &IP::from("test"),
+    )
+    .unwrap_err();
+    assert!(err.to_string().contains(
+        "field `field_1` of type `test::TestType` is not a defaultable type (pointer or function?)"
+    ));
 }
 
 #[test]
 fn will_reject_defaultable_on_enum_field() {
-    assert_ast_produces_failure(
-        M::new().with_definitions([
+    let err = build_state(
+        &M::new().with_definitions([
             ID::new(
                 (V::Public, "TestType"),
                 TD::new([TS::field((V::Private, "field_1"), T::ident("TestEnum"))])
@@ -902,14 +921,19 @@ fn will_reject_defaultable_on_enum_field() {
                 ED::new(T::ident("u32"), [ES::field("Item1")], []),
             ),
         ]),
-        "field `field_1` of type `test::TestType` is not a defaultable type",
+        &IP::from("test"),
+    )
+    .unwrap_err();
+    assert!(
+        err.to_string()
+            .contains("field `field_1` of type `test::TestType` is not a defaultable type")
     );
 }
 
 #[test]
 fn can_handle_defaultable_on_enum_with_default_field() {
-    assert_ast_produces_failure(
-        M::new().with_definitions([ID::new(
+    let err1 = build_state(
+        &M::new().with_definitions([ID::new(
             (V::Public, "TestType"),
             ED::new(
                 T::ident("u32"),
@@ -918,11 +942,17 @@ fn can_handle_defaultable_on_enum_with_default_field() {
             )
             .with_attributes([A::defaultable()]),
         )]),
-        "enum `test::TestType` is marked as defaultable but has no default variant set",
+        &IP::from("test"),
+    )
+    .unwrap_err();
+    assert!(
+        err1.to_string().contains(
+            "enum `test::TestType` is marked as defaultable but has no default variant set"
+        )
     );
 
-    assert_ast_produces_failure(
-        M::new().with_definitions([ID::new(
+    let err2 = build_state(
+        &M::new().with_definitions([ID::new(
             (V::Public, "TestType"),
             ED::new(
                 T::ident("u32"),
@@ -934,8 +964,12 @@ fn can_handle_defaultable_on_enum_with_default_field() {
             )
             .with_attributes([]),
         )]),
-        "enum `test::TestType` has a default variant set but is not marked as defaultable",
-    );
+        &IP::from("test"),
+    )
+    .unwrap_err();
+    assert!(err2.to_string().contains(
+        "enum `test::TestType` has a default variant set but is not marked as defaultable"
+    ));
 
     assert_ast_produces_type_definitions(
         M::new().with_definitions([ID::new(
@@ -964,8 +998,8 @@ fn can_handle_defaultable_on_enum_with_default_field() {
 
 #[test]
 fn will_reject_defaultable_on_non_defaultable_type() {
-    assert_ast_produces_failure(
-        M::new().with_definitions([
+    let err = build_state(
+        &M::new().with_definitions([
             ID::new(
                 (V::Public, "TestType"),
                 TD::new([TS::field(
@@ -976,14 +1010,19 @@ fn will_reject_defaultable_on_non_defaultable_type() {
             ),
             ID::new((V::Public, "TestNonDefaultable"), TD::new([])),
         ]),
-        "field `field_1` of type `test::TestType` is not a defaultable type",
+        &IP::from("test"),
+    )
+    .unwrap_err();
+    assert!(
+        err.to_string()
+            .contains("field `field_1` of type `test::TestType` is not a defaultable type")
     );
 }
 
 #[test]
 fn will_reject_types_that_are_larger_than_their_specified_size() {
-    assert_ast_produces_failure(
-        M::new().with_definitions([
+    let err = build_state(
+        &M::new().with_definitions([
             ID::new(
                 (V::Public, "Matrix4"),
                 TD::new([TS::field((V::Public, "data"), T::ident("f32").array(16))]),
@@ -997,12 +1036,17 @@ fn will_reject_types_that_are_larger_than_their_specified_size() {
                 .with_attributes([A::size(0x100)]),
             ),
         ]),
-        concat!(
-            "while processing `test::TestType`\n",
-            "calculated size 512 for type `test::TestType` does not match target size 256; ",
-            "is your target size correct?"
-        ),
+        &IP::from("test"),
+    )
+    .unwrap_err();
+    let err_str = err.to_string();
+    assert!(err_str.contains("while processing `test::TestType`"));
+    assert!(
+        err_str.contains(
+            "calculated size 512 for type `test::TestType` does not match target size 256"
+        )
     );
+    assert!(err_str.contains("is your target size correct?"));
 }
 
 #[test]
@@ -1012,7 +1056,7 @@ fn can_propagate_doc_comments() {
             .with_definitions([ID::new(
                 (V::Private, "TestType"),
                 TD::new([
-                    TS::vftable([F::new((V::Private, "test_vfunc"), [Ar::ConstSelf])
+                    TS::vftable([F::new((V::Private, "test_vfunc"), [Ar::const_self()])
                         .with_doc_comments(vec![" My test vfunc!".to_string()])]),
                     TS::field((V::Private, "field_1"), T::ident("u64"))
                         .with_doc_comments(vec![" This is a field doc comment".to_string()])
@@ -1023,7 +1067,7 @@ fn can_propagate_doc_comments() {
             .with_doc_comments(vec![" This is a doc comment".to_string()])])
             .with_impls([FB::new(
                 "TestType",
-                [F::new((V::Private, "test_func"), [Ar::ConstSelf])
+                [F::new((V::Private, "test_func"), [Ar::const_self()])
                     .with_doc_comments(vec![" My test func!".to_string()])
                     .with_attributes([A::address(0x123)])],
             )])
@@ -1053,7 +1097,7 @@ fn can_propagate_doc_comments() {
                                 SFB::vftable("test_vfunc"),
                                 SCC::for_member_function(pointer_size()),
                             )
-                            .with_arguments([SAr::ConstSelf])
+                            .with_arguments([SAr::const_self()])
                             .with_doc([" My test vfunc!"])],
                             None,
                             ST::raw("test::TestTypeVftable").const_pointer(),
@@ -1063,7 +1107,7 @@ fn can_propagate_doc_comments() {
                             SFB::address(0x123),
                             SCC::for_member_function(pointer_size()),
                         )
-                        .with_arguments([SAr::ConstSelf])
+                        .with_arguments([SAr::const_self()])
                         .with_doc([" My test func!"])]),
                 ),
             ),
@@ -1129,8 +1173,8 @@ fn can_resolve_bitflags() {
 
 #[test]
 fn bitflags_handle_defaultable_correctly() {
-    assert_ast_produces_failure(
-        M::new().with_definitions([ID::new(
+    let err1 = build_state(
+        &M::new().with_definitions([ID::new(
             (V::Public, "TestType"),
             BFD::new(
                 T::ident("u32"),
@@ -1142,11 +1186,15 @@ fn bitflags_handle_defaultable_correctly() {
             )
             .with_attributes([A::defaultable()]),
         )]),
-        "bitflags `test::TestType` is marked as defaultable but has no default value set",
-    );
+        &IP::from("test"),
+    )
+    .unwrap_err();
+    assert!(err1.to_string().contains(
+        "bitflags `test::TestType` is marked as defaultable but has no default value set"
+    ));
 
-    assert_ast_produces_failure(
-        M::new().with_definitions([ID::new(
+    let err2 = build_state(
+        &M::new().with_definitions([ID::new(
             (V::Public, "TestType"),
             BFD::new(
                 T::ident("u32"),
@@ -1158,8 +1206,12 @@ fn bitflags_handle_defaultable_correctly() {
             )
             .with_attributes([]),
         )]),
-        "bitflags `test::TestType` has a default value set but is not marked as defaultable",
-    );
+        &IP::from("test"),
+    )
+    .unwrap_err();
+    assert!(err2.to_string().contains(
+        "bitflags `test::TestType` has a default value set but is not marked as defaultable"
+    ));
 
     assert_ast_produces_type_definitions(
         M::new().with_definitions([ID::new(
@@ -1189,8 +1241,8 @@ fn bitflags_handle_defaultable_correctly() {
 #[test]
 fn bitflags_with_invalid_underlying_type_are_rejected() {
     for invalid_type in ["i8", "i16", "i32", "i64", "i128", "Lol"] {
-        assert_ast_produces_failure(
-            M::new().with_definitions([
+        let err = build_state(
+            &M::new().with_definitions([
                 ID::new((V::Public, "Lol"), TD::new([])),
                 ID::new(
                     (V::Public, "TestType"),
@@ -1204,14 +1256,17 @@ fn bitflags_with_invalid_underlying_type_are_rejected() {
                     ),
                 ),
             ]),
-            &if invalid_type == "Lol" {
-                "bitflags definition `test::TestType` has a type that is not a predefined type: test::Lol".to_string()
-            } else {
-                format!(
-                    "bitflags definition `test::TestType` has a type that is not an unsigned integer: {invalid_type}"
-                )
-            },
-        );
+            &IP::from("test"),
+        )
+        .unwrap_err();
+        let expected = if invalid_type == "Lol" {
+            "bitflags definition `test::TestType` has a type that is not a predefined type: test::Lol".to_string()
+        } else {
+            format!(
+                "bitflags definition `test::TestType` has a type that is not an unsigned integer: {invalid_type}"
+            )
+        };
+        assert!(err.to_string().contains(&expected));
     }
 
     assert_ast_produces_type_definitions(
@@ -1277,7 +1332,7 @@ fn can_resolve_freestanding_functions() {
     assert_eq!(func2.name, "another_freestanding");
     assert_eq!(func2.visibility, SV::Private);
     assert_eq!(func2.arguments.len(), 1);
-    assert!(matches!(&func2.arguments[0], SAr::Field(name, _) if name == "arg1"));
+    assert!(matches!(&func2.arguments[0], SAr::Field(name, _, _) if name == "arg1"));
     assert_eq!(func2.return_type, Some(ST::raw("i32")));
     assert_eq!(func2.calling_convention, SCC::System);
     assert!(matches!(func2.body, SFB::Address { address: 0x789 }));

@@ -72,15 +72,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             match pyxis::build(&in_dir, &out_dir, backend.into()) {
                 Ok(()) => Ok(()),
                 Err(err) => {
-                    // Format semantic errors with ariadne before displaying
-                    if let pyxis::BuildError::Semantic(semantic_err) = &err {
-                        let mut store = pyxis::source_store::FilesystemSourceStore::new();
-                        let formatted = semantic_err.format_with_ariadne(&mut store);
-                        eprintln!("{}", formatted);
-                    } else {
-                        eprintln!("{}", err);
-                    }
-                    Err(err.into())
+                    // Format errors with ariadne before displaying
+                    let mut store = pyxis::source_store::FilesystemSourceStore::new();
+                    let formatted = err.format_with_ariadne(&mut store);
+                    eprintln!("{formatted}");
+                    std::process::exit(1);
                 }
             }
         }

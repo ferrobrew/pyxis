@@ -11,7 +11,7 @@ fn vfunc_grammar(name: &str) -> F {
     F::new(
         (V::Public, name),
         [
-            Ar::MutSelf,
+            Ar::mut_self(),
             Ar::named("arg0", T::ident("u32")),
             Ar::named("arg1", T::ident("f32")),
         ],
@@ -41,7 +41,7 @@ fn vfunc_semantic(name: &str) -> SF {
         SCC::for_member_function(pointer_size()),
     )
     .with_arguments([
-        SAr::MutSelf,
+        SAr::mut_self(),
         SAr::field("arg0", ST::raw("u32")),
         SAr::field("arg1", ST::raw("f32")),
     ])

@@ -112,7 +112,7 @@ impl PrettyPrinter {
                     self.writeln("");
                 }
             }
-            ModuleItem::ExternType(name, attrs, doc_comments) => {
+            ModuleItem::ExternType(name, attrs, doc_comments, _) => {
                 // Print doc comments
                 for doc in doc_comments {
                     self.write_indent();
@@ -868,12 +868,12 @@ impl PrettyPrinter {
 
     fn print_argument(&mut self, arg: &Argument) {
         match arg {
-            Argument::Named(name, type_) => {
+            Argument::Named(name, type_, _) => {
                 write!(&mut self.output, "{name}: ").unwrap();
                 self.print_type(type_);
             }
-            Argument::ConstSelf => write!(&mut self.output, "&self").unwrap(),
-            Argument::MutSelf => write!(&mut self.output, "&mut self").unwrap(),
+            Argument::ConstSelf(_) => write!(&mut self.output, "&self").unwrap(),
+            Argument::MutSelf(_) => write!(&mut self.output, "&mut self").unwrap(),
         }
     }
 }
@@ -895,7 +895,7 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     use super::*;
-    use crate::parser::parse_str;
+    use crate::parser::parse_str_for_tests;
 
     #[test]
     fn test_pretty_print_basic() {
@@ -905,7 +905,7 @@ mod tests {
         }
         "#;
 
-        let module = parse_str(text).unwrap();
+        let module = parse_str_for_tests(text).unwrap();
         let printed = pretty_print(&module);
 
         assert!(printed.contains("pub type Test"));
@@ -949,7 +949,7 @@ pub type InputDeviceManager {
         "#
         .trim();
 
-        let module = parse_str(text).unwrap();
+        let module = parse_str_for_tests(text).unwrap();
         let printed = pretty_print(&module);
 
         dbg!(&module);
@@ -983,7 +983,7 @@ pub type AnarkGui {
         "#
         .trim();
 
-        let module = parse_str(text).unwrap();
+        let module = parse_str_for_tests(text).unwrap();
         let printed = pretty_print(&module);
 
         assert_eq!(printed, output);
@@ -1018,13 +1018,13 @@ pub type BlockCommentTest {
         "#
         .trim();
 
-        let module = parse_str(text).unwrap();
+        let module = parse_str_for_tests(text).unwrap();
         let printed = pretty_print(&module);
 
         assert_eq!(printed, expected);
 
         // Parse again to verify round-trip
-        let module2 = parse_str(&printed).unwrap();
+        let module2 = parse_str_for_tests(&printed).unwrap();
         let printed2 = pretty_print(&module2);
 
         assert_eq!(printed, printed2);
@@ -1063,13 +1063,13 @@ pub type BlockCommentTest {
         "#
         .trim();
 
-        let module = parse_str(text).unwrap();
+        let module = parse_str_for_tests(text).unwrap();
         let printed = pretty_print(&module);
 
         assert_eq!(printed, expected);
 
         // Parse again to verify round-trip
-        let module2 = parse_str(&printed).unwrap();
+        let module2 = parse_str_for_tests(&printed).unwrap();
         let printed2 = pretty_print(&module2);
 
         assert_eq!(printed, printed2);
@@ -1098,13 +1098,13 @@ pub enum State: u32 {
         "#
         .trim();
 
-        let module = parse_str(text).unwrap();
+        let module = parse_str_for_tests(text).unwrap();
         let printed = pretty_print(&module);
 
         assert_eq!(printed, expected);
 
         // Parse again to verify round-trip
-        let module2 = parse_str(&printed).unwrap();
+        let module2 = parse_str_for_tests(&printed).unwrap();
         let printed2 = pretty_print(&module2);
 
         assert_eq!(printed, printed2);
@@ -1133,13 +1133,13 @@ pub bitflags Flags: u32 {
         "#
         .trim();
 
-        let module = parse_str(text).unwrap();
+        let module = parse_str_for_tests(text).unwrap();
         let printed = pretty_print(&module);
 
         assert_eq!(printed, expected);
 
         // Parse again to verify round-trip
-        let module2 = parse_str(&printed).unwrap();
+        let module2 = parse_str_for_tests(&printed).unwrap();
         let printed2 = pretty_print(&module2);
 
         assert_eq!(printed, printed2);
@@ -1190,13 +1190,13 @@ pub type Bar {
         "#
         .trim();
 
-        let module = parse_str(text).unwrap();
+        let module = parse_str_for_tests(text).unwrap();
         let printed = pretty_print(&module);
 
         assert_eq!(printed, expected);
 
         // Parse again to verify round-trip
-        let module2 = parse_str(&printed).unwrap();
+        let module2 = parse_str_for_tests(&printed).unwrap();
         let printed2 = pretty_print(&module2);
 
         assert_eq!(printed, printed2);
@@ -1219,13 +1219,13 @@ pub type SimpleType {
         "#
         .trim();
 
-        let module = parse_str(text).unwrap();
+        let module = parse_str_for_tests(text).unwrap();
         let printed = pretty_print(&module);
 
         assert_eq!(printed, expected);
 
         // Parse again to verify round-trip
-        let module2 = parse_str(&printed).unwrap();
+        let module2 = parse_str_for_tests(&printed).unwrap();
         let printed2 = pretty_print(&module2);
 
         assert_eq!(printed, printed2);
@@ -1252,13 +1252,13 @@ pub type Foo {
         "#
         .trim();
 
-        let module = parse_str(text).unwrap();
+        let module = parse_str_for_tests(text).unwrap();
         let printed = pretty_print(&module);
 
         assert_eq!(printed, expected);
 
         // Parse again to verify round-trip
-        let module2 = parse_str(&printed).unwrap();
+        let module2 = parse_str_for_tests(&printed).unwrap();
         let printed2 = pretty_print(&module2);
 
         assert_eq!(printed, printed2);
@@ -1281,13 +1281,13 @@ pub type Foo {
         "#
         .trim();
 
-        let module = parse_str(text).unwrap();
+        let module = parse_str_for_tests(text).unwrap();
         let printed = pretty_print(&module);
 
         assert_eq!(printed, expected);
 
         // Parse again to verify round-trip
-        let module2 = parse_str(&printed).unwrap();
+        let module2 = parse_str_for_tests(&printed).unwrap();
         let printed2 = pretty_print(&module2);
 
         assert_eq!(printed, printed2);
@@ -1326,13 +1326,13 @@ pub type MultipleBlocks {
         "#
         .trim();
 
-        let module = parse_str(text).unwrap();
+        let module = parse_str_for_tests(text).unwrap();
         let printed = pretty_print(&module);
 
         assert_eq!(printed, expected);
 
         // Parse again to verify round-trip
-        let module2 = parse_str(&printed).unwrap();
+        let module2 = parse_str_for_tests(&printed).unwrap();
         let printed2 = pretty_print(&module2);
 
         assert_eq!(printed, printed2);
@@ -1347,7 +1347,7 @@ backend rust prologue "
 ";
         "#;
 
-        let module = parse_str(text).unwrap();
+        let module = parse_str_for_tests(text).unwrap();
         let printed = pretty_print(&module);
 
         // Verify the backend is present and format is correct
@@ -1375,7 +1375,7 @@ backend rust prologue r#"
         "##
         .trim();
 
-        let module = parse_str(text).unwrap();
+        let module = parse_str_for_tests(text).unwrap();
         let printed = pretty_print(&module);
 
         assert_eq!(printed, expected);
@@ -1402,7 +1402,7 @@ pub type RenderBlock {
         "#
         .trim();
 
-        let module = parse_str(text).unwrap();
+        let module = parse_str_for_tests(text).unwrap();
         let printed = pretty_print(&module);
 
         assert_eq!(printed, expected);
@@ -1429,7 +1429,7 @@ extern type ManuallyDrop<SharedPtr<u32>>;
         "#
         .trim();
 
-        let module = parse_str(text).unwrap();
+        let module = parse_str_for_tests(text).unwrap();
         let printed = pretty_print(&module);
 
         assert_eq!(printed, expected);
@@ -1462,7 +1462,7 @@ pub bitflags CameraState: u8 {
         "#
         .trim();
 
-        let module = parse_str(text).unwrap();
+        let module = parse_str_for_tests(text).unwrap();
         let printed = pretty_print(&module);
 
         assert_eq!(printed, expected);
@@ -1487,7 +1487,7 @@ pub bitflags TestFlags: u32 {
         "#
         .trim();
 
-        let module = parse_str(text).unwrap();
+        let module = parse_str_for_tests(text).unwrap();
         let printed = pretty_print(&module);
 
         assert_eq!(printed, expected);

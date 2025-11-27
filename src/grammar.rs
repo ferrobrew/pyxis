@@ -1,6 +1,6 @@
 use std::{fmt, path::Path};
 
-use crate::span::{Span, Spanned};
+use crate::span::{ItemLocation, Spanned};
 
 /// Format information for integer literals
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -149,6 +149,31 @@ impl Type {
 impl From<&str> for Type {
     fn from(item: &str) -> Self {
         Type::Ident(item.into(), vec![])
+    }
+}
+
+impl fmt::Display for Type {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Type::ConstPointer(inner) => write!(f, "*const {}", inner),
+            Type::MutPointer(inner) => write!(f, "*mut {}", inner),
+            Type::Array(inner, size) => write!(f, "[{}; {}]", inner, size),
+            Type::Ident(ident, args) => {
+                write!(f, "{}", ident)?;
+                if !args.is_empty() {
+                    write!(f, "<")?;
+                    for (i, arg) in args.iter().enumerate() {
+                        if i > 0 {
+                            write!(f, ", ")?;
+                        }
+                        write!(f, "{}", arg)?;
+                    }
+                    write!(f, ">")?;
+                }
+                Ok(())
+            }
+            Type::Unknown(size) => write!(f, "unknown({})", size),
+        }
     }
 }
 
@@ -422,13 +447,20 @@ pub enum Visibility {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Argument {
-    ConstSelf,
-    MutSelf,
-    Named(Ident, Type),
+    ConstSelf(ItemLocation),
+    MutSelf(ItemLocation),
+    Named(Ident, Type, ItemLocation),
 }
+#[cfg(test)]
 impl Argument {
+    pub fn const_self() -> Argument {
+        Argument::ConstSelf(ItemLocation::test())
+    }
+    pub fn mut_self() -> Argument {
+        Argument::MutSelf(ItemLocation::test())
+    }
     pub fn named(ident: impl Into<Ident>, type_: impl Into<Type>) -> Argument {
-        Argument::Named(ident.into(), type_.into())
+        Argument::Named(ident.into(), type_.into(), ItemLocation::test())
     }
 }
 
@@ -440,7 +472,9 @@ pub struct Function {
     pub doc_comments: Vec<String>,
     pub arguments: Vec<Argument>,
     pub return_type: Option<Type>,
+    pub location: ItemLocation,
 }
+#[cfg(test)]
 impl Function {
     pub fn new(
         (visibility, name): (Visibility, &str),
@@ -453,6 +487,7 @@ impl Function {
             doc_comments: vec![],
             arguments: arguments.into(),
             return_type: None,
+            location: ItemLocation::test(),
         }
     }
     pub fn with_attributes(mut self, attributes: impl Into<Attributes>) -> Self {
@@ -465,6 +500,10 @@ impl Function {
     }
     pub fn with_return_type(mut self, return_type: impl Into<Type>) -> Self {
         self.return_type = Some(return_type.into());
+        self
+    }
+    pub fn with_location(mut self, location: ItemLocation) -> Self {
+        self.location = location;
         self
     }
 }
@@ -524,8 +563,9 @@ pub struct TypeStatement {
     pub doc_comments: Vec<String>,
     pub inline_trailing_comments: Vec<Spanned<Comment>>, // Comments on same line as field
     pub following_comments: Vec<Spanned<Comment>>,       // Comments on lines after field
-    pub span: Span,
+    pub location: ItemLocation,
 }
+#[cfg(test)]
 impl TypeStatement {
     pub fn field((visibility, name): (Visibility, &str), type_: Type) -> TypeStatement {
         TypeStatement {
@@ -534,7 +574,7 @@ impl TypeStatement {
             doc_comments: vec![],
             inline_trailing_comments: Vec::new(),
             following_comments: Vec::new(),
-            span: Span::synthetic(),
+            location: ItemLocation::test(),
         }
     }
     pub fn vftable(functions: impl IntoIterator<Item = Function>) -> TypeStatement {
@@ -544,11 +584,11 @@ impl TypeStatement {
             doc_comments: vec![],
             inline_trailing_comments: Vec::new(),
             following_comments: Vec::new(),
-            span: Span::synthetic(),
+            location: ItemLocation::test(),
         }
     }
-    pub fn with_span(mut self, span: Span) -> Self {
-        self.span = span;
+    pub fn with_location(mut self, location: ItemLocation) -> Self {
+        self.location = location;
         self
     }
     pub fn with_attributes(mut self, attributes: impl Into<Attributes>) -> Self {
@@ -632,8 +672,9 @@ pub struct EnumStatement {
     pub doc_comments: Vec<String>,
     pub inline_trailing_comments: Vec<Spanned<Comment>>, // Comments on same line as enum variant
     pub following_comments: Vec<Spanned<Comment>>,       // Comments on lines after enum variant
-    pub span: Span,
+    pub location: ItemLocation,
 }
+#[cfg(test)]
 impl EnumStatement {
     pub fn new(name: Ident, expr: Option<Expr>) -> EnumStatement {
         EnumStatement {
@@ -643,7 +684,7 @@ impl EnumStatement {
             doc_comments: vec![],
             inline_trailing_comments: Vec::new(),
             following_comments: Vec::new(),
-            span: Span::synthetic(),
+            location: ItemLocation::test(),
         }
     }
     pub fn field(name: &str) -> EnumStatement {
@@ -652,8 +693,8 @@ impl EnumStatement {
     pub fn field_with_expr(name: &str, expr: Expr) -> EnumStatement {
         Self::new(name.into(), Some(expr))
     }
-    pub fn with_span(mut self, span: Span) -> Self {
-        self.span = span;
+    pub fn with_location(mut self, location: ItemLocation) -> Self {
+        self.location = location;
         self
     }
     pub fn with_attributes(mut self, attributes: impl Into<Attributes>) -> Self {
@@ -743,8 +784,9 @@ pub struct BitflagsStatement {
     pub doc_comments: Vec<String>,
     pub inline_trailing_comments: Vec<Spanned<Comment>>, // Comments on same line as bitflag
     pub following_comments: Vec<Spanned<Comment>>,       // Comments on lines after bitflag
-    pub span: Span,
+    pub location: ItemLocation,
 }
+#[cfg(test)]
 impl BitflagsStatement {
     pub fn new(name: Ident, expr: Expr) -> BitflagsStatement {
         BitflagsStatement {
@@ -754,14 +796,14 @@ impl BitflagsStatement {
             doc_comments: vec![],
             inline_trailing_comments: Vec::new(),
             following_comments: Vec::new(),
-            span: Span::synthetic(),
+            location: ItemLocation::test(),
         }
     }
     pub fn field(name: &str, expr: Expr) -> BitflagsStatement {
         Self::new(name.into(), expr)
     }
-    pub fn with_span(mut self, span: Span) -> Self {
-        self.span = span;
+    pub fn with_location(mut self, location: ItemLocation) -> Self {
+        self.location = location;
         self
     }
     pub fn with_attributes(mut self, attributes: impl Into<Attributes>) -> Self {
@@ -864,8 +906,9 @@ pub struct ItemDefinition {
     pub name: Ident,
     pub doc_comments: Vec<String>,
     pub inner: ItemDefinitionInner,
-    pub span: Span,
+    pub location: ItemLocation,
 }
+#[cfg(test)]
 impl ItemDefinition {
     pub fn new(
         (visibility, name): (Visibility, &str),
@@ -876,12 +919,12 @@ impl ItemDefinition {
             name: name.into(),
             doc_comments: vec![],
             inner: inner.into(),
-            span: Span::synthetic(),
+            location: ItemLocation::test(),
         }
     }
 
-    pub fn with_span(mut self, span: Span) -> Self {
-        self.span = span;
+    pub fn with_location(mut self, location: ItemLocation) -> Self {
+        self.location = location;
         self
     }
     pub fn with_doc_comments(mut self, doc_comments: Vec<String>) -> Self {
@@ -982,7 +1025,9 @@ pub struct ExternValue {
     pub type_: Type,
     pub attributes: Attributes,
     pub doc_comments: Vec<String>,
+    pub location: ItemLocation,
 }
+#[cfg(test)]
 impl ExternValue {
     pub fn new(
         visibility: Visibility,
@@ -996,10 +1041,15 @@ impl ExternValue {
             type_,
             attributes: attributes.into(),
             doc_comments: vec![],
+            location: ItemLocation::test(),
         }
     }
     pub fn with_doc_comments(mut self, doc_comments: Vec<String>) -> Self {
         self.doc_comments = doc_comments;
+        self
+    }
+    pub fn with_location(mut self, location: ItemLocation) -> Self {
+        self.location = location;
         self
     }
 }
@@ -1009,7 +1059,7 @@ impl ExternValue {
 pub enum ModuleItem {
     Comment(Spanned<Comment>),
     Use(ItemPath),
-    ExternType(Ident, Attributes, Vec<String>), // name, attributes, doc_comments
+    ExternType(Ident, Attributes, Vec<String>, ItemLocation), // name, attributes, doc_comments, location
     Backend(Backend),
     Definition(ItemDefinition),
     Impl(FunctionBlock),
@@ -1027,7 +1077,9 @@ impl Module {
     pub fn new() -> Self {
         Self::default()
     }
-
+}
+#[cfg(test)]
+impl Module {
     pub fn with_uses(mut self, uses: impl Into<Vec<ItemPath>>) -> Self {
         for use_path in uses.into() {
             self.items.push(ModuleItem::Use(use_path));
@@ -1036,7 +1088,12 @@ impl Module {
     }
     pub fn with_extern_types(mut self, extern_types: impl Into<Vec<(Ident, Attributes)>>) -> Self {
         for (name, attrs) in extern_types.into() {
-            self.items.push(ModuleItem::ExternType(name, attrs, vec![]));
+            self.items.push(ModuleItem::ExternType(
+                name,
+                attrs,
+                vec![],
+                ItemLocation::test(),
+            ));
         }
         self
     }
@@ -1078,7 +1135,8 @@ impl Module {
         self.doc_comments = doc_comments;
         self
     }
-
+}
+impl Module {
     /// Helper to extract uses (for compatibility)
     pub fn uses(&self) -> impl Iterator<Item = &ItemPath> {
         self.items.iter().filter_map(|item| match item {
@@ -1088,9 +1146,9 @@ impl Module {
     }
 
     /// Helper to extract extern_types (for compatibility)
-    pub fn extern_types(&self) -> impl Iterator<Item = (&Ident, &Attributes)> {
+    pub fn extern_types(&self) -> impl Iterator<Item = (&Ident, &Attributes, &ItemLocation)> {
         self.items.iter().filter_map(|item| match item {
-            ModuleItem::ExternType(name, attrs, _) => Some((name, attrs)),
+            ModuleItem::ExternType(name, attrs, _, location) => Some((name, attrs, location)),
             _ => None,
         })
     }
