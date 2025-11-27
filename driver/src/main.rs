@@ -59,7 +59,7 @@ impl From<Backend> for pyxis::Backend {
     }
 }
 
-fn main() -> anyhow::Result<()> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
 
     match args.command {
@@ -69,7 +69,16 @@ fn main() -> anyhow::Result<()> {
             out_dir,
         } => {
             std::fs::create_dir_all(&out_dir)?;
-            pyxis::build(&in_dir, &out_dir, backend.into())
+            match pyxis::build(&in_dir, &out_dir, backend.into()) {
+                Ok(()) => Ok(()),
+                Err(err) => {
+                    // Format errors with ariadne before displaying
+                    let mut store = pyxis::source_store::FilesystemSourceStore::new();
+                    let formatted = err.format_with_ariadne(&mut store);
+                    eprintln!("{formatted}");
+                    std::process::exit(1);
+                }
+            }
         }
         Command::AstDump { file, pretty } => {
             let content = std::fs::read_to_string(&file)?;
@@ -151,14 +160,17 @@ fn main() -> anyhow::Result<()> {
 }
 
 /// Recursively find all .pyxis files in the given directory
-fn find_pyxis_files(dir: &PathBuf) -> anyhow::Result<Vec<PathBuf>> {
+fn find_pyxis_files(dir: &PathBuf) -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
     let mut files = Vec::new();
     find_pyxis_files_recursive(dir, &mut files)?;
     files.sort();
     Ok(files)
 }
 
-fn find_pyxis_files_recursive(dir: &PathBuf, files: &mut Vec<PathBuf>) -> anyhow::Result<()> {
+fn find_pyxis_files_recursive(
+    dir: &PathBuf,
+    files: &mut Vec<PathBuf>,
+) -> Result<(), Box<dyn std::error::Error>> {
     if dir.is_dir() {
         for entry in std::fs::read_dir(dir)? {
             let entry = entry?;
@@ -174,7 +186,7 @@ fn find_pyxis_files_recursive(dir: &PathBuf, files: &mut Vec<PathBuf>) -> anyhow
 }
 
 /// Format a single file. Returns true if the file was modified (or needs formatting in check mode)
-fn format_file(file: &PathBuf, check: bool) -> anyhow::Result<bool> {
+fn format_file(file: &PathBuf, check: bool) -> Result<bool, Box<dyn std::error::Error>> {
     let content = std::fs::read_to_string(file)?;
     let filename = file.display().to_string();
     let module = pyxis::parser::parse_str_with_filename(&content, &filename)?;

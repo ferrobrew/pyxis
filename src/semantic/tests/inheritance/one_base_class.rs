@@ -14,6 +14,7 @@
 //!
 
 use super::*;
+use crate::semantic::error::SemanticError;
 
 #[test]
 fn b0_d0() {
@@ -230,12 +231,12 @@ fn b1_d1_with_associated_functions() {
             .with_impls([
                 FB::new(
                     "Base",
-                    [F::new((V::Public, "base_associated"), [Ar::MutSelf])
+                    [F::new((V::Public, "base_associated"), [Ar::mut_self()])
                         .with_attributes([A::address(0x123)])],
                 ),
                 FB::new(
                     "Derived",
-                    [F::new((V::Public, "derived_associated"), [Ar::MutSelf])
+                    [F::new((V::Public, "derived_associated"), [Ar::mut_self()])
                         .with_attributes([A::address(0x456)])],
                 ),
             ]),
@@ -265,7 +266,7 @@ fn b1_d1_with_associated_functions() {
                             SFB::address(0x123),
                             SCC::for_member_function(pointer_size()),
                         )
-                        .with_arguments([SAr::MutSelf])]),
+                        .with_arguments([SAr::mut_self()])]),
                 ),
             ),
             SID::defined_resolved(
@@ -297,13 +298,13 @@ fn b1_d1_with_associated_functions() {
                                 SFB::field("base", "base_associated"),
                                 SCC::for_member_function(pointer_size()),
                             )
-                            .with_arguments([SAr::MutSelf]),
+                            .with_arguments([SAr::mut_self()]),
                             SF::new(
                                 (SV::Public, "derived_associated"),
                                 SFB::address(0x456),
                                 SCC::for_member_function(pointer_size()),
                             )
-                            .with_arguments([SAr::MutSelf]),
+                            .with_arguments([SAr::mut_self()]),
                         ]),
                 ),
             ),
@@ -323,15 +324,7 @@ fn b1_d1_with_associated_functions() {
 
 #[test]
 fn b1_d1_without_overlapping_vfuncs_will_fail() {
-    let error = format!(
-"while processing `test::Derived`
-vftable for `test::Derived` has function \
-`pub extern \"{callconv}\" fn not_base_vfunc2(&mut self, arg0: u32, arg1: f32) -> i32 = self.vftable.not_base_vfunc2` \
-at index 1 but base class `base` has function \
-`pub extern \"{callconv}\" fn base_vfunc2(&mut self, arg0: u32, arg1: f32) -> i32 = self.vftable.base_vfunc2`",
-callconv = SCC::for_member_function(pointer_size()).as_str()
-    );
-    assert_ast_produces_failure(
+    assert_ast_produces_error(
         M::new().with_definitions([
             ID::new(
                 (V::Public, "Base"),
@@ -357,6 +350,22 @@ callconv = SCC::for_member_function(pointer_size()).as_str()
                 .with_attributes([A::align(8)]),
             ),
         ]),
-        &error,
+        |err| {
+            matches!(
+                err,
+                SemanticError::VftableFunctionMismatch {
+                    item_path,
+                    base_name,
+                    index: 1,
+                    derived_function,
+                    base_function,
+                    ..
+                }
+                if item_path.to_string() == "test::Derived"
+                    && base_name == "base"
+                    && derived_function.contains("not_base_vfunc2")
+                    && base_function.contains("base_vfunc2")
+            )
+        },
     );
 }

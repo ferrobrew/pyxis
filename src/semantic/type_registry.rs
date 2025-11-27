@@ -1,8 +1,13 @@
 use std::collections::BTreeMap;
 
 use crate::{
+    SemanticError,
     grammar::{self, ItemPath},
-    semantic::types::{ItemDefinition, Type},
+    semantic::{
+        error::Result,
+        types::{ItemDefinition, Type},
+    },
+    span::ItemLocation,
 };
 
 #[derive(Debug)]
@@ -23,12 +28,30 @@ impl TypeRegistry {
         self.pointer_size
     }
 
-    pub fn get(&self, item_path: &ItemPath) -> Option<&ItemDefinition> {
-        self.types.get(item_path)
+    pub fn get(
+        &self,
+        item_path: &ItemPath,
+        from_location: &ItemLocation,
+    ) -> Result<&ItemDefinition> {
+        self.types
+            .get(item_path)
+            .ok_or_else(|| SemanticError::TypeNotFound {
+                path: item_path.clone(),
+                location: from_location.clone(),
+            })
     }
 
-    pub fn get_mut(&mut self, item_path: &ItemPath) -> Option<&mut ItemDefinition> {
-        self.types.get_mut(item_path)
+    pub fn get_mut(
+        &mut self,
+        item_path: &ItemPath,
+        from_location: &ItemLocation,
+    ) -> Result<&mut ItemDefinition> {
+        self.types
+            .get_mut(item_path)
+            .ok_or_else(|| SemanticError::TypeNotFound {
+                path: item_path.clone(),
+                location: from_location.clone(),
+            })
     }
 
     pub(crate) fn resolved(&self) -> Vec<ItemPath> {
@@ -81,15 +104,15 @@ impl TypeRegistry {
         // todo: consider building a better module import/scope system
         match type_ {
             grammar::Type::ConstPointer(t) => self
-                .resolve_grammar_type(scope, t.as_ref())
+                .resolve_grammar_type(scope, t)
                 .map(|t| Type::ConstPointer(Box::new(t))),
             grammar::Type::MutPointer(t) => self
-                .resolve_grammar_type(scope, t.as_ref())
+                .resolve_grammar_type(scope, t)
                 .map(|t| Type::MutPointer(Box::new(t))),
             grammar::Type::Array(t, size) => self
-                .resolve_grammar_type(scope, t.as_ref())
+                .resolve_grammar_type(scope, t)
                 .map(|t| Type::Array(Box::new(t), *size)),
-            grammar::Type::Ident(ident, _args) => self.resolve_string(scope, ident.as_str()),
+            grammar::Type::Ident(ident) => self.resolve_string(scope, ident.as_str()),
             grammar::Type::Unknown(size) => Some(self.padding_type(*size)),
         }
     }

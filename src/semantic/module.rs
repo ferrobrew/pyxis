@@ -3,10 +3,12 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::{
     grammar::{self, ItemPath},
     semantic::{
+        error::{Result, SemanticError, TypeResolutionContext},
         function::Function,
-        type_registry,
+        type_registry::TypeRegistry,
         types::{Backend, ExternValue, ItemDefinition, Type},
     },
+    span::ItemLocation,
 };
 
 #[derive(Debug, Clone)]
@@ -43,7 +45,7 @@ impl Module {
         extern_values: Vec<ExternValue>,
         impls: &[grammar::FunctionBlock],
         backends: &[grammar::Backend],
-    ) -> anyhow::Result<Self> {
+    ) -> Result<Self> {
         let impls = impls
             .iter()
             .map(|f| (path.join(f.name.as_str().into()), f.clone()))
@@ -83,11 +85,11 @@ impl Module {
 
     pub fn definitions<'a>(
         &'a self,
-        type_registry: &'a type_registry::TypeRegistry,
+        type_registry: &'a TypeRegistry,
     ) -> impl Iterator<Item = &'a ItemDefinition> {
         self.definition_paths()
             .iter()
-            .filter_map(|p| type_registry.get(p))
+            .filter_map(|p| type_registry.get(p, &ItemLocation::internal()).ok())
     }
 
     pub fn scope(&self) -> Vec<ItemPath> {
@@ -96,27 +98,27 @@ impl Module {
             .collect()
     }
 
-    pub(crate) fn resolve_extern_values(
-        &mut self,
-        type_registry: &mut type_registry::TypeRegistry,
-    ) -> anyhow::Result<()> {
+    pub(crate) fn resolve_extern_values(&mut self, type_registry: &mut TypeRegistry) -> Result<()> {
         let scope = self.scope();
 
         for ev in &mut self.extern_values {
             if let Type::Unresolved(type_ref) = &ev.type_ {
                 ev.type_ = type_registry
                     .resolve_grammar_type(&scope, type_ref)
-                    .ok_or_else(|| anyhow::anyhow!("failed to resolve type for {}", ev.name))?;
+                    .ok_or_else(|| SemanticError::TypeResolutionFailed {
+                        type_: type_ref.clone(),
+                        resolution_context: TypeResolutionContext::ExternValue {
+                            extern_name: ev.name.clone(),
+                        },
+                        location: type_ref.location.clone(),
+                    })?;
             }
         }
 
         Ok(())
     }
 
-    pub(crate) fn resolve_functions(
-        &mut self,
-        type_registry: &type_registry::TypeRegistry,
-    ) -> anyhow::Result<()> {
+    pub(crate) fn resolve_functions(&mut self, type_registry: &TypeRegistry) -> Result<()> {
         let scope = self.scope();
 
         for function in self.ast.functions().collect::<Vec<_>>() {

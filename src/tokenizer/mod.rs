@@ -1,5 +1,7 @@
-use crate::span::{Location, Span};
+use crate::source_store::SourceStore;
+use crate::span::{self, ItemLocation, Location, Span};
 use ariadne::{Color, Label, Report, ReportKind, Source};
+use std::sync::Arc;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TokenKind {
@@ -64,67 +66,86 @@ pub enum TokenKind {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Token {
     pub kind: TokenKind,
-    pub span: Span,
+    pub location: ItemLocation,
 }
 
 impl Token {
-    pub fn new(kind: TokenKind, span: Span) -> Self {
-        Self { kind, span }
+    pub fn new(kind: TokenKind, location: ItemLocation) -> Self {
+        Self { kind, location }
+    }
+
+    pub fn start_location(&self) -> Location {
+        self.location.span.start
+    }
+
+    pub fn end_location(&self) -> Location {
+        self.location.span.end
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct LexError {
     pub message: String,
-    pub location: Location,
-    pub filename: String,
+    pub location: ItemLocation,
     pub source: String,
 }
 
 impl LexError {
-    /// Convert a Location to a byte offset in the source text
-    fn location_to_offset(&self, location: Location) -> usize {
-        let mut offset = 0;
-        let mut current_line = 1;
+    /// Format the error using ariadne with the provided source store.
+    /// Always produces ariadne-formatted output.
+    pub fn format_with_ariadne(&self, source_store: &mut dyn SourceStore) -> String {
+        if let Some(source) = source_store.get(self.location.filename.as_ref()) {
+            let offset = span::span_to_offset(source, &self.location.span);
+            let report = Report::build(ReportKind::Error, self.location.filename.as_ref(), offset)
+                .with_message(&self.message)
+                .with_label(
+                    Label::new((self.location.filename.as_ref(), offset..offset + 1))
+                        .with_message(&self.message)
+                        .with_color(Color::Red),
+                )
+                .finish();
 
-        for ch in self.source.chars() {
-            if current_line == location.line {
-                // We're on the target line, add column offset (1-indexed)
-                return offset + (location.column - 1);
+            let mut buffer = Vec::new();
+            if report
+                .write(
+                    (self.location.filename.as_ref(), Source::from(source)),
+                    &mut buffer,
+                )
+                .is_ok()
+            {
+                return String::from_utf8_lossy(&buffer).to_string();
             }
-            if ch == '\n' {
-                current_line += 1;
-            }
-            offset += ch.len_utf8();
         }
 
-        // If we reached the end, return the offset
-        offset
+        // Source not available - create a report without source code labels
+        let placeholder_filename = self.location.filename.as_ref();
+        let report = Report::<(&str, std::ops::Range<usize>)>::build(
+            ReportKind::Error,
+            placeholder_filename,
+            0,
+        )
+        .with_message(&self.message)
+        .with_note(format!(
+            "Error location: {}:{}:{}",
+            self.location.filename, self.location.span.start.line, self.location.span.start.column
+        ))
+        .finish();
+
+        let mut buffer = Vec::new();
+        if report
+            .write((placeholder_filename, Source::from("")), &mut buffer)
+            .is_ok()
+        {
+            return String::from_utf8_lossy(&buffer).to_string();
+        }
+
+        self.message.clone()
     }
 }
 
 impl std::fmt::Display for LexError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let offset = self.location_to_offset(self.location);
-
-        let report = Report::build(ReportKind::Error, &self.filename, offset)
-            .with_message(&self.message)
-            .with_label(
-                Label::new((&self.filename, offset..offset + 1))
-                    .with_message(&self.message)
-                    .with_color(Color::Red),
-            )
-            .finish();
-
-        // Write the report to a string buffer
-        let mut buffer = Vec::new();
-        report
-            .write((&self.filename, Source::from(&self.source)), &mut buffer)
-            .map_err(|_| std::fmt::Error)?;
-
-        // Convert to string and write to formatter
-        let output = String::from_utf8_lossy(&buffer);
-        write!(f, "{}", output)
+        write!(f, "Lexer error at {}: {}", self.location, self.message)
     }
 }
 
@@ -136,11 +157,11 @@ pub struct Lexer {
     pos: usize,
     line: usize,
     column: usize,
-    filename: String,
+    filename: Arc<str>,
 }
 
 impl Lexer {
-    pub fn new(input: String, filename: String) -> Self {
+    pub fn new(input: String, filename: impl Into<Arc<str>>) -> Self {
         let chars: Vec<char> = input.chars().collect();
         Self {
             input,
@@ -148,7 +169,7 @@ impl Lexer {
             pos: 0,
             line: 1,
             column: 1,
-            filename,
+            filename: filename.into(),
         }
     }
 
@@ -156,8 +177,7 @@ impl Lexer {
     fn error(&self, message: String, location: Location) -> LexError {
         LexError {
             message,
-            location,
-            filename: self.filename.clone(),
+            location: ItemLocation::new(self.filename.clone(), Span::new(location, location)),
             source: self.input.clone(),
         }
     }
@@ -171,7 +191,7 @@ impl Lexer {
                 let loc = self.current_location();
                 tokens.push(Token::new(
                     TokenKind::Eof,
-                    Span::new(loc, loc, String::new()),
+                    ItemLocation::new(self.filename.clone(), Span::new(loc, loc)),
                 ));
                 break;
             }
@@ -283,15 +303,16 @@ impl Lexer {
                 if self.peek() == Some(':') {
                     self.advance();
                     let end = self.current_location();
-                    let text = self.input[start_pos..self.pos].to_string();
                     Ok(Token::new(
                         TokenKind::ColonColon,
-                        Span::new(start, end, text),
+                        ItemLocation::new(self.filename.clone(), Span::new(start, end)),
                     ))
                 } else {
                     let end = self.current_location();
-                    let text = self.input[start_pos..self.pos].to_string();
-                    Ok(Token::new(TokenKind::Colon, Span::new(start, end, text)))
+                    Ok(Token::new(
+                        TokenKind::Colon,
+                        ItemLocation::new(self.filename.clone(), Span::new(start, end)),
+                    ))
                 }
             }
             '-' => {
@@ -299,8 +320,10 @@ impl Lexer {
                 if self.peek() == Some('>') {
                     self.advance();
                     let end = self.current_location();
-                    let text = self.input[start_pos..self.pos].to_string();
-                    Ok(Token::new(TokenKind::Arrow, Span::new(start, end, text)))
+                    Ok(Token::new(
+                        TokenKind::Arrow,
+                        ItemLocation::new(self.filename.clone(), Span::new(start, end)),
+                    ))
                 } else {
                     // Could be negative number
                     if let Some(ch) = self.peek()
@@ -314,94 +337,124 @@ impl Lexer {
             '&' => {
                 self.advance();
                 let end = self.current_location();
-                let text = self.input[start_pos..self.pos].to_string();
-                Ok(Token::new(TokenKind::Amp, Span::new(start, end, text)))
+                Ok(Token::new(
+                    TokenKind::Amp,
+                    ItemLocation::new(self.filename.clone(), Span::new(start, end)),
+                ))
             }
             '*' => {
                 self.advance();
                 let end = self.current_location();
-                let text = self.input[start_pos..self.pos].to_string();
-                Ok(Token::new(TokenKind::Star, Span::new(start, end, text)))
+                Ok(Token::new(
+                    TokenKind::Star,
+                    ItemLocation::new(self.filename.clone(), Span::new(start, end)),
+                ))
             }
             '[' => {
                 self.advance();
                 let end = self.current_location();
-                let text = self.input[start_pos..self.pos].to_string();
-                Ok(Token::new(TokenKind::LBracket, Span::new(start, end, text)))
+                Ok(Token::new(
+                    TokenKind::LBracket,
+                    ItemLocation::new(self.filename.clone(), Span::new(start, end)),
+                ))
             }
             ']' => {
                 self.advance();
                 let end = self.current_location();
-                let text = self.input[start_pos..self.pos].to_string();
-                Ok(Token::new(TokenKind::RBracket, Span::new(start, end, text)))
+                Ok(Token::new(
+                    TokenKind::RBracket,
+                    ItemLocation::new(self.filename.clone(), Span::new(start, end)),
+                ))
             }
             '{' => {
                 self.advance();
                 let end = self.current_location();
-                let text = self.input[start_pos..self.pos].to_string();
-                Ok(Token::new(TokenKind::LBrace, Span::new(start, end, text)))
+                Ok(Token::new(
+                    TokenKind::LBrace,
+                    ItemLocation::new(self.filename.clone(), Span::new(start, end)),
+                ))
             }
             '}' => {
                 self.advance();
                 let end = self.current_location();
-                let text = self.input[start_pos..self.pos].to_string();
-                Ok(Token::new(TokenKind::RBrace, Span::new(start, end, text)))
+                Ok(Token::new(
+                    TokenKind::RBrace,
+                    ItemLocation::new(self.filename.clone(), Span::new(start, end)),
+                ))
             }
             '(' => {
                 self.advance();
                 let end = self.current_location();
-                let text = self.input[start_pos..self.pos].to_string();
-                Ok(Token::new(TokenKind::LParen, Span::new(start, end, text)))
+                Ok(Token::new(
+                    TokenKind::LParen,
+                    ItemLocation::new(self.filename.clone(), Span::new(start, end)),
+                ))
             }
             ')' => {
                 self.advance();
                 let end = self.current_location();
-                let text = self.input[start_pos..self.pos].to_string();
-                Ok(Token::new(TokenKind::RParen, Span::new(start, end, text)))
+                Ok(Token::new(
+                    TokenKind::RParen,
+                    ItemLocation::new(self.filename.clone(), Span::new(start, end)),
+                ))
             }
             '<' => {
                 self.advance();
                 let end = self.current_location();
-                let text = self.input[start_pos..self.pos].to_string();
-                Ok(Token::new(TokenKind::Lt, Span::new(start, end, text)))
+                Ok(Token::new(
+                    TokenKind::Lt,
+                    ItemLocation::new(self.filename.clone(), Span::new(start, end)),
+                ))
             }
             '>' => {
                 self.advance();
                 let end = self.current_location();
-                let text = self.input[start_pos..self.pos].to_string();
-                Ok(Token::new(TokenKind::Gt, Span::new(start, end, text)))
+                Ok(Token::new(
+                    TokenKind::Gt,
+                    ItemLocation::new(self.filename.clone(), Span::new(start, end)),
+                ))
             }
             '=' => {
                 self.advance();
                 let end = self.current_location();
-                let text = self.input[start_pos..self.pos].to_string();
-                Ok(Token::new(TokenKind::Eq, Span::new(start, end, text)))
+                Ok(Token::new(
+                    TokenKind::Eq,
+                    ItemLocation::new(self.filename.clone(), Span::new(start, end)),
+                ))
             }
             ';' => {
                 self.advance();
                 let end = self.current_location();
-                let text = self.input[start_pos..self.pos].to_string();
-                Ok(Token::new(TokenKind::Semi, Span::new(start, end, text)))
+                Ok(Token::new(
+                    TokenKind::Semi,
+                    ItemLocation::new(self.filename.clone(), Span::new(start, end)),
+                ))
             }
             ',' => {
                 self.advance();
                 let end = self.current_location();
-                let text = self.input[start_pos..self.pos].to_string();
-                Ok(Token::new(TokenKind::Comma, Span::new(start, end, text)))
+                Ok(Token::new(
+                    TokenKind::Comma,
+                    ItemLocation::new(self.filename.clone(), Span::new(start, end)),
+                ))
             }
             '!' => {
                 self.advance();
                 let end = self.current_location();
-                let text = self.input[start_pos..self.pos].to_string();
-                Ok(Token::new(TokenKind::Bang, Span::new(start, end, text)))
+                Ok(Token::new(
+                    TokenKind::Bang,
+                    ItemLocation::new(self.filename.clone(), Span::new(start, end)),
+                ))
             }
             '#' => {
                 self.advance();
                 let end = self.current_location();
-                let text = self.input[start_pos..self.pos].to_string();
-                Ok(Token::new(TokenKind::Hash, Span::new(start, end, text)))
+                Ok(Token::new(
+                    TokenKind::Hash,
+                    ItemLocation::new(self.filename.clone(), Span::new(start, end)),
+                ))
             }
-            _ => Err(self.error(format!("Unexpected character: '{}'", ch), start)),
+            _ => Err(self.error(format!("Unexpected character: '{ch}'"), start)),
         }
     }
 
@@ -438,7 +491,10 @@ impl Lexer {
             TokenKind::Comment(text.clone())
         };
 
-        Ok(Token::new(kind, Span::new(start, end, text)))
+        Ok(Token::new(
+            kind,
+            ItemLocation::new(self.filename.clone(), Span::new(start, end)),
+        ))
     }
 
     fn lex_multiline_comment(
@@ -474,7 +530,7 @@ impl Lexer {
 
         Ok(Token::new(
             TokenKind::MultiLineComment(text.clone()),
-            Span::new(start, end, text),
+            ItemLocation::new(self.filename.clone(), Span::new(start, end)),
         ))
     }
 
@@ -518,7 +574,10 @@ impl Lexer {
             _ => TokenKind::Ident(text.clone()),
         };
 
-        Ok(Token::new(kind, Span::new(start, end, text)))
+        Ok(Token::new(
+            kind,
+            ItemLocation::new(self.filename.clone(), Span::new(start, end)),
+        ))
     }
 
     fn lex_number(&mut self, start: Location, start_pos: usize) -> Result<Token, LexError> {
@@ -593,14 +652,14 @@ impl Lexer {
 
         Ok(Token::new(
             TokenKind::IntLiteral(text.clone()),
-            Span::new(start, end, text),
+            ItemLocation::new(self.filename.clone(), Span::new(start, end)),
         ))
     }
 
     fn lex_string(
         &mut self,
         start: Location,
-        start_pos: usize,
+        _start_pos: usize,
         _hash_count: usize,
     ) -> Result<Token, LexError> {
         self.advance(); // consume opening '"'
@@ -625,7 +684,7 @@ impl Lexer {
                         '0' => value.push('\0'),
                         _ => {
                             return Err(self.error(
-                                format!("Invalid escape sequence: \\{}", escaped),
+                                format!("Invalid escape sequence: \\{escaped}"),
                                 self.current_location(),
                             ));
                         }
@@ -643,15 +702,14 @@ impl Lexer {
         }
 
         let end = self.current_location();
-        let text = self.input[start_pos..self.pos].to_string();
 
         Ok(Token::new(
             TokenKind::StringLiteral(value),
-            Span::new(start, end, text),
+            ItemLocation::new(self.filename.clone(), Span::new(start, end)),
         ))
     }
 
-    fn lex_raw_string(&mut self, start: Location, start_pos: usize) -> Result<Token, LexError> {
+    fn lex_raw_string(&mut self, start: Location, _start_pos: usize) -> Result<Token, LexError> {
         self.advance(); // consume 'r'
 
         // Count the number of '#' characters
@@ -705,15 +763,14 @@ impl Lexer {
         }
 
         let end = self.current_location();
-        let text = self.input[start_pos..self.pos].to_string();
 
         Ok(Token::new(
             TokenKind::StringLiteral(value),
-            Span::new(start, end, text),
+            ItemLocation::new(self.filename.clone(), Span::new(start, end)),
         ))
     }
 
-    fn lex_char(&mut self, start: Location, start_pos: usize) -> Result<Token, LexError> {
+    fn lex_char(&mut self, start: Location, _start_pos: usize) -> Result<Token, LexError> {
         self.advance(); // consume opening '\''
 
         let ch = if self.peek() == Some('\\') {
@@ -730,7 +787,7 @@ impl Lexer {
                     '0' => '\0',
                     _ => {
                         return Err(self.error(
-                            format!("Invalid escape sequence: \\{}", escaped),
+                            format!("Invalid escape sequence: \\{escaped}"),
                             self.current_location(),
                         ));
                     }
@@ -761,20 +818,22 @@ impl Lexer {
         self.advance(); // consume closing '\''
 
         let end = self.current_location();
-        let text = self.input[start_pos..self.pos].to_string();
 
         Ok(Token::new(
             TokenKind::CharLiteral(ch),
-            Span::new(start, end, text),
+            ItemLocation::new(self.filename.clone(), Span::new(start, end)),
         ))
     }
 }
 
 pub fn tokenize(input: String) -> Result<Vec<Token>, LexError> {
-    tokenize_with_filename(input, "<input>".to_string())
+    tokenize_with_filename(input, "<input>")
 }
 
-pub fn tokenize_with_filename(input: String, filename: String) -> Result<Vec<Token>, LexError> {
+pub fn tokenize_with_filename(
+    input: String,
+    filename: impl Into<Arc<str>>,
+) -> Result<Vec<Token>, LexError> {
     Lexer::new(input, filename).tokenize()
 }
 

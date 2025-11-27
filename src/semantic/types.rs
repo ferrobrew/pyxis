@@ -3,7 +3,11 @@ use std::fmt;
 use crate::{
     grammar::{self, ItemPath},
     semantic::type_registry,
+    span::{ItemLocation, Located},
 };
+
+#[cfg(test)]
+use crate::span::StripLocations;
 
 pub use crate::semantic::{
     bitflags_definition::BitflagsDefinition,
@@ -39,6 +43,12 @@ pub enum Visibility {
     Public,
     Private,
 }
+#[cfg(test)]
+impl StripLocations for Visibility {
+    fn strip_locations(&self) -> Self {
+        *self
+    }
+}
 impl From<grammar::Visibility> for Visibility {
     fn from(v: grammar::Visibility) -> Self {
         match v {
@@ -50,7 +60,7 @@ impl From<grammar::Visibility> for Visibility {
 
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]
 pub enum Type {
-    Unresolved(grammar::Type),
+    Unresolved(Located<grammar::Type>),
     Raw(ItemPath),
     ConstPointer(Box<Type>),
     MutPointer(Box<Type>),
@@ -61,12 +71,32 @@ pub enum Type {
         Option<Box<Type>>,
     ),
 }
+#[cfg(test)]
+impl StripLocations for Type {
+    fn strip_locations(&self) -> Self {
+        match self {
+            Type::Unresolved(located) => Type::Unresolved(located.strip_locations()),
+            Type::Raw(item_path) => Type::Raw(item_path.strip_locations()),
+            Type::ConstPointer(t) => Type::ConstPointer(t.strip_locations()),
+            Type::MutPointer(t) => Type::MutPointer(t.strip_locations()),
+            Type::Array(t, n) => Type::Array(t.strip_locations(), n.strip_locations()),
+            Type::Function(calling_convention, items, return_type) => Type::Function(
+                calling_convention.strip_locations(),
+                items.strip_locations(),
+                return_type.strip_locations(),
+            ),
+        }
+    }
+}
 impl Type {
     /// Returns `None` if this type is unresolved
     pub(crate) fn size(&self, type_registry: &type_registry::TypeRegistry) -> Option<usize> {
         match self {
             Type::Unresolved(_) => None,
-            Type::Raw(path) => type_registry.get(path).and_then(|t| t.size()),
+            Type::Raw(path) => type_registry
+                .get(path, &ItemLocation::internal())
+                .ok()
+                .and_then(|t| t.size()),
             Type::ConstPointer(_) => Some(type_registry.pointer_size()),
             Type::MutPointer(_) => Some(type_registry.pointer_size()),
             Type::Array(tr, count) => tr.size(type_registry).map(|s| s * count),
@@ -76,7 +106,10 @@ impl Type {
     pub(crate) fn alignment(&self, type_registry: &type_registry::TypeRegistry) -> Option<usize> {
         match self {
             Type::Unresolved(_) => None,
-            Type::Raw(path) => type_registry.get(path).and_then(|t| t.alignment()),
+            Type::Raw(path) => type_registry
+                .get(path, &ItemLocation::internal())
+                .ok()
+                .and_then(|t| t.alignment()),
             Type::ConstPointer(_) => Some(type_registry.pointer_size()),
             Type::MutPointer(_) => Some(type_registry.pointer_size()),
             Type::Array(tr, _) => Some(tr.alignment(type_registry)?),
@@ -135,8 +168,8 @@ impl Type {
 impl fmt::Display for Type {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Type::Unresolved(tr) => write!(f, "unresolved:{:?}", tr),
-            Type::Raw(path) => write!(f, "{}", path),
+            Type::Unresolved(tr) => write!(f, "unresolved:{tr:?}"),
+            Type::Raw(path) => write!(f, "{path}"),
             Type::ConstPointer(tr) => {
                 write!(f, "*const ")?;
                 tr.fmt(f)
@@ -148,7 +181,7 @@ impl fmt::Display for Type {
             Type::Array(tr, size) => {
                 write!(f, "[")?;
                 tr.fmt(f)?;
-                write!(f, "; {}]", size)
+                write!(f, "; {size}]")
             }
             Type::Function(calling_convention, args, return_type) => {
                 write!(f, "extern \"{calling_convention}\" fn (")?;
@@ -175,6 +208,18 @@ pub enum ItemDefinitionInner {
     Type(TypeDefinition),
     Enum(EnumDefinition),
     Bitflags(BitflagsDefinition),
+}
+#[cfg(test)]
+impl StripLocations for ItemDefinitionInner {
+    fn strip_locations(&self) -> Self {
+        match self {
+            ItemDefinitionInner::Type(td) => ItemDefinitionInner::Type(td.strip_locations()),
+            ItemDefinitionInner::Enum(ed) => ItemDefinitionInner::Enum(ed.strip_locations()),
+            ItemDefinitionInner::Bitflags(bd) => {
+                ItemDefinitionInner::Bitflags(bd.strip_locations())
+            }
+        }
+    }
 }
 impl From<TypeDefinition> for ItemDefinitionInner {
     fn from(td: TypeDefinition) -> Self {
@@ -218,18 +263,6 @@ impl ItemDefinitionInner {
             ItemDefinitionInner::Bitflags(_) => "a bitflags",
         }
     }
-    pub fn doc(&self) -> Option<String> {
-        let docs = match self {
-            ItemDefinitionInner::Type(t) => t.doc(),
-            ItemDefinitionInner::Enum(e) => e.doc(),
-            ItemDefinitionInner::Bitflags(b) => b.doc(),
-        };
-        if docs.is_empty() {
-            None
-        } else {
-            Some(docs.join("\n"))
-        }
-    }
 }
 
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]
@@ -237,6 +270,16 @@ pub struct ItemStateResolved {
     pub size: usize,
     pub alignment: usize,
     pub inner: ItemDefinitionInner,
+}
+#[cfg(test)]
+impl StripLocations for ItemStateResolved {
+    fn strip_locations(&self) -> Self {
+        ItemStateResolved {
+            size: self.size.strip_locations(),
+            alignment: self.alignment.strip_locations(),
+            inner: self.inner.strip_locations(),
+        }
+    }
 }
 impl From<ItemStateResolved> for ItemState {
     fn from(isr: ItemStateResolved) -> Self {
@@ -258,6 +301,15 @@ pub enum ItemState {
     Unresolved(grammar::ItemDefinition),
     Resolved(ItemStateResolved),
 }
+#[cfg(test)]
+impl StripLocations for ItemState {
+    fn strip_locations(&self) -> Self {
+        match self {
+            ItemState::Unresolved(def) => ItemState::Unresolved(def.strip_locations()),
+            ItemState::Resolved(resolved) => ItemState::Resolved(resolved.strip_locations()),
+        }
+    }
+}
 
 #[derive(PartialEq, Eq, Debug, Copy, Clone, Hash)]
 pub enum ItemCategory {
@@ -265,12 +317,23 @@ pub enum ItemCategory {
     Predefined,
     Extern,
 }
-
+#[cfg(test)]
+impl StripLocations for ItemCategory {
+    fn strip_locations(&self) -> Self {
+        *self
+    }
+}
 macro_rules! predefined_items {
     ($(($variant:ident, $name:expr, $size:expr)),* $(,)?) => {
         #[derive(PartialEq, Eq, Debug, Copy, Clone, Hash)]
         pub enum PredefinedItem {
             $($variant),*
+        }
+        #[cfg(test)]
+        impl StripLocations for PredefinedItem {
+            fn strip_locations(&self) -> Self {
+                *self
+            }
         }
         impl PredefinedItem {
             pub const ALL: &'static [PredefinedItem] = &[
@@ -309,17 +372,34 @@ predefined_items! {
     (F64, "f64", 8),
 }
 
-#[derive(PartialEq, Eq, Debug, Clone, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ItemDefinition {
     pub visibility: Visibility,
     pub path: ItemPath,
     pub state: ItemState,
     pub category: ItemCategory,
     pub predefined: Option<PredefinedItem>,
+    pub location: ItemLocation,
+}
+#[cfg(test)]
+// StripSpans implementations for testing
+impl StripLocations for ItemDefinition {
+    fn strip_locations(&self) -> Self {
+        ItemDefinition {
+            visibility: self.visibility.strip_locations(),
+            path: self.path.strip_locations(),
+            state: self.state.strip_locations(),
+            category: self.category.strip_locations(),
+            predefined: self.predefined.strip_locations(),
+            location: self.location.strip_locations(),
+        }
+    }
 }
 impl ItemDefinition {
+    /// Test-only constructor for category_resolved that uses a synthetic location
+    #[cfg(test)]
     pub fn category_resolved(
-        (visibility, path): (Visibility, impl Into<ItemPath>),
+        (visibility, path): (Visibility, impl Into<crate::grammar::ItemPath>),
         resolved: ItemStateResolved,
         category: ItemCategory,
     ) -> Self {
@@ -329,14 +409,26 @@ impl ItemDefinition {
             state: ItemState::Resolved(resolved),
             category,
             predefined: None,
+            location: ItemLocation::test(),
         }
     }
+
+    /// Test-only constructor for defined_resolved that uses a synthetic location
+    #[cfg(test)]
     pub fn defined_resolved(
-        (visibility, path): (Visibility, impl Into<ItemPath>),
+        (visibility, path): (Visibility, impl Into<crate::grammar::ItemPath>),
         resolved: ItemStateResolved,
     ) -> Self {
-        Self::category_resolved((visibility, path), resolved, ItemCategory::Defined)
+        ItemDefinition {
+            visibility,
+            path: path.into(),
+            state: ItemState::Resolved(resolved),
+            category: ItemCategory::Defined,
+            predefined: None,
+            location: ItemLocation::test(),
+        }
     }
+
     pub fn resolved(&self) -> Option<&ItemStateResolved> {
         match &self.state {
             ItemState::Resolved(tsr) => Some(tsr),
@@ -380,4 +472,5 @@ pub struct ExternValue {
     pub name: String,
     pub type_: Type,
     pub address: usize,
+    pub location: ItemLocation,
 }

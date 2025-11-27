@@ -1,6 +1,9 @@
 use std::{collections::BTreeMap, path::Path};
 
-use anyhow::Context;
+use crate::{
+    backends::{BackendError, Result},
+    semantic::types::Type,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::semantic::{
@@ -330,7 +333,7 @@ pub fn build(
     out_dir: &Path,
     semantic_state: &ResolvedSemanticState,
     project_name: &str,
-) -> anyhow::Result<()> {
+) -> Result<()> {
     let type_registry = semantic_state.type_registry();
 
     // Build items map
@@ -356,10 +359,13 @@ pub fn build(
 
     // Write to file
     let output_path = out_dir.join("output.json");
-    let json_string = serde_json::to_string_pretty(&documentation)
-        .context("Failed to serialize JSON documentation")?;
-    std::fs::write(&output_path, json_string)
-        .context(format!("Failed to write JSON to {:?}", output_path))?;
+    let json_string = serde_json::to_string_pretty(&documentation).map_err(|e| {
+        BackendError::Formatting(format!("Failed to serialize JSON documentation: {e}"))
+    })?;
+    std::fs::write(&output_path, &json_string).map_err(|e| BackendError::Io {
+        error: e,
+        context: format!("Failed to write JSON output to {}", output_path.display()),
+    })?;
 
     Ok(())
 }
@@ -369,28 +375,28 @@ pub fn export_types() -> specta::TypeCollection {
     specta::export()
 }
 
-fn convert_type(type_ref: &crate::semantic::types::Type) -> JsonType {
+fn convert_type(type_ref: &Type) -> JsonType {
     match type_ref {
-        crate::semantic::types::Type::Unresolved(_) => {
+        Type::Unresolved(_) => {
             // This shouldn't happen in resolved state, but handle it gracefully
             JsonType::Raw {
                 path: "unresolved".to_string(),
             }
         }
-        crate::semantic::types::Type::Raw(path) => JsonType::Raw {
+        Type::Raw(path) => JsonType::Raw {
             path: path.to_string(),
         },
-        crate::semantic::types::Type::ConstPointer(inner) => JsonType::ConstPointer {
+        Type::ConstPointer(inner) => JsonType::ConstPointer {
             inner: Box::new(convert_type(inner)),
         },
-        crate::semantic::types::Type::MutPointer(inner) => JsonType::MutPointer {
+        Type::MutPointer(inner) => JsonType::MutPointer {
             inner: Box::new(convert_type(inner)),
         },
-        crate::semantic::types::Type::Array(inner, size) => JsonType::Array {
+        Type::Array(inner, size) => JsonType::Array {
             inner: Box::new(convert_type(inner)),
             size: *size,
         },
-        crate::semantic::types::Type::Function(cc, args, return_type) => JsonType::Function {
+        Type::Function(cc, args, return_type) => JsonType::Function {
             calling_convention: (*cc).into(),
             arguments: args
                 .iter()
@@ -406,9 +412,9 @@ fn convert_type(type_ref: &crate::semantic::types::Type) -> JsonType {
 
 fn convert_argument(arg: &Argument) -> JsonArgument {
     match arg {
-        Argument::ConstSelf => JsonArgument::ConstSelf,
-        Argument::MutSelf => JsonArgument::MutSelf,
-        Argument::Field(name, type_ref) => JsonArgument::Field {
+        Argument::ConstSelf(_) => JsonArgument::ConstSelf,
+        Argument::MutSelf(_) => JsonArgument::MutSelf,
+        Argument::Field(name, type_ref, _) => JsonArgument::Field {
             name: name.clone(),
             type_ref: convert_type(type_ref),
         },

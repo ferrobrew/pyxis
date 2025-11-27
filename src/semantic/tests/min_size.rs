@@ -1,4 +1,5 @@
 use super::*;
+use crate::semantic::error::SemanticError;
 
 #[test]
 fn min_size_pads_to_minimum() {
@@ -98,13 +99,25 @@ fn min_size_with_explicit_address() {
 
 #[test]
 fn both_size_and_min_size_should_be_rejected() {
-    assert_ast_produces_failure(
+    assert_ast_produces_error(
         M::new().with_definitions([ID::new(
             (V::Public, "TestType"),
             TD::new([TS::field((V::Public, "field_1"), T::ident("i32"))])
                 .with_attributes([A::size(16), A::min_size(16)]),
         )]),
-        "cannot specify both `size` and `min_size` attributes for type `test::TestType`",
+        |err| {
+            matches!(
+                err,
+                SemanticError::ConflictingAttributes {
+                    attr1,
+                    attr2,
+                    item_path,
+                    ..
+                }
+                if (attr1 == "size" && attr2 == "min_size" || attr1 == "min_size" && attr2 == "size")
+                    && item_path.to_string() == "test::TestType"
+            )
+        },
     );
 }
 

@@ -1,11 +1,13 @@
-use anyhow::Context;
-
+#[cfg(test)]
+use crate::span::StripLocations;
 use crate::{
     grammar::{self, ItemPath},
     semantic::{
         SemanticState,
+        error::{Result, SemanticError, TypeResolutionContext},
         types::{Function, ItemStateResolved, Type},
     },
+    span::ItemLocation,
 };
 
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]
@@ -19,6 +21,22 @@ pub struct EnumDefinition {
     pub cloneable: bool,
     pub default: Option<usize>,
 }
+#[cfg(test)]
+impl StripLocations for EnumDefinition {
+    fn strip_locations(&self) -> Self {
+        EnumDefinition {
+            type_: self.type_.strip_locations(),
+            doc: self.doc.strip_locations(),
+            fields: self.fields.strip_locations(),
+            associated_functions: self.associated_functions.strip_locations(),
+            singleton: self.singleton.strip_locations(),
+            copyable: self.copyable.strip_locations(),
+            cloneable: self.cloneable.strip_locations(),
+            default: self.default.strip_locations(),
+        }
+    }
+}
+#[cfg(test)]
 impl EnumDefinition {
     pub fn new(type_: Type) -> Self {
         EnumDefinition {
@@ -76,10 +94,9 @@ pub fn build(
     resolvee_path: &ItemPath,
     definition: &grammar::EnumDefinition,
     doc_comments: &[String],
-) -> anyhow::Result<Option<ItemStateResolved>> {
-    let module = semantic
-        .get_module_for_path(resolvee_path)
-        .with_context(|| format!("failed to get module for path `{resolvee_path}`"))?;
+    location: ItemLocation,
+) -> Result<Option<ItemStateResolved>> {
+    let module = semantic.get_module_for_path(resolvee_path, &location)?;
 
     let Some(ty) = semantic
         .type_registry
@@ -105,9 +122,13 @@ pub fn build(
         } = statement;
         let value = match expr {
             Some(grammar::Expr::IntLiteral { value, .. }) => *value,
-            Some(_) => anyhow::bail!(
-                "unsupported enum value for case `{name}` of enum `{resolvee_path}`: {expr:?}"
-            ),
+            Some(_) => {
+                return Err(SemanticError::EnumUnsupportedValue {
+                    item_path: resolvee_path.clone(),
+                    case_name: name.0.clone(),
+                    location: location.clone(),
+                });
+            }
             None => last_field,
         };
         fields.push((name.0.clone(), value));
@@ -116,7 +137,10 @@ pub fn build(
             match attribute {
                 grammar::Attribute::Ident(ident) if ident.as_str() == "default" => {
                     if default.is_some() {
-                        anyhow::bail!("enum {resolvee_path} has multiple default variants");
+                        return Err(SemanticError::EnumMultipleDefaults {
+                            item_path: resolvee_path.clone(),
+                            location: location.clone(),
+                        });
                     }
                     default = Some(fields.len() - 1);
                 }
@@ -156,15 +180,17 @@ pub fn build(
     }
 
     if !defaultable && default.is_some() {
-        anyhow::bail!(
-            "enum `{resolvee_path}` has a default variant set but is not marked as defaultable"
-        );
+        return Err(SemanticError::EnumDefaultWithoutDefaultable {
+            item_path: resolvee_path.clone(),
+            location: location.clone(),
+        });
     }
 
     if defaultable && default.is_none() {
-        anyhow::bail!(
-            "enum `{resolvee_path}` is marked as defaultable but has no default variant set"
-        );
+        return Err(SemanticError::EnumDefaultableMissingDefault {
+            item_path: resolvee_path.clone(),
+            location: location.clone(),
+        });
     }
 
     // Handle associated functions
@@ -176,21 +202,21 @@ pub fn build(
                 &module.scope(),
                 false,
                 function,
-            )
-            .with_context(|| {
-                format!(
-                    "while building impl function `{}` for enum `{resolvee_path}`",
-                    function.name
-                )
-            })?;
+            )?;
             associated_functions.push(function);
         }
     }
 
     Ok(Some(ItemStateResolved {
         size,
-        alignment: ty.alignment(&semantic.type_registry).with_context(|| {
-            format!("failed to get alignment for base type of enum `{resolvee_path}`")
+        alignment: ty.alignment(&semantic.type_registry).ok_or_else(|| {
+            SemanticError::TypeResolutionFailed {
+                type_: definition.type_.clone(),
+                resolution_context: TypeResolutionContext::EnumBaseTypeAlignment {
+                    enum_path: resolvee_path.clone(),
+                },
+                location: location.clone(),
+            }
         })?,
         inner: EnumDefinition {
             type_: ty,

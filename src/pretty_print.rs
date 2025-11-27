@@ -112,7 +112,7 @@ impl PrettyPrinter {
                     self.writeln("");
                 }
             }
-            ModuleItem::ExternType(name, attrs, doc_comments) => {
+            ModuleItem::ExternType(name, attrs, doc_comments, _) => {
                 // Print doc comments
                 for doc in doc_comments {
                     self.write_indent();
@@ -224,10 +224,10 @@ impl PrettyPrinter {
     /// e.g., 0x142ED0E78 -> 0x142_ED0_E78
     fn format_hex_with_underscores(&self, val: isize) -> String {
         if val < 0 {
-            return format!("{}", val);
+            return format!("{val}");
         }
 
-        let hex_str = format!("{:X}", val);
+        let hex_str = format!("{val:X}");
         let mut result = String::from("0x");
         let len = hex_str.len();
 
@@ -246,14 +246,14 @@ impl PrettyPrinter {
     /// e.g., for u32: 1 -> 0b0000_0000_0000_0000_0000_0000_0000_0001
     fn format_binary_with_padding(&self, val: isize) -> String {
         if val < 0 {
-            return format!("0b{:b}", val);
+            return format!("0b{val:b}");
         }
 
         // Determine width based on context or default to 32
         let width = self.binary_literal_width.unwrap_or(32);
 
         // Format as binary and pad to width
-        let bin_str = format!("{:b}", val);
+        let bin_str = format!("{val:b}");
         let padding = width.saturating_sub(bin_str.len());
         let padded = "0".repeat(padding) + &bin_str;
 
@@ -271,7 +271,7 @@ impl PrettyPrinter {
 
     /// Get the bit width from a type (e.g., u8 -> 8, u32 -> 32)
     fn get_type_bit_width(&self, type_: &Type) -> Option<usize> {
-        if let Type::Ident(ident, _) = type_ {
+        if let Type::Ident(ident) = type_ {
             match ident.as_str() {
                 "u8" | "i8" => Some(8),
                 "u16" | "i16" => Some(16),
@@ -288,7 +288,7 @@ impl PrettyPrinter {
     fn print_attribute(&mut self, attr: &Attribute) {
         match attr {
             Attribute::Ident(name) => {
-                write!(&mut self.output, "{}", name).unwrap();
+                write!(&mut self.output, "{name}").unwrap();
             }
             Attribute::Function(name, items) => {
                 // Check special formatting requirements
@@ -299,7 +299,7 @@ impl PrettyPrinter {
                     self.in_vftable_index = true;
                 }
 
-                write!(&mut self.output, "{}(", name).unwrap();
+                write!(&mut self.output, "{name}(").unwrap();
                 let mut first_expr = true;
                 for item in items {
                     match item {
@@ -313,7 +313,7 @@ impl PrettyPrinter {
                             if needs_underscore {
                                 if let Expr::IntLiteral { value, .. } = expr {
                                     let formatted = self.format_hex_with_underscores(*value);
-                                    write!(&mut self.output, "{}", formatted).unwrap();
+                                    write!(&mut self.output, "{formatted}").unwrap();
                                 } else {
                                     self.print_expr(expr);
                                 }
@@ -322,7 +322,7 @@ impl PrettyPrinter {
                             }
                         }
                         AttributeItem::Comment(comment) => {
-                            write!(&mut self.output, " {}", comment).unwrap();
+                            write!(&mut self.output, " {comment}").unwrap();
                         }
                     }
                 }
@@ -333,14 +333,14 @@ impl PrettyPrinter {
                 }
             }
             Attribute::Assign(name, items) => {
-                write!(&mut self.output, "{} = ", name).unwrap();
+                write!(&mut self.output, "{name} = ").unwrap();
                 for item in items {
                     match item {
                         AttributeItem::Expr(expr) => {
                             self.print_expr(expr);
                         }
                         AttributeItem::Comment(comment) => {
-                            write!(&mut self.output, " {}", comment).unwrap();
+                            write!(&mut self.output, " {comment}").unwrap();
                         }
                     }
                 }
@@ -351,13 +351,13 @@ impl PrettyPrinter {
     fn print_expr(&mut self, expr: &Expr) {
         match expr {
             Expr::IntLiteral { value, format } => match format {
-                IntFormat::Hex => write!(&mut self.output, "0x{:X}", value).unwrap(),
+                IntFormat::Hex => write!(&mut self.output, "0x{value:X}").unwrap(),
                 IntFormat::Binary => {
                     let formatted = self.format_binary_with_padding(*value);
-                    write!(&mut self.output, "{}", formatted).unwrap();
+                    write!(&mut self.output, "{formatted}").unwrap();
                 }
-                IntFormat::Octal => write!(&mut self.output, "0o{:o}", value).unwrap(),
-                IntFormat::Decimal => write!(&mut self.output, "{}", value).unwrap(),
+                IntFormat::Octal => write!(&mut self.output, "0o{value:o}").unwrap(),
+                IntFormat::Decimal => write!(&mut self.output, "{value}").unwrap(),
             },
             Expr::StringLiteral { value, format } => {
                 match format {
@@ -377,7 +377,7 @@ impl PrettyPrinter {
                                 '\n' => write!(&mut self.output, "\\n").unwrap(),
                                 '\r' => write!(&mut self.output, "\\r").unwrap(),
                                 '\t' => write!(&mut self.output, "\\t").unwrap(),
-                                _ => write!(&mut self.output, "{}", ch).unwrap(),
+                                _ => write!(&mut self.output, "{ch}").unwrap(),
                             }
                         }
                         write!(&mut self.output, "\"").unwrap();
@@ -479,14 +479,14 @@ impl PrettyPrinter {
                 self.write_indent();
                 let prologue_str =
                     self.format_string_with_format(prologue, backend.prologue_format);
-                writeln!(&mut self.output, "prologue {};", prologue_str).unwrap();
+                writeln!(&mut self.output, "prologue {prologue_str};").unwrap();
             }
 
             if let Some(epilogue) = &backend.epilogue {
                 self.write_indent();
                 let epilogue_str =
                     self.format_string_with_format(epilogue, backend.epilogue_format);
-                writeln!(&mut self.output, "epilogue {};", epilogue_str).unwrap();
+                writeln!(&mut self.output, "epilogue {epilogue_str};").unwrap();
             }
 
             self.dedent();
@@ -578,12 +578,12 @@ impl PrettyPrinter {
             }
             ItemDefinitionInner::Enum(ed) => {
                 write!(&mut self.output, "enum {}: ", def.name).unwrap();
-                self.print_type(&ed.type_);
+                self.print_type(&ed.type_.value);
                 writeln!(&mut self.output, " {{").unwrap();
                 self.indent();
                 // Set binary literal width based on enum type
                 let old_width = self.binary_literal_width;
-                self.binary_literal_width = self.get_type_bit_width(&ed.type_);
+                self.binary_literal_width = self.get_type_bit_width(&ed.type_.value);
                 for (i, item) in ed.items.iter().enumerate() {
                     let next_item = ed.items.get(i + 1);
                     match item {
@@ -602,12 +602,12 @@ impl PrettyPrinter {
             }
             ItemDefinitionInner::Bitflags(bf) => {
                 write!(&mut self.output, "bitflags {}: ", def.name).unwrap();
-                self.print_type(&bf.type_);
+                self.print_type(&bf.type_.value);
                 writeln!(&mut self.output, " {{").unwrap();
                 self.indent();
                 // Set binary literal width based on bitflags type
                 let old_width = self.binary_literal_width;
-                self.binary_literal_width = self.get_type_bit_width(&bf.type_);
+                self.binary_literal_width = self.get_type_bit_width(&bf.type_.value);
                 for (i, item) in bf.items.iter().enumerate() {
                     let next_item = bf.items.get(i + 1);
                     match item {
@@ -653,7 +653,7 @@ impl PrettyPrinter {
                     write!(&mut self.output, "pub ").unwrap();
                 }
                 write!(&mut self.output, "{name}: ").unwrap();
-                self.print_type(type_);
+                self.print_type(&type_.value);
                 write!(&mut self.output, ",").unwrap();
 
                 // Print inline trailing comments
@@ -774,18 +774,18 @@ impl PrettyPrinter {
 
     fn print_type(&mut self, type_: &Type) {
         match type_ {
-            Type::Ident(name, _) => write!(&mut self.output, "{name}").unwrap(),
+            Type::Ident(ident) => write!(&mut self.output, "{ident}").unwrap(),
             Type::ConstPointer(inner) => {
                 write!(&mut self.output, "*const ").unwrap();
-                self.print_type(inner);
+                self.print_type(&inner.value);
             }
             Type::MutPointer(inner) => {
                 write!(&mut self.output, "*mut ").unwrap();
-                self.print_type(inner);
+                self.print_type(&inner.value);
             }
             Type::Array(inner, size) => {
                 write!(&mut self.output, "[").unwrap();
-                self.print_type(inner);
+                self.print_type(&inner.value);
                 write!(&mut self.output, "; {size}]").unwrap();
             }
             Type::Unknown(size) => {
@@ -831,7 +831,7 @@ impl PrettyPrinter {
             write!(&mut self.output, "pub ").unwrap();
         }
         write!(&mut self.output, "extern {}: ", extern_val.name).unwrap();
-        self.print_type(&extern_val.type_);
+        self.print_type(&extern_val.type_.value);
         writeln!(&mut self.output, ";").unwrap();
     }
 
@@ -868,12 +868,12 @@ impl PrettyPrinter {
 
     fn print_argument(&mut self, arg: &Argument) {
         match arg {
-            Argument::Named(name, type_) => {
+            Argument::Named(name, type_, _) => {
                 write!(&mut self.output, "{name}: ").unwrap();
                 self.print_type(type_);
             }
-            Argument::ConstSelf => write!(&mut self.output, "&self").unwrap(),
-            Argument::MutSelf => write!(&mut self.output, "&mut self").unwrap(),
+            Argument::ConstSelf(_) => write!(&mut self.output, "&self").unwrap(),
+            Argument::MutSelf(_) => write!(&mut self.output, "&mut self").unwrap(),
         }
     }
 }
@@ -895,7 +895,7 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     use super::*;
-    use crate::parser::parse_str;
+    use crate::parser::parse_str_for_tests;
 
     #[test]
     fn test_pretty_print_basic() {
@@ -905,7 +905,7 @@ mod tests {
         }
         "#;
 
-        let module = parse_str(text).unwrap();
+        let module = parse_str_for_tests(text).unwrap();
         let printed = pretty_print(&module);
 
         assert!(printed.contains("pub type Test"));
@@ -949,7 +949,7 @@ pub type InputDeviceManager {
         "#
         .trim();
 
-        let module = parse_str(text).unwrap();
+        let module = parse_str_for_tests(text).unwrap();
         let printed = pretty_print(&module);
 
         dbg!(&module);
@@ -983,7 +983,7 @@ pub type AnarkGui {
         "#
         .trim();
 
-        let module = parse_str(text).unwrap();
+        let module = parse_str_for_tests(text).unwrap();
         let printed = pretty_print(&module);
 
         assert_eq!(printed, output);
@@ -1018,13 +1018,13 @@ pub type BlockCommentTest {
         "#
         .trim();
 
-        let module = parse_str(text).unwrap();
+        let module = parse_str_for_tests(text).unwrap();
         let printed = pretty_print(&module);
 
         assert_eq!(printed, expected);
 
         // Parse again to verify round-trip
-        let module2 = parse_str(&printed).unwrap();
+        let module2 = parse_str_for_tests(&printed).unwrap();
         let printed2 = pretty_print(&module2);
 
         assert_eq!(printed, printed2);
@@ -1063,13 +1063,13 @@ pub type BlockCommentTest {
         "#
         .trim();
 
-        let module = parse_str(text).unwrap();
+        let module = parse_str_for_tests(text).unwrap();
         let printed = pretty_print(&module);
 
         assert_eq!(printed, expected);
 
         // Parse again to verify round-trip
-        let module2 = parse_str(&printed).unwrap();
+        let module2 = parse_str_for_tests(&printed).unwrap();
         let printed2 = pretty_print(&module2);
 
         assert_eq!(printed, printed2);
@@ -1098,13 +1098,13 @@ pub enum State: u32 {
         "#
         .trim();
 
-        let module = parse_str(text).unwrap();
+        let module = parse_str_for_tests(text).unwrap();
         let printed = pretty_print(&module);
 
         assert_eq!(printed, expected);
 
         // Parse again to verify round-trip
-        let module2 = parse_str(&printed).unwrap();
+        let module2 = parse_str_for_tests(&printed).unwrap();
         let printed2 = pretty_print(&module2);
 
         assert_eq!(printed, printed2);
@@ -1133,13 +1133,13 @@ pub bitflags Flags: u32 {
         "#
         .trim();
 
-        let module = parse_str(text).unwrap();
+        let module = parse_str_for_tests(text).unwrap();
         let printed = pretty_print(&module);
 
         assert_eq!(printed, expected);
 
         // Parse again to verify round-trip
-        let module2 = parse_str(&printed).unwrap();
+        let module2 = parse_str_for_tests(&printed).unwrap();
         let printed2 = pretty_print(&module2);
 
         assert_eq!(printed, printed2);
@@ -1190,13 +1190,13 @@ pub type Bar {
         "#
         .trim();
 
-        let module = parse_str(text).unwrap();
+        let module = parse_str_for_tests(text).unwrap();
         let printed = pretty_print(&module);
 
         assert_eq!(printed, expected);
 
         // Parse again to verify round-trip
-        let module2 = parse_str(&printed).unwrap();
+        let module2 = parse_str_for_tests(&printed).unwrap();
         let printed2 = pretty_print(&module2);
 
         assert_eq!(printed, printed2);
@@ -1219,13 +1219,13 @@ pub type SimpleType {
         "#
         .trim();
 
-        let module = parse_str(text).unwrap();
+        let module = parse_str_for_tests(text).unwrap();
         let printed = pretty_print(&module);
 
         assert_eq!(printed, expected);
 
         // Parse again to verify round-trip
-        let module2 = parse_str(&printed).unwrap();
+        let module2 = parse_str_for_tests(&printed).unwrap();
         let printed2 = pretty_print(&module2);
 
         assert_eq!(printed, printed2);
@@ -1252,13 +1252,13 @@ pub type Foo {
         "#
         .trim();
 
-        let module = parse_str(text).unwrap();
+        let module = parse_str_for_tests(text).unwrap();
         let printed = pretty_print(&module);
 
         assert_eq!(printed, expected);
 
         // Parse again to verify round-trip
-        let module2 = parse_str(&printed).unwrap();
+        let module2 = parse_str_for_tests(&printed).unwrap();
         let printed2 = pretty_print(&module2);
 
         assert_eq!(printed, printed2);
@@ -1281,13 +1281,13 @@ pub type Foo {
         "#
         .trim();
 
-        let module = parse_str(text).unwrap();
+        let module = parse_str_for_tests(text).unwrap();
         let printed = pretty_print(&module);
 
         assert_eq!(printed, expected);
 
         // Parse again to verify round-trip
-        let module2 = parse_str(&printed).unwrap();
+        let module2 = parse_str_for_tests(&printed).unwrap();
         let printed2 = pretty_print(&module2);
 
         assert_eq!(printed, printed2);
@@ -1326,13 +1326,13 @@ pub type MultipleBlocks {
         "#
         .trim();
 
-        let module = parse_str(text).unwrap();
+        let module = parse_str_for_tests(text).unwrap();
         let printed = pretty_print(&module);
 
         assert_eq!(printed, expected);
 
         // Parse again to verify round-trip
-        let module2 = parse_str(&printed).unwrap();
+        let module2 = parse_str_for_tests(&printed).unwrap();
         let printed2 = pretty_print(&module2);
 
         assert_eq!(printed, printed2);
@@ -1347,7 +1347,7 @@ backend rust prologue "
 ";
         "#;
 
-        let module = parse_str(text).unwrap();
+        let module = parse_str_for_tests(text).unwrap();
         let printed = pretty_print(&module);
 
         // Verify the backend is present and format is correct
@@ -1375,7 +1375,7 @@ backend rust prologue r#"
         "##
         .trim();
 
-        let module = parse_str(text).unwrap();
+        let module = parse_str_for_tests(text).unwrap();
         let printed = pretty_print(&module);
 
         assert_eq!(printed, expected);
@@ -1402,7 +1402,7 @@ pub type RenderBlock {
         "#
         .trim();
 
-        let module = parse_str(text).unwrap();
+        let module = parse_str_for_tests(text).unwrap();
         let printed = pretty_print(&module);
 
         assert_eq!(printed, expected);
@@ -1429,7 +1429,7 @@ extern type ManuallyDrop<SharedPtr<u32>>;
         "#
         .trim();
 
-        let module = parse_str(text).unwrap();
+        let module = parse_str_for_tests(text).unwrap();
         let printed = pretty_print(&module);
 
         assert_eq!(printed, expected);
@@ -1462,7 +1462,7 @@ pub bitflags CameraState: u8 {
         "#
         .trim();
 
-        let module = parse_str(text).unwrap();
+        let module = parse_str_for_tests(text).unwrap();
         let printed = pretty_print(&module);
 
         assert_eq!(printed, expected);
@@ -1487,7 +1487,7 @@ pub bitflags TestFlags: u32 {
         "#
         .trim();
 
-        let module = parse_str(text).unwrap();
+        let module = parse_str_for_tests(text).unwrap();
         let printed = pretty_print(&module);
 
         assert_eq!(printed, expected);

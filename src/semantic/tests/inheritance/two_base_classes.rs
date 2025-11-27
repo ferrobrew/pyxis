@@ -555,17 +555,17 @@ fn a1_b1_d1_with_associated_functions() {
             .with_impls([
                 FB::new(
                     "BaseA",
-                    [F::new((V::Public, "base_a_associated"), [Ar::MutSelf])
+                    [F::new((V::Public, "base_a_associated"), [Ar::mut_self()])
                         .with_attributes([A::address(0x123)])],
                 ),
                 FB::new(
                     "BaseB",
-                    [F::new((V::Public, "base_b_associated"), [Ar::MutSelf])
+                    [F::new((V::Public, "base_b_associated"), [Ar::mut_self()])
                         .with_attributes([A::address(0x456)])],
                 ),
                 FB::new(
                     "Derived",
-                    [F::new((V::Public, "derived_associated"), [Ar::MutSelf])
+                    [F::new((V::Public, "derived_associated"), [Ar::mut_self()])
                         .with_attributes([A::address(0x789)])],
                 ),
             ]),
@@ -595,7 +595,7 @@ fn a1_b1_d1_with_associated_functions() {
                             SFB::address(0x123),
                             SCC::for_member_function(pointer_size()),
                         )
-                        .with_arguments([SAr::MutSelf])]),
+                        .with_arguments([SAr::mut_self()])]),
                 ),
             ),
             SID::defined_resolved(
@@ -630,7 +630,7 @@ fn a1_b1_d1_with_associated_functions() {
                             SFB::address(0x456),
                             SCC::for_member_function(pointer_size()),
                         )
-                        .with_arguments([SAr::MutSelf])]),
+                        .with_arguments([SAr::mut_self()])]),
                 ),
             ),
             SID::defined_resolved(
@@ -665,13 +665,13 @@ fn a1_b1_d1_with_associated_functions() {
                                 SFB::field("base_a", "base_a_associated"),
                                 SCC::for_member_function(pointer_size()),
                             )
-                            .with_arguments([SAr::MutSelf]),
+                            .with_arguments([SAr::mut_self()]),
                             SF::new(
                                 (SV::Public, "base_b_associated"),
                                 SFB::field("base_b", "base_b_associated"),
                                 SCC::for_member_function(pointer_size()),
                             )
-                            .with_arguments([SAr::MutSelf]),
+                            .with_arguments([SAr::mut_self()]),
                             vfunc_semantic("base_b_vfunc")
                                 .with_body(SFB::field("base_b", "base_b_vfunc")),
                             SF::new(
@@ -679,7 +679,7 @@ fn a1_b1_d1_with_associated_functions() {
                                 SFB::address(0x789),
                                 SCC::for_member_function(pointer_size()),
                             )
-                            .with_arguments([SAr::MutSelf]),
+                            .with_arguments([SAr::mut_self()]),
                         ]),
                 ),
             ),
