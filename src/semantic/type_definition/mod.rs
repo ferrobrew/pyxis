@@ -299,9 +299,8 @@ pub fn build(
             field,
             attributes,
             doc_comments,
-            location,
             ..
-        } = statement;
+        } = &statement.value;
 
         match field {
             grammar::TypeField::Field(visibility, field_ident, type_) => {
@@ -328,7 +327,7 @@ pub fn build(
                                                 field_name: field_ident.0.clone(),
                                                 type_path: resolvee_path.clone(),
                                             },
-                                        location: location.clone(),
+                                        location: statement.location.clone(),
                                     }
                                 })?);
                             }
@@ -356,7 +355,7 @@ pub fn build(
                             type_ref: type_,
                             is_base,
                         },
-                        location.clone(),
+                        statement.location.clone(),
                     ),
                 ));
             }
@@ -367,7 +366,7 @@ pub fn build(
                 if idx != 0 {
                     return Err(SemanticError::VftableMustBeFirst {
                         item_path: resolvee_path.clone(),
-                        location: location.clone(),
+                        location: statement.location.clone(),
                     });
                 }
 
@@ -390,7 +389,7 @@ pub fn build(
                     module,
                     size,
                     functions,
-                    location,
+                    &statement.location,
                 )?);
             }
         }

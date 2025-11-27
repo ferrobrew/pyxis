@@ -562,12 +562,12 @@ impl PrettyPrinter {
                     self.indent();
                     for (i, item) in td.items.iter().enumerate() {
                         let next_item = td.items.get(i + 1);
-                        match item {
+                        match &item.value {
                             TypeDefItem::Comment(comment) => {
-                                self.print_comment(&comment.value);
+                                self.print_comment(comment);
                             }
                             TypeDefItem::Statement(stmt) => {
-                                self.print_type_statement(stmt, next_item);
+                                self.print_type_statement(stmt, next_item.map(|item| &item.value));
                             }
                         }
                     }
@@ -586,12 +586,12 @@ impl PrettyPrinter {
                 self.binary_literal_width = self.get_type_bit_width(&ed.type_.value);
                 for (i, item) in ed.items.iter().enumerate() {
                     let next_item = ed.items.get(i + 1);
-                    match item {
+                    match &item.value {
                         EnumDefItem::Comment(comment) => {
-                            self.print_comment(&comment.value);
+                            self.print_comment(comment);
                         }
                         EnumDefItem::Statement(stmt) => {
-                            self.print_enum_statement(stmt, next_item);
+                            self.print_enum_statement(stmt, next_item.map(|item| &item.value));
                         }
                     }
                 }
@@ -610,12 +610,12 @@ impl PrettyPrinter {
                 self.binary_literal_width = self.get_type_bit_width(&bf.type_.value);
                 for (i, item) in bf.items.iter().enumerate() {
                     let next_item = bf.items.get(i + 1);
-                    match item {
+                    match &item.value {
                         BitflagsDefItem::Comment(comment) => {
-                            self.print_comment(&comment.value);
+                            self.print_comment(comment);
                         }
                         BitflagsDefItem::Statement(stmt) => {
-                            self.print_bitflags_statement(stmt, next_item);
+                            self.print_bitflags_statement(stmt, next_item.map(|item| &item.value));
                         }
                     }
                 }

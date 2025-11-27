@@ -149,7 +149,7 @@ pub fn build(
             expr,
             attributes,
             ..
-        } = statement;
+        } = &statement.value;
         let value = match expr {
             grammar::Expr::IntLiteral { value, .. } => *value,
             _ => {

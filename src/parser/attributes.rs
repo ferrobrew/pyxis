@@ -235,7 +235,7 @@ pub type AnarkGui {
                     let statement_count = td
                         .items
                         .iter()
-                        .filter(|item| matches!(item, TypeDefItem::Statement(_)))
+                        .filter(|item| matches!(item.value, TypeDefItem::Statement(_)))
                         .count();
                     assert_eq!(statement_count, 3);
                 } else {

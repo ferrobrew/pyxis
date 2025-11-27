@@ -4,7 +4,7 @@ use crate::{
         EnumDefinition, EnumStatement, ItemDefinition, ItemDefinitionInner, TypeDefItem,
         TypeDefinition, TypeField, TypeStatement,
     },
-    span::{ItemLocation, Located, Span},
+    span::Located,
     tokenizer::TokenKind,
 };
 
@@ -168,7 +168,7 @@ impl Parser {
         }
     }
 
-    pub(crate) fn parse_type_def_items(&mut self) -> Result<Vec<TypeDefItem>, ParseError> {
+    pub(crate) fn parse_type_def_items(&mut self) -> Result<Vec<Located<TypeDefItem>>, ParseError> {
         let mut items = Vec::new();
 
         while !matches!(self.peek(), TokenKind::RBrace) {
@@ -178,7 +178,7 @@ impl Parser {
                 TokenKind::Comment(_) | TokenKind::MultiLineComment(_)
             ) {
                 if let Some(comment) = self.collect_comment() {
-                    items.push(TypeDefItem::Comment(comment));
+                    items.push(comment.map(TypeDefItem::Comment));
                 }
             }
 
@@ -211,13 +211,13 @@ impl Parser {
                 }
             }
 
-            items.push(TypeDefItem::Statement(stmt));
+            items.push(stmt.map(TypeDefItem::Statement));
         }
 
         Ok(items)
     }
 
-    pub(crate) fn parse_type_statement(&mut self) -> Result<TypeStatement, ParseError> {
+    pub(crate) fn parse_type_statement(&mut self) -> Result<Located<TypeStatement>, ParseError> {
         let start_pos = self.current().location.span.start;
 
         let doc_comments = self.collect_doc_comments();
@@ -239,14 +239,17 @@ impl Parser {
                 self.current().location.span.end
             };
 
-            Ok(TypeStatement {
-                field: TypeField::Vftable(functions),
-                attributes,
-                doc_comments,
-                inline_trailing_comments: Vec::new(), // Will be populated by parse_type_def_items
-                following_comments: Vec::new(),
-                location: ItemLocation::new(self.filename.clone(), Span::new(start_pos, end_pos)),
-            })
+            let location = self.item_location_from_locations(start_pos, end_pos);
+            Ok(Located::new(
+                TypeStatement {
+                    field: TypeField::Vftable(functions),
+                    attributes,
+                    doc_comments,
+                    inline_trailing_comments: Vec::new(), // Will be populated by parse_type_def_items
+                    following_comments: Vec::new(),
+                },
+                location,
+            ))
         } else {
             let visibility = self.parse_visibility()?;
             let (name, _) = self.expect_ident()?;
@@ -259,18 +262,21 @@ impl Parser {
                 self.current().location.span.end
             };
 
-            Ok(TypeStatement {
-                field: TypeField::Field(visibility, name, type_),
-                attributes,
-                doc_comments,
-                inline_trailing_comments: Vec::new(), // Will be populated by parse_type_def_items
-                following_comments: Vec::new(),
-                location: ItemLocation::new(self.filename.clone(), Span::new(start_pos, end_pos)),
-            })
+            let location = self.item_location_from_locations(start_pos, end_pos);
+            Ok(Located::new(
+                TypeStatement {
+                    field: TypeField::Field(visibility, name, type_),
+                    attributes,
+                    doc_comments,
+                    inline_trailing_comments: Vec::new(), // Will be populated by parse_type_def_items
+                    following_comments: Vec::new(),
+                },
+                location,
+            ))
         }
     }
 
-    pub(crate) fn parse_enum_def_items(&mut self) -> Result<Vec<EnumDefItem>, ParseError> {
+    pub(crate) fn parse_enum_def_items(&mut self) -> Result<Vec<Located<EnumDefItem>>, ParseError> {
         let mut items = Vec::new();
 
         while !matches!(self.peek(), TokenKind::RBrace) {
@@ -280,7 +286,7 @@ impl Parser {
                 TokenKind::Comment(_) | TokenKind::MultiLineComment(_)
             ) {
                 if let Some(comment) = self.collect_comment() {
-                    items.push(EnumDefItem::Comment(comment));
+                    items.push(comment.map(EnumDefItem::Comment));
                 }
             }
 
@@ -313,13 +319,13 @@ impl Parser {
                 }
             }
 
-            items.push(EnumDefItem::Statement(stmt));
+            items.push(stmt.map(EnumDefItem::Statement));
         }
 
         Ok(items)
     }
 
-    pub(crate) fn parse_enum_statement(&mut self) -> Result<EnumStatement, ParseError> {
+    pub(crate) fn parse_enum_statement(&mut self) -> Result<Located<EnumStatement>, ParseError> {
         let start_pos = self.current().location.span.start;
 
         let doc_comments = self.collect_doc_comments();
@@ -343,18 +349,23 @@ impl Parser {
             self.current().location.span.end
         };
 
-        Ok(EnumStatement {
-            name,
-            expr,
-            attributes,
-            doc_comments,
-            inline_trailing_comments: Vec::new(), // Will be populated by parse_enum_def_items
-            following_comments: Vec::new(),
-            location: ItemLocation::new(self.filename.clone(), Span::new(start_pos, end_pos)),
-        })
+        let location = self.item_location_from_locations(start_pos, end_pos);
+        Ok(Located::new(
+            EnumStatement {
+                name,
+                expr,
+                attributes,
+                doc_comments,
+                inline_trailing_comments: Vec::new(), // Will be populated by parse_enum_def_items
+                following_comments: Vec::new(),
+            },
+            location,
+        ))
     }
 
-    pub(crate) fn parse_bitflags_def_items(&mut self) -> Result<Vec<BitflagsDefItem>, ParseError> {
+    pub(crate) fn parse_bitflags_def_items(
+        &mut self,
+    ) -> Result<Vec<Located<BitflagsDefItem>>, ParseError> {
         let mut items = Vec::new();
 
         while !matches!(self.peek(), TokenKind::RBrace) {
@@ -364,7 +375,7 @@ impl Parser {
                 TokenKind::Comment(_) | TokenKind::MultiLineComment(_)
             ) {
                 if let Some(comment) = self.collect_comment() {
-                    items.push(BitflagsDefItem::Comment(comment));
+                    items.push(comment.map(BitflagsDefItem::Comment));
                 }
             }
 
@@ -397,13 +408,15 @@ impl Parser {
                 }
             }
 
-            items.push(BitflagsDefItem::Statement(stmt));
+            items.push(stmt.map(BitflagsDefItem::Statement));
         }
 
         Ok(items)
     }
 
-    pub(crate) fn parse_bitflags_statement(&mut self) -> Result<BitflagsStatement, ParseError> {
+    pub(crate) fn parse_bitflags_statement(
+        &mut self,
+    ) -> Result<Located<BitflagsStatement>, ParseError> {
         let start_pos = self.current().location.span.start;
 
         let doc_comments = self.collect_doc_comments();
@@ -423,15 +436,18 @@ impl Parser {
             self.current().location.span.end
         };
 
-        Ok(BitflagsStatement {
-            name,
-            expr,
-            attributes,
-            doc_comments,
-            inline_trailing_comments: Vec::new(), // Will be populated by parse_bitflags_def_items
-            following_comments: Vec::new(),
-            location: ItemLocation::new(self.filename.clone(), Span::new(start_pos, end_pos)),
-        })
+        let location = self.item_location_from_locations(start_pos, end_pos);
+        Ok(Located::new(
+            BitflagsStatement {
+                name,
+                expr,
+                attributes,
+                doc_comments,
+                inline_trailing_comments: Vec::new(), // Will be populated by parse_bitflags_def_items
+                following_comments: Vec::new(),
+            },
+            location,
+        ))
     }
 }
 
