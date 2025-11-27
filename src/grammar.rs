@@ -1165,7 +1165,6 @@ pub struct ItemDefinition {
     pub name: Ident,
     pub doc_comments: Vec<String>,
     pub inner: ItemDefinitionInner,
-    pub location: ItemLocation,
 }
 #[cfg(test)]
 impl StripLocations for ItemDefinition {
@@ -1175,7 +1174,6 @@ impl StripLocations for ItemDefinition {
             name: self.name.strip_locations(),
             doc_comments: self.doc_comments.strip_locations(),
             inner: self.inner.strip_locations(),
-            location: self.location.strip_locations(),
         }
     }
 }
@@ -1190,13 +1188,7 @@ impl ItemDefinition {
             name: name.into(),
             doc_comments: vec![],
             inner: inner.into(),
-            location: ItemLocation::test(),
         }
-    }
-
-    pub fn with_location(mut self, location: ItemLocation) -> Self {
-        self.location = location;
-        self
     }
     pub fn with_doc_comments(mut self, doc_comments: Vec<String>) -> Self {
         self.doc_comments = doc_comments;
@@ -1386,7 +1378,7 @@ pub enum ModuleItem {
     Use(ItemPath),
     ExternType(Ident, Attributes, Vec<String>, ItemLocation), // name, attributes, doc_comments, location
     Backend(Backend),
-    Definition(ItemDefinition),
+    Definition(Located<ItemDefinition>),
     Impl(FunctionBlock),
     ExternValue(Located<ExternValue>),
     Function(Located<Function>),
@@ -1474,8 +1466,11 @@ impl Module {
         }
         self
     }
-    pub fn with_definitions(mut self, definitions: impl Into<Vec<ItemDefinition>>) -> Self {
-        for definition in definitions.into() {
+    pub fn with_definitions(
+        mut self,
+        definitions: impl IntoIterator<Item = ItemDefinition>,
+    ) -> Self {
+        for definition in definitions.into_iter().map(Located::test) {
             self.items.push(ModuleItem::Definition(definition));
         }
         self
@@ -1526,9 +1521,9 @@ impl Module {
             _ => None,
         })
     }
-    pub fn definitions(&self) -> impl Iterator<Item = &ItemDefinition> {
+    pub fn definitions(&self) -> impl Iterator<Item = Located<&ItemDefinition>> {
         self.items.iter().filter_map(|item| match item {
-            ModuleItem::Definition(def) => Some(def),
+            ModuleItem::Definition(def) => Some(def.as_ref()),
             _ => None,
         })
     }

@@ -219,7 +219,7 @@ fn can_use_type_from_another_module() {
     let resolved_type = semantic_state
         .type_registry()
         .get(&path, &ItemLocation::test())
-        .cloned()
+        .map(|d| d.value.clone())
         .expect("failed to get type");
     assert_eq!(
         resolved_type,

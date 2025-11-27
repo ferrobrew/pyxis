@@ -7,7 +7,7 @@ use crate::{
         error::{Result, SemanticError, TypeResolutionContext},
         types::{Function, ItemStateResolved, Type},
     },
-    span::{ItemLocation, Located},
+    span::Located,
 };
 
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]
@@ -95,11 +95,10 @@ impl EnumDefinition {
 pub fn build(
     semantic: &SemanticState,
     resolvee_path: &ItemPath,
-    definition: &grammar::EnumDefinition,
+    definition: Located<&grammar::EnumDefinition>,
     doc_comments: &[String],
-    location: ItemLocation,
 ) -> Result<Option<ItemStateResolved>> {
-    let module = semantic.get_module_for_path(resolvee_path, &location)?;
+    let module = semantic.get_module_for_path(resolvee_path, &definition.location)?;
 
     let Some(ty) = semantic
         .type_registry
@@ -129,7 +128,7 @@ pub fn build(
                 return Err(SemanticError::EnumUnsupportedValue {
                     item_path: resolvee_path.clone(),
                     case_name: name.0.clone(),
-                    location: location.clone(),
+                    location: definition.location.clone(),
                 });
             }
             None => last_field,
@@ -142,7 +141,7 @@ pub fn build(
                     if default.is_some() {
                         return Err(SemanticError::EnumMultipleDefaults {
                             item_path: resolvee_path.clone(),
-                            location: location.clone(),
+                            location: definition.location.clone(),
                         });
                     }
                     default = Some(fields.len() - 1);
@@ -185,14 +184,14 @@ pub fn build(
     if !defaultable && default.is_some() {
         return Err(SemanticError::EnumDefaultWithoutDefaultable {
             item_path: resolvee_path.clone(),
-            location: location.clone(),
+            location: definition.location.clone(),
         });
     }
 
     if defaultable && default.is_none() {
         return Err(SemanticError::EnumDefaultableMissingDefault {
             item_path: resolvee_path.clone(),
-            location: location.clone(),
+            location: definition.location.clone(),
         });
     }
 
@@ -218,7 +217,7 @@ pub fn build(
                 resolution_context: TypeResolutionContext::EnumBaseTypeAlignment {
                     enum_path: resolvee_path.clone(),
                 },
-                location: location.clone(),
+                location: definition.location.clone(),
             }
         })?,
         inner: EnumDefinition {

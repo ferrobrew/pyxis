@@ -145,7 +145,7 @@ pub fn write_module(
 
 fn build_item(
     type_registry: &TypeRegistry,
-    definition: &ItemDefinition,
+    definition: Located<&ItemDefinition>,
 ) -> Result<proc_macro2::TokenStream> {
     let resolved = definition
         .resolved()

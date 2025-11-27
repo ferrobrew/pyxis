@@ -4,14 +4,14 @@ use crate::{
         EnumDefinition, EnumStatement, ItemDefinition, ItemDefinitionInner, TypeDefItem,
         TypeDefinition, TypeField, TypeStatement,
     },
-    span::{ItemLocation, Span},
+    span::{ItemLocation, Located, Span},
     tokenizer::TokenKind,
 };
 
 use super::{ParseError, core::Parser};
 
 impl Parser {
-    pub(crate) fn parse_item_definition(&mut self) -> Result<ItemDefinition, ParseError> {
+    pub(crate) fn parse_item_definition(&mut self) -> Result<Located<ItemDefinition>, ParseError> {
         // Capture the start position
         let start_pos = self.current().location.span.start;
 
@@ -84,16 +84,16 @@ impl Parser {
                     self.current().location.span.end
                 };
 
-                Ok(ItemDefinition {
-                    visibility,
-                    name,
-                    doc_comments,
-                    inner: ItemDefinitionInner::Type(def),
-                    location: ItemLocation::new(
-                        self.filename.clone(),
-                        Span::new(start_pos, end_pos),
-                    ),
-                })
+                let location = self.item_location_from_locations(start_pos, end_pos);
+                Ok(Located::new(
+                    ItemDefinition {
+                        visibility,
+                        name,
+                        doc_comments,
+                        inner: ItemDefinitionInner::Type(def),
+                    },
+                    location,
+                ))
             }
             TokenKind::Enum => {
                 self.advance();
@@ -111,22 +111,22 @@ impl Parser {
                     self.current().location.span.end
                 };
 
-                Ok(ItemDefinition {
-                    visibility,
-                    name,
-                    doc_comments,
-                    inner: ItemDefinitionInner::Enum(EnumDefinition {
-                        type_,
-                        items,
-                        attributes,
-                        inline_trailing_comments: inline_trailing_comments.clone(),
-                        following_comments: following_comments.clone(),
-                    }),
-                    location: ItemLocation::new(
-                        self.filename.clone(),
-                        Span::new(start_pos, end_pos),
-                    ),
-                })
+                let location = self.item_location_from_locations(start_pos, end_pos);
+                Ok(Located::new(
+                    ItemDefinition {
+                        visibility,
+                        name,
+                        doc_comments,
+                        inner: ItemDefinitionInner::Enum(EnumDefinition {
+                            type_,
+                            items,
+                            attributes,
+                            inline_trailing_comments: inline_trailing_comments.clone(),
+                            following_comments: following_comments.clone(),
+                        }),
+                    },
+                    location,
+                ))
             }
             TokenKind::Bitflags => {
                 self.advance();
@@ -144,22 +144,22 @@ impl Parser {
                     self.current().location.span.end
                 };
 
-                Ok(ItemDefinition {
-                    visibility,
-                    name,
-                    doc_comments,
-                    inner: ItemDefinitionInner::Bitflags(BitflagsDefinition {
-                        type_,
-                        items,
-                        attributes,
-                        inline_trailing_comments,
-                        following_comments,
-                    }),
-                    location: ItemLocation::new(
-                        self.filename.clone(),
-                        Span::new(start_pos, end_pos),
-                    ),
-                })
+                let location = self.item_location_from_locations(start_pos, end_pos);
+                Ok(Located::new(
+                    ItemDefinition {
+                        visibility,
+                        name,
+                        doc_comments,
+                        inner: ItemDefinitionInner::Bitflags(BitflagsDefinition {
+                            type_,
+                            items,
+                            attributes,
+                            inline_trailing_comments,
+                            following_comments,
+                        }),
+                    },
+                    location,
+                ))
             }
             _ => Err(ParseError::ExpectedItemDefinition {
                 found: self.peek().clone(),

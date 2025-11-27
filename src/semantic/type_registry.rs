@@ -7,12 +7,12 @@ use crate::{
         error::Result,
         types::{ItemDefinition, Type},
     },
-    span::ItemLocation,
+    span::{ItemLocation, Located},
 };
 
 #[derive(Debug)]
 pub struct TypeRegistry {
-    types: BTreeMap<ItemPath, ItemDefinition>,
+    types: BTreeMap<ItemPath, Located<ItemDefinition>>,
     pointer_size: usize,
 }
 
@@ -32,9 +32,10 @@ impl TypeRegistry {
         &self,
         item_path: &ItemPath,
         from_location: &ItemLocation,
-    ) -> Result<&ItemDefinition> {
+    ) -> Result<Located<&ItemDefinition>> {
         self.types
             .get(item_path)
+            .map(|l| l.as_ref())
             .ok_or_else(|| SemanticError::TypeNotFound {
                 path: item_path.clone(),
                 location: from_location.clone(),
@@ -45,9 +46,10 @@ impl TypeRegistry {
         &mut self,
         item_path: &ItemPath,
         from_location: &ItemLocation,
-    ) -> Result<&mut ItemDefinition> {
+    ) -> Result<Located<&mut ItemDefinition>> {
         self.types
             .get_mut(item_path)
+            .map(|l| l.as_mut())
             .ok_or_else(|| SemanticError::TypeNotFound {
                 path: item_path.clone(),
                 location: from_location.clone(),
@@ -70,7 +72,7 @@ impl TypeRegistry {
             .collect()
     }
 
-    pub(crate) fn add(&mut self, type_: ItemDefinition) {
+    pub(crate) fn add(&mut self, type_: Located<ItemDefinition>) {
         self.types.insert(type_.path.clone(), type_);
     }
 

@@ -40,24 +40,26 @@ impl SemanticState {
             let size = predefined_item.size();
             let alignment = size.max(1);
             semantic_state
-                .add_item(ItemDefinition {
-                    visibility: Visibility::Public,
-                    path,
-                    state: ItemState::Resolved(ItemStateResolved {
-                        size,
-                        alignment,
-                        inner: TypeDefinition {
-                            cloneable: true,
-                            copyable: true,
-                            defaultable: true,
-                            ..Default::default()
-                        }
-                        .into(),
-                    }),
-                    category: ItemCategory::Predefined,
-                    predefined: Some(*predefined_item),
-                    location: ItemLocation::internal(),
-                })
+                .add_item(Located::new(
+                    ItemDefinition {
+                        visibility: Visibility::Public,
+                        path,
+                        state: ItemState::Resolved(ItemStateResolved {
+                            size,
+                            alignment,
+                            inner: TypeDefinition {
+                                cloneable: true,
+                                copyable: true,
+                                defaultable: true,
+                                ..Default::default()
+                            }
+                            .into(),
+                        }),
+                        category: ItemCategory::Predefined,
+                        predefined: Some(*predefined_item),
+                    },
+                    ItemLocation::internal(),
+                ))
                 .expect("failed to add predefined type");
         }
 
@@ -142,14 +144,16 @@ impl SemanticState {
         for definition in module.definitions().collect::<Vec<_>>() {
             let new_path = path.join(definition.name.as_str().into());
 
-            self.add_item(ItemDefinition {
-                visibility: definition.visibility.into(),
-                path: new_path,
-                state: ItemState::Unresolved(definition.clone()),
-                category: ItemCategory::Defined,
-                predefined: None,
-                location: definition.location.clone(),
-            })?;
+            self.add_item(Located::new(
+                ItemDefinition {
+                    visibility: definition.visibility.into(),
+                    path: new_path,
+                    state: ItemState::Unresolved(definition.cloned()),
+                    category: ItemCategory::Defined,
+                    predefined: None,
+                },
+                definition.location.clone(),
+            ))?;
         }
 
         for (extern_name, attributes, extern_location) in module.extern_types().collect::<Vec<_>>()
@@ -209,24 +213,26 @@ impl SemanticState {
 
             let extern_path = path.join(extern_name.as_str().into());
 
-            self.add_item(ItemDefinition {
-                visibility: Visibility::Public,
-                path: extern_path.clone(),
-                state: ItemState::Resolved(ItemStateResolved {
-                    size,
-                    alignment,
-                    inner: TypeDefinition::default().into(),
-                }),
-                category: ItemCategory::Extern,
-                predefined: None,
-                location: extern_location.clone(),
-            })?;
+            self.add_item(Located::new(
+                ItemDefinition {
+                    visibility: Visibility::Public,
+                    path: extern_path.clone(),
+                    state: ItemState::Resolved(ItemStateResolved {
+                        size,
+                        alignment,
+                        inner: TypeDefinition::default().into(),
+                    }),
+                    category: ItemCategory::Extern,
+                    predefined: None,
+                },
+                extern_location.clone(),
+            ))?;
         }
 
         Ok(())
     }
 
-    pub fn add_item(&mut self, item_definition: ItemDefinition) -> Result<()> {
+    pub fn add_item(&mut self, item_definition: Located<ItemDefinition>) -> Result<()> {
         let parent_path =
             &item_definition
                 .path
@@ -258,7 +264,6 @@ impl SemanticState {
                 let item_def = self
                     .type_registry
                     .get(resolvee_path, &ItemLocation::internal())?;
-                let item_location = item_def.location.clone();
                 let ItemState::Unresolved(definition) = item_def.state.clone() else {
                     continue;
                 };
@@ -270,29 +275,26 @@ impl SemanticState {
                         &mut self,
                         resolvee_path,
                         visibility,
-                        ty,
+                        definition.as_ref().map(|_| ty),
                         &definition.doc_comments,
-                        definition.location.clone(),
                     )?,
                     grammar::ItemDefinitionInner::Enum(e) => enum_definition::build(
                         &self,
                         resolvee_path,
-                        e,
+                        definition.as_ref().map(|_| e),
                         &definition.doc_comments,
-                        item_location.clone(),
                     )?,
                     grammar::ItemDefinitionInner::Bitflags(b) => bitflags_definition::build(
                         &self,
                         resolvee_path,
-                        b,
+                        definition.as_ref().map(|_| b),
                         &definition.doc_comments,
-                        item_location.clone(),
                     )?,
                 };
 
                 let Some(item) = item else { continue };
                 self.type_registry
-                    .get_mut(resolvee_path, &item_location)?
+                    .get_mut(resolvee_path, &definition.location)?
                     .state = ItemState::Resolved(item);
             }
 

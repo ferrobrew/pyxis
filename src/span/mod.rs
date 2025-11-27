@@ -130,6 +130,10 @@ impl<T> Located<T> {
         Located::new(&self.value, self.location.clone())
     }
 
+    pub fn as_mut(&mut self) -> Located<&mut T> {
+        Located::new(&mut self.value, self.location.clone())
+    }
+
     pub fn map<U, F>(self, f: F) -> Located<U>
     where
         F: FnOnce(T) -> U,
@@ -173,6 +177,11 @@ impl<T> Deref for Located<T> {
 impl<T> DerefMut for Located<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.value
+    }
+}
+impl<T: Clone> Located<&T> {
+    pub fn cloned(&self) -> Located<T> {
+        Located::new(self.value.clone(), self.location.clone())
     }
 }
 impl<T, E> Located<Result<T, E>> {

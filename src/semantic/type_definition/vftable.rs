@@ -249,7 +249,7 @@ fn build_type(
     visibility: Visibility,
     functions: &[Located<Function>],
     location: &ItemLocation,
-) -> Option<ItemDefinition> {
+) -> Option<Located<ItemDefinition>> {
     let name = resolvee_path.last()?;
 
     let resolvee_vtable_path = resolvee_path
@@ -267,29 +267,31 @@ fn build_type(
         .map(|f| f.location.clone())
         .unwrap_or_else(|| location.clone());
 
-    Some(ItemDefinition {
-        visibility,
-        path: resolvee_vtable_path.clone(),
-        state: ItemState::Resolved(ItemStateResolved {
-            size: regions.iter().map(|r| r.size(type_registry).unwrap()).sum(),
-            alignment: type_registry.pointer_size(),
-            inner: TypeDefinition {
-                regions,
-                doc: vec![],
-                associated_functions: vec![],
-                vftable: None,
-                singleton: None,
-                cloneable: false,
-                copyable: false,
-                defaultable: false,
-                packed: false,
-            }
-            .into(),
-        }),
-        category: ItemCategory::Defined,
-        predefined: None,
-        location: vftable_type_location,
-    })
+    Some(Located::new(
+        ItemDefinition {
+            visibility,
+            path: resolvee_vtable_path.clone(),
+            state: ItemState::Resolved(ItemStateResolved {
+                size: regions.iter().map(|r| r.size(type_registry).unwrap()).sum(),
+                alignment: type_registry.pointer_size(),
+                inner: TypeDefinition {
+                    regions,
+                    doc: vec![],
+                    associated_functions: vec![],
+                    vftable: None,
+                    singleton: None,
+                    cloneable: false,
+                    copyable: false,
+                    defaultable: false,
+                    packed: false,
+                }
+                .into(),
+            }),
+            category: ItemCategory::Defined,
+            predefined: None,
+        },
+        vftable_type_location,
+    ))
 }
 
 /// Given a function, create a region representing it

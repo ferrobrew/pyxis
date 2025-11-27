@@ -6,6 +6,7 @@ use crate::{
         semantic_state::{ResolvedSemanticState, SemanticState},
         types::test_aliases::*,
     },
+    span::Located,
 };
 
 use pretty_assertions::assert_eq;
@@ -43,9 +44,12 @@ pub fn assert_ast_produces_type_definitions(
     let created_module = state.modules().get(&module_path).unwrap();
     let type_registry = state.type_registry();
 
-    let mut expected_type_definitions: Vec<_> = type_definitions.into_iter().collect();
-    let mut created_type_definitions: Vec<_> =
-        created_module.definitions(type_registry).cloned().collect();
+    let mut expected_type_definitions: Vec<_> =
+        type_definitions.into_iter().map(Located::test).collect();
+    let mut created_type_definitions: Vec<_> = created_module
+        .definitions(type_registry)
+        .map(|d| d.cloned())
+        .collect();
 
     expected_type_definitions.sort_by_key(|t| t.path.clone());
     created_type_definitions.sort_by_key(|t| t.path.clone());

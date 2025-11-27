@@ -8,7 +8,7 @@ use crate::{
         },
         types::{ItemStateResolved, Type},
     },
-    span::ItemLocation,
+    span::Located,
 };
 
 #[cfg(test)]
@@ -85,11 +85,10 @@ impl BitflagsDefinition {
 pub fn build(
     semantic: &SemanticState,
     resolvee_path: &ItemPath,
-    definition: &grammar::BitflagsDefinition,
+    definition: Located<&grammar::BitflagsDefinition>,
     doc_comments: &[String],
-    location: ItemLocation,
 ) -> Result<Option<ItemStateResolved>> {
-    let module = semantic.get_module_for_path(resolvee_path, &location)?;
+    let module = semantic.get_module_for_path(resolvee_path, &definition.location)?;
 
     let type_location = definition.type_.location.clone();
 
@@ -157,7 +156,7 @@ pub fn build(
                 return Err(SemanticError::BitflagsUnsupportedValue {
                     item_path: resolvee_path.clone(),
                     case_name: name.0.clone(),
-                    location: location.clone(),
+                    location: definition.location.clone(),
                 });
             }
         };
@@ -172,7 +171,7 @@ pub fn build(
                         field_name: name.0.clone(),
                         type_path: resolvee_path.clone(),
                     },
-                    location: location.clone(),
+                    location: definition.location.clone(),
                 })?,
         ));
 
@@ -182,7 +181,7 @@ pub fn build(
                     if default.is_some() {
                         return Err(SemanticError::BitflagsMultipleDefaults {
                             item_path: resolvee_path.clone(),
-                            location: location.clone(),
+                            location: definition.location.clone(),
                         });
                     }
                     default = Some(fields.len() - 1);
@@ -223,14 +222,14 @@ pub fn build(
     if !defaultable && default.is_some() {
         return Err(SemanticError::BitflagsDefaultWithoutDefaultable {
             item_path: resolvee_path.clone(),
-            location: location.clone(),
+            location: definition.location.clone(),
         });
     }
 
     if defaultable && default.is_none() {
         return Err(SemanticError::BitflagsDefaultableMissingDefault {
             item_path: resolvee_path.clone(),
-            location: location.clone(),
+            location: definition.location.clone(),
         });
     }
 

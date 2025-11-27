@@ -327,7 +327,7 @@ impl ItemStateResolved {
 
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]
 pub enum ItemState {
-    Unresolved(grammar::ItemDefinition),
+    Unresolved(Located<grammar::ItemDefinition>),
     Resolved(ItemStateResolved),
 }
 #[cfg(test)]
@@ -408,7 +408,6 @@ pub struct ItemDefinition {
     pub state: ItemState,
     pub category: ItemCategory,
     pub predefined: Option<PredefinedItem>,
-    pub location: ItemLocation,
 }
 #[cfg(test)]
 // StripSpans implementations for testing
@@ -420,7 +419,6 @@ impl StripLocations for ItemDefinition {
             state: self.state.strip_locations(),
             category: self.category.strip_locations(),
             predefined: self.predefined.strip_locations(),
-            location: self.location.strip_locations(),
         }
     }
 }
@@ -438,7 +436,6 @@ impl ItemDefinition {
             state: ItemState::Resolved(resolved),
             category,
             predefined: None,
-            location: ItemLocation::test(),
         }
     }
 
@@ -454,7 +451,6 @@ impl ItemDefinition {
             state: ItemState::Resolved(resolved),
             category: ItemCategory::Defined,
             predefined: None,
-            location: ItemLocation::test(),
         }
     }
 
