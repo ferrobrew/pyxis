@@ -18,8 +18,8 @@ pub struct Module {
     pub(crate) definition_paths: BTreeSet<ItemPath>,
     pub(crate) extern_values: Vec<Located<ExternValue>>,
     pub(crate) functions: Vec<Located<Function>>,
-    pub(crate) impls: BTreeMap<ItemPath, grammar::FunctionBlock>,
-    pub(crate) backends: BTreeMap<String, Vec<Backend>>,
+    pub(crate) impls: BTreeMap<ItemPath, Located<grammar::FunctionBlock>>,
+    pub(crate) backends: BTreeMap<String, Vec<Located<Backend>>>,
     pub(crate) doc: Vec<String>,
 }
 
@@ -43,23 +43,26 @@ impl Module {
         path: ItemPath,
         ast: grammar::Module,
         extern_values: Vec<Located<ExternValue>>,
-        impls: &[grammar::FunctionBlock],
-        backends: &[grammar::Backend],
+        impls: &[Located<grammar::FunctionBlock>],
+        backends: &[Located<grammar::Backend>],
     ) -> Result<Self> {
         let impls = impls
             .iter()
             .map(|f| (path.join(f.name.as_str().into()), f.clone()))
             .collect();
 
-        let mut backends_map: BTreeMap<String, Vec<Backend>> = BTreeMap::new();
+        let mut backends_map: BTreeMap<String, Vec<Located<Backend>>> = BTreeMap::new();
         for backend in backends {
             backends_map
                 .entry(backend.name.0.clone())
                 .or_default()
-                .push(Backend {
-                    prologue: backend.prologue.clone(),
-                    epilogue: backend.epilogue.clone(),
-                });
+                .push(Located::new(
+                    Backend {
+                        prologue: backend.prologue.clone(),
+                        epilogue: backend.epilogue.clone(),
+                    },
+                    backend.location.clone(),
+                ));
         }
 
         let doc = ast.doc_comments.clone();
@@ -75,8 +78,8 @@ impl Module {
         })
     }
 
-    pub fn uses(&self) -> Vec<ItemPath> {
-        self.ast.uses().cloned().collect()
+    pub fn uses(&self) -> impl Iterator<Item = Located<&ItemPath>> {
+        self.ast.uses()
     }
 
     pub fn definition_paths(&self) -> &BTreeSet<ItemPath> {
@@ -94,7 +97,7 @@ impl Module {
 
     pub fn scope(&self) -> Vec<ItemPath> {
         std::iter::once(self.path.clone())
-            .chain(self.uses().iter().cloned())
+            .chain(self.uses().map(|u| u.value.clone()))
             .collect()
     }
 

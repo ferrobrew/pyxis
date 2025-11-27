@@ -7,8 +7,8 @@ use crate::{
 use super::{ParseError, core::Parser};
 
 impl Parser {
-    pub(crate) fn parse_use(&mut self) -> Result<ItemPath, ParseError> {
-        self.expect(TokenKind::Use)?;
+    pub(crate) fn parse_use(&mut self) -> Result<Located<ItemPath>, ParseError> {
+        let first_token = self.expect(TokenKind::Use)?;
 
         // Check for super keyword (not supported yet)
         if let TokenKind::Ident(name) = self.peek()
@@ -20,11 +20,13 @@ impl Parser {
         }
 
         let path = self.parse_item_path()?;
-        self.expect(TokenKind::Semi)?;
-        Ok(path)
+        let last_token = self.expect(TokenKind::Semi)?;
+
+        let location = self.item_location_from_token_range(&first_token, &last_token);
+        Ok(Located::new(path, location))
     }
 
-    pub(crate) fn parse_extern_type(&mut self) -> Result<ModuleItem, ParseError> {
+    pub(crate) fn parse_extern_type(&mut self) -> Result<Located<ModuleItem>, ParseError> {
         let start_pos = self.current().location.span.start;
         let mut doc_comments = self.collect_doc_comments();
         let attributes = if matches!(self.peek(), TokenKind::Hash) {
@@ -87,10 +89,8 @@ impl Parser {
             self.current().location.span.end
         };
         let location = ItemLocation::new(self.filename.clone(), Span::new(start_pos, end_pos));
-        Ok(ModuleItem::ExternType(
-            name,
-            attributes,
-            doc_comments,
+        Ok(Located::new(
+            ModuleItem::ExternType(name, attributes, doc_comments),
             location,
         ))
     }
@@ -133,8 +133,8 @@ impl Parser {
         ))
     }
 
-    pub(crate) fn parse_backend(&mut self) -> Result<Backend, ParseError> {
-        self.expect(TokenKind::Backend)?;
+    pub(crate) fn parse_backend(&mut self) -> Result<Located<Backend>, ParseError> {
+        let first_token = self.expect(TokenKind::Backend)?;
         let (name, _) = self.expect_ident()?;
 
         let mut prologue = None;
@@ -143,7 +143,7 @@ impl Parser {
         let mut epilogue_format = StringFormat::Regular;
 
         // Check if we have braces or direct prologue/epilogue
-        if matches!(self.peek(), TokenKind::LBrace) {
+        let last_token = if matches!(self.peek(), TokenKind::LBrace) {
             // Form: backend name { prologue ...; epilogue ...; }
             self.advance(); // consume {
 
@@ -186,7 +186,7 @@ impl Parser {
                 }
             }
 
-            self.expect(TokenKind::RBrace)?;
+            self.expect(TokenKind::RBrace)?
         } else {
             // Form: backend name prologue ... or backend name epilogue ...
             match self.peek() {
@@ -202,7 +202,7 @@ impl Parser {
                             location: self.current().location.clone(),
                         });
                     }
-                    self.expect(TokenKind::Semi)?;
+                    self.expect(TokenKind::Semi)?
                 }
                 TokenKind::Epilogue => {
                     self.advance();
@@ -216,7 +216,7 @@ impl Parser {
                             location: self.current().location.clone(),
                         });
                     }
-                    self.expect(TokenKind::Semi)?;
+                    self.expect(TokenKind::Semi)?
                 }
                 _ => {
                     return Err(ParseError::ExpectedBackendContent {
@@ -225,15 +225,19 @@ impl Parser {
                     });
                 }
             }
-        }
+        };
 
-        Ok(Backend {
-            name,
-            prologue,
-            prologue_format,
-            epilogue,
-            epilogue_format,
-        })
+        let location = self.item_location_from_token_range(&first_token, &last_token);
+        Ok(Located::new(
+            Backend {
+                name,
+                prologue,
+                prologue_format,
+                epilogue,
+                epilogue_format,
+            },
+            location,
+        ))
     }
 }
 
@@ -315,8 +319,8 @@ extern type ManuallyDrop<SharedPtr<u32>>;
         assert_eq!(module.items.len(), 1);
 
         // Verify it's an ExternType with the correct attributes and doc comments
-        match &module.items[0] {
-            ModuleItem::ExternType(name, attrs, doc_comments, _location) => {
+        match &module.items[0].value {
+            ModuleItem::ExternType(name, attrs, doc_comments) => {
                 assert_eq!(name.0, "ManuallyDrop<SharedPtr<u32>>");
                 assert_eq!(attrs.0.len(), 2);
                 assert_eq!(doc_comments.len(), 4); // 4 lines of doc comment

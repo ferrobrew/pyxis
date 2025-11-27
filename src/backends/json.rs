@@ -2,7 +2,7 @@ use std::{collections::BTreeMap, path::Path};
 
 use crate::{
     backends::{BackendError, Result},
-    semantic::types::Type,
+    semantic::types::{Backend, Type},
     span::Located,
 };
 use serde::{Deserialize, Serialize};
@@ -608,7 +608,7 @@ fn convert_extern_value(ev: Located<&ExternValue>) -> JsonExternValue {
     }
 }
 
-fn convert_backend(backend: &crate::semantic::types::Backend) -> JsonBackend {
+fn convert_backend(backend: Located<&Backend>) -> JsonBackend {
     JsonBackend {
         prologue: backend.prologue.clone(),
         epilogue: backend.epilogue.clone(),
@@ -651,7 +651,10 @@ fn build_module_hierarchy(semantic_state: &ResolvedSemanticState) -> BTreeMap<St
             .map(|(name, backend_list)| {
                 (
                     name.clone(),
-                    backend_list.iter().map(convert_backend).collect(),
+                    backend_list
+                        .iter()
+                        .map(|b| convert_backend(b.as_ref()))
+                        .collect(),
                 )
             })
             .collect();

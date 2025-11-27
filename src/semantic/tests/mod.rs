@@ -1,7 +1,7 @@
 use crate::{
     grammar::test_aliases::{int_literal, *},
     semantic::{error::SemanticError, semantic_state::SemanticState, types::test_aliases::*},
-    span::ItemLocation,
+    span::{ItemLocation, Located},
 };
 
 use pretty_assertions::assert_eq;
@@ -769,8 +769,8 @@ fn can_carry_backend_across() {
     assert_eq!(
         module.backends.get("rust").unwrap(),
         &[
-            SB::new(prologue.to_string(), epilogue.to_string()),
-            SB::new(None, epilogue.to_string()),
+            Located::test(SB::new(prologue.to_string(), epilogue.to_string())),
+            Located::test(SB::new(None, epilogue.to_string())),
         ]
     );
 }

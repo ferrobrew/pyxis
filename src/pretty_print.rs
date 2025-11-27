@@ -5,7 +5,10 @@
 /// - Validating the AST design
 /// - Formatting/normalizing code
 /// - Testing round-trip parsing
-use crate::grammar::{ItemDefinitionInner, *};
+use crate::{
+    grammar::{ItemDefinitionInner, *},
+    span::Located,
+};
 use std::fmt::Write;
 
 pub struct PrettyPrinter {
@@ -75,11 +78,14 @@ impl PrettyPrinter {
         // Print items with lookahead for proper spacing
         for (i, item) in module.items.iter().enumerate() {
             let next_item = module.items.get(i + 1);
-            self.print_module_item(item, next_item);
+            self.print_module_item(&item.value, next_item.as_ref().map(|i| &i.value));
 
             // Add blank line between regular comment and definition with both doc comments and attributes
-            if let ModuleItem::Comment(_comment) = item
-                && let Some(ModuleItem::Definition(def)) = next_item
+            if let ModuleItem::Comment(_comment) = &item.value
+                && let Some(Located {
+                    value: ModuleItem::Definition(def),
+                    location: _,
+                }) = &next_item
             {
                 // Add blank line if definition has both doc comments and attributes
                 let has_attrs = match &def.inner {
@@ -100,7 +106,7 @@ impl PrettyPrinter {
     fn print_module_item(&mut self, item: &ModuleItem, next_item: Option<&ModuleItem>) {
         match item {
             ModuleItem::Comment(comment) => {
-                self.print_comment(&comment.value);
+                self.print_comment(comment);
                 // Don't add blank line after comments - they group with the following item
             }
             ModuleItem::Use(path) => {
@@ -112,7 +118,7 @@ impl PrettyPrinter {
                     self.writeln("");
                 }
             }
-            ModuleItem::ExternType(name, attrs, doc_comments, _) => {
+            ModuleItem::ExternType(name, attrs, doc_comments) => {
                 // Print doc comments
                 for doc in doc_comments {
                     self.write_indent();

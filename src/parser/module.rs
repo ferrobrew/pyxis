@@ -1,5 +1,6 @@
 use crate::{
     grammar::{Module, ModuleItem},
+    span::Located,
     tokenizer::TokenKind,
 };
 
@@ -26,7 +27,7 @@ impl Parser {
                 TokenKind::Comment(_) | TokenKind::MultiLineComment(_)
             ) {
                 if let Some(comment) = self.collect_comment() {
-                    items.push(ModuleItem::Comment(comment));
+                    items.push(comment.map(ModuleItem::Comment));
                 }
             }
 
@@ -39,7 +40,7 @@ impl Parser {
 
             // Add any pending comments that were collected during parsing (e.g., inline comments after attributes)
             for comment in self.pending_comments.drain(..) {
-                items.push(ModuleItem::Comment(comment));
+                items.push(comment.map(ModuleItem::Comment));
             }
 
             // Collect any inline comments that appeared after the item
@@ -48,7 +49,7 @@ impl Parser {
                 TokenKind::Comment(_) | TokenKind::MultiLineComment(_)
             ) {
                 if let Some(comment) = self.collect_comment() {
-                    items.push(ModuleItem::Comment(comment));
+                    items.push(comment.map(ModuleItem::Comment));
                 }
             }
         }
@@ -60,21 +61,22 @@ impl Parser {
         })
     }
 
-    pub(crate) fn parse_module_item(&mut self) -> Result<ModuleItem, ParseError> {
+    pub(crate) fn parse_module_item(&mut self) -> Result<Located<ModuleItem>, ParseError> {
         // Attributes can appear before any item
         let has_attributes = matches!(self.peek(), TokenKind::Hash);
 
         match self.peek() {
-            TokenKind::Use => self.parse_use().map(ModuleItem::Use),
+            TokenKind::Use => self.parse_use().map(|l| l.map(ModuleItem::Use)),
             TokenKind::Extern if !has_attributes => {
                 // Peek ahead to distinguish extern type from extern value
                 if matches!(self.peek_nth(1), TokenKind::Type) {
                     self.parse_extern_type()
                 } else {
-                    self.parse_extern_value().map(ModuleItem::ExternValue)
+                    self.parse_extern_value()
+                        .map(|l| l.map(ModuleItem::ExternValue))
                 }
             }
-            TokenKind::Backend => self.parse_backend().map(ModuleItem::Backend),
+            TokenKind::Backend => self.parse_backend().map(|l| l.map(ModuleItem::Backend)),
             TokenKind::Hash => {
                 // Attributes - need to peek ahead to see what comes after
                 let mut pos = self.pos;
@@ -119,24 +121,29 @@ impl Parser {
                         ) {
                             self.parse_extern_type()
                         } else {
-                            self.parse_extern_value().map(ModuleItem::ExternValue)
+                            self.parse_extern_value()
+                                .map(|l| l.map(ModuleItem::ExternValue))
                         }
                     }
                     TokenKind::Pub => {
                         // Could be pub extern value, pub fn, or pub item definition
                         match self.tokens.get(pos + 1).map(|t| &t.kind) {
-                            Some(TokenKind::Extern) => {
-                                self.parse_extern_value().map(ModuleItem::ExternValue)
+                            Some(TokenKind::Extern) => self
+                                .parse_extern_value()
+                                .map(|l| l.map(ModuleItem::ExternValue)),
+                            Some(TokenKind::Fn) => {
+                                self.parse_function().map(|l| l.map(ModuleItem::Function))
                             }
-                            Some(TokenKind::Fn) => self.parse_function().map(ModuleItem::Function),
-                            _ => self.parse_item_definition().map(ModuleItem::Definition),
+                            _ => self
+                                .parse_item_definition()
+                                .map(|l| l.map(ModuleItem::Definition)),
                         }
                     }
-                    TokenKind::Type | TokenKind::Enum | TokenKind::Bitflags => {
-                        self.parse_item_definition().map(ModuleItem::Definition)
-                    }
-                    TokenKind::Impl => self.parse_impl_block().map(ModuleItem::Impl),
-                    TokenKind::Fn => self.parse_function().map(ModuleItem::Function),
+                    TokenKind::Type | TokenKind::Enum | TokenKind::Bitflags => self
+                        .parse_item_definition()
+                        .map(|l| l.map(ModuleItem::Definition)),
+                    TokenKind::Impl => self.parse_impl_block().map(|l| l.map(ModuleItem::Impl)),
+                    TokenKind::Fn => self.parse_function().map(|l| l.map(ModuleItem::Function)),
                     _ => Err(ParseError::UnexpectedTokenAfterAttributes {
                         found: self.tokens[pos].kind.clone(),
                         location: self.tokens[pos].location.clone(),
@@ -184,16 +191,17 @@ impl Parser {
                 ) {
                     self.parse_extern_type()
                 } else {
-                    self.parse_item_definition().map(ModuleItem::Definition)
+                    self.parse_item_definition()
+                        .map(|l| l.map(ModuleItem::Definition))
                 }
             }
-            TokenKind::Pub | TokenKind::Type | TokenKind::Enum | TokenKind::Bitflags => {
-                self.parse_item_definition().map(ModuleItem::Definition)
-            }
-            TokenKind::Impl => self.parse_impl_block().map(ModuleItem::Impl),
+            TokenKind::Pub | TokenKind::Type | TokenKind::Enum | TokenKind::Bitflags => self
+                .parse_item_definition()
+                .map(|l| l.map(ModuleItem::Definition)),
+            TokenKind::Impl => self.parse_impl_block().map(|l| l.map(ModuleItem::Impl)),
             TokenKind::Fn => {
                 // Freestanding function with attributes
-                self.parse_function().map(ModuleItem::Function)
+                self.parse_function().map(|l| l.map(ModuleItem::Function))
             }
             _ => Err(ParseError::UnexpectedModuleToken {
                 found: self.peek().clone(),
@@ -552,7 +560,7 @@ impl PfxInstance {
         let module = parse_str_for_tests(text).unwrap();
 
         // Check extern type has no doc comments (doc comes after, not before)
-        if let ModuleItem::ExternType(_name, _attrs, doc_comments, _location) = &module.items[0] {
+        if let ModuleItem::ExternType(_name, _attrs, doc_comments) = &module.items[0].value {
             assert_eq!(
                 doc_comments.len(),
                 0,
@@ -563,7 +571,7 @@ impl PfxInstance {
         }
 
         // Check first type definition has doc comments
-        if let ModuleItem::Definition(def) = &module.items[1] {
+        if let ModuleItem::Definition(def) = &module.items[1].value {
             assert_eq!(def.name.0, "PfxInstanceInterface");
             assert_eq!(
                 def.doc_comments.len(),
@@ -577,7 +585,7 @@ impl PfxInstance {
         }
 
         // Check second type definition has doc comments (after attributes)
-        if let ModuleItem::Definition(def) = &module.items[2] {
+        if let ModuleItem::Definition(def) = &module.items[2].value {
             assert_eq!(def.name.0, "PfxInstance");
             assert_eq!(
                 def.doc_comments.len(),

@@ -221,7 +221,7 @@ pub type AnarkGui {
         assert_eq!(module.items.len(), 1);
 
         // Verify it's the correct type with attributes and fields
-        match &module.items[0] {
+        match &module.items[0].value {
             ModuleItem::Definition(def) => {
                 assert_eq!(def.name.0, "AnarkGui");
                 assert_eq!(def.visibility, Visibility::Public);

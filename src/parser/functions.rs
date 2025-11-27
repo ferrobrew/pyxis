@@ -7,7 +7,8 @@ use crate::{
 use super::{ParseError, core::Parser};
 
 impl Parser {
-    pub(crate) fn parse_impl_block(&mut self) -> Result<FunctionBlock, ParseError> {
+    pub(crate) fn parse_impl_block(&mut self) -> Result<Located<FunctionBlock>, ParseError> {
+        let start_pos = self.current().location.span.start;
         let attributes = if matches!(self.peek(), TokenKind::Hash) {
             self.parse_attributes()?
         } else {
@@ -37,13 +38,17 @@ impl Parser {
             items.push(self.parse_function()?.map(ImplItem::Function));
         }
 
-        self.expect(TokenKind::RBrace)?;
+        let last_token = self.expect(TokenKind::RBrace)?;
 
-        Ok(FunctionBlock {
-            name,
-            items,
-            attributes,
-        })
+        let location = self.item_location_from_locations(start_pos, last_token.end_location());
+        Ok(Located::new(
+            FunctionBlock {
+                name,
+                items,
+                attributes,
+            },
+            location,
+        ))
     }
 
     pub(crate) fn parse_functions_in_block(

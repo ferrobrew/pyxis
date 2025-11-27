@@ -1,6 +1,6 @@
 use std::{fmt, path::Path};
 
-use crate::span::{EqualsIgnoringLocations, ItemLocation, Located};
+use crate::span::{EqualsIgnoringLocations, Located};
 
 #[cfg(test)]
 use crate::span::StripLocations;
@@ -1418,14 +1418,14 @@ impl ExternValue {
 /// Module-level items (preserves ordering and comments)
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ModuleItem {
-    Comment(Located<Comment>),
+    Comment(Comment),
     Use(ItemPath),
-    ExternType(Ident, Attributes, Vec<String>, ItemLocation), // name, attributes, doc_comments, location
+    ExternType(Ident, Attributes, Vec<String>), // name, attributes, doc_comments
     Backend(Backend),
-    Definition(Located<ItemDefinition>),
+    Definition(ItemDefinition),
     Impl(FunctionBlock),
-    ExternValue(Located<ExternValue>),
-    Function(Located<Function>),
+    ExternValue(ExternValue),
+    Function(Function),
 }
 #[cfg(test)]
 impl StripLocations for ModuleItem {
@@ -1433,11 +1433,10 @@ impl StripLocations for ModuleItem {
         match self {
             ModuleItem::Comment(c) => ModuleItem::Comment(c.strip_locations()),
             ModuleItem::Use(p) => ModuleItem::Use(p.strip_locations()),
-            ModuleItem::ExternType(n, a, d, l) => ModuleItem::ExternType(
+            ModuleItem::ExternType(n, a, d) => ModuleItem::ExternType(
                 n.strip_locations(),
                 a.strip_locations(),
                 d.strip_locations(),
-                l.strip_locations(),
             ),
             ModuleItem::Backend(b) => ModuleItem::Backend(b.strip_locations()),
             ModuleItem::Definition(d) => ModuleItem::Definition(d.strip_locations()),
@@ -1450,7 +1449,7 @@ impl StripLocations for ModuleItem {
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Module {
-    pub items: Vec<ModuleItem>,
+    pub items: Vec<Located<ModuleItem>>,
     pub attributes: Attributes,
     pub doc_comments: Vec<String>,
 }
@@ -1466,9 +1465,13 @@ impl StripLocations for Module {
             items: self
                 .items
                 .iter()
-                .filter_map(|item| match item {
-                    ModuleItem::Comment(_) => None, // Filter out comments
-                    _ => Some(item.strip_locations()),
+                .filter_map(|item| {
+                    item.strip_locations()
+                        .map(|item| match item {
+                            ModuleItem::Comment(_) => None, // Filter out comments
+                            _ => Some(item.strip_locations()),
+                        })
+                        .transpose()
                 })
                 .collect(),
             attributes: self.attributes.strip_locations(),
@@ -1478,20 +1481,19 @@ impl StripLocations for Module {
 }
 #[cfg(test)]
 impl Module {
-    pub fn with_uses(mut self, uses: impl Into<Vec<ItemPath>>) -> Self {
-        for use_path in uses.into() {
-            self.items.push(ModuleItem::Use(use_path));
+    pub fn with_uses(mut self, uses: impl IntoIterator<Item = ItemPath>) -> Self {
+        for use_path in uses.into_iter() {
+            self.items.push(Located::test(ModuleItem::Use(use_path)));
         }
         self
     }
-    pub fn with_extern_types(mut self, extern_types: impl Into<Vec<(Ident, Attributes)>>) -> Self {
-        for (name, attrs) in extern_types.into() {
-            self.items.push(ModuleItem::ExternType(
-                name,
-                attrs,
-                vec![],
-                ItemLocation::test(),
-            ));
+    pub fn with_extern_types(
+        mut self,
+        extern_types: impl IntoIterator<Item = (Ident, Attributes)>,
+    ) -> Self {
+        for (name, attrs) in extern_types.into_iter() {
+            self.items
+                .push(Located::test(ModuleItem::ExternType(name, attrs, vec![])));
         }
         self
     }
@@ -1499,14 +1501,16 @@ impl Module {
         mut self,
         extern_values: impl IntoIterator<Item = ExternValue>,
     ) -> Self {
-        for extern_value in extern_values.into_iter().map(Located::test) {
-            self.items.push(ModuleItem::ExternValue(extern_value));
+        for extern_value in extern_values.into_iter() {
+            self.items
+                .push(Located::test(ModuleItem::ExternValue(extern_value)));
         }
         self
     }
     pub fn with_functions(mut self, functions: impl IntoIterator<Item = Function>) -> Self {
-        for function in functions.into_iter().map(Located::test) {
-            self.items.push(ModuleItem::Function(function));
+        for function in functions.into_iter() {
+            self.items
+                .push(Located::test(ModuleItem::Function(function)));
         }
         self
     }
@@ -1514,20 +1518,21 @@ impl Module {
         mut self,
         definitions: impl IntoIterator<Item = ItemDefinition>,
     ) -> Self {
-        for definition in definitions.into_iter().map(Located::test) {
-            self.items.push(ModuleItem::Definition(definition));
+        for definition in definitions.into_iter() {
+            self.items
+                .push(Located::test(ModuleItem::Definition(definition)));
         }
         self
     }
-    pub fn with_impls(mut self, impls: impl Into<Vec<FunctionBlock>>) -> Self {
-        for impl_block in impls.into() {
-            self.items.push(ModuleItem::Impl(impl_block));
+    pub fn with_impls(mut self, impls: impl IntoIterator<Item = FunctionBlock>) -> Self {
+        for impl_block in impls.into_iter() {
+            self.items.push(Located::test(ModuleItem::Impl(impl_block)));
         }
         self
     }
-    pub fn with_backends(mut self, backends: impl Into<Vec<Backend>>) -> Self {
-        for backend in backends.into() {
-            self.items.push(ModuleItem::Backend(backend));
+    pub fn with_backends(mut self, backends: impl IntoIterator<Item = Backend>) -> Self {
+        for backend in backends.into_iter() {
+            self.items.push(Located::test(ModuleItem::Backend(backend)));
         }
         self
     }
@@ -1541,46 +1546,74 @@ impl Module {
     }
 }
 impl Module {
-    pub fn uses(&self) -> impl Iterator<Item = &ItemPath> {
-        self.items.iter().filter_map(|item| match item {
-            ModuleItem::Use(path) => Some(path),
-            _ => None,
+    pub fn uses(&self) -> impl Iterator<Item = Located<&ItemPath>> {
+        self.items.iter().filter_map(|item| {
+            item.as_ref()
+                .map(|item| match item {
+                    ModuleItem::Use(path) => Some(path),
+                    _ => None,
+                })
+                .transpose()
         })
     }
-    pub fn extern_types(&self) -> impl Iterator<Item = (&Ident, &Attributes, &ItemLocation)> {
-        self.items.iter().filter_map(|item| match item {
-            ModuleItem::ExternType(name, attrs, _, location) => Some((name, attrs, location)),
-            _ => None,
+    pub fn extern_types(&self) -> impl Iterator<Item = Located<(&Ident, &Attributes)>> {
+        self.items.iter().filter_map(|item| {
+            item.as_ref()
+                .map(|item| match item {
+                    ModuleItem::ExternType(name, attrs, _doc_comments) => Some((name, attrs)),
+                    _ => None,
+                })
+                .transpose()
         })
     }
     pub fn extern_values(&self) -> impl Iterator<Item = Located<&ExternValue>> {
-        self.items.iter().filter_map(|item| match item {
-            ModuleItem::ExternValue(ev) => Some(ev.as_ref()),
-            _ => None,
+        self.items.iter().filter_map(|item| {
+            item.as_ref()
+                .map(|item| match item {
+                    ModuleItem::ExternValue(ev) => Some(ev),
+                    _ => None,
+                })
+                .transpose()
         })
     }
     pub fn functions(&self) -> impl Iterator<Item = Located<&Function>> {
-        self.items.iter().filter_map(|item| match item {
-            ModuleItem::Function(func) => Some(func.as_ref()),
-            _ => None,
+        self.items.iter().filter_map(|item| {
+            item.as_ref()
+                .map(|item| match item {
+                    ModuleItem::Function(func) => Some(func),
+                    _ => None,
+                })
+                .transpose()
         })
     }
     pub fn definitions(&self) -> impl Iterator<Item = Located<&ItemDefinition>> {
-        self.items.iter().filter_map(|item| match item {
-            ModuleItem::Definition(def) => Some(def.as_ref()),
-            _ => None,
+        self.items.iter().filter_map(|item| {
+            item.as_ref()
+                .map(|item| match item {
+                    ModuleItem::Definition(def) => Some(def),
+                    _ => None,
+                })
+                .transpose()
         })
     }
-    pub fn impls(&self) -> impl Iterator<Item = &FunctionBlock> {
-        self.items.iter().filter_map(|item| match item {
-            ModuleItem::Impl(impl_block) => Some(impl_block),
-            _ => None,
+    pub fn impls(&self) -> impl Iterator<Item = Located<&FunctionBlock>> {
+        self.items.iter().filter_map(|item| {
+            item.as_ref()
+                .map(|item| match item {
+                    ModuleItem::Impl(impl_block) => Some(impl_block),
+                    _ => None,
+                })
+                .transpose()
         })
     }
-    pub fn backends(&self) -> impl Iterator<Item = &Backend> {
-        self.items.iter().filter_map(|item| match item {
-            ModuleItem::Backend(backend) => Some(backend),
-            _ => None,
+    pub fn backends(&self) -> impl Iterator<Item = Located<&Backend>> {
+        self.items.iter().filter_map(|item| {
+            item.as_ref()
+                .map(|item| match item {
+                    ModuleItem::Backend(backend) => Some(backend),
+                    _ => None,
+                })
+                .transpose()
         })
     }
 }

@@ -127,8 +127,8 @@ impl SemanticState {
             })
             .collect::<Result<Vec<_>>>()?;
 
-        let impls: Vec<_> = module.impls().cloned().collect();
-        let backends: Vec<_> = module.backends().cloned().collect();
+        let impls: Vec<_> = module.impls().map(|i| i.cloned()).collect();
+        let backends: Vec<_> = module.backends().map(|b| b.cloned()).collect();
 
         self.modules.insert(
             path.clone(),
@@ -141,7 +141,7 @@ impl SemanticState {
             )?,
         );
 
-        for definition in module.definitions().collect::<Vec<_>>() {
+        for definition in module.definitions() {
             let new_path = path.join(definition.name.as_str().into());
 
             self.add_item(Located::new(
@@ -156,7 +156,10 @@ impl SemanticState {
             ))?;
         }
 
-        for (extern_name, attributes, extern_location) in module.extern_types().collect::<Vec<_>>()
+        for Located {
+            value: (extern_name, attributes),
+            location: extern_location,
+        } in module.extern_types()
         {
             let mut size = None;
             let mut alignment = None;
