@@ -1233,7 +1233,7 @@ impl SemanticError {
         let message = self.error_message();
         let context = self.error_context();
 
-        let (offset, length, location, source, labels) = if let Some(ctx) = context
+        let (offset, length, location, source) = if let Some(ctx) = context
             && let Some(source) = source_store.get(ctx.location.filename.as_ref())
         {
             let location = ctx.location.clone();
@@ -1242,16 +1242,9 @@ impl SemanticError {
                 span::span_length(source, &location.span),
                 location,
                 source,
-                ctx.labels.clone(),
             )
         } else {
-            (
-                0,
-                0,
-                ItemLocation::new("<unknown>", Span::synthetic()),
-                "",
-                Vec::new(),
-            )
+            (0, 0, ItemLocation::new("<unknown>", Span::synthetic()), "")
         };
 
         // Build the report with the primary label
@@ -1263,20 +1256,6 @@ impl SemanticError {
                         .with_message("error occurred here")
                         .with_color(ariadne::Color::Red),
                 );
-
-        // Add additional labels if present
-        for label in &labels {
-            let label_offset = span::span_to_offset(source, &label.span);
-            let label_length = span::span_length(source, &label.span);
-            report_builder = report_builder.with_label(
-                Label::new((
-                    location.filename.as_ref(),
-                    label_offset..label_offset + label_length,
-                ))
-                .with_message(&label.message)
-                .with_color(span::label_type_to_ariadne_color(label.label_type)),
-            );
-        }
 
         // Add helpful context
         match self {

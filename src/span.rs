@@ -134,75 +134,21 @@ impl std::fmt::Display for ItemLocation {
     }
 }
 
-/// Label for additional span highlighting in error reports
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ErrorLabel {
-    /// The span to highlight
-    pub span: Span,
-    /// Message to show for this label
-    pub message: String,
-    /// Label type/role (determines presentation)
-    pub label_type: ErrorLabelType,
-}
-
-/// Type/role for error labels in terminal output (with semantic meaning)
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum ErrorLabelType {
-    /// Primary error location (red)
-    Primary,
-    /// Secondary related location (yellow)
-    Secondary,
-    /// Informational note (blue)
-    Note,
-    /// Helpful suggestion (cyan)
-    Help,
-}
-
-impl ErrorLabel {
-    pub fn new(span: Span, message: impl Into<String>) -> Self {
-        Self {
-            span,
-            message: message.into(),
-            label_type: ErrorLabelType::Primary,
-        }
-    }
-
-    pub fn with_type(mut self, label_type: ErrorLabelType) -> Self {
-        self.label_type = label_type;
-        self
-    }
-}
-
 /// Context information for error reporting
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ErrorContext {
     /// Primary location where the error occurred
     pub location: ItemLocation,
-    /// Additional labeled spans to show related locations
-    pub labels: Vec<ErrorLabel>,
 }
 
 impl ErrorContext {
     /// Create a new ErrorContext with the given location
     pub fn new(location: ItemLocation) -> Self {
-        Self {
-            location,
-            labels: Vec::new(),
-        }
+        Self { location }
     }
 
     pub fn with_location(mut self, location: ItemLocation) -> Self {
         self.location = location;
-        self
-    }
-
-    pub fn with_label(mut self, label: ErrorLabel) -> Self {
-        self.labels.push(label);
-        self
-    }
-
-    pub fn with_labels(mut self, labels: impl IntoIterator<Item = ErrorLabel>) -> Self {
-        self.labels.extend(labels);
         self
     }
 
@@ -248,16 +194,6 @@ pub fn span_length(source: &str, span: &Span) -> usize {
             .sum();
         let last_line_len = span.end.column.saturating_sub(1);
         first_line_len + middle_lines_len + last_line_len
-    }
-}
-
-/// Convert ErrorLabelType to ariadne Color
-pub fn label_type_to_ariadne_color(label_type: ErrorLabelType) -> ariadne::Color {
-    match label_type {
-        ErrorLabelType::Primary => ariadne::Color::Red,
-        ErrorLabelType::Secondary => ariadne::Color::Yellow,
-        ErrorLabelType::Note => ariadne::Color::Blue,
-        ErrorLabelType::Help => ariadne::Color::Cyan,
     }
 }
 
