@@ -412,9 +412,9 @@ fn convert_type(type_ref: &Type) -> JsonType {
 
 fn convert_argument(arg: &Argument) -> JsonArgument {
     match arg {
-        Argument::ConstSelf(_) => JsonArgument::ConstSelf,
-        Argument::MutSelf(_) => JsonArgument::MutSelf,
-        Argument::Field(name, type_ref, _) => JsonArgument::Field {
+        Argument::ConstSelf => JsonArgument::ConstSelf,
+        Argument::MutSelf => JsonArgument::MutSelf,
+        Argument::Field(name, type_ref) => JsonArgument::Field {
             name: name.clone(),
             type_ref: convert_type(type_ref),
         },
@@ -447,7 +447,11 @@ fn convert_function(func: &Function) -> JsonFunction {
             None
         },
         body: convert_function_body(&func.body),
-        arguments: func.arguments.iter().map(convert_argument).collect(),
+        arguments: func
+            .arguments
+            .iter()
+            .map(|a| convert_argument(&a.value))
+            .collect(),
         return_type: func.return_type.as_ref().map(convert_type),
         calling_convention: func.calling_convention.into(),
     }

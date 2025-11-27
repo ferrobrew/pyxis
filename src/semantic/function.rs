@@ -10,7 +10,7 @@ use crate::{
         type_registry::TypeRegistry,
         types::{Type, Visibility},
     },
-    span::ItemLocation,
+    span::{EqualsIgnoringLocations, ItemLocation, Located},
 };
 
 #[cfg(test)]
@@ -18,58 +18,58 @@ use crate::span::StripLocations;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Argument {
-    ConstSelf(ItemLocation),
-    MutSelf(ItemLocation),
-    Field(String, Type, ItemLocation),
+    ConstSelf,
+    MutSelf,
+    Field(String, Type),
 }
 #[cfg(test)]
 impl StripLocations for Argument {
     fn strip_locations(&self) -> Self {
         match self {
-            Argument::ConstSelf(l) => Argument::ConstSelf(l.strip_locations()),
-            Argument::MutSelf(l) => Argument::MutSelf(l.strip_locations()),
-            Argument::Field(name, ty, l) => Argument::Field(
-                name.strip_locations(),
-                ty.strip_locations(),
-                l.strip_locations(),
-            ),
+            Argument::ConstSelf => Argument::ConstSelf,
+            Argument::MutSelf => Argument::MutSelf,
+            Argument::Field(name, ty) => {
+                Argument::Field(name.strip_locations(), ty.strip_locations())
+            }
+        }
+    }
+}
+impl EqualsIgnoringLocations for Argument {
+    fn equals_ignoring_locations(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Argument::ConstSelf, Argument::ConstSelf) => true,
+            (Argument::MutSelf, Argument::MutSelf) => true,
+            (Argument::Field(name, ty), Argument::Field(name2, ty2)) => {
+                name.equals_ignoring_locations(name2) && ty.equals_ignoring_locations(ty2)
+            }
+            _ => false,
         }
     }
 }
 impl fmt::Display for Argument {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Argument::ConstSelf(_) => write!(f, "&self"),
-            Argument::MutSelf(_) => write!(f, "&mut self"),
-            Argument::Field(name, ty, _) => write!(f, "{name}: {ty}"),
+            Argument::ConstSelf => write!(f, "&self"),
+            Argument::MutSelf => write!(f, "&mut self"),
+            Argument::Field(name, ty) => write!(f, "{name}: {ty}"),
         }
     }
 }
 #[cfg(test)]
 impl Argument {
     pub fn const_self() -> Self {
-        Argument::ConstSelf(ItemLocation::test())
+        Argument::ConstSelf
     }
     pub fn mut_self() -> Self {
-        Argument::MutSelf(ItemLocation::test())
+        Argument::MutSelf
     }
     pub fn field(name: impl Into<String>, type_ref: impl Into<Type>) -> Self {
-        Argument::Field(name.into(), type_ref.into(), ItemLocation::test())
+        Argument::Field(name.into(), type_ref.into())
     }
 }
 impl Argument {
     pub fn is_self(&self) -> bool {
-        matches!(self, Argument::ConstSelf(_) | Argument::MutSelf(_))
-    }
-    pub fn equals_ignoring_location(&self, other: &Argument) -> bool {
-        match (self, other) {
-            (Argument::ConstSelf(_), Argument::ConstSelf(_)) => true,
-            (Argument::MutSelf(_), Argument::MutSelf(_)) => true,
-            (Argument::Field(name1, ty1, _), Argument::Field(name2, ty2, _)) => {
-                name1 == name2 && ty1 == ty2
-            }
-            _ => false,
-        }
+        matches!(self, Argument::ConstSelf | Argument::MutSelf)
     }
 }
 
@@ -87,6 +87,11 @@ pub enum CallingConvention {
 impl StripLocations for CallingConvention {
     fn strip_locations(&self) -> Self {
         *self
+    }
+}
+impl EqualsIgnoringLocations for CallingConvention {
+    fn equals_ignoring_locations(&self, other: &Self) -> bool {
+        self == other
     }
 }
 impl CallingConvention {
@@ -183,6 +188,36 @@ impl StripLocations for FunctionBody {
         }
     }
 }
+impl EqualsIgnoringLocations for FunctionBody {
+    fn equals_ignoring_locations(&self, other: &Self) -> bool {
+        match (self, other) {
+            (FunctionBody::Address { address }, FunctionBody::Address { address: address2 }) => {
+                address.equals_ignoring_locations(address2)
+            }
+            (
+                FunctionBody::Field {
+                    field,
+                    function_name,
+                },
+                FunctionBody::Field {
+                    field: field2,
+                    function_name: function_name2,
+                },
+            ) => {
+                field.equals_ignoring_locations(field2)
+                    && function_name.equals_ignoring_locations(function_name2)
+            }
+            (
+                FunctionBody::Vftable { function_name },
+                FunctionBody::Vftable {
+                    function_name: function_name2,
+                },
+            ) => function_name.equals_ignoring_locations(function_name2),
+            _ => false,
+        }
+    }
+}
+#[cfg(test)]
 impl FunctionBody {
     pub fn address(address: usize) -> Self {
         FunctionBody::Address { address }
@@ -198,18 +233,19 @@ impl FunctionBody {
             function_name: function_name.into(),
         }
     }
+}
+impl FunctionBody {
     pub fn is_field(&self) -> bool {
         matches!(self, FunctionBody::Field { .. })
     }
 }
-
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Function {
     pub visibility: Visibility,
     pub name: String,
     pub doc: Vec<String>,
     pub body: FunctionBody,
-    pub arguments: Vec<Argument>,
+    pub arguments: Vec<Located<Argument>>,
     pub return_type: Option<Type>,
     pub calling_convention: CallingConvention,
     pub location: ItemLocation,
@@ -248,24 +284,26 @@ impl fmt::Display for Function {
         Ok(())
     }
 }
+impl EqualsIgnoringLocations for Function {
+    fn equals_ignoring_locations(&self, other: &Self) -> bool {
+        self.visibility.equals_ignoring_locations(&other.visibility)
+            && self.name.equals_ignoring_locations(&other.name)
+            && self.body.equals_ignoring_locations(&other.body)
+            && self.arguments.equals_ignoring_locations(&other.arguments)
+            && self
+                .return_type
+                .equals_ignoring_locations(&other.return_type)
+            && self
+                .calling_convention
+                .equals_ignoring_locations(&other.calling_convention)
+    }
+}
 impl Function {
     pub fn is_internal(&self) -> bool {
         self.name.starts_with("_")
     }
     pub fn is_public(&self) -> bool {
         matches!(self.visibility, Visibility::Public)
-    }
-    pub fn equals_ignoring_location(&self, other: &Function) -> bool {
-        self.visibility == other.visibility
-            && self.name == other.name
-            && self.body == other.body
-            && self
-                .arguments
-                .iter()
-                .zip(other.arguments.iter())
-                .all(|(a, b)| a.equals_ignoring_location(b))
-            && self.return_type == other.return_type
-            && self.calling_convention == other.calling_convention
     }
 }
 #[cfg(test)]
@@ -301,8 +339,8 @@ impl Function {
             location: ItemLocation::test(),
         }
     }
-    pub fn with_arguments(mut self, arguments: impl Into<Vec<Argument>>) -> Self {
-        self.arguments = arguments.into();
+    pub fn with_arguments(mut self, arguments: impl IntoIterator<Item = Argument>) -> Self {
+        self.arguments = arguments.into_iter().map(Located::test).collect();
         self
     }
     pub fn with_return_type(mut self, return_type: Type) -> Self {
@@ -409,23 +447,26 @@ pub fn build(
     let arguments = function
         .arguments
         .iter()
-        .map(|a| match a {
-            grammar::Argument::ConstSelf(location) => Ok(Argument::ConstSelf(location.clone())),
-            grammar::Argument::MutSelf(location) => Ok(Argument::MutSelf(location.clone())),
-            grammar::Argument::Named(name, type_, location) => Ok(Argument::Field(
-                name.0.clone(),
-                type_registry
-                    .resolve_grammar_type(scope, type_)
-                    .ok_or_else(|| SemanticError::TypeResolutionFailed {
-                        type_: type_.clone(),
-                        resolution_context: TypeResolutionContext::FunctionArgument {
-                            argument_name: name.0.clone(),
-                            function_name: function.name.0.clone(),
-                        },
-                        location: location.clone(),
-                    })?,
-                location.clone(),
-            )),
+        .map(|a| {
+            a.as_ref()
+                .map_with_location(|a, location| match a {
+                    grammar::Argument::ConstSelf => Ok(Argument::ConstSelf),
+                    grammar::Argument::MutSelf => Ok(Argument::MutSelf),
+                    grammar::Argument::Named(name, type_) => Ok(Argument::Field(
+                        name.0.clone(),
+                        type_registry
+                            .resolve_grammar_type(scope, type_)
+                            .ok_or_else(|| SemanticError::TypeResolutionFailed {
+                                type_: type_.clone(),
+                                resolution_context: TypeResolutionContext::FunctionArgument {
+                                    argument_name: name.0.clone(),
+                                    function_name: function.name.0.clone(),
+                                },
+                                location: location.clone(),
+                            })?,
+                    )),
+                })
+                .transpose()
         })
         .collect::<Result<Vec<_>>>()?;
 
@@ -437,7 +478,7 @@ pub fn build(
     let calling_convention = calling_convention.unwrap_or_else(|| {
         let has_self = arguments
             .iter()
-            .any(|a| matches!(a, Argument::ConstSelf(_) | Argument::MutSelf(_)));
+            .any(|a| matches!(&a.value, Argument::ConstSelf | Argument::MutSelf));
         // probably a bit sus
         if has_self {
             CallingConvention::for_member_function(type_registry.pointer_size())

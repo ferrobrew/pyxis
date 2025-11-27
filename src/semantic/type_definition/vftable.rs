@@ -12,7 +12,7 @@ use crate::{
             ItemState, ItemStateResolved, Region, Type, TypeDefinition, Visibility,
         },
     },
-    span::ItemLocation,
+    span::{EqualsIgnoringLocations as _, ItemLocation, Located},
 };
 
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]
@@ -97,7 +97,7 @@ pub fn convert_grammar_functions_to_semantic_functions(
                 visibility: Visibility::Private,
                 name: name.clone(),
                 doc: vec![],
-                arguments: vec![Argument::MutSelf(location.clone())],
+                arguments: vec![Located::new(Argument::MutSelf, location.clone())],
                 return_type: None,
                 body: FunctionBody::Vftable {
                     function_name: name,
@@ -169,7 +169,7 @@ pub fn build(
                 .zip(vftable_functions.iter())
                 .enumerate()
             {
-                if !base_vfunc.equals_ignoring_location(derived_vfunc) {
+                if !base_vfunc.equals_ignoring_locations(derived_vfunc) {
                     // Use the derived function's location for the error
                     return Err(SemanticError::VftableFunctionMismatch {
                         item_path: resolvee_path.clone(),
@@ -289,18 +289,18 @@ fn function_to_region(resolvee_path: &ItemPath, function: &Function) -> Region {
     let arguments = function
         .arguments
         .iter()
-        .map(|a| match a {
-            Argument::ConstSelf(_) => (
+        .map(|a| match &a.value {
+            Argument::ConstSelf => (
                 "this".to_string(),
                 Box::new(Type::ConstPointer(Box::new(Type::Raw(
                     resolvee_path.clone(),
                 )))),
             ),
-            Argument::MutSelf(_) => (
+            Argument::MutSelf => (
                 "this".to_string(),
                 Box::new(Type::MutPointer(Box::new(Type::Raw(resolvee_path.clone())))),
             ),
-            Argument::Field(name, type_ref, _) => (name.clone(), Box::new(type_ref.clone())),
+            Argument::Field(name, type_ref) => (name.clone(), Box::new(type_ref.clone())),
         })
         .collect();
     let return_type = function.return_type.as_ref().map(|t| Box::new(t.clone()));

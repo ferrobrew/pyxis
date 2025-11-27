@@ -3,7 +3,7 @@ use std::fmt;
 use crate::{
     grammar::{self, ItemPath},
     semantic::type_registry,
-    span::{ItemLocation, Located},
+    span::{EqualsIgnoringLocations, ItemLocation, Located},
 };
 
 #[cfg(test)]
@@ -43,6 +43,11 @@ pub enum Visibility {
     Public,
     Private,
 }
+impl EqualsIgnoringLocations for Visibility {
+    fn equals_ignoring_locations(&self, other: &Self) -> bool {
+        self == other
+    }
+}
 #[cfg(test)]
 impl StripLocations for Visibility {
     fn strip_locations(&self) -> Self {
@@ -70,6 +75,30 @@ pub enum Type {
         Vec<(String, Box<Type>)>,
         Option<Box<Type>>,
     ),
+}
+impl EqualsIgnoringLocations for Type {
+    fn equals_ignoring_locations(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Type::Unresolved(t), Type::Unresolved(t2)) => t.equals_ignoring_locations(t2),
+            (Type::Raw(item_path), Type::Raw(item_path2)) => {
+                item_path.equals_ignoring_locations(item_path2)
+            }
+            (Type::ConstPointer(t), Type::ConstPointer(t2)) => t.equals_ignoring_locations(t2),
+            (Type::MutPointer(t), Type::MutPointer(t2)) => t.equals_ignoring_locations(t2),
+            (Type::Array(t, n), Type::Array(t2, n2)) => {
+                t.equals_ignoring_locations(t2) && n.equals_ignoring_locations(n2)
+            }
+            (
+                Type::Function(calling_convention, items, t),
+                Type::Function(calling_convention2, items2, t2),
+            ) => {
+                calling_convention.equals_ignoring_locations(calling_convention2)
+                    && items.equals_ignoring_locations(items2)
+                    && t.equals_ignoring_locations(t2)
+            }
+            _ => false,
+        }
+    }
 }
 #[cfg(test)]
 impl StripLocations for Type {

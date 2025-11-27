@@ -478,7 +478,10 @@ pub fn build(
                 if associated_functions_used_names.contains(&original_name) {
                     function.name = format!("{base_name}_{original_name}");
                 }
-                function.body = FunctionBody::field(base_name.clone(), original_name);
+                function.body = FunctionBody::Field {
+                    field: base_name.clone(),
+                    function_name: original_name,
+                };
                 associated_functions_used_names.insert(function.name.clone());
                 associated_functions.push(function);
             }

@@ -1,6 +1,6 @@
 use crate::{
     grammar::{Argument, Attributes, Function, FunctionBlock, ImplItem},
-    span::{ItemLocation, Span},
+    span::{ItemLocation, Located, Span},
     tokenizer::TokenKind,
 };
 
@@ -129,16 +129,16 @@ impl Parser {
         })
     }
 
-    pub(crate) fn parse_argument(&mut self) -> Result<Argument, ParseError> {
+    pub(crate) fn parse_argument(&mut self) -> Result<Located<Argument>, ParseError> {
         if matches!(self.peek(), TokenKind::Amp) {
             self.advance();
             if matches!(self.peek(), TokenKind::Mut) {
                 self.advance();
                 let tok = self.expect(TokenKind::SelfValue)?;
-                Ok(Argument::MutSelf(tok.location.clone()))
+                Ok(Located::new(Argument::MutSelf, tok.location.clone()))
             } else {
                 let tok = self.expect(TokenKind::SelfValue)?;
-                Ok(Argument::ConstSelf(tok.location.clone()))
+                Ok(Located::new(Argument::ConstSelf, tok.location.clone()))
             }
         } else {
             let start_pos = self.current().location.span.start;
@@ -148,7 +148,7 @@ impl Parser {
             let end_pos = self.current().location.span.end;
             let location = ItemLocation::new(self.filename.clone(), Span::new(start_pos, end_pos));
 
-            Ok(Argument::Named(name, type_, location))
+            Ok(Located::new(Argument::Named(name, type_), location))
         }
     }
 }

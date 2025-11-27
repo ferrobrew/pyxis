@@ -665,10 +665,10 @@ fn build_function(function: &Function) -> Result<proc_macro2::TokenStream> {
         .arguments
         .iter()
         .map(|a| {
-            Ok(match a {
-                Argument::ConstSelf(_) => quote! { &self },
-                Argument::MutSelf(_) => quote! { &mut self },
-                Argument::Field(name, type_ref, _) => {
+            Ok(match &a.value {
+                Argument::ConstSelf => quote! { &self },
+                Argument::MutSelf => quote! { &mut self },
+                Argument::Field(name, type_ref) => {
                     let name = str_to_ident(name);
                     let syn_type = sa_type_to_syn_type(type_ref)?;
                     quote! {
@@ -683,10 +683,10 @@ fn build_function(function: &Function) -> Result<proc_macro2::TokenStream> {
         .arguments
         .iter()
         .map(|a| {
-            Ok(match a {
-                Argument::ConstSelf(_) => quote! { this: *const Self },
-                Argument::MutSelf(_) => quote! { this: *mut Self },
-                Argument::Field(name, type_ref, _) => {
+            Ok(match &a.value {
+                Argument::ConstSelf => quote! { this: *const Self },
+                Argument::MutSelf => quote! { this: *mut Self },
+                Argument::Field(name, type_ref) => {
                     let name = str_to_ident(name);
                     let syn_type = sa_type_to_syn_type(type_ref)?;
                     quote! {
@@ -703,10 +703,10 @@ fn build_function(function: &Function) -> Result<proc_macro2::TokenStream> {
         .iter()
         // Only pass `self` to the function if it's not a field function
         .filter(|a| !is_field_function || !a.is_self())
-        .map(|a| match a {
-            Argument::ConstSelf(_) => quote! { self as *const Self as _ },
-            Argument::MutSelf(_) => quote! { self as *mut Self as _ },
-            Argument::Field(name, _, _) => {
+        .map(|a| match &a.value {
+            Argument::ConstSelf => quote! { self as *const Self as _ },
+            Argument::MutSelf => quote! { self as *mut Self as _ },
+            Argument::Field(name, _) => {
                 let name = str_to_ident(name);
                 quote! { #name }
             }

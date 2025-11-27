@@ -868,12 +868,12 @@ impl PrettyPrinter {
 
     fn print_argument(&mut self, arg: &Argument) {
         match arg {
-            Argument::Named(name, type_, _) => {
+            Argument::Named(name, type_) => {
                 write!(&mut self.output, "{name}: ").unwrap();
                 self.print_type(type_);
             }
-            Argument::ConstSelf(_) => write!(&mut self.output, "&self").unwrap(),
-            Argument::MutSelf(_) => write!(&mut self.output, "&mut self").unwrap(),
+            Argument::ConstSelf => write!(&mut self.output, "&self").unwrap(),
+            Argument::MutSelf => write!(&mut self.output, "&mut self").unwrap(),
         }
     }
 }

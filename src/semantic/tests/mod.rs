@@ -1332,7 +1332,7 @@ fn can_resolve_freestanding_functions() {
     assert_eq!(func2.name, "another_freestanding");
     assert_eq!(func2.visibility, SV::Private);
     assert_eq!(func2.arguments.len(), 1);
-    assert!(matches!(&func2.arguments[0], SAr::Field(name, _, _) if name == "arg1"));
+    assert!(matches!(&*func2.arguments[0], SAr::Field(name, _) if name == "arg1"));
     assert_eq!(func2.return_type, Some(ST::raw("i32")));
     assert_eq!(func2.calling_convention, SCC::System);
     assert!(matches!(func2.body, SFB::Address { address: 0x789 }));

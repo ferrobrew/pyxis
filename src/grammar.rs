@@ -1,6 +1,6 @@
 use std::{fmt, path::Path};
 
-use crate::span::{ItemLocation, Located};
+use crate::span::{EqualsIgnoringLocations, ItemLocation, Located};
 
 #[cfg(test)]
 use crate::span::StripLocations;
@@ -118,6 +118,11 @@ impl StripLocations for Ident {
         Ident(self.0.strip_locations())
     }
 }
+impl EqualsIgnoringLocations for Ident {
+    fn equals_ignoring_locations(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
 impl From<&str> for Ident {
     fn from(item: &str) -> Self {
         Ident(item.to_string())
@@ -146,6 +151,20 @@ pub enum Type {
     Array(Box<Located<Type>>, usize),
     Ident(Ident),
     Unknown(usize),
+}
+impl EqualsIgnoringLocations for Type {
+    fn equals_ignoring_locations(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Type::ConstPointer(t), Type::ConstPointer(t2)) => t.equals_ignoring_locations(t2),
+            (Type::MutPointer(t), Type::MutPointer(t2)) => t.equals_ignoring_locations(t2),
+            (Type::Array(t, n), Type::Array(t2, n2)) => {
+                t.equals_ignoring_locations(t2) && n.equals_ignoring_locations(n2)
+            }
+            (Type::Ident(ident), Type::Ident(ident2)) => ident.equals_ignoring_locations(ident2),
+            (Type::Unknown(size), Type::Unknown(size2)) => size.equals_ignoring_locations(size2),
+            _ => false,
+        }
+    }
 }
 #[cfg(test)]
 impl StripLocations for Type {
@@ -216,6 +235,11 @@ impl StripLocations for ItemPathSegment {
         ItemPathSegment(self.0.strip_locations())
     }
 }
+impl EqualsIgnoringLocations for ItemPathSegment {
+    fn equals_ignoring_locations(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
 impl ItemPathSegment {
     pub fn as_str(&self) -> &str {
         self.0.as_str()
@@ -243,6 +267,11 @@ pub struct ItemPath(Vec<ItemPathSegment>);
 impl StripLocations for ItemPath {
     fn strip_locations(&self) -> Self {
         ItemPath(self.0.strip_locations())
+    }
+}
+impl EqualsIgnoringLocations for ItemPath {
+    fn equals_ignoring_locations(&self, other: &Self) -> bool {
+        self.0.equals_ignoring_locations(&other.0)
     }
 }
 impl ItemPath {
@@ -542,38 +571,32 @@ impl StripLocations for Visibility {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Argument {
-    ConstSelf(ItemLocation),
-    MutSelf(ItemLocation),
-    Named(Ident, Located<Type>, ItemLocation),
+    ConstSelf,
+    MutSelf,
+    Named(Ident, Located<Type>),
 }
 #[cfg(test)]
 impl StripLocations for Argument {
     fn strip_locations(&self) -> Self {
         match self {
-            Argument::ConstSelf(l) => Argument::ConstSelf(l.strip_locations()),
-            Argument::MutSelf(l) => Argument::MutSelf(l.strip_locations()),
-            Argument::Named(ident, ty, l) => Argument::Named(
-                ident.strip_locations(),
-                ty.strip_locations(),
-                l.strip_locations(),
-            ),
+            Argument::ConstSelf => Argument::ConstSelf,
+            Argument::MutSelf => Argument::MutSelf,
+            Argument::Named(ident, ty) => {
+                Argument::Named(ident.strip_locations(), ty.strip_locations())
+            }
         }
     }
 }
 #[cfg(test)]
 impl Argument {
     pub fn const_self() -> Argument {
-        Argument::ConstSelf(ItemLocation::test())
+        Argument::ConstSelf
     }
     pub fn mut_self() -> Argument {
-        Argument::MutSelf(ItemLocation::test())
+        Argument::MutSelf
     }
     pub fn named(ident: impl Into<Ident>, type_: impl Into<Type>) -> Argument {
-        Argument::Named(
-            ident.into(),
-            Located::test(type_.into()),
-            ItemLocation::test(),
-        )
+        Argument::Named(ident.into(), Located::test(type_.into()))
     }
 }
 
@@ -583,7 +606,7 @@ pub struct Function {
     pub name: Ident,
     pub attributes: Attributes,
     pub doc_comments: Vec<String>,
-    pub arguments: Vec<Argument>,
+    pub arguments: Vec<Located<Argument>>,
     pub return_type: Option<Located<Type>>,
     pub location: ItemLocation,
 }
@@ -605,14 +628,14 @@ impl StripLocations for Function {
 impl Function {
     pub fn new(
         (visibility, name): (Visibility, &str),
-        arguments: impl Into<Vec<Argument>>,
+        arguments: impl IntoIterator<Item = Argument>,
     ) -> Self {
         Self {
             visibility,
             name: name.into(),
             attributes: Default::default(),
             doc_comments: vec![],
-            arguments: arguments.into(),
+            arguments: arguments.into_iter().map(Located::test).collect(),
             return_type: None,
             location: ItemLocation::test(),
         }
