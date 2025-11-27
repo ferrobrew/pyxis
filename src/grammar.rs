@@ -1,6 +1,6 @@
 use std::{fmt, path::Path};
 
-use crate::span::{ItemLocation, Spanned};
+use crate::span::{ItemLocation, Located};
 
 /// Format information for integer literals
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -552,7 +552,7 @@ impl TypeField {
 /// Items in a type definition body (preserves ordering and comments)
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TypeDefItem {
-    Comment(Spanned<Comment>),
+    Comment(Located<Comment>),
     Statement(TypeStatement),
 }
 
@@ -561,8 +561,8 @@ pub struct TypeStatement {
     pub field: TypeField,
     pub attributes: Attributes,
     pub doc_comments: Vec<String>,
-    pub inline_trailing_comments: Vec<Spanned<Comment>>, // Comments on same line as field
-    pub following_comments: Vec<Spanned<Comment>>,       // Comments on lines after field
+    pub inline_trailing_comments: Vec<Located<Comment>>, // Comments on same line as field
+    pub following_comments: Vec<Located<Comment>>,       // Comments on lines after field
     pub location: ItemLocation,
 }
 #[cfg(test)]
@@ -601,12 +601,12 @@ impl TypeStatement {
     }
     pub fn with_inline_trailing_comments(
         mut self,
-        inline_trailing_comments: Vec<Spanned<Comment>>,
+        inline_trailing_comments: Vec<Located<Comment>>,
     ) -> Self {
         self.inline_trailing_comments = inline_trailing_comments;
         self
     }
-    pub fn with_following_comments(mut self, following_comments: Vec<Spanned<Comment>>) -> Self {
+    pub fn with_following_comments(mut self, following_comments: Vec<Located<Comment>>) -> Self {
         self.following_comments = following_comments;
         self
     }
@@ -615,8 +615,8 @@ impl TypeStatement {
 pub struct TypeDefinition {
     pub items: Vec<TypeDefItem>,
     pub attributes: Attributes,
-    pub inline_trailing_comments: Vec<Spanned<Comment>>, // Comments on same line as attributes
-    pub following_comments: Vec<Spanned<Comment>>,       // Comments on lines after attributes
+    pub inline_trailing_comments: Vec<Located<Comment>>, // Comments on same line as attributes
+    pub following_comments: Vec<Located<Comment>>,       // Comments on lines after attributes
 }
 impl TypeDefinition {
     pub fn new(statements: impl Into<Vec<TypeStatement>>) -> Self {
@@ -637,12 +637,12 @@ impl TypeDefinition {
     }
     pub fn with_inline_trailing_comments(
         mut self,
-        inline_trailing_comments: Vec<Spanned<Comment>>,
+        inline_trailing_comments: Vec<Located<Comment>>,
     ) -> Self {
         self.inline_trailing_comments = inline_trailing_comments;
         self
     }
-    pub fn with_following_comments(mut self, following_comments: Vec<Spanned<Comment>>) -> Self {
+    pub fn with_following_comments(mut self, following_comments: Vec<Located<Comment>>) -> Self {
         self.following_comments = following_comments;
         self
     }
@@ -660,7 +660,7 @@ impl TypeDefinition {
 /// Items in an enum definition (preserves ordering and comments)
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum EnumDefItem {
-    Comment(Spanned<Comment>),
+    Comment(Located<Comment>),
     Statement(EnumStatement),
 }
 
@@ -670,8 +670,8 @@ pub struct EnumStatement {
     pub expr: Option<Expr>,
     pub attributes: Attributes,
     pub doc_comments: Vec<String>,
-    pub inline_trailing_comments: Vec<Spanned<Comment>>, // Comments on same line as enum variant
-    pub following_comments: Vec<Spanned<Comment>>,       // Comments on lines after enum variant
+    pub inline_trailing_comments: Vec<Located<Comment>>, // Comments on same line as enum variant
+    pub following_comments: Vec<Located<Comment>>,       // Comments on lines after enum variant
     pub location: ItemLocation,
 }
 #[cfg(test)]
@@ -707,12 +707,12 @@ impl EnumStatement {
     }
     pub fn with_inline_trailing_comments(
         mut self,
-        inline_trailing_comments: Vec<Spanned<Comment>>,
+        inline_trailing_comments: Vec<Located<Comment>>,
     ) -> Self {
         self.inline_trailing_comments = inline_trailing_comments;
         self
     }
-    pub fn with_following_comments(mut self, following_comments: Vec<Spanned<Comment>>) -> Self {
+    pub fn with_following_comments(mut self, following_comments: Vec<Located<Comment>>) -> Self {
         self.following_comments = following_comments;
         self
     }
@@ -722,8 +722,8 @@ pub struct EnumDefinition {
     pub type_: Type,
     pub items: Vec<EnumDefItem>,
     pub attributes: Attributes,
-    pub inline_trailing_comments: Vec<Spanned<Comment>>, // Comments on same line as attributes
-    pub following_comments: Vec<Spanned<Comment>>,       // Comments on lines after attributes
+    pub inline_trailing_comments: Vec<Located<Comment>>, // Comments on same line as attributes
+    pub following_comments: Vec<Located<Comment>>,       // Comments on lines after attributes
 }
 impl EnumDefinition {
     pub fn new(
@@ -749,12 +749,12 @@ impl EnumDefinition {
     }
     pub fn with_inline_trailing_comments(
         mut self,
-        inline_trailing_comments: Vec<Spanned<Comment>>,
+        inline_trailing_comments: Vec<Located<Comment>>,
     ) -> Self {
         self.inline_trailing_comments = inline_trailing_comments;
         self
     }
-    pub fn with_following_comments(mut self, following_comments: Vec<Spanned<Comment>>) -> Self {
+    pub fn with_following_comments(mut self, following_comments: Vec<Located<Comment>>) -> Self {
         self.following_comments = following_comments;
         self
     }
@@ -772,7 +772,7 @@ impl EnumDefinition {
 /// Items in a bitflags definition (preserves ordering and comments)
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum BitflagsDefItem {
-    Comment(Spanned<Comment>),
+    Comment(Located<Comment>),
     Statement(BitflagsStatement),
 }
 
@@ -782,8 +782,8 @@ pub struct BitflagsStatement {
     pub expr: Expr,
     pub attributes: Attributes,
     pub doc_comments: Vec<String>,
-    pub inline_trailing_comments: Vec<Spanned<Comment>>, // Comments on same line as bitflag
-    pub following_comments: Vec<Spanned<Comment>>,       // Comments on lines after bitflag
+    pub inline_trailing_comments: Vec<Located<Comment>>, // Comments on same line as bitflag
+    pub following_comments: Vec<Located<Comment>>,       // Comments on lines after bitflag
     pub location: ItemLocation,
 }
 #[cfg(test)]
@@ -816,12 +816,12 @@ impl BitflagsStatement {
     }
     pub fn with_inline_trailing_comments(
         mut self,
-        inline_trailing_comments: Vec<Spanned<Comment>>,
+        inline_trailing_comments: Vec<Located<Comment>>,
     ) -> Self {
         self.inline_trailing_comments = inline_trailing_comments;
         self
     }
-    pub fn with_following_comments(mut self, following_comments: Vec<Spanned<Comment>>) -> Self {
+    pub fn with_following_comments(mut self, following_comments: Vec<Located<Comment>>) -> Self {
         self.following_comments = following_comments;
         self
     }
@@ -831,8 +831,8 @@ pub struct BitflagsDefinition {
     pub type_: Type,
     pub items: Vec<BitflagsDefItem>,
     pub attributes: Attributes,
-    pub inline_trailing_comments: Vec<Spanned<Comment>>, // Comments on same line as attributes
-    pub following_comments: Vec<Spanned<Comment>>,       // Comments on lines after attributes
+    pub inline_trailing_comments: Vec<Located<Comment>>, // Comments on same line as attributes
+    pub following_comments: Vec<Located<Comment>>,       // Comments on lines after attributes
 }
 impl BitflagsDefinition {
     pub fn new(
@@ -858,12 +858,12 @@ impl BitflagsDefinition {
     }
     pub fn with_inline_trailing_comments(
         mut self,
-        inline_trailing_comments: Vec<Spanned<Comment>>,
+        inline_trailing_comments: Vec<Located<Comment>>,
     ) -> Self {
         self.inline_trailing_comments = inline_trailing_comments;
         self
     }
-    pub fn with_following_comments(mut self, following_comments: Vec<Spanned<Comment>>) -> Self {
+    pub fn with_following_comments(mut self, following_comments: Vec<Located<Comment>>) -> Self {
         self.following_comments = following_comments;
         self
     }
@@ -936,7 +936,7 @@ impl ItemDefinition {
 /// Items in an impl block (preserves ordering and comments)
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ImplItem {
-    Comment(Spanned<Comment>),
+    Comment(Located<Comment>),
     Function(Function),
 }
 
@@ -1057,7 +1057,7 @@ impl ExternValue {
 /// Module-level items (preserves ordering and comments)
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ModuleItem {
-    Comment(Spanned<Comment>),
+    Comment(Located<Comment>),
     Use(ItemPath),
     ExternType(Ident, Attributes, Vec<String>, ItemLocation), // name, attributes, doc_comments, location
     Backend(Backend),

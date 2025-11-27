@@ -4,7 +4,8 @@ use crate::{
         Visibility,
         test_aliases::{int_literal, int_literal_with_format, *},
     },
-    parser::{ParseError, parse_str_for_tests, strip_spans::StripSpans},
+    parser::{ParseError, parse_str_for_tests},
+    span::StripLocations,
     tokenizer::TokenKind,
 };
 
@@ -27,7 +28,7 @@ fn can_parse_basic_struct() {
         ]),
     )]);
 
-    assert_eq!(parse_str_for_tests(text).unwrap().strip_spans(), ast);
+    assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
 }
 
 #[test]
@@ -50,7 +51,7 @@ fn can_parse_vftable() {
         .with_attributes([A::size(4)])]),
     )]);
 
-    assert_eq!(parse_str_for_tests(text).unwrap().strip_spans(), ast);
+    assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
 }
 
 #[test]
@@ -96,7 +97,7 @@ fn can_parse_vehicle_types() {
         ]),
     )]);
 
-    assert_eq!(parse_str_for_tests(text).unwrap().strip_spans(), ast);
+    assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
 }
 
 #[test]
@@ -188,7 +189,7 @@ fn can_parse_spawn_manager() {
             ],
         )]);
 
-    assert_eq!(parse_str_for_tests(text).unwrap().strip_spans(), ast);
+    assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
 }
 
 #[test]
@@ -208,7 +209,7 @@ fn can_parse_address_field() {
         ]),
     )]);
 
-    assert_eq!(parse_str_for_tests(text).unwrap().strip_spans(), ast);
+    assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
 }
 
 #[test]
@@ -227,7 +228,7 @@ fn can_parse_use() {
             TD::new([TS::field((V::Private, "test"), T::ident("TestType<Hey>"))]),
         )]);
 
-    assert_eq!(parse_str_for_tests(text).unwrap().strip_spans(), ast);
+    assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
 }
 
 #[test]
@@ -260,7 +261,7 @@ fn can_parse_extern() {
             TD::new([TS::field((V::Private, "test"), T::ident("TestType<Hey>"))]),
         )]);
 
-    assert_eq!(parse_str_for_tests(text).unwrap().strip_spans(), ast);
+    assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
 }
 
 #[test]
@@ -274,7 +275,7 @@ fn can_parse_extern_with_multiline_doc_comment() {
 extern type ManuallyDrop<SharedPtr<u32>>;
     "#;
 
-    let module = parse_str_for_tests(text).unwrap().strip_spans();
+    let module = parse_str_for_tests(text).unwrap().strip_locations();
 
     // Verify we have one extern type item
     assert_eq!(module.items.len(), 1);
@@ -301,7 +302,7 @@ fn can_parse_an_empty_type() {
         "#;
 
     let ast = M::new().with_definitions([ID::new((V::Private, "Test"), TD::new([]))]);
-    assert_eq!(parse_str_for_tests(text).unwrap().strip_spans(), ast);
+    assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
 }
 
 #[test]
@@ -332,7 +333,7 @@ fn can_parse_extern_value() {
             ),
         ]);
 
-    assert_eq!(parse_str_for_tests(text).unwrap().strip_spans(), ast);
+    assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
 }
 
 #[test]
@@ -364,7 +365,7 @@ fn can_parse_enum() {
         ),
     )]);
 
-    assert_eq!(parse_str_for_tests(text).unwrap().strip_spans(), ast);
+    assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
 }
 
 #[test]
@@ -395,7 +396,7 @@ fn can_parse_bitflags() {
         ),
     )]);
 
-    assert_eq!(parse_str_for_tests(text).unwrap().strip_spans(), ast);
+    assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
 }
 
 #[test]
@@ -411,7 +412,7 @@ fn can_parse_array_field() {
         TD::new([TS::field((V::Private, "field_1"), T::ident("i32").array(4))]),
     )]);
 
-    assert_eq!(parse_str_for_tests(text).unwrap().strip_spans(), ast);
+    assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
 }
 
 #[test]
@@ -477,7 +478,7 @@ backend rust epilogue r#"
         ),
     ]);
 
-    assert_eq!(parse_str_for_tests(text).unwrap().strip_spans(), ast);
+    assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
 }
 
 #[test]
@@ -492,7 +493,7 @@ backend rust prologue "
     let ast = M::new().with_backends([B::new("rust")
         .with_prologue("\n    use crate::shared_ptr::*;\n    use std::mem::ManuallyDrop;\n")]);
 
-    assert_eq!(parse_str_for_tests(text).unwrap().strip_spans(), ast);
+    assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
 }
 
 #[test]
@@ -510,7 +511,7 @@ fn can_parse_ident_attributes() {
             .with_attributes([A::copyable(), A::cloneable()]),
     )]);
 
-    assert_eq!(parse_str_for_tests(text).unwrap().strip_spans(), ast);
+    assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
 }
 
 #[test]
@@ -557,7 +558,7 @@ fn can_parse_doc_comments() {
             " The best of its kind".to_string(),
         ]);
 
-    assert_eq!(parse_str_for_tests(text).unwrap().strip_spans(), ast);
+    assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
 }
 
 #[test]
@@ -592,7 +593,7 @@ fn can_parse_freestanding_functions() {
             .with_return_type(T::ident("i32")),
         ]);
 
-    assert_eq!(parse_str_for_tests(text).unwrap().strip_spans(), ast);
+    assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
 }
 
 #[test]
@@ -628,7 +629,7 @@ fn can_parse_multiple_attributes_with_underscored_literals() {
         ]),
     )]);
 
-    assert_eq!(parse_str_for_tests(text).unwrap().strip_spans(), ast);
+    assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
 }
 
 #[test]
@@ -677,7 +678,7 @@ fn can_parse_pfx_instance_with_vftable_and_impl() {
             .with_attributes([A::address(0x6B7C40)])],
         )]);
 
-    assert_eq!(parse_str_for_tests(text).unwrap().strip_spans(), ast);
+    assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
 }
 
 #[test]
@@ -713,7 +714,7 @@ fn can_parse_raycast_result_with_pointers_and_arrays() {
         )]),
     )]);
 
-    assert_eq!(parse_str_for_tests(text).unwrap().strip_spans(), ast);
+    assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
 }
 
 #[test]
@@ -729,7 +730,7 @@ pub type AnarkGui {
 }
     "#;
 
-    let module = parse_str_for_tests(text).unwrap().strip_spans();
+    let module = parse_str_for_tests(text).unwrap().strip_locations();
 
     // Verify we have one type definition
     assert_eq!(module.items.len(), 1);
@@ -783,7 +784,7 @@ impl PfxInstance {
 }
     "#;
 
-    // Don't use strip_spans() - it empties doc_comments and converts them to attributes
+    // Don't use strip_locations() - it empties doc_comments and converts them to attributes
     let module = parse_str_for_tests(text).unwrap();
 
     // Check extern type has no doc comments (doc comes after, not before)

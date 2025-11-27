@@ -1,17 +1,17 @@
 use crate::{
     grammar::*,
     source_store::SourceStore,
-    span::{ItemLocation, Span, Spanned},
+    span::{ItemLocation, Located, Span},
     tokenizer::{LexError, Token, TokenKind},
 };
 use ariadne::{Color, Label, Report, ReportKind, Source};
 use std::sync::Arc;
 
 #[cfg(test)]
-mod tests;
+use crate::span::StripLocations;
 
 #[cfg(test)]
-pub mod strip_spans;
+mod tests;
 
 #[cfg(test)]
 /// Parse a Pyxis module from a string for tests, with the spans stripped out
@@ -359,7 +359,7 @@ impl From<LexError> for ParseError {
 pub struct Parser {
     tokens: Vec<Token>,
     pos: usize,
-    pending_comments: Vec<Spanned<Comment>>,
+    pending_comments: Vec<Located<Comment>>,
     filename: Arc<str>,
     source: String,
 }
@@ -486,37 +486,34 @@ impl Parser {
         comments
     }
 
-    /// Collect a comment as a Spanned<Comment>
-    fn collect_comment(&mut self) -> Option<Spanned<Comment>> {
+    /// Collect a comment as a Located<Comment>
+    fn collect_comment(&mut self) -> Option<Located<Comment>> {
         match self.peek().clone() {
             TokenKind::DocOuter(ref text) => {
                 let token = self.advance();
                 let content = text.strip_prefix("///").unwrap_or(text).trim().to_string();
-                Some(Spanned::new(
+                Some(Located::new(
                     Comment::DocOuter(vec![content]),
-                    token.location.span,
+                    token.location,
                 ))
             }
             TokenKind::DocInner(ref text) => {
                 let token = self.advance();
                 let content = text.strip_prefix("//!").unwrap_or(text).trim().to_string();
-                Some(Spanned::new(
+                Some(Located::new(
                     Comment::DocInner(vec![content]),
-                    token.location.span,
+                    token.location,
                 ))
             }
             TokenKind::Comment(ref text) => {
                 let token = self.advance();
-                Some(Spanned::new(
-                    Comment::Regular(text.clone()),
-                    token.location.span,
-                ))
+                Some(Located::new(Comment::Regular(text.clone()), token.location))
             }
             TokenKind::MultiLineComment(ref text) => {
                 let token = self.advance();
                 // Split multiline comments into lines
                 let lines: Vec<String> = text.lines().map(|s| s.to_string()).collect();
-                Some(Spanned::new(Comment::MultiLine(lines), token.location.span))
+                Some(Located::new(Comment::MultiLine(lines), token.location))
             }
             _ => None,
         }
@@ -1913,5 +1910,289 @@ impl Parser {
                 location: self.current().location.clone(),
             }),
         }
+    }
+}
+
+#[cfg(test)]
+impl StripLocations for Module {
+    fn strip_locations(&self) -> Self {
+        Module {
+            items: self
+                .items
+                .iter()
+                .filter_map(|item| match item {
+                    ModuleItem::Comment(_) => None, // Filter out comments
+                    _ => Some(item.strip_locations()),
+                })
+                .collect(),
+            attributes: self.attributes.strip_locations(),
+            doc_comments: self.doc_comments.clone(),
+        }
+    }
+}
+
+#[cfg(test)]
+impl StripLocations for ModuleItem {
+    fn strip_locations(&self) -> Self {
+        match self {
+            ModuleItem::Comment(c) => ModuleItem::Comment(c.strip_locations()),
+            ModuleItem::Use(p) => ModuleItem::Use(p.clone()),
+            ModuleItem::ExternType(n, a, d, _) => ModuleItem::ExternType(
+                n.clone(),
+                a.strip_locations(),
+                d.clone(),
+                ItemLocation::test(),
+            ),
+            ModuleItem::Backend(b) => ModuleItem::Backend(b.clone()),
+            ModuleItem::Definition(d) => ModuleItem::Definition(d.strip_locations()),
+            ModuleItem::Impl(i) => ModuleItem::Impl(i.strip_locations()),
+            ModuleItem::ExternValue(e) => ModuleItem::ExternValue(e.strip_locations()),
+            ModuleItem::Function(f) => ModuleItem::Function(f.strip_locations()),
+        }
+    }
+}
+
+#[cfg(test)]
+impl StripLocations for ItemDefinition {
+    fn strip_locations(&self) -> Self {
+        ItemDefinition {
+            visibility: self.visibility,
+            name: self.name.clone(),
+            doc_comments: self.doc_comments.clone(),
+            inner: self.inner.strip_locations(),
+            location: ItemLocation::test(),
+        }
+    }
+}
+
+#[cfg(test)]
+impl StripLocations for ItemDefinitionInner {
+    fn strip_locations(&self) -> Self {
+        match self {
+            ItemDefinitionInner::Type(t) => ItemDefinitionInner::Type(t.strip_locations()),
+            ItemDefinitionInner::Enum(e) => ItemDefinitionInner::Enum(e.strip_locations()),
+            ItemDefinitionInner::Bitflags(b) => ItemDefinitionInner::Bitflags(b.strip_locations()),
+        }
+    }
+}
+
+#[cfg(test)]
+impl StripLocations for TypeDefinition {
+    fn strip_locations(&self) -> Self {
+        TypeDefinition {
+            items: self
+                .items
+                .iter()
+                .filter_map(|item| match item {
+                    TypeDefItem::Comment(_) => None, // Filter out comments
+                    TypeDefItem::Statement(s) => Some(TypeDefItem::Statement(s.strip_locations())),
+                })
+                .collect(),
+            attributes: self.attributes.strip_locations(),
+            inline_trailing_comments: Vec::new(), // Strip trailing comments
+            following_comments: Vec::new(),
+        }
+    }
+}
+
+#[cfg(test)]
+impl StripLocations for TypeStatement {
+    fn strip_locations(&self) -> Self {
+        TypeStatement {
+            field: self.field.strip_locations(),
+            attributes: self.attributes.strip_locations(),
+            doc_comments: self.doc_comments.clone(),
+            inline_trailing_comments: Vec::new(), // Strip trailing comments
+            following_comments: Vec::new(),
+            location: ItemLocation::test(),
+        }
+    }
+}
+
+#[cfg(test)]
+impl StripLocations for TypeField {
+    fn strip_locations(&self) -> Self {
+        match self {
+            TypeField::Field(v, n, t) => TypeField::Field(*v, n.clone(), t.clone()),
+            TypeField::Vftable(funcs) => {
+                TypeField::Vftable(funcs.iter().map(|f| f.strip_locations()).collect())
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+impl StripLocations for EnumDefinition {
+    fn strip_locations(&self) -> Self {
+        EnumDefinition {
+            type_: self.type_.clone(),
+            items: self
+                .items
+                .iter()
+                .filter_map(|item| match item {
+                    EnumDefItem::Comment(_) => None, // Filter out comments
+                    EnumDefItem::Statement(s) => Some(EnumDefItem::Statement(s.strip_locations())),
+                })
+                .collect(),
+            attributes: self.attributes.strip_locations(),
+            inline_trailing_comments: Vec::new(), // Strip trailing comments
+            following_comments: Vec::new(),
+        }
+    }
+}
+
+#[cfg(test)]
+impl StripLocations for Expr {
+    fn strip_locations(&self) -> Self {
+        // Expr already doesn't contain spans, just clone it
+        self.clone()
+    }
+}
+
+#[cfg(test)]
+impl StripLocations for EnumStatement {
+    fn strip_locations(&self) -> Self {
+        EnumStatement {
+            name: self.name.clone(),
+            expr: self.expr.as_ref().map(|e| e.strip_locations()),
+            attributes: self.attributes.strip_locations(),
+            doc_comments: self.doc_comments.clone(),
+            inline_trailing_comments: Vec::new(), // Strip trailing comments
+            following_comments: Vec::new(),
+            location: ItemLocation::test(),
+        }
+    }
+}
+
+#[cfg(test)]
+impl StripLocations for BitflagsDefinition {
+    fn strip_locations(&self) -> Self {
+        BitflagsDefinition {
+            type_: self.type_.clone(),
+            items: self
+                .items
+                .iter()
+                .filter_map(|item| match item {
+                    BitflagsDefItem::Comment(_) => None, // Filter out comments
+                    BitflagsDefItem::Statement(s) => {
+                        Some(BitflagsDefItem::Statement(s.strip_locations()))
+                    }
+                })
+                .collect(),
+            attributes: self.attributes.strip_locations(),
+            inline_trailing_comments: Vec::new(), // Strip trailing comments
+            following_comments: Vec::new(),
+        }
+    }
+}
+
+#[cfg(test)]
+impl StripLocations for BitflagsStatement {
+    fn strip_locations(&self) -> Self {
+        BitflagsStatement {
+            name: self.name.clone(),
+            expr: self.expr.strip_locations(),
+            attributes: self.attributes.strip_locations(),
+            doc_comments: self.doc_comments.clone(),
+            inline_trailing_comments: Vec::new(), // Strip trailing comments
+            following_comments: Vec::new(),
+            location: ItemLocation::test(),
+        }
+    }
+}
+
+#[cfg(test)]
+impl StripLocations for FunctionBlock {
+    fn strip_locations(&self) -> Self {
+        FunctionBlock {
+            name: self.name.clone(),
+            items: self
+                .items
+                .iter()
+                .filter_map(|item| match item {
+                    ImplItem::Comment(_) => None, // Filter out comments
+                    ImplItem::Function(f) => Some(ImplItem::Function(f.strip_locations())),
+                })
+                .collect(),
+            attributes: self.attributes.strip_locations(),
+        }
+    }
+}
+
+#[cfg(test)]
+impl StripLocations for Function {
+    fn strip_locations(&self) -> Self {
+        Function {
+            visibility: self.visibility,
+            name: self.name.clone(),
+            attributes: self.attributes.strip_locations(),
+            doc_comments: self.doc_comments.clone(),
+            arguments: self.arguments.strip_locations(),
+            return_type: self.return_type.clone(),
+            location: ItemLocation::test(),
+        }
+    }
+}
+
+#[cfg(test)]
+impl StripLocations for Argument {
+    fn strip_locations(&self) -> Self {
+        match self {
+            Argument::ConstSelf(_) => Argument::ConstSelf(ItemLocation::test()),
+            Argument::MutSelf(_) => Argument::MutSelf(ItemLocation::test()),
+            Argument::Named(ident, ty, _) => {
+                Argument::Named(ident.clone(), ty.clone(), ItemLocation::test())
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+impl StripLocations for ExternValue {
+    fn strip_locations(&self) -> Self {
+        ExternValue {
+            visibility: self.visibility,
+            name: self.name.clone(),
+            type_: self.type_.clone(),
+            attributes: self.attributes.strip_locations(),
+            doc_comments: self.doc_comments.clone(),
+            location: ItemLocation::test(),
+        }
+    }
+}
+
+#[cfg(test)]
+impl StripLocations for Attribute {
+    fn strip_locations(&self) -> Self {
+        match self {
+            Attribute::Ident(i) => Attribute::Ident(i.clone()),
+            Attribute::Function(name, items) => Attribute::Function(
+                name.clone(),
+                items
+                    .iter()
+                    .map(|item| match item {
+                        AttributeItem::Expr(e) => AttributeItem::Expr(e.strip_locations()),
+                        AttributeItem::Comment(c) => AttributeItem::Comment(c.clone()),
+                    })
+                    .collect(),
+            ),
+            Attribute::Assign(name, items) => Attribute::Assign(
+                name.clone(),
+                items
+                    .iter()
+                    .map(|item| match item {
+                        AttributeItem::Expr(e) => AttributeItem::Expr(e.strip_locations()),
+                        AttributeItem::Comment(c) => AttributeItem::Comment(c.clone()),
+                    })
+                    .collect(),
+            ),
+        }
+    }
+}
+
+#[cfg(test)]
+impl StripLocations for Attributes {
+    fn strip_locations(&self) -> Self {
+        Attributes(self.0.iter().map(|a| a.strip_locations()).collect())
     }
 }
