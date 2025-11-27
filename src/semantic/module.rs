@@ -8,6 +8,7 @@ use crate::{
         type_registry,
         types::{Backend, ExternValue, ItemDefinition, Type},
     },
+    span::ItemLocation,
 };
 
 #[derive(Debug, Clone)]
@@ -88,7 +89,7 @@ impl Module {
     ) -> impl Iterator<Item = &'a ItemDefinition> {
         self.definition_paths()
             .iter()
-            .filter_map(|p| type_registry.get(p))
+            .filter_map(|p| type_registry.get(p, &ItemLocation::internal()).ok())
     }
 
     pub fn scope(&self) -> Vec<ItemPath> {

@@ -78,9 +78,7 @@ pub fn build(
     doc_comments: &[String],
     location: ItemLocation,
 ) -> Result<Option<ItemStateResolved>> {
-    let module = semantic
-        .get_module_for_path(resolvee_path)
-        .ok_or_else(|| SemanticError::module_not_found(resolvee_path.clone(), location.clone()))?;
+    let module = semantic.get_module_for_path(resolvee_path, &location)?;
 
     let Some(ty) = semantic
         .type_registry

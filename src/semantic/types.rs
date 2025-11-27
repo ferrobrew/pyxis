@@ -70,7 +70,10 @@ impl Type {
     pub(crate) fn size(&self, type_registry: &type_registry::TypeRegistry) -> Option<usize> {
         match self {
             Type::Unresolved(_) => None,
-            Type::Raw(path) => type_registry.get(path).and_then(|t| t.size()),
+            Type::Raw(path) => type_registry
+                .get(path, &ItemLocation::internal())
+                .ok()
+                .and_then(|t| t.size()),
             Type::ConstPointer(_) => Some(type_registry.pointer_size()),
             Type::MutPointer(_) => Some(type_registry.pointer_size()),
             Type::Array(tr, count) => tr.size(type_registry).map(|s| s * count),
@@ -80,7 +83,10 @@ impl Type {
     pub(crate) fn alignment(&self, type_registry: &type_registry::TypeRegistry) -> Option<usize> {
         match self {
             Type::Unresolved(_) => None,
-            Type::Raw(path) => type_registry.get(path).and_then(|t| t.alignment()),
+            Type::Raw(path) => type_registry
+                .get(path, &ItemLocation::internal())
+                .ok()
+                .and_then(|t| t.alignment()),
             Type::ConstPointer(_) => Some(type_registry.pointer_size()),
             Type::MutPointer(_) => Some(type_registry.pointer_size()),
             Type::Array(tr, _) => Some(tr.alignment(type_registry)?),

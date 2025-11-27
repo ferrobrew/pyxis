@@ -411,14 +411,6 @@ pub enum SemanticError {
 }
 
 impl SemanticError {
-    pub fn module_not_found(path: ItemPath, location: ItemLocation) -> Self {
-        Self::ModuleNotFound { path, location }
-    }
-
-    pub fn type_not_found(path: ItemPath, location: ItemLocation) -> Self {
-        Self::TypeNotFound { path, location }
-    }
-
     pub fn missing_extern_attribute(
         attribute_name: impl Into<String>,
         extern_kind: impl Into<String>,

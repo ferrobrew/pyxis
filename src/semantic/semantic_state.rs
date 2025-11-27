@@ -236,18 +236,16 @@ impl SemanticState {
 
     pub fn add_item(&mut self, item_definition: ItemDefinition) -> Result<()> {
         let parent_path = &item_definition.path.parent().ok_or_else(|| {
-            SemanticError::module_not_found(
-                item_definition.path.clone(),
-                item_definition.location.clone(),
-            )
+            let path = item_definition.path.clone();
+            let location = item_definition.location.clone();
+            SemanticError::ModuleNotFound { path, location }
         })?;
         self.modules
             .get_mut(parent_path)
             .ok_or_else(|| {
-                SemanticError::module_not_found(
-                    parent_path.clone(),
-                    item_definition.location.clone(),
-                )
+                let path = parent_path.clone();
+                let location = item_definition.location.clone();
+                SemanticError::ModuleNotFound { path, location }
             })?
             .definition_paths
             .insert(item_definition.path.clone());
@@ -263,9 +261,9 @@ impl SemanticState {
             }
 
             for resolvee_path in &to_resolve {
-                let item_def = self.type_registry.get(resolvee_path).ok_or_else(|| {
-                    SemanticError::type_not_found(resolvee_path.clone(), ItemLocation::internal())
-                })?;
+                let item_def = self
+                    .type_registry
+                    .get(resolvee_path, &ItemLocation::internal())?;
                 let item_location = item_def.location.clone();
                 let ItemState::Unresolved(definition) = item_def.state.clone() else {
                     continue;
@@ -299,8 +297,9 @@ impl SemanticState {
                 };
 
                 let Some(item) = item else { continue };
-                self.type_registry.get_mut(resolvee_path).unwrap().state =
-                    ItemState::Resolved(item);
+                self.type_registry
+                    .get_mut(resolvee_path, &item_location)?
+                    .state = ItemState::Resolved(item);
             }
 
             if to_resolve == self.type_registry.unresolved() {
@@ -337,8 +336,17 @@ impl SemanticState {
 }
 
 impl SemanticState {
-    pub(super) fn get_module_for_path(&self, path: &ItemPath) -> Option<&Module> {
-        self.modules.get(&path.parent()?)
+    pub(super) fn get_module_for_path(
+        &self,
+        path: &ItemPath,
+        from_location: &ItemLocation,
+    ) -> Result<&Module> {
+        path.parent()
+            .and_then(|parent| self.modules.get(&parent))
+            .ok_or_else(|| SemanticError::ModuleNotFound {
+                path: path.clone(),
+                location: from_location.clone(),
+            })
     }
 }
 

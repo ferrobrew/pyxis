@@ -218,7 +218,7 @@ fn can_use_type_from_another_module() {
     let path = IP::from("module1::TestType1");
     let resolved_type = semantic_state
         .type_registry()
-        .get(&path)
+        .get(&path, &ItemLocation::test())
         .cloned()
         .expect("failed to get type");
     assert_eq!(

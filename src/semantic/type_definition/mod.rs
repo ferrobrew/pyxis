@@ -171,9 +171,7 @@ pub fn build(
     doc_comments: &[String],
     location: ItemLocation,
 ) -> Result<Option<ItemStateResolved>> {
-    let module = semantic
-        .get_module_for_path(resolvee_path)
-        .ok_or_else(|| SemanticError::module_not_found(resolvee_path.clone(), location.clone()))?;
+    let module = semantic.get_module_for_path(resolvee_path, &location)?;
 
     // Handle attributes
     let mut target_size: Option<usize> = None;
@@ -422,7 +420,7 @@ pub fn build(
     };
 
     // Reborrow the module after resolving regions
-    let module = semantic.get_module_for_path(resolvee_path).unwrap();
+    let module = semantic.get_module_for_path(resolvee_path, &location)?;
 
     // Handle functions
     let mut associated_functions = vec![];
@@ -513,10 +511,7 @@ pub fn build(
 
             let item = semantic
                 .type_registry
-                .get(path)
-                .ok_or_else(|| {
-                    SemanticError::type_not_found(path.clone(), region_location.clone())
-                })?
+                .get(path, region_location)?
                 .state
                 .clone();
 
@@ -823,9 +818,7 @@ fn get_region_name_and_type_definition<'a>(
         ));
     };
 
-    let region_type = type_registry
-        .get(path)
-        .ok_or_else(|| SemanticError::type_not_found(path.clone(), region.location.clone()))?;
+    let region_type = type_registry.get(path, &region.location)?;
 
     let Some(region_type) = region_type.resolved() else {
         return Ok(None);

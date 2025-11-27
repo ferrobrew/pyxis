@@ -72,9 +72,7 @@ pub fn build(
     doc_comments: &[String],
     location: ItemLocation,
 ) -> Result<Option<ItemStateResolved>> {
-    let module = semantic
-        .get_module_for_path(resolvee_path)
-        .ok_or_else(|| SemanticError::module_not_found(resolvee_path.clone(), location.clone()))?;
+    let module = semantic.get_module_for_path(resolvee_path, &location)?;
 
     // Retrieve the type for this bitflags, and validate it, before getting its size
     let Some(ty) = semantic
@@ -91,7 +89,7 @@ pub fn build(
             location.clone(),
         )
     })?;
-    let Some(ty_item) = semantic.type_registry.get(ty_raw_path) else {
+    let Ok(ty_item) = semantic.type_registry.get(ty_raw_path, &location) else {
         return Ok(None);
     };
     let Some(predefined_item) = ty_item.predefined else {

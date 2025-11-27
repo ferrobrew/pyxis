@@ -1,8 +1,13 @@
 use std::collections::BTreeMap;
 
 use crate::{
+    SemanticError,
     grammar::{self, ItemPath},
-    semantic::types::{ItemDefinition, Type},
+    semantic::{
+        error::Result,
+        types::{ItemDefinition, Type},
+    },
+    span::ItemLocation,
 };
 
 #[derive(Debug)]
@@ -23,12 +28,30 @@ impl TypeRegistry {
         self.pointer_size
     }
 
-    pub fn get(&self, item_path: &ItemPath) -> Option<&ItemDefinition> {
-        self.types.get(item_path)
+    pub fn get(
+        &self,
+        item_path: &ItemPath,
+        from_location: &ItemLocation,
+    ) -> Result<&ItemDefinition> {
+        self.types
+            .get(item_path)
+            .ok_or_else(|| SemanticError::TypeNotFound {
+                path: item_path.clone(),
+                location: from_location.clone(),
+            })
     }
 
-    pub fn get_mut(&mut self, item_path: &ItemPath) -> Option<&mut ItemDefinition> {
-        self.types.get_mut(item_path)
+    pub fn get_mut(
+        &mut self,
+        item_path: &ItemPath,
+        from_location: &ItemLocation,
+    ) -> Result<&mut ItemDefinition> {
+        self.types
+            .get_mut(item_path)
+            .ok_or_else(|| SemanticError::TypeNotFound {
+                path: item_path.clone(),
+                location: from_location.clone(),
+            })
     }
 
     pub(crate) fn resolved(&self) -> Vec<ItemPath> {
