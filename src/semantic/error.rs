@@ -415,10 +415,10 @@ impl SemanticError {
     pub fn error_message(&self) -> String {
         match self {
             SemanticError::ModuleNotFound { path, .. } => {
-                std::format!("Module not found: `{}`", path)
+                format!("Module not found: `{}`", path)
             }
             SemanticError::TypeNotFound { path, .. } => {
-                std::format!("Type not found: `{}`", path)
+                format!("Type not found: `{}`", path)
             }
             SemanticError::MissingExternAttribute {
                 attribute_name,
@@ -427,12 +427,9 @@ impl SemanticError {
                 module_name,
                 ..
             } => {
-                std::format!(
+                format!(
                     "failed to find `{}` attribute for {} `{}` in module `{}`",
-                    attribute_name,
-                    extern_kind,
-                    type_name,
-                    module_name
+                    attribute_name, extern_kind, type_name, module_name
                 )
             }
             SemanticError::MissingAttribute {
@@ -441,11 +438,9 @@ impl SemanticError {
                 item_path,
                 ..
             } => {
-                std::format!(
+                format!(
                     "Missing required attribute `{}` for {} `{}`",
-                    attribute_name,
-                    item_kind,
-                    item_path
+                    attribute_name, item_kind, item_path
                 )
             }
             SemanticError::InvalidAttributeValue {
@@ -454,11 +449,9 @@ impl SemanticError {
                 item_path,
                 ..
             } => {
-                std::format!(
+                format!(
                     "Invalid value for attribute `{}` (expected {}) in `{}`",
-                    attribute_name,
-                    expected_type,
-                    item_path
+                    attribute_name, expected_type, item_path
                 )
             }
             SemanticError::ConflictingAttributes {
@@ -467,11 +460,9 @@ impl SemanticError {
                 item_path,
                 ..
             } => {
-                std::format!(
+                format!(
                     "cannot specify both `{}` and `{}` attributes for type `{}`",
-                    attr1,
-                    attr2,
-                    item_path
+                    attr1, attr2, item_path
                 )
             }
             SemanticError::TypeResolutionFailed {
@@ -479,10 +470,9 @@ impl SemanticError {
                 resolution_context,
                 ..
             } => {
-                std::format!(
+                format!(
                     "Failed to resolve type `{}` for {}",
-                    type_,
-                    resolution_context
+                    type_, resolution_context
                 )
             }
             SemanticError::TypeResolutionStalled {
@@ -491,13 +481,13 @@ impl SemanticError {
             } => {
                 let unresolved_quoted: Vec<String> = unresolved_types
                     .iter()
-                    .map(|s| std::format!("\"{}\"", s))
+                    .map(|s| format!("\"{}\"", s))
                     .collect();
                 let resolved_quoted: Vec<String> = resolved_types
                     .iter()
-                    .map(|s| std::format!("\"{}\"", s))
+                    .map(|s| format!("\"{}\"", s))
                     .collect();
-                std::format!(
+                format!(
                     "type resolution will not terminate, failed on types: [{}] (resolved types: [{}])",
                     unresolved_quoted.join(", "),
                     resolved_quoted.join(", ")
@@ -509,11 +499,9 @@ impl SemanticError {
                 item_path,
                 ..
             } => {
-                std::format!(
+                format!(
                     "bitflags definition `{}` has a type that is not {}: {}",
-                    item_path,
-                    expected,
-                    found
+                    item_path, expected, found
                 )
             }
             SemanticError::InvalidType {
@@ -523,12 +511,9 @@ impl SemanticError {
                 context_description,
                 ..
             } => {
-                std::format!(
+                format!(
                     "Invalid type for `{}` in `{}`: expected {}, found {}",
-                    context_description,
-                    item_path,
-                    expected,
-                    found
+                    context_description, item_path, expected, found
                 )
             }
             SemanticError::VftableMissingFunctions {
@@ -538,12 +523,9 @@ impl SemanticError {
                 actual_count,
                 ..
             } => {
-                std::format!(
+                format!(
                     "vftable for `{}` has {} functions but base class `{}` requires at least {}",
-                    item_path,
-                    actual_count,
-                    base_name,
-                    expected_count
+                    item_path, actual_count, base_name, expected_count
                 )
             }
             SemanticError::VftableFunctionMismatch {
@@ -554,13 +536,9 @@ impl SemanticError {
                 base_function,
                 ..
             } => {
-                std::format!(
+                format!(
                     "vftable for `{}` has function `{}` at index {} but base class `{}` has function `{}`",
-                    item_path,
-                    derived_function,
-                    index,
-                    base_name,
-                    base_function
+                    item_path, derived_function, index, base_name, base_function
                 )
             }
             SemanticError::FieldError {
@@ -569,11 +547,9 @@ impl SemanticError {
                 message,
                 ..
             } => {
-                std::format!(
+                format!(
                     "Error in field `{}` of `{}`: {}",
-                    field_name,
-                    item_path,
-                    message
+                    field_name, item_path, message
                 )
             }
             SemanticError::SizeBelowMinimum {
@@ -582,11 +558,9 @@ impl SemanticError {
                 item_path,
                 ..
             } => {
-                std::format!(
+                format!(
                     "Size {} for `{}` is less than minimum size {}",
-                    actual_size,
-                    item_path,
-                    minimum_size
+                    actual_size, item_path, minimum_size
                 )
             }
             SemanticError::SizeMismatch {
@@ -595,12 +569,9 @@ impl SemanticError {
                 item_path,
                 ..
             } => {
-                std::format!(
+                format!(
                     "while processing `{}`\ncalculated size {} for type `{}` does not match target size {}; is your target size correct?",
-                    item_path,
-                    actual,
-                    item_path,
-                    expected
+                    item_path, actual, item_path, expected
                 )
             }
             SemanticError::AlignmentBelowMinimum {
@@ -609,11 +580,9 @@ impl SemanticError {
                 item_path,
                 ..
             } => {
-                std::format!(
+                format!(
                     "alignment {} is less than minimum required alignment {} for type `{}`",
-                    alignment,
-                    required_alignment,
-                    item_path
+                    alignment, required_alignment, item_path
                 )
             }
             SemanticError::FieldNotAligned {
@@ -623,12 +592,9 @@ impl SemanticError {
                 required_alignment,
                 ..
             } => {
-                std::format!(
+                format!(
                     "field `{}` of type `{}` is located at {:#x}, which is not divisible by {} (the alignment of the type of the field)",
-                    field_name,
-                    item_path,
-                    address,
-                    required_alignment
+                    field_name, item_path, address, required_alignment
                 )
             }
             SemanticError::SizeNotAlignmentMultiple {
@@ -637,15 +603,13 @@ impl SemanticError {
                 item_path,
                 ..
             } => {
-                std::format!(
+                format!(
                     "the type `{}` has a size of {}, which is not a multiple of its alignment {}",
-                    item_path,
-                    size,
-                    alignment
+                    item_path, size, alignment
                 )
             }
             SemanticError::VftableMustBeFirst { item_path, .. } => {
-                std::format!(
+                format!(
                     "Vftable field must be the first field in type `{}`",
                     item_path
                 )
@@ -656,15 +620,13 @@ impl SemanticError {
                 message,
                 ..
             } => {
-                std::format!(
+                format!(
                     "Duplicate definition of `{}` in `{}` ({})",
-                    name,
-                    item_path,
-                    message
+                    name, item_path, message
                 )
             }
             SemanticError::FunctionMissingImplementation { function_name, .. } => {
-                std::format!(
+                format!(
                     "Function `{}` has no implementation (missing address attribute?)",
                     function_name
                 )
@@ -674,10 +636,9 @@ impl SemanticError {
                 function_name,
                 ..
             } => {
-                std::format!(
+                format!(
                     "Invalid calling convention `{}` for function `{}`",
-                    convention,
-                    function_name
+                    convention, function_name
                 )
             }
             SemanticError::AttributeNotSupported {
@@ -685,10 +646,9 @@ impl SemanticError {
                 attribute_context,
                 ..
             } => {
-                std::format!(
+                format!(
                     "Attribute `{}` is not supported for {}",
-                    attribute_name,
-                    attribute_context
+                    attribute_name, attribute_context
                 )
             }
             SemanticError::EnumUnsupportedValue {
@@ -696,23 +656,22 @@ impl SemanticError {
                 case_name,
                 ..
             } => {
-                std::format!(
+                format!(
                     "enum `{}` has an unsupported value for case `{}`",
-                    item_path,
-                    case_name
+                    item_path, case_name
                 )
             }
             SemanticError::EnumMultipleDefaults { item_path, .. } => {
-                std::format!("enum `{}` has multiple default variants", item_path)
+                format!("enum `{}` has multiple default variants", item_path)
             }
             SemanticError::EnumDefaultWithoutDefaultable { item_path, .. } => {
-                std::format!(
+                format!(
                     "enum `{}` has a default variant set but is not marked as defaultable",
                     item_path
                 )
             }
             SemanticError::EnumDefaultableMissingDefault { item_path, .. } => {
-                std::format!(
+                format!(
                     "enum `{}` is marked as defaultable but has no default variant set",
                     item_path
                 )
@@ -722,23 +681,22 @@ impl SemanticError {
                 case_name,
                 ..
             } => {
-                std::format!(
+                format!(
                     "bitflags `{}` has an unsupported value for case `{}`",
-                    item_path,
-                    case_name
+                    item_path, case_name
                 )
             }
             SemanticError::BitflagsMultipleDefaults { item_path, .. } => {
-                std::format!("bitflags `{}` has multiple default values", item_path)
+                format!("bitflags `{}` has multiple default values", item_path)
             }
             SemanticError::BitflagsDefaultWithoutDefaultable { item_path, .. } => {
-                std::format!(
+                format!(
                     "bitflags `{}` has a default value set but is not marked as defaultable",
                     item_path
                 )
             }
             SemanticError::BitflagsDefaultableMissingDefault { item_path, .. } => {
-                std::format!(
+                format!(
                     "bitflags `{}` is marked as defaultable but has no default value set",
                     item_path
                 )
@@ -749,7 +707,7 @@ impl SemanticError {
                 message,
                 ..
             } => {
-                std::format!("field `{}` of type `{}` {}", field_name, item_path, message)
+                format!("field `{}` of type `{}` {}", field_name, item_path, message)
             }
             SemanticError::IntegerConversion {
                 value,
@@ -757,11 +715,9 @@ impl SemanticError {
                 conversion_context,
                 ..
             } => {
-                std::format!(
+                format!(
                     "Failed to convert `{}` to {} in {}",
-                    value,
-                    target_type,
-                    conversion_context
+                    value, target_type, conversion_context
                 )
             }
             SemanticError::OverlappingRegions {
@@ -771,12 +727,9 @@ impl SemanticError {
                 existing_end,
                 ..
             } => {
-                std::format!(
+                format!(
                     "Overlapping regions in `{}`: attempted to insert padding at {:#x}, but overlapped with existing region `{}` that ends at {:#x}",
-                    item_path,
-                    address,
-                    region_name,
-                    existing_end
+                    item_path, address, region_name, existing_end
                 )
             }
         }
