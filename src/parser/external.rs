@@ -1,10 +1,123 @@
 use crate::{
-    grammar::{Attributes, Backend, Expr, ExternValue, Ident, ItemPath, ModuleItem, StringFormat},
     span::{ItemLocation, Located, Span},
     tokenizer::TokenKind,
 };
 
-use super::{ParseError, core::Parser};
+#[cfg(test)]
+use crate::span::StripLocations;
+
+use super::{
+    ParseError,
+    attributes::{Attributes, Visibility},
+    core::Parser,
+    expressions::{Expr, StringFormat},
+    module::ModuleItem,
+    paths::ItemPath,
+    types::{Ident, Type},
+};
+
+#[cfg(test)]
+use super::attributes::Attribute;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Backend {
+    pub name: Ident,
+    pub prologue: Option<String>,
+    pub prologue_format: StringFormat,
+    pub epilogue: Option<String>,
+    pub epilogue_format: StringFormat,
+}
+#[cfg(test)]
+impl StripLocations for Backend {
+    fn strip_locations(&self) -> Self {
+        Backend {
+            name: self.name.strip_locations(),
+            prologue: self.prologue.strip_locations(),
+            prologue_format: self.prologue_format.strip_locations(),
+            epilogue: self.epilogue.strip_locations(),
+            epilogue_format: self.epilogue_format.strip_locations(),
+        }
+    }
+}
+impl Backend {
+    pub fn new(name: &str) -> Self {
+        Self {
+            name: name.into(),
+            prologue: None,
+            prologue_format: StringFormat::Regular,
+            epilogue: None,
+            epilogue_format: StringFormat::Regular,
+        }
+    }
+    pub fn with_prologue(mut self, prologue: impl Into<String>) -> Self {
+        self.prologue = Some(prologue.into());
+        self
+    }
+    pub fn with_prologue_format(
+        mut self,
+        prologue: impl Into<String>,
+        format: StringFormat,
+    ) -> Self {
+        self.prologue = Some(prologue.into());
+        self.prologue_format = format;
+        self
+    }
+    pub fn with_epilogue(mut self, epilogue: impl Into<String>) -> Self {
+        self.epilogue = Some(epilogue.into());
+        self
+    }
+    pub fn with_epilogue_format(
+        mut self,
+        epilogue: impl Into<String>,
+        format: StringFormat,
+    ) -> Self {
+        self.epilogue = Some(epilogue.into());
+        self.epilogue_format = format;
+        self
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExternValue {
+    pub visibility: Visibility,
+    pub name: Ident,
+    pub type_: Located<Type>,
+    pub attributes: Attributes,
+    pub doc_comments: Vec<String>,
+}
+#[cfg(test)]
+impl StripLocations for ExternValue {
+    fn strip_locations(&self) -> Self {
+        ExternValue {
+            visibility: self.visibility.strip_locations(),
+            name: self.name.strip_locations(),
+            type_: self.type_.strip_locations(),
+            attributes: self.attributes.strip_locations(),
+            doc_comments: self.doc_comments.strip_locations(),
+        }
+    }
+}
+#[cfg(test)]
+impl ExternValue {
+    pub fn new(
+        visibility: Visibility,
+        name: &str,
+        type_: Type,
+        attributes: impl IntoIterator<Item = Attribute>,
+    ) -> Self {
+        Self {
+            visibility,
+            name: name.into(),
+            type_: Located::test(type_),
+            attributes: Attributes::from_iter(attributes),
+            doc_comments: vec![],
+        }
+    }
+    pub fn with_doc_comments(mut self, doc_comments: Vec<String>) -> Self {
+        self.doc_comments = doc_comments;
+        self
+    }
+}
 
 impl Parser {
     pub(crate) fn parse_use(&mut self) -> Result<Located<ItemPath>, ParseError> {

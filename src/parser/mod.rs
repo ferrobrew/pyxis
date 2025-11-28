@@ -1,18 +1,19 @@
-mod attributes;
-mod core;
-mod error;
-mod expressions;
-mod external;
-mod functions;
-mod items;
-mod module;
-mod paths;
-mod types;
+pub mod attributes;
+pub mod expressions;
+pub mod external;
+pub mod functions;
+pub mod items;
+pub mod module;
+pub mod paths;
+pub mod types;
 
 pub use core::Parser;
 pub use error::ParseError;
+pub use module::Module;
 
-use crate::grammar::Module;
+mod core;
+mod error;
+
 use std::sync::Arc;
 
 #[cfg(test)]

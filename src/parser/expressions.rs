@@ -1,10 +1,91 @@
-use crate::{
-    grammar::{Expr, IntFormat, StringFormat},
-    span::Located,
-    tokenizer::TokenKind,
-};
+use crate::{span::Located, tokenizer::TokenKind};
 
-use super::{ParseError, core::Parser};
+#[cfg(test)]
+use crate::span::StripLocations;
+
+use super::{ParseError, core::Parser, types::Ident};
+
+/// Format information for integer literals
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum IntFormat {
+    Decimal,
+    Hex,
+    Binary,
+    Octal,
+}
+#[cfg(test)]
+impl StripLocations for IntFormat {
+    fn strip_locations(&self) -> Self {
+        *self
+    }
+}
+
+/// Format information for string literals
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum StringFormat {
+    Regular,
+    Raw,
+}
+#[cfg(test)]
+impl StripLocations for StringFormat {
+    fn strip_locations(&self) -> Self {
+        *self
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum Expr {
+    IntLiteral { value: isize, format: IntFormat },
+    StringLiteral { value: String, format: StringFormat },
+    Ident(Ident),
+}
+#[cfg(test)]
+impl StripLocations for Expr {
+    fn strip_locations(&self) -> Self {
+        match self {
+            Expr::IntLiteral { value, format } => Expr::IntLiteral {
+                value: value.strip_locations(),
+                format: format.strip_locations(),
+            },
+            Expr::StringLiteral { value, format } => Expr::StringLiteral {
+                value: value.strip_locations(),
+                format: format.strip_locations(),
+            },
+            Expr::Ident(ident) => Expr::Ident(ident.strip_locations()),
+        }
+    }
+}
+impl Expr {
+    pub fn int_literal(&self) -> Option<isize> {
+        match self {
+            Expr::IntLiteral { value, .. } => Some(*value),
+            _ => None,
+        }
+    }
+    pub fn string_literal(&self) -> Option<&str> {
+        match self {
+            Expr::StringLiteral { value, .. } => Some(value.as_str()),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExprField(pub Ident, pub Expr);
+impl ExprField {
+    pub fn ident(&self) -> &Ident {
+        &self.0
+    }
+
+    pub fn ident_as_str(&self) -> &str {
+        self.0.as_str()
+    }
+}
+impl From<(Ident, Expr)> for ExprField {
+    fn from(item: (Ident, Expr)) -> Self {
+        ExprField(item.0, item.1)
+    }
+}
 
 impl Parser {
     pub(crate) fn parse_expr(&mut self) -> Result<Located<Expr>, ParseError> {

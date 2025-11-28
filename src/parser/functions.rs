@@ -1,10 +1,178 @@
 use crate::{
-    grammar::{Argument, Attributes, Function, FunctionBlock, ImplItem},
     span::{ItemLocation, Located, Span},
     tokenizer::TokenKind,
 };
 
-use super::{ParseError, core::Parser};
+#[cfg(test)]
+use crate::span::StripLocations;
+
+use super::{
+    ParseError,
+    attributes::{Attributes, Visibility},
+    core::Parser,
+    items::Comment,
+    types::{Ident, Type},
+};
+
+#[cfg(test)]
+use super::attributes::Attribute;
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum Argument {
+    ConstSelf,
+    MutSelf,
+    Named(Ident, Located<Type>),
+}
+#[cfg(test)]
+impl StripLocations for Argument {
+    fn strip_locations(&self) -> Self {
+        match self {
+            Argument::ConstSelf => Argument::ConstSelf,
+            Argument::MutSelf => Argument::MutSelf,
+            Argument::Named(ident, ty) => {
+                Argument::Named(ident.strip_locations(), ty.strip_locations())
+            }
+        }
+    }
+}
+#[cfg(test)]
+impl Argument {
+    pub fn const_self() -> Argument {
+        Argument::ConstSelf
+    }
+    pub fn mut_self() -> Argument {
+        Argument::MutSelf
+    }
+    pub fn named(ident: impl Into<Ident>, type_: impl Into<Type>) -> Argument {
+        Argument::Named(ident.into(), Located::test(type_.into()))
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Function {
+    pub visibility: Visibility,
+    pub name: Ident,
+    pub attributes: Attributes,
+    pub doc_comments: Vec<String>,
+    pub arguments: Vec<Located<Argument>>,
+    pub return_type: Option<Located<Type>>,
+}
+#[cfg(test)]
+impl StripLocations for Function {
+    fn strip_locations(&self) -> Self {
+        Function {
+            visibility: self.visibility.strip_locations(),
+            name: self.name.strip_locations(),
+            attributes: self.attributes.strip_locations(),
+            doc_comments: self.doc_comments.strip_locations(),
+            arguments: self.arguments.strip_locations(),
+            return_type: self.return_type.strip_locations(),
+        }
+    }
+}
+#[cfg(test)]
+impl Function {
+    pub fn new(
+        (visibility, name): (Visibility, &str),
+        arguments: impl IntoIterator<Item = Argument>,
+    ) -> Self {
+        Self {
+            visibility,
+            name: name.into(),
+            attributes: Default::default(),
+            doc_comments: vec![],
+            arguments: arguments.into_iter().map(Located::test).collect(),
+            return_type: None,
+        }
+    }
+    pub fn with_attributes(mut self, attributes: impl IntoIterator<Item = Attribute>) -> Self {
+        self.attributes = Attributes::from_iter(attributes);
+        self
+    }
+    pub fn with_doc_comments(mut self, doc_comments: Vec<String>) -> Self {
+        self.doc_comments = doc_comments;
+        self
+    }
+    pub fn with_return_type(mut self, return_type: impl Into<Type>) -> Self {
+        self.return_type = Some(Located::test(return_type.into()));
+        self
+    }
+}
+
+/// Items in an impl block (preserves ordering and comments)
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ImplItem {
+    Comment(Comment),
+    Function(Function),
+}
+#[cfg(test)]
+impl StripLocations for ImplItem {
+    fn strip_locations(&self) -> Self {
+        match self {
+            ImplItem::Comment(c) => ImplItem::Comment(c.strip_locations()),
+            ImplItem::Function(f) => ImplItem::Function(f.strip_locations()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FunctionBlock {
+    pub name: Ident,
+    pub items: Vec<Located<ImplItem>>,
+    pub attributes: Attributes,
+}
+#[cfg(test)]
+impl StripLocations for FunctionBlock {
+    fn strip_locations(&self) -> Self {
+        FunctionBlock {
+            name: self.name.strip_locations(),
+            items: self
+                .items
+                .iter()
+                .filter_map(|item| {
+                    item.strip_locations()
+                        .map(|item| match item {
+                            ImplItem::Comment(_) => None, // Filter out comments
+                            ImplItem::Function(f) => Some(ImplItem::Function(f.strip_locations())),
+                        })
+                        .strip_locations()
+                        .transpose()
+                })
+                .collect(),
+            attributes: self.attributes.strip_locations(),
+        }
+    }
+}
+#[cfg(test)]
+impl FunctionBlock {
+    pub fn new(name: impl Into<Ident>, functions: impl IntoIterator<Item = Function>) -> Self {
+        Self {
+            name: name.into(),
+            items: functions
+                .into_iter()
+                .map(ImplItem::Function)
+                .map(Located::test)
+                .collect(),
+            attributes: Default::default(),
+        }
+    }
+    pub fn with_attributes(mut self, attributes: impl Into<Attributes>) -> Self {
+        self.attributes = attributes.into();
+        self
+    }
+}
+impl FunctionBlock {
+    pub fn functions(&self) -> impl Iterator<Item = Located<&Function>> {
+        self.items.iter().filter_map(|item| {
+            item.as_ref()
+                .map(|item| match item {
+                    ImplItem::Function(func) => Some(func),
+                    _ => None,
+                })
+                .transpose()
+        })
+    }
+}
 
 impl Parser {
     pub(crate) fn parse_impl_block(&mut self) -> Result<Located<FunctionBlock>, ParseError> {

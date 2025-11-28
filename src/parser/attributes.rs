@@ -1,10 +1,235 @@
-use crate::{
-    grammar::{Attribute, AttributeItem, AttributeItems, Attributes, Visibility},
-    span::Located,
-    tokenizer::TokenKind,
-};
+use std::ops::{Deref, DerefMut};
 
-use super::{ParseError, core::Parser};
+use crate::{span::Located, tokenizer::TokenKind};
+
+#[cfg(test)]
+use crate::span::StripLocations;
+
+use super::{ParseError, core::Parser, expressions::Expr, types::Ident};
+
+#[cfg(test)]
+use super::expressions::{IntFormat, StringFormat};
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum AttributeItem {
+    Expr(Expr),
+    Comment(String),
+}
+#[cfg(test)]
+impl StripLocations for AttributeItem {
+    fn strip_locations(&self) -> Self {
+        match self {
+            AttributeItem::Expr(expr) => AttributeItem::Expr(expr.strip_locations()),
+            AttributeItem::Comment(comment) => AttributeItem::Comment(comment.strip_locations()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct AttributeItems(pub Vec<Located<AttributeItem>>);
+#[cfg(test)]
+impl StripLocations for AttributeItems {
+    fn strip_locations(&self) -> Self {
+        AttributeItems(self.0.strip_locations())
+    }
+}
+#[cfg(test)]
+impl FromIterator<AttributeItem> for AttributeItems {
+    fn from_iter<I: IntoIterator<Item = AttributeItem>>(iter: I) -> Self {
+        AttributeItems(iter.into_iter().map(Located::test).collect())
+    }
+}
+impl IntoIterator for AttributeItems {
+    type Item = Located<AttributeItem>;
+    type IntoIter = std::vec::IntoIter<Located<AttributeItem>>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+impl<'a> IntoIterator for &'a AttributeItems {
+    type Item = &'a Located<AttributeItem>;
+    type IntoIter = std::slice::Iter<'a, Located<AttributeItem>>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter()
+    }
+}
+impl AttributeItems {
+    pub fn exprs(&self) -> impl Iterator<Item = Located<&Expr>> {
+        self.0.iter().filter_map(|item| {
+            item.as_ref()
+                .map(|item| match item {
+                    AttributeItem::Expr(expr) => Some(expr),
+                    _ => None,
+                })
+                .transpose()
+        })
+    }
+    pub fn exprs_vec(&self) -> Vec<Located<&Expr>> {
+        self.exprs().collect()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum Attribute {
+    Ident(Ident),
+    /// Function attribute with expressions and comments
+    /// Example: size(0x620 /* actually 0x61C */)
+    Function(Ident, AttributeItems),
+    /// Assign attribute with expression and optional comments
+    /// Example: foo = bar /* comment */
+    Assign(Ident, AttributeItems),
+}
+#[cfg(test)]
+impl StripLocations for Attribute {
+    fn strip_locations(&self) -> Self {
+        match self {
+            Attribute::Ident(i) => Attribute::Ident(i.strip_locations()),
+            Attribute::Function(name, items) => {
+                Attribute::Function(name.clone(), items.strip_locations())
+            }
+            Attribute::Assign(name, items) => {
+                Attribute::Assign(name.clone(), items.strip_locations())
+            }
+        }
+    }
+}
+#[cfg(test)]
+impl Attribute {
+    // Ident attributes
+    pub fn copyable() -> Self {
+        Attribute::Ident("copyable".into())
+    }
+    pub fn cloneable() -> Self {
+        Attribute::Ident("cloneable".into())
+    }
+    pub fn defaultable() -> Self {
+        Attribute::Ident("defaultable".into())
+    }
+    #[allow(clippy::should_implement_trait)]
+    pub fn default() -> Self {
+        Attribute::Ident("default".into())
+    }
+    pub fn base() -> Self {
+        Attribute::Ident("base".into())
+    }
+    pub fn packed() -> Self {
+        Attribute::Ident("packed".into())
+    }
+
+    pub fn integer_fn(name: &str, value: isize) -> Self {
+        Attribute::Function(
+            name.into(),
+            AttributeItems(vec![Located::test(AttributeItem::Expr(Expr::IntLiteral {
+                value,
+                format: IntFormat::Decimal,
+            }))]),
+        )
+    }
+    fn integer_fn_hex(name: &str, value: isize) -> Self {
+        Attribute::Function(
+            name.into(),
+            AttributeItems(vec![Located::test(AttributeItem::Expr(Expr::IntLiteral {
+                value,
+                format: IntFormat::Hex,
+            }))]),
+        )
+    }
+    pub fn address(address: usize) -> Self {
+        Self::integer_fn_hex("address", address as isize)
+    }
+    pub fn size(size: usize) -> Self {
+        Self::integer_fn("size", size as isize)
+    }
+    pub fn min_size(min_size: usize) -> Self {
+        Self::integer_fn("min_size", min_size as isize)
+    }
+    pub fn align(align: usize) -> Self {
+        Self::integer_fn("align", align as isize)
+    }
+    pub fn singleton(address: usize) -> Self {
+        Self::integer_fn_hex("singleton", address as isize)
+    }
+    pub fn index(index: usize) -> Self {
+        Self::integer_fn_hex("index", index as isize)
+    }
+    pub fn calling_convention(name: &str) -> Self {
+        Attribute::Function(
+            "calling_convention".into(),
+            AttributeItems(vec![Located::test(AttributeItem::Expr(
+                Expr::StringLiteral {
+                    value: name.into(),
+                    format: StringFormat::Regular,
+                },
+            ))]),
+        )
+    }
+}
+impl Attribute {
+    pub fn function(&self) -> Option<(&Ident, &AttributeItems)> {
+        match self {
+            Attribute::Function(ident, items) => Some((ident, items)),
+            _ => None,
+        }
+    }
+    pub fn assign(&self) -> Option<(&Ident, &AttributeItems)> {
+        match self {
+            Attribute::Assign(ident, items) => Some((ident, items)),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+pub struct Attributes(pub Vec<Located<Attribute>>);
+#[cfg(test)]
+impl StripLocations for Attributes {
+    fn strip_locations(&self) -> Self {
+        Attributes(self.0.strip_locations())
+    }
+}
+#[cfg(test)]
+impl FromIterator<Attribute> for Attributes {
+    fn from_iter<I: IntoIterator<Item = Attribute>>(iter: I) -> Self {
+        Attributes(iter.into_iter().map(Located::test).collect())
+    }
+}
+impl IntoIterator for Attributes {
+    type Item = Located<Attribute>;
+    type IntoIter = std::vec::IntoIter<Located<Attribute>>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+impl<'a> IntoIterator for &'a Attributes {
+    type Item = &'a Located<Attribute>;
+    type IntoIter = std::slice::Iter<'a, Located<Attribute>>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter()
+    }
+}
+impl Deref for Attributes {
+    type Target = Vec<Located<Attribute>>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+impl DerefMut for Attributes {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum Visibility {
+    Public,
+    Private,
+}
+#[cfg(test)]
+impl StripLocations for Visibility {
+    fn strip_locations(&self) -> Self {
+        *self
+    }
+}
 
 impl Parser {
     pub(crate) fn parse_visibility(&mut self) -> Result<Visibility, ParseError> {
