@@ -3,8 +3,8 @@ use std::collections::HashSet;
 use crate::{
     grammar::{self, ItemPath},
     semantic::{
-        SemanticState,
-        error::{IntegerConversionContext, Result, SemanticError},
+        SemanticState, attribute,
+        error::{Result, SemanticError},
         function,
         type_registry::TypeRegistry,
         types::{Function, FunctionBody, ItemState, ItemStateResolved, Type, Visibility},
@@ -210,59 +210,18 @@ pub fn build(
     let mut align = None;
     let doc = doc_comments.to_vec();
     for attribute in &definition.attributes {
-        match attribute {
+        match &attribute.value {
             grammar::Attribute::Function(ident, items) => {
-                let exprs = grammar::AttributeItem::extract_exprs(items);
-                match (ident.as_str(), exprs.as_slice()) {
-                    ("size", [grammar::Expr::IntLiteral { value, .. }]) => {
-                        target_size = Some((*value).try_into().map_err(|_| {
-                            SemanticError::IntegerConversion {
-                                value: value.to_string(),
-                                target_type: "usize".into(),
-                                conversion_context: IntegerConversionContext::SizeAttribute {
-                                    type_path: resolvee_path.clone(),
-                                },
-                                location: definition.location.clone(),
-                            }
-                        })?);
-                    }
-                    ("min_size", [grammar::Expr::IntLiteral { value, .. }]) => {
-                        min_size = Some((*value).try_into().map_err(|_| {
-                            SemanticError::IntegerConversion {
-                                value: value.to_string(),
-                                target_type: "usize".into(),
-                                conversion_context: IntegerConversionContext::MinSizeAttribute {
-                                    type_path: resolvee_path.clone(),
-                                },
-                                location: definition.location.clone(),
-                            }
-                        })?);
-                    }
-                    ("singleton", [grammar::Expr::IntLiteral { value, .. }]) => {
-                        singleton = Some((*value).try_into().map_err(|_| {
-                            SemanticError::IntegerConversion {
-                                value: value.to_string(),
-                                target_type: "usize".into(),
-                                conversion_context: IntegerConversionContext::SingletonAttribute {
-                                    type_path: resolvee_path.clone(),
-                                },
-                                location: definition.location.clone(),
-                            }
-                        })?);
-                    }
-                    ("align", [grammar::Expr::IntLiteral { value, .. }]) => {
-                        align = Some((*value).try_into().map_err(|_| {
-                            SemanticError::IntegerConversion {
-                                value: value.to_string(),
-                                target_type: "usize".into(),
-                                conversion_context: IntegerConversionContext::AlignAttribute {
-                                    type_path: resolvee_path.clone(),
-                                },
-                                location: definition.location.clone(),
-                            }
-                        })?);
-                    }
-                    _ => {}
+                let loc = &attribute.location;
+                if let Some(attr_size) = attribute::parse_size(ident, items, loc)? {
+                    target_size = Some(attr_size);
+                } else if let Some(attr_min_size) = attribute::parse_min_size(ident, items, loc)? {
+                    min_size = Some(attr_min_size);
+                } else if let Some(attr_singleton) = attribute::parse_singleton(ident, items, loc)?
+                {
+                    singleton = Some(attr_singleton);
+                } else if let Some(attr_align) = attribute::parse_align(ident, items, loc)? {
+                    align = Some(attr_align);
                 }
             }
             grammar::Attribute::Ident(ident) => match ident.as_str() {
@@ -309,27 +268,15 @@ pub fn build(
                 let mut is_base = false;
                 let doc = doc_comments.to_vec();
                 for attribute in attributes {
-                    match attribute {
+                    match &attribute.value {
                         grammar::Attribute::Ident(attr_ident) if attr_ident.as_str() == "base" => {
-                            is_base = true
+                            is_base = true;
                         }
                         grammar::Attribute::Function(attr_ident, items) => {
-                            let exprs = grammar::AttributeItem::extract_exprs(items);
-                            if let ("address", [grammar::Expr::IntLiteral { value, .. }]) =
-                                (attr_ident.as_str(), &exprs[..])
+                            if let Some(attr_address) =
+                                attribute::parse_address(attr_ident, items, &attribute.location)?
                             {
-                                address = Some((*value).try_into().map_err(|_| {
-                                    SemanticError::IntegerConversion {
-                                        value: value.to_string(),
-                                        target_type: "usize".into(),
-                                        conversion_context:
-                                            IntegerConversionContext::FieldAddressAttribute {
-                                                field_name: field_ident.0.clone(),
-                                                type_path: resolvee_path.clone(),
-                                            },
-                                        location: statement.location.clone(),
-                                    }
-                                })?);
+                                address = Some(attr_address);
                             }
                         }
                         _ => {}
@@ -373,14 +320,12 @@ pub fn build(
                 // Extract size attribute
                 let mut size = None;
                 for attribute in attributes {
-                    let grammar::Attribute::Function(ident, items) = attribute else {
-                        continue;
-                    };
-                    let exprs = grammar::AttributeItem::extract_exprs(items);
-                    if let ("size", [grammar::Expr::IntLiteral { value, .. }]) =
-                        (ident.as_str(), exprs.as_slice())
-                    {
-                        size = Some(*value as usize);
+                    if let grammar::Attribute::Function(ident, items) = &attribute.value {
+                        if let Some(attr_size) =
+                            attribute::parse_size(ident, items, &attribute.location)?
+                        {
+                            size = Some(attr_size);
+                        }
                     }
                 }
 

@@ -215,7 +215,7 @@ impl Parser {
 mod tests {
     use crate::{
         grammar::{
-            AttributeItem, IntFormat, ModuleItem,
+            IntFormat, ModuleItem,
             test_aliases::{int_literal_with_format, *},
         },
         parser::parse_str_for_tests,
@@ -364,10 +364,7 @@ mod tests {
                 .with_attributes([
                     A::Function(
                         "size".into(),
-                        vec![AttributeItem::Expr(int_literal_with_format(
-                            0x1754,
-                            IntFormat::Hex,
-                        ))],
+                        AIs::from_iter([AI::Expr(int_literal_with_format(0x1754, IntFormat::Hex))]),
                     ),
                     A::singleton(0x1_191_918),
                 ]),
@@ -476,10 +473,7 @@ mod tests {
             ])
             .with_attributes([A::Function(
                 "size".into(),
-                vec![AttributeItem::Expr(int_literal_with_format(
-                    0x2C,
-                    IntFormat::Hex,
-                ))],
+                AIs::from_iter([AI::Expr(int_literal_with_format(0x2C, IntFormat::Hex))]),
             )]),
         )]);
 

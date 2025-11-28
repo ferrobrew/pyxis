@@ -166,7 +166,7 @@ impl Parser {
 mod tests {
     use crate::{
         grammar::{
-            AttributeItem, IntFormat,
+            IntFormat,
             test_aliases::{int_literal_with_format, *},
         },
         parser::parse_str_for_tests,
@@ -236,10 +236,7 @@ mod tests {
                 ])
                 .with_attributes([A::Function(
                     "size".into(),
-                    vec![AttributeItem::Expr(int_literal_with_format(
-                        0x10,
-                        IntFormat::Hex,
-                    ))],
+                    AIs::from_iter([AI::Expr(int_literal_with_format(0x10, IntFormat::Hex))]),
                 )]),
             )
             .with_doc_comments(vec![" `CPfxInstance` in original game".to_string()])])

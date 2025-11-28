@@ -308,7 +308,7 @@ impl PrettyPrinter {
                 write!(&mut self.output, "{name}(").unwrap();
                 let mut first_expr = true;
                 for item in items {
-                    match item {
+                    match &item.value {
                         AttributeItem::Expr(expr) => {
                             if !first_expr {
                                 write!(&mut self.output, ", ").unwrap();
@@ -341,7 +341,7 @@ impl PrettyPrinter {
             Attribute::Assign(name, items) => {
                 write!(&mut self.output, "{name} = ").unwrap();
                 for item in items {
-                    match item {
+                    match &item.value {
                         AttributeItem::Expr(expr) => {
                             self.print_expr(expr);
                         }
@@ -637,7 +637,7 @@ impl PrettyPrinter {
         // Add blank line before this statement if it has index/address attribute and it's not the first item
         // But don't add if we already have a blank line (e.g., from vftable)
         let has_index_or_address = stmt.attributes.0.iter().any(|attr| {
-            matches!(attr, Attribute::Function(name, _) if name.as_str() == "index" || name.as_str() == "address")
+            matches!(&attr.value, Attribute::Function(name, _) if name.as_str() == "index" || name.as_str() == "address")
         });
 
         if has_index_or_address && !self.output.ends_with("{\n") && !self.output.ends_with("\n\n") {
@@ -684,7 +684,7 @@ impl PrettyPrinter {
                     for (i, func) in funcs.iter().enumerate() {
                         // Add blank line before function if it has index attribute and it's not the first
                         let has_index = func.attributes.0.iter().any(|attr| {
-                            matches!(attr, Attribute::Function(name, _) if name.as_str() == "index")
+                            matches!(&attr.value, Attribute::Function(name, _) if name.as_str() == "index")
                         });
                         if has_index && i > 0 {
                             self.writeln("");
@@ -815,7 +815,7 @@ impl PrettyPrinter {
                 ImplItem::Function(func) => {
                     // Add blank line before function if it has address attribute and it's not the first
                     let has_address = func.attributes.0.iter().any(|attr| {
-                        matches!(attr, Attribute::Function(name, _) if name.as_str() == "address")
+                        matches!(&attr.value, Attribute::Function(name, _) if name.as_str() == "address")
                     });
                     if has_address && i > 0 {
                         self.writeln("");

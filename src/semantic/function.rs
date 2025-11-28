@@ -1,12 +1,10 @@
 use std::{fmt, str::FromStr};
 
 use crate::{
-    grammar::{self, ItemPath},
+    grammar::{self, Expr, ItemPath},
     semantic::{
-        error::{
-            AttributeNotSupportedContext, IntegerConversionContext, Result, SemanticError,
-            TypeResolutionContext,
-        },
+        attribute,
+        error::{AttributeNotSupportedContext, Result, SemanticError, TypeResolutionContext},
         type_registry::TypeRegistry,
         types::{Type, Visibility},
     },
@@ -373,57 +371,57 @@ pub fn build(
         let Some((ident, items)) = attribute.function() else {
             continue;
         };
-        let exprs = grammar::AttributeItem::extract_exprs(items);
-        match (ident.as_str(), &exprs[..]) {
-            ("address", [grammar::Expr::IntLiteral { value, .. }]) => {
-                if is_vfunc {
-                    return Err(SemanticError::AttributeNotSupported {
-                        attribute_name: "address".into(),
-                        attribute_context: AttributeNotSupportedContext::VirtualFunction {
-                            function_name: function.name.0.clone(),
-                        },
-                        location: function.location.clone(),
-                    });
-                }
-
-                body = Some(FunctionBody::Address {
-                    address: (*value)
-                        .try_into()
-                        .map_err(|_| SemanticError::IntegerConversion {
-                            value: value.to_string(),
-                            target_type: "usize".into(),
-                            conversion_context: IntegerConversionContext::AddressAttribute {
-                                function_name: function.name.0.clone(),
-                            },
-                            location: function.location.clone(),
-                        })?,
+        if let Some(attr_address) = attribute::parse_address(ident, items, &attribute.location)? {
+            if is_vfunc {
+                return Err(SemanticError::AttributeNotSupported {
+                    attribute_name: "address".into(),
+                    attribute_context: AttributeNotSupportedContext::VirtualFunction {
+                        function_name: function.name.0.clone(),
+                    },
+                    location: function.location.clone(),
                 });
             }
-            ("index", _) => {
-                // ignore index attribute, this is handled by vftable construction
-                if !is_vfunc {
-                    return Err(SemanticError::AttributeNotSupported {
-                        attribute_name: "index".into(),
-                        attribute_context: AttributeNotSupportedContext::NonVirtualFunction {
+            body = Some(FunctionBody::Address {
+                address: attr_address,
+            });
+        } else if let Some(_attr_index) = attribute::parse_index(ident, items, &attribute.location)?
+        {
+            if !is_vfunc {
+                return Err(SemanticError::AttributeNotSupported {
+                    attribute_name: "index".into(),
+                    attribute_context: AttributeNotSupportedContext::NonVirtualFunction {
+                        function_name: function.name.0.clone(),
+                    },
+                    location: function.location.clone(),
+                });
+            }
+            // ignore index attribute, this is handled by vftable construction
+        } else if ident.as_str() == "calling_convention" {
+            let exprs = attribute::assert_function_argument_count(
+                items,
+                "calling_convention",
+                1,
+                &attribute.location,
+            )?;
+            let Located { value, location } = &exprs[0];
+            let Expr::StringLiteral { value, .. } = value else {
+                return Err(SemanticError::InvalidAttributeValue {
+                    attribute_name: "calling_convention".into(),
+                    expected_type: std::any::type_name::<CallingConvention>().into(),
+                    location: location.clone(),
+                });
+            };
+
+            calling_convention =
+                Some(
+                    value
+                        .parse()
+                        .map_err(|_| SemanticError::InvalidCallingConvention {
+                            convention: value.clone(),
                             function_name: function.name.0.clone(),
-                        },
-                        location: function.location.clone(),
-                    });
-                }
-            }
-            ("calling_convention", [grammar::Expr::StringLiteral { value, .. }]) => {
-                calling_convention =
-                    Some(
-                        value
-                            .parse()
-                            .map_err(|_| SemanticError::InvalidCallingConvention {
-                                convention: value.clone(),
-                                function_name: function.name.0.clone(),
-                                location: function.location.clone(),
-                            })?,
-                    );
-            }
-            _ => {}
+                            location: location.clone(),
+                        })?,
+                );
         }
     }
 

@@ -3,7 +3,7 @@ use crate::span::StripLocations;
 use crate::{
     grammar::{self, ItemPath},
     semantic::{
-        SemanticState,
+        SemanticState, attribute,
         error::{Result, SemanticError, TypeResolutionContext},
         types::{Function, ItemStateResolved, Type},
     },
@@ -123,12 +123,15 @@ pub fn build(
             ..
         } = &statement.value;
         let value = match expr {
-            Some(grammar::Expr::IntLiteral { value, .. }) => *value,
-            Some(_) => {
+            Some(Located {
+                value: grammar::Expr::IntLiteral { value, .. },
+                ..
+            }) => *value,
+            Some(Located { location, .. }) => {
                 return Err(SemanticError::EnumUnsupportedValue {
                     item_path: resolvee_path.clone(),
                     case_name: name.0.clone(),
-                    location: definition.location.clone(),
+                    location: location.clone(),
                 });
             }
             None => last_field,
@@ -136,7 +139,7 @@ pub fn build(
         fields.push((name.0.clone(), value));
 
         for attribute in attributes {
-            match attribute {
+            match &attribute.value {
                 grammar::Attribute::Ident(ident) if ident.as_str() == "default" => {
                     if default.is_some() {
                         return Err(SemanticError::EnumMultipleDefaults {
@@ -159,7 +162,7 @@ pub fn build(
     let mut defaultable = false;
     let doc = doc_comments.to_vec();
     for attribute in &definition.attributes {
-        match attribute {
+        match &attribute.value {
             grammar::Attribute::Ident(ident) => match ident.as_str() {
                 "copyable" => {
                     copyable = true;
@@ -170,11 +173,10 @@ pub fn build(
                 _ => {}
             },
             grammar::Attribute::Function(ident, items) => {
-                let exprs = grammar::AttributeItem::extract_exprs(items);
-                if let ("singleton", [grammar::Expr::IntLiteral { value, .. }]) =
-                    (ident.as_str(), exprs.as_slice())
+                if let Some(attr_singleton) =
+                    attribute::parse_singleton(ident, items, &attribute.location)?
                 {
-                    singleton = Some(*value as usize);
+                    singleton = Some(attr_singleton);
                 }
             }
             grammar::Attribute::Assign(_ident, _expr) => {}

@@ -170,12 +170,16 @@ impl Parser {
         }
     }
 
+    pub(crate) fn item_location_from_span(&self, span: Span) -> ItemLocation {
+        ItemLocation::new(self.filename.clone(), span)
+    }
+
     pub(crate) fn item_location_from_locations(
         &self,
         start: Location,
         end: Location,
     ) -> ItemLocation {
-        ItemLocation::new(self.filename.clone(), Span::new(start, end))
+        self.item_location_from_span(Span::new(start, end))
     }
 
     pub(crate) fn item_location_from_token_range(
@@ -183,9 +187,6 @@ impl Parser {
         start: &Token,
         end: &Token,
     ) -> ItemLocation {
-        ItemLocation::new(
-            self.filename.clone(),
-            Span::new(start.location.span.start, end.location.span.end),
-        )
+        self.item_location_from_span(Span::new(start.location.span.start, end.location.span.end))
     }
 }

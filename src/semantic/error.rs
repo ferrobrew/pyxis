@@ -93,96 +93,6 @@ impl fmt::Display for TypeResolutionContext {
     }
 }
 
-/// Context for integer conversion errors
-#[derive(Debug, Clone)]
-pub enum IntegerConversionContext {
-    /// Converting address attribute for a function
-    AddressAttribute { function_name: String },
-    /// Converting size attribute for an extern type
-    ExternSizeAttribute {
-        type_name: String,
-        module_name: String,
-    },
-    /// Converting align attribute for an extern type
-    ExternAlignAttribute {
-        type_name: String,
-        module_name: String,
-    },
-    /// Converting size attribute for a type
-    SizeAttribute { type_path: ItemPath },
-    /// Converting min_size attribute for a type
-    MinSizeAttribute { type_path: ItemPath },
-    /// Converting singleton attribute for a type
-    SingletonAttribute { type_path: ItemPath },
-    /// Converting align attribute for a type
-    AlignAttribute { type_path: ItemPath },
-    /// Converting address attribute for a field
-    FieldAddressAttribute {
-        field_name: String,
-        type_path: ItemPath,
-    },
-    /// Converting bitflags value
-    BitflagsValue {
-        field_name: String,
-        type_path: ItemPath,
-    },
-}
-
-impl fmt::Display for IntegerConversionContext {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            IntegerConversionContext::AddressAttribute { function_name } => {
-                write!(f, "address attribute for function `{function_name}`")
-            }
-            IntegerConversionContext::ExternSizeAttribute {
-                type_name,
-                module_name,
-            } => {
-                write!(
-                    f,
-                    "size attribute for extern type `{type_name}` in module `{module_name}`"
-                )
-            }
-            IntegerConversionContext::ExternAlignAttribute {
-                type_name,
-                module_name,
-            } => {
-                write!(
-                    f,
-                    "align attribute for extern type `{type_name}` in module `{module_name}`"
-                )
-            }
-            IntegerConversionContext::SizeAttribute { type_path } => {
-                write!(f, "size attribute for type `{type_path}`")
-            }
-            IntegerConversionContext::MinSizeAttribute { type_path } => {
-                write!(f, "min_size attribute for type `{type_path}`")
-            }
-            IntegerConversionContext::SingletonAttribute { type_path } => {
-                write!(f, "singleton attribute for type `{type_path}`")
-            }
-            IntegerConversionContext::AlignAttribute { type_path } => {
-                write!(f, "align attribute for type `{type_path}`")
-            }
-            IntegerConversionContext::FieldAddressAttribute {
-                field_name,
-                type_path,
-            } => {
-                write!(
-                    f,
-                    "address attribute for field `{field_name}` of type `{type_path}`"
-                )
-            }
-            IntegerConversionContext::BitflagsValue {
-                field_name,
-                type_path,
-            } => {
-                write!(f, "bitflags value for `{field_name}` of `{type_path}`")
-            }
-        }
-    }
-}
-
 /// Semantic analysis errors
 #[derive(Debug, Clone)]
 pub enum SemanticError {
@@ -211,11 +121,17 @@ pub enum SemanticError {
         item_path: ItemPath,
         location: ItemLocation,
     },
+    /// This function-attribute has the wrong number of arguments
+    InvalidAttributeFunctionArgumentCount {
+        attribute_name: String,
+        expected_count: usize,
+        actual_count: usize,
+        location: ItemLocation,
+    },
     /// Invalid attribute value
     InvalidAttributeValue {
         attribute_name: String,
         expected_type: String,
-        item_path: ItemPath,
         location: ItemLocation,
     },
     /// Conflicting attributes
@@ -393,7 +309,6 @@ pub enum SemanticError {
     IntegerConversion {
         value: String,
         target_type: String,
-        conversion_context: IntegerConversionContext,
         location: ItemLocation,
     },
     /// Overlapping regions
@@ -437,15 +352,22 @@ impl SemanticError {
                     "Missing required attribute `{attribute_name}` for {item_kind} `{item_path}`"
                 )
             }
-            SemanticError::InvalidAttributeValue {
+            SemanticError::InvalidAttributeFunctionArgumentCount {
                 attribute_name,
-                expected_type,
-                item_path,
+                expected_count,
+                actual_count,
                 ..
             } => {
                 format!(
-                    "Invalid value for attribute `{attribute_name}` (expected {expected_type}) in `{item_path}`"
+                    "Invalid number of arguments for attribute `{attribute_name}`: expected {expected_count}, found {actual_count}"
                 )
+            }
+            SemanticError::InvalidAttributeValue {
+                attribute_name,
+                expected_type,
+                ..
+            } => {
+                format!("Invalid value for attribute `{attribute_name}` (expected {expected_type})")
             }
             SemanticError::ConflictingAttributes {
                 attr1,
@@ -662,12 +584,9 @@ impl SemanticError {
                 format!("field `{field_name}` of type `{item_path}` {message}")
             }
             SemanticError::IntegerConversion {
-                value,
-                target_type,
-                conversion_context,
-                ..
+                value, target_type, ..
             } => {
-                format!("Failed to convert `{value}` to {target_type} in {conversion_context}")
+                format!("Failed to convert `{value}` to {target_type}")
             }
             SemanticError::OverlappingRegions {
                 item_path,
@@ -689,6 +608,7 @@ impl SemanticError {
             SemanticError::TypeNotFound { location, .. } => Some(location),
             SemanticError::MissingExternAttribute { location, .. } => Some(location),
             SemanticError::MissingAttribute { location, .. } => Some(location),
+            SemanticError::InvalidAttributeFunctionArgumentCount { location, .. } => Some(location),
             SemanticError::InvalidAttributeValue { location, .. } => Some(location),
             SemanticError::ConflictingAttributes { location, .. } => Some(location),
             SemanticError::TypeResolutionFailed { location, .. } => Some(location),

@@ -1,5 +1,6 @@
 use crate::{
-    grammar::{Attribute, AttributeItem, Attributes, Visibility},
+    grammar::{Attribute, AttributeItem, AttributeItems, Attributes, Visibility},
+    span::Located,
     tokenizer::TokenKind,
 };
 
@@ -37,8 +38,9 @@ impl Parser {
         Ok(Attributes(attrs))
     }
 
-    pub(crate) fn parse_attribute(&mut self) -> Result<Attribute, ParseError> {
-        let (name, _) = self.expect_ident()?;
+    pub(crate) fn parse_attribute(&mut self) -> Result<Located<Attribute>, ParseError> {
+        let (name, name_span) = self.expect_ident()?;
+        let start_pos = name_span.start;
 
         if matches!(self.peek(), TokenKind::LParen) {
             // Function attribute
@@ -56,7 +58,10 @@ impl Parser {
                         TokenKind::MultiLineComment(text) => text.clone(),
                         _ => unreachable!(),
                     };
-                    items.push(AttributeItem::Comment(comment_text));
+                    items.push(Located::new(
+                        AttributeItem::Comment(comment_text),
+                        token.location,
+                    ));
                 }
 
                 // Skip doc comments (they don't belong in attribute expressions)
@@ -68,7 +73,7 @@ impl Parser {
                     break;
                 }
 
-                items.push(AttributeItem::Expr(self.parse_expr()?));
+                items.push(self.parse_expr()?.map(AttributeItem::Expr));
 
                 // Collect trailing comments after the expression
                 while matches!(
@@ -81,7 +86,10 @@ impl Parser {
                         TokenKind::MultiLineComment(text) => text.clone(),
                         _ => unreachable!(),
                     };
-                    items.push(AttributeItem::Comment(comment_text));
+                    items.push(Located::new(
+                        AttributeItem::Comment(comment_text),
+                        token.location.clone(),
+                    ));
                 }
 
                 if matches!(self.peek(), TokenKind::Comma) {
@@ -90,8 +98,12 @@ impl Parser {
                     break;
                 }
             }
-            self.expect(TokenKind::RParen)?;
-            Ok(Attribute::Function(name, items))
+            let end_pos = self.expect(TokenKind::RParen)?.end_location();
+            let location = self.item_location_from_locations(start_pos, end_pos);
+            Ok(Located::new(
+                Attribute::Function(name, AttributeItems(items)),
+                location,
+            ))
         } else if matches!(self.peek(), TokenKind::Eq) {
             // Assign attribute
             self.advance();
@@ -108,10 +120,15 @@ impl Parser {
                     TokenKind::MultiLineComment(text) => text.clone(),
                     _ => unreachable!(),
                 };
-                items.push(AttributeItem::Comment(comment_text));
+                items.push(Located::new(
+                    AttributeItem::Comment(comment_text),
+                    token.location,
+                ));
             }
 
-            items.push(AttributeItem::Expr(self.parse_expr()?));
+            let expr = self.parse_expr()?;
+            let mut end_pos = expr.location.span.end;
+            items.push(expr.map(AttributeItem::Expr));
 
             // Collect comments after the expression
             while matches!(
@@ -124,13 +141,23 @@ impl Parser {
                     TokenKind::MultiLineComment(text) => text.clone(),
                     _ => unreachable!(),
                 };
-                items.push(AttributeItem::Comment(comment_text));
+                items.push(Located::new(
+                    AttributeItem::Comment(comment_text),
+                    token.location.clone(),
+                ));
+                end_pos = token.location.span.end;
             }
 
-            Ok(Attribute::Assign(name, items))
+            let location = self.item_location_from_locations(start_pos, end_pos);
+            Ok(Located::new(
+                Attribute::Assign(name, AttributeItems(items)),
+                location,
+            ))
         } else {
             // Ident attribute
-            Ok(Attribute::Ident(name))
+            let end_pos = name_span.end;
+            let location = self.item_location_from_locations(start_pos, end_pos);
+            Ok(Located::new(Attribute::Ident(name), location))
         }
     }
 }
@@ -139,7 +166,7 @@ impl Parser {
 mod tests {
     use crate::{
         grammar::{
-            AttributeItem, IntFormat, ItemDefinitionInner, ModuleItem, TypeDefItem, Visibility,
+            IntFormat, ItemDefinitionInner, ModuleItem, TypeDefItem, Visibility,
             test_aliases::{int_literal_with_format, *},
         },
         parser::parse_str_for_tests,
@@ -190,10 +217,7 @@ mod tests {
                 A::singleton(0x118FB64),
                 A::Function(
                     "size".into(),
-                    vec![AttributeItem::Expr(int_literal_with_format(
-                        0x40,
-                        IntFormat::Hex,
-                    ))],
+                    AIs::from_iter([AI::Expr(int_literal_with_format(0x40, IntFormat::Hex))]),
                 ),
                 A::align(16),
             ]),

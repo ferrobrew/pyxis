@@ -1,6 +1,7 @@
 pub mod error;
 pub mod types;
 
+mod attribute;
 mod bitflags_definition;
 mod enum_definition;
 mod function;

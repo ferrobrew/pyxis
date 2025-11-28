@@ -1,11 +1,8 @@
 use crate::{
     grammar::{self, ItemPath},
     semantic::{
-        SemanticState,
-        error::{
-            BitflagsExpectedType, IntegerConversionContext, Result, SemanticError,
-            TypeResolutionContext,
-        },
+        SemanticState, attribute,
+        error::{BitflagsExpectedType, Result, SemanticError, TypeResolutionContext},
         types::{ItemStateResolved, Type},
     },
     span::Located,
@@ -150,13 +147,13 @@ pub fn build(
             attributes,
             ..
         } = &statement.value;
-        let value = match expr {
+        let value = match &expr.value {
             grammar::Expr::IntLiteral { value, .. } => *value,
             _ => {
                 return Err(SemanticError::BitflagsUnsupportedValue {
                     item_path: resolvee_path.clone(),
                     case_name: name.0.clone(),
-                    location: definition.location.clone(),
+                    location: expr.location.clone(),
                 });
             }
         };
@@ -167,16 +164,12 @@ pub fn build(
                 .map_err(|_| SemanticError::IntegerConversion {
                     value: value.to_string(),
                     target_type: "usize".into(),
-                    conversion_context: IntegerConversionContext::BitflagsValue {
-                        field_name: name.0.clone(),
-                        type_path: resolvee_path.clone(),
-                    },
-                    location: definition.location.clone(),
+                    location: expr.location.clone(),
                 })?,
         ));
 
         for attribute in attributes {
-            match attribute {
+            match &attribute.value {
                 grammar::Attribute::Ident(ident) if ident.as_str() == "default" => {
                     if default.is_some() {
                         return Err(SemanticError::BitflagsMultipleDefaults {
@@ -197,7 +190,7 @@ pub fn build(
     let mut defaultable = false;
     let doc = doc_comments.to_vec();
     for attribute in &definition.attributes {
-        match attribute {
+        match &attribute.value {
             grammar::Attribute::Ident(ident) => match ident.as_str() {
                 "copyable" => {
                     copyable = true;
@@ -208,11 +201,10 @@ pub fn build(
                 _ => {}
             },
             grammar::Attribute::Function(ident, items) => {
-                let exprs = grammar::AttributeItem::extract_exprs(items);
-                if let ("singleton", [grammar::Expr::IntLiteral { value, .. }]) =
-                    (ident.as_str(), exprs.as_slice())
+                if let Some(attr_singleton) =
+                    attribute::parse_singleton(ident, items, &attribute.location)?
                 {
-                    singleton = Some(*value as usize);
+                    singleton = Some(attr_singleton);
                 }
             }
             grammar::Attribute::Assign(_ident, _expr) => {}

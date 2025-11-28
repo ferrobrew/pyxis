@@ -5,8 +5,8 @@ use crate::{
     grammar::{self, ItemPath},
     parser,
     semantic::{
-        bitflags_definition, enum_definition,
-        error::{IntegerConversionContext, Result, SemanticError},
+        attribute, bitflags_definition, enum_definition,
+        error::{Result, SemanticError},
         module::Module,
         type_definition,
         type_registry::TypeRegistry,
@@ -100,11 +100,10 @@ impl SemanticState {
                     let Some((ident, items)) = attribute.function() else {
                         continue;
                     };
-                    let exprs = grammar::AttributeItem::extract_exprs(items);
-                    if let ("address", [grammar::Expr::IntLiteral { value, .. }]) =
-                        (ident.as_str(), &exprs[..])
+                    if let Some(attr_address) =
+                        attribute::parse_address(ident, items, &attribute.location)?
                     {
-                        address = Some(*value as usize);
+                        address = Some(attr_address);
                     }
                 }
 
@@ -167,36 +166,11 @@ impl SemanticState {
                 let Some((ident, items)) = attribute.function() else {
                     continue;
                 };
-                let exprs = grammar::AttributeItem::extract_exprs(items);
-                match (ident.as_str(), &exprs[..]) {
-                    ("size", [grammar::Expr::IntLiteral { value, .. }]) => {
-                        size = Some((*value).try_into().map_err(|_| {
-                            SemanticError::IntegerConversion {
-                                value: value.to_string(),
-                                target_type: "usize".into(),
-                                conversion_context: IntegerConversionContext::ExternSizeAttribute {
-                                    type_name: extern_name.to_string(),
-                                    module_name: path.to_string(),
-                                },
-                                location: extern_location.clone(),
-                            }
-                        })?);
-                    }
-                    ("align", [grammar::Expr::IntLiteral { value, .. }]) => {
-                        alignment = Some((*value).try_into().map_err(|_| {
-                            SemanticError::IntegerConversion {
-                                value: value.to_string(),
-                                target_type: "usize".into(),
-                                conversion_context:
-                                    IntegerConversionContext::ExternAlignAttribute {
-                                        type_name: extern_name.to_string(),
-                                        module_name: path.to_string(),
-                                    },
-                                location: extern_location.clone(),
-                            }
-                        })?);
-                    }
-                    _ => {}
+                let location = &attribute.location;
+                if let Some(attr_size) = attribute::parse_size(ident, items, location)? {
+                    size = Some(attr_size);
+                } else if let Some(attr_align) = attribute::parse_align(ident, items, location)? {
+                    alignment = Some(attr_align);
                 }
             }
             let size = size.ok_or_else(|| SemanticError::MissingExternAttribute {

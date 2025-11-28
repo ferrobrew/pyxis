@@ -1,4 +1,8 @@
-use std::{fmt, path::Path};
+use std::{
+    fmt,
+    ops::{Deref, DerefMut},
+    path::Path,
+};
 
 use crate::span::{EqualsIgnoringLocations, Located};
 
@@ -45,6 +49,8 @@ pub mod test_aliases {
     pub type BFD = super::BitflagsDefinition;
     pub type T = super::Type;
     pub type A = super::Attribute;
+    pub type AI = super::AttributeItem;
+    pub type AIs = super::AttributeItems;
     pub type As = super::Attributes;
     pub type Ar = super::Argument;
     pub type TF = super::TypeField;
@@ -388,15 +394,47 @@ impl StripLocations for AttributeItem {
     }
 }
 
-impl AttributeItem {
-    pub fn extract_exprs(items: &[AttributeItem]) -> Vec<&Expr> {
-        items
-            .iter()
-            .filter_map(|item| match item {
-                AttributeItem::Expr(expr) => Some(expr),
-                AttributeItem::Comment(_) => None,
-            })
-            .collect()
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct AttributeItems(pub Vec<Located<AttributeItem>>);
+#[cfg(test)]
+impl StripLocations for AttributeItems {
+    fn strip_locations(&self) -> Self {
+        AttributeItems(self.0.strip_locations())
+    }
+}
+#[cfg(test)]
+impl FromIterator<AttributeItem> for AttributeItems {
+    fn from_iter<I: IntoIterator<Item = AttributeItem>>(iter: I) -> Self {
+        AttributeItems(iter.into_iter().map(Located::test).collect())
+    }
+}
+impl IntoIterator for AttributeItems {
+    type Item = Located<AttributeItem>;
+    type IntoIter = std::vec::IntoIter<Located<AttributeItem>>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+impl<'a> IntoIterator for &'a AttributeItems {
+    type Item = &'a Located<AttributeItem>;
+    type IntoIter = std::slice::Iter<'a, Located<AttributeItem>>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter()
+    }
+}
+impl AttributeItems {
+    pub fn exprs(&self) -> impl Iterator<Item = Located<&Expr>> {
+        self.0.iter().filter_map(|item| {
+            item.as_ref()
+                .map(|item| match item {
+                    AttributeItem::Expr(expr) => Some(expr),
+                    _ => None,
+                })
+                .transpose()
+        })
+    }
+    pub fn exprs_vec(&self) -> Vec<Located<&Expr>> {
+        self.exprs().collect()
     }
 }
 
@@ -405,10 +443,10 @@ pub enum Attribute {
     Ident(Ident),
     /// Function attribute with expressions and comments
     /// Example: size(0x620 /* actually 0x61C */)
-    Function(Ident, Vec<AttributeItem>),
+    Function(Ident, AttributeItems),
     /// Assign attribute with expression and optional comments
     /// Example: foo = bar /* comment */
-    Assign(Ident, Vec<AttributeItem>),
+    Assign(Ident, AttributeItems),
 }
 #[cfg(test)]
 impl StripLocations for Attribute {
@@ -424,7 +462,7 @@ impl StripLocations for Attribute {
         }
     }
 }
-
+#[cfg(test)]
 impl Attribute {
     // Ident attributes
     pub fn copyable() -> Self {
@@ -447,29 +485,22 @@ impl Attribute {
         Attribute::Ident("packed".into())
     }
 
-    // Function attributes
-    pub fn function(&self) -> Option<(&Ident, &Vec<AttributeItem>)> {
-        match self {
-            Attribute::Function(ident, items) => Some((ident, items)),
-            _ => None,
-        }
-    }
     pub fn integer_fn(name: &str, value: isize) -> Self {
         Attribute::Function(
             name.into(),
-            vec![AttributeItem::Expr(Expr::IntLiteral {
+            AttributeItems(vec![Located::test(AttributeItem::Expr(Expr::IntLiteral {
                 value,
                 format: IntFormat::Decimal,
-            })],
+            }))]),
         )
     }
     fn integer_fn_hex(name: &str, value: isize) -> Self {
         Attribute::Function(
             name.into(),
-            vec![AttributeItem::Expr(Expr::IntLiteral {
+            AttributeItems(vec![Located::test(AttributeItem::Expr(Expr::IntLiteral {
                 value,
                 format: IntFormat::Hex,
-            })],
+            }))]),
         )
     }
     pub fn address(address: usize) -> Self {
@@ -493,58 +524,67 @@ impl Attribute {
     pub fn calling_convention(name: &str) -> Self {
         Attribute::Function(
             "calling_convention".into(),
-            vec![AttributeItem::Expr(Expr::StringLiteral {
-                value: name.into(),
-                format: StringFormat::Regular,
-            })],
+            AttributeItems(vec![Located::test(AttributeItem::Expr(
+                Expr::StringLiteral {
+                    value: name.into(),
+                    format: StringFormat::Regular,
+                },
+            ))]),
         )
     }
-
-    // Assign attributes
-    pub fn assign(&self) -> Option<(&Ident, &Vec<AttributeItem>)> {
+}
+impl Attribute {
+    pub fn function(&self) -> Option<(&Ident, &AttributeItems)> {
+        match self {
+            Attribute::Function(ident, items) => Some((ident, items)),
+            _ => None,
+        }
+    }
+    pub fn assign(&self) -> Option<(&Ident, &AttributeItems)> {
         match self {
             Attribute::Assign(ident, items) => Some((ident, items)),
             _ => None,
         }
     }
 }
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
-pub struct Attributes(pub Vec<Attribute>);
+pub struct Attributes(pub Vec<Located<Attribute>>);
 #[cfg(test)]
 impl StripLocations for Attributes {
     fn strip_locations(&self) -> Self {
         Attributes(self.0.strip_locations())
     }
 }
-impl<const N: usize> From<[Attribute; N]> for Attributes {
-    fn from(s: [Attribute; N]) -> Self {
-        Attributes(s.to_vec())
-    }
-}
-impl From<Vec<Attribute>> for Attributes {
-    fn from(s: Vec<Attribute>) -> Self {
-        Attributes(s)
+#[cfg(test)]
+impl FromIterator<Attribute> for Attributes {
+    fn from_iter<I: IntoIterator<Item = Attribute>>(iter: I) -> Self {
+        Attributes(iter.into_iter().map(Located::test).collect())
     }
 }
 impl IntoIterator for Attributes {
-    type Item = Attribute;
-    type IntoIter = std::vec::IntoIter<Attribute>;
-
+    type Item = Located<Attribute>;
+    type IntoIter = std::vec::IntoIter<Located<Attribute>>;
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
     }
 }
 impl<'a> IntoIterator for &'a Attributes {
-    type Item = &'a Attribute;
-    type IntoIter = std::slice::Iter<'a, Attribute>;
-
+    type Item = &'a Located<Attribute>;
+    type IntoIter = std::slice::Iter<'a, Located<Attribute>>;
     fn into_iter(self) -> Self::IntoIter {
         self.0.iter()
     }
 }
-impl FromIterator<Attribute> for Attributes {
-    fn from_iter<I: IntoIterator<Item = Attribute>>(iter: I) -> Self {
-        Attributes(iter.into_iter().collect())
+impl Deref for Attributes {
+    type Target = Vec<Located<Attribute>>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+impl DerefMut for Attributes {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
     }
 }
 
@@ -628,8 +668,8 @@ impl Function {
             return_type: None,
         }
     }
-    pub fn with_attributes(mut self, attributes: impl Into<Attributes>) -> Self {
-        self.attributes = attributes.into();
+    pub fn with_attributes(mut self, attributes: impl IntoIterator<Item = Attribute>) -> Self {
+        self.attributes = Attributes::from_iter(attributes);
         self
     }
     pub fn with_doc_comments(mut self, doc_comments: Vec<String>) -> Self {
@@ -757,8 +797,8 @@ impl TypeStatement {
             following_comments: Vec::new(),
         }
     }
-    pub fn with_attributes(mut self, attributes: impl Into<Attributes>) -> Self {
-        self.attributes = attributes.into();
+    pub fn with_attributes(mut self, attributes: impl IntoIterator<Item = Attribute>) -> Self {
+        self.attributes = Attributes::from_iter(attributes);
         self
     }
     pub fn with_doc_comments(mut self, doc_comments: Vec<String>) -> Self {
@@ -822,8 +862,8 @@ impl TypeDefinition {
             following_comments: Vec::new(),
         }
     }
-    pub fn with_attributes(mut self, attributes: impl Into<Attributes>) -> Self {
-        self.attributes = attributes.into();
+    pub fn with_attributes(mut self, attributes: impl IntoIterator<Item = Attribute>) -> Self {
+        self.attributes = Attributes::from_iter(attributes);
         self
     }
     pub fn with_inline_trailing_comments(
@@ -873,7 +913,7 @@ impl StripLocations for EnumDefItem {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct EnumStatement {
     pub name: Ident,
-    pub expr: Option<Expr>,
+    pub expr: Option<Located<Expr>>,
     pub attributes: Attributes,
     pub doc_comments: Vec<String>,
     pub inline_trailing_comments: Vec<Located<Comment>>, // Comments on same line as enum variant
@@ -897,7 +937,7 @@ impl EnumStatement {
     pub fn new(name: Ident, expr: Option<Expr>) -> EnumStatement {
         EnumStatement {
             name,
-            expr,
+            expr: expr.map(Located::test),
             attributes: Default::default(),
             doc_comments: vec![],
             inline_trailing_comments: Vec::new(),
@@ -910,8 +950,8 @@ impl EnumStatement {
     pub fn field_with_expr(name: &str, expr: Expr) -> EnumStatement {
         Self::new(name.into(), Some(expr))
     }
-    pub fn with_attributes(mut self, attributes: impl Into<Attributes>) -> Self {
-        self.attributes = attributes.into();
+    pub fn with_attributes(mut self, attributes: impl IntoIterator<Item = Attribute>) -> Self {
+        self.attributes = Attributes::from_iter(attributes);
         self
     }
     pub fn with_doc_comments(mut self, doc_comments: Vec<String>) -> Self {
@@ -968,7 +1008,7 @@ impl EnumDefinition {
     pub fn new(
         type_: Type,
         statements: impl IntoIterator<Item = EnumStatement>,
-        attributes: impl Into<Attributes>,
+        attributes: impl IntoIterator<Item = Attribute>,
     ) -> Self {
         Self {
             type_: Located::test(type_),
@@ -977,13 +1017,13 @@ impl EnumDefinition {
                 .map(EnumDefItem::Statement)
                 .map(Located::test)
                 .collect(),
-            attributes: attributes.into(),
+            attributes: Attributes::from_iter(attributes),
             inline_trailing_comments: Vec::new(),
             following_comments: Vec::new(),
         }
     }
-    pub fn with_attributes(mut self, attributes: impl Into<Attributes>) -> Self {
-        self.attributes = attributes.into();
+    pub fn with_attributes(mut self, attributes: impl IntoIterator<Item = Attribute>) -> Self {
+        self.attributes = Attributes::from_iter(attributes);
         self
     }
     pub fn with_inline_trailing_comments(
@@ -1035,7 +1075,7 @@ impl StripLocations for BitflagsDefItem {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct BitflagsStatement {
     pub name: Ident,
-    pub expr: Expr,
+    pub expr: Located<Expr>,
     pub attributes: Attributes,
     pub doc_comments: Vec<String>,
     pub inline_trailing_comments: Vec<Located<Comment>>, // Comments on same line as bitflag
@@ -1059,7 +1099,7 @@ impl BitflagsStatement {
     pub fn new(name: Ident, expr: Expr) -> BitflagsStatement {
         BitflagsStatement {
             name,
-            expr,
+            expr: Located::test(expr),
             attributes: Default::default(),
             doc_comments: vec![],
             inline_trailing_comments: Vec::new(),
@@ -1069,8 +1109,8 @@ impl BitflagsStatement {
     pub fn field(name: &str, expr: Expr) -> BitflagsStatement {
         Self::new(name.into(), expr)
     }
-    pub fn with_attributes(mut self, attributes: impl Into<Attributes>) -> Self {
-        self.attributes = attributes.into();
+    pub fn with_attributes(mut self, attributes: impl IntoIterator<Item = Attribute>) -> Self {
+        self.attributes = Attributes::from_iter(attributes);
         self
     }
     pub fn with_doc_comments(mut self, doc_comments: Vec<String>) -> Self {
@@ -1127,7 +1167,7 @@ impl BitflagsDefinition {
     pub fn new(
         type_: Type,
         statements: impl IntoIterator<Item = BitflagsStatement>,
-        attributes: impl Into<Attributes>,
+        attributes: impl IntoIterator<Item = Attribute>,
     ) -> Self {
         Self {
             type_: Located::test(type_),
@@ -1136,13 +1176,13 @@ impl BitflagsDefinition {
                 .map(BitflagsDefItem::Statement)
                 .map(Located::test)
                 .collect(),
-            attributes: attributes.into(),
+            attributes: Attributes::from_iter(attributes),
             inline_trailing_comments: Vec::new(),
             following_comments: Vec::new(),
         }
     }
-    pub fn with_attributes(mut self, attributes: impl Into<Attributes>) -> Self {
-        self.attributes = attributes.into();
+    pub fn with_attributes(mut self, attributes: impl IntoIterator<Item = Attribute>) -> Self {
+        self.attributes = Attributes::from_iter(attributes);
         self
     }
     pub fn with_inline_trailing_comments(
@@ -1399,13 +1439,13 @@ impl ExternValue {
         visibility: Visibility,
         name: &str,
         type_: Type,
-        attributes: impl Into<Attributes>,
+        attributes: impl IntoIterator<Item = Attribute>,
     ) -> Self {
         Self {
             visibility,
             name: name.into(),
             type_: Located::test(type_),
-            attributes: attributes.into(),
+            attributes: Attributes::from_iter(attributes),
             doc_comments: vec![],
         }
     }

@@ -2,6 +2,7 @@ use crate::{
     grammar::{self, ItemPath},
     semantic::{
         SemanticState,
+        attribute::parse_index,
         error::{Result, SemanticError},
         function,
         module::Module,
@@ -61,15 +62,11 @@ pub fn convert_grammar_functions_to_semantic_functions(
     for function in functions {
         let mut index = None;
         for attribute in &function.attributes {
-            let grammar::Attribute::Function(ident, items) = attribute else {
+            let grammar::Attribute::Function(ident, items) = &attribute.value else {
                 continue;
             };
-            let exprs = grammar::AttributeItem::extract_exprs(items);
-            match (ident.as_str(), exprs.as_slice()) {
-                ("index", [grammar::Expr::IntLiteral { value, .. }]) => {
-                    index = Some(*value as usize);
-                }
-                _ => continue,
+            if let Some(attr_index) = parse_index(ident, items, &attribute.location)? {
+                index = Some(attr_index);
             }
         }
 
