@@ -1,6 +1,6 @@
 use crate::{
     grammar::{Comment, Ident},
-    span::{ItemLocation, Located, Location, Span},
+    span::{HasLocation, ItemLocation, Located, Location, Span},
     tokenizer::{Token, TokenKind},
 };
 use std::sync::Arc;
@@ -137,37 +137,52 @@ impl Parser {
         comments
     }
 
-    /// Collect a comment as a Located<Comment>
-    pub(crate) fn collect_comment(&mut self) -> Option<Located<Comment>> {
+    /// Collect a comment as a Comment (with inline location)
+    pub(crate) fn collect_comment(&mut self) -> Option<Comment> {
         match self.peek().clone() {
             TokenKind::DocOuter(ref text) => {
                 let token = self.advance();
                 let content = text.strip_prefix("///").unwrap_or(text).trim().to_string();
-                Some(Located::new(
-                    Comment::DocOuter(vec![content]),
-                    token.location,
-                ))
+                Some(Comment::DocOuter {
+                    lines: vec![content],
+                    location: token.location,
+                })
             }
             TokenKind::DocInner(ref text) => {
                 let token = self.advance();
                 let content = text.strip_prefix("//!").unwrap_or(text).trim().to_string();
-                Some(Located::new(
-                    Comment::DocInner(vec![content]),
-                    token.location,
-                ))
+                Some(Comment::DocInner {
+                    lines: vec![content],
+                    location: token.location,
+                })
             }
             TokenKind::Comment(ref text) => {
                 let token = self.advance();
-                Some(Located::new(Comment::Regular(text.clone()), token.location))
+                Some(Comment::Regular {
+                    text: text.clone(),
+                    location: token.location,
+                })
             }
             TokenKind::MultiLineComment(ref text) => {
                 let token = self.advance();
                 // Split multiline comments into lines
                 let lines: Vec<String> = text.lines().map(|s| s.to_string()).collect();
-                Some(Located::new(Comment::MultiLine(lines), token.location))
+                Some(Comment::MultiLine {
+                    lines,
+                    location: token.location,
+                })
             }
             _ => None,
         }
+    }
+
+    /// Collect a comment and wrap it in Located for backwards compatibility
+    /// This will be removed once all callers are updated
+    pub(crate) fn collect_comment_located(&mut self) -> Option<Located<Comment>> {
+        self.collect_comment().map(|c| {
+            let location = c.location().clone();
+            Located::new(c, location)
+        })
     }
 
     pub(crate) fn item_location_from_span(&self, span: Span) -> ItemLocation {

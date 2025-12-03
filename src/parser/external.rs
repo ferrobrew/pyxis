@@ -1,5 +1,5 @@
 use crate::{
-    span::{ItemLocation, Located, Span},
+    span::{HasLocation, ItemLocation, Located, Span},
     tokenizer::TokenKind,
 };
 
@@ -225,7 +225,7 @@ impl Parser {
         self.expect(TokenKind::Extern)?;
         let (name, _) = self.expect_ident()?;
         self.expect(TokenKind::Colon)?;
-        let type_ = self.parse_type()?;
+        let type_ = self.parse_type_located()?;
         self.expect(TokenKind::Semi)?;
         let end_pos = if self.pos > 0 {
             self.tokens[self.pos - 1].location.span.end
@@ -265,13 +265,13 @@ impl Parser {
                     TokenKind::Prologue => {
                         self.advance();
                         let expr = self.parse_expr()?;
-                        if let Expr::StringLiteral { value, format } = expr.value {
+                        if let Expr::StringLiteral { value, format, .. } = expr {
                             prologue = Some(value);
                             prologue_format = format;
                         } else {
                             return Err(ParseError::ExpectedStringLiteral {
                                 found: self.peek().clone(),
-                                location: expr.location.clone(),
+                                location: expr.location().clone(),
                             });
                         }
                         self.expect(TokenKind::Semi)?;
@@ -279,13 +279,13 @@ impl Parser {
                     TokenKind::Epilogue => {
                         self.advance();
                         let expr = self.parse_expr()?;
-                        if let Expr::StringLiteral { value, format } = expr.value {
+                        if let Expr::StringLiteral { value, format, .. } = expr {
                             epilogue = Some(value);
                             epilogue_format = format;
                         } else {
                             return Err(ParseError::ExpectedStringLiteral {
                                 found: self.peek().clone(),
-                                location: expr.location.clone(),
+                                location: expr.location().clone(),
                             });
                         }
                         self.expect(TokenKind::Semi)?;
@@ -306,13 +306,13 @@ impl Parser {
                 TokenKind::Prologue => {
                     self.advance();
                     let expr = self.parse_expr()?;
-                    if let Expr::StringLiteral { value, format } = expr.value {
+                    if let Expr::StringLiteral { value, format, .. } = expr {
                         prologue = Some(value);
                         prologue_format = format;
                     } else {
                         return Err(ParseError::ExpectedStringLiteral {
                             found: self.peek().clone(),
-                            location: expr.location.clone(),
+                            location: expr.location().clone(),
                         });
                     }
                     self.expect(TokenKind::Semi)?
@@ -320,13 +320,13 @@ impl Parser {
                 TokenKind::Epilogue => {
                     self.advance();
                     let expr = self.parse_expr()?;
-                    if let Expr::StringLiteral { value, format } = expr.value {
+                    if let Expr::StringLiteral { value, format, .. } = expr {
                         epilogue = Some(value);
                         epilogue_format = format;
                     } else {
                         return Err(ParseError::ExpectedStringLiteral {
                             found: self.peek().clone(),
-                            location: expr.location.clone(),
+                            location: expr.location().clone(),
                         });
                     }
                     self.expect(TokenKind::Semi)?

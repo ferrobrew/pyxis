@@ -1,4 +1,7 @@
-use crate::{span::Located, tokenizer::TokenKind};
+use crate::{
+    span::{HasLocation, ItemLocation, Located},
+    tokenizer::TokenKind,
+};
 
 #[cfg(test)]
 use crate::span::StripLocations;
@@ -19,22 +22,56 @@ use super::attributes::Attribute;
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Comment {
     /// Doc comment for outer items (///)
-    DocOuter(Vec<String>),
+    DocOuter {
+        lines: Vec<String>,
+        location: ItemLocation,
+    },
     /// Doc comment for inner items (//!)
-    DocInner(Vec<String>),
+    DocInner {
+        lines: Vec<String>,
+        location: ItemLocation,
+    },
     /// Regular comment (//)
-    Regular(String),
+    Regular {
+        text: String,
+        location: ItemLocation,
+    },
     /// Multiline comment (/* */)
-    MultiLine(Vec<String>),
+    MultiLine {
+        lines: Vec<String>,
+        location: ItemLocation,
+    },
+}
+impl HasLocation for Comment {
+    fn location(&self) -> &ItemLocation {
+        match self {
+            Comment::DocOuter { location, .. } => location,
+            Comment::DocInner { location, .. } => location,
+            Comment::Regular { location, .. } => location,
+            Comment::MultiLine { location, .. } => location,
+        }
+    }
 }
 #[cfg(test)]
 impl StripLocations for Comment {
     fn strip_locations(&self) -> Self {
         match self {
-            Comment::DocOuter(comments) => Comment::DocOuter(comments.strip_locations()),
-            Comment::DocInner(comments) => Comment::DocInner(comments.strip_locations()),
-            Comment::Regular(comment) => Comment::Regular(comment.strip_locations()),
-            Comment::MultiLine(comments) => Comment::MultiLine(comments.strip_locations()),
+            Comment::DocOuter { lines, .. } => Comment::DocOuter {
+                lines: lines.strip_locations(),
+                location: ItemLocation::test(),
+            },
+            Comment::DocInner { lines, .. } => Comment::DocInner {
+                lines: lines.strip_locations(),
+                location: ItemLocation::test(),
+            },
+            Comment::Regular { text, .. } => Comment::Regular {
+                text: text.strip_locations(),
+                location: ItemLocation::test(),
+            },
+            Comment::MultiLine { lines, .. } => Comment::MultiLine {
+                lines: lines.strip_locations(),
+                location: ItemLocation::test(),
+            },
         }
     }
 }
@@ -649,7 +686,7 @@ impl Parser {
             TokenKind::Comment(_) | TokenKind::MultiLineComment(_)
         ) {
             let comment_line = self.current().location.span.start.line;
-            if let Some(comment) = self.collect_comment() {
+            if let Some(comment) = self.collect_comment_located() {
                 if comment_line == attributes_end_line {
                     // Comment is on the same line as the attributes
                     inline_trailing_comments.push(comment);
@@ -708,7 +745,7 @@ impl Parser {
                 self.advance();
                 let (name, _) = self.expect_ident()?;
                 self.expect(TokenKind::Colon)?;
-                let type_ = self.parse_type()?;
+                let type_ = self.parse_type_located()?;
                 self.expect(TokenKind::LBrace)?;
                 let items = self.parse_enum_def_items()?;
                 self.expect(TokenKind::RBrace)?;
@@ -741,7 +778,7 @@ impl Parser {
                 self.advance();
                 let (name, _) = self.expect_ident()?;
                 self.expect(TokenKind::Colon)?;
-                let type_ = self.parse_type()?;
+                let type_ = self.parse_type_located()?;
                 self.expect(TokenKind::LBrace)?;
                 let items = self.parse_bitflags_def_items()?;
                 self.expect(TokenKind::RBrace)?;
@@ -786,7 +823,7 @@ impl Parser {
                 self.peek(),
                 TokenKind::Comment(_) | TokenKind::MultiLineComment(_)
             ) {
-                if let Some(comment) = self.collect_comment() {
+                if let Some(comment) = self.collect_comment_located() {
                     items.push(comment.map(TypeDefItem::Comment));
                 }
             }
@@ -809,7 +846,7 @@ impl Parser {
                 TokenKind::Comment(_) | TokenKind::MultiLineComment(_)
             ) {
                 let comment_line = self.current().location.span.start.line;
-                if let Some(comment) = self.collect_comment() {
+                if let Some(comment) = self.collect_comment_located() {
                     if comment_line == statement_line {
                         // Comment is on the same line as the field
                         stmt.inline_trailing_comments.push(comment);
@@ -863,7 +900,7 @@ impl Parser {
             let visibility = self.parse_visibility()?;
             let (name, _) = self.expect_ident()?;
             self.expect(TokenKind::Colon)?;
-            let type_ = self.parse_type()?;
+            let type_ = self.parse_type_located()?;
 
             let end_pos = if self.pos > 0 {
                 self.tokens[self.pos - 1].location.span.end
@@ -894,7 +931,7 @@ impl Parser {
                 self.peek(),
                 TokenKind::Comment(_) | TokenKind::MultiLineComment(_)
             ) {
-                if let Some(comment) = self.collect_comment() {
+                if let Some(comment) = self.collect_comment_located() {
                     items.push(comment.map(EnumDefItem::Comment));
                 }
             }
@@ -917,7 +954,7 @@ impl Parser {
                 TokenKind::Comment(_) | TokenKind::MultiLineComment(_)
             ) {
                 let comment_line = self.current().location.span.start.line;
-                if let Some(comment) = self.collect_comment() {
+                if let Some(comment) = self.collect_comment_located() {
                     if comment_line == statement_line {
                         // Comment is on the same line as the enum variant
                         stmt.inline_trailing_comments.push(comment);
@@ -947,7 +984,7 @@ impl Parser {
         let (name, _) = self.expect_ident()?;
         let expr = if matches!(self.peek(), TokenKind::Eq) {
             self.advance();
-            Some(self.parse_expr()?)
+            Some(self.parse_expr_located()?)
         } else {
             None
         };
@@ -983,7 +1020,7 @@ impl Parser {
                 self.peek(),
                 TokenKind::Comment(_) | TokenKind::MultiLineComment(_)
             ) {
-                if let Some(comment) = self.collect_comment() {
+                if let Some(comment) = self.collect_comment_located() {
                     items.push(comment.map(BitflagsDefItem::Comment));
                 }
             }
@@ -1006,7 +1043,7 @@ impl Parser {
                 TokenKind::Comment(_) | TokenKind::MultiLineComment(_)
             ) {
                 let comment_line = self.current().location.span.start.line;
-                if let Some(comment) = self.collect_comment() {
+                if let Some(comment) = self.collect_comment_located() {
                     if comment_line == statement_line {
                         // Comment is on the same line as the bitflag
                         stmt.inline_trailing_comments.push(comment);
@@ -1037,7 +1074,7 @@ impl Parser {
 
         let (name, _) = self.expect_ident()?;
         self.expect(TokenKind::Eq)?;
-        let expr = self.parse_expr()?;
+        let expr = self.parse_expr_located()?;
 
         let end_pos = if self.pos > 0 {
             self.tokens[self.pos - 1].location.span.end

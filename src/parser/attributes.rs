@@ -3,7 +3,7 @@ use std::ops::{Deref, DerefMut};
 use crate::{span::Located, tokenizer::TokenKind};
 
 #[cfg(test)]
-use crate::span::StripLocations;
+use crate::span::{ItemLocation, StripLocations};
 
 use super::{ParseError, core::Parser, expressions::Expr, types::Ident};
 
@@ -122,6 +122,7 @@ impl Attribute {
             AttributeItems(vec![Located::test(AttributeItem::Expr(Expr::IntLiteral {
                 value,
                 format: IntFormat::Decimal,
+                location: ItemLocation::test(),
             }))]),
         )
     }
@@ -131,6 +132,7 @@ impl Attribute {
             AttributeItems(vec![Located::test(AttributeItem::Expr(Expr::IntLiteral {
                 value,
                 format: IntFormat::Hex,
+                location: ItemLocation::test(),
             }))]),
         )
     }
@@ -159,6 +161,7 @@ impl Attribute {
                 Expr::StringLiteral {
                     value: name.into(),
                     format: StringFormat::Regular,
+                    location: ItemLocation::test(),
                 },
             ))]),
         )
@@ -298,7 +301,7 @@ impl Parser {
                     break;
                 }
 
-                items.push(self.parse_expr()?.map(AttributeItem::Expr));
+                items.push(self.parse_expr_located()?.map(AttributeItem::Expr));
 
                 // Collect trailing comments after the expression
                 while matches!(
@@ -351,7 +354,7 @@ impl Parser {
                 ));
             }
 
-            let expr = self.parse_expr()?;
+            let expr = self.parse_expr_located()?;
             let mut end_pos = expr.location.span.end;
             items.push(expr.map(AttributeItem::Expr));
 

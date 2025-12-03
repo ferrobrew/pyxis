@@ -194,7 +194,7 @@ impl Parser {
                 self.peek(),
                 TokenKind::Comment(_) | TokenKind::MultiLineComment(_)
             ) {
-                if let Some(comment) = self.collect_comment() {
+                if let Some(comment) = self.collect_comment_located() {
                     items.push(comment.map(ImplItem::Comment));
                 }
             }
@@ -280,7 +280,7 @@ impl Parser {
 
         let return_type = if matches!(self.peek(), TokenKind::Arrow) {
             self.advance();
-            Some(self.parse_type()?)
+            Some(self.parse_type_located()?)
         } else {
             None
         };
@@ -321,7 +321,7 @@ impl Parser {
             let start_pos = self.current().location.span.start;
             let (name, _) = self.expect_ident()?;
             self.expect(TokenKind::Colon)?;
-            let type_ = self.parse_type()?;
+            let type_ = self.parse_type_located()?;
             let end_pos = self.current().location.span.end;
             let location = ItemLocation::new(self.filename.clone(), Span::new(start_pos, end_pos));
 

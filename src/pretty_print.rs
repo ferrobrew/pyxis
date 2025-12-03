@@ -157,24 +157,24 @@ impl PrettyPrinter {
 
     fn print_comment(&mut self, comment: &Comment) {
         match comment {
-            Comment::DocOuter(lines) => {
+            Comment::DocOuter { lines, .. } => {
                 for line in lines {
                     self.write_indent();
                     writeln!(&mut self.output, "/// {line}").unwrap();
                 }
             }
-            Comment::DocInner(lines) => {
+            Comment::DocInner { lines, .. } => {
                 for line in lines {
                     self.write_indent();
                     writeln!(&mut self.output, "//! {line}").unwrap();
                 }
             }
-            Comment::Regular(text) => {
+            Comment::Regular { text, .. } => {
                 // Regular comments include the // prefix
                 self.write_indent();
                 writeln!(&mut self.output, "{text}").unwrap();
             }
-            Comment::MultiLine(lines) => {
+            Comment::MultiLine { lines, .. } => {
                 // Multiline comments include /* and */ in the text
                 for line in lines {
                     self.write_indent();
@@ -186,11 +186,11 @@ impl PrettyPrinter {
 
     fn print_comment_inline(&mut self, comment: &Comment) {
         match comment {
-            Comment::Regular(text) => {
+            Comment::Regular { text, .. } => {
                 // Regular comments include the // prefix
                 write!(&mut self.output, "{text}").unwrap();
             }
-            Comment::MultiLine(lines) => {
+            Comment::MultiLine { lines, .. } => {
                 // Multiline comments - just print first line inline for now
                 if let Some(first) = lines.first() {
                     write!(&mut self.output, "{first}").unwrap();
@@ -277,7 +277,7 @@ impl PrettyPrinter {
 
     /// Get the bit width from a type (e.g., u8 -> 8, u32 -> 32)
     fn get_type_bit_width(&self, type_: &Type) -> Option<usize> {
-        if let Type::Ident(ident) = type_ {
+        if let Type::Ident { ident, .. } = type_ {
             match ident.as_str() {
                 "u8" | "i8" => Some(8),
                 "u16" | "i16" => Some(16),
@@ -356,7 +356,7 @@ impl PrettyPrinter {
 
     fn print_expr(&mut self, expr: &Expr) {
         match expr {
-            Expr::IntLiteral { value, format } => match format {
+            Expr::IntLiteral { value, format, .. } => match format {
                 IntFormat::Hex => write!(&mut self.output, "0x{value:X}").unwrap(),
                 IntFormat::Binary => {
                     let formatted = self.format_binary_with_padding(*value);
@@ -365,7 +365,7 @@ impl PrettyPrinter {
                 IntFormat::Octal => write!(&mut self.output, "0o{value:o}").unwrap(),
                 IntFormat::Decimal => write!(&mut self.output, "{value}").unwrap(),
             },
-            Expr::StringLiteral { value, format } => {
+            Expr::StringLiteral { value, format, .. } => {
                 match format {
                     StringFormat::Raw => {
                         // Determine the number of # needed
@@ -390,7 +390,7 @@ impl PrettyPrinter {
                     }
                 }
             }
-            Expr::Ident(name) => write!(&mut self.output, "{name}").unwrap(),
+            Expr::Ident { ident, .. } => write!(&mut self.output, "{ident}").unwrap(),
         }
     }
 
@@ -780,21 +780,21 @@ impl PrettyPrinter {
 
     fn print_type(&mut self, type_: &Type) {
         match type_ {
-            Type::Ident(ident) => write!(&mut self.output, "{ident}").unwrap(),
-            Type::ConstPointer(inner) => {
+            Type::Ident { ident, .. } => write!(&mut self.output, "{ident}").unwrap(),
+            Type::ConstPointer { pointee, .. } => {
                 write!(&mut self.output, "*const ").unwrap();
-                self.print_type(&inner.value);
+                self.print_type(pointee);
             }
-            Type::MutPointer(inner) => {
+            Type::MutPointer { pointee, .. } => {
                 write!(&mut self.output, "*mut ").unwrap();
-                self.print_type(&inner.value);
+                self.print_type(pointee);
             }
-            Type::Array(inner, size) => {
+            Type::Array { element, size, .. } => {
                 write!(&mut self.output, "[").unwrap();
-                self.print_type(&inner.value);
+                self.print_type(element);
                 write!(&mut self.output, "; {size}]").unwrap();
             }
-            Type::Unknown(size) => {
+            Type::Unknown { size, .. } => {
                 // Format unknown sizes as hex
                 write!(&mut self.output, "unknown<0x{size:X}>").unwrap();
             }

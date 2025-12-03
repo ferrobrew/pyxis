@@ -1,4 +1,7 @@
-use crate::{span::Located, tokenizer::TokenKind};
+use crate::{
+    span::{HasLocation, ItemLocation, Located},
+    tokenizer::TokenKind,
+};
 
 #[cfg(test)]
 use crate::span::StripLocations;
@@ -35,23 +38,48 @@ impl StripLocations for StringFormat {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Expr {
-    IntLiteral { value: isize, format: IntFormat },
-    StringLiteral { value: String, format: StringFormat },
-    Ident(Ident),
+    IntLiteral {
+        value: isize,
+        format: IntFormat,
+        location: ItemLocation,
+    },
+    StringLiteral {
+        value: String,
+        format: StringFormat,
+        location: ItemLocation,
+    },
+    Ident {
+        ident: Ident,
+        location: ItemLocation,
+    },
+}
+impl HasLocation for Expr {
+    fn location(&self) -> &ItemLocation {
+        match self {
+            Expr::IntLiteral { location, .. } => location,
+            Expr::StringLiteral { location, .. } => location,
+            Expr::Ident { location, .. } => location,
+        }
+    }
 }
 #[cfg(test)]
 impl StripLocations for Expr {
     fn strip_locations(&self) -> Self {
         match self {
-            Expr::IntLiteral { value, format } => Expr::IntLiteral {
+            Expr::IntLiteral { value, format, .. } => Expr::IntLiteral {
                 value: value.strip_locations(),
                 format: format.strip_locations(),
+                location: ItemLocation::test(),
             },
-            Expr::StringLiteral { value, format } => Expr::StringLiteral {
+            Expr::StringLiteral { value, format, .. } => Expr::StringLiteral {
                 value: value.strip_locations(),
                 format: format.strip_locations(),
+                location: ItemLocation::test(),
             },
-            Expr::Ident(ident) => Expr::Ident(ident.strip_locations()),
+            Expr::Ident { ident, .. } => Expr::Ident {
+                ident: ident.strip_locations(),
+                location: ItemLocation::test(),
+            },
         }
     }
 }
@@ -88,11 +116,11 @@ impl From<(Ident, Expr)> for ExprField {
 }
 
 impl Parser {
-    pub(crate) fn parse_expr(&mut self) -> Result<Located<Expr>, ParseError> {
+    pub(crate) fn parse_expr(&mut self) -> Result<Expr, ParseError> {
         match self.peek() {
             TokenKind::IntLiteral(_) => {
                 let token = self.current().clone();
-                let value = self.parse_int_literal()?;
+                let int_located = self.parse_int_literal()?;
                 // Detect format from the original token text
                 let text = self.span_text(&token.location.span);
                 let format = if text.starts_with("0x") || text.starts_with("-0x") {
@@ -104,11 +132,15 @@ impl Parser {
                 } else {
                     IntFormat::Decimal
                 };
-                Ok(value.map(|value| Expr::IntLiteral { value, format }))
+                Ok(Expr::IntLiteral {
+                    value: int_located.value,
+                    format,
+                    location: int_located.location,
+                })
             }
             TokenKind::StringLiteral(_) => {
                 let token = self.current().clone();
-                let value = self.parse_string_literal()?;
+                let str_located = self.parse_string_literal()?;
                 // Detect if this was a raw string from the original token text
                 let text = self.span_text(&token.location.span);
                 let format = if text.starts_with('r') {
@@ -116,20 +148,30 @@ impl Parser {
                 } else {
                     StringFormat::Regular
                 };
-                Ok(value.map(|value| Expr::StringLiteral { value, format }))
+                Ok(Expr::StringLiteral {
+                    value: str_located.value,
+                    format,
+                    location: str_located.location,
+                })
             }
             TokenKind::Ident(_) => {
                 let (ident, ident_span) = self.expect_ident()?;
-                Ok(Located::new(
-                    Expr::Ident(ident),
-                    self.item_location_from_span(ident_span),
-                ))
+                let location = self.item_location_from_span(ident_span);
+                Ok(Expr::Ident { ident, location })
             }
             _ => Err(ParseError::ExpectedExpression {
                 found: self.peek().clone(),
                 location: self.current().location.clone(),
             }),
         }
+    }
+
+    /// Parse an expression and wrap it in Located for backwards compatibility
+    /// This will be removed once all callers are updated
+    pub(crate) fn parse_expr_located(&mut self) -> Result<Located<Expr>, ParseError> {
+        let expr = self.parse_expr()?;
+        let location = expr.location().clone();
+        Ok(Located::new(expr, location))
     }
 
     pub(crate) fn parse_int_literal(&mut self) -> Result<Located<isize>, ParseError> {

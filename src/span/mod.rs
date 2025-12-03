@@ -110,6 +110,11 @@ impl std::fmt::Display for ItemLocation {
     }
 }
 
+/// Trait for types that have an associated source location
+pub trait HasLocation {
+    fn location(&self) -> &ItemLocation;
+}
+
 /// A value with an associated span
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Located<T> {
@@ -151,6 +156,11 @@ impl<T> Located<T> {
 impl<T: EqualsIgnoringLocations> EqualsIgnoringLocations for Located<T> {
     fn equals_ignoring_locations(&self, other: &Self) -> bool {
         self.value.equals_ignoring_locations(&other.value)
+    }
+}
+impl<T> HasLocation for Located<T> {
+    fn location(&self) -> &ItemLocation {
+        &self.location
     }
 }
 #[cfg(test)]

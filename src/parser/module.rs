@@ -237,7 +237,7 @@ impl Parser {
                 self.peek(),
                 TokenKind::Comment(_) | TokenKind::MultiLineComment(_)
             ) {
-                if let Some(comment) = self.collect_comment() {
+                if let Some(comment) = self.collect_comment_located() {
                     items.push(comment.map(ModuleItem::Comment));
                 }
             }
@@ -259,7 +259,7 @@ impl Parser {
                 self.peek(),
                 TokenKind::Comment(_) | TokenKind::MultiLineComment(_)
             ) {
-                if let Some(comment) = self.collect_comment() {
+                if let Some(comment) = self.collect_comment_located() {
                     items.push(comment.map(ModuleItem::Comment));
                 }
             }
