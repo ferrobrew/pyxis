@@ -62,7 +62,10 @@ pub fn convert_grammar_functions_to_semantic_functions(
     for function in functions {
         let mut index = None;
         for attribute in &function.attributes {
-            let grammar::Attribute::Function { name: ident, items, .. } = attribute else {
+            let grammar::Attribute::Function {
+                name: ident, items, ..
+            } = attribute
+            else {
                 continue;
             };
             if let Some(attr_index) = parse_index(ident, items, attribute.location())? {

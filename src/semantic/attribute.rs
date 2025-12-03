@@ -64,10 +64,7 @@ fn parse_single_integer<T: TryFrom<isize> + Display>(
         .transpose()
 }
 
-fn integer_expr<T: TryFrom<isize> + Display>(
-    expr: &Expr,
-    attribute_name: &str,
-) -> Result<T> {
+fn integer_expr<T: TryFrom<isize> + Display>(expr: &Expr, attribute_name: &str) -> Result<T> {
     let Expr::IntLiteral { value, .. } = expr else {
         return Err(SemanticError::InvalidAttributeValue {
             attribute_name: attribute_name.into(),

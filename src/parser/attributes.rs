@@ -1,9 +1,6 @@
 use std::ops::{Deref, DerefMut};
 
-use crate::{
-    span::ItemLocation,
-    tokenizer::TokenKind,
-};
+use crate::{span::ItemLocation, tokenizer::TokenKind};
 
 #[cfg(test)]
 use crate::span::StripLocations;
@@ -15,8 +12,14 @@ use super::expressions::{IntFormat, StringFormat};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum AttributeItem {
-    Expr { expr: Expr, location: ItemLocation },
-    Comment { text: String, location: ItemLocation },
+    Expr {
+        expr: Expr,
+        location: ItemLocation,
+    },
+    Comment {
+        text: String,
+        location: ItemLocation,
+    },
 }
 impl HasLocation for AttributeItem {
     fn location(&self) -> &ItemLocation {
@@ -433,7 +436,10 @@ impl Parser {
             let expr = self.parse_expr()?;
             let mut end_pos = expr.location().span.end;
             let expr_location = expr.location().clone();
-            items.push(AttributeItem::Expr { expr, location: expr_location });
+            items.push(AttributeItem::Expr {
+                expr,
+                location: expr_location,
+            });
 
             // Collect comments after the expression
             while matches!(
@@ -474,10 +480,7 @@ impl Parser {
 #[cfg(test)]
 mod tests {
     use crate::{
-        grammar::{
-            ItemDefinitionInner, ModuleItem, TypeDefItem, Visibility,
-            test_aliases::*,
-        },
+        grammar::{ItemDefinitionInner, ModuleItem, TypeDefItem, Visibility, test_aliases::*},
         parser::parse_str_for_tests,
         span::StripLocations,
     };
@@ -522,11 +525,7 @@ mod tests {
                 TS::field((V::Public, "in_focus"), T::ident("bool"))
                     .with_attributes([A::address(0x38)]),
             ])
-            .with_attributes([
-                A::singleton(0x118FB64),
-                A::size(0x40),
-                A::align(16),
-            ]),
+            .with_attributes([A::singleton(0x118FB64), A::size(0x40), A::align(16)]),
         )]);
 
         assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);

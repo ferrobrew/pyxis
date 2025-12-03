@@ -84,11 +84,16 @@ impl EqualsIgnoringLocations for Type {
         match (self, other) {
             (
                 Type::ConstPointer { pointee, .. },
-                Type::ConstPointer { pointee: pointee2, .. },
+                Type::ConstPointer {
+                    pointee: pointee2, ..
+                },
             ) => pointee.equals_ignoring_locations(pointee2),
-            (Type::MutPointer { pointee, .. }, Type::MutPointer { pointee: pointee2, .. }) => {
-                pointee.equals_ignoring_locations(pointee2)
-            }
+            (
+                Type::MutPointer { pointee, .. },
+                Type::MutPointer {
+                    pointee: pointee2, ..
+                },
+            ) => pointee.equals_ignoring_locations(pointee2),
             (
                 Type::Array { element, size, .. },
                 Type::Array {
@@ -96,7 +101,9 @@ impl EqualsIgnoringLocations for Type {
                     size: size2,
                     ..
                 },
-            ) => element.equals_ignoring_locations(element2) && size.equals_ignoring_locations(size2),
+            ) => {
+                element.equals_ignoring_locations(element2) && size.equals_ignoring_locations(size2)
+            }
             (Type::Ident { ident, .. }, Type::Ident { ident: ident2, .. }) => {
                 ident.equals_ignoring_locations(ident2)
             }

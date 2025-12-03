@@ -384,7 +384,8 @@ pub fn build(
             body = Some(FunctionBody::Address {
                 address: attr_address,
             });
-        } else if let Some(_attr_index) = attribute::parse_index(ident, items, attribute.location())?
+        } else if let Some(_attr_index) =
+            attribute::parse_index(ident, items, attribute.location())?
         {
             if !is_vfunc {
                 return Err(SemanticError::AttributeNotSupported {

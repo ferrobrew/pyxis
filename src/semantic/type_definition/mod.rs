@@ -217,8 +217,7 @@ pub fn build(
                     target_size = Some(attr_size);
                 } else if let Some(attr_min_size) = attribute::parse_min_size(name, items, loc)? {
                     min_size = Some(attr_min_size);
-                } else if let Some(attr_singleton) = attribute::parse_singleton(name, items, loc)?
-                {
+                } else if let Some(attr_singleton) = attribute::parse_singleton(name, items, loc)? {
                     singleton = Some(attr_singleton);
                 } else if let Some(attr_align) = attribute::parse_align(name, items, loc)? {
                     align = Some(attr_align);
@@ -269,10 +268,16 @@ pub fn build(
                 let doc = doc_comments.to_vec();
                 for attribute in attributes {
                     match attribute {
-                        grammar::Attribute::Ident { ident: attr_ident, .. } if attr_ident.as_str() == "base" => {
+                        grammar::Attribute::Ident {
+                            ident: attr_ident, ..
+                        } if attr_ident.as_str() == "base" => {
                             is_base = true;
                         }
-                        grammar::Attribute::Function { name: attr_ident, items, .. } => {
+                        grammar::Attribute::Function {
+                            name: attr_ident,
+                            items,
+                            ..
+                        } => {
                             if let Some(attr_address) =
                                 attribute::parse_address(attr_ident, items, attribute.location())?
                             {
@@ -320,7 +325,10 @@ pub fn build(
                 // Extract size attribute
                 let mut size = None;
                 for attribute in attributes {
-                    if let grammar::Attribute::Function { name: ident, items, .. } = attribute {
+                    if let grammar::Attribute::Function {
+                        name: ident, items, ..
+                    } = attribute
+                    {
                         if let Some(attr_size) =
                             attribute::parse_size(ident, items, attribute.location())?
                         {

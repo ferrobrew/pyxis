@@ -569,10 +569,7 @@ mod tests {
                     TS::field((V::Public, "character_types"), T::unknown(0x74)),
                     TS::field((V::Public, "vehicle_types"), T::ident("VehicleTypes")),
                 ])
-                .with_attributes([
-                    A::size(0x1754),
-                    A::singleton(0x1_191_918),
-                ]),
+                .with_attributes([A::size(0x1754), A::singleton(0x1_191_918)]),
             )])
             .with_impls([FB::new(
                 "SpawnManager",

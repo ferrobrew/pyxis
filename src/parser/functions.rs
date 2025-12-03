@@ -21,9 +21,17 @@ use crate::span::HasLocation;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Argument {
-    ConstSelf { location: ItemLocation },
-    MutSelf { location: ItemLocation },
-    Named { ident: Ident, type_: Type, location: ItemLocation },
+    ConstSelf {
+        location: ItemLocation,
+    },
+    MutSelf {
+        location: ItemLocation,
+    },
+    Named {
+        ident: Ident,
+        type_: Type,
+        location: ItemLocation,
+    },
 }
 impl HasLocation for Argument {
     fn location(&self) -> &ItemLocation {
@@ -38,8 +46,12 @@ impl HasLocation for Argument {
 impl StripLocations for Argument {
     fn strip_locations(&self) -> Self {
         match self {
-            Argument::ConstSelf { .. } => Argument::ConstSelf { location: ItemLocation::test() },
-            Argument::MutSelf { .. } => Argument::MutSelf { location: ItemLocation::test() },
+            Argument::ConstSelf { .. } => Argument::ConstSelf {
+                location: ItemLocation::test(),
+            },
+            Argument::MutSelf { .. } => Argument::MutSelf {
+                location: ItemLocation::test(),
+            },
             Argument::Named { ident, type_, .. } => Argument::Named {
                 ident: ident.strip_locations(),
                 type_: type_.strip_locations(),
@@ -51,10 +63,14 @@ impl StripLocations for Argument {
 #[cfg(test)]
 impl Argument {
     pub fn const_self() -> Argument {
-        Argument::ConstSelf { location: ItemLocation::test() }
+        Argument::ConstSelf {
+            location: ItemLocation::test(),
+        }
     }
     pub fn mut_self() -> Argument {
-        Argument::MutSelf { location: ItemLocation::test() }
+        Argument::MutSelf {
+            location: ItemLocation::test(),
+        }
     }
     pub fn named(ident: impl Into<Ident>, type_: impl Into<Type>) -> Argument {
         let type_ = type_.into();
@@ -330,10 +346,14 @@ impl Parser {
             if matches!(self.peek(), TokenKind::Mut) {
                 self.advance();
                 let tok = self.expect(TokenKind::SelfValue)?;
-                Ok(Argument::MutSelf { location: tok.location.clone() })
+                Ok(Argument::MutSelf {
+                    location: tok.location.clone(),
+                })
             } else {
                 let tok = self.expect(TokenKind::SelfValue)?;
-                Ok(Argument::ConstSelf { location: tok.location.clone() })
+                Ok(Argument::ConstSelf {
+                    location: tok.location.clone(),
+                })
             }
         } else {
             let start_pos = self.current().location.span.start;
@@ -343,18 +363,18 @@ impl Parser {
             let end_pos = self.current().location.span.end;
             let location = ItemLocation::new(self.filename.clone(), Span::new(start_pos, end_pos));
 
-            Ok(Argument::Named { ident: name, type_, location })
+            Ok(Argument::Named {
+                ident: name,
+                type_,
+                location,
+            })
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        grammar::test_aliases::*,
-        parser::parse_str_for_tests,
-        span::StripLocations,
-    };
+    use crate::{grammar::test_aliases::*, parser::parse_str_for_tests, span::StripLocations};
     use pretty_assertions::assert_eq;
 
     #[test]
