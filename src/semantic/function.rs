@@ -8,7 +8,7 @@ use crate::{
         type_registry::TypeRegistry,
         types::{Type, Visibility},
     },
-    span::{EqualsIgnoringLocations, Located},
+    span::{EqualsIgnoringLocations, HasLocation, Located},
 };
 
 #[cfg(test)]
@@ -371,7 +371,7 @@ pub fn build(
         let Some((ident, items)) = attribute.function() else {
             continue;
         };
-        if let Some(attr_address) = attribute::parse_address(ident, items, &attribute.location)? {
+        if let Some(attr_address) = attribute::parse_address(ident, items, attribute.location())? {
             if is_vfunc {
                 return Err(SemanticError::AttributeNotSupported {
                     attribute_name: "address".into(),
@@ -384,7 +384,7 @@ pub fn build(
             body = Some(FunctionBody::Address {
                 address: attr_address,
             });
-        } else if let Some(_attr_index) = attribute::parse_index(ident, items, &attribute.location)?
+        } else if let Some(_attr_index) = attribute::parse_index(ident, items, attribute.location())?
         {
             if !is_vfunc {
                 return Err(SemanticError::AttributeNotSupported {
@@ -401,7 +401,7 @@ pub fn build(
                 items,
                 "calling_convention",
                 1,
-                &attribute.location,
+                attribute.location(),
             )?;
             let Located { value, location } = &exprs[0];
             let Expr::StringLiteral { value, .. } = value else {

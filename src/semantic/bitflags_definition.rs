@@ -5,7 +5,7 @@ use crate::{
         error::{BitflagsExpectedType, Result, SemanticError, TypeResolutionContext},
         types::{ItemStateResolved, Type},
     },
-    span::Located,
+    span::{HasLocation, Located},
 };
 
 #[cfg(test)]
@@ -169,8 +169,8 @@ pub fn build(
         ));
 
         for attribute in attributes {
-            match &attribute.value {
-                grammar::Attribute::Ident(ident) if ident.as_str() == "default" => {
+            match attribute {
+                grammar::Attribute::Ident { ident, .. } if ident.as_str() == "default" => {
                     if default.is_some() {
                         return Err(SemanticError::BitflagsMultipleDefaults {
                             item_path: resolvee_path.clone(),
@@ -190,8 +190,8 @@ pub fn build(
     let mut defaultable = false;
     let doc = doc_comments.to_vec();
     for attribute in &definition.attributes {
-        match &attribute.value {
-            grammar::Attribute::Ident(ident) => match ident.as_str() {
+        match attribute {
+            grammar::Attribute::Ident { ident, .. } => match ident.as_str() {
                 "copyable" => {
                     copyable = true;
                     cloneable = true;
@@ -200,14 +200,14 @@ pub fn build(
                 "defaultable" => defaultable = true,
                 _ => {}
             },
-            grammar::Attribute::Function(ident, items) => {
+            grammar::Attribute::Function { name, items, .. } => {
                 if let Some(attr_singleton) =
-                    attribute::parse_singleton(ident, items, &attribute.location)?
+                    attribute::parse_singleton(name, items, attribute.location())?
                 {
                     singleton = Some(attr_singleton);
                 }
             }
-            grammar::Attribute::Assign(_ident, _expr) => {}
+            grammar::Attribute::Assign { .. } => {}
         }
     }
 

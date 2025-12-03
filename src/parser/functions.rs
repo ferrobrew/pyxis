@@ -333,10 +333,7 @@ impl Parser {
 #[cfg(test)]
 mod tests {
     use crate::{
-        grammar::{
-            IntFormat,
-            test_aliases::{int_literal_with_format, *},
-        },
+        grammar::test_aliases::*,
         parser::parse_str_for_tests,
         span::StripLocations,
     };
@@ -402,10 +399,7 @@ mod tests {
                         T::ident("SharedPtr<PfxInstanceInterface>"),
                     ),
                 ])
-                .with_attributes([A::Function(
-                    "size".into(),
-                    AIs::from_iter([AI::Expr(int_literal_with_format(0x10, IntFormat::Hex))]),
-                )]),
+                .with_attributes([A::size(0x10)]),
             )
             .with_doc_comments(vec![" `CPfxInstance` in original game".to_string()])])
             .with_impls([FB::new(

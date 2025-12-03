@@ -13,7 +13,7 @@ use crate::{
             ItemState, ItemStateResolved, Region, Type, TypeDefinition, Visibility,
         },
     },
-    span::{EqualsIgnoringLocations as _, ItemLocation, Located},
+    span::{EqualsIgnoringLocations as _, HasLocation, ItemLocation, Located},
 };
 
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]
@@ -62,10 +62,10 @@ pub fn convert_grammar_functions_to_semantic_functions(
     for function in functions {
         let mut index = None;
         for attribute in &function.attributes {
-            let grammar::Attribute::Function(ident, items) = &attribute.value else {
+            let grammar::Attribute::Function { name: ident, items, .. } = attribute else {
                 continue;
             };
-            if let Some(attr_index) = parse_index(ident, items, &attribute.location)? {
+            if let Some(attr_index) = parse_index(ident, items, attribute.location())? {
                 index = Some(attr_index);
             }
         }

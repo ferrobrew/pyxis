@@ -425,10 +425,7 @@ impl Parser {
 #[cfg(test)]
 mod tests {
     use crate::{
-        grammar::{
-            IntFormat, ModuleItem,
-            test_aliases::{int_literal_with_format, *},
-        },
+        grammar::{ModuleItem, test_aliases::*},
         parser::parse_str_for_tests,
         span::StripLocations,
     };
@@ -471,7 +468,7 @@ mod tests {
                 (V::Public, "test"),
                 [Ar::mut_self(), Ar::named("test2", T::ident("i32"))],
             )])
-            .with_attributes([A::size(4)])]),
+            .with_attributes([A::size_decimal(4)])]),
         )]);
 
         assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
@@ -573,10 +570,7 @@ mod tests {
                     TS::field((V::Public, "vehicle_types"), T::ident("VehicleTypes")),
                 ])
                 .with_attributes([
-                    A::Function(
-                        "size".into(),
-                        AIs::from_iter([AI::Expr(int_literal_with_format(0x1754, IntFormat::Hex))]),
-                    ),
+                    A::size(0x1754),
                     A::singleton(0x1_191_918),
                 ]),
             )])
@@ -682,10 +676,7 @@ mod tests {
                 TS::field((V::Private, "shape"), T::ident("u32").mut_pointer()),
                 TS::field((V::Private, "unknown"), T::array(T::ident("u32"), 4)),
             ])
-            .with_attributes([A::Function(
-                "size".into(),
-                AIs::from_iter([AI::Expr(int_literal_with_format(0x2C, IntFormat::Hex))]),
-            )]),
+            .with_attributes([A::size(0x2C)]),
         )]);
 
         assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);

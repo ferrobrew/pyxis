@@ -406,7 +406,7 @@ mod tests {
         "#;
 
         let ast = M::new()
-            .with_extern_types([("TestType<Hey>".into(), As::from_iter([A::size(12)]))])
+            .with_extern_types([("TestType<Hey>".into(), As::from_iter([A::size_decimal(12)]))])
             .with_definitions([ID::new(
                 (V::Private, "Test"),
                 TD::new([TS::field((V::Private, "test"), T::ident("TestType<Hey>"))]),
@@ -458,7 +458,7 @@ extern type ManuallyDrop<SharedPtr<u32>>;
         "#;
 
         let ast = M::new()
-            .with_extern_types([("SomeType".into(), As::from_iter([A::size(4)]))])
+            .with_extern_types([("SomeType".into(), As::from_iter([A::size_decimal(4)]))])
             .with_extern_values([
                 EV::new(
                     V::Public,

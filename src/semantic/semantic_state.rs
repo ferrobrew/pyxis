@@ -15,7 +15,7 @@ use crate::{
             PredefinedItem, Type, TypeDefinition, Visibility,
         },
     },
-    span::{ItemLocation, Located},
+    span::{HasLocation, ItemLocation, Located},
 };
 
 pub struct SemanticState {
@@ -101,7 +101,7 @@ impl SemanticState {
                         continue;
                     };
                     if let Some(attr_address) =
-                        attribute::parse_address(ident, items, &attribute.location)?
+                        attribute::parse_address(ident, items, attribute.location())?
                     {
                         address = Some(attr_address);
                     }
@@ -166,7 +166,7 @@ impl SemanticState {
                 let Some((ident, items)) = attribute.function() else {
                     continue;
                 };
-                let location = &attribute.location;
+                let location = attribute.location();
                 if let Some(attr_size) = attribute::parse_size(ident, items, location)? {
                     size = Some(attr_size);
                 } else if let Some(attr_align) = attribute::parse_align(ident, items, location)? {
