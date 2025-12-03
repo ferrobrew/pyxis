@@ -4,7 +4,7 @@ use crate::{
     SemanticError,
     grammar::{AttributeItems, Expr, Ident},
     semantic::error::Result,
-    span::{ItemLocation, Located},
+    span::{HasLocation, ItemLocation},
 };
 
 macro_rules! parse_integer_attribute {
@@ -31,7 +31,7 @@ pub fn assert_function_argument_count<'a>(
     target_name: &str,
     length: usize,
     fallback_location: &ItemLocation,
-) -> Result<Vec<Located<&'a Expr>>> {
+) -> Result<Vec<&'a Expr>> {
     let exprs = items.exprs_vec();
     if exprs.len() != length {
         return Err(SemanticError::InvalidAttributeFunctionArgumentCount {
@@ -56,7 +56,7 @@ fn parse_single_integer<T: TryFrom<isize> + Display>(
         fallback_location: &ItemLocation,
     ) -> Result<T> {
         let exprs = assert_function_argument_count(items, target_name, 1, fallback_location)?;
-        integer_expr(&exprs[0], target_name)
+        integer_expr(exprs[0], target_name)
     }
 
     (attr_ident.as_str() == target_name)
@@ -65,15 +65,14 @@ fn parse_single_integer<T: TryFrom<isize> + Display>(
 }
 
 fn integer_expr<T: TryFrom<isize> + Display>(
-    expr: &Located<&Expr>,
+    expr: &Expr,
     attribute_name: &str,
 ) -> Result<T> {
-    let Located { value, location } = expr;
-    let Expr::IntLiteral { value, .. } = value else {
+    let Expr::IntLiteral { value, .. } = expr else {
         return Err(SemanticError::InvalidAttributeValue {
             attribute_name: attribute_name.into(),
             expected_type: std::any::type_name::<T>().into(),
-            location: location.clone(),
+            location: expr.location().clone(),
         });
     };
     let value = (*value)
@@ -81,7 +80,7 @@ fn integer_expr<T: TryFrom<isize> + Display>(
         .map_err(|_| SemanticError::IntegerConversion {
             value: value.to_string(),
             target_type: std::any::type_name::<T>().into(),
-            location: location.clone(),
+            location: expr.location().clone(),
         })?;
     Ok(value)
 }

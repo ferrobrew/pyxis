@@ -308,8 +308,8 @@ impl PrettyPrinter {
                 write!(&mut self.output, "{name}(").unwrap();
                 let mut first_expr = true;
                 for item in items {
-                    match &item.value {
-                        AttributeItem::Expr(expr) => {
+                    match item {
+                        AttributeItem::Expr { expr, .. } => {
                             if !first_expr {
                                 write!(&mut self.output, ", ").unwrap();
                             }
@@ -327,8 +327,8 @@ impl PrettyPrinter {
                                 self.print_expr(expr);
                             }
                         }
-                        AttributeItem::Comment(comment) => {
-                            write!(&mut self.output, " {comment}").unwrap();
+                        AttributeItem::Comment { text, .. } => {
+                            write!(&mut self.output, " {text}").unwrap();
                         }
                     }
                 }
@@ -341,12 +341,12 @@ impl PrettyPrinter {
             Attribute::Assign { name, items, .. } => {
                 write!(&mut self.output, "{name} = ").unwrap();
                 for item in items {
-                    match &item.value {
-                        AttributeItem::Expr(expr) => {
+                    match item {
+                        AttributeItem::Expr { expr, .. } => {
                             self.print_expr(expr);
                         }
-                        AttributeItem::Comment(comment) => {
-                            write!(&mut self.output, " {comment}").unwrap();
+                        AttributeItem::Comment { text, .. } => {
+                            write!(&mut self.output, " {text}").unwrap();
                         }
                     }
                 }

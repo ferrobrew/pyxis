@@ -403,12 +403,12 @@ pub fn build(
                 1,
                 attribute.location(),
             )?;
-            let Located { value, location } = &exprs[0];
-            let Expr::StringLiteral { value, .. } = value else {
+            let expr = exprs[0];
+            let Expr::StringLiteral { value, .. } = expr else {
                 return Err(SemanticError::InvalidAttributeValue {
                     attribute_name: "calling_convention".into(),
                     expected_type: std::any::type_name::<CallingConvention>().into(),
-                    location: location.clone(),
+                    location: expr.location().clone(),
                 });
             };
 
@@ -419,7 +419,7 @@ pub fn build(
                         .map_err(|_| SemanticError::InvalidCallingConvention {
                             convention: value.clone(),
                             function_name: function.name.0.clone(),
-                            location: location.clone(),
+                            location: expr.location().clone(),
                         })?,
                 );
         }

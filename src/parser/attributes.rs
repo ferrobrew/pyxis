@@ -1,7 +1,7 @@
 use std::ops::{Deref, DerefMut};
 
 use crate::{
-    span::{ItemLocation, Located},
+    span::ItemLocation,
     tokenizer::TokenKind,
 };
 
@@ -15,21 +15,35 @@ use super::expressions::{IntFormat, StringFormat};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum AttributeItem {
-    Expr(Expr),
-    Comment(String),
+    Expr { expr: Expr, location: ItemLocation },
+    Comment { text: String, location: ItemLocation },
+}
+impl HasLocation for AttributeItem {
+    fn location(&self) -> &ItemLocation {
+        match self {
+            AttributeItem::Expr { location, .. } => location,
+            AttributeItem::Comment { location, .. } => location,
+        }
+    }
 }
 #[cfg(test)]
 impl StripLocations for AttributeItem {
     fn strip_locations(&self) -> Self {
         match self {
-            AttributeItem::Expr(expr) => AttributeItem::Expr(expr.strip_locations()),
-            AttributeItem::Comment(comment) => AttributeItem::Comment(comment.strip_locations()),
+            AttributeItem::Expr { expr, .. } => AttributeItem::Expr {
+                expr: expr.strip_locations(),
+                location: ItemLocation::test(),
+            },
+            AttributeItem::Comment { text, .. } => AttributeItem::Comment {
+                text: text.strip_locations(),
+                location: ItemLocation::test(),
+            },
         }
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct AttributeItems(pub Vec<Located<AttributeItem>>);
+pub struct AttributeItems(pub Vec<AttributeItem>);
 #[cfg(test)]
 impl StripLocations for AttributeItems {
     fn strip_locations(&self) -> Self {
@@ -39,35 +53,31 @@ impl StripLocations for AttributeItems {
 #[cfg(test)]
 impl FromIterator<AttributeItem> for AttributeItems {
     fn from_iter<I: IntoIterator<Item = AttributeItem>>(iter: I) -> Self {
-        AttributeItems(iter.into_iter().map(Located::test).collect())
+        AttributeItems(iter.into_iter().collect())
     }
 }
 impl IntoIterator for AttributeItems {
-    type Item = Located<AttributeItem>;
-    type IntoIter = std::vec::IntoIter<Located<AttributeItem>>;
+    type Item = AttributeItem;
+    type IntoIter = std::vec::IntoIter<AttributeItem>;
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
     }
 }
 impl<'a> IntoIterator for &'a AttributeItems {
-    type Item = &'a Located<AttributeItem>;
-    type IntoIter = std::slice::Iter<'a, Located<AttributeItem>>;
+    type Item = &'a AttributeItem;
+    type IntoIter = std::slice::Iter<'a, AttributeItem>;
     fn into_iter(self) -> Self::IntoIter {
         self.0.iter()
     }
 }
 impl AttributeItems {
-    pub fn exprs(&self) -> impl Iterator<Item = Located<&Expr>> {
-        self.0.iter().filter_map(|item| {
-            item.as_ref()
-                .map(|item| match item {
-                    AttributeItem::Expr(expr) => Some(expr),
-                    _ => None,
-                })
-                .transpose()
+    pub fn exprs(&self) -> impl Iterator<Item = &Expr> {
+        self.0.iter().filter_map(|item| match item {
+            AttributeItem::Expr { expr, .. } => Some(expr),
+            _ => None,
         })
     }
-    pub fn exprs_vec(&self) -> Vec<Located<&Expr>> {
+    pub fn exprs_vec(&self) -> Vec<&Expr> {
         self.exprs().collect()
     }
 }
@@ -169,22 +179,28 @@ impl Attribute {
     pub fn integer_fn(attr_name: &str, value: isize) -> Self {
         Attribute::Function {
             name: attr_name.into(),
-            items: AttributeItems(vec![Located::test(AttributeItem::Expr(Expr::IntLiteral {
-                value,
-                format: IntFormat::Decimal,
+            items: AttributeItems(vec![AttributeItem::Expr {
+                expr: Expr::IntLiteral {
+                    value,
+                    format: IntFormat::Decimal,
+                    location: ItemLocation::test(),
+                },
                 location: ItemLocation::test(),
-            }))]),
+            }]),
             location: ItemLocation::test(),
         }
     }
     fn integer_fn_hex(attr_name: &str, value: isize) -> Self {
         Attribute::Function {
             name: attr_name.into(),
-            items: AttributeItems(vec![Located::test(AttributeItem::Expr(Expr::IntLiteral {
-                value,
-                format: IntFormat::Hex,
+            items: AttributeItems(vec![AttributeItem::Expr {
+                expr: Expr::IntLiteral {
+                    value,
+                    format: IntFormat::Hex,
+                    location: ItemLocation::test(),
+                },
                 location: ItemLocation::test(),
-            }))]),
+            }]),
             location: ItemLocation::test(),
         }
     }
@@ -212,13 +228,14 @@ impl Attribute {
     pub fn calling_convention(conv_name: &str) -> Self {
         Attribute::Function {
             name: "calling_convention".into(),
-            items: AttributeItems(vec![Located::test(AttributeItem::Expr(
-                Expr::StringLiteral {
+            items: AttributeItems(vec![AttributeItem::Expr {
+                expr: Expr::StringLiteral {
                     value: conv_name.into(),
                     format: StringFormat::Regular,
                     location: ItemLocation::test(),
                 },
-            ))]),
+                location: ItemLocation::test(),
+            }]),
             location: ItemLocation::test(),
         }
     }
@@ -342,10 +359,10 @@ impl Parser {
                         TokenKind::MultiLineComment(text) => text.clone(),
                         _ => unreachable!(),
                     };
-                    items.push(Located::new(
-                        AttributeItem::Comment(comment_text),
-                        token.location,
-                    ));
+                    items.push(AttributeItem::Comment {
+                        text: comment_text,
+                        location: token.location,
+                    });
                 }
 
                 // Skip doc comments (they don't belong in attribute expressions)
@@ -357,7 +374,9 @@ impl Parser {
                     break;
                 }
 
-                items.push(self.parse_expr_located()?.map(AttributeItem::Expr));
+                let expr = self.parse_expr()?;
+                let location = expr.location().clone();
+                items.push(AttributeItem::Expr { expr, location });
 
                 // Collect trailing comments after the expression
                 while matches!(
@@ -370,10 +389,10 @@ impl Parser {
                         TokenKind::MultiLineComment(text) => text.clone(),
                         _ => unreachable!(),
                     };
-                    items.push(Located::new(
-                        AttributeItem::Comment(comment_text),
-                        token.location.clone(),
-                    ));
+                    items.push(AttributeItem::Comment {
+                        text: comment_text,
+                        location: token.location.clone(),
+                    });
                 }
 
                 if matches!(self.peek(), TokenKind::Comma) {
@@ -405,15 +424,16 @@ impl Parser {
                     TokenKind::MultiLineComment(text) => text.clone(),
                     _ => unreachable!(),
                 };
-                items.push(Located::new(
-                    AttributeItem::Comment(comment_text),
-                    token.location,
-                ));
+                items.push(AttributeItem::Comment {
+                    text: comment_text,
+                    location: token.location,
+                });
             }
 
-            let expr = self.parse_expr_located()?;
-            let mut end_pos = expr.location.span.end;
-            items.push(expr.map(AttributeItem::Expr));
+            let expr = self.parse_expr()?;
+            let mut end_pos = expr.location().span.end;
+            let expr_location = expr.location().clone();
+            items.push(AttributeItem::Expr { expr, location: expr_location });
 
             // Collect comments after the expression
             while matches!(
@@ -426,10 +446,10 @@ impl Parser {
                     TokenKind::MultiLineComment(text) => text.clone(),
                     _ => unreachable!(),
                 };
-                items.push(Located::new(
-                    AttributeItem::Comment(comment_text),
-                    token.location.clone(),
-                ));
+                items.push(AttributeItem::Comment {
+                    text: comment_text,
+                    location: token.location.clone(),
+                });
                 end_pos = token.location.span.end;
             }
 
