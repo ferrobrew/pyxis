@@ -87,7 +87,7 @@ pub struct Function {
     pub attributes: Attributes,
     pub doc_comments: Vec<String>,
     pub arguments: Vec<Argument>,
-    pub return_type: Option<Located<Type>>,
+    pub return_type: Option<Type>,
 }
 #[cfg(test)]
 impl StripLocations for Function {
@@ -126,7 +126,7 @@ impl Function {
         self
     }
     pub fn with_return_type(mut self, return_type: impl Into<Type>) -> Self {
-        self.return_type = Some(Located::test(return_type.into()));
+        self.return_type = Some(return_type.into());
         self
     }
 }
@@ -313,7 +313,7 @@ impl Parser {
 
         let return_type = if matches!(self.peek(), TokenKind::Arrow) {
             self.advance();
-            Some(self.parse_type_located()?)
+            Some(self.parse_type()?)
         } else {
             None
         };

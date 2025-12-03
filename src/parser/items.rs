@@ -339,7 +339,7 @@ impl EnumStatement {
 }
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct EnumDefinition {
-    pub type_: Located<Type>,
+    pub type_: Type,
     pub items: Vec<Located<EnumDefItem>>,
     pub attributes: Attributes,
     pub inline_trailing_comments: Vec<Comment>, // Comments on same line as attributes
@@ -378,7 +378,7 @@ impl EnumDefinition {
         attributes: impl IntoIterator<Item = Attribute>,
     ) -> Self {
         Self {
-            type_: Located::test(type_),
+            type_,
             items: statements
                 .into_iter()
                 .map(EnumDefItem::Statement)
@@ -492,7 +492,7 @@ impl BitflagsStatement {
 }
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct BitflagsDefinition {
-    pub type_: Located<Type>,
+    pub type_: Type,
     pub items: Vec<Located<BitflagsDefItem>>,
     pub attributes: Attributes,
     pub inline_trailing_comments: Vec<Comment>, // Comments on same line as attributes
@@ -531,7 +531,7 @@ impl BitflagsDefinition {
         attributes: impl IntoIterator<Item = Attribute>,
     ) -> Self {
         Self {
-            type_: Located::test(type_),
+            type_,
             items: statements
                 .into_iter()
                 .map(BitflagsDefItem::Statement)
@@ -727,7 +727,7 @@ impl Parser {
                 self.advance();
                 let (name, _) = self.expect_ident()?;
                 self.expect(TokenKind::Colon)?;
-                let type_ = self.parse_type_located()?;
+                let type_ = self.parse_type()?;
                 self.expect(TokenKind::LBrace)?;
                 let items = self.parse_enum_def_items()?;
                 self.expect(TokenKind::RBrace)?;
@@ -760,7 +760,7 @@ impl Parser {
                 self.advance();
                 let (name, _) = self.expect_ident()?;
                 self.expect(TokenKind::Colon)?;
-                let type_ = self.parse_type_located()?;
+                let type_ = self.parse_type()?;
                 self.expect(TokenKind::LBrace)?;
                 let items = self.parse_bitflags_def_items()?;
                 self.expect(TokenKind::RBrace)?;

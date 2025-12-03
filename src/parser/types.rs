@@ -208,8 +208,6 @@ impl fmt::Display for Type {
     }
 }
 
-use crate::span::Located;
-
 impl Parser {
     pub(crate) fn parse_type(&mut self) -> Result<Type, ParseError> {
         match self.peek() {
@@ -312,13 +310,5 @@ impl Parser {
                 location: self.current().location.clone(),
             }),
         }
-    }
-
-    /// Parse a type and wrap it in Located for backwards compatibility
-    /// This will be removed once all callers are updated
-    pub(crate) fn parse_type_located(&mut self) -> Result<Located<Type>, ParseError> {
-        let ty = self.parse_type()?;
-        let location = ty.location().clone();
-        Ok(Located::new(ty, location))
     }
 }

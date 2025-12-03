@@ -81,7 +81,7 @@ impl Backend {
 pub struct ExternValue {
     pub visibility: Visibility,
     pub name: Ident,
-    pub type_: Located<Type>,
+    pub type_: Type,
     pub attributes: Attributes,
     pub doc_comments: Vec<String>,
 }
@@ -108,7 +108,7 @@ impl ExternValue {
         Self {
             visibility,
             name: name.into(),
-            type_: Located::test(type_),
+            type_,
             attributes: Attributes::from_iter(attributes),
             doc_comments: vec![],
         }
@@ -225,7 +225,7 @@ impl Parser {
         self.expect(TokenKind::Extern)?;
         let (name, _) = self.expect_ident()?;
         self.expect(TokenKind::Colon)?;
-        let type_ = self.parse_type_located()?;
+        let type_ = self.parse_type()?;
         self.expect(TokenKind::Semi)?;
         let end_pos = if self.pos > 0 {
             self.tokens[self.pos - 1].location.span.end

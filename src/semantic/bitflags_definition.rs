@@ -87,7 +87,7 @@ pub fn build(
 ) -> Result<Option<ItemStateResolved>> {
     let module = semantic.get_module_for_path(resolvee_path, &definition.location)?;
 
-    let type_location = definition.type_.location.clone();
+    let type_location = definition.type_.location().clone();
 
     // Retrieve the type for this bitflags, and validate it, before getting its size
     let Some(ty) = semantic

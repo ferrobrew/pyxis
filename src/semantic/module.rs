@@ -8,7 +8,7 @@ use crate::{
         type_registry::TypeRegistry,
         types::{Backend, ExternValue, ItemDefinition, Type},
     },
-    span::{ItemLocation, Located},
+    span::{HasLocation, ItemLocation, Located},
 };
 
 #[derive(Debug, Clone)]
@@ -113,7 +113,7 @@ impl Module {
                         resolution_context: TypeResolutionContext::ExternValue {
                             extern_name: ev.name.clone(),
                         },
-                        location: type_ref.location.clone(),
+                        location: type_ref.location().clone(),
                     })?;
             }
         }

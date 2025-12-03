@@ -453,7 +453,7 @@ pub fn build(
                     type_registry
                         .resolve_grammar_type(scope, type_)
                         .ok_or_else(|| SemanticError::TypeResolutionFailed {
-                            type_: Located::new(type_.clone(), type_.location().clone()),
+                            type_: type_.clone(),
                             resolution_context: TypeResolutionContext::FunctionArgument {
                                 argument_name: ident.0.clone(),
                                 function_name: function.name.0.clone(),

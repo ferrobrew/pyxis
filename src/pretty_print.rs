@@ -584,12 +584,12 @@ impl PrettyPrinter {
             }
             ItemDefinitionInner::Enum(ed) => {
                 write!(&mut self.output, "enum {}: ", def.name).unwrap();
-                self.print_type(&ed.type_.value);
+                self.print_type(&ed.type_);
                 writeln!(&mut self.output, " {{").unwrap();
                 self.indent();
                 // Set binary literal width based on enum type
                 let old_width = self.binary_literal_width;
-                self.binary_literal_width = self.get_type_bit_width(&ed.type_.value);
+                self.binary_literal_width = self.get_type_bit_width(&ed.type_);
                 for (i, item) in ed.items.iter().enumerate() {
                     let next_item = ed.items.get(i + 1);
                     match &item.value {
@@ -608,12 +608,12 @@ impl PrettyPrinter {
             }
             ItemDefinitionInner::Bitflags(bf) => {
                 write!(&mut self.output, "bitflags {}: ", def.name).unwrap();
-                self.print_type(&bf.type_.value);
+                self.print_type(&bf.type_);
                 writeln!(&mut self.output, " {{").unwrap();
                 self.indent();
                 // Set binary literal width based on bitflags type
                 let old_width = self.binary_literal_width;
-                self.binary_literal_width = self.get_type_bit_width(&bf.type_.value);
+                self.binary_literal_width = self.get_type_bit_width(&bf.type_);
                 for (i, item) in bf.items.iter().enumerate() {
                     let next_item = bf.items.get(i + 1);
                     match &item.value {
@@ -837,7 +837,7 @@ impl PrettyPrinter {
             write!(&mut self.output, "pub ").unwrap();
         }
         write!(&mut self.output, "extern {}: ", extern_val.name).unwrap();
-        self.print_type(&extern_val.type_.value);
+        self.print_type(&extern_val.type_);
         writeln!(&mut self.output, ";").unwrap();
     }
 

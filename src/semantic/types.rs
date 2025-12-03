@@ -65,7 +65,7 @@ impl From<grammar::Visibility> for Visibility {
 
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]
 pub enum Type {
-    Unresolved(Located<grammar::Type>),
+    Unresolved(grammar::Type),
     Raw(ItemPath),
     ConstPointer(Box<Type>),
     MutPointer(Box<Type>),
