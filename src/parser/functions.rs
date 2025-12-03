@@ -17,34 +17,52 @@ use super::{
 #[cfg(test)]
 use super::attributes::Attribute;
 
+use crate::span::HasLocation;
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Argument {
-    ConstSelf,
-    MutSelf,
-    Named(Ident, Located<Type>),
+    ConstSelf { location: ItemLocation },
+    MutSelf { location: ItemLocation },
+    Named { ident: Ident, type_: Type, location: ItemLocation },
+}
+impl HasLocation for Argument {
+    fn location(&self) -> &ItemLocation {
+        match self {
+            Argument::ConstSelf { location } => location,
+            Argument::MutSelf { location } => location,
+            Argument::Named { location, .. } => location,
+        }
+    }
 }
 #[cfg(test)]
 impl StripLocations for Argument {
     fn strip_locations(&self) -> Self {
         match self {
-            Argument::ConstSelf => Argument::ConstSelf,
-            Argument::MutSelf => Argument::MutSelf,
-            Argument::Named(ident, ty) => {
-                Argument::Named(ident.strip_locations(), ty.strip_locations())
-            }
+            Argument::ConstSelf { .. } => Argument::ConstSelf { location: ItemLocation::test() },
+            Argument::MutSelf { .. } => Argument::MutSelf { location: ItemLocation::test() },
+            Argument::Named { ident, type_, .. } => Argument::Named {
+                ident: ident.strip_locations(),
+                type_: type_.strip_locations(),
+                location: ItemLocation::test(),
+            },
         }
     }
 }
 #[cfg(test)]
 impl Argument {
     pub fn const_self() -> Argument {
-        Argument::ConstSelf
+        Argument::ConstSelf { location: ItemLocation::test() }
     }
     pub fn mut_self() -> Argument {
-        Argument::MutSelf
+        Argument::MutSelf { location: ItemLocation::test() }
     }
     pub fn named(ident: impl Into<Ident>, type_: impl Into<Type>) -> Argument {
-        Argument::Named(ident.into(), Located::test(type_.into()))
+        let type_ = type_.into();
+        Argument::Named {
+            ident: ident.into(),
+            location: type_.location().clone(),
+            type_,
+        }
     }
 }
 
@@ -54,7 +72,7 @@ pub struct Function {
     pub name: Ident,
     pub attributes: Attributes,
     pub doc_comments: Vec<String>,
-    pub arguments: Vec<Located<Argument>>,
+    pub arguments: Vec<Argument>,
     pub return_type: Option<Located<Type>>,
 }
 #[cfg(test)]
@@ -81,7 +99,7 @@ impl Function {
             name: name.into(),
             attributes: Default::default(),
             doc_comments: vec![],
-            arguments: arguments.into_iter().map(Located::test).collect(),
+            arguments: arguments.into_iter().collect(),
             return_type: None,
         }
     }
@@ -306,26 +324,26 @@ impl Parser {
         ))
     }
 
-    pub(crate) fn parse_argument(&mut self) -> Result<Located<Argument>, ParseError> {
+    pub(crate) fn parse_argument(&mut self) -> Result<Argument, ParseError> {
         if matches!(self.peek(), TokenKind::Amp) {
             self.advance();
             if matches!(self.peek(), TokenKind::Mut) {
                 self.advance();
                 let tok = self.expect(TokenKind::SelfValue)?;
-                Ok(Located::new(Argument::MutSelf, tok.location.clone()))
+                Ok(Argument::MutSelf { location: tok.location.clone() })
             } else {
                 let tok = self.expect(TokenKind::SelfValue)?;
-                Ok(Located::new(Argument::ConstSelf, tok.location.clone()))
+                Ok(Argument::ConstSelf { location: tok.location.clone() })
             }
         } else {
             let start_pos = self.current().location.span.start;
             let (name, _) = self.expect_ident()?;
             self.expect(TokenKind::Colon)?;
-            let type_ = self.parse_type_located()?;
+            let type_ = self.parse_type()?;
             let end_pos = self.current().location.span.end;
             let location = ItemLocation::new(self.filename.clone(), Span::new(start_pos, end_pos));
 
-            Ok(Located::new(Argument::Named(name, type_), location))
+            Ok(Argument::Named { ident: name, type_, location })
         }
     }
 }

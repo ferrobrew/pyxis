@@ -443,25 +443,25 @@ pub fn build(
         .arguments
         .iter()
         .map(|a| {
-            a.as_ref()
-                .map_with_location(|a, location| match a {
-                    grammar::Argument::ConstSelf => Ok(Argument::ConstSelf),
-                    grammar::Argument::MutSelf => Ok(Argument::MutSelf),
-                    grammar::Argument::Named(name, type_) => Ok(Argument::Field(
-                        name.0.clone(),
-                        type_registry
-                            .resolve_grammar_type(scope, type_)
-                            .ok_or_else(|| SemanticError::TypeResolutionFailed {
-                                type_: type_.clone(),
-                                resolution_context: TypeResolutionContext::FunctionArgument {
-                                    argument_name: name.0.clone(),
-                                    function_name: function.name.0.clone(),
-                                },
-                                location: location.clone(),
-                            })?,
-                    )),
-                })
-                .transpose()
+            let location = a.location().clone();
+            let arg = match a {
+                grammar::Argument::ConstSelf { .. } => Argument::ConstSelf,
+                grammar::Argument::MutSelf { .. } => Argument::MutSelf,
+                grammar::Argument::Named { ident, type_, .. } => Argument::Field(
+                    ident.0.clone(),
+                    type_registry
+                        .resolve_grammar_type(scope, type_)
+                        .ok_or_else(|| SemanticError::TypeResolutionFailed {
+                            type_: Located::new(type_.clone(), type_.location().clone()),
+                            resolution_context: TypeResolutionContext::FunctionArgument {
+                                argument_name: ident.0.clone(),
+                                function_name: function.name.0.clone(),
+                            },
+                            location: location.clone(),
+                        })?,
+                ),
+            };
+            Ok(Located::new(arg, location))
         })
         .collect::<Result<Vec<_>>>()?;
 
