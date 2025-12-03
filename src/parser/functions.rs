@@ -1,5 +1,5 @@
 use crate::{
-    span::{ItemLocation, Located, Span},
+    span::{HasLocation, ItemLocation, Located, Span},
     tokenizer::TokenKind,
 };
 
@@ -16,8 +16,6 @@ use super::{
 
 #[cfg(test)]
 use super::attributes::Attribute;
-
-use crate::span::HasLocation;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Argument {
@@ -228,8 +226,9 @@ impl Parser {
                 self.peek(),
                 TokenKind::Comment(_) | TokenKind::MultiLineComment(_)
             ) {
-                if let Some(comment) = self.collect_comment_located() {
-                    items.push(comment.map(ImplItem::Comment));
+                if let Some(comment) = self.collect_comment() {
+                    let location = comment.location().clone();
+                    items.push(Located::new(ImplItem::Comment(comment), location));
                 }
             }
 

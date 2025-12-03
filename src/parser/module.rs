@@ -1,4 +1,7 @@
-use crate::{span::Located, tokenizer::TokenKind};
+use crate::{
+    span::{HasLocation, Located},
+    tokenizer::TokenKind,
+};
 
 #[cfg(test)]
 use crate::span::StripLocations;
@@ -237,8 +240,9 @@ impl Parser {
                 self.peek(),
                 TokenKind::Comment(_) | TokenKind::MultiLineComment(_)
             ) {
-                if let Some(comment) = self.collect_comment_located() {
-                    items.push(comment.map(ModuleItem::Comment));
+                if let Some(comment) = self.collect_comment() {
+                    let location = comment.location().clone();
+                    items.push(Located::new(ModuleItem::Comment(comment), location));
                 }
             }
 
@@ -251,7 +255,8 @@ impl Parser {
 
             // Add any pending comments that were collected during parsing (e.g., inline comments after attributes)
             for comment in self.pending_comments.drain(..) {
-                items.push(comment.map(ModuleItem::Comment));
+                let location = comment.location().clone();
+                items.push(Located::new(ModuleItem::Comment(comment), location));
             }
 
             // Collect any inline comments that appeared after the item
@@ -259,8 +264,9 @@ impl Parser {
                 self.peek(),
                 TokenKind::Comment(_) | TokenKind::MultiLineComment(_)
             ) {
-                if let Some(comment) = self.collect_comment_located() {
-                    items.push(comment.map(ModuleItem::Comment));
+                if let Some(comment) = self.collect_comment() {
+                    let location = comment.location().clone();
+                    items.push(Located::new(ModuleItem::Comment(comment), location));
                 }
             }
         }

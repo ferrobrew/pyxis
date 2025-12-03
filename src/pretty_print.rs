@@ -542,7 +542,7 @@ impl PrettyPrinter {
             // Print inline trailing comments (comments on the same line as attributes)
             for comment in inline_trailing_comments {
                 write!(&mut self.output, " ").unwrap();
-                self.print_comment_inline(&comment.value);
+                self.print_comment_inline(comment);
             }
 
             writeln!(&mut self.output).unwrap();
@@ -550,7 +550,7 @@ impl PrettyPrinter {
 
         // Print following comments (comments on lines after attributes)
         for comment in following_comments {
-            self.print_comment(&comment.value);
+            self.print_comment(comment);
         }
 
         self.write_indent();
@@ -659,20 +659,20 @@ impl PrettyPrinter {
                     write!(&mut self.output, "pub ").unwrap();
                 }
                 write!(&mut self.output, "{name}: ").unwrap();
-                self.print_type(&type_.value);
+                self.print_type(type_);
                 write!(&mut self.output, ",").unwrap();
 
                 // Print inline trailing comments
                 for comment in &stmt.inline_trailing_comments {
                     write!(&mut self.output, " ").unwrap();
-                    self.print_comment_inline(&comment.value);
+                    self.print_comment_inline(comment);
                 }
 
                 writeln!(&mut self.output).unwrap();
 
                 // Print following comments (comments on lines after the field)
                 for comment in &stmt.following_comments {
-                    self.print_comment(&comment.value);
+                    self.print_comment(comment);
                 }
             }
             TypeField::Vftable(funcs) => {
@@ -699,14 +699,14 @@ impl PrettyPrinter {
                 // Print inline trailing comments for vftable too
                 for comment in &stmt.inline_trailing_comments {
                     write!(&mut self.output, " ").unwrap();
-                    self.print_comment_inline(&comment.value);
+                    self.print_comment_inline(comment);
                 }
 
                 writeln!(&mut self.output).unwrap();
 
                 // Print following comments (comments on lines after vftable)
                 for comment in &stmt.following_comments {
-                    self.print_comment(&comment.value);
+                    self.print_comment(comment);
                 }
 
                 // Add blank line after vftable if there's a field following
@@ -736,14 +736,14 @@ impl PrettyPrinter {
         // Print inline trailing comments
         for comment in &stmt.inline_trailing_comments {
             write!(&mut self.output, " ").unwrap();
-            self.print_comment_inline(&comment.value);
+            self.print_comment_inline(comment);
         }
 
         writeln!(&mut self.output).unwrap();
 
         // Print following comments (comments on lines after the enum variant)
         for comment in &stmt.following_comments {
-            self.print_comment(&comment.value);
+            self.print_comment(comment);
         }
     }
 
@@ -767,14 +767,14 @@ impl PrettyPrinter {
         // Print inline trailing comments
         for comment in &stmt.inline_trailing_comments {
             write!(&mut self.output, " ").unwrap();
-            self.print_comment_inline(&comment.value);
+            self.print_comment_inline(comment);
         }
 
         writeln!(&mut self.output).unwrap();
 
         // Print following comments (comments on lines after the bitflag)
         for comment in &stmt.following_comments {
-            self.print_comment(&comment.value);
+            self.print_comment(comment);
         }
     }
 

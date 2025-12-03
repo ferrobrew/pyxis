@@ -79,7 +79,7 @@ impl StripLocations for Comment {
 // types
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TypeField {
-    Field(Visibility, Ident, Located<Type>),
+    Field(Visibility, Ident, Type),
     Vftable(Vec<Located<Function>>),
 }
 #[cfg(test)]
@@ -102,7 +102,7 @@ impl TypeField {
         name: impl Into<Ident>,
         type_: impl Into<Type>,
     ) -> TypeField {
-        TypeField::Field(visibility, name.into(), Located::test(type_.into()))
+        TypeField::Field(visibility, name.into(), type_.into())
     }
 
     pub fn vftable(functions: impl IntoIterator<Item = Function>) -> TypeField {
@@ -138,8 +138,8 @@ pub struct TypeStatement {
     pub field: TypeField,
     pub attributes: Attributes,
     pub doc_comments: Vec<String>,
-    pub inline_trailing_comments: Vec<Located<Comment>>, // Comments on same line as field
-    pub following_comments: Vec<Located<Comment>>,       // Comments on lines after field
+    pub inline_trailing_comments: Vec<Comment>, // Comments on same line as field
+    pub following_comments: Vec<Comment>,       // Comments on lines after field
 }
 #[cfg(test)]
 impl StripLocations for TypeStatement {
@@ -157,7 +157,7 @@ impl StripLocations for TypeStatement {
 impl TypeStatement {
     pub fn field((visibility, name): (Visibility, &str), type_: Type) -> TypeStatement {
         TypeStatement {
-            field: TypeField::Field(visibility, name.into(), Located::test(type_)),
+            field: TypeField::Field(visibility, name.into(), type_),
             attributes: Default::default(),
             doc_comments: vec![],
             inline_trailing_comments: Vec::new(),
@@ -181,14 +181,11 @@ impl TypeStatement {
         self.doc_comments = doc_comments;
         self
     }
-    pub fn with_inline_trailing_comments(
-        mut self,
-        inline_trailing_comments: Vec<Located<Comment>>,
-    ) -> Self {
+    pub fn with_inline_trailing_comments(mut self, inline_trailing_comments: Vec<Comment>) -> Self {
         self.inline_trailing_comments = inline_trailing_comments;
         self
     }
-    pub fn with_following_comments(mut self, following_comments: Vec<Located<Comment>>) -> Self {
+    pub fn with_following_comments(mut self, following_comments: Vec<Comment>) -> Self {
         self.following_comments = following_comments;
         self
     }
@@ -197,8 +194,8 @@ impl TypeStatement {
 pub struct TypeDefinition {
     pub items: Vec<Located<TypeDefItem>>,
     pub attributes: Attributes,
-    pub inline_trailing_comments: Vec<Located<Comment>>, // Comments on same line as attributes
-    pub following_comments: Vec<Located<Comment>>,       // Comments on lines after attributes
+    pub inline_trailing_comments: Vec<Comment>, // Comments on same line as attributes
+    pub following_comments: Vec<Comment>,       // Comments on lines after attributes
 }
 #[cfg(test)]
 impl StripLocations for TypeDefinition {
@@ -242,14 +239,11 @@ impl TypeDefinition {
         self.attributes = Attributes::from_iter(attributes);
         self
     }
-    pub fn with_inline_trailing_comments(
-        mut self,
-        inline_trailing_comments: Vec<Located<Comment>>,
-    ) -> Self {
+    pub fn with_inline_trailing_comments(mut self, inline_trailing_comments: Vec<Comment>) -> Self {
         self.inline_trailing_comments = inline_trailing_comments;
         self
     }
-    pub fn with_following_comments(mut self, following_comments: Vec<Located<Comment>>) -> Self {
+    pub fn with_following_comments(mut self, following_comments: Vec<Comment>) -> Self {
         self.following_comments = following_comments;
         self
     }
@@ -292,8 +286,8 @@ pub struct EnumStatement {
     pub expr: Option<Located<Expr>>,
     pub attributes: Attributes,
     pub doc_comments: Vec<String>,
-    pub inline_trailing_comments: Vec<Located<Comment>>, // Comments on same line as enum variant
-    pub following_comments: Vec<Located<Comment>>,       // Comments on lines after enum variant
+    pub inline_trailing_comments: Vec<Comment>, // Comments on same line as enum variant
+    pub following_comments: Vec<Comment>,       // Comments on lines after enum variant
 }
 #[cfg(test)]
 impl StripLocations for EnumStatement {
@@ -334,14 +328,11 @@ impl EnumStatement {
         self.doc_comments = doc_comments;
         self
     }
-    pub fn with_inline_trailing_comments(
-        mut self,
-        inline_trailing_comments: Vec<Located<Comment>>,
-    ) -> Self {
+    pub fn with_inline_trailing_comments(mut self, inline_trailing_comments: Vec<Comment>) -> Self {
         self.inline_trailing_comments = inline_trailing_comments;
         self
     }
-    pub fn with_following_comments(mut self, following_comments: Vec<Located<Comment>>) -> Self {
+    pub fn with_following_comments(mut self, following_comments: Vec<Comment>) -> Self {
         self.following_comments = following_comments;
         self
     }
@@ -351,8 +342,8 @@ pub struct EnumDefinition {
     pub type_: Located<Type>,
     pub items: Vec<Located<EnumDefItem>>,
     pub attributes: Attributes,
-    pub inline_trailing_comments: Vec<Located<Comment>>, // Comments on same line as attributes
-    pub following_comments: Vec<Located<Comment>>,       // Comments on lines after attributes
+    pub inline_trailing_comments: Vec<Comment>, // Comments on same line as attributes
+    pub following_comments: Vec<Comment>,       // Comments on lines after attributes
 }
 #[cfg(test)]
 impl StripLocations for EnumDefinition {
@@ -402,14 +393,11 @@ impl EnumDefinition {
         self.attributes = Attributes::from_iter(attributes);
         self
     }
-    pub fn with_inline_trailing_comments(
-        mut self,
-        inline_trailing_comments: Vec<Located<Comment>>,
-    ) -> Self {
+    pub fn with_inline_trailing_comments(mut self, inline_trailing_comments: Vec<Comment>) -> Self {
         self.inline_trailing_comments = inline_trailing_comments;
         self
     }
-    pub fn with_following_comments(mut self, following_comments: Vec<Located<Comment>>) -> Self {
+    pub fn with_following_comments(mut self, following_comments: Vec<Comment>) -> Self {
         self.following_comments = following_comments;
         self
     }
@@ -454,8 +442,8 @@ pub struct BitflagsStatement {
     pub expr: Located<Expr>,
     pub attributes: Attributes,
     pub doc_comments: Vec<String>,
-    pub inline_trailing_comments: Vec<Located<Comment>>, // Comments on same line as bitflag
-    pub following_comments: Vec<Located<Comment>>,       // Comments on lines after bitflag
+    pub inline_trailing_comments: Vec<Comment>, // Comments on same line as bitflag
+    pub following_comments: Vec<Comment>,       // Comments on lines after bitflag
 }
 #[cfg(test)]
 impl StripLocations for BitflagsStatement {
@@ -493,14 +481,11 @@ impl BitflagsStatement {
         self.doc_comments = doc_comments;
         self
     }
-    pub fn with_inline_trailing_comments(
-        mut self,
-        inline_trailing_comments: Vec<Located<Comment>>,
-    ) -> Self {
+    pub fn with_inline_trailing_comments(mut self, inline_trailing_comments: Vec<Comment>) -> Self {
         self.inline_trailing_comments = inline_trailing_comments;
         self
     }
-    pub fn with_following_comments(mut self, following_comments: Vec<Located<Comment>>) -> Self {
+    pub fn with_following_comments(mut self, following_comments: Vec<Comment>) -> Self {
         self.following_comments = following_comments;
         self
     }
@@ -510,8 +495,8 @@ pub struct BitflagsDefinition {
     pub type_: Located<Type>,
     pub items: Vec<Located<BitflagsDefItem>>,
     pub attributes: Attributes,
-    pub inline_trailing_comments: Vec<Located<Comment>>, // Comments on same line as attributes
-    pub following_comments: Vec<Located<Comment>>,       // Comments on lines after attributes
+    pub inline_trailing_comments: Vec<Comment>, // Comments on same line as attributes
+    pub following_comments: Vec<Comment>,       // Comments on lines after attributes
 }
 #[cfg(test)]
 impl StripLocations for BitflagsDefinition {
@@ -561,14 +546,11 @@ impl BitflagsDefinition {
         self.attributes = Attributes::from_iter(attributes);
         self
     }
-    pub fn with_inline_trailing_comments(
-        mut self,
-        inline_trailing_comments: Vec<Located<Comment>>,
-    ) -> Self {
+    pub fn with_inline_trailing_comments(mut self, inline_trailing_comments: Vec<Comment>) -> Self {
         self.inline_trailing_comments = inline_trailing_comments;
         self
     }
-    pub fn with_following_comments(mut self, following_comments: Vec<Located<Comment>>) -> Self {
+    pub fn with_following_comments(mut self, following_comments: Vec<Comment>) -> Self {
         self.following_comments = following_comments;
         self
     }
@@ -686,7 +668,7 @@ impl Parser {
             TokenKind::Comment(_) | TokenKind::MultiLineComment(_)
         ) {
             let comment_line = self.current().location.span.start.line;
-            if let Some(comment) = self.collect_comment_located() {
+            if let Some(comment) = self.collect_comment() {
                 if comment_line == attributes_end_line {
                     // Comment is on the same line as the attributes
                     inline_trailing_comments.push(comment);
@@ -823,8 +805,9 @@ impl Parser {
                 self.peek(),
                 TokenKind::Comment(_) | TokenKind::MultiLineComment(_)
             ) {
-                if let Some(comment) = self.collect_comment_located() {
-                    items.push(comment.map(TypeDefItem::Comment));
+                if let Some(comment) = self.collect_comment() {
+                    let location = comment.location().clone();
+                    items.push(Located::new(TypeDefItem::Comment(comment), location));
                 }
             }
 
@@ -846,7 +829,7 @@ impl Parser {
                 TokenKind::Comment(_) | TokenKind::MultiLineComment(_)
             ) {
                 let comment_line = self.current().location.span.start.line;
-                if let Some(comment) = self.collect_comment_located() {
+                if let Some(comment) = self.collect_comment() {
                     if comment_line == statement_line {
                         // Comment is on the same line as the field
                         stmt.inline_trailing_comments.push(comment);
@@ -900,7 +883,7 @@ impl Parser {
             let visibility = self.parse_visibility()?;
             let (name, _) = self.expect_ident()?;
             self.expect(TokenKind::Colon)?;
-            let type_ = self.parse_type_located()?;
+            let type_ = self.parse_type()?;
 
             let end_pos = if self.pos > 0 {
                 self.tokens[self.pos - 1].location.span.end
@@ -931,8 +914,9 @@ impl Parser {
                 self.peek(),
                 TokenKind::Comment(_) | TokenKind::MultiLineComment(_)
             ) {
-                if let Some(comment) = self.collect_comment_located() {
-                    items.push(comment.map(EnumDefItem::Comment));
+                if let Some(comment) = self.collect_comment() {
+                    let location = comment.location().clone();
+                    items.push(Located::new(EnumDefItem::Comment(comment), location));
                 }
             }
 
@@ -954,7 +938,7 @@ impl Parser {
                 TokenKind::Comment(_) | TokenKind::MultiLineComment(_)
             ) {
                 let comment_line = self.current().location.span.start.line;
-                if let Some(comment) = self.collect_comment_located() {
+                if let Some(comment) = self.collect_comment() {
                     if comment_line == statement_line {
                         // Comment is on the same line as the enum variant
                         stmt.inline_trailing_comments.push(comment);
@@ -1020,8 +1004,9 @@ impl Parser {
                 self.peek(),
                 TokenKind::Comment(_) | TokenKind::MultiLineComment(_)
             ) {
-                if let Some(comment) = self.collect_comment_located() {
-                    items.push(comment.map(BitflagsDefItem::Comment));
+                if let Some(comment) = self.collect_comment() {
+                    let location = comment.location().clone();
+                    items.push(Located::new(BitflagsDefItem::Comment(comment), location));
                 }
             }
 
@@ -1043,7 +1028,7 @@ impl Parser {
                 TokenKind::Comment(_) | TokenKind::MultiLineComment(_)
             ) {
                 let comment_line = self.current().location.span.start.line;
-                if let Some(comment) = self.collect_comment_located() {
+                if let Some(comment) = self.collect_comment() {
                     if comment_line == statement_line {
                         // Comment is on the same line as the bitflag
                         stmt.inline_trailing_comments.push(comment);

@@ -1,6 +1,6 @@
 use crate::{
     grammar::{Comment, Ident},
-    span::{HasLocation, ItemLocation, Located, Location, Span},
+    span::{ItemLocation, Location, Span},
     tokenizer::{Token, TokenKind},
 };
 use std::sync::Arc;
@@ -10,7 +10,7 @@ use super::ParseError;
 pub struct Parser {
     pub(crate) tokens: Vec<Token>,
     pub(crate) pos: usize,
-    pub(crate) pending_comments: Vec<Located<Comment>>,
+    pub(crate) pending_comments: Vec<Comment>,
     pub(crate) filename: Arc<str>,
     pub(crate) source: String,
 }
@@ -174,15 +174,6 @@ impl Parser {
             }
             _ => None,
         }
-    }
-
-    /// Collect a comment and wrap it in Located for backwards compatibility
-    /// This will be removed once all callers are updated
-    pub(crate) fn collect_comment_located(&mut self) -> Option<Located<Comment>> {
-        self.collect_comment().map(|c| {
-            let location = c.location().clone();
-            Located::new(c, location)
-        })
     }
 
     pub(crate) fn item_location_from_span(&self, span: Span) -> ItemLocation {
