@@ -360,7 +360,7 @@ pub fn build(
     type_registry: &TypeRegistry,
     scope: &[ItemPath],
     is_vfunc: bool,
-    function: Located<&grammar::Function>,
+    function: &grammar::Function,
 ) -> Result<Located<Function>> {
     let mut body = is_vfunc.then(|| FunctionBody::Vftable {
         function_name: function.name.0.clone(),

@@ -178,14 +178,10 @@ impl Module {
                 .transpose()
         })
     }
-    pub fn functions(&self) -> impl Iterator<Item = Located<&Function>> {
-        self.items.iter().filter_map(|item| {
-            item.as_ref()
-                .map(|item| match item {
-                    ModuleItem::Function(func) => Some(func),
-                    _ => None,
-                })
-                .transpose()
+    pub fn functions(&self) -> impl Iterator<Item = &Function> {
+        self.items.iter().filter_map(|item| match &item.value {
+            ModuleItem::Function(func) => Some(func),
+            _ => None,
         })
     }
     pub fn definitions(&self) -> impl Iterator<Item = Located<&ItemDefinition>> {
@@ -348,9 +344,10 @@ impl Parser {
                             Some(TokenKind::Extern) => self
                                 .parse_extern_value()
                                 .map(|l| l.map(ModuleItem::ExternValue)),
-                            Some(TokenKind::Fn) => {
-                                self.parse_function().map(|l| l.map(ModuleItem::Function))
-                            }
+                            Some(TokenKind::Fn) => self.parse_function().map(|f| {
+                                let location = f.location.clone();
+                                Located::new(ModuleItem::Function(f), location)
+                            }),
                             _ => self
                                 .parse_item_definition()
                                 .map(|l| l.map(ModuleItem::Definition)),
@@ -360,7 +357,10 @@ impl Parser {
                         .parse_item_definition()
                         .map(|l| l.map(ModuleItem::Definition)),
                     TokenKind::Impl => self.parse_impl_block().map(|l| l.map(ModuleItem::Impl)),
-                    TokenKind::Fn => self.parse_function().map(|l| l.map(ModuleItem::Function)),
+                    TokenKind::Fn => self.parse_function().map(|f| {
+                        let location = f.location.clone();
+                        Located::new(ModuleItem::Function(f), location)
+                    }),
                     _ => Err(ParseError::UnexpectedTokenAfterAttributes {
                         found: self.tokens[pos].kind.clone(),
                         location: self.tokens[pos].location.clone(),
@@ -418,7 +418,10 @@ impl Parser {
             TokenKind::Impl => self.parse_impl_block().map(|l| l.map(ModuleItem::Impl)),
             TokenKind::Fn => {
                 // Freestanding function with attributes
-                self.parse_function().map(|l| l.map(ModuleItem::Function))
+                self.parse_function().map(|f| {
+                    let location = f.location.clone();
+                    Located::new(ModuleItem::Function(f), location)
+                })
             }
             _ => Err(ParseError::UnexpectedModuleToken {
                 found: self.peek().clone(),

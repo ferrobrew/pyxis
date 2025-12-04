@@ -53,7 +53,7 @@ pub fn convert_grammar_functions_to_semantic_functions(
     type_registry: &TypeRegistry,
     module: &Module,
     size: Option<usize>,
-    functions: &[Located<grammar::Function>],
+    functions: &[grammar::Function],
     location: &ItemLocation,
 ) -> Result<Vec<Located<Function>>> {
     // Insert function, with padding if necessary
@@ -80,7 +80,7 @@ pub fn convert_grammar_functions_to_semantic_functions(
             type_registry,
             &module.scope(),
             true,
-            function.as_ref(),
+            function,
         )?);
     }
 

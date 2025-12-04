@@ -80,7 +80,7 @@ impl StripLocations for Comment {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TypeField {
     Field(Visibility, Ident, Type),
-    Vftable(Vec<Located<Function>>),
+    Vftable(Vec<Function>),
 }
 #[cfg(test)]
 impl StripLocations for TypeField {
@@ -106,7 +106,7 @@ impl TypeField {
     }
 
     pub fn vftable(functions: impl IntoIterator<Item = Function>) -> TypeField {
-        TypeField::Vftable(functions.into_iter().map(Located::test).collect())
+        TypeField::Vftable(functions.into_iter().collect())
     }
 }
 impl TypeField {

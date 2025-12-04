@@ -88,6 +88,12 @@ pub struct Function {
     pub doc_comments: Vec<String>,
     pub arguments: Vec<Argument>,
     pub return_type: Option<Type>,
+    pub location: ItemLocation,
+}
+impl HasLocation for Function {
+    fn location(&self) -> &ItemLocation {
+        &self.location
+    }
 }
 #[cfg(test)]
 impl StripLocations for Function {
@@ -99,6 +105,7 @@ impl StripLocations for Function {
             doc_comments: self.doc_comments.strip_locations(),
             arguments: self.arguments.strip_locations(),
             return_type: self.return_type.strip_locations(),
+            location: ItemLocation::test(),
         }
     }
 }
@@ -115,6 +122,7 @@ impl Function {
             doc_comments: vec![],
             arguments: arguments.into_iter().collect(),
             return_type: None,
+            location: ItemLocation::test(),
         }
     }
     pub fn with_attributes(mut self, attributes: impl IntoIterator<Item = Attribute>) -> Self {
@@ -194,14 +202,10 @@ impl FunctionBlock {
     }
 }
 impl FunctionBlock {
-    pub fn functions(&self) -> impl Iterator<Item = Located<&Function>> {
-        self.items.iter().filter_map(|item| {
-            item.as_ref()
-                .map(|item| match item {
-                    ImplItem::Function(func) => Some(func),
-                    _ => None,
-                })
-                .transpose()
+    pub fn functions(&self) -> impl Iterator<Item = &Function> {
+        self.items.iter().filter_map(|item| match &item.value {
+            ImplItem::Function(func) => Some(func),
+            _ => None,
         })
     }
 }
@@ -236,7 +240,9 @@ impl Parser {
                 break;
             }
 
-            items.push(self.parse_function()?.map(ImplItem::Function));
+            let function = self.parse_function()?;
+            let location = function.location.clone();
+            items.push(Located::new(ImplItem::Function(function), location));
         }
 
         let last_token = self.expect(TokenKind::RBrace)?;
@@ -252,9 +258,7 @@ impl Parser {
         ))
     }
 
-    pub(crate) fn parse_functions_in_block(
-        &mut self,
-    ) -> Result<Vec<Located<Function>>, ParseError> {
+    pub(crate) fn parse_functions_in_block(&mut self) -> Result<Vec<Function>, ParseError> {
         let mut functions = Vec::new();
 
         while !matches!(self.peek(), TokenKind::RBrace) {
@@ -281,7 +285,7 @@ impl Parser {
         Ok(functions)
     }
 
-    pub(crate) fn parse_function(&mut self) -> Result<Located<Function>, ParseError> {
+    pub(crate) fn parse_function(&mut self) -> Result<Function, ParseError> {
         let start_pos = self.current().location.span.start;
         let mut doc_comments = self.collect_doc_comments();
         let attributes = if matches!(self.peek(), TokenKind::Hash) {
@@ -326,17 +330,15 @@ impl Parser {
         };
         let location = ItemLocation::new(self.filename.clone(), Span::new(start_pos, end_pos));
 
-        Ok(Located::new(
-            Function {
-                visibility,
-                name,
-                attributes,
-                doc_comments,
-                arguments,
-                return_type,
-            },
+        Ok(Function {
+            visibility,
+            name,
+            attributes,
+            doc_comments,
+            arguments,
+            return_type,
             location,
-        ))
+        })
     }
 
     pub(crate) fn parse_argument(&mut self) -> Result<Argument, ParseError> {
