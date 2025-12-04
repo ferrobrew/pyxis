@@ -289,13 +289,8 @@ impl Parser {
                 break;
             }
 
-            // Handle use statements specially
-            if matches!(self.peek(), TokenKind::Use) {
-                items.push(self.parse_use()?);
-            } else {
-                // Parse other module-level items
-                items.push(self.parse_module_item()?);
-            }
+            // Parse module-level items
+            items.push(self.parse_module_item()?);
 
             // Add any pending comments that were collected during parsing (e.g., inline comments after attributes)
             for comment in self.pending_comments.drain(..) {
@@ -324,10 +319,8 @@ impl Parser {
         // Attributes can appear before any item
         let has_attributes = matches!(self.peek(), TokenKind::Hash);
 
-        // Note: Use statements are handled specially in parse_module() since they
-        // can expand to multiple items (braced imports). This function should not
-        // be called with TokenKind::Use.
         match self.peek() {
+            TokenKind::Use => self.parse_use(),
             TokenKind::Extern if !has_attributes => {
                 // Peek ahead to distinguish extern type from extern value
                 if matches!(self.peek_nth(1), TokenKind::Type) {
