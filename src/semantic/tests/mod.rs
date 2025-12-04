@@ -241,11 +241,10 @@ fn can_use_braced_imports_from_another_module() {
     // Test that braced imports like `use math::{Matrix4, Vector3}` work correctly.
     // The UseTree::Group is flattened by the semantic layer's scope() function.
     let module1 = M::new()
-        .with_use_trees([UT::Group {
-            prefix: IP::from("math"),
-            items: vec![UT::Path(IP::from("Matrix4")), UT::Path(IP::from("Vector3"))],
-            location: ItemLocation::test(),
-        }])
+        .with_use_trees([UT::group(
+            "math",
+            [UT::path("Matrix4"), UT::path("Vector3")],
+        )])
         .with_definitions([ID::new(
             (V::Public, "Transform"),
             TD::new([

@@ -1,7 +1,7 @@
 use std::{fmt, path::Path};
 
 use crate::{
-    span::{EqualsIgnoringLocations, ItemLocation},
+    span::{EqualsIgnoringLocations, HasLocation, ItemLocation, Location},
     tokenizer::TokenKind,
 };
 
@@ -12,13 +12,16 @@ use super::{ParseError, core::Parser};
 
 /// Represents a use tree for braced imports.
 /// Examples:
-/// - `Vector3` → `UseTree::Path(["Vector3"])`
-/// - `math::{Vector3, Matrix4}` → `UseTree::Group { prefix: ["math"], items: [Path(["Vector3"]), Path(["Matrix4"])] }`
+/// - `Vector3` → `UseTree::Path { path: ["Vector3"], location }`
+/// - `math::{Vector3, Matrix4}` → `UseTree::Group { prefix: ["math"], items: [Path(...), Path(...)] }`
 /// - `types::{math::{V3, V4}, Game}` → nested groups
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UseTree {
     /// A leaf path like `Vector3` or `math::Vector3`
-    Path(ItemPath),
+    Path {
+        path: ItemPath,
+        location: ItemLocation,
+    },
     /// A group like `{A, B}` or `path::{A, B}`
     Group {
         prefix: ItemPath,
@@ -26,13 +29,12 @@ pub enum UseTree {
         location: ItemLocation,
     },
 }
-
 impl UseTree {
     /// Flatten this UseTree into a list of complete ItemPaths.
     /// For example, `math::{Vector3, Matrix4}` becomes `["math::Vector3", "math::Matrix4"]`
     pub fn flatten(&self) -> Vec<ItemPath> {
         match self {
-            UseTree::Path(path) => vec![path.clone()],
+            UseTree::Path { path, .. } => vec![path.clone()],
             UseTree::Group { prefix, items, .. } => items
                 .iter()
                 .flat_map(|item| {
@@ -47,26 +49,42 @@ impl UseTree {
                 .collect(),
         }
     }
-
-    /// Get the location of this UseTree
-    pub fn location(&self) -> &ItemLocation {
+}
+impl HasLocation for UseTree {
+    fn location(&self) -> &ItemLocation {
         match self {
-            UseTree::Path(_) => {
-                // For paths, we don't have a separate location - use an internal location
-                // This is a bit of a hack but paths don't carry locations
-                static INTERNAL: std::sync::OnceLock<ItemLocation> = std::sync::OnceLock::new();
-                INTERNAL.get_or_init(ItemLocation::internal)
-            }
+            UseTree::Path { location, .. } => location,
             UseTree::Group { location, .. } => location,
         }
     }
 }
+#[cfg(test)]
+impl UseTree {
+    /// Create a Path variant with a test location (for use in tests)
+    pub fn path(path: impl Into<ItemPath>) -> Self {
+        UseTree::Path {
+            path: path.into(),
+            location: ItemLocation::test(),
+        }
+    }
 
+    /// Create a Group variant with a test location (for use in tests)
+    pub fn group(prefix: impl Into<ItemPath>, items: impl IntoIterator<Item = UseTree>) -> Self {
+        UseTree::Group {
+            prefix: prefix.into(),
+            items: items.into_iter().collect(),
+            location: ItemLocation::test(),
+        }
+    }
+}
 #[cfg(test)]
 impl StripLocations for UseTree {
     fn strip_locations(&self) -> Self {
         match self {
-            UseTree::Path(path) => UseTree::Path(path.strip_locations()),
+            UseTree::Path { path, .. } => UseTree::Path {
+                path: path.strip_locations(),
+                location: ItemLocation::test(),
+            },
             UseTree::Group { prefix, items, .. } => UseTree::Group {
                 prefix: prefix.strip_locations(),
                 items: items.iter().map(|i| i.strip_locations()).collect(),
@@ -75,11 +93,12 @@ impl StripLocations for UseTree {
         }
     }
 }
-
 impl EqualsIgnoringLocations for UseTree {
     fn equals_ignoring_locations(&self, other: &Self) -> bool {
         match (self, other) {
-            (UseTree::Path(a), UseTree::Path(b)) => a.equals_ignoring_locations(b),
+            (UseTree::Path { path: a, .. }, UseTree::Path { path: b, .. }) => {
+                a.equals_ignoring_locations(b)
+            }
             (
                 UseTree::Group {
                     prefix: p1,
@@ -215,19 +234,24 @@ impl From<&str> for ItemPath {
 }
 
 impl Parser {
-    pub(crate) fn parse_item_path(&mut self) -> Result<ItemPath, ParseError> {
+    pub(crate) fn parse_item_path(&mut self) -> Result<(ItemPath, ItemLocation), ParseError> {
+        let first_token = self.current();
+        let start_pos = first_token.location.span.start;
+        let mut end_pos = first_token.location.span.end;
         let mut segments = Vec::new();
 
         while let TokenKind::Ident(name) = self.peek() {
             segments.push(ItemPathSegment::from(name.clone()));
+            end_pos = self.current().location.span.end;
             self.advance();
 
             // Handle generics in the path
             if matches!(self.peek(), TokenKind::Lt) {
                 // Parse generic arguments as part of the segment
-                let generic_str = self.parse_generic_args_as_string()?;
+                let (generic_str, generic_end) = self.parse_generic_args_as_string()?;
                 let last = segments.last_mut().unwrap();
                 *last = ItemPathSegment::from(format!("{}{}", last.as_str(), generic_str));
+                end_pos = generic_end;
             }
 
             if !matches!(self.peek(), TokenKind::ColonColon) {
@@ -236,10 +260,13 @@ impl Parser {
             self.advance();
         }
 
-        Ok(ItemPath::from_iter(segments))
+        let location = self.item_location_from_locations(start_pos, end_pos);
+        Ok((ItemPath::from_iter(segments), location))
     }
 
-    pub(crate) fn parse_generic_args_as_string(&mut self) -> Result<String, ParseError> {
+    pub(crate) fn parse_generic_args_as_string(
+        &mut self,
+    ) -> Result<(String, Location), ParseError> {
         let mut result = String::new();
         result.push('<');
         self.expect(TokenKind::Lt)?;
@@ -256,9 +283,9 @@ impl Parser {
             result.push_str(&self.parse_type_as_string()?);
         }
 
-        self.expect(TokenKind::Gt)?;
+        let gt_token = self.expect(TokenKind::Gt)?;
         result.push('>');
-        Ok(result)
+        Ok((result, gt_token.location.span.end))
     }
 
     pub(crate) fn parse_type_as_string(&mut self) -> Result<String, ParseError> {

@@ -141,7 +141,7 @@ impl Module {
     pub fn with_uses(mut self, uses: impl IntoIterator<Item = ItemPath>) -> Self {
         for path in uses.into_iter() {
             self.items.push(ModuleItem::Use {
-                tree: UseTree::Path(path),
+                tree: UseTree::path(path),
                 location: ItemLocation::test(),
             });
         }

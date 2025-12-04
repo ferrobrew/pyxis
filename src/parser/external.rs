@@ -162,7 +162,7 @@ impl Parser {
     /// Handles: `path::Item`, `path::{A, B}`, `path::{a::{X, Y}, B}`
     fn parse_use_tree(&mut self) -> Result<UseTree, ParseError> {
         // Parse the path prefix (may be empty for top-level braces, or full path)
-        let prefix = self.parse_item_path()?;
+        let (prefix, path_location) = self.parse_item_path()?;
 
         // Check for braced imports: path::{...}
         // Note: parse_item_path already consumed the :: before {, so we just check for {
@@ -201,7 +201,10 @@ impl Parser {
             })
         } else {
             // Simple path: just return it
-            Ok(UseTree::Path(prefix))
+            Ok(UseTree::Path {
+                path: prefix,
+                location: path_location,
+            })
         }
     }
 
@@ -423,7 +426,7 @@ mod tests {
     use crate::{
         grammar::{ModuleItem, StringFormat, test_aliases::*},
         parser::{ParseError, parse_str_for_tests},
-        span::{ItemLocation, StripLocations},
+        span::StripLocations,
     };
     use pretty_assertions::assert_eq;
 
@@ -457,11 +460,10 @@ mod tests {
         "#;
 
         let ast = M::new()
-            .with_use_trees([UT::Group {
-                prefix: IP::from("math"),
-                items: vec![UT::Path(IP::from("Matrix4")), UT::Path(IP::from("Vector3"))],
-                location: ItemLocation::test(),
-            }])
+            .with_use_trees([UT::group(
+                "math",
+                [UT::path("Matrix4"), UT::path("Vector3")],
+            )])
             .with_definitions([ID::new(
                 (V::Private, "Test"),
                 TD::new([
@@ -479,14 +481,10 @@ mod tests {
         use types::{SharedPtr<T>, Vec<u32>};
         "#;
 
-        let ast = M::new().with_use_trees([UT::Group {
-            prefix: IP::from("types"),
-            items: vec![
-                UT::Path(IP::from("SharedPtr<T>")),
-                UT::Path(IP::from("Vec<u32>")),
-            ],
-            location: ItemLocation::test(),
-        }]);
+        let ast = M::new().with_use_trees([UT::group(
+            "types",
+            [UT::path("SharedPtr<T>"), UT::path("Vec<u32>")],
+        )]);
 
         assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
     }
@@ -497,11 +495,7 @@ mod tests {
         use math::{Matrix4};
         "#;
 
-        let ast = M::new().with_use_trees([UT::Group {
-            prefix: IP::from("math"),
-            items: vec![UT::Path(IP::from("Matrix4"))],
-            location: ItemLocation::test(),
-        }]);
+        let ast = M::new().with_use_trees([UT::group("math", [UT::path("Matrix4")])]);
 
         assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
     }
@@ -512,11 +506,10 @@ mod tests {
         use math::{Matrix4, Vector3,};
         "#;
 
-        let ast = M::new().with_use_trees([UT::Group {
-            prefix: IP::from("math"),
-            items: vec![UT::Path(IP::from("Matrix4")), UT::Path(IP::from("Vector3"))],
-            location: ItemLocation::test(),
-        }]);
+        let ast = M::new().with_use_trees([UT::group(
+            "math",
+            [UT::path("Matrix4"), UT::path("Vector3")],
+        )]);
 
         assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
     }
@@ -527,11 +520,10 @@ mod tests {
         use graphics::math::{Matrix4, Vector3};
         "#;
 
-        let ast = M::new().with_use_trees([UT::Group {
-            prefix: IP::from("graphics::math"),
-            items: vec![UT::Path(IP::from("Matrix4")), UT::Path(IP::from("Vector3"))],
-            location: ItemLocation::test(),
-        }]);
+        let ast = M::new().with_use_trees([UT::group(
+            "graphics::math",
+            [UT::path("Matrix4"), UT::path("Vector3")],
+        )]);
 
         assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
     }
@@ -542,11 +534,7 @@ mod tests {
         use math::{};
         "#;
 
-        let ast = M::new().with_use_trees([UT::Group {
-            prefix: IP::from("math"),
-            items: vec![],
-            location: ItemLocation::test(),
-        }]);
+        let ast = M::new().with_use_trees([UT::group("math", [])]);
 
         assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
     }
@@ -557,18 +545,13 @@ mod tests {
         use types::{math::{Vector3, Matrix4}, Game};
         "#;
 
-        let ast = M::new().with_use_trees([UT::Group {
-            prefix: IP::from("types"),
-            items: vec![
-                UT::Group {
-                    prefix: IP::from("math"),
-                    items: vec![UT::Path(IP::from("Vector3")), UT::Path(IP::from("Matrix4"))],
-                    location: ItemLocation::test(),
-                },
-                UT::Path(IP::from("Game")),
+        let ast = M::new().with_use_trees([UT::group(
+            "types",
+            [
+                UT::group("math", [UT::path("Vector3"), UT::path("Matrix4")]),
+                UT::path("Game"),
             ],
-            location: ItemLocation::test(),
-        }]);
+        )]);
 
         assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
     }
@@ -576,18 +559,13 @@ mod tests {
     #[test]
     fn can_flatten_nested_braced_imports() {
         // Test that UseTree::flatten() works correctly for nested imports
-        let tree = UT::Group {
-            prefix: IP::from("types"),
-            items: vec![
-                UT::Group {
-                    prefix: IP::from("math"),
-                    items: vec![UT::Path(IP::from("Vector3")), UT::Path(IP::from("Matrix4"))],
-                    location: ItemLocation::test(),
-                },
-                UT::Path(IP::from("Game")),
+        let tree = UT::group(
+            "types",
+            [
+                UT::group("math", [UT::path("Vector3"), UT::path("Matrix4")]),
+                UT::path("Game"),
             ],
-            location: ItemLocation::test(),
-        };
+        );
 
         let flattened = tree.flatten();
         assert_eq!(flattened.len(), 3);

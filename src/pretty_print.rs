@@ -425,7 +425,7 @@ impl PrettyPrinter {
     /// Format a UseTree for pretty printing
     fn format_use_tree(&self, tree: &UseTree) -> String {
         match tree {
-            UseTree::Path(path) => self.format_item_path(path),
+            UseTree::Path { path, .. } => self.format_item_path(path),
             UseTree::Group { prefix, items, .. } => {
                 let prefix_str = self.format_item_path(prefix);
                 let items_str = items
