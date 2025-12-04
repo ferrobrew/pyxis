@@ -166,14 +166,6 @@ impl Parser {
         }
     }
 
-    /// Parse an expression and wrap it in Located for backwards compatibility
-    /// This will be removed once all callers are updated
-    pub(crate) fn parse_expr_located(&mut self) -> Result<Located<Expr>, ParseError> {
-        let expr = self.parse_expr()?;
-        let location = expr.location().clone();
-        Ok(Located::new(expr, location))
-    }
-
     pub(crate) fn parse_int_literal(&mut self) -> Result<Located<isize>, ParseError> {
         match self.peek() {
             TokenKind::IntLiteral(_) => {

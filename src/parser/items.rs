@@ -283,7 +283,7 @@ impl StripLocations for EnumDefItem {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct EnumStatement {
     pub name: Ident,
-    pub expr: Option<Located<Expr>>,
+    pub expr: Option<Expr>,
     pub attributes: Attributes,
     pub doc_comments: Vec<String>,
     pub inline_trailing_comments: Vec<Comment>, // Comments on same line as enum variant
@@ -307,7 +307,7 @@ impl EnumStatement {
     pub fn new(name: Ident, expr: Option<Expr>) -> EnumStatement {
         EnumStatement {
             name,
-            expr: expr.map(Located::test),
+            expr,
             attributes: Default::default(),
             doc_comments: vec![],
             inline_trailing_comments: Vec::new(),
@@ -439,7 +439,7 @@ impl StripLocations for BitflagsDefItem {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct BitflagsStatement {
     pub name: Ident,
-    pub expr: Located<Expr>,
+    pub expr: Expr,
     pub attributes: Attributes,
     pub doc_comments: Vec<String>,
     pub inline_trailing_comments: Vec<Comment>, // Comments on same line as bitflag
@@ -463,7 +463,7 @@ impl BitflagsStatement {
     pub fn new(name: Ident, expr: Expr) -> BitflagsStatement {
         BitflagsStatement {
             name,
-            expr: Located::test(expr),
+            expr,
             attributes: Default::default(),
             doc_comments: vec![],
             inline_trailing_comments: Vec::new(),
@@ -968,7 +968,7 @@ impl Parser {
         let (name, _) = self.expect_ident()?;
         let expr = if matches!(self.peek(), TokenKind::Eq) {
             self.advance();
-            Some(self.parse_expr_located()?)
+            Some(self.parse_expr()?)
         } else {
             None
         };
@@ -1059,7 +1059,7 @@ impl Parser {
 
         let (name, _) = self.expect_ident()?;
         self.expect(TokenKind::Eq)?;
-        let expr = self.parse_expr_located()?;
+        let expr = self.parse_expr()?;
 
         let end_pos = if self.pos > 0 {
             self.tokens[self.pos - 1].location.span.end

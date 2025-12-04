@@ -123,15 +123,12 @@ pub fn build(
             ..
         } = &statement.value;
         let value = match expr {
-            Some(Located {
-                value: grammar::Expr::IntLiteral { value, .. },
-                ..
-            }) => *value,
-            Some(Located { location, .. }) => {
+            Some(grammar::Expr::IntLiteral { value, .. }) => *value,
+            Some(e) => {
                 return Err(SemanticError::EnumUnsupportedValue {
                     item_path: resolvee_path.clone(),
                     case_name: name.0.clone(),
-                    location: location.clone(),
+                    location: e.location().clone(),
                 });
             }
             None => last_field,

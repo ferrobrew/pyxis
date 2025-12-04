@@ -147,13 +147,13 @@ pub fn build(
             attributes,
             ..
         } = &statement.value;
-        let value = match &expr.value {
+        let value = match expr {
             grammar::Expr::IntLiteral { value, .. } => *value,
             _ => {
                 return Err(SemanticError::BitflagsUnsupportedValue {
                     item_path: resolvee_path.clone(),
                     case_name: name.0.clone(),
-                    location: expr.location.clone(),
+                    location: expr.location().clone(),
                 });
             }
         };
@@ -164,7 +164,7 @@ pub fn build(
                 .map_err(|_| SemanticError::IntegerConversion {
                     value: value.to_string(),
                     target_type: "usize".into(),
-                    location: expr.location.clone(),
+                    location: expr.location().clone(),
                 })?,
         ));
 
