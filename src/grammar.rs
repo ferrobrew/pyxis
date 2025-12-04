@@ -2,7 +2,7 @@
 pub use crate::parser::{
     attributes::{Attribute, AttributeItem, AttributeItems, Attributes, Visibility},
     expressions::{Expr, ExprField, IntFormat, StringFormat},
-    external::{Backend, ExternValue},
+    external::{Backend, ExternValue, UseTree},
     functions::{Argument, Function, FunctionBlock, ImplItem},
     items::{
         BitflagsDefItem, BitflagsDefinition, BitflagsStatement, Comment, EnumDefItem,
@@ -37,6 +37,7 @@ pub mod test_aliases {
     pub type F = super::Function;
     pub type FB = super::FunctionBlock;
     pub type IP = super::ItemPath;
+    pub type UT = super::UseTree;
     pub type B = super::Backend;
     pub type V = super::Visibility;
     pub type EV = super::ExternValue;

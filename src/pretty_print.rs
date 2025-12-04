@@ -103,10 +103,10 @@ impl PrettyPrinter {
                 self.print_comment(comment);
                 // Don't add blank line after comments - they group with the following item
             }
-            ModuleItem::Use { path, .. } => {
+            ModuleItem::Use { tree, .. } => {
                 self.write_indent();
-                let path_str = self.format_item_path(path);
-                writeln!(&mut self.output, "use {path_str};").unwrap();
+                let tree_str = self.format_use_tree(tree);
+                writeln!(&mut self.output, "use {tree_str};").unwrap();
                 // Only add blank line if next item is not a use statement
                 if !matches!(next_item, Some(ModuleItem::Use { .. })) {
                     self.writeln("");
@@ -420,6 +420,26 @@ impl PrettyPrinter {
             .map(|seg| seg.as_str())
             .collect::<Vec<_>>()
             .join("::")
+    }
+
+    /// Format a UseTree for pretty printing
+    fn format_use_tree(&self, tree: &UseTree) -> String {
+        match tree {
+            UseTree::Path { path, .. } => self.format_item_path(path),
+            UseTree::Group { prefix, items, .. } => {
+                let prefix_str = self.format_item_path(prefix);
+                let items_str = items
+                    .iter()
+                    .map(|item| self.format_use_tree(item))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                if prefix_str.is_empty() {
+                    format!("{{{items_str}}}")
+                } else {
+                    format!("{prefix_str}::{{{items_str}}}")
+                }
+            }
+        }
     }
 
     /// Format a string literal with the specified format

@@ -1,8 +1,10 @@
 pub mod bitflags;
+pub mod braced_imports;
 pub mod diamond_inheritance;
 pub mod doc_comments;
 pub mod enums;
 pub mod freestanding_functions;
+pub mod math;
 pub mod min_size;
 pub mod multiple_levels;
 pub mod singleton;

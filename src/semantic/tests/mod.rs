@@ -237,6 +237,68 @@ fn can_use_type_from_another_module() {
 }
 
 #[test]
+fn can_use_braced_imports_from_another_module() {
+    // Test that braced imports like `use math::{Matrix4, Vector3}` work correctly.
+    // The UseTree::Group is flattened by the semantic layer's scope() function.
+    let module1 = M::new()
+        .with_use_trees([UT::group(
+            "math",
+            [UT::path("Matrix4"), UT::path("Vector3")],
+        )])
+        .with_definitions([ID::new(
+            (V::Public, "Transform"),
+            TD::new([
+                TS::field((V::Private, "matrix"), T::ident("Matrix4")),
+                TS::field((V::Private, "position"), T::ident("Vector3")),
+            ]),
+        )]);
+    let module_math = M::new().with_definitions([
+        ID::new(
+            (V::Public, "Matrix4"),
+            TD::new([TS::field((V::Public, "data"), T::ident("f32").array(16))]),
+        ),
+        ID::new(
+            (V::Public, "Vector3"),
+            TD::new([
+                TS::field((V::Public, "x"), T::ident("f32")),
+                TS::field((V::Public, "y"), T::ident("f32")),
+                TS::field((V::Public, "z"), T::ident("f32")),
+            ]),
+        ),
+    ]);
+
+    let mut semantic_state = SemanticState::new(4);
+    semantic_state
+        .add_module(&module1, &IP::from("module1"), None)
+        .unwrap();
+    semantic_state
+        .add_module(&module_math, &IP::from("math"), None)
+        .unwrap();
+    let semantic_state = semantic_state.build().unwrap();
+
+    // Verify the Transform type was resolved correctly with both imported types
+    let path = IP::from("module1::Transform");
+    let resolved_type = semantic_state
+        .type_registry()
+        .get(&path, &ItemLocation::test())
+        .cloned()
+        .expect("failed to get Transform type");
+    assert_eq!(
+        resolved_type,
+        SID::defined_resolved(
+            (SV::Public, path.clone(),),
+            SISR::new(
+                (76, 4,), // 64 bytes for Matrix4 + 12 bytes for Vector3
+                STD::new().with_regions([
+                    SR::field((SV::Private, "matrix"), ST::raw("math::Matrix4")),
+                    SR::field((SV::Private, "position"), ST::raw("math::Vector3")),
+                ])
+            )
+        )
+    );
+}
+
+#[test]
 fn will_fail_on_an_extern_without_size() {
     let err = build_state(
         &M::new().with_extern_types([("TestType".into(), As::default())]),

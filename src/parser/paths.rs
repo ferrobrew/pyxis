@@ -1,6 +1,9 @@
 use std::{fmt, path::Path};
 
-use crate::{span::EqualsIgnoringLocations, tokenizer::TokenKind};
+use crate::{
+    span::{EqualsIgnoringLocations, ItemLocation, Location},
+    tokenizer::TokenKind,
+};
 
 #[cfg(test)]
 use crate::span::StripLocations;
@@ -125,19 +128,24 @@ impl From<&str> for ItemPath {
 }
 
 impl Parser {
-    pub(crate) fn parse_item_path(&mut self) -> Result<ItemPath, ParseError> {
+    pub(crate) fn parse_item_path(&mut self) -> Result<(ItemPath, ItemLocation), ParseError> {
+        let first_token = self.current();
+        let start_pos = first_token.location.span.start;
+        let mut end_pos = first_token.location.span.end;
         let mut segments = Vec::new();
 
         while let TokenKind::Ident(name) = self.peek() {
             segments.push(ItemPathSegment::from(name.clone()));
+            end_pos = self.current().location.span.end;
             self.advance();
 
             // Handle generics in the path
             if matches!(self.peek(), TokenKind::Lt) {
                 // Parse generic arguments as part of the segment
-                let generic_str = self.parse_generic_args_as_string()?;
+                let (generic_str, generic_end) = self.parse_generic_args_as_string()?;
                 let last = segments.last_mut().unwrap();
                 *last = ItemPathSegment::from(format!("{}{}", last.as_str(), generic_str));
+                end_pos = generic_end;
             }
 
             if !matches!(self.peek(), TokenKind::ColonColon) {
@@ -146,10 +154,13 @@ impl Parser {
             self.advance();
         }
 
-        Ok(ItemPath::from_iter(segments))
+        let location = self.item_location_from_locations(start_pos, end_pos);
+        Ok((ItemPath::from_iter(segments), location))
     }
 
-    pub(crate) fn parse_generic_args_as_string(&mut self) -> Result<String, ParseError> {
+    pub(crate) fn parse_generic_args_as_string(
+        &mut self,
+    ) -> Result<(String, Location), ParseError> {
         let mut result = String::new();
         result.push('<');
         self.expect(TokenKind::Lt)?;
@@ -166,9 +177,9 @@ impl Parser {
             result.push_str(&self.parse_type_as_string()?);
         }
 
-        self.expect(TokenKind::Gt)?;
+        let gt_token = self.expect(TokenKind::Gt)?;
         result.push('>');
-        Ok(result)
+        Ok((result, gt_token.location.span.end))
     }
 
     pub(crate) fn parse_type_as_string(&mut self) -> Result<String, ParseError> {

@@ -1,5 +1,6 @@
 use crate::{
-    span::{HasLocation, ItemLocation, Span},
+    grammar::ItemPath,
+    span::{EqualsIgnoringLocations, HasLocation, ItemLocation, Span},
     tokenizer::TokenKind,
 };
 
@@ -135,7 +136,115 @@ impl ExternValue {
     }
 }
 
+/// Represents a use tree for braced imports.
+/// Examples:
+/// - `Vector3` → `UseTree::Path { path: ["Vector3"], location }`
+/// - `math::{Vector3, Matrix4}` → `UseTree::Group { prefix: ["math"], items: [Path(...), Path(...)] }`
+/// - `types::{math::{V3, V4}, Game}` → nested groups
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum UseTree {
+    /// A leaf path like `Vector3` or `math::Vector3`
+    Path {
+        path: ItemPath,
+        location: ItemLocation,
+    },
+    /// A group like `{A, B}` or `path::{A, B}`
+    Group {
+        prefix: ItemPath,
+        items: Vec<UseTree>,
+        location: ItemLocation,
+    },
+}
+impl UseTree {
+    /// Flatten this UseTree into a list of complete ItemPaths.
+    /// For example, `math::{Vector3, Matrix4}` becomes `["math::Vector3", "math::Matrix4"]`
+    pub fn flatten(&self) -> Vec<ItemPath> {
+        match self {
+            UseTree::Path { path, .. } => vec![path.clone()],
+            UseTree::Group { prefix, items, .. } => items
+                .iter()
+                .flat_map(|item| {
+                    item.flatten().into_iter().map(|item_path| {
+                        prefix
+                            .iter()
+                            .chain(item_path.iter())
+                            .cloned()
+                            .collect::<ItemPath>()
+                    })
+                })
+                .collect(),
+        }
+    }
+}
+impl HasLocation for UseTree {
+    fn location(&self) -> &ItemLocation {
+        match self {
+            UseTree::Path { location, .. } => location,
+            UseTree::Group { location, .. } => location,
+        }
+    }
+}
+#[cfg(test)]
+impl UseTree {
+    /// Create a Path variant with a test location (for use in tests)
+    pub fn path(path: impl Into<ItemPath>) -> Self {
+        UseTree::Path {
+            path: path.into(),
+            location: ItemLocation::test(),
+        }
+    }
+
+    /// Create a Group variant with a test location (for use in tests)
+    pub fn group(prefix: impl Into<ItemPath>, items: impl IntoIterator<Item = UseTree>) -> Self {
+        UseTree::Group {
+            prefix: prefix.into(),
+            items: items.into_iter().collect(),
+            location: ItemLocation::test(),
+        }
+    }
+}
+#[cfg(test)]
+impl StripLocations for UseTree {
+    fn strip_locations(&self) -> Self {
+        match self {
+            UseTree::Path { path, .. } => UseTree::Path {
+                path: path.strip_locations(),
+                location: ItemLocation::test(),
+            },
+            UseTree::Group { prefix, items, .. } => UseTree::Group {
+                prefix: prefix.strip_locations(),
+                items: items.iter().map(|i| i.strip_locations()).collect(),
+                location: ItemLocation::test(),
+            },
+        }
+    }
+}
+impl EqualsIgnoringLocations for UseTree {
+    fn equals_ignoring_locations(&self, other: &Self) -> bool {
+        match (self, other) {
+            (UseTree::Path { path: a, .. }, UseTree::Path { path: b, .. }) => {
+                a.equals_ignoring_locations(b)
+            }
+            (
+                UseTree::Group {
+                    prefix: p1,
+                    items: i1,
+                    ..
+                },
+                UseTree::Group {
+                    prefix: p2,
+                    items: i2,
+                    ..
+                },
+            ) => p1.equals_ignoring_locations(p2) && i1.equals_ignoring_locations(i2),
+            _ => false,
+        }
+    }
+}
+
 impl Parser {
+    /// Parse a use statement, potentially with braced imports (including nested).
+    /// Returns a single ModuleItem containing a UseTree.
     pub(crate) fn parse_use(&mut self) -> Result<ModuleItem, ParseError> {
         let first_token = self.expect(TokenKind::Use)?;
 
@@ -148,11 +257,61 @@ impl Parser {
             });
         }
 
-        let path = self.parse_item_path()?;
+        let tree = self.parse_use_tree()?;
         let last_token = self.expect(TokenKind::Semi)?;
-
         let location = self.item_location_from_token_range(&first_token, &last_token);
-        Ok(ModuleItem::Use { path, location })
+
+        Ok(ModuleItem::Use { tree, location })
+    }
+
+    /// Parse a use tree (recursive for nested braced imports).
+    /// Handles: `path::Item`, `path::{A, B}`, `path::{a::{X, Y}, B}`
+    fn parse_use_tree(&mut self) -> Result<UseTree, ParseError> {
+        // Parse the path prefix (may be empty for top-level braces, or full path)
+        let (prefix, path_location) = self.parse_item_path()?;
+
+        // Check for braced imports: path::{...}
+        // Note: parse_item_path already consumed the :: before {, so we just check for {
+        if matches!(self.peek(), TokenKind::LBrace) {
+            let brace_start = self.current().location.span.start;
+            self.advance(); // consume {
+
+            let mut items = Vec::new();
+
+            // Parse comma-separated use trees
+            loop {
+                if matches!(self.peek(), TokenKind::RBrace) {
+                    break;
+                }
+
+                // Recursively parse each item as a use tree (supports nesting)
+                let item = self.parse_use_tree()?;
+                items.push(item);
+
+                // Check for comma or end of list
+                if matches!(self.peek(), TokenKind::Comma) {
+                    self.advance();
+                } else {
+                    break;
+                }
+            }
+
+            let rbrace = self.expect(TokenKind::RBrace)?;
+            let end_pos = rbrace.location.span.end;
+            let location = self.item_location_from_locations(brace_start, end_pos);
+
+            Ok(UseTree::Group {
+                prefix,
+                items,
+                location,
+            })
+        } else {
+            // Simple path: just return it
+            Ok(UseTree::Path {
+                path: prefix,
+                location: path_location,
+            })
+        }
     }
 
     pub(crate) fn parse_extern_type(&mut self) -> Result<ModuleItem, ParseError> {
@@ -394,6 +553,131 @@ mod tests {
             )]);
 
         assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
+    }
+
+    #[test]
+    fn can_parse_braced_imports() {
+        let text = r#"
+        use math::{Matrix4, Vector3};
+        type Test {
+            matrix: Matrix4,
+            vector: Vector3,
+        }
+        "#;
+
+        let ast = M::new()
+            .with_use_trees([UT::group(
+                "math",
+                [UT::path("Matrix4"), UT::path("Vector3")],
+            )])
+            .with_definitions([ID::new(
+                (V::Private, "Test"),
+                TD::new([
+                    TS::field((V::Private, "matrix"), T::ident("Matrix4")),
+                    TS::field((V::Private, "vector"), T::ident("Vector3")),
+                ]),
+            )]);
+
+        assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
+    }
+
+    #[test]
+    fn can_parse_braced_imports_with_generics() {
+        let text = r#"
+        use types::{SharedPtr<T>, Vec<u32>};
+        "#;
+
+        let ast = M::new().with_use_trees([UT::group(
+            "types",
+            [UT::path("SharedPtr<T>"), UT::path("Vec<u32>")],
+        )]);
+
+        assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
+    }
+
+    #[test]
+    fn can_parse_braced_imports_single_item() {
+        let text = r#"
+        use math::{Matrix4};
+        "#;
+
+        let ast = M::new().with_use_trees([UT::group("math", [UT::path("Matrix4")])]);
+
+        assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
+    }
+
+    #[test]
+    fn can_parse_braced_imports_with_trailing_comma() {
+        let text = r#"
+        use math::{Matrix4, Vector3,};
+        "#;
+
+        let ast = M::new().with_use_trees([UT::group(
+            "math",
+            [UT::path("Matrix4"), UT::path("Vector3")],
+        )]);
+
+        assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
+    }
+
+    #[test]
+    fn can_parse_braced_imports_nested_path() {
+        let text = r#"
+        use graphics::math::{Matrix4, Vector3};
+        "#;
+
+        let ast = M::new().with_use_trees([UT::group(
+            "graphics::math",
+            [UT::path("Matrix4"), UT::path("Vector3")],
+        )]);
+
+        assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
+    }
+
+    #[test]
+    fn can_parse_empty_braced_imports() {
+        let text = r#"
+        use math::{};
+        "#;
+
+        let ast = M::new().with_use_trees([UT::group("math", [])]);
+
+        assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
+    }
+
+    #[test]
+    fn can_parse_nested_braced_imports() {
+        let text = r#"
+        use types::{math::{Vector3, Matrix4}, Game};
+        "#;
+
+        let ast = M::new().with_use_trees([UT::group(
+            "types",
+            [
+                UT::group("math", [UT::path("Vector3"), UT::path("Matrix4")]),
+                UT::path("Game"),
+            ],
+        )]);
+
+        assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
+    }
+
+    #[test]
+    fn can_flatten_nested_braced_imports() {
+        // Test that UseTree::flatten() works correctly for nested imports
+        let tree = UT::group(
+            "types",
+            [
+                UT::group("math", [UT::path("Vector3"), UT::path("Matrix4")]),
+                UT::path("Game"),
+            ],
+        );
+
+        let flattened = tree.flatten();
+        assert_eq!(flattened.len(), 3);
+        assert_eq!(flattened[0], IP::from("types::math::Vector3"));
+        assert_eq!(flattened[1], IP::from("types::math::Matrix4"));
+        assert_eq!(flattened[2], IP::from("types::Game"));
     }
 
     #[test]

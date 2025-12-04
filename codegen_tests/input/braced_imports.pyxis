@@ -1,0 +1,9 @@
+// Test braced imports syntax: use path::{Item1, Item2};
+use math::{Matrix4, Vector3};
+
+/// Transform type that uses imported Matrix4 and Vector3
+#[align(4)]
+pub type Transform {
+    pub matrix: Matrix4,
+    pub position: Vector3,
+}
