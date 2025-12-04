@@ -26,6 +26,12 @@ pub struct Backend {
     pub prologue_format: StringFormat,
     pub epilogue: Option<String>,
     pub epilogue_format: StringFormat,
+    pub location: ItemLocation,
+}
+impl HasLocation for Backend {
+    fn location(&self) -> &ItemLocation {
+        &self.location
+    }
 }
 #[cfg(test)]
 impl StripLocations for Backend {
@@ -36,9 +42,11 @@ impl StripLocations for Backend {
             prologue_format: self.prologue_format.strip_locations(),
             epilogue: self.epilogue.strip_locations(),
             epilogue_format: self.epilogue_format.strip_locations(),
+            location: ItemLocation::test(),
         }
     }
 }
+#[cfg(test)]
 impl Backend {
     pub fn new(name: &str) -> Self {
         Self {
@@ -47,6 +55,7 @@ impl Backend {
             prologue_format: StringFormat::Regular,
             epilogue: None,
             epilogue_format: StringFormat::Regular,
+            location: ItemLocation::test(),
         }
     }
     pub fn with_prologue(mut self, prologue: impl Into<String>) -> Self {
@@ -84,6 +93,12 @@ pub struct ExternValue {
     pub type_: Type,
     pub attributes: Attributes,
     pub doc_comments: Vec<String>,
+    pub location: ItemLocation,
+}
+impl HasLocation for ExternValue {
+    fn location(&self) -> &ItemLocation {
+        &self.location
+    }
 }
 #[cfg(test)]
 impl StripLocations for ExternValue {
@@ -94,6 +109,7 @@ impl StripLocations for ExternValue {
             type_: self.type_.strip_locations(),
             attributes: self.attributes.strip_locations(),
             doc_comments: self.doc_comments.strip_locations(),
+            location: ItemLocation::test(),
         }
     }
 }
@@ -111,6 +127,7 @@ impl ExternValue {
             type_,
             attributes: Attributes::from_iter(attributes),
             doc_comments: vec![],
+            location: ItemLocation::test(),
         }
     }
     pub fn with_doc_comments(mut self, doc_comments: Vec<String>) -> Self {
@@ -208,7 +225,7 @@ impl Parser {
         ))
     }
 
-    pub(crate) fn parse_extern_value(&mut self) -> Result<Located<ExternValue>, ParseError> {
+    pub(crate) fn parse_extern_value(&mut self) -> Result<ExternValue, ParseError> {
         let start_pos = self.current().location.span.start;
         let mut doc_comments = self.collect_doc_comments();
         let attributes = if matches!(self.peek(), TokenKind::Hash) {
@@ -234,19 +251,17 @@ impl Parser {
         };
         let location = self.item_location_from_locations(start_pos, end_pos);
 
-        Ok(Located::new(
-            ExternValue {
-                visibility,
-                name,
-                type_,
-                attributes,
-                doc_comments,
-            },
+        Ok(ExternValue {
+            visibility,
+            name,
+            type_,
+            attributes,
+            doc_comments,
             location,
-        ))
+        })
     }
 
-    pub(crate) fn parse_backend(&mut self) -> Result<Located<Backend>, ParseError> {
+    pub(crate) fn parse_backend(&mut self) -> Result<Backend, ParseError> {
         let first_token = self.expect(TokenKind::Backend)?;
         let (name, _) = self.expect_ident()?;
 
@@ -341,16 +356,14 @@ impl Parser {
         };
 
         let location = self.item_location_from_token_range(&first_token, &last_token);
-        Ok(Located::new(
-            Backend {
-                name,
-                prologue,
-                prologue_format,
-                epilogue,
-                epilogue_format,
-            },
+        Ok(Backend {
+            name,
+            prologue,
+            prologue_format,
+            epilogue,
+            epilogue_format,
             location,
-        ))
+        })
     }
 }
 

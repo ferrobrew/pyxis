@@ -285,11 +285,16 @@ impl Parser {
                 if matches!(self.peek_nth(1), TokenKind::Type) {
                     self.parse_extern_type()
                 } else {
-                    self.parse_extern_value()
-                        .map(|l| l.map(ModuleItem::ExternValue))
+                    self.parse_extern_value().map(|ev| {
+                        let location = ev.location.clone();
+                        Located::new(ModuleItem::ExternValue(ev), location)
+                    })
                 }
             }
-            TokenKind::Backend => self.parse_backend().map(|l| l.map(ModuleItem::Backend)),
+            TokenKind::Backend => self.parse_backend().map(|b| {
+                let location = b.location.clone();
+                Located::new(ModuleItem::Backend(b), location)
+            }),
             TokenKind::Hash => {
                 // Attributes - need to peek ahead to see what comes after
                 let mut pos = self.pos;
@@ -334,16 +339,19 @@ impl Parser {
                         ) {
                             self.parse_extern_type()
                         } else {
-                            self.parse_extern_value()
-                                .map(|l| l.map(ModuleItem::ExternValue))
+                            self.parse_extern_value().map(|ev| {
+                                let location = ev.location.clone();
+                                Located::new(ModuleItem::ExternValue(ev), location)
+                            })
                         }
                     }
                     TokenKind::Pub => {
                         // Could be pub extern value, pub fn, or pub item definition
                         match self.tokens.get(pos + 1).map(|t| &t.kind) {
-                            Some(TokenKind::Extern) => self
-                                .parse_extern_value()
-                                .map(|l| l.map(ModuleItem::ExternValue)),
+                            Some(TokenKind::Extern) => self.parse_extern_value().map(|ev| {
+                                let location = ev.location.clone();
+                                Located::new(ModuleItem::ExternValue(ev), location)
+                            }),
                             Some(TokenKind::Fn) => self.parse_function().map(|f| {
                                 let location = f.location.clone();
                                 Located::new(ModuleItem::Function(f), location)
