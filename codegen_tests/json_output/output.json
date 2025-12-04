@@ -95,6 +95,52 @@
         "packed": false
       }
     },
+    "braced_imports::Transform": {
+      "path": "braced_imports::Transform",
+      "visibility": "public",
+      "size": 76,
+      "alignment": 4,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": " Transform type that uses imported Matrix4 and Vector3",
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "matrix",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "math::Matrix4"
+            },
+            "offset": 0,
+            "size": 64,
+            "alignment": 4,
+            "is_base": false
+          },
+          {
+            "visibility": "public",
+            "name": "position",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "math::Vector3"
+            },
+            "offset": 64,
+            "size": 12,
+            "alignment": 4,
+            "is_base": false
+          }
+        ],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false
+      }
+    },
     "diamond_inheritance::Base": {
       "path": "diamond_inheritance::Base",
       "visibility": "private",
@@ -955,6 +1001,102 @@
         "copyable": true,
         "cloneable": true,
         "defaultable": true,
+        "packed": false
+      }
+    },
+    "math::Matrix4": {
+      "path": "math::Matrix4",
+      "visibility": "public",
+      "size": 64,
+      "alignment": 4,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": " 4x4 matrix type for transformations",
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "data",
+            "doc": null,
+            "type_ref": {
+              "type": "array",
+              "inner": {
+                "type": "raw",
+                "path": "f32"
+              },
+              "size": 16
+            },
+            "offset": 0,
+            "size": 64,
+            "alignment": 4,
+            "is_base": false
+          }
+        ],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false
+      }
+    },
+    "math::Vector3": {
+      "path": "math::Vector3",
+      "visibility": "public",
+      "size": 12,
+      "alignment": 4,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": " 3D vector type",
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "x",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "f32"
+            },
+            "offset": 0,
+            "size": 4,
+            "alignment": 4,
+            "is_base": false
+          },
+          {
+            "visibility": "public",
+            "name": "y",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "f32"
+            },
+            "offset": 4,
+            "size": 4,
+            "alignment": 4,
+            "is_base": false
+          },
+          {
+            "visibility": "public",
+            "name": "z",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "f32"
+            },
+            "offset": 8,
+            "size": 4,
+            "alignment": 4,
+            "is_base": false
+          }
+        ],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
         "packed": false
       }
     },
@@ -3053,6 +3195,16 @@
       "functions": [],
       "backends": {}
     },
+    "braced_imports": {
+      "doc": null,
+      "items": [
+        "braced_imports::Transform"
+      ],
+      "submodules": {},
+      "extern_values": [],
+      "functions": [],
+      "backends": {}
+    },
     "diamond_inheritance": {
       "doc": null,
       "items": [
@@ -3136,6 +3288,17 @@
           "calling_convention": "system"
         }
       ],
+      "backends": {}
+    },
+    "math": {
+      "doc": null,
+      "items": [
+        "math::Matrix4",
+        "math::Vector3"
+      ],
+      "submodules": {},
+      "extern_values": [],
+      "functions": [],
       "backends": {}
     },
     "min_size": {

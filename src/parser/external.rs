@@ -136,7 +136,9 @@ impl ExternValue {
 }
 
 impl Parser {
-    pub(crate) fn parse_use(&mut self) -> Result<ModuleItem, ParseError> {
+    /// Parse a use statement, potentially with braced imports.
+    /// Returns a Vec because `use a::{B, C};` expands to multiple Use items.
+    pub(crate) fn parse_use(&mut self) -> Result<Vec<ModuleItem>, ParseError> {
         let first_token = self.expect(TokenKind::Use)?;
 
         // Check for super keyword (not supported yet)
@@ -148,11 +150,56 @@ impl Parser {
             });
         }
 
-        let path = self.parse_item_path()?;
-        let last_token = self.expect(TokenKind::Semi)?;
+        let base_path = self.parse_item_path()?;
 
-        let location = self.item_location_from_token_range(&first_token, &last_token);
-        Ok(ModuleItem::Use { path, location })
+        // Check for braced imports: use path::{Item1, Item2};
+        // Note: parse_item_path already consumed the :: before {, so we just check for {
+        if matches!(self.peek(), TokenKind::LBrace) {
+            self.advance(); // consume {
+
+            let mut items = Vec::new();
+
+            // Parse comma-separated identifiers
+            loop {
+                // Skip any leading whitespace/newlines (handled by tokenizer)
+                if matches!(self.peek(), TokenKind::RBrace) {
+                    break;
+                }
+
+                // Parse item name (potentially with generics)
+                let item_path = self.parse_item_path()?;
+                let full_path = base_path.iter().chain(item_path.iter()).cloned().collect();
+
+                items.push(full_path);
+
+                // Check for comma or end of list
+                if matches!(self.peek(), TokenKind::Comma) {
+                    self.advance();
+                } else {
+                    break;
+                }
+            }
+
+            self.expect(TokenKind::RBrace)?;
+            let last_token = self.expect(TokenKind::Semi)?;
+
+            let location = self.item_location_from_token_range(&first_token, &last_token);
+            Ok(items
+                .into_iter()
+                .map(|path| ModuleItem::Use {
+                    path,
+                    location: location.clone(),
+                })
+                .collect())
+        } else {
+            // Simple use statement: use path::Item;
+            let last_token = self.expect(TokenKind::Semi)?;
+            let location = self.item_location_from_token_range(&first_token, &last_token);
+            Ok(vec![ModuleItem::Use {
+                path: base_path,
+                location,
+            }])
+        }
     }
 
     pub(crate) fn parse_extern_type(&mut self) -> Result<ModuleItem, ParseError> {
@@ -392,6 +439,88 @@ mod tests {
                 (V::Private, "Test"),
                 TD::new([TS::field((V::Private, "test"), T::ident("TestType<Hey>"))]),
             )]);
+
+        assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
+    }
+
+    #[test]
+    fn can_parse_braced_imports() {
+        let text = r#"
+        use math::{Matrix4, Vector3};
+        type Test {
+            matrix: Matrix4,
+            vector: Vector3,
+        }
+        "#;
+
+        let ast = M::new()
+            .with_uses([IP::from("math::Matrix4"), IP::from("math::Vector3")])
+            .with_definitions([ID::new(
+                (V::Private, "Test"),
+                TD::new([
+                    TS::field((V::Private, "matrix"), T::ident("Matrix4")),
+                    TS::field((V::Private, "vector"), T::ident("Vector3")),
+                ]),
+            )]);
+
+        assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
+    }
+
+    #[test]
+    fn can_parse_braced_imports_with_generics() {
+        let text = r#"
+        use types::{SharedPtr<T>, Vec<u32>};
+        "#;
+
+        let ast =
+            M::new().with_uses([IP::from("types::SharedPtr<T>"), IP::from("types::Vec<u32>")]);
+
+        assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
+    }
+
+    #[test]
+    fn can_parse_braced_imports_single_item() {
+        let text = r#"
+        use math::{Matrix4};
+        "#;
+
+        let ast = M::new().with_uses([IP::from("math::Matrix4")]);
+
+        assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
+    }
+
+    #[test]
+    fn can_parse_braced_imports_with_trailing_comma() {
+        let text = r#"
+        use math::{Matrix4, Vector3,};
+        "#;
+
+        let ast = M::new().with_uses([IP::from("math::Matrix4"), IP::from("math::Vector3")]);
+
+        assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
+    }
+
+    #[test]
+    fn can_parse_braced_imports_nested_path() {
+        let text = r#"
+        use graphics::math::{Matrix4, Vector3};
+        "#;
+
+        let ast = M::new().with_uses([
+            IP::from("graphics::math::Matrix4"),
+            IP::from("graphics::math::Vector3"),
+        ]);
+
+        assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
+    }
+
+    #[test]
+    fn can_parse_empty_braced_imports() {
+        let text = r#"
+        use math::{};
+        "#;
+
+        let ast = M::new().with_uses([]);
 
         assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
     }
