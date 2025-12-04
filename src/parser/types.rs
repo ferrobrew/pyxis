@@ -214,7 +214,8 @@ impl Parser {
             TokenKind::Unknown => {
                 let start = self.advance();
                 self.expect(TokenKind::Lt)?;
-                let size = self.parse_int_literal()?.value as usize;
+                let (size, _) = self.parse_int_literal()?;
+                let size = size as usize;
                 let end = self.expect(TokenKind::Gt)?;
                 let location = self.item_location_from_token_range(&start, &end);
 
@@ -254,7 +255,8 @@ impl Parser {
                 let start = self.advance();
                 let element = self.parse_type()?;
                 self.expect(TokenKind::Semi)?;
-                let size = self.parse_int_literal()?.value as usize;
+                let (size, _) = self.parse_int_literal()?;
+                let size = size as usize;
                 let end = self.expect(TokenKind::RBracket)?;
                 let location = self.item_location_from_token_range(&start, &end);
                 Ok(Type::Array {

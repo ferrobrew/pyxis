@@ -1,5 +1,5 @@
 use crate::{
-    span::{HasLocation, ItemLocation, Located},
+    span::{HasLocation, ItemLocation},
     tokenizer::TokenKind,
 };
 
@@ -120,7 +120,7 @@ impl Parser {
         match self.peek() {
             TokenKind::IntLiteral(_) => {
                 let token = self.current().clone();
-                let int_located = self.parse_int_literal()?;
+                let (value, location) = self.parse_int_literal()?;
                 // Detect format from the original token text
                 let text = self.span_text(&token.location.span);
                 let format = if text.starts_with("0x") || text.starts_with("-0x") {
@@ -133,14 +133,14 @@ impl Parser {
                     IntFormat::Decimal
                 };
                 Ok(Expr::IntLiteral {
-                    value: int_located.value,
+                    value,
                     format,
-                    location: int_located.location,
+                    location,
                 })
             }
             TokenKind::StringLiteral(_) => {
                 let token = self.current().clone();
-                let str_located = self.parse_string_literal()?;
+                let (value, location) = self.parse_string_literal()?;
                 // Detect if this was a raw string from the original token text
                 let text = self.span_text(&token.location.span);
                 let format = if text.starts_with('r') {
@@ -149,9 +149,9 @@ impl Parser {
                     StringFormat::Regular
                 };
                 Ok(Expr::StringLiteral {
-                    value: str_located.value,
+                    value,
                     format,
-                    location: str_located.location,
+                    location,
                 })
             }
             TokenKind::Ident(_) => {
@@ -166,7 +166,7 @@ impl Parser {
         }
     }
 
-    pub(crate) fn parse_int_literal(&mut self) -> Result<Located<isize>, ParseError> {
+    pub(crate) fn parse_int_literal(&mut self) -> Result<(isize, ItemLocation), ParseError> {
         match self.peek() {
             TokenKind::IntLiteral(_) => {
                 let token = self.advance();
@@ -232,7 +232,7 @@ impl Parser {
                         })
                 }?;
 
-                Ok(Located::new(value, token.location))
+                Ok((value, token.location))
             }
             _ => Err(ParseError::ExpectedIntLiteral {
                 found: self.peek().clone(),
@@ -241,14 +241,14 @@ impl Parser {
         }
     }
 
-    pub(crate) fn parse_string_literal(&mut self) -> Result<Located<String>, ParseError> {
+    pub(crate) fn parse_string_literal(&mut self) -> Result<(String, ItemLocation), ParseError> {
         match self.peek() {
             TokenKind::StringLiteral(_) => {
                 let token = self.advance();
                 let TokenKind::StringLiteral(s) = token.kind else {
                     unreachable!()
                 };
-                Ok(Located::new(s, token.location))
+                Ok((s, token.location))
             }
             _ => Err(ParseError::ExpectedStringLiteral {
                 found: self.peek().clone(),
