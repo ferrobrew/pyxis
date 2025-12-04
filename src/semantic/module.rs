@@ -8,7 +8,7 @@ use crate::{
         type_registry::TypeRegistry,
         types::{Backend, ExternValue, ItemDefinition, Type},
     },
-    span::{ItemLocation, Located},
+    span::{HasLocation, ItemLocation},
 };
 
 #[derive(Debug, Clone)]
@@ -16,10 +16,10 @@ pub struct Module {
     pub(crate) path: ItemPath,
     pub(crate) ast: grammar::Module,
     pub(crate) definition_paths: BTreeSet<ItemPath>,
-    pub(crate) extern_values: Vec<Located<ExternValue>>,
-    pub(crate) functions: Vec<Located<Function>>,
-    pub(crate) impls: BTreeMap<ItemPath, Located<grammar::FunctionBlock>>,
-    pub(crate) backends: BTreeMap<String, Vec<Located<Backend>>>,
+    pub(crate) extern_values: Vec<ExternValue>,
+    pub(crate) functions: Vec<Function>,
+    pub(crate) impls: BTreeMap<ItemPath, grammar::FunctionBlock>,
+    pub(crate) backends: BTreeMap<String, Vec<Backend>>,
     pub(crate) doc: Vec<String>,
 }
 
@@ -42,27 +42,25 @@ impl Module {
     pub(crate) fn new(
         path: ItemPath,
         ast: grammar::Module,
-        extern_values: Vec<Located<ExternValue>>,
-        impls: &[Located<grammar::FunctionBlock>],
-        backends: &[Located<grammar::Backend>],
+        extern_values: Vec<ExternValue>,
+        impls: &[grammar::FunctionBlock],
+        grammar_backends: &[grammar::Backend],
     ) -> Result<Self> {
         let impls = impls
             .iter()
             .map(|f| (path.join(f.name.as_str().into()), f.clone()))
             .collect();
 
-        let mut backends_map: BTreeMap<String, Vec<Located<Backend>>> = BTreeMap::new();
-        for backend in backends {
-            backends_map
+        let mut backends: BTreeMap<String, Vec<Backend>> = BTreeMap::new();
+        for backend in grammar_backends {
+            backends
                 .entry(backend.name.0.clone())
                 .or_default()
-                .push(Located::new(
-                    Backend {
-                        prologue: backend.prologue.clone(),
-                        epilogue: backend.epilogue.clone(),
-                    },
-                    backend.location.clone(),
-                ));
+                .push(Backend {
+                    prologue: backend.prologue.clone(),
+                    epilogue: backend.epilogue.clone(),
+                    location: backend.location.clone(),
+                });
         }
 
         let doc = ast.doc_comments.clone();
@@ -73,12 +71,12 @@ impl Module {
             extern_values,
             functions: vec![],
             impls,
-            backends: backends_map,
+            backends,
             doc,
         })
     }
 
-    pub fn uses(&self) -> impl Iterator<Item = Located<&ItemPath>> {
+    pub fn uses(&self) -> impl Iterator<Item = &grammar::ModuleItem> {
         self.ast.uses()
     }
 
@@ -89,7 +87,7 @@ impl Module {
     pub fn definitions<'a>(
         &'a self,
         type_registry: &'a TypeRegistry,
-    ) -> impl Iterator<Item = Located<&'a ItemDefinition>> {
+    ) -> impl Iterator<Item = &'a ItemDefinition> {
         self.definition_paths()
             .iter()
             .filter_map(|p| type_registry.get(p, &ItemLocation::internal()).ok())
@@ -97,7 +95,13 @@ impl Module {
 
     pub fn scope(&self) -> Vec<ItemPath> {
         std::iter::once(self.path.clone())
-            .chain(self.uses().map(|u| u.value.clone()))
+            .chain(self.uses().filter_map(|u| {
+                if let grammar::ModuleItem::Use { path, .. } = u {
+                    Some(path.clone())
+                } else {
+                    None
+                }
+            }))
             .collect()
     }
 
@@ -113,7 +117,7 @@ impl Module {
                         resolution_context: TypeResolutionContext::ExternValue {
                             extern_name: ev.name.clone(),
                         },
-                        location: type_ref.location.clone(),
+                        location: type_ref.location().clone(),
                     })?;
             }
         }
@@ -140,7 +144,7 @@ impl Module {
         &self.doc
     }
 
-    pub fn functions(&self) -> &[Located<Function>] {
+    pub fn functions(&self) -> &[Function] {
         &self.functions
     }
 }

@@ -1,7 +1,4 @@
-use std::{
-    ops::{Deref, DerefMut},
-    sync::Arc,
-};
+use std::sync::Arc;
 
 mod equals_ignoring_location;
 pub use equals_ignoring_location::*;
@@ -110,89 +107,9 @@ impl std::fmt::Display for ItemLocation {
     }
 }
 
-/// A value with an associated span
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Located<T> {
-    pub value: T,
-    pub location: ItemLocation,
-}
-impl<T> Located<T> {
-    pub fn new(value: T, location: ItemLocation) -> Self {
-        Self { value, location }
-    }
-
-    #[cfg(test)]
-    pub fn test(value: T) -> Self {
-        Self::new(value, ItemLocation::test())
-    }
-
-    pub fn as_ref(&self) -> Located<&T> {
-        Located::new(&self.value, self.location.clone())
-    }
-
-    pub fn as_mut(&mut self) -> Located<&mut T> {
-        Located::new(&mut self.value, self.location.clone())
-    }
-
-    pub fn map<U, F>(self, f: F) -> Located<U>
-    where
-        F: FnOnce(T) -> U,
-    {
-        self.map_with_location(|value, _| f(value))
-    }
-
-    pub fn map_with_location<U, F>(self, f: F) -> Located<U>
-    where
-        F: FnOnce(T, &ItemLocation) -> U,
-    {
-        Located::new(f(self.value, &self.location), self.location)
-    }
-}
-impl<T: EqualsIgnoringLocations> EqualsIgnoringLocations for Located<T> {
-    fn equals_ignoring_locations(&self, other: &Self) -> bool {
-        self.value.equals_ignoring_locations(&other.value)
-    }
-}
-#[cfg(test)]
-impl<T: StripLocations> StripLocations for Located<T> {
-    fn strip_locations(&self) -> Self {
-        // Return a synthetic version with the same value but no real span
-        Located::new(
-            self.value.strip_locations(),
-            self.location.strip_locations(),
-        )
-    }
-}
-impl<T: std::fmt::Display> std::fmt::Display for Located<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} ({})", self.value, self.location)
-    }
-}
-impl<T> Deref for Located<T> {
-    type Target = T;
-    fn deref(&self) -> &Self::Target {
-        &self.value
-    }
-}
-impl<T> DerefMut for Located<T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.value
-    }
-}
-impl<T: Clone> Located<&T> {
-    pub fn cloned(&self) -> Located<T> {
-        Located::new(self.value.clone(), self.location.clone())
-    }
-}
-impl<T, E> Located<Result<T, E>> {
-    pub fn transpose(self) -> Result<Located<T>, E> {
-        self.value.map(|value| Located::new(value, self.location))
-    }
-}
-impl<T> Located<Option<T>> {
-    pub fn transpose(self) -> Option<Located<T>> {
-        self.value.map(|value| Located::new(value, self.location))
-    }
+/// Trait for types that have an associated source location
+pub trait HasLocation {
+    fn location(&self) -> &ItemLocation;
 }
 
 // Helper functions for span manipulation and ariadne integration

@@ -1,4 +1,7 @@
-use crate::{span::Located, tokenizer::TokenKind};
+use crate::{
+    span::{HasLocation, ItemLocation},
+    tokenizer::TokenKind,
+};
 
 #[cfg(test)]
 use crate::span::StripLocations;
@@ -17,38 +20,93 @@ use super::{
 /// Module-level items (preserves ordering and comments)
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ModuleItem {
-    Comment(Comment),
-    Use(ItemPath),
-    ExternType(Ident, Attributes, Vec<String>), // name, attributes, doc_comments
-    Backend(Backend),
-    Definition(ItemDefinition),
-    Impl(FunctionBlock),
-    ExternValue(ExternValue),
-    Function(Function),
+    Comment {
+        comment: Comment,
+    },
+    Use {
+        path: ItemPath,
+        location: ItemLocation,
+    },
+    ExternType {
+        name: Ident,
+        attributes: Attributes,
+        doc_comments: Vec<String>,
+        location: ItemLocation,
+    },
+    Backend {
+        backend: Backend,
+    },
+    Definition {
+        definition: ItemDefinition,
+    },
+    Impl {
+        impl_block: FunctionBlock,
+    },
+    ExternValue {
+        extern_value: ExternValue,
+    },
+    Function {
+        function: Function,
+    },
+}
+impl HasLocation for ModuleItem {
+    fn location(&self) -> &ItemLocation {
+        match self {
+            ModuleItem::Comment { comment } => comment.location(),
+            ModuleItem::Use { location, .. } => location,
+            ModuleItem::ExternType { location, .. } => location,
+            ModuleItem::Backend { backend } => backend.location(),
+            ModuleItem::Definition { definition } => definition.location(),
+            ModuleItem::Impl { impl_block } => impl_block.location(),
+            ModuleItem::ExternValue { extern_value } => extern_value.location(),
+            ModuleItem::Function { function } => function.location(),
+        }
+    }
 }
 #[cfg(test)]
 impl StripLocations for ModuleItem {
     fn strip_locations(&self) -> Self {
         match self {
-            ModuleItem::Comment(c) => ModuleItem::Comment(c.strip_locations()),
-            ModuleItem::Use(p) => ModuleItem::Use(p.strip_locations()),
-            ModuleItem::ExternType(n, a, d) => ModuleItem::ExternType(
-                n.strip_locations(),
-                a.strip_locations(),
-                d.strip_locations(),
-            ),
-            ModuleItem::Backend(b) => ModuleItem::Backend(b.strip_locations()),
-            ModuleItem::Definition(d) => ModuleItem::Definition(d.strip_locations()),
-            ModuleItem::Impl(i) => ModuleItem::Impl(i.strip_locations()),
-            ModuleItem::ExternValue(e) => ModuleItem::ExternValue(e.strip_locations()),
-            ModuleItem::Function(f) => ModuleItem::Function(f.strip_locations()),
+            ModuleItem::Comment { comment } => ModuleItem::Comment {
+                comment: comment.strip_locations(),
+            },
+            ModuleItem::Use { path, .. } => ModuleItem::Use {
+                path: path.strip_locations(),
+                location: ItemLocation::test(),
+            },
+            ModuleItem::ExternType {
+                name,
+                attributes,
+                doc_comments,
+                ..
+            } => ModuleItem::ExternType {
+                name: name.strip_locations(),
+                attributes: attributes.strip_locations(),
+                doc_comments: doc_comments.strip_locations(),
+                location: ItemLocation::test(),
+            },
+            ModuleItem::Backend { backend } => ModuleItem::Backend {
+                backend: backend.strip_locations(),
+            },
+            ModuleItem::Definition { definition } => ModuleItem::Definition {
+                definition: definition.strip_locations(),
+            },
+            ModuleItem::Impl { impl_block } => ModuleItem::Impl {
+                impl_block: impl_block.strip_locations(),
+            },
+            ModuleItem::ExternValue { extern_value } => ModuleItem::ExternValue {
+                extern_value: extern_value.strip_locations(),
+            },
+            ModuleItem::Function { function } => ModuleItem::Function {
+                function: function.strip_locations(),
+            },
         }
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Module {
-    pub items: Vec<Located<ModuleItem>>,
+    pub items: Vec<ModuleItem>,
     pub attributes: Attributes,
     pub doc_comments: Vec<String>,
 }
@@ -64,13 +122,9 @@ impl StripLocations for Module {
             items: self
                 .items
                 .iter()
-                .filter_map(|item| {
-                    item.strip_locations()
-                        .map(|item| match item {
-                            ModuleItem::Comment(_) => None, // Filter out comments
-                            _ => Some(item.strip_locations()),
-                        })
-                        .transpose()
+                .filter_map(|item| match item {
+                    ModuleItem::Comment { .. } => None, // Filter out comments
+                    _ => Some(item.strip_locations()),
                 })
                 .collect(),
             attributes: self.attributes.strip_locations(),
@@ -81,8 +135,11 @@ impl StripLocations for Module {
 #[cfg(test)]
 impl Module {
     pub fn with_uses(mut self, uses: impl IntoIterator<Item = ItemPath>) -> Self {
-        for use_path in uses.into_iter() {
-            self.items.push(Located::test(ModuleItem::Use(use_path)));
+        for path in uses.into_iter() {
+            self.items.push(ModuleItem::Use {
+                path,
+                location: ItemLocation::test(),
+            });
         }
         self
     }
@@ -90,9 +147,13 @@ impl Module {
         mut self,
         extern_types: impl IntoIterator<Item = (Ident, Attributes)>,
     ) -> Self {
-        for (name, attrs) in extern_types.into_iter() {
-            self.items
-                .push(Located::test(ModuleItem::ExternType(name, attrs, vec![])));
+        for (name, attributes) in extern_types.into_iter() {
+            self.items.push(ModuleItem::ExternType {
+                name,
+                attributes,
+                doc_comments: vec![],
+                location: ItemLocation::test(),
+            });
         }
         self
     }
@@ -101,15 +162,13 @@ impl Module {
         extern_values: impl IntoIterator<Item = ExternValue>,
     ) -> Self {
         for extern_value in extern_values.into_iter() {
-            self.items
-                .push(Located::test(ModuleItem::ExternValue(extern_value)));
+            self.items.push(ModuleItem::ExternValue { extern_value });
         }
         self
     }
     pub fn with_functions(mut self, functions: impl IntoIterator<Item = Function>) -> Self {
         for function in functions.into_iter() {
-            self.items
-                .push(Located::test(ModuleItem::Function(function)));
+            self.items.push(ModuleItem::Function { function });
         }
         self
     }
@@ -118,20 +177,19 @@ impl Module {
         definitions: impl IntoIterator<Item = ItemDefinition>,
     ) -> Self {
         for definition in definitions.into_iter() {
-            self.items
-                .push(Located::test(ModuleItem::Definition(definition)));
+            self.items.push(ModuleItem::Definition { definition });
         }
         self
     }
     pub fn with_impls(mut self, impls: impl IntoIterator<Item = FunctionBlock>) -> Self {
         for impl_block in impls.into_iter() {
-            self.items.push(Located::test(ModuleItem::Impl(impl_block)));
+            self.items.push(ModuleItem::Impl { impl_block });
         }
         self
     }
     pub fn with_backends(mut self, backends: impl IntoIterator<Item = Backend>) -> Self {
         for backend in backends.into_iter() {
-            self.items.push(Located::test(ModuleItem::Backend(backend)));
+            self.items.push(ModuleItem::Backend { backend });
         }
         self
     }
@@ -145,74 +203,44 @@ impl Module {
     }
 }
 impl Module {
-    pub fn uses(&self) -> impl Iterator<Item = Located<&ItemPath>> {
-        self.items.iter().filter_map(|item| {
-            item.as_ref()
-                .map(|item| match item {
-                    ModuleItem::Use(path) => Some(path),
-                    _ => None,
-                })
-                .transpose()
+    pub fn uses(&self) -> impl Iterator<Item = &ModuleItem> {
+        self.items
+            .iter()
+            .filter(|item| matches!(item, ModuleItem::Use { .. }))
+    }
+    pub fn extern_types(&self) -> impl Iterator<Item = &ModuleItem> {
+        self.items
+            .iter()
+            .filter(|item| matches!(item, ModuleItem::ExternType { .. }))
+    }
+    pub fn extern_values(&self) -> impl Iterator<Item = &ExternValue> {
+        self.items.iter().filter_map(|item| match item {
+            ModuleItem::ExternValue { extern_value } => Some(extern_value),
+            _ => None,
         })
     }
-    pub fn extern_types(&self) -> impl Iterator<Item = Located<(&Ident, &Attributes)>> {
-        self.items.iter().filter_map(|item| {
-            item.as_ref()
-                .map(|item| match item {
-                    ModuleItem::ExternType(name, attrs, _doc_comments) => Some((name, attrs)),
-                    _ => None,
-                })
-                .transpose()
+    pub fn functions(&self) -> impl Iterator<Item = &Function> {
+        self.items.iter().filter_map(|item| match item {
+            ModuleItem::Function { function } => Some(function),
+            _ => None,
         })
     }
-    pub fn extern_values(&self) -> impl Iterator<Item = Located<&ExternValue>> {
-        self.items.iter().filter_map(|item| {
-            item.as_ref()
-                .map(|item| match item {
-                    ModuleItem::ExternValue(ev) => Some(ev),
-                    _ => None,
-                })
-                .transpose()
+    pub fn definitions(&self) -> impl Iterator<Item = &ItemDefinition> {
+        self.items.iter().filter_map(|item| match item {
+            ModuleItem::Definition { definition } => Some(definition),
+            _ => None,
         })
     }
-    pub fn functions(&self) -> impl Iterator<Item = Located<&Function>> {
-        self.items.iter().filter_map(|item| {
-            item.as_ref()
-                .map(|item| match item {
-                    ModuleItem::Function(func) => Some(func),
-                    _ => None,
-                })
-                .transpose()
+    pub fn impls(&self) -> impl Iterator<Item = &FunctionBlock> {
+        self.items.iter().filter_map(|item| match item {
+            ModuleItem::Impl { impl_block } => Some(impl_block),
+            _ => None,
         })
     }
-    pub fn definitions(&self) -> impl Iterator<Item = Located<&ItemDefinition>> {
-        self.items.iter().filter_map(|item| {
-            item.as_ref()
-                .map(|item| match item {
-                    ModuleItem::Definition(def) => Some(def),
-                    _ => None,
-                })
-                .transpose()
-        })
-    }
-    pub fn impls(&self) -> impl Iterator<Item = Located<&FunctionBlock>> {
-        self.items.iter().filter_map(|item| {
-            item.as_ref()
-                .map(|item| match item {
-                    ModuleItem::Impl(impl_block) => Some(impl_block),
-                    _ => None,
-                })
-                .transpose()
-        })
-    }
-    pub fn backends(&self) -> impl Iterator<Item = Located<&Backend>> {
-        self.items.iter().filter_map(|item| {
-            item.as_ref()
-                .map(|item| match item {
-                    ModuleItem::Backend(backend) => Some(backend),
-                    _ => None,
-                })
-                .transpose()
+    pub fn backends(&self) -> impl Iterator<Item = &Backend> {
+        self.items.iter().filter_map(|item| match item {
+            ModuleItem::Backend { backend } => Some(backend),
+            _ => None,
         })
     }
 }
@@ -238,7 +266,7 @@ impl Parser {
                 TokenKind::Comment(_) | TokenKind::MultiLineComment(_)
             ) {
                 if let Some(comment) = self.collect_comment() {
-                    items.push(comment.map(ModuleItem::Comment));
+                    items.push(ModuleItem::Comment { comment });
                 }
             }
 
@@ -251,7 +279,7 @@ impl Parser {
 
             // Add any pending comments that were collected during parsing (e.g., inline comments after attributes)
             for comment in self.pending_comments.drain(..) {
-                items.push(comment.map(ModuleItem::Comment));
+                items.push(ModuleItem::Comment { comment });
             }
 
             // Collect any inline comments that appeared after the item
@@ -260,7 +288,7 @@ impl Parser {
                 TokenKind::Comment(_) | TokenKind::MultiLineComment(_)
             ) {
                 if let Some(comment) = self.collect_comment() {
-                    items.push(comment.map(ModuleItem::Comment));
+                    items.push(ModuleItem::Comment { comment });
                 }
             }
         }
@@ -272,22 +300,24 @@ impl Parser {
         })
     }
 
-    pub(crate) fn parse_module_item(&mut self) -> Result<Located<ModuleItem>, ParseError> {
+    pub(crate) fn parse_module_item(&mut self) -> Result<ModuleItem, ParseError> {
         // Attributes can appear before any item
         let has_attributes = matches!(self.peek(), TokenKind::Hash);
 
         match self.peek() {
-            TokenKind::Use => self.parse_use().map(|l| l.map(ModuleItem::Use)),
+            TokenKind::Use => self.parse_use(),
             TokenKind::Extern if !has_attributes => {
                 // Peek ahead to distinguish extern type from extern value
                 if matches!(self.peek_nth(1), TokenKind::Type) {
                     self.parse_extern_type()
                 } else {
                     self.parse_extern_value()
-                        .map(|l| l.map(ModuleItem::ExternValue))
+                        .map(|extern_value| ModuleItem::ExternValue { extern_value })
                 }
             }
-            TokenKind::Backend => self.parse_backend().map(|l| l.map(ModuleItem::Backend)),
+            TokenKind::Backend => self
+                .parse_backend()
+                .map(|backend| ModuleItem::Backend { backend }),
             TokenKind::Hash => {
                 // Attributes - need to peek ahead to see what comes after
                 let mut pos = self.pos;
@@ -333,7 +363,7 @@ impl Parser {
                             self.parse_extern_type()
                         } else {
                             self.parse_extern_value()
-                                .map(|l| l.map(ModuleItem::ExternValue))
+                                .map(|extern_value| ModuleItem::ExternValue { extern_value })
                         }
                     }
                     TokenKind::Pub => {
@@ -341,20 +371,24 @@ impl Parser {
                         match self.tokens.get(pos + 1).map(|t| &t.kind) {
                             Some(TokenKind::Extern) => self
                                 .parse_extern_value()
-                                .map(|l| l.map(ModuleItem::ExternValue)),
-                            Some(TokenKind::Fn) => {
-                                self.parse_function().map(|l| l.map(ModuleItem::Function))
-                            }
+                                .map(|extern_value| ModuleItem::ExternValue { extern_value }),
+                            Some(TokenKind::Fn) => self
+                                .parse_function()
+                                .map(|function| ModuleItem::Function { function }),
                             _ => self
                                 .parse_item_definition()
-                                .map(|l| l.map(ModuleItem::Definition)),
+                                .map(|definition| ModuleItem::Definition { definition }),
                         }
                     }
                     TokenKind::Type | TokenKind::Enum | TokenKind::Bitflags => self
                         .parse_item_definition()
-                        .map(|l| l.map(ModuleItem::Definition)),
-                    TokenKind::Impl => self.parse_impl_block().map(|l| l.map(ModuleItem::Impl)),
-                    TokenKind::Fn => self.parse_function().map(|l| l.map(ModuleItem::Function)),
+                        .map(|definition| ModuleItem::Definition { definition }),
+                    TokenKind::Impl => self
+                        .parse_impl_block()
+                        .map(|impl_block| ModuleItem::Impl { impl_block }),
+                    TokenKind::Fn => self
+                        .parse_function()
+                        .map(|function| ModuleItem::Function { function }),
                     _ => Err(ParseError::UnexpectedTokenAfterAttributes {
                         found: self.tokens[pos].kind.clone(),
                         location: self.tokens[pos].location.clone(),
@@ -403,16 +437,19 @@ impl Parser {
                     self.parse_extern_type()
                 } else {
                     self.parse_item_definition()
-                        .map(|l| l.map(ModuleItem::Definition))
+                        .map(|definition| ModuleItem::Definition { definition })
                 }
             }
             TokenKind::Pub | TokenKind::Type | TokenKind::Enum | TokenKind::Bitflags => self
                 .parse_item_definition()
-                .map(|l| l.map(ModuleItem::Definition)),
-            TokenKind::Impl => self.parse_impl_block().map(|l| l.map(ModuleItem::Impl)),
+                .map(|definition| ModuleItem::Definition { definition }),
+            TokenKind::Impl => self
+                .parse_impl_block()
+                .map(|impl_block| ModuleItem::Impl { impl_block }),
             TokenKind::Fn => {
                 // Freestanding function with attributes
-                self.parse_function().map(|l| l.map(ModuleItem::Function))
+                self.parse_function()
+                    .map(|function| ModuleItem::Function { function })
             }
             _ => Err(ParseError::UnexpectedModuleToken {
                 found: self.peek().clone(),
@@ -425,10 +462,7 @@ impl Parser {
 #[cfg(test)]
 mod tests {
     use crate::{
-        grammar::{
-            IntFormat, ModuleItem,
-            test_aliases::{int_literal_with_format, *},
-        },
+        grammar::{ModuleItem, test_aliases::*},
         parser::parse_str_for_tests,
         span::StripLocations,
     };
@@ -471,7 +505,7 @@ mod tests {
                 (V::Public, "test"),
                 [Ar::mut_self(), Ar::named("test2", T::ident("i32"))],
             )])
-            .with_attributes([A::size(4)])]),
+            .with_attributes([A::size_decimal(4)])]),
         )]);
 
         assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
@@ -572,13 +606,7 @@ mod tests {
                     TS::field((V::Public, "character_types"), T::unknown(0x74)),
                     TS::field((V::Public, "vehicle_types"), T::ident("VehicleTypes")),
                 ])
-                .with_attributes([
-                    A::Function(
-                        "size".into(),
-                        AIs::from_iter([AI::Expr(int_literal_with_format(0x1754, IntFormat::Hex))]),
-                    ),
-                    A::singleton(0x1_191_918),
-                ]),
+                .with_attributes([A::size(0x1754), A::singleton(0x1_191_918)]),
             )])
             .with_impls([FB::new(
                 "SpawnManager",
@@ -682,10 +710,7 @@ mod tests {
                 TS::field((V::Private, "shape"), T::ident("u32").mut_pointer()),
                 TS::field((V::Private, "unknown"), T::array(T::ident("u32"), 4)),
             ])
-            .with_attributes([A::Function(
-                "size".into(),
-                AIs::from_iter([AI::Expr(int_literal_with_format(0x2C, IntFormat::Hex))]),
-            )]),
+            .with_attributes([A::size(0x2C)]),
         )]);
 
         assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
@@ -765,7 +790,7 @@ impl PfxInstance {
         let module = parse_str_for_tests(text).unwrap();
 
         // Check extern type has no doc comments (doc comes after, not before)
-        if let ModuleItem::ExternType(_name, _attrs, doc_comments) = &module.items[0].value {
+        if let ModuleItem::ExternType { doc_comments, .. } = &module.items[0] {
             assert_eq!(
                 doc_comments.len(),
                 0,
@@ -776,29 +801,29 @@ impl PfxInstance {
         }
 
         // Check first type definition has doc comments
-        if let ModuleItem::Definition(def) = &module.items[1].value {
-            assert_eq!(def.name.0, "PfxInstanceInterface");
+        if let ModuleItem::Definition { definition } = &module.items[1] {
+            assert_eq!(definition.name.0, "PfxInstanceInterface");
             assert_eq!(
-                def.doc_comments.len(),
+                definition.doc_comments.len(),
                 1,
                 "PfxInstanceInterface should have 1 doc comment, got: {:?}",
-                def.doc_comments
+                definition.doc_comments
             );
-            assert!(def.doc_comments[0].contains("IPfxInstance"));
+            assert!(definition.doc_comments[0].contains("IPfxInstance"));
         } else {
             panic!("Expected Definition for PfxInstanceInterface");
         }
 
         // Check second type definition has doc comments (after attributes)
-        if let ModuleItem::Definition(def) = &module.items[2].value {
-            assert_eq!(def.name.0, "PfxInstance");
+        if let ModuleItem::Definition { definition } = &module.items[2] {
+            assert_eq!(definition.name.0, "PfxInstance");
             assert_eq!(
-                def.doc_comments.len(),
+                definition.doc_comments.len(),
                 1,
                 "PfxInstance should have 1 doc comment, got: {:?}",
-                def.doc_comments
+                definition.doc_comments
             );
-            assert!(def.doc_comments[0].contains("CPfxInstance"));
+            assert!(definition.doc_comments[0].contains("CPfxInstance"));
         } else {
             panic!("Expected Definition for PfxInstance");
         }

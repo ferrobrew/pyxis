@@ -1,5 +1,5 @@
 use crate::{
-    span::{ItemLocation, Located, Span},
+    span::{HasLocation, ItemLocation, Span},
     tokenizer::TokenKind,
 };
 
@@ -12,7 +12,6 @@ use super::{
     core::Parser,
     expressions::{Expr, StringFormat},
     module::ModuleItem,
-    paths::ItemPath,
     types::{Ident, Type},
 };
 
@@ -26,6 +25,12 @@ pub struct Backend {
     pub prologue_format: StringFormat,
     pub epilogue: Option<String>,
     pub epilogue_format: StringFormat,
+    pub location: ItemLocation,
+}
+impl HasLocation for Backend {
+    fn location(&self) -> &ItemLocation {
+        &self.location
+    }
 }
 #[cfg(test)]
 impl StripLocations for Backend {
@@ -36,9 +41,11 @@ impl StripLocations for Backend {
             prologue_format: self.prologue_format.strip_locations(),
             epilogue: self.epilogue.strip_locations(),
             epilogue_format: self.epilogue_format.strip_locations(),
+            location: ItemLocation::test(),
         }
     }
 }
+#[cfg(test)]
 impl Backend {
     pub fn new(name: &str) -> Self {
         Self {
@@ -47,6 +54,7 @@ impl Backend {
             prologue_format: StringFormat::Regular,
             epilogue: None,
             epilogue_format: StringFormat::Regular,
+            location: ItemLocation::test(),
         }
     }
     pub fn with_prologue(mut self, prologue: impl Into<String>) -> Self {
@@ -81,9 +89,15 @@ impl Backend {
 pub struct ExternValue {
     pub visibility: Visibility,
     pub name: Ident,
-    pub type_: Located<Type>,
+    pub type_: Type,
     pub attributes: Attributes,
     pub doc_comments: Vec<String>,
+    pub location: ItemLocation,
+}
+impl HasLocation for ExternValue {
+    fn location(&self) -> &ItemLocation {
+        &self.location
+    }
 }
 #[cfg(test)]
 impl StripLocations for ExternValue {
@@ -94,6 +108,7 @@ impl StripLocations for ExternValue {
             type_: self.type_.strip_locations(),
             attributes: self.attributes.strip_locations(),
             doc_comments: self.doc_comments.strip_locations(),
+            location: ItemLocation::test(),
         }
     }
 }
@@ -108,9 +123,10 @@ impl ExternValue {
         Self {
             visibility,
             name: name.into(),
-            type_: Located::test(type_),
+            type_,
             attributes: Attributes::from_iter(attributes),
             doc_comments: vec![],
+            location: ItemLocation::test(),
         }
     }
     pub fn with_doc_comments(mut self, doc_comments: Vec<String>) -> Self {
@@ -120,7 +136,7 @@ impl ExternValue {
 }
 
 impl Parser {
-    pub(crate) fn parse_use(&mut self) -> Result<Located<ItemPath>, ParseError> {
+    pub(crate) fn parse_use(&mut self) -> Result<ModuleItem, ParseError> {
         let first_token = self.expect(TokenKind::Use)?;
 
         // Check for super keyword (not supported yet)
@@ -136,10 +152,10 @@ impl Parser {
         let last_token = self.expect(TokenKind::Semi)?;
 
         let location = self.item_location_from_token_range(&first_token, &last_token);
-        Ok(Located::new(path, location))
+        Ok(ModuleItem::Use { path, location })
     }
 
-    pub(crate) fn parse_extern_type(&mut self) -> Result<Located<ModuleItem>, ParseError> {
+    pub(crate) fn parse_extern_type(&mut self) -> Result<ModuleItem, ParseError> {
         let start_pos = self.current().location.span.start;
         let mut doc_comments = self.collect_doc_comments();
         let attributes = if matches!(self.peek(), TokenKind::Hash) {
@@ -202,13 +218,15 @@ impl Parser {
             self.current().location.span.end
         };
         let location = ItemLocation::new(self.filename.clone(), Span::new(start_pos, end_pos));
-        Ok(Located::new(
-            ModuleItem::ExternType(name, attributes, doc_comments),
+        Ok(ModuleItem::ExternType {
+            name,
+            attributes,
+            doc_comments,
             location,
-        ))
+        })
     }
 
-    pub(crate) fn parse_extern_value(&mut self) -> Result<Located<ExternValue>, ParseError> {
+    pub(crate) fn parse_extern_value(&mut self) -> Result<ExternValue, ParseError> {
         let start_pos = self.current().location.span.start;
         let mut doc_comments = self.collect_doc_comments();
         let attributes = if matches!(self.peek(), TokenKind::Hash) {
@@ -234,19 +252,17 @@ impl Parser {
         };
         let location = self.item_location_from_locations(start_pos, end_pos);
 
-        Ok(Located::new(
-            ExternValue {
-                visibility,
-                name,
-                type_,
-                attributes,
-                doc_comments,
-            },
+        Ok(ExternValue {
+            visibility,
+            name,
+            type_,
+            attributes,
+            doc_comments,
             location,
-        ))
+        })
     }
 
-    pub(crate) fn parse_backend(&mut self) -> Result<Located<Backend>, ParseError> {
+    pub(crate) fn parse_backend(&mut self) -> Result<Backend, ParseError> {
         let first_token = self.expect(TokenKind::Backend)?;
         let (name, _) = self.expect_ident()?;
 
@@ -265,13 +281,13 @@ impl Parser {
                     TokenKind::Prologue => {
                         self.advance();
                         let expr = self.parse_expr()?;
-                        if let Expr::StringLiteral { value, format } = expr.value {
+                        if let Expr::StringLiteral { value, format, .. } = expr {
                             prologue = Some(value);
                             prologue_format = format;
                         } else {
                             return Err(ParseError::ExpectedStringLiteral {
                                 found: self.peek().clone(),
-                                location: expr.location.clone(),
+                                location: expr.location().clone(),
                             });
                         }
                         self.expect(TokenKind::Semi)?;
@@ -279,13 +295,13 @@ impl Parser {
                     TokenKind::Epilogue => {
                         self.advance();
                         let expr = self.parse_expr()?;
-                        if let Expr::StringLiteral { value, format } = expr.value {
+                        if let Expr::StringLiteral { value, format, .. } = expr {
                             epilogue = Some(value);
                             epilogue_format = format;
                         } else {
                             return Err(ParseError::ExpectedStringLiteral {
                                 found: self.peek().clone(),
-                                location: expr.location.clone(),
+                                location: expr.location().clone(),
                             });
                         }
                         self.expect(TokenKind::Semi)?;
@@ -306,13 +322,13 @@ impl Parser {
                 TokenKind::Prologue => {
                     self.advance();
                     let expr = self.parse_expr()?;
-                    if let Expr::StringLiteral { value, format } = expr.value {
+                    if let Expr::StringLiteral { value, format, .. } = expr {
                         prologue = Some(value);
                         prologue_format = format;
                     } else {
                         return Err(ParseError::ExpectedStringLiteral {
                             found: self.peek().clone(),
-                            location: expr.location.clone(),
+                            location: expr.location().clone(),
                         });
                     }
                     self.expect(TokenKind::Semi)?
@@ -320,13 +336,13 @@ impl Parser {
                 TokenKind::Epilogue => {
                     self.advance();
                     let expr = self.parse_expr()?;
-                    if let Expr::StringLiteral { value, format } = expr.value {
+                    if let Expr::StringLiteral { value, format, .. } = expr {
                         epilogue = Some(value);
                         epilogue_format = format;
                     } else {
                         return Err(ParseError::ExpectedStringLiteral {
                             found: self.peek().clone(),
-                            location: expr.location.clone(),
+                            location: expr.location().clone(),
                         });
                     }
                     self.expect(TokenKind::Semi)?
@@ -341,16 +357,14 @@ impl Parser {
         };
 
         let location = self.item_location_from_token_range(&first_token, &last_token);
-        Ok(Located::new(
-            Backend {
-                name,
-                prologue,
-                prologue_format,
-                epilogue,
-                epilogue_format,
-            },
+        Ok(Backend {
+            name,
+            prologue,
+            prologue_format,
+            epilogue,
+            epilogue_format,
             location,
-        ))
+        })
     }
 }
 
@@ -406,7 +420,7 @@ mod tests {
         "#;
 
         let ast = M::new()
-            .with_extern_types([("TestType<Hey>".into(), As::from_iter([A::size(12)]))])
+            .with_extern_types([("TestType<Hey>".into(), As::from_iter([A::size_decimal(12)]))])
             .with_definitions([ID::new(
                 (V::Private, "Test"),
                 TD::new([TS::field((V::Private, "test"), T::ident("TestType<Hey>"))]),
@@ -432,10 +446,15 @@ extern type ManuallyDrop<SharedPtr<u32>>;
         assert_eq!(module.items.len(), 1);
 
         // Verify it's an ExternType with the correct attributes and doc comments
-        match &module.items[0].value {
-            ModuleItem::ExternType(name, attrs, doc_comments) => {
+        match &module.items[0] {
+            ModuleItem::ExternType {
+                name,
+                attributes,
+                doc_comments,
+                ..
+            } => {
                 assert_eq!(name.0, "ManuallyDrop<SharedPtr<u32>>");
-                assert_eq!(attrs.0.len(), 2);
+                assert_eq!(attributes.0.len(), 2);
                 assert_eq!(doc_comments.len(), 4); // 4 lines of doc comment
                 assert!(doc_comments[0].contains("ManuallyDrop<SharedPtr<u32>>"));
                 assert!(doc_comments[1].contains("Drop` implementation"));
@@ -458,7 +477,7 @@ extern type ManuallyDrop<SharedPtr<u32>>;
         "#;
 
         let ast = M::new()
-            .with_extern_types([("SomeType".into(), As::from_iter([A::size(4)]))])
+            .with_extern_types([("SomeType".into(), As::from_iter([A::size_decimal(4)]))])
             .with_extern_values([
                 EV::new(
                     V::Public,

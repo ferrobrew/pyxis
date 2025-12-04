@@ -1,6 +1,6 @@
 use std::ops::{Deref, DerefMut};
 
-use crate::{span::Located, tokenizer::TokenKind};
+use crate::{span::ItemLocation, tokenizer::TokenKind};
 
 #[cfg(test)]
 use crate::span::StripLocations;
@@ -12,21 +12,41 @@ use super::expressions::{IntFormat, StringFormat};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum AttributeItem {
-    Expr(Expr),
-    Comment(String),
+    Expr {
+        expr: Expr,
+        location: ItemLocation,
+    },
+    Comment {
+        text: String,
+        location: ItemLocation,
+    },
+}
+impl HasLocation for AttributeItem {
+    fn location(&self) -> &ItemLocation {
+        match self {
+            AttributeItem::Expr { location, .. } => location,
+            AttributeItem::Comment { location, .. } => location,
+        }
+    }
 }
 #[cfg(test)]
 impl StripLocations for AttributeItem {
     fn strip_locations(&self) -> Self {
         match self {
-            AttributeItem::Expr(expr) => AttributeItem::Expr(expr.strip_locations()),
-            AttributeItem::Comment(comment) => AttributeItem::Comment(comment.strip_locations()),
+            AttributeItem::Expr { expr, .. } => AttributeItem::Expr {
+                expr: expr.strip_locations(),
+                location: ItemLocation::test(),
+            },
+            AttributeItem::Comment { text, .. } => AttributeItem::Comment {
+                text: text.strip_locations(),
+                location: ItemLocation::test(),
+            },
         }
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct AttributeItems(pub Vec<Located<AttributeItem>>);
+pub struct AttributeItems(pub Vec<AttributeItem>);
 #[cfg(test)]
 impl StripLocations for AttributeItems {
     fn strip_locations(&self) -> Self {
@@ -36,60 +56,85 @@ impl StripLocations for AttributeItems {
 #[cfg(test)]
 impl FromIterator<AttributeItem> for AttributeItems {
     fn from_iter<I: IntoIterator<Item = AttributeItem>>(iter: I) -> Self {
-        AttributeItems(iter.into_iter().map(Located::test).collect())
+        AttributeItems(iter.into_iter().collect())
     }
 }
 impl IntoIterator for AttributeItems {
-    type Item = Located<AttributeItem>;
-    type IntoIter = std::vec::IntoIter<Located<AttributeItem>>;
+    type Item = AttributeItem;
+    type IntoIter = std::vec::IntoIter<AttributeItem>;
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
     }
 }
 impl<'a> IntoIterator for &'a AttributeItems {
-    type Item = &'a Located<AttributeItem>;
-    type IntoIter = std::slice::Iter<'a, Located<AttributeItem>>;
+    type Item = &'a AttributeItem;
+    type IntoIter = std::slice::Iter<'a, AttributeItem>;
     fn into_iter(self) -> Self::IntoIter {
         self.0.iter()
     }
 }
 impl AttributeItems {
-    pub fn exprs(&self) -> impl Iterator<Item = Located<&Expr>> {
-        self.0.iter().filter_map(|item| {
-            item.as_ref()
-                .map(|item| match item {
-                    AttributeItem::Expr(expr) => Some(expr),
-                    _ => None,
-                })
-                .transpose()
+    pub fn exprs(&self) -> impl Iterator<Item = &Expr> {
+        self.0.iter().filter_map(|item| match item {
+            AttributeItem::Expr { expr, .. } => Some(expr),
+            _ => None,
         })
     }
-    pub fn exprs_vec(&self) -> Vec<Located<&Expr>> {
+    pub fn exprs_vec(&self) -> Vec<&Expr> {
         self.exprs().collect()
     }
 }
 
+use crate::span::HasLocation;
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Attribute {
-    Ident(Ident),
+    Ident {
+        ident: Ident,
+        location: ItemLocation,
+    },
     /// Function attribute with expressions and comments
     /// Example: size(0x620 /* actually 0x61C */)
-    Function(Ident, AttributeItems),
+    Function {
+        name: Ident,
+        items: AttributeItems,
+        location: ItemLocation,
+    },
     /// Assign attribute with expression and optional comments
     /// Example: foo = bar /* comment */
-    Assign(Ident, AttributeItems),
+    Assign {
+        name: Ident,
+        items: AttributeItems,
+        location: ItemLocation,
+    },
+}
+impl HasLocation for Attribute {
+    fn location(&self) -> &ItemLocation {
+        match self {
+            Attribute::Ident { location, .. } => location,
+            Attribute::Function { location, .. } => location,
+            Attribute::Assign { location, .. } => location,
+        }
+    }
 }
 #[cfg(test)]
 impl StripLocations for Attribute {
     fn strip_locations(&self) -> Self {
         match self {
-            Attribute::Ident(i) => Attribute::Ident(i.strip_locations()),
-            Attribute::Function(name, items) => {
-                Attribute::Function(name.clone(), items.strip_locations())
-            }
-            Attribute::Assign(name, items) => {
-                Attribute::Assign(name.clone(), items.strip_locations())
-            }
+            Attribute::Ident { ident, .. } => Attribute::Ident {
+                ident: ident.strip_locations(),
+                location: ItemLocation::test(),
+            },
+            Attribute::Function { name, items, .. } => Attribute::Function {
+                name: name.clone(),
+                items: items.strip_locations(),
+                location: ItemLocation::test(),
+            },
+            Attribute::Assign { name, items, .. } => Attribute::Assign {
+                name: name.clone(),
+                items: items.strip_locations(),
+                location: ItemLocation::test(),
+            },
         }
     }
 }
@@ -97,47 +142,78 @@ impl StripLocations for Attribute {
 impl Attribute {
     // Ident attributes
     pub fn copyable() -> Self {
-        Attribute::Ident("copyable".into())
+        Attribute::Ident {
+            ident: "copyable".into(),
+            location: ItemLocation::test(),
+        }
     }
     pub fn cloneable() -> Self {
-        Attribute::Ident("cloneable".into())
+        Attribute::Ident {
+            ident: "cloneable".into(),
+            location: ItemLocation::test(),
+        }
     }
     pub fn defaultable() -> Self {
-        Attribute::Ident("defaultable".into())
+        Attribute::Ident {
+            ident: "defaultable".into(),
+            location: ItemLocation::test(),
+        }
     }
     #[allow(clippy::should_implement_trait)]
     pub fn default() -> Self {
-        Attribute::Ident("default".into())
+        Attribute::Ident {
+            ident: "default".into(),
+            location: ItemLocation::test(),
+        }
     }
     pub fn base() -> Self {
-        Attribute::Ident("base".into())
+        Attribute::Ident {
+            ident: "base".into(),
+            location: ItemLocation::test(),
+        }
     }
     pub fn packed() -> Self {
-        Attribute::Ident("packed".into())
+        Attribute::Ident {
+            ident: "packed".into(),
+            location: ItemLocation::test(),
+        }
     }
 
-    pub fn integer_fn(name: &str, value: isize) -> Self {
-        Attribute::Function(
-            name.into(),
-            AttributeItems(vec![Located::test(AttributeItem::Expr(Expr::IntLiteral {
-                value,
-                format: IntFormat::Decimal,
-            }))]),
-        )
+    pub fn integer_fn(attr_name: &str, value: isize) -> Self {
+        Attribute::Function {
+            name: attr_name.into(),
+            items: AttributeItems(vec![AttributeItem::Expr {
+                expr: Expr::IntLiteral {
+                    value,
+                    format: IntFormat::Decimal,
+                    location: ItemLocation::test(),
+                },
+                location: ItemLocation::test(),
+            }]),
+            location: ItemLocation::test(),
+        }
     }
-    fn integer_fn_hex(name: &str, value: isize) -> Self {
-        Attribute::Function(
-            name.into(),
-            AttributeItems(vec![Located::test(AttributeItem::Expr(Expr::IntLiteral {
-                value,
-                format: IntFormat::Hex,
-            }))]),
-        )
+    fn integer_fn_hex(attr_name: &str, value: isize) -> Self {
+        Attribute::Function {
+            name: attr_name.into(),
+            items: AttributeItems(vec![AttributeItem::Expr {
+                expr: Expr::IntLiteral {
+                    value,
+                    format: IntFormat::Hex,
+                    location: ItemLocation::test(),
+                },
+                location: ItemLocation::test(),
+            }]),
+            location: ItemLocation::test(),
+        }
     }
     pub fn address(address: usize) -> Self {
         Self::integer_fn_hex("address", address as isize)
     }
     pub fn size(size: usize) -> Self {
+        Self::integer_fn_hex("size", size as isize)
+    }
+    pub fn size_decimal(size: usize) -> Self {
         Self::integer_fn("size", size as isize)
     }
     pub fn min_size(min_size: usize) -> Self {
@@ -152,35 +228,38 @@ impl Attribute {
     pub fn index(index: usize) -> Self {
         Self::integer_fn_hex("index", index as isize)
     }
-    pub fn calling_convention(name: &str) -> Self {
-        Attribute::Function(
-            "calling_convention".into(),
-            AttributeItems(vec![Located::test(AttributeItem::Expr(
-                Expr::StringLiteral {
-                    value: name.into(),
+    pub fn calling_convention(conv_name: &str) -> Self {
+        Attribute::Function {
+            name: "calling_convention".into(),
+            items: AttributeItems(vec![AttributeItem::Expr {
+                expr: Expr::StringLiteral {
+                    value: conv_name.into(),
                     format: StringFormat::Regular,
+                    location: ItemLocation::test(),
                 },
-            ))]),
-        )
+                location: ItemLocation::test(),
+            }]),
+            location: ItemLocation::test(),
+        }
     }
 }
 impl Attribute {
     pub fn function(&self) -> Option<(&Ident, &AttributeItems)> {
         match self {
-            Attribute::Function(ident, items) => Some((ident, items)),
+            Attribute::Function { name, items, .. } => Some((name, items)),
             _ => None,
         }
     }
     pub fn assign(&self) -> Option<(&Ident, &AttributeItems)> {
         match self {
-            Attribute::Assign(ident, items) => Some((ident, items)),
+            Attribute::Assign { name, items, .. } => Some((name, items)),
             _ => None,
         }
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
-pub struct Attributes(pub Vec<Located<Attribute>>);
+pub struct Attributes(pub Vec<Attribute>);
 #[cfg(test)]
 impl StripLocations for Attributes {
     fn strip_locations(&self) -> Self {
@@ -190,25 +269,25 @@ impl StripLocations for Attributes {
 #[cfg(test)]
 impl FromIterator<Attribute> for Attributes {
     fn from_iter<I: IntoIterator<Item = Attribute>>(iter: I) -> Self {
-        Attributes(iter.into_iter().map(Located::test).collect())
+        Attributes(iter.into_iter().collect())
     }
 }
 impl IntoIterator for Attributes {
-    type Item = Located<Attribute>;
-    type IntoIter = std::vec::IntoIter<Located<Attribute>>;
+    type Item = Attribute;
+    type IntoIter = std::vec::IntoIter<Attribute>;
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
     }
 }
 impl<'a> IntoIterator for &'a Attributes {
-    type Item = &'a Located<Attribute>;
-    type IntoIter = std::slice::Iter<'a, Located<Attribute>>;
+    type Item = &'a Attribute;
+    type IntoIter = std::slice::Iter<'a, Attribute>;
     fn into_iter(self) -> Self::IntoIter {
         self.0.iter()
     }
 }
 impl Deref for Attributes {
-    type Target = Vec<Located<Attribute>>;
+    type Target = Vec<Attribute>;
     fn deref(&self) -> &Self::Target {
         &self.0
     }
@@ -263,7 +342,7 @@ impl Parser {
         Ok(Attributes(attrs))
     }
 
-    pub(crate) fn parse_attribute(&mut self) -> Result<Located<Attribute>, ParseError> {
+    pub(crate) fn parse_attribute(&mut self) -> Result<Attribute, ParseError> {
         let (name, name_span) = self.expect_ident()?;
         let start_pos = name_span.start;
 
@@ -283,10 +362,10 @@ impl Parser {
                         TokenKind::MultiLineComment(text) => text.clone(),
                         _ => unreachable!(),
                     };
-                    items.push(Located::new(
-                        AttributeItem::Comment(comment_text),
-                        token.location,
-                    ));
+                    items.push(AttributeItem::Comment {
+                        text: comment_text,
+                        location: token.location,
+                    });
                 }
 
                 // Skip doc comments (they don't belong in attribute expressions)
@@ -298,7 +377,9 @@ impl Parser {
                     break;
                 }
 
-                items.push(self.parse_expr()?.map(AttributeItem::Expr));
+                let expr = self.parse_expr()?;
+                let location = expr.location().clone();
+                items.push(AttributeItem::Expr { expr, location });
 
                 // Collect trailing comments after the expression
                 while matches!(
@@ -311,10 +392,10 @@ impl Parser {
                         TokenKind::MultiLineComment(text) => text.clone(),
                         _ => unreachable!(),
                     };
-                    items.push(Located::new(
-                        AttributeItem::Comment(comment_text),
-                        token.location.clone(),
-                    ));
+                    items.push(AttributeItem::Comment {
+                        text: comment_text,
+                        location: token.location.clone(),
+                    });
                 }
 
                 if matches!(self.peek(), TokenKind::Comma) {
@@ -325,10 +406,11 @@ impl Parser {
             }
             let end_pos = self.expect(TokenKind::RParen)?.end_location();
             let location = self.item_location_from_locations(start_pos, end_pos);
-            Ok(Located::new(
-                Attribute::Function(name, AttributeItems(items)),
+            Ok(Attribute::Function {
+                name,
+                items: AttributeItems(items),
                 location,
-            ))
+            })
         } else if matches!(self.peek(), TokenKind::Eq) {
             // Assign attribute
             self.advance();
@@ -345,15 +427,19 @@ impl Parser {
                     TokenKind::MultiLineComment(text) => text.clone(),
                     _ => unreachable!(),
                 };
-                items.push(Located::new(
-                    AttributeItem::Comment(comment_text),
-                    token.location,
-                ));
+                items.push(AttributeItem::Comment {
+                    text: comment_text,
+                    location: token.location,
+                });
             }
 
             let expr = self.parse_expr()?;
-            let mut end_pos = expr.location.span.end;
-            items.push(expr.map(AttributeItem::Expr));
+            let mut end_pos = expr.location().span.end;
+            let expr_location = expr.location().clone();
+            items.push(AttributeItem::Expr {
+                expr,
+                location: expr_location,
+            });
 
             // Collect comments after the expression
             while matches!(
@@ -366,23 +452,27 @@ impl Parser {
                     TokenKind::MultiLineComment(text) => text.clone(),
                     _ => unreachable!(),
                 };
-                items.push(Located::new(
-                    AttributeItem::Comment(comment_text),
-                    token.location.clone(),
-                ));
+                items.push(AttributeItem::Comment {
+                    text: comment_text,
+                    location: token.location.clone(),
+                });
                 end_pos = token.location.span.end;
             }
 
             let location = self.item_location_from_locations(start_pos, end_pos);
-            Ok(Located::new(
-                Attribute::Assign(name, AttributeItems(items)),
+            Ok(Attribute::Assign {
+                name,
+                items: AttributeItems(items),
                 location,
-            ))
+            })
         } else {
             // Ident attribute
             let end_pos = name_span.end;
             let location = self.item_location_from_locations(start_pos, end_pos);
-            Ok(Located::new(Attribute::Ident(name), location))
+            Ok(Attribute::Ident {
+                ident: name,
+                location,
+            })
         }
     }
 }
@@ -390,10 +480,7 @@ impl Parser {
 #[cfg(test)]
 mod tests {
     use crate::{
-        grammar::{
-            IntFormat, ItemDefinitionInner, ModuleItem, TypeDefItem, Visibility,
-            test_aliases::{int_literal_with_format, *},
-        },
+        grammar::{ItemDefinitionInner, ModuleItem, TypeDefItem, Visibility, test_aliases::*},
         parser::parse_str_for_tests,
         span::StripLocations,
     };
@@ -438,14 +525,7 @@ mod tests {
                 TS::field((V::Public, "in_focus"), T::ident("bool"))
                     .with_attributes([A::address(0x38)]),
             ])
-            .with_attributes([
-                A::singleton(0x118FB64),
-                A::Function(
-                    "size".into(),
-                    AIs::from_iter([AI::Expr(int_literal_with_format(0x40, IntFormat::Hex))]),
-                ),
-                A::align(16),
-            ]),
+            .with_attributes([A::singleton(0x118FB64), A::size(0x40), A::align(16)]),
         )]);
 
         assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
@@ -470,13 +550,13 @@ pub type AnarkGui {
         assert_eq!(module.items.len(), 1);
 
         // Verify it's the correct type with attributes and fields
-        match &module.items[0].value {
-            ModuleItem::Definition(def) => {
-                assert_eq!(def.name.0, "AnarkGui");
-                assert_eq!(def.visibility, Visibility::Public);
+        match &module.items[0] {
+            ModuleItem::Definition { definition } => {
+                assert_eq!(definition.name.0, "AnarkGui");
+                assert_eq!(definition.visibility, Visibility::Public);
 
                 // Check the type has attributes
-                if let ItemDefinitionInner::Type(td) = &def.inner {
+                if let ItemDefinitionInner::Type(td) = &definition.inner {
                     assert_eq!(td.attributes.0.len(), 3); // singleton, size, align
 
                     // Verify we have vftable and two fields
@@ -484,7 +564,7 @@ pub type AnarkGui {
                     let statement_count = td
                         .items
                         .iter()
-                        .filter(|item| matches!(item.value, TypeDefItem::Statement(_)))
+                        .filter(|item| matches!(item, TypeDefItem::Statement(_)))
                         .count();
                     assert_eq!(statement_count, 3);
                 } else {

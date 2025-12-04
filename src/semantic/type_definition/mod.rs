@@ -9,7 +9,7 @@ use crate::{
         type_registry::TypeRegistry,
         types::{Function, FunctionBody, ItemState, ItemStateResolved, Type, Visibility},
     },
-    span::{ItemLocation, Located},
+    span::{HasLocation, ItemLocation},
     util,
 };
 
@@ -26,6 +26,12 @@ pub struct Region {
     pub doc: Vec<String>,
     pub type_ref: Type,
     pub is_base: bool,
+    pub location: ItemLocation,
+}
+impl HasLocation for Region {
+    fn location(&self) -> &ItemLocation {
+        &self.location
+    }
 }
 #[cfg(test)]
 impl StripLocations for Region {
@@ -36,6 +42,7 @@ impl StripLocations for Region {
             doc: self.doc.strip_locations(),
             type_ref: self.type_ref.strip_locations(),
             is_base: self.is_base.strip_locations(),
+            location: ItemLocation::test(),
         }
     }
 }
@@ -50,16 +57,18 @@ impl Region {
             doc: vec![],
             type_ref,
             is_base: false,
+            location: ItemLocation::test(),
         }
     }
 
-    pub fn unnamed_field(type_ref: Type) -> Self {
+    pub fn unnamed_field(type_ref: Type, location: ItemLocation) -> Self {
         Region {
             visibility: Visibility::Private,
             name: None,
             doc: vec![],
             type_ref,
             is_base: false,
+            location,
         }
     }
 
@@ -78,9 +87,9 @@ impl Region {
 
 #[derive(PartialEq, Eq, Debug, Clone, Default, Hash)]
 pub struct TypeDefinition {
-    pub regions: Vec<Located<Region>>,
+    pub regions: Vec<Region>,
     pub doc: Vec<String>,
-    pub associated_functions: Vec<Located<Function>>,
+    pub associated_functions: Vec<Function>,
     pub vftable: Option<TypeVftable>,
     pub singleton: Option<usize>,
     pub copyable: bool,
@@ -110,7 +119,7 @@ impl TypeDefinition {
         Default::default()
     }
     pub fn with_regions(mut self, regions: impl IntoIterator<Item = Region>) -> Self {
-        self.regions = regions.into_iter().map(Located::test).collect();
+        self.regions = regions.into_iter().collect();
         self
     }
     pub fn with_doc(mut self, doc: impl IntoIterator<Item = impl Into<String>>) -> Self {
@@ -121,10 +130,7 @@ impl TypeDefinition {
         mut self,
         associated_functions: impl IntoIterator<Item = Function>,
     ) -> Self {
-        self.associated_functions = associated_functions
-            .into_iter()
-            .map(Located::test)
-            .collect();
+        self.associated_functions = associated_functions.into_iter().collect();
         self
     }
     pub fn with_vftable(mut self, vftable: TypeVftable) -> Self {
@@ -167,7 +173,7 @@ impl TypeDefinition {
             }
 
             let Some((field_name, type_definition)) =
-                get_region_name_and_type_definition(type_registry, type_path, region.as_ref())?
+                get_region_name_and_type_definition(type_registry, type_path, region)?
             else {
                 continue;
             };
@@ -194,10 +200,11 @@ pub fn build(
     semantic: &mut SemanticState,
     resolvee_path: &ItemPath,
     visibility: Visibility,
-    definition: Located<&grammar::TypeDefinition>,
+    definition: &grammar::TypeDefinition,
+    location: &ItemLocation,
     doc_comments: &[String],
 ) -> Result<Option<ItemStateResolved>> {
-    let module = semantic.get_module_for_path(resolvee_path, &definition.location)?;
+    let module = semantic.get_module_for_path(resolvee_path, location)?;
 
     // Handle attributes
     let mut target_size: Option<usize> = None;
@@ -210,21 +217,20 @@ pub fn build(
     let mut align = None;
     let doc = doc_comments.to_vec();
     for attribute in &definition.attributes {
-        match &attribute.value {
-            grammar::Attribute::Function(ident, items) => {
-                let loc = &attribute.location;
-                if let Some(attr_size) = attribute::parse_size(ident, items, loc)? {
+        match attribute {
+            grammar::Attribute::Function { name, items, .. } => {
+                let loc = attribute.location();
+                if let Some(attr_size) = attribute::parse_size(name, items, loc)? {
                     target_size = Some(attr_size);
-                } else if let Some(attr_min_size) = attribute::parse_min_size(ident, items, loc)? {
+                } else if let Some(attr_min_size) = attribute::parse_min_size(name, items, loc)? {
                     min_size = Some(attr_min_size);
-                } else if let Some(attr_singleton) = attribute::parse_singleton(ident, items, loc)?
-                {
+                } else if let Some(attr_singleton) = attribute::parse_singleton(name, items, loc)? {
                     singleton = Some(attr_singleton);
-                } else if let Some(attr_align) = attribute::parse_align(ident, items, loc)? {
+                } else if let Some(attr_align) = attribute::parse_align(name, items, loc)? {
                     align = Some(attr_align);
                 }
             }
-            grammar::Attribute::Ident(ident) => match ident.as_str() {
+            grammar::Attribute::Ident { ident, .. } => match ident.as_str() {
                 "copyable" => {
                     copyable = true;
                     cloneable = true;
@@ -234,7 +240,7 @@ pub fn build(
                 "packed" => packed = true,
                 _ => {}
             },
-            grammar::Attribute::Assign(_, _) => {}
+            grammar::Attribute::Assign { .. } => {}
         }
     }
 
@@ -245,13 +251,13 @@ pub fn build(
                 attr1: "size".into(),
                 attr2: "min_size".into(),
                 item_path: resolvee_path.clone(),
-                location: definition.location.clone(),
+                location: location.clone(),
             }
         });
     }
 
     // Handle fields
-    let mut pending_regions: Vec<(Option<usize>, Located<Region>)> = vec![];
+    let mut pending_regions: Vec<(Option<usize>, Region)> = vec![];
     let mut vftable_functions = None;
     for (idx, statement) in definition.statements().enumerate() {
         let grammar::TypeStatement {
@@ -259,7 +265,7 @@ pub fn build(
             attributes,
             doc_comments,
             ..
-        } = &statement.value;
+        } = statement;
 
         match field {
             grammar::TypeField::Field(visibility, field_ident, type_) => {
@@ -268,13 +274,19 @@ pub fn build(
                 let mut is_base = false;
                 let doc = doc_comments.to_vec();
                 for attribute in attributes {
-                    match &attribute.value {
-                        grammar::Attribute::Ident(attr_ident) if attr_ident.as_str() == "base" => {
+                    match attribute {
+                        grammar::Attribute::Ident {
+                            ident: attr_ident, ..
+                        } if attr_ident.as_str() == "base" => {
                             is_base = true;
                         }
-                        grammar::Attribute::Function(attr_ident, items) => {
+                        grammar::Attribute::Function {
+                            name: attr_ident,
+                            items,
+                            ..
+                        } => {
                             if let Some(attr_address) =
-                                attribute::parse_address(attr_ident, items, &attribute.location)?
+                                attribute::parse_address(attr_ident, items, attribute.location())?
                             {
                                 address = Some(attr_address);
                             }
@@ -294,16 +306,14 @@ pub fn build(
                 let ident = (field_ident.0 != "_").then(|| field_ident.0.clone());
                 pending_regions.push((
                     address,
-                    Located::new(
-                        Region {
-                            visibility: (*visibility).into(),
-                            name: ident,
-                            doc,
-                            type_ref: type_,
-                            is_base,
-                        },
-                        statement.location.clone(),
-                    ),
+                    Region {
+                        visibility: (*visibility).into(),
+                        name: ident,
+                        doc,
+                        type_ref: type_,
+                        is_base,
+                        location: statement.location.clone(),
+                    },
                 ));
             }
             grammar::TypeField::Vftable(functions) => {
@@ -320,9 +330,12 @@ pub fn build(
                 // Extract size attribute
                 let mut size = None;
                 for attribute in attributes {
-                    if let grammar::Attribute::Function(ident, items) = &attribute.value {
+                    if let grammar::Attribute::Function {
+                        name: ident, items, ..
+                    } = attribute
+                    {
                         if let Some(attr_size) =
-                            attribute::parse_size(ident, items, &attribute.location)?
+                            attribute::parse_size(ident, items, attribute.location())?
                         {
                             size = Some(attr_size);
                         }
@@ -388,14 +401,14 @@ pub fn build(
         min_size.is_some(),
         pending_regions,
         vftable_functions,
-        &definition.location,
+        location,
     )?
     else {
         return Ok(None);
     };
 
     // Reborrow the module after resolving regions
-    let module = semantic.get_module_for_path(resolvee_path, &definition.location)?;
+    let module = semantic.get_module_for_path(resolvee_path, location)?;
 
     // Handle functions
     let mut associated_functions = vec![];
@@ -408,13 +421,13 @@ pub fn build(
         let Some((base_name, base_type)) = get_region_name_and_type_definition(
             &semantic.type_registry,
             resolvee_path,
-            base_region.as_ref(),
+            base_region,
         )?
         else {
             continue;
         };
 
-        let mut add_functions = |functions: &[Located<Function>]| {
+        let mut add_functions = |functions: &[Function]| {
             for function in functions.iter().filter(|f| f.is_public()) {
                 let mut function = function.clone();
                 let original_name = function.name.clone();
@@ -447,7 +460,7 @@ pub fn build(
                     name: function.name.0.clone(),
                     item_path: resolvee_path.clone(),
                     message: "function already defined in type or base type".into(),
-                    location: definition.location.clone(),
+                    location: location.clone(),
                 });
             }
 
@@ -468,7 +481,8 @@ pub fn build(
                 doc: _,
                 type_ref,
                 is_base: _,
-            } = &region.value;
+                location: _,
+            } = region;
             let name = name.as_deref().unwrap_or("unnamed");
             fn get_defaultable_type_path(type_ref: &Type) -> Option<&ItemPath> {
                 match type_ref {
@@ -513,7 +527,7 @@ pub fn build(
                 attr1: "packed".into(),
                 attr2: "align".into(),
                 item_path: resolvee_path.clone(),
-                location: definition.location.clone(),
+                location: location.clone(),
             });
         }
 
@@ -540,7 +554,7 @@ pub fn build(
                 alignment,
                 required_alignment,
                 item_path: resolvee_path.clone(),
-                location: definition.location.clone(),
+                location: location.clone(),
             });
         }
 
@@ -556,7 +570,7 @@ pub fn build(
                         item_path: resolvee_path.clone(),
                         address: last_address,
                         required_alignment: field_alignment,
-                        location: definition.location.clone(),
+                        location: location.clone(),
                     });
                 }
                 last_address += region.size(&semantic.type_registry).unwrap();
@@ -569,7 +583,7 @@ pub fn build(
                 size,
                 alignment,
                 item_path: resolvee_path.clone(),
-                location: definition.location.clone(),
+                location: location.clone(),
             });
         }
 
@@ -601,19 +615,19 @@ fn resolve_regions(
     visibility: Visibility,
     target_size: Option<usize>,
     is_min_size: bool,
-    regions: Vec<(Option<usize>, Located<Region>)>,
-    vftable_functions: Option<Vec<Located<Function>>>,
+    regions: Vec<(Option<usize>, Region)>,
+    vftable_functions: Option<Vec<Function>>,
     type_location: &ItemLocation,
-) -> Result<Option<(Vec<Located<Region>>, Option<TypeVftable>, usize)>> {
+) -> Result<Option<(Vec<Region>, Option<TypeVftable>, usize)>> {
     // this resolution algorithm is very simple and doesn't handle overlapping regions
     // or regions that are out of order
     #[derive(Default)]
     struct Regions {
-        regions: Vec<Located<Region>>,
+        regions: Vec<Region>,
         last_address: usize,
     }
     impl Regions {
-        fn push(&mut self, type_registry: &TypeRegistry, region: Located<Region>) -> Option<()> {
+        fn push(&mut self, type_registry: &TypeRegistry, region: Region) -> Option<()> {
             let size = region.size(type_registry)?;
             if size == 0 && region.type_ref.is_array() {
                 // zero-sized regions that are arrays are ignored
@@ -662,12 +676,12 @@ fn resolve_regions(
                     region_name: existing_region,
                     address: offset,
                     existing_end: resolved.last_address,
-                    location: region.location.clone(),
+                    location: region.location().clone(),
                 });
             };
-            let padding_region = Located::new(
-                Region::unnamed_field(semantic.type_registry.padding_type(size)),
-                region.location.clone(),
+            let padding_region = Region::unnamed_field(
+                semantic.type_registry.padding_type(size),
+                region.location().clone(),
             );
             if resolved
                 .push(&semantic.type_registry, padding_region)
@@ -686,12 +700,10 @@ fn resolve_regions(
     if let Some(target_size) = target_size
         && resolved.last_address < target_size
     {
-        let padding_region = Located::new(
-            Region::unnamed_field(
-                semantic
-                    .type_registry
-                    .padding_type(target_size - resolved.last_address),
-            ),
+        let padding_region = Region::unnamed_field(
+            semantic
+                .type_registry
+                .padding_type(target_size - resolved.last_address),
             type_location.clone(),
         );
         if resolved
@@ -709,20 +721,16 @@ fn resolve_regions(
             return Ok(None);
         };
 
-        if let Region {
-            visibility: _,
-            name: None,
-            doc: _,
-            type_ref,
-            is_base: _,
-        } = &region.value
-        {
-            region.value = Region {
+        if region.name.is_none() {
+            let type_ref = region.type_ref.clone();
+            let location = region.location.clone();
+            *region = Region {
                 visibility: Visibility::Private,
                 name: Some(format!("_field_{size:x}")),
                 doc: vec![],
-                type_ref: type_ref.clone(),
+                type_ref,
                 is_base: false,
+                location,
             };
         }
 
@@ -735,7 +743,7 @@ fn resolve_regions(
         let error_location = resolved
             .regions
             .first()
-            .map(|r| r.location.clone())
+            .map(|r| r.location().clone())
             .unwrap_or_else(|| type_location.clone());
         if is_min_size {
             // For min_size, the final size should be >= target_size (which was already rounded)
@@ -764,10 +772,10 @@ fn resolve_regions(
 }
 
 /// Given a region, attempt to get the region's name and its type definition if available
-fn get_region_name_and_type_definition<'a>(
+pub(super) fn get_region_name_and_type_definition<'a>(
     type_registry: &'a TypeRegistry,
     type_path: &ItemPath,
-    region: Located<&Region>,
+    region: &Region,
 ) -> Result<Option<(String, &'a TypeDefinition)>> {
     let region_name = region
         .name
@@ -781,12 +789,12 @@ fn get_region_name_and_type_definition<'a>(
                 found: region.type_ref.human_friendly_type().into(),
                 item_path: type_path.clone(),
                 context_description: format!("region field `{region_name}`"),
-                location: region.location.clone(),
+                location: region.location().clone(),
             }
         });
     };
 
-    let region_type = type_registry.get(path, &region.location)?;
+    let region_type = type_registry.get(path, region.location())?;
 
     let Some(region_type) = region_type.resolved() else {
         return Ok(None);

@@ -3,7 +3,6 @@ use std::{collections::BTreeMap, path::Path};
 use crate::{
     backends::{BackendError, Result},
     semantic::types::{Backend, Type},
-    span::Located,
 };
 use serde::{Deserialize, Serialize};
 
@@ -413,11 +412,11 @@ fn convert_type(type_ref: &Type) -> JsonType {
 
 fn convert_argument(arg: &Argument) -> JsonArgument {
     match arg {
-        Argument::ConstSelf => JsonArgument::ConstSelf,
-        Argument::MutSelf => JsonArgument::MutSelf,
-        Argument::Field(name, type_ref) => JsonArgument::Field {
+        Argument::ConstSelf { .. } => JsonArgument::ConstSelf,
+        Argument::MutSelf { .. } => JsonArgument::MutSelf,
+        Argument::Field { name, type_, .. } => JsonArgument::Field {
             name: name.clone(),
-            type_ref: convert_type(type_ref),
+            type_ref: convert_type(type_),
         },
     }
 }
@@ -438,7 +437,7 @@ fn convert_function_body(body: &FunctionBody) -> JsonFunctionBody {
     }
 }
 
-fn convert_function(func: Located<&Function>) -> JsonFunction {
+fn convert_function(func: &Function) -> JsonFunction {
     JsonFunction {
         visibility: func.visibility.into(),
         name: func.name.clone(),
@@ -448,11 +447,7 @@ fn convert_function(func: Located<&Function>) -> JsonFunction {
             None
         },
         body: convert_function_body(&func.body),
-        arguments: func
-            .arguments
-            .iter()
-            .map(|a| convert_argument(&a.value))
-            .collect(),
+        arguments: func.arguments.iter().map(convert_argument).collect(),
         return_type: func.return_type.as_ref().map(convert_type),
         calling_convention: func.calling_convention.into(),
     }
@@ -480,11 +475,7 @@ fn convert_region(region: &Region, type_registry: &TypeRegistry, offset: usize) 
 
 fn convert_vftable(vftable: &TypeVftable) -> JsonTypeVftable {
     JsonTypeVftable {
-        functions: vftable
-            .functions
-            .iter()
-            .map(|f| convert_function(f.as_ref()))
-            .collect(),
+        functions: vftable.functions.iter().map(convert_function).collect(),
     }
 }
 
@@ -514,7 +505,7 @@ fn convert_type_definition(
         associated_functions: td
             .associated_functions
             .iter()
-            .map(|f| convert_function(f.as_ref()))
+            .map(convert_function)
             .collect(),
         vftable: td.vftable.as_ref().map(convert_vftable),
         singleton: td.singleton,
@@ -544,7 +535,7 @@ fn convert_enum_definition(ed: &EnumDefinition) -> JsonEnumDefinition {
         associated_functions: ed
             .associated_functions
             .iter()
-            .map(|f| convert_function(f.as_ref()))
+            .map(convert_function)
             .collect(),
         singleton: ed.singleton,
         copyable: ed.copyable,
@@ -576,7 +567,7 @@ fn convert_bitflags_definition(bd: &BitflagsDefinition) -> JsonBitflagsDefinitio
     }
 }
 
-fn convert_item(item: Located<&ItemDefinition>, type_registry: &TypeRegistry) -> Option<JsonItem> {
+fn convert_item(item: &ItemDefinition, type_registry: &TypeRegistry) -> Option<JsonItem> {
     let resolved = item.resolved()?;
 
     let kind = match &resolved.inner {
@@ -599,7 +590,7 @@ fn convert_item(item: Located<&ItemDefinition>, type_registry: &TypeRegistry) ->
     })
 }
 
-fn convert_extern_value(ev: Located<&ExternValue>) -> JsonExternValue {
+fn convert_extern_value(ev: &ExternValue) -> JsonExternValue {
     JsonExternValue {
         visibility: ev.visibility.into(),
         name: ev.name.clone(),
@@ -608,7 +599,7 @@ fn convert_extern_value(ev: Located<&ExternValue>) -> JsonExternValue {
     }
 }
 
-fn convert_backend(backend: Located<&Backend>) -> JsonBackend {
+fn convert_backend(backend: &Backend) -> JsonBackend {
     JsonBackend {
         prologue: backend.prologue.clone(),
         epilogue: backend.epilogue.clone(),
@@ -636,13 +627,10 @@ fn build_module_hierarchy(semantic_state: &ResolvedSemanticState) -> BTreeMap<St
         let extern_values: Vec<JsonExternValue> = module
             .extern_values
             .iter()
-            .map(|ev| convert_extern_value(ev.as_ref()))
+            .map(convert_extern_value)
             .collect();
-        let functions: Vec<JsonFunction> = module
-            .functions()
-            .iter()
-            .map(|f| convert_function(f.as_ref()))
-            .collect();
+        let functions: Vec<JsonFunction> =
+            module.functions().iter().map(convert_function).collect();
 
         // Convert backends
         let backends: BTreeMap<String, Vec<JsonBackend>> = module
@@ -651,10 +639,7 @@ fn build_module_hierarchy(semantic_state: &ResolvedSemanticState) -> BTreeMap<St
             .map(|(name, backend_list)| {
                 (
                     name.clone(),
-                    backend_list
-                        .iter()
-                        .map(|b| convert_backend(b.as_ref()))
-                        .collect(),
+                    backend_list.iter().map(convert_backend).collect(),
                 )
             })
             .collect();

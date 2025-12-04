@@ -1,7 +1,7 @@
 use crate::{
     grammar::test_aliases::{int_literal, *},
     semantic::{error::SemanticError, semantic_state::SemanticState, types::test_aliases::*},
-    span::{ItemLocation, Located},
+    span::ItemLocation,
 };
 
 use pretty_assertions::assert_eq;
@@ -219,7 +219,7 @@ fn can_use_type_from_another_module() {
     let resolved_type = semantic_state
         .type_registry()
         .get(&path, &ItemLocation::test())
-        .map(|d| d.value.clone())
+        .cloned()
         .expect("failed to get type");
     assert_eq!(
         resolved_type,
@@ -652,12 +652,13 @@ fn can_define_extern_value() {
         .unwrap();
 
     assert_eq!(
-        &extern_value.value,
+        extern_value,
         &SEV {
             visibility: SV::Public,
             name: "test".into(),
             type_: ST::raw("u32").mut_pointer(),
             address: 0x1337,
+            location: ItemLocation::test(),
         }
     );
 }
@@ -769,8 +770,8 @@ fn can_carry_backend_across() {
     assert_eq!(
         module.backends.get("rust").unwrap(),
         &[
-            Located::test(SB::new(prologue.to_string(), epilogue.to_string())),
-            Located::test(SB::new(None, epilogue.to_string())),
+            SB::new(prologue.to_string(), epilogue.to_string()),
+            SB::new(None, epilogue.to_string()),
         ]
     );
 }
@@ -1331,7 +1332,7 @@ fn can_resolve_freestanding_functions() {
     assert_eq!(func2.name, "another_freestanding");
     assert_eq!(func2.visibility, SV::Private);
     assert_eq!(func2.arguments.len(), 1);
-    assert!(matches!(&*func2.arguments[0], SAr::Field(name, _) if name == "arg1"));
+    assert!(matches!(&func2.arguments[0], SAr::Field { name, .. } if name == "arg1"));
     assert_eq!(func2.return_type, Some(ST::raw("i32")));
     assert_eq!(func2.calling_convention, SCC::System);
     assert!(matches!(func2.body, SFB::Address { address: 0x789 }));

@@ -5,10 +5,7 @@
 /// - Validating the AST design
 /// - Formatting/normalizing code
 /// - Testing round-trip parsing
-use crate::{
-    grammar::{ItemDefinitionInner, *},
-    span::Located,
-};
+use crate::grammar::{ItemDefinitionInner, *};
 use std::fmt::Write;
 
 pub struct PrettyPrinter {
@@ -78,14 +75,11 @@ impl PrettyPrinter {
         // Print items with lookahead for proper spacing
         for (i, item) in module.items.iter().enumerate() {
             let next_item = module.items.get(i + 1);
-            self.print_module_item(&item.value, next_item.as_ref().map(|i| &i.value));
+            self.print_module_item(item, next_item);
 
             // Add blank line between regular comment and definition with both doc comments and attributes
-            if let ModuleItem::Comment(_comment) = &item.value
-                && let Some(Located {
-                    value: ModuleItem::Definition(def),
-                    location: _,
-                }) = &next_item
+            if let ModuleItem::Comment { .. } = item
+                && let Some(ModuleItem::Definition { definition: def }) = next_item
             {
                 // Add blank line if definition has both doc comments and attributes
                 let has_attrs = match &def.inner {
@@ -105,51 +99,56 @@ impl PrettyPrinter {
 
     fn print_module_item(&mut self, item: &ModuleItem, next_item: Option<&ModuleItem>) {
         match item {
-            ModuleItem::Comment(comment) => {
+            ModuleItem::Comment { comment } => {
                 self.print_comment(comment);
                 // Don't add blank line after comments - they group with the following item
             }
-            ModuleItem::Use(path) => {
+            ModuleItem::Use { path, .. } => {
                 self.write_indent();
                 let path_str = self.format_item_path(path);
                 writeln!(&mut self.output, "use {path_str};").unwrap();
                 // Only add blank line if next item is not a use statement
-                if !matches!(next_item, Some(ModuleItem::Use(_))) {
+                if !matches!(next_item, Some(ModuleItem::Use { .. })) {
                     self.writeln("");
                 }
             }
-            ModuleItem::ExternType(name, attrs, doc_comments) => {
+            ModuleItem::ExternType {
+                name,
+                attributes,
+                doc_comments,
+                ..
+            } => {
                 // Print doc comments
                 for doc in doc_comments {
                     self.write_indent();
                     writeln!(&mut self.output, "///{doc}").unwrap();
                 }
-                self.print_attributes(attrs);
+                self.print_attributes(attributes);
                 self.write_indent();
                 writeln!(&mut self.output, "extern type {name};").unwrap();
                 self.writeln("");
             }
-            ModuleItem::Backend(backend) => {
+            ModuleItem::Backend { backend } => {
                 self.print_backend(backend);
                 self.writeln("");
             }
-            ModuleItem::Definition(def) => {
-                self.print_item_definition(def);
+            ModuleItem::Definition { definition } => {
+                self.print_item_definition(definition);
                 // Don't add blank line if next item is an impl block
-                if !matches!(next_item, Some(ModuleItem::Impl(_))) {
+                if !matches!(next_item, Some(ModuleItem::Impl { .. })) {
                     self.writeln("");
                 }
             }
-            ModuleItem::Impl(impl_block) => {
+            ModuleItem::Impl { impl_block } => {
                 self.print_impl_block(impl_block);
                 self.writeln("");
             }
-            ModuleItem::ExternValue(extern_val) => {
-                self.print_extern_value(extern_val);
+            ModuleItem::ExternValue { extern_value } => {
+                self.print_extern_value(extern_value);
                 self.writeln("");
             }
-            ModuleItem::Function(func) => {
-                self.print_function(func);
+            ModuleItem::Function { function } => {
+                self.print_function(function);
                 self.writeln("");
             }
         }
@@ -157,24 +156,24 @@ impl PrettyPrinter {
 
     fn print_comment(&mut self, comment: &Comment) {
         match comment {
-            Comment::DocOuter(lines) => {
+            Comment::DocOuter { lines, .. } => {
                 for line in lines {
                     self.write_indent();
                     writeln!(&mut self.output, "/// {line}").unwrap();
                 }
             }
-            Comment::DocInner(lines) => {
+            Comment::DocInner { lines, .. } => {
                 for line in lines {
                     self.write_indent();
                     writeln!(&mut self.output, "//! {line}").unwrap();
                 }
             }
-            Comment::Regular(text) => {
+            Comment::Regular { text, .. } => {
                 // Regular comments include the // prefix
                 self.write_indent();
                 writeln!(&mut self.output, "{text}").unwrap();
             }
-            Comment::MultiLine(lines) => {
+            Comment::MultiLine { lines, .. } => {
                 // Multiline comments include /* and */ in the text
                 for line in lines {
                     self.write_indent();
@@ -186,11 +185,11 @@ impl PrettyPrinter {
 
     fn print_comment_inline(&mut self, comment: &Comment) {
         match comment {
-            Comment::Regular(text) => {
+            Comment::Regular { text, .. } => {
                 // Regular comments include the // prefix
                 write!(&mut self.output, "{text}").unwrap();
             }
-            Comment::MultiLine(lines) => {
+            Comment::MultiLine { lines, .. } => {
                 // Multiline comments - just print first line inline for now
                 if let Some(first) = lines.first() {
                     write!(&mut self.output, "{first}").unwrap();
@@ -277,7 +276,7 @@ impl PrettyPrinter {
 
     /// Get the bit width from a type (e.g., u8 -> 8, u32 -> 32)
     fn get_type_bit_width(&self, type_: &Type) -> Option<usize> {
-        if let Type::Ident(ident) = type_ {
+        if let Type::Ident { ident, .. } = type_ {
             match ident.as_str() {
                 "u8" | "i8" => Some(8),
                 "u16" | "i16" => Some(16),
@@ -293,10 +292,10 @@ impl PrettyPrinter {
 
     fn print_attribute(&mut self, attr: &Attribute) {
         match attr {
-            Attribute::Ident(name) => {
-                write!(&mut self.output, "{name}").unwrap();
+            Attribute::Ident { ident, .. } => {
+                write!(&mut self.output, "{ident}").unwrap();
             }
-            Attribute::Function(name, items) => {
+            Attribute::Function { name, items, .. } => {
                 // Check special formatting requirements
                 let is_index = name.as_str() == "index";
                 let needs_underscore = matches!(name.as_str(), "address" | "singleton");
@@ -308,8 +307,8 @@ impl PrettyPrinter {
                 write!(&mut self.output, "{name}(").unwrap();
                 let mut first_expr = true;
                 for item in items {
-                    match &item.value {
-                        AttributeItem::Expr(expr) => {
+                    match item {
+                        AttributeItem::Expr { expr, .. } => {
                             if !first_expr {
                                 write!(&mut self.output, ", ").unwrap();
                             }
@@ -327,8 +326,8 @@ impl PrettyPrinter {
                                 self.print_expr(expr);
                             }
                         }
-                        AttributeItem::Comment(comment) => {
-                            write!(&mut self.output, " {comment}").unwrap();
+                        AttributeItem::Comment { text, .. } => {
+                            write!(&mut self.output, " {text}").unwrap();
                         }
                     }
                 }
@@ -338,15 +337,15 @@ impl PrettyPrinter {
                     self.in_vftable_index = false;
                 }
             }
-            Attribute::Assign(name, items) => {
+            Attribute::Assign { name, items, .. } => {
                 write!(&mut self.output, "{name} = ").unwrap();
                 for item in items {
-                    match &item.value {
-                        AttributeItem::Expr(expr) => {
+                    match item {
+                        AttributeItem::Expr { expr, .. } => {
                             self.print_expr(expr);
                         }
-                        AttributeItem::Comment(comment) => {
-                            write!(&mut self.output, " {comment}").unwrap();
+                        AttributeItem::Comment { text, .. } => {
+                            write!(&mut self.output, " {text}").unwrap();
                         }
                     }
                 }
@@ -356,7 +355,7 @@ impl PrettyPrinter {
 
     fn print_expr(&mut self, expr: &Expr) {
         match expr {
-            Expr::IntLiteral { value, format } => match format {
+            Expr::IntLiteral { value, format, .. } => match format {
                 IntFormat::Hex => write!(&mut self.output, "0x{value:X}").unwrap(),
                 IntFormat::Binary => {
                     let formatted = self.format_binary_with_padding(*value);
@@ -365,7 +364,7 @@ impl PrettyPrinter {
                 IntFormat::Octal => write!(&mut self.output, "0o{value:o}").unwrap(),
                 IntFormat::Decimal => write!(&mut self.output, "{value}").unwrap(),
             },
-            Expr::StringLiteral { value, format } => {
+            Expr::StringLiteral { value, format, .. } => {
                 match format {
                     StringFormat::Raw => {
                         // Determine the number of # needed
@@ -390,7 +389,7 @@ impl PrettyPrinter {
                     }
                 }
             }
-            Expr::Ident(name) => write!(&mut self.output, "{name}").unwrap(),
+            Expr::Ident { ident, .. } => write!(&mut self.output, "{ident}").unwrap(),
         }
     }
 
@@ -542,7 +541,7 @@ impl PrettyPrinter {
             // Print inline trailing comments (comments on the same line as attributes)
             for comment in inline_trailing_comments {
                 write!(&mut self.output, " ").unwrap();
-                self.print_comment_inline(&comment.value);
+                self.print_comment_inline(comment);
             }
 
             writeln!(&mut self.output).unwrap();
@@ -550,7 +549,7 @@ impl PrettyPrinter {
 
         // Print following comments (comments on lines after attributes)
         for comment in following_comments {
-            self.print_comment(&comment.value);
+            self.print_comment(comment);
         }
 
         self.write_indent();
@@ -568,12 +567,12 @@ impl PrettyPrinter {
                     self.indent();
                     for (i, item) in td.items.iter().enumerate() {
                         let next_item = td.items.get(i + 1);
-                        match &item.value {
+                        match item {
                             TypeDefItem::Comment(comment) => {
                                 self.print_comment(comment);
                             }
                             TypeDefItem::Statement(stmt) => {
-                                self.print_type_statement(stmt, next_item.map(|item| &item.value));
+                                self.print_type_statement(stmt, next_item);
                             }
                         }
                     }
@@ -584,20 +583,20 @@ impl PrettyPrinter {
             }
             ItemDefinitionInner::Enum(ed) => {
                 write!(&mut self.output, "enum {}: ", def.name).unwrap();
-                self.print_type(&ed.type_.value);
+                self.print_type(&ed.type_);
                 writeln!(&mut self.output, " {{").unwrap();
                 self.indent();
                 // Set binary literal width based on enum type
                 let old_width = self.binary_literal_width;
-                self.binary_literal_width = self.get_type_bit_width(&ed.type_.value);
+                self.binary_literal_width = self.get_type_bit_width(&ed.type_);
                 for (i, item) in ed.items.iter().enumerate() {
                     let next_item = ed.items.get(i + 1);
-                    match &item.value {
+                    match item {
                         EnumDefItem::Comment(comment) => {
                             self.print_comment(comment);
                         }
                         EnumDefItem::Statement(stmt) => {
-                            self.print_enum_statement(stmt, next_item.map(|item| &item.value));
+                            self.print_enum_statement(stmt, next_item);
                         }
                     }
                 }
@@ -608,20 +607,20 @@ impl PrettyPrinter {
             }
             ItemDefinitionInner::Bitflags(bf) => {
                 write!(&mut self.output, "bitflags {}: ", def.name).unwrap();
-                self.print_type(&bf.type_.value);
+                self.print_type(&bf.type_);
                 writeln!(&mut self.output, " {{").unwrap();
                 self.indent();
                 // Set binary literal width based on bitflags type
                 let old_width = self.binary_literal_width;
-                self.binary_literal_width = self.get_type_bit_width(&bf.type_.value);
+                self.binary_literal_width = self.get_type_bit_width(&bf.type_);
                 for (i, item) in bf.items.iter().enumerate() {
                     let next_item = bf.items.get(i + 1);
-                    match &item.value {
+                    match item {
                         BitflagsDefItem::Comment(comment) => {
                             self.print_comment(comment);
                         }
                         BitflagsDefItem::Statement(stmt) => {
-                            self.print_bitflags_statement(stmt, next_item.map(|item| &item.value));
+                            self.print_bitflags_statement(stmt, next_item);
                         }
                     }
                 }
@@ -637,7 +636,7 @@ impl PrettyPrinter {
         // Add blank line before this statement if it has index/address attribute and it's not the first item
         // But don't add if we already have a blank line (e.g., from vftable)
         let has_index_or_address = stmt.attributes.0.iter().any(|attr| {
-            matches!(&attr.value, Attribute::Function(name, _) if name.as_str() == "index" || name.as_str() == "address")
+            matches!(attr, Attribute::Function { name, .. } if name.as_str() == "index" || name.as_str() == "address")
         });
 
         if has_index_or_address && !self.output.ends_with("{\n") && !self.output.ends_with("\n\n") {
@@ -659,20 +658,20 @@ impl PrettyPrinter {
                     write!(&mut self.output, "pub ").unwrap();
                 }
                 write!(&mut self.output, "{name}: ").unwrap();
-                self.print_type(&type_.value);
+                self.print_type(type_);
                 write!(&mut self.output, ",").unwrap();
 
                 // Print inline trailing comments
                 for comment in &stmt.inline_trailing_comments {
                     write!(&mut self.output, " ").unwrap();
-                    self.print_comment_inline(&comment.value);
+                    self.print_comment_inline(comment);
                 }
 
                 writeln!(&mut self.output).unwrap();
 
                 // Print following comments (comments on lines after the field)
                 for comment in &stmt.following_comments {
-                    self.print_comment(&comment.value);
+                    self.print_comment(comment);
                 }
             }
             TypeField::Vftable(funcs) => {
@@ -684,7 +683,7 @@ impl PrettyPrinter {
                     for (i, func) in funcs.iter().enumerate() {
                         // Add blank line before function if it has index attribute and it's not the first
                         let has_index = func.attributes.0.iter().any(|attr| {
-                            matches!(&attr.value, Attribute::Function(name, _) if name.as_str() == "index")
+                            matches!(attr, Attribute::Function { name, .. } if name.as_str() == "index")
                         });
                         if has_index && i > 0 {
                             self.writeln("");
@@ -699,14 +698,14 @@ impl PrettyPrinter {
                 // Print inline trailing comments for vftable too
                 for comment in &stmt.inline_trailing_comments {
                     write!(&mut self.output, " ").unwrap();
-                    self.print_comment_inline(&comment.value);
+                    self.print_comment_inline(comment);
                 }
 
                 writeln!(&mut self.output).unwrap();
 
                 // Print following comments (comments on lines after vftable)
                 for comment in &stmt.following_comments {
-                    self.print_comment(&comment.value);
+                    self.print_comment(comment);
                 }
 
                 // Add blank line after vftable if there's a field following
@@ -736,14 +735,14 @@ impl PrettyPrinter {
         // Print inline trailing comments
         for comment in &stmt.inline_trailing_comments {
             write!(&mut self.output, " ").unwrap();
-            self.print_comment_inline(&comment.value);
+            self.print_comment_inline(comment);
         }
 
         writeln!(&mut self.output).unwrap();
 
         // Print following comments (comments on lines after the enum variant)
         for comment in &stmt.following_comments {
-            self.print_comment(&comment.value);
+            self.print_comment(comment);
         }
     }
 
@@ -767,34 +766,34 @@ impl PrettyPrinter {
         // Print inline trailing comments
         for comment in &stmt.inline_trailing_comments {
             write!(&mut self.output, " ").unwrap();
-            self.print_comment_inline(&comment.value);
+            self.print_comment_inline(comment);
         }
 
         writeln!(&mut self.output).unwrap();
 
         // Print following comments (comments on lines after the bitflag)
         for comment in &stmt.following_comments {
-            self.print_comment(&comment.value);
+            self.print_comment(comment);
         }
     }
 
     fn print_type(&mut self, type_: &Type) {
         match type_ {
-            Type::Ident(ident) => write!(&mut self.output, "{ident}").unwrap(),
-            Type::ConstPointer(inner) => {
+            Type::Ident { ident, .. } => write!(&mut self.output, "{ident}").unwrap(),
+            Type::ConstPointer { pointee, .. } => {
                 write!(&mut self.output, "*const ").unwrap();
-                self.print_type(&inner.value);
+                self.print_type(pointee);
             }
-            Type::MutPointer(inner) => {
+            Type::MutPointer { pointee, .. } => {
                 write!(&mut self.output, "*mut ").unwrap();
-                self.print_type(&inner.value);
+                self.print_type(pointee);
             }
-            Type::Array(inner, size) => {
+            Type::Array { element, size, .. } => {
                 write!(&mut self.output, "[").unwrap();
-                self.print_type(&inner.value);
+                self.print_type(element);
                 write!(&mut self.output, "; {size}]").unwrap();
             }
-            Type::Unknown(size) => {
+            Type::Unknown { size, .. } => {
                 // Format unknown sizes as hex
                 write!(&mut self.output, "unknown<0x{size:X}>").unwrap();
             }
@@ -808,14 +807,14 @@ impl PrettyPrinter {
         self.indent();
 
         for (i, item) in impl_block.items.iter().enumerate() {
-            match &item.value {
+            match item {
                 ImplItem::Comment(comment) => {
                     self.print_comment(comment);
                 }
                 ImplItem::Function(func) => {
                     // Add blank line before function if it has address attribute and it's not the first
                     let has_address = func.attributes.0.iter().any(|attr| {
-                        matches!(&attr.value, Attribute::Function(name, _) if name.as_str() == "address")
+                        matches!(attr, Attribute::Function { name, .. } if name.as_str() == "address")
                     });
                     if has_address && i > 0 {
                         self.writeln("");
@@ -837,7 +836,7 @@ impl PrettyPrinter {
             write!(&mut self.output, "pub ").unwrap();
         }
         write!(&mut self.output, "extern {}: ", extern_val.name).unwrap();
-        self.print_type(&extern_val.type_.value);
+        self.print_type(&extern_val.type_);
         writeln!(&mut self.output, ";").unwrap();
     }
 
@@ -874,12 +873,12 @@ impl PrettyPrinter {
 
     fn print_argument(&mut self, arg: &Argument) {
         match arg {
-            Argument::Named(name, type_) => {
-                write!(&mut self.output, "{name}: ").unwrap();
+            Argument::Named { ident, type_, .. } => {
+                write!(&mut self.output, "{ident}: ").unwrap();
                 self.print_type(type_);
             }
-            Argument::ConstSelf => write!(&mut self.output, "&self").unwrap(),
-            Argument::MutSelf => write!(&mut self.output, "&mut self").unwrap(),
+            Argument::ConstSelf { .. } => write!(&mut self.output, "&self").unwrap(),
+            Argument::MutSelf { .. } => write!(&mut self.output, "&mut self").unwrap(),
         }
     }
 }

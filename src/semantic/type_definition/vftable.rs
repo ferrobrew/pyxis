@@ -13,12 +13,12 @@ use crate::{
             ItemState, ItemStateResolved, Region, Type, TypeDefinition, Visibility,
         },
     },
-    span::{EqualsIgnoringLocations as _, ItemLocation, Located},
+    span::{EqualsIgnoringLocations as _, HasLocation, ItemLocation},
 };
 
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]
 pub struct TypeVftable {
-    pub functions: Vec<Located<Function>>,
+    pub functions: Vec<Function>,
     pub base_field: Option<String>,
     pub type_: Type,
 }
@@ -30,7 +30,7 @@ impl TypeVftable {
         type_: Type,
     ) -> Self {
         Self {
-            functions: functions.into_iter().map(Located::test).collect(),
+            functions: functions.into_iter().collect(),
             base_field: base_field.into(),
             type_,
         }
@@ -53,19 +53,22 @@ pub fn convert_grammar_functions_to_semantic_functions(
     type_registry: &TypeRegistry,
     module: &Module,
     size: Option<usize>,
-    functions: &[Located<grammar::Function>],
+    functions: &[grammar::Function],
     location: &ItemLocation,
-) -> Result<Vec<Located<Function>>> {
+) -> Result<Vec<Function>> {
     // Insert function, with padding if necessary
     let mut output = vec![];
     let calling_convention = CallingConvention::for_member_function(type_registry.pointer_size());
     for function in functions {
         let mut index = None;
         for attribute in &function.attributes {
-            let grammar::Attribute::Function(ident, items) = &attribute.value else {
+            let grammar::Attribute::Function {
+                name: ident, items, ..
+            } = attribute
+            else {
                 continue;
             };
-            if let Some(attr_index) = parse_index(ident, items, &attribute.location)? {
+            if let Some(attr_index) = parse_index(ident, items, attribute.location())? {
                 index = Some(attr_index);
             }
         }
@@ -77,7 +80,7 @@ pub fn convert_grammar_functions_to_semantic_functions(
             type_registry,
             &module.scope(),
             true,
-            function.as_ref(),
+            function,
         )?);
     }
 
@@ -87,7 +90,7 @@ pub fn convert_grammar_functions_to_semantic_functions(
     }
 
     fn make_padding_functions(
-        output: &mut Vec<Located<Function>>,
+        output: &mut Vec<Function>,
         target_len: usize,
         calling_convention: CallingConvention,
         location: &ItemLocation,
@@ -95,20 +98,20 @@ pub fn convert_grammar_functions_to_semantic_functions(
         let functions_to_add = target_len.saturating_sub(output.len());
         for _ in 0..functions_to_add {
             let name = format!("_vfunc_{}", output.len());
-            output.push(Located::new(
-                Function {
-                    visibility: Visibility::Private,
-                    name: name.clone(),
-                    doc: vec![],
-                    arguments: vec![Located::new(Argument::MutSelf, location.clone())],
-                    return_type: None,
-                    body: FunctionBody::Vftable {
-                        function_name: name,
-                    },
-                    calling_convention,
+            output.push(Function {
+                visibility: Visibility::Private,
+                name: name.clone(),
+                doc: vec![],
+                arguments: vec![Argument::MutSelf {
+                    location: location.clone(),
+                }],
+                return_type: None,
+                body: FunctionBody::Vftable {
+                    function_name: name,
                 },
-                location.clone(),
-            ));
+                calling_convention,
+                location: location.clone(),
+            });
         }
     }
 
@@ -119,10 +122,10 @@ pub fn build(
     semantic: &mut SemanticState,
     resolvee_path: &ItemPath,
     visibility: Visibility,
-    first_base: Option<&Located<Region>>,
-    vftable_functions: Option<Vec<Located<Function>>>,
+    first_base: Option<&Region>,
+    vftable_functions: Option<Vec<Function>>,
     location: &ItemLocation,
-) -> Result<(Option<TypeVftable>, Option<Located<Region>>)> {
+) -> Result<(Option<TypeVftable>, Option<Region>)> {
     if let Some(vftable_functions) = vftable_functions {
         // There are functions defined for this vftable.
         let vftable_item = build_type(
@@ -144,7 +147,7 @@ pub fn build(
         if let Some((base_name, base_vftable)) = get_optional_region_name_and_vftable(
             &semantic.type_registry,
             resolvee_path,
-            first_base.map(|b| b.as_ref()),
+            first_base,
         )? {
             // There is a base class with a vftable. Let's use its field.
 
@@ -154,8 +157,8 @@ pub fn build(
                 // Note: We always expect at least one function in either list, so the fallback should never trigger
                 let error_location = vftable_functions
                     .last()
-                    .map(|f| f.location.clone())
-                    .or_else(|| base_vftable.functions.first().map(|f| f.location.clone()))
+                    .map(|f| f.location().clone())
+                    .or_else(|| base_vftable.functions.first().map(|f| f.location().clone()))
                     .unwrap_or_else(|| location.clone());
                 return Err({
                     SemanticError::VftableMissingFunctions {
@@ -181,7 +184,7 @@ pub fn build(
                         index: idx,
                         derived_function: derived_vfunc.to_string(),
                         base_function: base_vfunc.to_string(),
-                        location: derived_vfunc.location.clone(),
+                        location: derived_vfunc.location().clone(),
                     });
                 }
             }
@@ -199,7 +202,7 @@ pub fn build(
             // Use the first vftable function's location for the generated vftable field
             let vftable_location = vftable_functions
                 .first()
-                .map(|f| f.location.clone())
+                .map(|f| f.location().clone())
                 .unwrap_or_else(|| location.clone());
 
             let region = Region {
@@ -208,6 +211,7 @@ pub fn build(
                 doc: vec![],
                 type_ref: vftable_pointer_type.clone(),
                 is_base: false,
+                location: vftable_location,
             };
 
             Ok((
@@ -216,14 +220,12 @@ pub fn build(
                     base_field: None,
                     type_: vftable_pointer_type,
                 }),
-                Some(Located::new(region, vftable_location)),
+                Some(region),
             ))
         }
-    } else if let Some((base_name, base_vftable)) = get_optional_region_name_and_vftable(
-        &semantic.type_registry,
-        resolvee_path,
-        first_base.map(|b| b.as_ref()),
-    )? {
+    } else if let Some((base_name, base_vftable)) =
+        get_optional_region_name_and_vftable(&semantic.type_registry, resolvee_path, first_base)?
+    {
         // There are no functions defined for this vftable, but there is a base class with a vftable.
         // Let's use its field.
         Ok((
@@ -244,9 +246,9 @@ fn build_type(
     type_registry: &TypeRegistry,
     resolvee_path: &ItemPath,
     visibility: Visibility,
-    functions: &[Located<Function>],
+    functions: &[Function],
     location: &ItemLocation,
-) -> Option<Located<ItemDefinition>> {
+) -> Option<ItemDefinition> {
     let name = resolvee_path.last()?;
 
     let resolvee_vtable_path = resolvee_path
@@ -261,74 +263,70 @@ fn build_type(
     // Use the first function's location for the generated vftable type
     let vftable_type_location = functions
         .first()
-        .map(|f| f.location.clone())
+        .map(|f| f.location().clone())
         .unwrap_or_else(|| location.clone());
 
-    Some(Located::new(
-        ItemDefinition {
-            visibility,
-            path: resolvee_vtable_path.clone(),
-            state: ItemState::Resolved(ItemStateResolved {
-                size: regions.iter().map(|r| r.size(type_registry).unwrap()).sum(),
-                alignment: type_registry.pointer_size(),
-                inner: TypeDefinition {
-                    regions,
-                    doc: vec![],
-                    associated_functions: vec![],
-                    vftable: None,
-                    singleton: None,
-                    cloneable: false,
-                    copyable: false,
-                    defaultable: false,
-                    packed: false,
-                }
-                .into(),
-            }),
-            category: ItemCategory::Defined,
-            predefined: None,
-        },
-        vftable_type_location,
-    ))
+    Some(ItemDefinition {
+        visibility,
+        path: resolvee_vtable_path.clone(),
+        state: ItemState::Resolved(ItemStateResolved {
+            size: regions.iter().map(|r| r.size(type_registry).unwrap()).sum(),
+            alignment: type_registry.pointer_size(),
+            inner: TypeDefinition {
+                regions,
+                doc: vec![],
+                associated_functions: vec![],
+                vftable: None,
+                singleton: None,
+                cloneable: false,
+                copyable: false,
+                defaultable: false,
+                packed: false,
+            }
+            .into(),
+        }),
+        category: ItemCategory::Defined,
+        predefined: None,
+        location: vftable_type_location,
+    })
 }
 
 /// Given a function, create a region representing it
-fn function_to_region(resolvee_path: &ItemPath, function: &Located<Function>) -> Located<Region> {
+fn function_to_region(resolvee_path: &ItemPath, function: &Function) -> Region {
     let arguments = function
         .arguments
         .iter()
-        .map(|a| match &a.value {
-            Argument::ConstSelf => (
+        .map(|a| match a {
+            Argument::ConstSelf { .. } => (
                 "this".to_string(),
                 Box::new(Type::ConstPointer(Box::new(Type::Raw(
                     resolvee_path.clone(),
                 )))),
             ),
-            Argument::MutSelf => (
+            Argument::MutSelf { .. } => (
                 "this".to_string(),
                 Box::new(Type::MutPointer(Box::new(Type::Raw(resolvee_path.clone())))),
             ),
-            Argument::Field(name, type_ref) => (name.clone(), Box::new(type_ref.clone())),
+            Argument::Field { name, type_, .. } => (name.clone(), Box::new(type_.clone())),
         })
         .collect();
     let return_type = function.return_type.as_ref().map(|t| Box::new(t.clone()));
 
-    Located::new(
-        Region {
-            visibility: function.visibility,
-            name: Some(function.name.clone()),
-            doc: function.doc.clone(),
-            type_ref: Type::Function(function.calling_convention, arguments, return_type),
-            is_base: false,
-        },
-        function.location.clone(),
-    )
+    Region {
+        visibility: function.visibility,
+        name: Some(function.name.clone()),
+        doc: function.doc.clone(),
+        type_ref: Type::Function(function.calling_convention, arguments, return_type),
+        is_base: false,
+        location: function.location.clone(),
+    }
 }
 
 /// Given an optional region, attempt to get the region's name and its type's vftable if available
 fn get_optional_region_name_and_vftable<'a>(
     type_registry: &'a TypeRegistry,
     resolvee_path: &ItemPath,
-    region: Option<Located<&Region>>,
+    region: Option<&Region>,
 ) -> Result<Option<(String, &'a TypeVftable)>> {
     Ok(region
         .map(|b| get_region_name_and_vftable(type_registry, resolvee_path, b))
@@ -340,7 +338,7 @@ fn get_optional_region_name_and_vftable<'a>(
 fn get_region_name_and_vftable<'a>(
     type_registry: &'a TypeRegistry,
     resolvee_path: &ItemPath,
-    region: Located<&Region>,
+    region: &Region,
 ) -> Result<Option<(String, &'a TypeVftable)>> {
     Ok(
         get_region_name_and_type_definition(type_registry, resolvee_path, region)?

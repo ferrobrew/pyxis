@@ -1,5 +1,5 @@
 use crate::{
-    span::{ItemLocation, Located, Span},
+    span::{HasLocation, ItemLocation, Span},
     tokenizer::TokenKind,
 };
 
@@ -19,32 +19,64 @@ use super::attributes::Attribute;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Argument {
-    ConstSelf,
-    MutSelf,
-    Named(Ident, Located<Type>),
+    ConstSelf {
+        location: ItemLocation,
+    },
+    MutSelf {
+        location: ItemLocation,
+    },
+    Named {
+        ident: Ident,
+        type_: Type,
+        location: ItemLocation,
+    },
+}
+impl HasLocation for Argument {
+    fn location(&self) -> &ItemLocation {
+        match self {
+            Argument::ConstSelf { location } => location,
+            Argument::MutSelf { location } => location,
+            Argument::Named { location, .. } => location,
+        }
+    }
 }
 #[cfg(test)]
 impl StripLocations for Argument {
     fn strip_locations(&self) -> Self {
         match self {
-            Argument::ConstSelf => Argument::ConstSelf,
-            Argument::MutSelf => Argument::MutSelf,
-            Argument::Named(ident, ty) => {
-                Argument::Named(ident.strip_locations(), ty.strip_locations())
-            }
+            Argument::ConstSelf { .. } => Argument::ConstSelf {
+                location: ItemLocation::test(),
+            },
+            Argument::MutSelf { .. } => Argument::MutSelf {
+                location: ItemLocation::test(),
+            },
+            Argument::Named { ident, type_, .. } => Argument::Named {
+                ident: ident.strip_locations(),
+                type_: type_.strip_locations(),
+                location: ItemLocation::test(),
+            },
         }
     }
 }
 #[cfg(test)]
 impl Argument {
     pub fn const_self() -> Argument {
-        Argument::ConstSelf
+        Argument::ConstSelf {
+            location: ItemLocation::test(),
+        }
     }
     pub fn mut_self() -> Argument {
-        Argument::MutSelf
+        Argument::MutSelf {
+            location: ItemLocation::test(),
+        }
     }
     pub fn named(ident: impl Into<Ident>, type_: impl Into<Type>) -> Argument {
-        Argument::Named(ident.into(), Located::test(type_.into()))
+        let type_ = type_.into();
+        Argument::Named {
+            ident: ident.into(),
+            location: type_.location().clone(),
+            type_,
+        }
     }
 }
 
@@ -54,8 +86,14 @@ pub struct Function {
     pub name: Ident,
     pub attributes: Attributes,
     pub doc_comments: Vec<String>,
-    pub arguments: Vec<Located<Argument>>,
-    pub return_type: Option<Located<Type>>,
+    pub arguments: Vec<Argument>,
+    pub return_type: Option<Type>,
+    pub location: ItemLocation,
+}
+impl HasLocation for Function {
+    fn location(&self) -> &ItemLocation {
+        &self.location
+    }
 }
 #[cfg(test)]
 impl StripLocations for Function {
@@ -67,6 +105,7 @@ impl StripLocations for Function {
             doc_comments: self.doc_comments.strip_locations(),
             arguments: self.arguments.strip_locations(),
             return_type: self.return_type.strip_locations(),
+            location: ItemLocation::test(),
         }
     }
 }
@@ -81,8 +120,9 @@ impl Function {
             name: name.into(),
             attributes: Default::default(),
             doc_comments: vec![],
-            arguments: arguments.into_iter().map(Located::test).collect(),
+            arguments: arguments.into_iter().collect(),
             return_type: None,
+            location: ItemLocation::test(),
         }
     }
     pub fn with_attributes(mut self, attributes: impl IntoIterator<Item = Attribute>) -> Self {
@@ -94,7 +134,7 @@ impl Function {
         self
     }
     pub fn with_return_type(mut self, return_type: impl Into<Type>) -> Self {
-        self.return_type = Some(Located::test(return_type.into()));
+        self.return_type = Some(return_type.into());
         self
     }
 }
@@ -104,6 +144,14 @@ impl Function {
 pub enum ImplItem {
     Comment(Comment),
     Function(Function),
+}
+impl HasLocation for ImplItem {
+    fn location(&self) -> &ItemLocation {
+        match self {
+            ImplItem::Comment(c) => c.location(),
+            ImplItem::Function(f) => f.location(),
+        }
+    }
 }
 #[cfg(test)]
 impl StripLocations for ImplItem {
@@ -118,8 +166,14 @@ impl StripLocations for ImplItem {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FunctionBlock {
     pub name: Ident,
-    pub items: Vec<Located<ImplItem>>,
+    pub items: Vec<ImplItem>,
     pub attributes: Attributes,
+    pub location: ItemLocation,
+}
+impl HasLocation for FunctionBlock {
+    fn location(&self) -> &ItemLocation {
+        &self.location
+    }
 }
 #[cfg(test)]
 impl StripLocations for FunctionBlock {
@@ -129,17 +183,13 @@ impl StripLocations for FunctionBlock {
             items: self
                 .items
                 .iter()
-                .filter_map(|item| {
-                    item.strip_locations()
-                        .map(|item| match item {
-                            ImplItem::Comment(_) => None, // Filter out comments
-                            ImplItem::Function(f) => Some(ImplItem::Function(f.strip_locations())),
-                        })
-                        .strip_locations()
-                        .transpose()
+                .filter_map(|item| match item {
+                    ImplItem::Comment(_) => None, // Filter out comments
+                    ImplItem::Function(f) => Some(ImplItem::Function(f.strip_locations())),
                 })
                 .collect(),
             attributes: self.attributes.strip_locations(),
+            location: ItemLocation::test(),
         }
     }
 }
@@ -148,12 +198,9 @@ impl FunctionBlock {
     pub fn new(name: impl Into<Ident>, functions: impl IntoIterator<Item = Function>) -> Self {
         Self {
             name: name.into(),
-            items: functions
-                .into_iter()
-                .map(ImplItem::Function)
-                .map(Located::test)
-                .collect(),
+            items: functions.into_iter().map(ImplItem::Function).collect(),
             attributes: Default::default(),
+            location: ItemLocation::test(),
         }
     }
     pub fn with_attributes(mut self, attributes: impl Into<Attributes>) -> Self {
@@ -162,20 +209,16 @@ impl FunctionBlock {
     }
 }
 impl FunctionBlock {
-    pub fn functions(&self) -> impl Iterator<Item = Located<&Function>> {
-        self.items.iter().filter_map(|item| {
-            item.as_ref()
-                .map(|item| match item {
-                    ImplItem::Function(func) => Some(func),
-                    _ => None,
-                })
-                .transpose()
+    pub fn functions(&self) -> impl Iterator<Item = &Function> {
+        self.items.iter().filter_map(|item| match item {
+            ImplItem::Function(func) => Some(func),
+            _ => None,
         })
     }
 }
 
 impl Parser {
-    pub(crate) fn parse_impl_block(&mut self) -> Result<Located<FunctionBlock>, ParseError> {
+    pub(crate) fn parse_impl_block(&mut self) -> Result<FunctionBlock, ParseError> {
         let start_pos = self.current().location.span.start;
         let attributes = if matches!(self.peek(), TokenKind::Hash) {
             self.parse_attributes()?
@@ -195,7 +238,7 @@ impl Parser {
                 TokenKind::Comment(_) | TokenKind::MultiLineComment(_)
             ) {
                 if let Some(comment) = self.collect_comment() {
-                    items.push(comment.map(ImplItem::Comment));
+                    items.push(ImplItem::Comment(comment));
                 }
             }
 
@@ -203,25 +246,22 @@ impl Parser {
                 break;
             }
 
-            items.push(self.parse_function()?.map(ImplItem::Function));
+            let function = self.parse_function()?;
+            items.push(ImplItem::Function(function));
         }
 
         let last_token = self.expect(TokenKind::RBrace)?;
 
         let location = self.item_location_from_locations(start_pos, last_token.end_location());
-        Ok(Located::new(
-            FunctionBlock {
-                name,
-                items,
-                attributes,
-            },
+        Ok(FunctionBlock {
+            name,
+            items,
+            attributes,
             location,
-        ))
+        })
     }
 
-    pub(crate) fn parse_functions_in_block(
-        &mut self,
-    ) -> Result<Vec<Located<Function>>, ParseError> {
+    pub(crate) fn parse_functions_in_block(&mut self) -> Result<Vec<Function>, ParseError> {
         let mut functions = Vec::new();
 
         while !matches!(self.peek(), TokenKind::RBrace) {
@@ -248,7 +288,7 @@ impl Parser {
         Ok(functions)
     }
 
-    pub(crate) fn parse_function(&mut self) -> Result<Located<Function>, ParseError> {
+    pub(crate) fn parse_function(&mut self) -> Result<Function, ParseError> {
         let start_pos = self.current().location.span.start;
         let mut doc_comments = self.collect_doc_comments();
         let attributes = if matches!(self.peek(), TokenKind::Hash) {
@@ -293,29 +333,31 @@ impl Parser {
         };
         let location = ItemLocation::new(self.filename.clone(), Span::new(start_pos, end_pos));
 
-        Ok(Located::new(
-            Function {
-                visibility,
-                name,
-                attributes,
-                doc_comments,
-                arguments,
-                return_type,
-            },
+        Ok(Function {
+            visibility,
+            name,
+            attributes,
+            doc_comments,
+            arguments,
+            return_type,
             location,
-        ))
+        })
     }
 
-    pub(crate) fn parse_argument(&mut self) -> Result<Located<Argument>, ParseError> {
+    pub(crate) fn parse_argument(&mut self) -> Result<Argument, ParseError> {
         if matches!(self.peek(), TokenKind::Amp) {
             self.advance();
             if matches!(self.peek(), TokenKind::Mut) {
                 self.advance();
                 let tok = self.expect(TokenKind::SelfValue)?;
-                Ok(Located::new(Argument::MutSelf, tok.location.clone()))
+                Ok(Argument::MutSelf {
+                    location: tok.location.clone(),
+                })
             } else {
                 let tok = self.expect(TokenKind::SelfValue)?;
-                Ok(Located::new(Argument::ConstSelf, tok.location.clone()))
+                Ok(Argument::ConstSelf {
+                    location: tok.location.clone(),
+                })
             }
         } else {
             let start_pos = self.current().location.span.start;
@@ -325,21 +367,18 @@ impl Parser {
             let end_pos = self.current().location.span.end;
             let location = ItemLocation::new(self.filename.clone(), Span::new(start_pos, end_pos));
 
-            Ok(Located::new(Argument::Named(name, type_), location))
+            Ok(Argument::Named {
+                ident: name,
+                type_,
+                location,
+            })
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        grammar::{
-            IntFormat,
-            test_aliases::{int_literal_with_format, *},
-        },
-        parser::parse_str_for_tests,
-        span::StripLocations,
-    };
+    use crate::{grammar::test_aliases::*, parser::parse_str_for_tests, span::StripLocations};
     use pretty_assertions::assert_eq;
 
     #[test]
@@ -402,10 +441,7 @@ mod tests {
                         T::ident("SharedPtr<PfxInstanceInterface>"),
                     ),
                 ])
-                .with_attributes([A::Function(
-                    "size".into(),
-                    AIs::from_iter([AI::Expr(int_literal_with_format(0x10, IntFormat::Hex))]),
-                )]),
+                .with_attributes([A::size(0x10)]),
             )
             .with_doc_comments(vec![" `CPfxInstance` in original game".to_string()])])
             .with_impls([FB::new(

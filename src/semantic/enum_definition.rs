@@ -7,7 +7,7 @@ use crate::{
         error::{Result, SemanticError, TypeResolutionContext},
         types::{Function, ItemStateResolved, Type},
     },
-    span::Located,
+    span::{HasLocation, ItemLocation},
 };
 
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]
@@ -15,7 +15,7 @@ pub struct EnumDefinition {
     pub type_: Type,
     pub doc: Vec<String>,
     pub fields: Vec<(String, isize)>,
-    pub associated_functions: Vec<Located<Function>>,
+    pub associated_functions: Vec<Function>,
     pub singleton: Option<usize>,
     pub copyable: bool,
     pub cloneable: bool,
@@ -65,10 +65,7 @@ impl EnumDefinition {
         mut self,
         associated_functions: impl IntoIterator<Item = Function>,
     ) -> Self {
-        self.associated_functions = associated_functions
-            .into_iter()
-            .map(Located::test)
-            .collect();
+        self.associated_functions = associated_functions.into_iter().collect();
         self
     }
     pub fn with_singleton(mut self, singleton: usize) -> Self {
@@ -95,10 +92,11 @@ impl EnumDefinition {
 pub fn build(
     semantic: &SemanticState,
     resolvee_path: &ItemPath,
-    definition: Located<&grammar::EnumDefinition>,
+    definition: &grammar::EnumDefinition,
+    location: &ItemLocation,
     doc_comments: &[String],
 ) -> Result<Option<ItemStateResolved>> {
-    let module = semantic.get_module_for_path(resolvee_path, &definition.location)?;
+    let module = semantic.get_module_for_path(resolvee_path, location)?;
 
     let Some(ty) = semantic
         .type_registry
@@ -121,17 +119,14 @@ pub fn build(
             expr,
             attributes,
             ..
-        } = &statement.value;
+        } = statement;
         let value = match expr {
-            Some(Located {
-                value: grammar::Expr::IntLiteral { value, .. },
-                ..
-            }) => *value,
-            Some(Located { location, .. }) => {
+            Some(grammar::Expr::IntLiteral { value, .. }) => *value,
+            Some(e) => {
                 return Err(SemanticError::EnumUnsupportedValue {
                     item_path: resolvee_path.clone(),
                     case_name: name.0.clone(),
-                    location: location.clone(),
+                    location: e.location().clone(),
                 });
             }
             None => last_field,
@@ -139,12 +134,12 @@ pub fn build(
         fields.push((name.0.clone(), value));
 
         for attribute in attributes {
-            match &attribute.value {
-                grammar::Attribute::Ident(ident) if ident.as_str() == "default" => {
+            match attribute {
+                grammar::Attribute::Ident { ident, .. } if ident.as_str() == "default" => {
                     if default.is_some() {
                         return Err(SemanticError::EnumMultipleDefaults {
                             item_path: resolvee_path.clone(),
-                            location: definition.location.clone(),
+                            location: location.clone(),
                         });
                     }
                     default = Some(fields.len() - 1);
@@ -162,8 +157,8 @@ pub fn build(
     let mut defaultable = false;
     let doc = doc_comments.to_vec();
     for attribute in &definition.attributes {
-        match &attribute.value {
-            grammar::Attribute::Ident(ident) => match ident.as_str() {
+        match attribute {
+            grammar::Attribute::Ident { ident, .. } => match ident.as_str() {
                 "copyable" => {
                     copyable = true;
                     cloneable = true;
@@ -172,28 +167,28 @@ pub fn build(
                 "defaultable" => defaultable = true,
                 _ => {}
             },
-            grammar::Attribute::Function(ident, items) => {
+            grammar::Attribute::Function { name, items, .. } => {
                 if let Some(attr_singleton) =
-                    attribute::parse_singleton(ident, items, &attribute.location)?
+                    attribute::parse_singleton(name, items, attribute.location())?
                 {
                     singleton = Some(attr_singleton);
                 }
             }
-            grammar::Attribute::Assign(_ident, _expr) => {}
+            grammar::Attribute::Assign { .. } => {}
         }
     }
 
     if !defaultable && default.is_some() {
         return Err(SemanticError::EnumDefaultWithoutDefaultable {
             item_path: resolvee_path.clone(),
-            location: definition.location.clone(),
+            location: location.clone(),
         });
     }
 
     if defaultable && default.is_none() {
         return Err(SemanticError::EnumDefaultableMissingDefault {
             item_path: resolvee_path.clone(),
-            location: definition.location.clone(),
+            location: location.clone(),
         });
     }
 
@@ -219,7 +214,7 @@ pub fn build(
                 resolution_context: TypeResolutionContext::EnumBaseTypeAlignment {
                     enum_path: resolvee_path.clone(),
                 },
-                location: definition.location.clone(),
+                location: location.clone(),
             }
         })?,
         inner: EnumDefinition {

@@ -5,7 +5,7 @@ use crate::{
         error::{BitflagsExpectedType, Result, SemanticError, TypeResolutionContext},
         types::{ItemStateResolved, Type},
     },
-    span::Located,
+    span::{HasLocation, ItemLocation},
 };
 
 #[cfg(test)]
@@ -82,12 +82,13 @@ impl BitflagsDefinition {
 pub fn build(
     semantic: &SemanticState,
     resolvee_path: &ItemPath,
-    definition: Located<&grammar::BitflagsDefinition>,
+    definition: &grammar::BitflagsDefinition,
+    location: &ItemLocation,
     doc_comments: &[String],
 ) -> Result<Option<ItemStateResolved>> {
-    let module = semantic.get_module_for_path(resolvee_path, &definition.location)?;
+    let module = semantic.get_module_for_path(resolvee_path, location)?;
 
-    let type_location = definition.type_.location.clone();
+    let type_location = definition.type_.location().clone();
 
     // Retrieve the type for this bitflags, and validate it, before getting its size
     let Some(ty) = semantic
@@ -146,14 +147,14 @@ pub fn build(
             expr,
             attributes,
             ..
-        } = &statement.value;
-        let value = match &expr.value {
+        } = statement;
+        let value = match expr {
             grammar::Expr::IntLiteral { value, .. } => *value,
             _ => {
                 return Err(SemanticError::BitflagsUnsupportedValue {
                     item_path: resolvee_path.clone(),
                     case_name: name.0.clone(),
-                    location: expr.location.clone(),
+                    location: expr.location().clone(),
                 });
             }
         };
@@ -164,17 +165,17 @@ pub fn build(
                 .map_err(|_| SemanticError::IntegerConversion {
                     value: value.to_string(),
                     target_type: "usize".into(),
-                    location: expr.location.clone(),
+                    location: expr.location().clone(),
                 })?,
         ));
 
         for attribute in attributes {
-            match &attribute.value {
-                grammar::Attribute::Ident(ident) if ident.as_str() == "default" => {
+            match attribute {
+                grammar::Attribute::Ident { ident, .. } if ident.as_str() == "default" => {
                     if default.is_some() {
                         return Err(SemanticError::BitflagsMultipleDefaults {
                             item_path: resolvee_path.clone(),
-                            location: definition.location.clone(),
+                            location: location.clone(),
                         });
                     }
                     default = Some(fields.len() - 1);
@@ -190,8 +191,8 @@ pub fn build(
     let mut defaultable = false;
     let doc = doc_comments.to_vec();
     for attribute in &definition.attributes {
-        match &attribute.value {
-            grammar::Attribute::Ident(ident) => match ident.as_str() {
+        match attribute {
+            grammar::Attribute::Ident { ident, .. } => match ident.as_str() {
                 "copyable" => {
                     copyable = true;
                     cloneable = true;
@@ -200,28 +201,28 @@ pub fn build(
                 "defaultable" => defaultable = true,
                 _ => {}
             },
-            grammar::Attribute::Function(ident, items) => {
+            grammar::Attribute::Function { name, items, .. } => {
                 if let Some(attr_singleton) =
-                    attribute::parse_singleton(ident, items, &attribute.location)?
+                    attribute::parse_singleton(name, items, attribute.location())?
                 {
                     singleton = Some(attr_singleton);
                 }
             }
-            grammar::Attribute::Assign(_ident, _expr) => {}
+            grammar::Attribute::Assign { .. } => {}
         }
     }
 
     if !defaultable && default.is_some() {
         return Err(SemanticError::BitflagsDefaultWithoutDefaultable {
             item_path: resolvee_path.clone(),
-            location: definition.location.clone(),
+            location: location.clone(),
         });
     }
 
     if defaultable && default.is_none() {
         return Err(SemanticError::BitflagsDefaultableMissingDefault {
             item_path: resolvee_path.clone(),
-            location: definition.location.clone(),
+            location: location.clone(),
         });
     }
 

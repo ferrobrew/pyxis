@@ -11,7 +11,7 @@ use crate::{
             TypeDefinition, Visibility,
         },
     },
-    span::{ItemLocation, Located},
+    span::ItemLocation,
 };
 
 use quote::{ToTokens, quote};
@@ -91,7 +91,7 @@ pub fn write_module(
         .functions()
         .iter()
         .filter(|f| !f.is_internal())
-        .map(|f| build_function(f.as_ref()))
+        .map(build_function)
         .collect::<Result<Vec<_>>>()?;
     for func in freestanding_functions {
         writeln!(raw_output, "{func}")?;
@@ -145,7 +145,7 @@ pub fn write_module(
 
 fn build_item(
     type_registry: &TypeRegistry,
-    definition: Located<&ItemDefinition>,
+    definition: &ItemDefinition,
 ) -> Result<proc_macro2::TokenStream> {
     let resolved = definition
         .resolved()
@@ -222,14 +222,15 @@ fn build_type(
                 doc,
                 type_ref,
                 is_base: _,
-            } = &r.value;
+                location,
+            } = r;
             let field_name = field
                 .as_deref()
                 .ok_or_else(|| BackendError::FieldCodeGenFailed {
                     type_path: path.clone(),
                     field_name: "unnamed".to_string(),
                     reason: "field name not present".to_string(),
-                    location: r.location.clone(),
+                    location: location.clone(),
                 })?;
             let field_ident = str_to_ident(field_name);
             let visibility = visibility_to_tokens(*visibility);
@@ -292,7 +293,7 @@ fn build_type(
     let associated_functions_impl = associated_functions
         .iter()
         .filter(|f| !f.is_internal())
-        .map(|f| build_function(f.as_ref()))
+        .map(build_function)
         .collect::<Result<Vec<_>>>()?;
 
     let vftable_function_impl = vftable
@@ -301,7 +302,7 @@ fn build_type(
             v.functions
                 .iter()
                 .filter(|f| !f.is_internal())
-                .map(|f| build_function(f.as_ref()))
+                .map(build_function)
                 .collect::<Result<Vec<_>>>()
         })
         .transpose()?
@@ -535,7 +536,7 @@ fn build_enum(
     let associated_functions_impl = associated_functions
         .iter()
         .filter(|f| !f.is_internal())
-        .map(|f| build_function(f.as_ref()))
+        .map(build_function)
         .collect::<Result<Vec<_>>>()?;
 
     let associated_impl = if !associated_functions_impl.is_empty() {
@@ -656,7 +657,7 @@ fn build_bitflags(
     })
 }
 
-fn build_function(function: Located<&Function>) -> Result<proc_macro2::TokenStream> {
+fn build_function(function: &Function) -> Result<proc_macro2::TokenStream> {
     let name = str_to_ident(&function.name);
     let doc = doc_to_tokens(false, &function.doc);
 
@@ -664,12 +665,12 @@ fn build_function(function: Located<&Function>) -> Result<proc_macro2::TokenStre
         .arguments
         .iter()
         .map(|a| {
-            Ok(match &a.value {
-                Argument::ConstSelf => quote! { &self },
-                Argument::MutSelf => quote! { &mut self },
-                Argument::Field(name, type_ref) => {
+            Ok(match a {
+                Argument::ConstSelf { .. } => quote! { &self },
+                Argument::MutSelf { .. } => quote! { &mut self },
+                Argument::Field { name, type_, .. } => {
                     let name = str_to_ident(name);
-                    let syn_type = sa_type_to_syn_type(type_ref)?;
+                    let syn_type = sa_type_to_syn_type(type_)?;
                     quote! {
                         #name: #syn_type
                     }
@@ -682,12 +683,12 @@ fn build_function(function: Located<&Function>) -> Result<proc_macro2::TokenStre
         .arguments
         .iter()
         .map(|a| {
-            Ok(match &a.value {
-                Argument::ConstSelf => quote! { this: *const Self },
-                Argument::MutSelf => quote! { this: *mut Self },
-                Argument::Field(name, type_ref) => {
+            Ok(match a {
+                Argument::ConstSelf { .. } => quote! { this: *const Self },
+                Argument::MutSelf { .. } => quote! { this: *mut Self },
+                Argument::Field { name, type_, .. } => {
                     let name = str_to_ident(name);
-                    let syn_type = sa_type_to_syn_type(type_ref)?;
+                    let syn_type = sa_type_to_syn_type(type_)?;
                     quote! {
                         #name: #syn_type
                     }
@@ -702,10 +703,10 @@ fn build_function(function: Located<&Function>) -> Result<proc_macro2::TokenStre
         .iter()
         // Only pass `self` to the function if it's not a field function
         .filter(|a| !is_field_function || !a.is_self())
-        .map(|a| match &a.value {
-            Argument::ConstSelf => quote! { self as *const Self as _ },
-            Argument::MutSelf => quote! { self as *mut Self as _ },
-            Argument::Field(name, _) => {
+        .map(|a| match a {
+            Argument::ConstSelf { .. } => quote! { self as *const Self as _ },
+            Argument::MutSelf { .. } => quote! { self as *mut Self as _ },
+            Argument::Field { name, .. } => {
                 let name = str_to_ident(name);
                 quote! { #name }
             }

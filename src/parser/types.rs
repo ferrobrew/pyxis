@@ -1,7 +1,7 @@
 use std::fmt;
 
 use crate::{
-    span::{EqualsIgnoringLocations, Located},
+    span::{EqualsIgnoringLocations, HasLocation, ItemLocation},
     tokenizer::TokenKind,
 };
 
@@ -46,22 +46,70 @@ impl fmt::Display for Ident {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Type {
-    ConstPointer(Box<Located<Type>>),
-    MutPointer(Box<Located<Type>>),
-    Array(Box<Located<Type>>, usize),
-    Ident(Ident),
-    Unknown(usize),
+    ConstPointer {
+        pointee: Box<Type>,
+        location: ItemLocation,
+    },
+    MutPointer {
+        pointee: Box<Type>,
+        location: ItemLocation,
+    },
+    Array {
+        element: Box<Type>,
+        size: usize,
+        location: ItemLocation,
+    },
+    Ident {
+        ident: Ident,
+        location: ItemLocation,
+    },
+    Unknown {
+        size: usize,
+        location: ItemLocation,
+    },
+}
+impl HasLocation for Type {
+    fn location(&self) -> &ItemLocation {
+        match self {
+            Type::ConstPointer { location, .. } => location,
+            Type::MutPointer { location, .. } => location,
+            Type::Array { location, .. } => location,
+            Type::Ident { location, .. } => location,
+            Type::Unknown { location, .. } => location,
+        }
+    }
 }
 impl EqualsIgnoringLocations for Type {
     fn equals_ignoring_locations(&self, other: &Self) -> bool {
         match (self, other) {
-            (Type::ConstPointer(t), Type::ConstPointer(t2)) => t.equals_ignoring_locations(t2),
-            (Type::MutPointer(t), Type::MutPointer(t2)) => t.equals_ignoring_locations(t2),
-            (Type::Array(t, n), Type::Array(t2, n2)) => {
-                t.equals_ignoring_locations(t2) && n.equals_ignoring_locations(n2)
+            (
+                Type::ConstPointer { pointee, .. },
+                Type::ConstPointer {
+                    pointee: pointee2, ..
+                },
+            ) => pointee.equals_ignoring_locations(pointee2),
+            (
+                Type::MutPointer { pointee, .. },
+                Type::MutPointer {
+                    pointee: pointee2, ..
+                },
+            ) => pointee.equals_ignoring_locations(pointee2),
+            (
+                Type::Array { element, size, .. },
+                Type::Array {
+                    element: element2,
+                    size: size2,
+                    ..
+                },
+            ) => {
+                element.equals_ignoring_locations(element2) && size.equals_ignoring_locations(size2)
             }
-            (Type::Ident(ident), Type::Ident(ident2)) => ident.equals_ignoring_locations(ident2),
-            (Type::Unknown(size), Type::Unknown(size2)) => size.equals_ignoring_locations(size2),
+            (Type::Ident { ident, .. }, Type::Ident { ident: ident2, .. }) => {
+                ident.equals_ignoring_locations(ident2)
+            }
+            (Type::Unknown { size, .. }, Type::Unknown { size: size2, .. }) => {
+                size.equals_ignoring_locations(size2)
+            }
             _ => false,
         }
     }
@@ -70,95 +118,133 @@ impl EqualsIgnoringLocations for Type {
 impl StripLocations for Type {
     fn strip_locations(&self) -> Self {
         match self {
-            Type::ConstPointer(located) => Type::ConstPointer(located.strip_locations()),
-            Type::MutPointer(located) => Type::MutPointer(located.strip_locations()),
-            Type::Array(located, len) => {
-                Type::Array(located.strip_locations(), len.strip_locations())
-            }
-            Type::Ident(ident) => Type::Ident(ident.strip_locations()),
-            Type::Unknown(size) => Type::Unknown(size.strip_locations()),
+            Type::ConstPointer { pointee, .. } => Type::ConstPointer {
+                pointee: pointee.strip_locations(),
+                location: ItemLocation::test(),
+            },
+            Type::MutPointer { pointee, .. } => Type::MutPointer {
+                pointee: pointee.strip_locations(),
+                location: ItemLocation::test(),
+            },
+            Type::Array { element, size, .. } => Type::Array {
+                element: element.strip_locations(),
+                size: size.strip_locations(),
+                location: ItemLocation::test(),
+            },
+            Type::Ident { ident, .. } => Type::Ident {
+                ident: ident.strip_locations(),
+                location: ItemLocation::test(),
+            },
+            Type::Unknown { size, .. } => Type::Unknown {
+                size: size.strip_locations(),
+                location: ItemLocation::test(),
+            },
         }
     }
 }
 #[cfg(test)]
 impl Type {
-    pub fn ident(ident: &str) -> Type {
-        Type::Ident(ident.into())
+    pub fn ident(name: &str) -> Type {
+        Type::Ident {
+            ident: name.into(),
+            location: ItemLocation::test(),
+        }
     }
 
     pub fn as_ident(&self) -> Option<&Ident> {
         match self {
-            Type::Ident(ident) => Some(ident),
+            Type::Ident { ident, .. } => Some(ident),
             _ => None,
         }
     }
 
     pub fn const_pointer(self) -> Type {
-        Type::ConstPointer(Box::new(Located::test(self)))
+        Type::ConstPointer {
+            pointee: Box::new(self),
+            location: ItemLocation::test(),
+        }
     }
 
     pub fn mut_pointer(self) -> Type {
-        Type::MutPointer(Box::new(Located::test(self)))
+        Type::MutPointer {
+            pointee: Box::new(self),
+            location: ItemLocation::test(),
+        }
     }
 
     pub fn array(self, size: usize) -> Type {
-        Type::Array(Box::new(Located::test(self)), size)
+        Type::Array {
+            element: Box::new(self),
+            size,
+            location: ItemLocation::test(),
+        }
     }
 
     pub fn unknown(size: usize) -> Type {
-        Type::Unknown(size)
+        Type::Unknown {
+            size,
+            location: ItemLocation::test(),
+        }
     }
 }
 impl From<&str> for Type {
     fn from(item: &str) -> Self {
-        Type::Ident(item.into())
+        Type::Ident {
+            ident: item.into(),
+            location: ItemLocation::internal(),
+        }
     }
 }
 
 impl fmt::Display for Type {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Type::ConstPointer(inner) => write!(f, "*const {inner}"),
-            Type::MutPointer(inner) => write!(f, "*mut {inner}"),
-            Type::Array(inner, size) => write!(f, "[{inner}; {size}]"),
-            Type::Ident(ident) => write!(f, "{ident}"),
-            Type::Unknown(size) => write!(f, "unknown({size})"),
+            Type::ConstPointer { pointee, .. } => write!(f, "*const {pointee}"),
+            Type::MutPointer { pointee, .. } => write!(f, "*mut {pointee}"),
+            Type::Array { element, size, .. } => write!(f, "[{element}; {size}]"),
+            Type::Ident { ident, .. } => write!(f, "{ident}"),
+            Type::Unknown { size, .. } => write!(f, "unknown({size})"),
         }
     }
 }
 
 impl Parser {
-    pub(crate) fn parse_type(&mut self) -> Result<Located<Type>, ParseError> {
+    pub(crate) fn parse_type(&mut self) -> Result<Type, ParseError> {
         match self.peek() {
             TokenKind::Unknown => {
                 let start = self.advance();
                 self.expect(TokenKind::Lt)?;
-                let size = self.parse_int_literal()?.value as usize;
+                let (size, _) = self.parse_int_literal()?;
+                let size = size as usize;
                 let end = self.expect(TokenKind::Gt)?;
+                let location = self.item_location_from_token_range(&start, &end);
 
-                Ok(Located::new(
-                    Type::Unknown(size),
-                    self.item_location_from_token_range(&start, &end),
-                ))
+                Ok(Type::Unknown { size, location })
             }
             TokenKind::Star => {
                 let start = self.advance();
                 if matches!(self.peek(), TokenKind::Const) {
                     self.advance();
-                    let inner = self.parse_type()?;
+                    let pointee = self.parse_type()?;
                     let location = self.item_location_from_locations(
                         start.start_location(),
-                        inner.location.span.end,
+                        pointee.location().span.end,
                     );
-                    Ok(Located::new(Type::ConstPointer(Box::new(inner)), location))
+                    Ok(Type::ConstPointer {
+                        pointee: Box::new(pointee),
+                        location,
+                    })
                 } else if matches!(self.peek(), TokenKind::Mut) {
                     self.advance();
-                    let inner = self.parse_type()?;
+                    let pointee = self.parse_type()?;
                     let location = self.item_location_from_locations(
                         start.start_location(),
-                        inner.location.span.end,
+                        pointee.location().span.end,
                     );
-                    Ok(Located::new(Type::MutPointer(Box::new(inner)), location))
+                    Ok(Type::MutPointer {
+                        pointee: Box::new(pointee),
+                        location,
+                    })
                 } else {
                     Err(ParseError::MissingPointerQualifier {
                         location: self.current().location.clone(),
@@ -167,14 +253,17 @@ impl Parser {
             }
             TokenKind::LBracket => {
                 let start = self.advance();
-                let inner = self.parse_type()?;
+                let element = self.parse_type()?;
                 self.expect(TokenKind::Semi)?;
-                let size = self.parse_int_literal()?.value as usize;
+                let (size, _) = self.parse_int_literal()?;
+                let size = size as usize;
                 let end = self.expect(TokenKind::RBracket)?;
-                Ok(Located::new(
-                    Type::Array(Box::new(inner), size),
-                    self.item_location_from_token_range(&start, &end),
-                ))
+                let location = self.item_location_from_token_range(&start, &end);
+                Ok(Type::Array {
+                    element: Box::new(element),
+                    size,
+                    location,
+                })
             }
             TokenKind::Ident(_) => {
                 let (mut ident, ident_span) = self.expect_ident()?;
@@ -215,10 +304,8 @@ impl Parser {
                     ident = Ident(type_str);
                 }
 
-                Ok(Located::new(
-                    Type::Ident(ident),
-                    self.item_location_from_locations(start_pos, end_pos),
-                ))
+                let location = self.item_location_from_locations(start_pos, end_pos);
+                Ok(Type::Ident { ident, location })
             }
             _ => Err(ParseError::ExpectedType {
                 found: self.peek().clone(),

@@ -15,7 +15,7 @@ use crate::{
             PredefinedItem, Type, TypeDefinition, Visibility,
         },
     },
-    span::{ItemLocation, Located},
+    span::{HasLocation, ItemLocation},
 };
 
 pub struct SemanticState {
@@ -39,27 +39,26 @@ impl SemanticState {
             let path = ItemPath::from(predefined_item.name());
             let size = predefined_item.size();
             let alignment = size.max(1);
+            let location = ItemLocation::internal();
             semantic_state
-                .add_item(Located::new(
-                    ItemDefinition {
-                        visibility: Visibility::Public,
-                        path,
-                        state: ItemState::Resolved(ItemStateResolved {
-                            size,
-                            alignment,
-                            inner: TypeDefinition {
-                                cloneable: true,
-                                copyable: true,
-                                defaultable: true,
-                                ..Default::default()
-                            }
-                            .into(),
-                        }),
-                        category: ItemCategory::Predefined,
-                        predefined: Some(*predefined_item),
-                    },
-                    ItemLocation::internal(),
-                ))
+                .add_item(ItemDefinition {
+                    visibility: Visibility::Public,
+                    path,
+                    state: ItemState::Resolved(ItemStateResolved {
+                        size,
+                        alignment,
+                        inner: TypeDefinition {
+                            cloneable: true,
+                            copyable: true,
+                            defaultable: true,
+                            ..Default::default()
+                        }
+                        .into(),
+                    }),
+                    category: ItemCategory::Predefined,
+                    predefined: Some(*predefined_item),
+                    location,
+                })
                 .expect("failed to add predefined type");
         }
 
@@ -101,7 +100,7 @@ impl SemanticState {
                         continue;
                     };
                     if let Some(attr_address) =
-                        attribute::parse_address(ident, items, &attribute.location)?
+                        attribute::parse_address(ident, items, attribute.location())?
                     {
                         address = Some(attr_address);
                     }
@@ -114,20 +113,18 @@ impl SemanticState {
                     location: ev.location.clone(),
                 })?;
 
-                Ok(Located::new(
-                    ExternValue {
-                        visibility: Visibility::from(ev.visibility),
-                        name: name.as_str().to_owned(),
-                        type_: Type::Unresolved(ev.type_.clone()),
-                        address,
-                    },
-                    ev.location.clone(),
-                ))
+                Ok(ExternValue {
+                    visibility: Visibility::from(ev.visibility),
+                    name: name.as_str().to_owned(),
+                    type_: Type::Unresolved(ev.type_.clone()),
+                    address,
+                    location: ev.location.clone(),
+                })
             })
             .collect::<Result<Vec<_>>>()?;
 
-        let impls: Vec<_> = module.impls().map(|i| i.cloned()).collect();
-        let backends: Vec<_> = module.backends().map(|b| b.cloned()).collect();
+        let impls: Vec<_> = module.impls().cloned().collect();
+        let backends: Vec<_> = module.backends().cloned().collect();
 
         self.modules.insert(
             path.clone(),
@@ -143,30 +140,33 @@ impl SemanticState {
         for definition in module.definitions() {
             let new_path = path.join(definition.name.as_str().into());
 
-            self.add_item(Located::new(
-                ItemDefinition {
-                    visibility: definition.visibility.into(),
-                    path: new_path,
-                    state: ItemState::Unresolved(definition.cloned()),
-                    category: ItemCategory::Defined,
-                    predefined: None,
-                },
-                definition.location.clone(),
-            ))?;
+            self.add_item(ItemDefinition {
+                visibility: definition.visibility.into(),
+                path: new_path,
+                state: ItemState::Unresolved(definition.clone()),
+                category: ItemCategory::Defined,
+                predefined: None,
+                location: definition.location.clone(),
+            })?;
         }
 
-        for Located {
-            value: (extern_name, attributes),
-            location: extern_location,
-        } in module.extern_types()
-        {
+        for extern_type in module.extern_types() {
+            let grammar::ModuleItem::ExternType {
+                name: extern_name,
+                attributes,
+                location: extern_location,
+                ..
+            } = extern_type
+            else {
+                continue;
+            };
             let mut size = None;
             let mut alignment = None;
             for attribute in attributes {
                 let Some((ident, items)) = attribute.function() else {
                     continue;
                 };
-                let location = &attribute.location;
+                let location = attribute.location();
                 if let Some(attr_size) = attribute::parse_size(ident, items, location)? {
                     size = Some(attr_size);
                 } else if let Some(attr_align) = attribute::parse_align(ident, items, location)? {
@@ -190,39 +190,37 @@ impl SemanticState {
 
             let extern_path = path.join(extern_name.as_str().into());
 
-            self.add_item(Located::new(
-                ItemDefinition {
-                    visibility: Visibility::Public,
-                    path: extern_path.clone(),
-                    state: ItemState::Resolved(ItemStateResolved {
-                        size,
-                        alignment,
-                        inner: TypeDefinition::default().into(),
-                    }),
-                    category: ItemCategory::Extern,
-                    predefined: None,
-                },
-                extern_location.clone(),
-            ))?;
+            self.add_item(ItemDefinition {
+                visibility: Visibility::Public,
+                path: extern_path.clone(),
+                state: ItemState::Resolved(ItemStateResolved {
+                    size,
+                    alignment,
+                    inner: TypeDefinition::default().into(),
+                }),
+                category: ItemCategory::Extern,
+                predefined: None,
+                location: extern_location.clone(),
+            })?;
         }
 
         Ok(())
     }
 
-    pub fn add_item(&mut self, item_definition: Located<ItemDefinition>) -> Result<()> {
+    pub fn add_item(&mut self, item_definition: ItemDefinition) -> Result<()> {
         let parent_path =
             &item_definition
                 .path
                 .parent()
                 .ok_or_else(|| SemanticError::ModuleNotFound {
                     path: item_definition.path.clone(),
-                    location: item_definition.location.clone(),
+                    location: item_definition.location().clone(),
                 })?;
         self.modules
             .get_mut(parent_path)
             .ok_or_else(|| SemanticError::ModuleNotFound {
                 path: parent_path.clone(),
-                location: item_definition.location.clone(),
+                location: item_definition.location().clone(),
             })?
             .definition_paths
             .insert(item_definition.path.clone());
@@ -247,24 +245,28 @@ impl SemanticState {
 
                 let visibility: Visibility = definition.visibility.into();
 
+                let def_location = &definition.location;
                 let item = match &definition.inner {
                     grammar::ItemDefinitionInner::Type(ty) => type_definition::build(
                         &mut self,
                         resolvee_path,
                         visibility,
-                        definition.as_ref().map(|_| ty),
+                        ty,
+                        def_location,
                         &definition.doc_comments,
                     )?,
                     grammar::ItemDefinitionInner::Enum(e) => enum_definition::build(
                         &self,
                         resolvee_path,
-                        definition.as_ref().map(|_| e),
+                        e,
+                        def_location,
                         &definition.doc_comments,
                     )?,
                     grammar::ItemDefinitionInner::Bitflags(b) => bitflags_definition::build(
                         &self,
                         resolvee_path,
-                        definition.as_ref().map(|_| b),
+                        b,
+                        def_location,
                         &definition.doc_comments,
                     )?,
                 };

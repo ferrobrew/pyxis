@@ -7,12 +7,12 @@ use crate::{
         error::Result,
         types::{ItemDefinition, Type},
     },
-    span::{ItemLocation, Located},
+    span::ItemLocation,
 };
 
 #[derive(Debug)]
 pub struct TypeRegistry {
-    types: BTreeMap<ItemPath, Located<ItemDefinition>>,
+    types: BTreeMap<ItemPath, ItemDefinition>,
     pointer_size: usize,
 }
 
@@ -32,10 +32,9 @@ impl TypeRegistry {
         &self,
         item_path: &ItemPath,
         from_location: &ItemLocation,
-    ) -> Result<Located<&ItemDefinition>> {
+    ) -> Result<&ItemDefinition> {
         self.types
             .get(item_path)
-            .map(|l| l.as_ref())
             .ok_or_else(|| SemanticError::TypeNotFound {
                 path: item_path.clone(),
                 location: from_location.clone(),
@@ -46,10 +45,9 @@ impl TypeRegistry {
         &mut self,
         item_path: &ItemPath,
         from_location: &ItemLocation,
-    ) -> Result<Located<&mut ItemDefinition>> {
+    ) -> Result<&mut ItemDefinition> {
         self.types
             .get_mut(item_path)
-            .map(|l| l.as_mut())
             .ok_or_else(|| SemanticError::TypeNotFound {
                 path: item_path.clone(),
                 location: from_location.clone(),
@@ -72,7 +70,7 @@ impl TypeRegistry {
             .collect()
     }
 
-    pub(crate) fn add(&mut self, type_: Located<ItemDefinition>) {
+    pub(crate) fn add(&mut self, type_: ItemDefinition) {
         self.types.insert(type_.path.clone(), type_);
     }
 
@@ -105,17 +103,17 @@ impl TypeRegistry {
     ) -> Option<Type> {
         // todo: consider building a better module import/scope system
         match type_ {
-            grammar::Type::ConstPointer(t) => self
-                .resolve_grammar_type(scope, t)
+            grammar::Type::ConstPointer { pointee, .. } => self
+                .resolve_grammar_type(scope, pointee)
                 .map(|t| Type::ConstPointer(Box::new(t))),
-            grammar::Type::MutPointer(t) => self
-                .resolve_grammar_type(scope, t)
+            grammar::Type::MutPointer { pointee, .. } => self
+                .resolve_grammar_type(scope, pointee)
                 .map(|t| Type::MutPointer(Box::new(t))),
-            grammar::Type::Array(t, size) => self
-                .resolve_grammar_type(scope, t)
+            grammar::Type::Array { element, size, .. } => self
+                .resolve_grammar_type(scope, element)
                 .map(|t| Type::Array(Box::new(t), *size)),
-            grammar::Type::Ident(ident) => self.resolve_string(scope, ident.as_str()),
-            grammar::Type::Unknown(size) => Some(self.padding_type(*size)),
+            grammar::Type::Ident { ident, .. } => self.resolve_string(scope, ident.as_str()),
+            grammar::Type::Unknown { size, .. } => Some(self.padding_type(*size)),
         }
     }
 

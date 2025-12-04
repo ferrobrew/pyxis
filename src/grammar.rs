@@ -16,6 +16,8 @@ pub use crate::parser::{
 
 #[cfg(test)]
 pub mod test_aliases {
+    use crate::span::ItemLocation;
+
     pub type M = super::Module;
     pub type ID = super::ItemDefinition;
     pub type TS = super::TypeStatement;
@@ -42,21 +44,28 @@ pub mod test_aliases {
         E::IntLiteral {
             value,
             format: super::IntFormat::Decimal,
+            location: ItemLocation::test(),
         }
     }
     pub fn int_literal_with_format(value: isize, format: super::IntFormat) -> E {
-        E::IntLiteral { value, format }
+        E::IntLiteral {
+            value,
+            format,
+            location: ItemLocation::test(),
+        }
     }
     pub fn string_literal(value: impl Into<String>) -> E {
         E::StringLiteral {
             value: value.into(),
             format: super::StringFormat::Regular,
+            location: ItemLocation::test(),
         }
     }
     pub fn string_literal_with_format(value: impl Into<String>, format: super::StringFormat) -> E {
         E::StringLiteral {
             value: value.into(),
             format,
+            location: ItemLocation::test(),
         }
     }
 }

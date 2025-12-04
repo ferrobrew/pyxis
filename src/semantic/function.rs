@@ -8,7 +8,7 @@ use crate::{
         type_registry::TypeRegistry,
         types::{Type, Visibility},
     },
-    span::{EqualsIgnoringLocations, Located},
+    span::{EqualsIgnoringLocations, HasLocation, ItemLocation},
 };
 
 #[cfg(test)]
@@ -16,30 +16,58 @@ use crate::span::StripLocations;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Argument {
-    ConstSelf,
-    MutSelf,
-    Field(String, Type),
+    ConstSelf {
+        location: ItemLocation,
+    },
+    MutSelf {
+        location: ItemLocation,
+    },
+    Field {
+        name: String,
+        type_: Type,
+        location: ItemLocation,
+    },
+}
+impl HasLocation for Argument {
+    fn location(&self) -> &ItemLocation {
+        match self {
+            Argument::ConstSelf { location } => location,
+            Argument::MutSelf { location } => location,
+            Argument::Field { location, .. } => location,
+        }
+    }
 }
 #[cfg(test)]
 impl StripLocations for Argument {
     fn strip_locations(&self) -> Self {
         match self {
-            Argument::ConstSelf => Argument::ConstSelf,
-            Argument::MutSelf => Argument::MutSelf,
-            Argument::Field(name, ty) => {
-                Argument::Field(name.strip_locations(), ty.strip_locations())
-            }
+            Argument::ConstSelf { .. } => Argument::ConstSelf {
+                location: ItemLocation::test(),
+            },
+            Argument::MutSelf { .. } => Argument::MutSelf {
+                location: ItemLocation::test(),
+            },
+            Argument::Field { name, type_, .. } => Argument::Field {
+                name: name.strip_locations(),
+                type_: type_.strip_locations(),
+                location: ItemLocation::test(),
+            },
         }
     }
 }
 impl EqualsIgnoringLocations for Argument {
     fn equals_ignoring_locations(&self, other: &Self) -> bool {
         match (self, other) {
-            (Argument::ConstSelf, Argument::ConstSelf) => true,
-            (Argument::MutSelf, Argument::MutSelf) => true,
-            (Argument::Field(name, ty), Argument::Field(name2, ty2)) => {
-                name.equals_ignoring_locations(name2) && ty.equals_ignoring_locations(ty2)
-            }
+            (Argument::ConstSelf { .. }, Argument::ConstSelf { .. }) => true,
+            (Argument::MutSelf { .. }, Argument::MutSelf { .. }) => true,
+            (
+                Argument::Field { name, type_, .. },
+                Argument::Field {
+                    name: name2,
+                    type_: type_2,
+                    ..
+                },
+            ) => name.equals_ignoring_locations(name2) && type_.equals_ignoring_locations(type_2),
             _ => false,
         }
     }
@@ -47,27 +75,35 @@ impl EqualsIgnoringLocations for Argument {
 impl fmt::Display for Argument {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Argument::ConstSelf => write!(f, "&self"),
-            Argument::MutSelf => write!(f, "&mut self"),
-            Argument::Field(name, ty) => write!(f, "{name}: {ty}"),
+            Argument::ConstSelf { .. } => write!(f, "&self"),
+            Argument::MutSelf { .. } => write!(f, "&mut self"),
+            Argument::Field { name, type_, .. } => write!(f, "{name}: {type_}"),
         }
     }
 }
 #[cfg(test)]
 impl Argument {
     pub fn const_self() -> Self {
-        Argument::ConstSelf
+        Argument::ConstSelf {
+            location: ItemLocation::test(),
+        }
     }
     pub fn mut_self() -> Self {
-        Argument::MutSelf
+        Argument::MutSelf {
+            location: ItemLocation::test(),
+        }
     }
     pub fn field(name: impl Into<String>, type_ref: impl Into<Type>) -> Self {
-        Argument::Field(name.into(), type_ref.into())
+        Argument::Field {
+            name: name.into(),
+            type_: type_ref.into(),
+            location: ItemLocation::test(),
+        }
     }
 }
 impl Argument {
     pub fn is_self(&self) -> bool {
-        matches!(self, Argument::ConstSelf | Argument::MutSelf)
+        matches!(self, Argument::ConstSelf { .. } | Argument::MutSelf { .. })
     }
 }
 
@@ -243,9 +279,15 @@ pub struct Function {
     pub name: String,
     pub doc: Vec<String>,
     pub body: FunctionBody,
-    pub arguments: Vec<Located<Argument>>,
+    pub arguments: Vec<Argument>,
     pub return_type: Option<Type>,
     pub calling_convention: CallingConvention,
+    pub location: ItemLocation,
+}
+impl HasLocation for Function {
+    fn location(&self) -> &ItemLocation {
+        &self.location
+    }
 }
 impl fmt::Display for Function {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -314,6 +356,7 @@ impl StripLocations for Function {
             arguments: self.arguments.strip_locations(),
             return_type: self.return_type.strip_locations(),
             calling_convention: self.calling_convention.strip_locations(),
+            location: ItemLocation::test(),
         }
     }
 }
@@ -332,10 +375,11 @@ impl Function {
             arguments: Vec::new(),
             return_type: None,
             calling_convention,
+            location: ItemLocation::test(),
         }
     }
     pub fn with_arguments(mut self, arguments: impl IntoIterator<Item = Argument>) -> Self {
-        self.arguments = arguments.into_iter().map(Located::test).collect();
+        self.arguments = arguments.into_iter().collect();
         self
     }
     pub fn with_return_type(mut self, return_type: Type) -> Self {
@@ -360,8 +404,8 @@ pub fn build(
     type_registry: &TypeRegistry,
     scope: &[ItemPath],
     is_vfunc: bool,
-    function: Located<&grammar::Function>,
-) -> Result<Located<Function>> {
+    function: &grammar::Function,
+) -> Result<Function> {
     let mut body = is_vfunc.then(|| FunctionBody::Vftable {
         function_name: function.name.0.clone(),
     });
@@ -371,7 +415,7 @@ pub fn build(
         let Some((ident, items)) = attribute.function() else {
             continue;
         };
-        if let Some(attr_address) = attribute::parse_address(ident, items, &attribute.location)? {
+        if let Some(attr_address) = attribute::parse_address(ident, items, attribute.location())? {
             if is_vfunc {
                 return Err(SemanticError::AttributeNotSupported {
                     attribute_name: "address".into(),
@@ -384,7 +428,8 @@ pub fn build(
             body = Some(FunctionBody::Address {
                 address: attr_address,
             });
-        } else if let Some(_attr_index) = attribute::parse_index(ident, items, &attribute.location)?
+        } else if let Some(_attr_index) =
+            attribute::parse_index(ident, items, attribute.location())?
         {
             if !is_vfunc {
                 return Err(SemanticError::AttributeNotSupported {
@@ -401,14 +446,14 @@ pub fn build(
                 items,
                 "calling_convention",
                 1,
-                &attribute.location,
+                attribute.location(),
             )?;
-            let Located { value, location } = &exprs[0];
-            let Expr::StringLiteral { value, .. } = value else {
+            let expr = exprs[0];
+            let Expr::StringLiteral { value, .. } = expr else {
                 return Err(SemanticError::InvalidAttributeValue {
                     attribute_name: "calling_convention".into(),
                     expected_type: std::any::type_name::<CallingConvention>().into(),
-                    location: location.clone(),
+                    location: expr.location().clone(),
                 });
             };
 
@@ -419,7 +464,7 @@ pub fn build(
                         .map_err(|_| SemanticError::InvalidCallingConvention {
                             convention: value.clone(),
                             function_name: function.name.0.clone(),
-                            location: location.clone(),
+                            location: expr.location().clone(),
                         })?,
                 );
         }
@@ -443,25 +488,25 @@ pub fn build(
         .arguments
         .iter()
         .map(|a| {
-            a.as_ref()
-                .map_with_location(|a, location| match a {
-                    grammar::Argument::ConstSelf => Ok(Argument::ConstSelf),
-                    grammar::Argument::MutSelf => Ok(Argument::MutSelf),
-                    grammar::Argument::Named(name, type_) => Ok(Argument::Field(
-                        name.0.clone(),
-                        type_registry
-                            .resolve_grammar_type(scope, type_)
-                            .ok_or_else(|| SemanticError::TypeResolutionFailed {
-                                type_: type_.clone(),
-                                resolution_context: TypeResolutionContext::FunctionArgument {
-                                    argument_name: name.0.clone(),
-                                    function_name: function.name.0.clone(),
-                                },
-                                location: location.clone(),
-                            })?,
-                    )),
-                })
-                .transpose()
+            let location = a.location().clone();
+            match a {
+                grammar::Argument::ConstSelf { .. } => Ok(Argument::ConstSelf { location }),
+                grammar::Argument::MutSelf { .. } => Ok(Argument::MutSelf { location }),
+                grammar::Argument::Named { ident, type_, .. } => Ok(Argument::Field {
+                    name: ident.0.clone(),
+                    type_: type_registry
+                        .resolve_grammar_type(scope, type_)
+                        .ok_or_else(|| SemanticError::TypeResolutionFailed {
+                            type_: type_.clone(),
+                            resolution_context: TypeResolutionContext::FunctionArgument {
+                                argument_name: ident.0.clone(),
+                                function_name: function.name.0.clone(),
+                            },
+                            location: location.clone(),
+                        })?,
+                    location,
+                }),
+            }
         })
         .collect::<Result<Vec<_>>>()?;
 
@@ -473,7 +518,7 @@ pub fn build(
     let calling_convention = calling_convention.unwrap_or_else(|| {
         let has_self = arguments
             .iter()
-            .any(|a| matches!(&a.value, Argument::ConstSelf | Argument::MutSelf));
+            .any(|a| matches!(a, Argument::ConstSelf { .. } | Argument::MutSelf { .. }));
         // probably a bit sus
         if has_self {
             CallingConvention::for_member_function(type_registry.pointer_size())
@@ -482,16 +527,14 @@ pub fn build(
         }
     });
 
-    Ok(Located::new(
-        Function {
-            visibility: function.visibility.into(),
-            name: function.name.0.clone(),
-            doc,
-            body,
-            arguments,
-            return_type,
-            calling_convention,
-        },
-        function.location.clone(),
-    ))
+    Ok(Function {
+        visibility: function.visibility.into(),
+        name: function.name.0.clone(),
+        doc,
+        body,
+        arguments,
+        return_type,
+        calling_convention,
+        location: function.location.clone(),
+    })
 }

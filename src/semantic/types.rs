@@ -3,7 +3,7 @@ use std::fmt;
 use crate::{
     grammar::{self, ItemPath},
     semantic::type_registry,
-    span::{EqualsIgnoringLocations, ItemLocation, Located},
+    span::{EqualsIgnoringLocations, HasLocation, ItemLocation},
 };
 
 #[cfg(test)]
@@ -65,7 +65,7 @@ impl From<grammar::Visibility> for Visibility {
 
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]
 pub enum Type {
-    Unresolved(Located<grammar::Type>),
+    Unresolved(grammar::Type),
     Raw(ItemPath),
     ConstPointer(Box<Type>),
     MutPointer(Box<Type>),
@@ -327,7 +327,7 @@ impl ItemStateResolved {
 
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]
 pub enum ItemState {
-    Unresolved(Located<grammar::ItemDefinition>),
+    Unresolved(grammar::ItemDefinition),
     Resolved(ItemStateResolved),
 }
 #[cfg(test)]
@@ -408,6 +408,12 @@ pub struct ItemDefinition {
     pub state: ItemState,
     pub category: ItemCategory,
     pub predefined: Option<PredefinedItem>,
+    pub location: ItemLocation,
+}
+impl HasLocation for ItemDefinition {
+    fn location(&self) -> &ItemLocation {
+        &self.location
+    }
 }
 #[cfg(test)]
 // StripSpans implementations for testing
@@ -419,6 +425,7 @@ impl StripLocations for ItemDefinition {
             state: self.state.strip_locations(),
             category: self.category.strip_locations(),
             predefined: self.predefined.strip_locations(),
+            location: ItemLocation::test(),
         }
     }
 }
@@ -436,6 +443,7 @@ impl ItemDefinition {
             state: ItemState::Resolved(resolved),
             category,
             predefined: None,
+            location: ItemLocation::test(),
         }
     }
 
@@ -451,6 +459,7 @@ impl ItemDefinition {
             state: ItemState::Resolved(resolved),
             category: ItemCategory::Defined,
             predefined: None,
+            location: ItemLocation::test(),
         }
     }
 
@@ -481,12 +490,20 @@ impl ItemDefinition {
 pub struct Backend {
     pub prologue: Option<String>,
     pub epilogue: Option<String>,
+    pub location: ItemLocation,
 }
+impl HasLocation for Backend {
+    fn location(&self) -> &ItemLocation {
+        &self.location
+    }
+}
+#[cfg(test)]
 impl Backend {
     pub fn new(prologue: impl Into<Option<String>>, epilogue: impl Into<Option<String>>) -> Self {
         Backend {
             prologue: prologue.into(),
             epilogue: epilogue.into(),
+            location: ItemLocation::test(),
         }
     }
 }
@@ -497,4 +514,10 @@ pub struct ExternValue {
     pub name: String,
     pub type_: Type,
     pub address: usize,
+    pub location: ItemLocation,
+}
+impl HasLocation for ExternValue {
+    fn location(&self) -> &ItemLocation {
+        &self.location
+    }
 }
