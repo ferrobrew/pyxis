@@ -20,19 +20,34 @@ use super::{
 /// Module-level items (preserves ordering and comments)
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ModuleItem {
-    Comment { comment: Comment },
-    Use { path: ItemPath, location: ItemLocation },
+    Comment {
+        comment: Comment,
+    },
+    Use {
+        path: ItemPath,
+        location: ItemLocation,
+    },
     ExternType {
         name: Ident,
         attributes: Attributes,
         doc_comments: Vec<String>,
         location: ItemLocation,
     },
-    Backend { backend: Backend },
-    Definition { definition: ItemDefinition },
-    Impl { impl_block: FunctionBlock },
-    ExternValue { extern_value: ExternValue },
-    Function { function: Function },
+    Backend {
+        backend: Backend,
+    },
+    Definition {
+        definition: ItemDefinition,
+    },
+    Impl {
+        impl_block: FunctionBlock,
+    },
+    ExternValue {
+        extern_value: ExternValue,
+    },
+    Function {
+        function: Function,
+    },
 }
 impl HasLocation for ModuleItem {
     fn location(&self) -> &ItemLocation {
@@ -189,14 +204,14 @@ impl Module {
 }
 impl Module {
     pub fn uses(&self) -> impl Iterator<Item = &ModuleItem> {
-        self.items.iter().filter(|item| {
-            matches!(item, ModuleItem::Use { .. })
-        })
+        self.items
+            .iter()
+            .filter(|item| matches!(item, ModuleItem::Use { .. }))
     }
     pub fn extern_types(&self) -> impl Iterator<Item = &ModuleItem> {
-        self.items.iter().filter(|item| {
-            matches!(item, ModuleItem::ExternType { .. })
-        })
+        self.items
+            .iter()
+            .filter(|item| matches!(item, ModuleItem::ExternType { .. }))
     }
     pub fn extern_values(&self) -> impl Iterator<Item = &ExternValue> {
         self.items.iter().filter_map(|item| match item {

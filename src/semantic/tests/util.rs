@@ -44,10 +44,8 @@ pub fn assert_ast_produces_type_definitions(
     let type_registry = state.type_registry();
 
     let mut expected_type_definitions: Vec<_> = type_definitions.into_iter().collect();
-    let mut created_type_definitions: Vec<_> = created_module
-        .definitions(type_registry)
-        .cloned()
-        .collect();
+    let mut created_type_definitions: Vec<_> =
+        created_module.definitions(type_registry).cloned().collect();
 
     expected_type_definitions.sort_by_key(|t| t.path.clone());
     created_type_definitions.sort_by_key(|t| t.path.clone());

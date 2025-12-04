@@ -102,7 +102,9 @@ pub fn convert_grammar_functions_to_semantic_functions(
                 visibility: Visibility::Private,
                 name: name.clone(),
                 doc: vec![],
-                arguments: vec![Argument::MutSelf { location: location.clone() }],
+                arguments: vec![Argument::MutSelf {
+                    location: location.clone(),
+                }],
                 return_type: None,
                 body: FunctionBody::Vftable {
                     function_name: name,
@@ -221,11 +223,9 @@ pub fn build(
                 Some(region),
             ))
         }
-    } else if let Some((base_name, base_vftable)) = get_optional_region_name_and_vftable(
-        &semantic.type_registry,
-        resolvee_path,
-        first_base,
-    )? {
+    } else if let Some((base_name, base_vftable)) =
+        get_optional_region_name_and_vftable(&semantic.type_registry, resolvee_path, first_base)?
+    {
         // There are no functions defined for this vftable, but there is a base class with a vftable.
         // Let's use its field.
         Ok((

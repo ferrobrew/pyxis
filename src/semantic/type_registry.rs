@@ -33,10 +33,12 @@ impl TypeRegistry {
         item_path: &ItemPath,
         from_location: &ItemLocation,
     ) -> Result<&ItemDefinition> {
-        self.types.get(item_path).ok_or_else(|| SemanticError::TypeNotFound {
-            path: item_path.clone(),
-            location: from_location.clone(),
-        })
+        self.types
+            .get(item_path)
+            .ok_or_else(|| SemanticError::TypeNotFound {
+                path: item_path.clone(),
+                location: from_location.clone(),
+            })
     }
 
     pub fn get_mut(

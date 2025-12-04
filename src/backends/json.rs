@@ -447,11 +447,7 @@ fn convert_function(func: &Function) -> JsonFunction {
             None
         },
         body: convert_function_body(&func.body),
-        arguments: func
-            .arguments
-            .iter()
-            .map(convert_argument)
-            .collect(),
+        arguments: func.arguments.iter().map(convert_argument).collect(),
         return_type: func.return_type.as_ref().map(convert_type),
         calling_convention: func.calling_convention.into(),
     }
@@ -479,11 +475,7 @@ fn convert_region(region: &Region, type_registry: &TypeRegistry, offset: usize) 
 
 fn convert_vftable(vftable: &TypeVftable) -> JsonTypeVftable {
     JsonTypeVftable {
-        functions: vftable
-            .functions
-            .iter()
-            .map(convert_function)
-            .collect(),
+        functions: vftable.functions.iter().map(convert_function).collect(),
     }
 }
 
@@ -637,11 +629,8 @@ fn build_module_hierarchy(semantic_state: &ResolvedSemanticState) -> BTreeMap<St
             .iter()
             .map(convert_extern_value)
             .collect();
-        let functions: Vec<JsonFunction> = module
-            .functions()
-            .iter()
-            .map(convert_function)
-            .collect();
+        let functions: Vec<JsonFunction> =
+            module.functions().iter().map(convert_function).collect();
 
         // Convert backends
         let backends: BTreeMap<String, Vec<JsonBackend>> = module
@@ -650,10 +639,7 @@ fn build_module_hierarchy(semantic_state: &ResolvedSemanticState) -> BTreeMap<St
             .map(|(name, backend_list)| {
                 (
                     name.clone(),
-                    backend_list
-                        .iter()
-                        .map(convert_backend)
-                        .collect(),
+                    backend_list.iter().map(convert_backend).collect(),
                 )
             })
             .collect();

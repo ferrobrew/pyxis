@@ -16,9 +16,17 @@ use crate::span::StripLocations;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Argument {
-    ConstSelf { location: ItemLocation },
-    MutSelf { location: ItemLocation },
-    Field { name: String, type_: Type, location: ItemLocation },
+    ConstSelf {
+        location: ItemLocation,
+    },
+    MutSelf {
+        location: ItemLocation,
+    },
+    Field {
+        name: String,
+        type_: Type,
+        location: ItemLocation,
+    },
 }
 impl HasLocation for Argument {
     fn location(&self) -> &ItemLocation {
@@ -33,8 +41,12 @@ impl HasLocation for Argument {
 impl StripLocations for Argument {
     fn strip_locations(&self) -> Self {
         match self {
-            Argument::ConstSelf { .. } => Argument::ConstSelf { location: ItemLocation::test() },
-            Argument::MutSelf { .. } => Argument::MutSelf { location: ItemLocation::test() },
+            Argument::ConstSelf { .. } => Argument::ConstSelf {
+                location: ItemLocation::test(),
+            },
+            Argument::MutSelf { .. } => Argument::MutSelf {
+                location: ItemLocation::test(),
+            },
             Argument::Field { name, type_, .. } => Argument::Field {
                 name: name.strip_locations(),
                 type_: type_.strip_locations(),
@@ -48,9 +60,14 @@ impl EqualsIgnoringLocations for Argument {
         match (self, other) {
             (Argument::ConstSelf { .. }, Argument::ConstSelf { .. }) => true,
             (Argument::MutSelf { .. }, Argument::MutSelf { .. }) => true,
-            (Argument::Field { name, type_, .. }, Argument::Field { name: name2, type_: type_2, .. }) => {
-                name.equals_ignoring_locations(name2) && type_.equals_ignoring_locations(type_2)
-            }
+            (
+                Argument::Field { name, type_, .. },
+                Argument::Field {
+                    name: name2,
+                    type_: type_2,
+                    ..
+                },
+            ) => name.equals_ignoring_locations(name2) && type_.equals_ignoring_locations(type_2),
             _ => false,
         }
     }
@@ -67,10 +84,14 @@ impl fmt::Display for Argument {
 #[cfg(test)]
 impl Argument {
     pub fn const_self() -> Self {
-        Argument::ConstSelf { location: ItemLocation::test() }
+        Argument::ConstSelf {
+            location: ItemLocation::test(),
+        }
     }
     pub fn mut_self() -> Self {
-        Argument::MutSelf { location: ItemLocation::test() }
+        Argument::MutSelf {
+            location: ItemLocation::test(),
+        }
     }
     pub fn field(name: impl Into<String>, type_ref: impl Into<Type>) -> Self {
         Argument::Field {
