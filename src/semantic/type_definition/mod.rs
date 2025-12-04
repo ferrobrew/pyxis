@@ -258,7 +258,7 @@ pub fn build(
             attributes,
             doc_comments,
             ..
-        } = &statement.value;
+        } = statement;
 
         match field {
             grammar::TypeField::Field(visibility, field_ident, type_) => {

@@ -121,6 +121,14 @@ pub enum TypeDefItem {
     Comment(Comment),
     Statement(TypeStatement),
 }
+impl HasLocation for TypeDefItem {
+    fn location(&self) -> &ItemLocation {
+        match self {
+            TypeDefItem::Comment(c) => c.location(),
+            TypeDefItem::Statement(s) => s.location(),
+        }
+    }
+}
 #[cfg(test)]
 impl StripLocations for TypeDefItem {
     fn strip_locations(&self) -> Self {
@@ -201,7 +209,7 @@ impl TypeStatement {
 }
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TypeDefinition {
-    pub items: Vec<Located<TypeDefItem>>,
+    pub items: Vec<TypeDefItem>,
     pub attributes: Attributes,
     pub inline_trailing_comments: Vec<Comment>, // Comments on same line as attributes
     pub following_comments: Vec<Comment>,       // Comments on lines after attributes
@@ -213,15 +221,9 @@ impl StripLocations for TypeDefinition {
             items: self
                 .items
                 .iter()
-                .filter_map(|item| {
-                    item.strip_locations()
-                        .map(|item| match item {
-                            TypeDefItem::Comment(_) => None, // Filter out comments
-                            TypeDefItem::Statement(s) => {
-                                Some(TypeDefItem::Statement(s.strip_locations()))
-                            }
-                        })
-                        .transpose()
+                .filter_map(|item| match item {
+                    TypeDefItem::Comment(_) => None, // Filter out comments
+                    TypeDefItem::Statement(s) => Some(TypeDefItem::Statement(s.strip_locations())),
                 })
                 .collect(),
             attributes: self.attributes.strip_locations(),
@@ -234,11 +236,7 @@ impl StripLocations for TypeDefinition {
 impl TypeDefinition {
     pub fn new(statements: impl IntoIterator<Item = TypeStatement>) -> Self {
         Self {
-            items: statements
-                .into_iter()
-                .map(TypeDefItem::Statement)
-                .map(Located::test)
-                .collect(),
+            items: statements.into_iter().map(TypeDefItem::Statement).collect(),
             attributes: Default::default(),
             inline_trailing_comments: Vec::new(),
             following_comments: Vec::new(),
@@ -258,14 +256,10 @@ impl TypeDefinition {
     }
 }
 impl TypeDefinition {
-    pub fn statements(&self) -> impl Iterator<Item = Located<&TypeStatement>> {
-        self.items.iter().filter_map(|item| {
-            item.as_ref()
-                .map(|item| match item {
-                    TypeDefItem::Statement(stmt) => Some(stmt),
-                    _ => None,
-                })
-                .transpose()
+    pub fn statements(&self) -> impl Iterator<Item = &TypeStatement> {
+        self.items.iter().filter_map(|item| match item {
+            TypeDefItem::Statement(stmt) => Some(stmt),
+            _ => None,
         })
     }
 }
@@ -276,6 +270,14 @@ impl TypeDefinition {
 pub enum EnumDefItem {
     Comment(Comment),
     Statement(EnumStatement),
+}
+impl HasLocation for EnumDefItem {
+    fn location(&self) -> &ItemLocation {
+        match self {
+            EnumDefItem::Comment(c) => c.location(),
+            EnumDefItem::Statement(s) => s.location(),
+        }
+    }
 }
 #[cfg(test)]
 impl StripLocations for EnumDefItem {
@@ -357,7 +359,7 @@ impl EnumStatement {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct EnumDefinition {
     pub type_: Type,
-    pub items: Vec<Located<EnumDefItem>>,
+    pub items: Vec<EnumDefItem>,
     pub attributes: Attributes,
     pub inline_trailing_comments: Vec<Comment>, // Comments on same line as attributes
     pub following_comments: Vec<Comment>,       // Comments on lines after attributes
@@ -370,15 +372,9 @@ impl StripLocations for EnumDefinition {
             items: self
                 .items
                 .iter()
-                .filter_map(|item| {
-                    item.strip_locations()
-                        .map(|item| match item {
-                            EnumDefItem::Comment(_) => None, // Filter out comments
-                            EnumDefItem::Statement(s) => {
-                                Some(EnumDefItem::Statement(s.strip_locations()))
-                            }
-                        })
-                        .transpose()
+                .filter_map(|item| match item {
+                    EnumDefItem::Comment(_) => None, // Filter out comments
+                    EnumDefItem::Statement(s) => Some(EnumDefItem::Statement(s.strip_locations())),
                 })
                 .collect(),
             attributes: self.attributes.strip_locations(),
@@ -396,11 +392,7 @@ impl EnumDefinition {
     ) -> Self {
         Self {
             type_,
-            items: statements
-                .into_iter()
-                .map(EnumDefItem::Statement)
-                .map(Located::test)
-                .collect(),
+            items: statements.into_iter().map(EnumDefItem::Statement).collect(),
             attributes: Attributes::from_iter(attributes),
             inline_trailing_comments: Vec::new(),
             following_comments: Vec::new(),
@@ -420,14 +412,10 @@ impl EnumDefinition {
     }
 }
 impl EnumDefinition {
-    pub fn statements(&self) -> impl Iterator<Item = Located<&EnumStatement>> {
-        self.items.iter().filter_map(|item| {
-            item.as_ref()
-                .map(|item| match item {
-                    EnumDefItem::Statement(stmt) => Some(stmt),
-                    _ => None,
-                })
-                .transpose()
+    pub fn statements(&self) -> impl Iterator<Item = &EnumStatement> {
+        self.items.iter().filter_map(|item| match item {
+            EnumDefItem::Statement(stmt) => Some(stmt),
+            _ => None,
         })
     }
 }
@@ -438,6 +426,14 @@ impl EnumDefinition {
 pub enum BitflagsDefItem {
     Comment(Comment),
     Statement(BitflagsStatement),
+}
+impl HasLocation for BitflagsDefItem {
+    fn location(&self) -> &ItemLocation {
+        match self {
+            BitflagsDefItem::Comment(c) => c.location(),
+            BitflagsDefItem::Statement(s) => s.location(),
+        }
+    }
 }
 #[cfg(test)]
 impl StripLocations for BitflagsDefItem {
@@ -518,7 +514,7 @@ impl BitflagsStatement {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct BitflagsDefinition {
     pub type_: Type,
-    pub items: Vec<Located<BitflagsDefItem>>,
+    pub items: Vec<BitflagsDefItem>,
     pub attributes: Attributes,
     pub inline_trailing_comments: Vec<Comment>, // Comments on same line as attributes
     pub following_comments: Vec<Comment>,       // Comments on lines after attributes
@@ -531,15 +527,11 @@ impl StripLocations for BitflagsDefinition {
             items: self
                 .items
                 .iter()
-                .filter_map(|item| {
-                    item.strip_locations()
-                        .map(|item| match item {
-                            BitflagsDefItem::Comment(_) => None, // Filter out comments
-                            BitflagsDefItem::Statement(s) => {
-                                Some(BitflagsDefItem::Statement(s.strip_locations()))
-                            }
-                        })
-                        .transpose()
+                .filter_map(|item| match item {
+                    BitflagsDefItem::Comment(_) => None, // Filter out comments
+                    BitflagsDefItem::Statement(s) => {
+                        Some(BitflagsDefItem::Statement(s.strip_locations()))
+                    }
                 })
                 .collect(),
             attributes: self.attributes.strip_locations(),
@@ -560,7 +552,6 @@ impl BitflagsDefinition {
             items: statements
                 .into_iter()
                 .map(BitflagsDefItem::Statement)
-                .map(Located::test)
                 .collect(),
             attributes: Attributes::from_iter(attributes),
             inline_trailing_comments: Vec::new(),
@@ -581,14 +572,10 @@ impl BitflagsDefinition {
     }
 }
 impl BitflagsDefinition {
-    pub fn statements(&self) -> impl Iterator<Item = Located<&BitflagsStatement>> {
-        self.items.iter().filter_map(|item| {
-            item.as_ref()
-                .map(|item| match item {
-                    BitflagsDefItem::Statement(stmt) => Some(stmt),
-                    _ => None,
-                })
-                .transpose()
+    pub fn statements(&self) -> impl Iterator<Item = &BitflagsStatement> {
+        self.items.iter().filter_map(|item| match item {
+            BitflagsDefItem::Statement(stmt) => Some(stmt),
+            _ => None,
         })
     }
 }
@@ -821,7 +808,7 @@ impl Parser {
         }
     }
 
-    pub(crate) fn parse_type_def_items(&mut self) -> Result<Vec<Located<TypeDefItem>>, ParseError> {
+    pub(crate) fn parse_type_def_items(&mut self) -> Result<Vec<TypeDefItem>, ParseError> {
         let mut items = Vec::new();
 
         while !matches!(self.peek(), TokenKind::RBrace) {
@@ -831,8 +818,7 @@ impl Parser {
                 TokenKind::Comment(_) | TokenKind::MultiLineComment(_)
             ) {
                 if let Some(comment) = self.collect_comment() {
-                    let location = comment.location().clone();
-                    items.push(Located::new(TypeDefItem::Comment(comment), location));
+                    items.push(TypeDefItem::Comment(comment));
                 }
             }
 
@@ -865,8 +851,7 @@ impl Parser {
                 }
             }
 
-            let location = stmt.location.clone();
-            items.push(Located::new(TypeDefItem::Statement(stmt), location));
+            items.push(TypeDefItem::Statement(stmt));
         }
 
         Ok(items)
@@ -927,7 +912,7 @@ impl Parser {
         }
     }
 
-    pub(crate) fn parse_enum_def_items(&mut self) -> Result<Vec<Located<EnumDefItem>>, ParseError> {
+    pub(crate) fn parse_enum_def_items(&mut self) -> Result<Vec<EnumDefItem>, ParseError> {
         let mut items = Vec::new();
 
         while !matches!(self.peek(), TokenKind::RBrace) {
@@ -937,8 +922,7 @@ impl Parser {
                 TokenKind::Comment(_) | TokenKind::MultiLineComment(_)
             ) {
                 if let Some(comment) = self.collect_comment() {
-                    let location = comment.location().clone();
-                    items.push(Located::new(EnumDefItem::Comment(comment), location));
+                    items.push(EnumDefItem::Comment(comment));
                 }
             }
 
@@ -971,8 +955,7 @@ impl Parser {
                 }
             }
 
-            let location = stmt.location.clone();
-            items.push(Located::new(EnumDefItem::Statement(stmt), location));
+            items.push(EnumDefItem::Statement(stmt));
         }
 
         Ok(items)
@@ -1014,9 +997,7 @@ impl Parser {
         })
     }
 
-    pub(crate) fn parse_bitflags_def_items(
-        &mut self,
-    ) -> Result<Vec<Located<BitflagsDefItem>>, ParseError> {
+    pub(crate) fn parse_bitflags_def_items(&mut self) -> Result<Vec<BitflagsDefItem>, ParseError> {
         let mut items = Vec::new();
 
         while !matches!(self.peek(), TokenKind::RBrace) {
@@ -1026,8 +1007,7 @@ impl Parser {
                 TokenKind::Comment(_) | TokenKind::MultiLineComment(_)
             ) {
                 if let Some(comment) = self.collect_comment() {
-                    let location = comment.location().clone();
-                    items.push(Located::new(BitflagsDefItem::Comment(comment), location));
+                    items.push(BitflagsDefItem::Comment(comment));
                 }
             }
 
@@ -1060,8 +1040,7 @@ impl Parser {
                 }
             }
 
-            let location = stmt.location.clone();
-            items.push(Located::new(BitflagsDefItem::Statement(stmt), location));
+            items.push(BitflagsDefItem::Statement(stmt));
         }
 
         Ok(items)

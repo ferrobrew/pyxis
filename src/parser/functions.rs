@@ -145,6 +145,14 @@ pub enum ImplItem {
     Comment(Comment),
     Function(Function),
 }
+impl HasLocation for ImplItem {
+    fn location(&self) -> &ItemLocation {
+        match self {
+            ImplItem::Comment(c) => c.location(),
+            ImplItem::Function(f) => f.location(),
+        }
+    }
+}
 #[cfg(test)]
 impl StripLocations for ImplItem {
     fn strip_locations(&self) -> Self {
@@ -158,7 +166,7 @@ impl StripLocations for ImplItem {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FunctionBlock {
     pub name: Ident,
-    pub items: Vec<Located<ImplItem>>,
+    pub items: Vec<ImplItem>,
     pub attributes: Attributes,
 }
 #[cfg(test)]
@@ -169,14 +177,9 @@ impl StripLocations for FunctionBlock {
             items: self
                 .items
                 .iter()
-                .filter_map(|item| {
-                    item.strip_locations()
-                        .map(|item| match item {
-                            ImplItem::Comment(_) => None, // Filter out comments
-                            ImplItem::Function(f) => Some(ImplItem::Function(f.strip_locations())),
-                        })
-                        .strip_locations()
-                        .transpose()
+                .filter_map(|item| match item {
+                    ImplItem::Comment(_) => None, // Filter out comments
+                    ImplItem::Function(f) => Some(ImplItem::Function(f.strip_locations())),
                 })
                 .collect(),
             attributes: self.attributes.strip_locations(),
@@ -188,11 +191,7 @@ impl FunctionBlock {
     pub fn new(name: impl Into<Ident>, functions: impl IntoIterator<Item = Function>) -> Self {
         Self {
             name: name.into(),
-            items: functions
-                .into_iter()
-                .map(ImplItem::Function)
-                .map(Located::test)
-                .collect(),
+            items: functions.into_iter().map(ImplItem::Function).collect(),
             attributes: Default::default(),
         }
     }
@@ -203,7 +202,7 @@ impl FunctionBlock {
 }
 impl FunctionBlock {
     pub fn functions(&self) -> impl Iterator<Item = &Function> {
-        self.items.iter().filter_map(|item| match &item.value {
+        self.items.iter().filter_map(|item| match item {
             ImplItem::Function(func) => Some(func),
             _ => None,
         })
@@ -231,8 +230,7 @@ impl Parser {
                 TokenKind::Comment(_) | TokenKind::MultiLineComment(_)
             ) {
                 if let Some(comment) = self.collect_comment() {
-                    let location = comment.location().clone();
-                    items.push(Located::new(ImplItem::Comment(comment), location));
+                    items.push(ImplItem::Comment(comment));
                 }
             }
 
@@ -241,8 +239,7 @@ impl Parser {
             }
 
             let function = self.parse_function()?;
-            let location = function.location.clone();
-            items.push(Located::new(ImplItem::Function(function), location));
+            items.push(ImplItem::Function(function));
         }
 
         let last_token = self.expect(TokenKind::RBrace)?;

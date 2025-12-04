@@ -121,7 +121,7 @@ pub fn build(
             expr,
             attributes,
             ..
-        } = &statement.value;
+        } = statement;
         let value = match expr {
             Some(grammar::Expr::IntLiteral { value, .. }) => *value,
             Some(e) => {
