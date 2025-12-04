@@ -12,6 +12,7 @@ use super::{
     core::Parser,
     expressions::{Expr, StringFormat},
     module::ModuleItem,
+    paths::UseTree,
     types::{Ident, Type},
 };
 
@@ -136,9 +137,9 @@ impl ExternValue {
 }
 
 impl Parser {
-    /// Parse a use statement, potentially with braced imports.
-    /// Returns a Vec because `use a::{B, C};` expands to multiple Use items.
-    pub(crate) fn parse_use(&mut self) -> Result<Vec<ModuleItem>, ParseError> {
+    /// Parse a use statement, potentially with braced imports (including nested).
+    /// Returns a single ModuleItem containing a UseTree.
+    pub(crate) fn parse_use(&mut self) -> Result<ModuleItem, ParseError> {
         let first_token = self.expect(TokenKind::Use)?;
 
         // Check for super keyword (not supported yet)
@@ -150,27 +151,36 @@ impl Parser {
             });
         }
 
-        let base_path = self.parse_item_path()?;
+        let tree = self.parse_use_tree()?;
+        let last_token = self.expect(TokenKind::Semi)?;
+        let location = self.item_location_from_token_range(&first_token, &last_token);
 
-        // Check for braced imports: use path::{Item1, Item2};
+        Ok(ModuleItem::Use { tree, location })
+    }
+
+    /// Parse a use tree (recursive for nested braced imports).
+    /// Handles: `path::Item`, `path::{A, B}`, `path::{a::{X, Y}, B}`
+    fn parse_use_tree(&mut self) -> Result<UseTree, ParseError> {
+        // Parse the path prefix (may be empty for top-level braces, or full path)
+        let prefix = self.parse_item_path()?;
+
+        // Check for braced imports: path::{...}
         // Note: parse_item_path already consumed the :: before {, so we just check for {
         if matches!(self.peek(), TokenKind::LBrace) {
+            let brace_start = self.current().location.span.start;
             self.advance(); // consume {
 
             let mut items = Vec::new();
 
-            // Parse comma-separated identifiers
+            // Parse comma-separated use trees
             loop {
-                // Skip any leading whitespace/newlines (handled by tokenizer)
                 if matches!(self.peek(), TokenKind::RBrace) {
                     break;
                 }
 
-                // Parse item name (potentially with generics)
-                let item_path = self.parse_item_path()?;
-                let full_path = base_path.iter().chain(item_path.iter()).cloned().collect();
-
-                items.push(full_path);
+                // Recursively parse each item as a use tree (supports nesting)
+                let item = self.parse_use_tree()?;
+                items.push(item);
 
                 // Check for comma or end of list
                 if matches!(self.peek(), TokenKind::Comma) {
@@ -180,25 +190,18 @@ impl Parser {
                 }
             }
 
-            self.expect(TokenKind::RBrace)?;
-            let last_token = self.expect(TokenKind::Semi)?;
+            let rbrace = self.expect(TokenKind::RBrace)?;
+            let end_pos = rbrace.location.span.end;
+            let location = self.item_location_from_locations(brace_start, end_pos);
 
-            let location = self.item_location_from_token_range(&first_token, &last_token);
-            Ok(items
-                .into_iter()
-                .map(|path| ModuleItem::Use {
-                    path,
-                    location: location.clone(),
-                })
-                .collect())
-        } else {
-            // Simple use statement: use path::Item;
-            let last_token = self.expect(TokenKind::Semi)?;
-            let location = self.item_location_from_token_range(&first_token, &last_token);
-            Ok(vec![ModuleItem::Use {
-                path: base_path,
+            Ok(UseTree::Group {
+                prefix,
+                items,
                 location,
-            }])
+            })
+        } else {
+            // Simple path: just return it
+            Ok(UseTree::Path(prefix))
         }
     }
 
@@ -420,7 +423,7 @@ mod tests {
     use crate::{
         grammar::{ModuleItem, StringFormat, test_aliases::*},
         parser::{ParseError, parse_str_for_tests},
-        span::StripLocations,
+        span::{ItemLocation, StripLocations},
     };
     use pretty_assertions::assert_eq;
 
@@ -454,7 +457,11 @@ mod tests {
         "#;
 
         let ast = M::new()
-            .with_uses([IP::from("math::Matrix4"), IP::from("math::Vector3")])
+            .with_use_trees([UT::Group {
+                prefix: IP::from("math"),
+                items: vec![UT::Path(IP::from("Matrix4")), UT::Path(IP::from("Vector3"))],
+                location: ItemLocation::test(),
+            }])
             .with_definitions([ID::new(
                 (V::Private, "Test"),
                 TD::new([
@@ -472,8 +479,14 @@ mod tests {
         use types::{SharedPtr<T>, Vec<u32>};
         "#;
 
-        let ast =
-            M::new().with_uses([IP::from("types::SharedPtr<T>"), IP::from("types::Vec<u32>")]);
+        let ast = M::new().with_use_trees([UT::Group {
+            prefix: IP::from("types"),
+            items: vec![
+                UT::Path(IP::from("SharedPtr<T>")),
+                UT::Path(IP::from("Vec<u32>")),
+            ],
+            location: ItemLocation::test(),
+        }]);
 
         assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
     }
@@ -484,7 +497,11 @@ mod tests {
         use math::{Matrix4};
         "#;
 
-        let ast = M::new().with_uses([IP::from("math::Matrix4")]);
+        let ast = M::new().with_use_trees([UT::Group {
+            prefix: IP::from("math"),
+            items: vec![UT::Path(IP::from("Matrix4"))],
+            location: ItemLocation::test(),
+        }]);
 
         assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
     }
@@ -495,7 +512,11 @@ mod tests {
         use math::{Matrix4, Vector3,};
         "#;
 
-        let ast = M::new().with_uses([IP::from("math::Matrix4"), IP::from("math::Vector3")]);
+        let ast = M::new().with_use_trees([UT::Group {
+            prefix: IP::from("math"),
+            items: vec![UT::Path(IP::from("Matrix4")), UT::Path(IP::from("Vector3"))],
+            location: ItemLocation::test(),
+        }]);
 
         assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
     }
@@ -506,10 +527,11 @@ mod tests {
         use graphics::math::{Matrix4, Vector3};
         "#;
 
-        let ast = M::new().with_uses([
-            IP::from("graphics::math::Matrix4"),
-            IP::from("graphics::math::Vector3"),
-        ]);
+        let ast = M::new().with_use_trees([UT::Group {
+            prefix: IP::from("graphics::math"),
+            items: vec![UT::Path(IP::from("Matrix4")), UT::Path(IP::from("Vector3"))],
+            location: ItemLocation::test(),
+        }]);
 
         assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
     }
@@ -520,9 +542,58 @@ mod tests {
         use math::{};
         "#;
 
-        let ast = M::new().with_uses([]);
+        let ast = M::new().with_use_trees([UT::Group {
+            prefix: IP::from("math"),
+            items: vec![],
+            location: ItemLocation::test(),
+        }]);
 
         assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
+    }
+
+    #[test]
+    fn can_parse_nested_braced_imports() {
+        let text = r#"
+        use types::{math::{Vector3, Matrix4}, Game};
+        "#;
+
+        let ast = M::new().with_use_trees([UT::Group {
+            prefix: IP::from("types"),
+            items: vec![
+                UT::Group {
+                    prefix: IP::from("math"),
+                    items: vec![UT::Path(IP::from("Vector3")), UT::Path(IP::from("Matrix4"))],
+                    location: ItemLocation::test(),
+                },
+                UT::Path(IP::from("Game")),
+            ],
+            location: ItemLocation::test(),
+        }]);
+
+        assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
+    }
+
+    #[test]
+    fn can_flatten_nested_braced_imports() {
+        // Test that UseTree::flatten() works correctly for nested imports
+        let tree = UT::Group {
+            prefix: IP::from("types"),
+            items: vec![
+                UT::Group {
+                    prefix: IP::from("math"),
+                    items: vec![UT::Path(IP::from("Vector3")), UT::Path(IP::from("Matrix4"))],
+                    location: ItemLocation::test(),
+                },
+                UT::Path(IP::from("Game")),
+            ],
+            location: ItemLocation::test(),
+        };
+
+        let flattened = tree.flatten();
+        assert_eq!(flattened.len(), 3);
+        assert_eq!(flattened[0], IP::from("types::math::Vector3"));
+        assert_eq!(flattened[1], IP::from("types::math::Matrix4"));
+        assert_eq!(flattened[2], IP::from("types::Game"));
     }
 
     #[test]

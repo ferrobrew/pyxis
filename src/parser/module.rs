@@ -13,9 +13,12 @@ use super::{
     external::{Backend, ExternValue},
     functions::{Function, FunctionBlock},
     items::{Comment, ItemDefinition},
-    paths::ItemPath,
+    paths::UseTree,
     types::Ident,
 };
+
+#[cfg(test)]
+use super::paths::ItemPath;
 
 /// Module-level items (preserves ordering and comments)
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -24,7 +27,7 @@ pub enum ModuleItem {
         comment: Comment,
     },
     Use {
-        path: ItemPath,
+        tree: UseTree,
         location: ItemLocation,
     },
     ExternType {
@@ -70,8 +73,8 @@ impl StripLocations for ModuleItem {
             ModuleItem::Comment { comment } => ModuleItem::Comment {
                 comment: comment.strip_locations(),
             },
-            ModuleItem::Use { path, .. } => ModuleItem::Use {
-                path: path.strip_locations(),
+            ModuleItem::Use { tree, .. } => ModuleItem::Use {
+                tree: tree.strip_locations(),
                 location: ItemLocation::test(),
             },
             ModuleItem::ExternType {
@@ -134,10 +137,22 @@ impl StripLocations for Module {
 }
 #[cfg(test)]
 impl Module {
+    /// Add simple path-based use statements (convenience for tests)
     pub fn with_uses(mut self, uses: impl IntoIterator<Item = ItemPath>) -> Self {
         for path in uses.into_iter() {
             self.items.push(ModuleItem::Use {
-                path,
+                tree: UseTree::Path(path),
+                location: ItemLocation::test(),
+            });
+        }
+        self
+    }
+
+    /// Add use statements with full UseTree support (for braced import tests)
+    pub fn with_use_trees(mut self, trees: impl IntoIterator<Item = UseTree>) -> Self {
+        for tree in trees.into_iter() {
+            self.items.push(ModuleItem::Use {
+                tree,
                 location: ItemLocation::test(),
             });
         }
@@ -274,9 +289,9 @@ impl Parser {
                 break;
             }
 
-            // Handle use statements specially since they can expand to multiple items
+            // Handle use statements specially
             if matches!(self.peek(), TokenKind::Use) {
-                items.extend(self.parse_use()?);
+                items.push(self.parse_use()?);
             } else {
                 // Parse other module-level items
                 items.push(self.parse_module_item()?);

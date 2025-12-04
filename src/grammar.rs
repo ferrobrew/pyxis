@@ -10,7 +10,7 @@ pub use crate::parser::{
         TypeDefinition, TypeField, TypeStatement,
     },
     module::{Module, ModuleItem},
-    paths::{ItemPath, ItemPathSegment},
+    paths::{ItemPath, ItemPathSegment, UseTree},
     types::{Ident, Type},
 };
 
@@ -37,6 +37,7 @@ pub mod test_aliases {
     pub type F = super::Function;
     pub type FB = super::FunctionBlock;
     pub type IP = super::ItemPath;
+    pub type UT = super::UseTree;
     pub type B = super::Backend;
     pub type V = super::Visibility;
     pub type EV = super::ExternValue;

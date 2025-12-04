@@ -1,11 +1,101 @@
 use std::{fmt, path::Path};
 
-use crate::{span::EqualsIgnoringLocations, tokenizer::TokenKind};
+use crate::{
+    span::{EqualsIgnoringLocations, ItemLocation},
+    tokenizer::TokenKind,
+};
 
 #[cfg(test)]
 use crate::span::StripLocations;
 
 use super::{ParseError, core::Parser};
+
+/// Represents a use tree for braced imports.
+/// Examples:
+/// - `Vector3` → `UseTree::Path(["Vector3"])`
+/// - `math::{Vector3, Matrix4}` → `UseTree::Group { prefix: ["math"], items: [Path(["Vector3"]), Path(["Matrix4"])] }`
+/// - `types::{math::{V3, V4}, Game}` → nested groups
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum UseTree {
+    /// A leaf path like `Vector3` or `math::Vector3`
+    Path(ItemPath),
+    /// A group like `{A, B}` or `path::{A, B}`
+    Group {
+        prefix: ItemPath,
+        items: Vec<UseTree>,
+        location: ItemLocation,
+    },
+}
+
+impl UseTree {
+    /// Flatten this UseTree into a list of complete ItemPaths.
+    /// For example, `math::{Vector3, Matrix4}` becomes `["math::Vector3", "math::Matrix4"]`
+    pub fn flatten(&self) -> Vec<ItemPath> {
+        match self {
+            UseTree::Path(path) => vec![path.clone()],
+            UseTree::Group { prefix, items, .. } => items
+                .iter()
+                .flat_map(|item| {
+                    item.flatten().into_iter().map(|item_path| {
+                        prefix
+                            .iter()
+                            .chain(item_path.iter())
+                            .cloned()
+                            .collect::<ItemPath>()
+                    })
+                })
+                .collect(),
+        }
+    }
+
+    /// Get the location of this UseTree
+    pub fn location(&self) -> &ItemLocation {
+        match self {
+            UseTree::Path(_) => {
+                // For paths, we don't have a separate location - use an internal location
+                // This is a bit of a hack but paths don't carry locations
+                static INTERNAL: std::sync::OnceLock<ItemLocation> = std::sync::OnceLock::new();
+                INTERNAL.get_or_init(ItemLocation::internal)
+            }
+            UseTree::Group { location, .. } => location,
+        }
+    }
+}
+
+#[cfg(test)]
+impl StripLocations for UseTree {
+    fn strip_locations(&self) -> Self {
+        match self {
+            UseTree::Path(path) => UseTree::Path(path.strip_locations()),
+            UseTree::Group { prefix, items, .. } => UseTree::Group {
+                prefix: prefix.strip_locations(),
+                items: items.iter().map(|i| i.strip_locations()).collect(),
+                location: ItemLocation::test(),
+            },
+        }
+    }
+}
+
+impl EqualsIgnoringLocations for UseTree {
+    fn equals_ignoring_locations(&self, other: &Self) -> bool {
+        match (self, other) {
+            (UseTree::Path(a), UseTree::Path(b)) => a.equals_ignoring_locations(b),
+            (
+                UseTree::Group {
+                    prefix: p1,
+                    items: i1,
+                    ..
+                },
+                UseTree::Group {
+                    prefix: p2,
+                    items: i2,
+                    ..
+                },
+            ) => p1.equals_ignoring_locations(p2) && i1.equals_ignoring_locations(i2),
+            _ => false,
+        }
+    }
+}
 
 #[derive(PartialEq, Hash, Eq, Clone, Debug, PartialOrd, Ord)]
 pub struct ItemPathSegment(String);

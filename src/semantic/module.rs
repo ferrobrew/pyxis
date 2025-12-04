@@ -95,11 +95,11 @@ impl Module {
 
     pub fn scope(&self) -> Vec<ItemPath> {
         std::iter::once(self.path.clone())
-            .chain(self.uses().filter_map(|u| {
-                if let grammar::ModuleItem::Use { path, .. } = u {
-                    Some(path.clone())
+            .chain(self.uses().flat_map(|u| {
+                if let grammar::ModuleItem::Use { tree, .. } = u {
+                    tree.flatten()
                 } else {
-                    None
+                    vec![]
                 }
             }))
             .collect()
