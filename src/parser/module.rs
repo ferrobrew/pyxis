@@ -348,14 +348,18 @@ impl Parser {
                                 let location = f.location.clone();
                                 Located::new(ModuleItem::Function(f), location)
                             }),
-                            _ => self
-                                .parse_item_definition()
-                                .map(|l| l.map(ModuleItem::Definition)),
+                            _ => self.parse_item_definition().map(|def| {
+                                let location = def.location.clone();
+                                Located::new(ModuleItem::Definition(def), location)
+                            }),
                         }
                     }
-                    TokenKind::Type | TokenKind::Enum | TokenKind::Bitflags => self
-                        .parse_item_definition()
-                        .map(|l| l.map(ModuleItem::Definition)),
+                    TokenKind::Type | TokenKind::Enum | TokenKind::Bitflags => {
+                        self.parse_item_definition().map(|def| {
+                            let location = def.location.clone();
+                            Located::new(ModuleItem::Definition(def), location)
+                        })
+                    }
                     TokenKind::Impl => self.parse_impl_block().map(|l| l.map(ModuleItem::Impl)),
                     TokenKind::Fn => self.parse_function().map(|f| {
                         let location = f.location.clone();
@@ -408,13 +412,18 @@ impl Parser {
                 ) {
                     self.parse_extern_type()
                 } else {
-                    self.parse_item_definition()
-                        .map(|l| l.map(ModuleItem::Definition))
+                    self.parse_item_definition().map(|def| {
+                        let location = def.location.clone();
+                        Located::new(ModuleItem::Definition(def), location)
+                    })
                 }
             }
-            TokenKind::Pub | TokenKind::Type | TokenKind::Enum | TokenKind::Bitflags => self
-                .parse_item_definition()
-                .map(|l| l.map(ModuleItem::Definition)),
+            TokenKind::Pub | TokenKind::Type | TokenKind::Enum | TokenKind::Bitflags => {
+                self.parse_item_definition().map(|def| {
+                    let location = def.location.clone();
+                    Located::new(ModuleItem::Definition(def), location)
+                })
+            }
             TokenKind::Impl => self.parse_impl_block().map(|l| l.map(ModuleItem::Impl)),
             TokenKind::Fn => {
                 // Freestanding function with attributes
