@@ -5,10 +5,7 @@
 /// - Validating the AST design
 /// - Formatting/normalizing code
 /// - Testing round-trip parsing
-use crate::{
-    grammar::{ItemDefinitionInner, *},
-    span::Located,
-};
+use crate::grammar::{ItemDefinitionInner, *};
 use std::fmt::Write;
 
 pub struct PrettyPrinter {
@@ -78,14 +75,11 @@ impl PrettyPrinter {
         // Print items with lookahead for proper spacing
         for (i, item) in module.items.iter().enumerate() {
             let next_item = module.items.get(i + 1);
-            self.print_module_item(&item.value, next_item.as_ref().map(|i| &i.value));
+            self.print_module_item(item, next_item);
 
             // Add blank line between regular comment and definition with both doc comments and attributes
-            if let ModuleItem::Comment(_comment) = &item.value
-                && let Some(Located {
-                    value: ModuleItem::Definition(def),
-                    location: _,
-                }) = &next_item
+            if let ModuleItem::Comment { .. } = item
+                && let Some(ModuleItem::Definition { definition: def }) = next_item
             {
                 // Add blank line if definition has both doc comments and attributes
                 let has_attrs = match &def.inner {
@@ -105,51 +99,56 @@ impl PrettyPrinter {
 
     fn print_module_item(&mut self, item: &ModuleItem, next_item: Option<&ModuleItem>) {
         match item {
-            ModuleItem::Comment(comment) => {
+            ModuleItem::Comment { comment } => {
                 self.print_comment(comment);
                 // Don't add blank line after comments - they group with the following item
             }
-            ModuleItem::Use(path) => {
+            ModuleItem::Use { path, .. } => {
                 self.write_indent();
                 let path_str = self.format_item_path(path);
                 writeln!(&mut self.output, "use {path_str};").unwrap();
                 // Only add blank line if next item is not a use statement
-                if !matches!(next_item, Some(ModuleItem::Use(_))) {
+                if !matches!(next_item, Some(ModuleItem::Use { .. })) {
                     self.writeln("");
                 }
             }
-            ModuleItem::ExternType(name, attrs, doc_comments) => {
+            ModuleItem::ExternType {
+                name,
+                attributes,
+                doc_comments,
+                ..
+            } => {
                 // Print doc comments
                 for doc in doc_comments {
                     self.write_indent();
                     writeln!(&mut self.output, "///{doc}").unwrap();
                 }
-                self.print_attributes(attrs);
+                self.print_attributes(attributes);
                 self.write_indent();
                 writeln!(&mut self.output, "extern type {name};").unwrap();
                 self.writeln("");
             }
-            ModuleItem::Backend(backend) => {
+            ModuleItem::Backend { backend } => {
                 self.print_backend(backend);
                 self.writeln("");
             }
-            ModuleItem::Definition(def) => {
-                self.print_item_definition(def);
+            ModuleItem::Definition { definition } => {
+                self.print_item_definition(definition);
                 // Don't add blank line if next item is an impl block
-                if !matches!(next_item, Some(ModuleItem::Impl(_))) {
+                if !matches!(next_item, Some(ModuleItem::Impl { .. })) {
                     self.writeln("");
                 }
             }
-            ModuleItem::Impl(impl_block) => {
+            ModuleItem::Impl { impl_block } => {
                 self.print_impl_block(impl_block);
                 self.writeln("");
             }
-            ModuleItem::ExternValue(extern_val) => {
-                self.print_extern_value(extern_val);
+            ModuleItem::ExternValue { extern_value } => {
+                self.print_extern_value(extern_value);
                 self.writeln("");
             }
-            ModuleItem::Function(func) => {
-                self.print_function(func);
+            ModuleItem::Function { function } => {
+                self.print_function(function);
                 self.writeln("");
             }
         }

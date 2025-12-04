@@ -114,20 +114,18 @@ impl SemanticState {
                     location: ev.location.clone(),
                 })?;
 
-                Ok(Located::new(
-                    ExternValue {
-                        visibility: Visibility::from(ev.visibility),
-                        name: name.as_str().to_owned(),
-                        type_: Type::Unresolved(ev.type_.clone()),
-                        address,
-                    },
-                    ev.location.clone(),
-                ))
+                Ok(ExternValue {
+                    visibility: Visibility::from(ev.visibility),
+                    name: name.as_str().to_owned(),
+                    type_: Type::Unresolved(ev.type_.clone()),
+                    address,
+                    location: ev.location.clone(),
+                })
             })
             .collect::<Result<Vec<_>>>()?;
 
-        let impls: Vec<_> = module.impls().map(|i| i.cloned()).collect();
-        let backends: Vec<_> = module.backends().map(|b| b.cloned()).collect();
+        let impls: Vec<_> = module.impls().cloned().collect();
+        let backends: Vec<_> = module.backends().cloned().collect();
 
         self.modules.insert(
             path.clone(),
@@ -147,7 +145,7 @@ impl SemanticState {
                 ItemDefinition {
                     visibility: definition.visibility.into(),
                     path: new_path,
-                    state: ItemState::Unresolved(definition.cloned()),
+                    state: ItemState::Unresolved(definition.clone()),
                     category: ItemCategory::Defined,
                     predefined: None,
                 },
@@ -155,11 +153,16 @@ impl SemanticState {
             ))?;
         }
 
-        for Located {
-            value: (extern_name, attributes),
-            location: extern_location,
-        } in module.extern_types()
-        {
+        for extern_type in module.extern_types() {
+            let grammar::ModuleItem::ExternType {
+                name: extern_name,
+                attributes,
+                location: extern_location,
+                ..
+            } = extern_type
+            else {
+                continue;
+            };
             let mut size = None;
             let mut alignment = None;
             for attribute in attributes {
@@ -247,24 +250,25 @@ impl SemanticState {
 
                 let visibility: Visibility = definition.visibility.into();
 
+                let def_location = definition.location.clone();
                 let item = match &definition.inner {
                     grammar::ItemDefinitionInner::Type(ty) => type_definition::build(
                         &mut self,
                         resolvee_path,
                         visibility,
-                        definition.as_ref().map(|_| ty),
+                        Located::new(ty, def_location.clone()),
                         &definition.doc_comments,
                     )?,
                     grammar::ItemDefinitionInner::Enum(e) => enum_definition::build(
                         &self,
                         resolvee_path,
-                        definition.as_ref().map(|_| e),
+                        Located::new(e, def_location.clone()),
                         &definition.doc_comments,
                     )?,
                     grammar::ItemDefinitionInner::Bitflags(b) => bitflags_definition::build(
                         &self,
                         resolvee_path,
-                        definition.as_ref().map(|_| b),
+                        Located::new(b, def_location.clone()),
                         &definition.doc_comments,
                     )?,
                 };

@@ -1,5 +1,5 @@
 use crate::{
-    span::{HasLocation, ItemLocation, Located, Span},
+    span::{HasLocation, ItemLocation, Span},
     tokenizer::TokenKind,
 };
 
@@ -12,7 +12,6 @@ use super::{
     core::Parser,
     expressions::{Expr, StringFormat},
     module::ModuleItem,
-    paths::ItemPath,
     types::{Ident, Type},
 };
 
@@ -137,7 +136,7 @@ impl ExternValue {
 }
 
 impl Parser {
-    pub(crate) fn parse_use(&mut self) -> Result<Located<ItemPath>, ParseError> {
+    pub(crate) fn parse_use(&mut self) -> Result<ModuleItem, ParseError> {
         let first_token = self.expect(TokenKind::Use)?;
 
         // Check for super keyword (not supported yet)
@@ -153,10 +152,10 @@ impl Parser {
         let last_token = self.expect(TokenKind::Semi)?;
 
         let location = self.item_location_from_token_range(&first_token, &last_token);
-        Ok(Located::new(path, location))
+        Ok(ModuleItem::Use { path, location })
     }
 
-    pub(crate) fn parse_extern_type(&mut self) -> Result<Located<ModuleItem>, ParseError> {
+    pub(crate) fn parse_extern_type(&mut self) -> Result<ModuleItem, ParseError> {
         let start_pos = self.current().location.span.start;
         let mut doc_comments = self.collect_doc_comments();
         let attributes = if matches!(self.peek(), TokenKind::Hash) {
@@ -219,10 +218,12 @@ impl Parser {
             self.current().location.span.end
         };
         let location = ItemLocation::new(self.filename.clone(), Span::new(start_pos, end_pos));
-        Ok(Located::new(
-            ModuleItem::ExternType(name, attributes, doc_comments),
+        Ok(ModuleItem::ExternType {
+            name,
+            attributes,
+            doc_comments,
             location,
-        ))
+        })
     }
 
     pub(crate) fn parse_extern_value(&mut self) -> Result<ExternValue, ParseError> {
@@ -445,10 +446,15 @@ extern type ManuallyDrop<SharedPtr<u32>>;
         assert_eq!(module.items.len(), 1);
 
         // Verify it's an ExternType with the correct attributes and doc comments
-        match &module.items[0].value {
-            ModuleItem::ExternType(name, attrs, doc_comments) => {
+        match &module.items[0] {
+            ModuleItem::ExternType {
+                name,
+                attributes,
+                doc_comments,
+                ..
+            } => {
                 assert_eq!(name.0, "ManuallyDrop<SharedPtr<u32>>");
-                assert_eq!(attrs.0.len(), 2);
+                assert_eq!(attributes.0.len(), 2);
                 assert_eq!(doc_comments.len(), 4); // 4 lines of doc comment
                 assert!(doc_comments[0].contains("ManuallyDrop<SharedPtr<u32>>"));
                 assert!(doc_comments[1].contains("Drop` implementation"));

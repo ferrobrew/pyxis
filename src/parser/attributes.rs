@@ -550,13 +550,13 @@ pub type AnarkGui {
         assert_eq!(module.items.len(), 1);
 
         // Verify it's the correct type with attributes and fields
-        match &module.items[0].value {
-            ModuleItem::Definition(def) => {
-                assert_eq!(def.name.0, "AnarkGui");
-                assert_eq!(def.visibility, Visibility::Public);
+        match &module.items[0] {
+            ModuleItem::Definition { definition } => {
+                assert_eq!(definition.name.0, "AnarkGui");
+                assert_eq!(definition.visibility, Visibility::Public);
 
                 // Check the type has attributes
-                if let ItemDefinitionInner::Type(td) = &def.inner {
+                if let ItemDefinitionInner::Type(td) = &definition.inner {
                     assert_eq!(td.attributes.0.len(), 3); // singleton, size, align
 
                     // Verify we have vftable and two fields

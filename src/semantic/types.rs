@@ -3,7 +3,7 @@ use std::fmt;
 use crate::{
     grammar::{self, ItemPath},
     semantic::type_registry,
-    span::{EqualsIgnoringLocations, ItemLocation, Located},
+    span::{EqualsIgnoringLocations, HasLocation, ItemLocation},
 };
 
 #[cfg(test)]
@@ -327,7 +327,7 @@ impl ItemStateResolved {
 
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]
 pub enum ItemState {
-    Unresolved(Located<grammar::ItemDefinition>),
+    Unresolved(grammar::ItemDefinition),
     Resolved(ItemStateResolved),
 }
 #[cfg(test)]
@@ -481,12 +481,23 @@ impl ItemDefinition {
 pub struct Backend {
     pub prologue: Option<String>,
     pub epilogue: Option<String>,
+    pub location: ItemLocation,
+}
+impl HasLocation for Backend {
+    fn location(&self) -> &ItemLocation {
+        &self.location
+    }
 }
 impl Backend {
-    pub fn new(prologue: impl Into<Option<String>>, epilogue: impl Into<Option<String>>) -> Self {
+    pub fn new(
+        prologue: impl Into<Option<String>>,
+        epilogue: impl Into<Option<String>>,
+        location: ItemLocation,
+    ) -> Self {
         Backend {
             prologue: prologue.into(),
             epilogue: epilogue.into(),
+            location,
         }
     }
 }
@@ -497,4 +508,10 @@ pub struct ExternValue {
     pub name: String,
     pub type_: Type,
     pub address: usize,
+    pub location: ItemLocation,
+}
+impl HasLocation for ExternValue {
+    fn location(&self) -> &ItemLocation {
+        &self.location
+    }
 }

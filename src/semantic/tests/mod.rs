@@ -1,7 +1,7 @@
 use crate::{
     grammar::test_aliases::{int_literal, *},
     semantic::{error::SemanticError, semantic_state::SemanticState, types::test_aliases::*},
-    span::{ItemLocation, Located},
+    span::ItemLocation,
 };
 
 use pretty_assertions::assert_eq;
@@ -652,12 +652,13 @@ fn can_define_extern_value() {
         .unwrap();
 
     assert_eq!(
-        &extern_value.value,
+        extern_value,
         &SEV {
             visibility: SV::Public,
             name: "test".into(),
             type_: ST::raw("u32").mut_pointer(),
             address: 0x1337,
+            location: ItemLocation::test(),
         }
     );
 }
@@ -769,8 +770,8 @@ fn can_carry_backend_across() {
     assert_eq!(
         module.backends.get("rust").unwrap(),
         &[
-            Located::test(SB::new(prologue.to_string(), epilogue.to_string())),
-            Located::test(SB::new(None, epilogue.to_string())),
+            SB::new(prologue.to_string(), epilogue.to_string(), ItemLocation::test()),
+            SB::new(None, epilogue.to_string(), ItemLocation::test()),
         ]
     );
 }
