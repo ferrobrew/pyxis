@@ -8,7 +8,7 @@ use crate::{
         type_registry::TypeRegistry,
         types::{Backend, ExternValue, ItemDefinition, Type},
     },
-    span::{HasLocation, ItemLocation, Located},
+    span::{HasLocation, ItemLocation},
 };
 
 #[derive(Debug, Clone)]
@@ -87,7 +87,7 @@ impl Module {
     pub fn definitions<'a>(
         &'a self,
         type_registry: &'a TypeRegistry,
-    ) -> impl Iterator<Item = Located<&'a ItemDefinition>> {
+    ) -> impl Iterator<Item = &'a ItemDefinition> {
         self.definition_paths()
             .iter()
             .filter_map(|p| type_registry.get(p, &ItemLocation::internal()).ok())

@@ -11,7 +11,7 @@ use crate::{
             TypeDefinition, Visibility,
         },
     },
-    span::{ItemLocation, Located},
+    span::ItemLocation,
 };
 
 use quote::{ToTokens, quote};
@@ -145,7 +145,7 @@ pub fn write_module(
 
 fn build_item(
     type_registry: &TypeRegistry,
-    definition: Located<&ItemDefinition>,
+    definition: &ItemDefinition,
 ) -> Result<proc_macro2::TokenStream> {
     let resolved = definition
         .resolved()

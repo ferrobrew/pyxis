@@ -13,7 +13,7 @@ use crate::{
             ItemState, ItemStateResolved, Region, Type, TypeDefinition, Visibility,
         },
     },
-    span::{EqualsIgnoringLocations as _, HasLocation, ItemLocation, Located},
+    span::{EqualsIgnoringLocations as _, HasLocation, ItemLocation},
 };
 
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]
@@ -248,7 +248,7 @@ fn build_type(
     visibility: Visibility,
     functions: &[Function],
     location: &ItemLocation,
-) -> Option<Located<ItemDefinition>> {
+) -> Option<ItemDefinition> {
     let name = resolvee_path.last()?;
 
     let resolvee_vtable_path = resolvee_path
@@ -266,31 +266,29 @@ fn build_type(
         .map(|f| f.location().clone())
         .unwrap_or_else(|| location.clone());
 
-    Some(Located::new(
-        ItemDefinition {
-            visibility,
-            path: resolvee_vtable_path.clone(),
-            state: ItemState::Resolved(ItemStateResolved {
-                size: regions.iter().map(|r| r.size(type_registry).unwrap()).sum(),
-                alignment: type_registry.pointer_size(),
-                inner: TypeDefinition {
-                    regions,
-                    doc: vec![],
-                    associated_functions: vec![],
-                    vftable: None,
-                    singleton: None,
-                    cloneable: false,
-                    copyable: false,
-                    defaultable: false,
-                    packed: false,
-                }
-                .into(),
-            }),
-            category: ItemCategory::Defined,
-            predefined: None,
-        },
-        vftable_type_location,
-    ))
+    Some(ItemDefinition {
+        visibility,
+        path: resolvee_vtable_path.clone(),
+        state: ItemState::Resolved(ItemStateResolved {
+            size: regions.iter().map(|r| r.size(type_registry).unwrap()).sum(),
+            alignment: type_registry.pointer_size(),
+            inner: TypeDefinition {
+                regions,
+                doc: vec![],
+                associated_functions: vec![],
+                vftable: None,
+                singleton: None,
+                cloneable: false,
+                copyable: false,
+                defaultable: false,
+                packed: false,
+            }
+            .into(),
+        }),
+        category: ItemCategory::Defined,
+        predefined: None,
+        location: vftable_type_location,
+    })
 }
 
 /// Given a function, create a region representing it

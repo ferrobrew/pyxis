@@ -3,7 +3,6 @@ use std::{collections::BTreeMap, path::Path};
 use crate::{
     backends::{BackendError, Result},
     semantic::types::{Backend, Type},
-    span::Located,
 };
 use serde::{Deserialize, Serialize};
 
@@ -576,7 +575,7 @@ fn convert_bitflags_definition(bd: &BitflagsDefinition) -> JsonBitflagsDefinitio
     }
 }
 
-fn convert_item(item: Located<&ItemDefinition>, type_registry: &TypeRegistry) -> Option<JsonItem> {
+fn convert_item(item: &ItemDefinition, type_registry: &TypeRegistry) -> Option<JsonItem> {
     let resolved = item.resolved()?;
 
     let kind = match &resolved.inner {

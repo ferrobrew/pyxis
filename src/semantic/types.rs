@@ -408,6 +408,12 @@ pub struct ItemDefinition {
     pub state: ItemState,
     pub category: ItemCategory,
     pub predefined: Option<PredefinedItem>,
+    pub location: ItemLocation,
+}
+impl HasLocation for ItemDefinition {
+    fn location(&self) -> &ItemLocation {
+        &self.location
+    }
 }
 #[cfg(test)]
 // StripSpans implementations for testing
@@ -419,6 +425,7 @@ impl StripLocations for ItemDefinition {
             state: self.state.strip_locations(),
             category: self.category.strip_locations(),
             predefined: self.predefined.strip_locations(),
+            location: ItemLocation::test(),
         }
     }
 }
@@ -436,6 +443,7 @@ impl ItemDefinition {
             state: ItemState::Resolved(resolved),
             category,
             predefined: None,
+            location: ItemLocation::test(),
         }
     }
 
@@ -451,6 +459,7 @@ impl ItemDefinition {
             state: ItemState::Resolved(resolved),
             category: ItemCategory::Defined,
             predefined: None,
+            location: ItemLocation::test(),
         }
     }
 
