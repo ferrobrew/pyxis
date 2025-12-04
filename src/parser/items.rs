@@ -580,12 +580,33 @@ impl BitflagsDefinition {
     }
 }
 
+// type alias
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct TypeAliasDefinition {
+    pub type_: Type,
+}
+#[cfg(test)]
+impl StripLocations for TypeAliasDefinition {
+    fn strip_locations(&self) -> Self {
+        TypeAliasDefinition {
+            type_: self.type_.strip_locations(),
+        }
+    }
+}
+#[cfg(test)]
+impl TypeAliasDefinition {
+    pub fn new(type_: Type) -> Self {
+        Self { type_ }
+    }
+}
+
 // items
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ItemDefinitionInner {
     Type(TypeDefinition),
     Enum(EnumDefinition),
     Bitflags(BitflagsDefinition),
+    TypeAlias(TypeAliasDefinition),
 }
 #[cfg(test)]
 impl StripLocations for ItemDefinitionInner {
@@ -594,6 +615,9 @@ impl StripLocations for ItemDefinitionInner {
             ItemDefinitionInner::Type(t) => ItemDefinitionInner::Type(t.strip_locations()),
             ItemDefinitionInner::Enum(e) => ItemDefinitionInner::Enum(e.strip_locations()),
             ItemDefinitionInner::Bitflags(b) => ItemDefinitionInner::Bitflags(b.strip_locations()),
+            ItemDefinitionInner::TypeAlias(ta) => {
+                ItemDefinitionInner::TypeAlias(ta.strip_locations())
+            }
         }
     }
 }
@@ -610,6 +634,11 @@ impl From<EnumDefinition> for ItemDefinitionInner {
 impl From<BitflagsDefinition> for ItemDefinitionInner {
     fn from(item: BitflagsDefinition) -> Self {
         ItemDefinitionInner::Bitflags(item)
+    }
+}
+impl From<TypeAliasDefinition> for ItemDefinitionInner {
+    fn from(item: TypeAliasDefinition) -> Self {
+        ItemDefinitionInner::TypeAlias(item)
     }
 }
 
@@ -709,6 +738,32 @@ impl Parser {
             TokenKind::Type => {
                 self.advance();
                 let (name, _) = self.expect_ident()?;
+
+                // Check for type alias syntax: type Name = OtherType;
+                if matches!(self.peek(), TokenKind::Eq) {
+                    self.advance(); // Consume '='
+                    let aliased_type = self.parse_type()?;
+                    self.expect(TokenKind::Semi)?;
+
+                    // Capture the end position
+                    let end_pos = if self.pos > 0 {
+                        self.tokens[self.pos - 1].location.span.end
+                    } else {
+                        self.current().location.span.end
+                    };
+
+                    let location = self.item_location_from_locations(start_pos, end_pos);
+                    return Ok(ItemDefinition {
+                        visibility,
+                        name,
+                        doc_comments,
+                        inner: ItemDefinitionInner::TypeAlias(TypeAliasDefinition {
+                            type_: aliased_type,
+                        }),
+                        location,
+                    });
+                }
+
                 let mut def = TypeDefinition {
                     items: Vec::new(),
                     attributes,
@@ -1151,6 +1206,62 @@ mod tests {
                 ],
                 [A::singleton(0x1234)],
             ),
+        )]);
+
+        assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
+    }
+
+    #[test]
+    fn can_parse_type_alias_simple() {
+        let text = r#"
+        pub type TexturePtr = Texture;
+        "#;
+
+        let ast = M::new().with_definitions([ID::new(
+            (V::Public, "TexturePtr"),
+            TAD::new(T::ident("Texture")),
+        )]);
+
+        assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
+    }
+
+    #[test]
+    fn can_parse_type_alias_pointer() {
+        let text = r#"
+        pub type TexturePtr = *const Texture;
+        "#;
+
+        let ast = M::new().with_definitions([ID::new(
+            (V::Public, "TexturePtr"),
+            TAD::new(T::const_pointer(T::ident("Texture"))),
+        )]);
+
+        assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
+    }
+
+    #[test]
+    fn can_parse_type_alias_private() {
+        let text = r#"
+        type InternalAlias = i32;
+        "#;
+
+        let ast = M::new().with_definitions([ID::new(
+            (V::Private, "InternalAlias"),
+            TAD::new(T::ident("i32")),
+        )]);
+
+        assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
+    }
+
+    #[test]
+    fn can_parse_type_alias_array() {
+        let text = r#"
+        pub type Matrix4 = [f32; 16];
+        "#;
+
+        let ast = M::new().with_definitions([ID::new(
+            (V::Public, "Matrix4"),
+            TAD::new(T::array(T::ident("f32"), 16)),
         )]);
 
         assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);

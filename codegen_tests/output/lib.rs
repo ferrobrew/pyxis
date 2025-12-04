@@ -9,3 +9,4 @@ pub mod min_size;
 pub mod multiple_levels;
 pub mod singleton;
 pub mod two_base_classes;
+pub mod type_aliases;

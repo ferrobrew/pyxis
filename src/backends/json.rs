@@ -10,8 +10,8 @@ use crate::semantic::{
     ResolvedSemanticState, TypeRegistry,
     types::{
         Argument, BitflagsDefinition, CallingConvention, EnumDefinition, ExternValue, Function,
-        FunctionBody, ItemCategory, ItemDefinition, ItemDefinitionInner, Region, TypeDefinition,
-        TypeVftable, Visibility,
+        FunctionBody, ItemCategory, ItemDefinition, ItemDefinitionInner, Region,
+        TypeAliasDefinition, TypeDefinition, TypeVftable, Visibility,
     },
 };
 
@@ -81,6 +81,7 @@ pub enum JsonItemKind {
     Type(JsonTypeDefinition),
     Enum(JsonEnumDefinition),
     Bitflags(JsonBitflagsDefinition),
+    TypeAlias(JsonTypeAliasDefinition),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
@@ -175,6 +176,14 @@ pub struct JsonBitflagsDefinition {
     pub cloneable: bool,
     /// Default flag index
     pub default: Option<usize>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+pub struct JsonTypeAliasDefinition {
+    /// Documentation
+    pub doc: Option<String>,
+    /// The type that this alias resolves to
+    pub aliased_type: JsonType,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
@@ -567,6 +576,17 @@ fn convert_bitflags_definition(bd: &BitflagsDefinition) -> JsonBitflagsDefinitio
     }
 }
 
+fn convert_type_alias_definition(ta: &TypeAliasDefinition) -> JsonTypeAliasDefinition {
+    JsonTypeAliasDefinition {
+        doc: if !ta.doc.is_empty() {
+            Some(ta.doc.join("\n"))
+        } else {
+            None
+        },
+        aliased_type: convert_type(&ta.type_),
+    }
+}
+
 fn convert_item(item: &ItemDefinition, type_registry: &TypeRegistry) -> Option<JsonItem> {
     let resolved = item.resolved()?;
 
@@ -577,6 +597,9 @@ fn convert_item(item: &ItemDefinition, type_registry: &TypeRegistry) -> Option<J
         ItemDefinitionInner::Enum(ed) => JsonItemKind::Enum(convert_enum_definition(ed)),
         ItemDefinitionInner::Bitflags(bd) => {
             JsonItemKind::Bitflags(convert_bitflags_definition(bd))
+        }
+        ItemDefinitionInner::TypeAlias(ta) => {
+            JsonItemKind::TypeAlias(convert_type_alias_definition(ta))
         }
     };
 

@@ -20,6 +20,7 @@ pub use crate::semantic::{
 pub mod test_aliases {
     pub type SID = super::ItemDefinition;
     pub type STD = super::TypeDefinition;
+    pub type STAD = super::TypeAliasDefinition;
     pub type SED = super::EnumDefinition;
     pub type SBFD = super::BitflagsDefinition;
     pub type ST = super::Type;
@@ -232,11 +233,44 @@ impl fmt::Display for Type {
     }
 }
 
+/// A type alias definition (e.g., `type TexturePtr = SharedPtr<Texture>;`)
+#[derive(PartialEq, Eq, Debug, Clone, Hash)]
+pub struct TypeAliasDefinition {
+    /// The type that this alias resolves to
+    pub type_: Type,
+    /// Doc comments for this type alias
+    pub doc: Vec<String>,
+}
+#[cfg(test)]
+impl StripLocations for TypeAliasDefinition {
+    fn strip_locations(&self) -> Self {
+        TypeAliasDefinition {
+            type_: self.type_.strip_locations(),
+            doc: self.doc.strip_locations(),
+        }
+    }
+}
+impl TypeAliasDefinition {
+    pub fn new(type_: Type) -> Self {
+        TypeAliasDefinition {
+            type_,
+            doc: Vec::new(),
+        }
+    }
+
+    #[cfg(test)]
+    pub fn with_doc(mut self, doc: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        self.doc = doc.into_iter().map(Into::into).collect();
+        self
+    }
+}
+
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]
 pub enum ItemDefinitionInner {
     Type(TypeDefinition),
     Enum(EnumDefinition),
     Bitflags(BitflagsDefinition),
+    TypeAlias(TypeAliasDefinition),
 }
 #[cfg(test)]
 impl StripLocations for ItemDefinitionInner {
@@ -246,6 +280,9 @@ impl StripLocations for ItemDefinitionInner {
             ItemDefinitionInner::Enum(ed) => ItemDefinitionInner::Enum(ed.strip_locations()),
             ItemDefinitionInner::Bitflags(bd) => {
                 ItemDefinitionInner::Bitflags(bd.strip_locations())
+            }
+            ItemDefinitionInner::TypeAlias(ta) => {
+                ItemDefinitionInner::TypeAlias(ta.strip_locations())
             }
         }
     }
@@ -265,12 +302,19 @@ impl From<BitflagsDefinition> for ItemDefinitionInner {
         ItemDefinitionInner::Bitflags(bd)
     }
 }
+impl From<TypeAliasDefinition> for ItemDefinitionInner {
+    fn from(ta: TypeAliasDefinition) -> Self {
+        ItemDefinitionInner::TypeAlias(ta)
+    }
+}
 impl ItemDefinitionInner {
     pub fn defaultable(&self) -> bool {
         match self {
             ItemDefinitionInner::Type(td) => td.defaultable,
             ItemDefinitionInner::Enum(ed) => ed.default.is_some(),
             ItemDefinitionInner::Bitflags(bd) => bd.default.is_some(),
+            // Type aliases inherit defaultability from their underlying type
+            ItemDefinitionInner::TypeAlias(_) => false,
         }
     }
     pub fn as_type(&self) -> Option<&TypeDefinition> {
@@ -285,11 +329,18 @@ impl ItemDefinitionInner {
             _ => None,
         }
     }
+    pub fn as_type_alias(&self) -> Option<&TypeAliasDefinition> {
+        match self {
+            Self::TypeAlias(v) => Some(v),
+            _ => None,
+        }
+    }
     pub fn human_friendly_type(&self) -> &'static str {
         match self {
             ItemDefinitionInner::Type(_) => "a type",
             ItemDefinitionInner::Enum(_) => "an enum",
             ItemDefinitionInner::Bitflags(_) => "a bitflags",
+            ItemDefinitionInner::TypeAlias(_) => "a type alias",
         }
     }
 }

@@ -1,0 +1,38 @@
+// Test type aliases: type Alias = ExistingType;
+use math::{Matrix4, Vector3};
+
+/// Simple type alias to a primitive
+pub type MyInt = i32;
+
+/// Type alias to an unsigned integer
+pub type MyU64 = u64;
+
+/// Type alias to a pointer type
+pub type VectorPtr = *const Vector3;
+
+/// Type alias to a mutable pointer
+pub type MutableMatrixPtr = *mut Matrix4;
+
+/// Type alias to an array type
+pub type Matrix4Data = [f32; 16];
+
+/// Simple type that uses a primitive type alias
+#[align(4)]
+pub type SimpleContainer {
+    pub value1: MyInt,
+    pub value2: MyInt,
+}
+
+/// Type with array alias
+#[align(4)]
+pub type DataContainer {
+    pub raw_data: Matrix4Data,
+    pub value: MyInt,
+}
+
+/// Type with pointer aliases (properly aligned)
+#[align(8)]
+pub type PointerContainer {
+    pub position_ptr: VectorPtr,
+    pub matrix_ptr: MutableMatrixPtr,
+}

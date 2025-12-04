@@ -272,6 +272,9 @@ impl SemanticState {
                         def_location,
                         &definition.doc_comments,
                     )?,
+                    grammar::ItemDefinitionInner::TypeAlias(ta) => {
+                        build_type_alias(&self, resolvee_path, ta, &definition.doc_comments)?
+                    }
                 };
 
                 let Some(item) = item else { continue };
@@ -380,5 +383,84 @@ impl ResolvedSemanticState {
 
     pub fn modules(&self) -> &BTreeMap<ItemPath, Module> {
         &self.modules
+    }
+}
+
+/// Build a type alias from the grammar definition
+fn build_type_alias(
+    semantic_state: &SemanticState,
+    resolvee_path: &ItemPath,
+    type_alias: &grammar::TypeAliasDefinition,
+    doc_comments: &[String],
+) -> Result<Option<ItemStateResolved>> {
+    use crate::semantic::types::TypeAliasDefinition;
+
+    // Get the module for this path to determine scope
+    let module = semantic_state.get_module_for_path(resolvee_path, type_alias.type_.location())?;
+    let scope = module.scope();
+
+    // Resolve the aliased type
+    let resolved_type = semantic_state
+        .type_registry
+        .resolve_grammar_type(&scope, &type_alias.type_);
+
+    // If we can't resolve yet, return None to try again later
+    let Some(resolved_type) = resolved_type else {
+        return Ok(None);
+    };
+
+    // Get the size and alignment of the aliased type
+    let (size, alignment) = get_type_size_and_alignment(
+        &semantic_state.type_registry,
+        &resolved_type,
+        type_alias.type_.location(),
+    )?;
+
+    // If size is None, the underlying type isn't resolved yet
+    let Some((size, alignment)) = size.zip(alignment) else {
+        return Ok(None);
+    };
+
+    Ok(Some(ItemStateResolved {
+        size,
+        alignment,
+        inner: TypeAliasDefinition {
+            type_: resolved_type,
+            doc: doc_comments.to_vec(),
+        }
+        .into(),
+    }))
+}
+
+/// Get the size and alignment of a resolved type
+fn get_type_size_and_alignment(
+    type_registry: &TypeRegistry,
+    resolved_type: &Type,
+    location: &ItemLocation,
+) -> Result<(Option<usize>, Option<usize>)> {
+    match resolved_type {
+        Type::Raw(path) => {
+            let item_def = type_registry.get(path, location)?;
+            match &item_def.state {
+                ItemState::Resolved(resolved) => {
+                    Ok((Some(resolved.size), Some(resolved.alignment)))
+                }
+                ItemState::Unresolved(_) => Ok((None, None)),
+            }
+        }
+        Type::ConstPointer(_) | Type::MutPointer(_) => {
+            let ps = type_registry.pointer_size();
+            Ok((Some(ps), Some(ps)))
+        }
+        Type::Array(inner, count) => {
+            let (inner_size, inner_alignment) =
+                get_type_size_and_alignment(type_registry, inner, location)?;
+            Ok((inner_size.map(|s| s * count), inner_alignment))
+        }
+        Type::Function(_, _, _) => {
+            let ps = type_registry.pointer_size();
+            Ok((Some(ps), Some(ps)))
+        }
+        Type::Unresolved(_) => Ok((None, None)),
     }
 }
