@@ -15,7 +15,7 @@ pub struct EnumDefinition {
     pub type_: Type,
     pub doc: Vec<String>,
     pub fields: Vec<(String, isize)>,
-    pub associated_functions: Vec<Located<Function>>,
+    pub associated_functions: Vec<Function>,
     pub singleton: Option<usize>,
     pub copyable: bool,
     pub cloneable: bool,
@@ -65,10 +65,7 @@ impl EnumDefinition {
         mut self,
         associated_functions: impl IntoIterator<Item = Function>,
     ) -> Self {
-        self.associated_functions = associated_functions
-            .into_iter()
-            .map(Located::test)
-            .collect();
+        self.associated_functions = associated_functions.into_iter().collect();
         self
     }
     pub fn with_singleton(mut self, singleton: usize) -> Self {

@@ -413,11 +413,11 @@ fn convert_type(type_ref: &Type) -> JsonType {
 
 fn convert_argument(arg: &Argument) -> JsonArgument {
     match arg {
-        Argument::ConstSelf => JsonArgument::ConstSelf,
-        Argument::MutSelf => JsonArgument::MutSelf,
-        Argument::Field(name, type_ref) => JsonArgument::Field {
+        Argument::ConstSelf { .. } => JsonArgument::ConstSelf,
+        Argument::MutSelf { .. } => JsonArgument::MutSelf,
+        Argument::Field { name, type_, .. } => JsonArgument::Field {
             name: name.clone(),
-            type_ref: convert_type(type_ref),
+            type_ref: convert_type(type_),
         },
     }
 }
@@ -438,7 +438,7 @@ fn convert_function_body(body: &FunctionBody) -> JsonFunctionBody {
     }
 }
 
-fn convert_function(func: Located<&Function>) -> JsonFunction {
+fn convert_function(func: &Function) -> JsonFunction {
     JsonFunction {
         visibility: func.visibility.into(),
         name: func.name.clone(),
@@ -451,7 +451,7 @@ fn convert_function(func: Located<&Function>) -> JsonFunction {
         arguments: func
             .arguments
             .iter()
-            .map(|a| convert_argument(&a.value))
+            .map(convert_argument)
             .collect(),
         return_type: func.return_type.as_ref().map(convert_type),
         calling_convention: func.calling_convention.into(),
@@ -483,7 +483,7 @@ fn convert_vftable(vftable: &TypeVftable) -> JsonTypeVftable {
         functions: vftable
             .functions
             .iter()
-            .map(|f| convert_function(f.as_ref()))
+            .map(convert_function)
             .collect(),
     }
 }
@@ -514,7 +514,7 @@ fn convert_type_definition(
         associated_functions: td
             .associated_functions
             .iter()
-            .map(|f| convert_function(f.as_ref()))
+            .map(convert_function)
             .collect(),
         vftable: td.vftable.as_ref().map(convert_vftable),
         singleton: td.singleton,
@@ -544,7 +544,7 @@ fn convert_enum_definition(ed: &EnumDefinition) -> JsonEnumDefinition {
         associated_functions: ed
             .associated_functions
             .iter()
-            .map(|f| convert_function(f.as_ref()))
+            .map(convert_function)
             .collect(),
         singleton: ed.singleton,
         copyable: ed.copyable,
@@ -641,7 +641,7 @@ fn build_module_hierarchy(semantic_state: &ResolvedSemanticState) -> BTreeMap<St
         let functions: Vec<JsonFunction> = module
             .functions()
             .iter()
-            .map(|f| convert_function(f.as_ref()))
+            .map(convert_function)
             .collect();
 
         // Convert backends

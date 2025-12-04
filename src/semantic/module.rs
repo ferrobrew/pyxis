@@ -17,7 +17,7 @@ pub struct Module {
     pub(crate) ast: grammar::Module,
     pub(crate) definition_paths: BTreeSet<ItemPath>,
     pub(crate) extern_values: Vec<ExternValue>,
-    pub(crate) functions: Vec<Located<Function>>,
+    pub(crate) functions: Vec<Function>,
     pub(crate) impls: BTreeMap<ItemPath, grammar::FunctionBlock>,
     pub(crate) backends: BTreeMap<String, Vec<Backend>>,
     pub(crate) doc: Vec<String>,
@@ -144,7 +144,7 @@ impl Module {
         &self.doc
     }
 
-    pub fn functions(&self) -> &[Located<Function>] {
+    pub fn functions(&self) -> &[Function] {
         &self.functions
     }
 }
