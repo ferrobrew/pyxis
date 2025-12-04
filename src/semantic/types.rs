@@ -497,16 +497,13 @@ impl HasLocation for Backend {
         &self.location
     }
 }
+#[cfg(test)]
 impl Backend {
-    pub fn new(
-        prologue: impl Into<Option<String>>,
-        epilogue: impl Into<Option<String>>,
-        location: ItemLocation,
-    ) -> Self {
+    pub fn new(prologue: impl Into<Option<String>>, epilogue: impl Into<Option<String>>) -> Self {
         Backend {
             prologue: prologue.into(),
             epilogue: epilogue.into(),
-            location,
+            location: ItemLocation::test(),
         }
     }
 }

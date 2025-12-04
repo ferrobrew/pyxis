@@ -770,12 +770,8 @@ fn can_carry_backend_across() {
     assert_eq!(
         module.backends.get("rust").unwrap(),
         &[
-            SB::new(
-                prologue.to_string(),
-                epilogue.to_string(),
-                ItemLocation::test()
-            ),
-            SB::new(None, epilogue.to_string(), ItemLocation::test()),
+            SB::new(prologue.to_string(), epilogue.to_string()),
+            SB::new(None, epilogue.to_string()),
         ]
     );
 }

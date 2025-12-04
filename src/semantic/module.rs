@@ -44,23 +44,23 @@ impl Module {
         ast: grammar::Module,
         extern_values: Vec<ExternValue>,
         impls: &[grammar::FunctionBlock],
-        backends: &[grammar::Backend],
+        grammar_backends: &[grammar::Backend],
     ) -> Result<Self> {
         let impls = impls
             .iter()
             .map(|f| (path.join(f.name.as_str().into()), f.clone()))
             .collect();
 
-        let mut backends_map: BTreeMap<String, Vec<Backend>> = BTreeMap::new();
-        for backend in backends {
-            backends_map
+        let mut backends: BTreeMap<String, Vec<Backend>> = BTreeMap::new();
+        for backend in grammar_backends {
+            backends
                 .entry(backend.name.0.clone())
                 .or_default()
-                .push(Backend::new(
-                    backend.prologue.clone(),
-                    backend.epilogue.clone(),
-                    backend.location.clone(),
-                ));
+                .push(Backend {
+                    prologue: backend.prologue.clone(),
+                    epilogue: backend.epilogue.clone(),
+                    location: backend.location.clone(),
+                });
         }
 
         let doc = ast.doc_comments.clone();
@@ -71,7 +71,7 @@ impl Module {
             extern_values,
             functions: vec![],
             impls,
-            backends: backends_map,
+            backends,
             doc,
         })
     }
