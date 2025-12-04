@@ -8,7 +8,7 @@ use crate::{
         types::{
             Argument, BitflagsDefinition, EnumDefinition, ExternValue, Function, FunctionBody,
             ItemCategory, ItemDefinition, ItemDefinitionInner, ItemStateResolved, Region, Type,
-            TypeDefinition, Visibility,
+            TypeAliasDefinition, TypeDefinition, Visibility,
         },
     },
     span::ItemLocation,
@@ -178,6 +178,7 @@ fn build_item(
             ),
             IDI::Enum(ed) => build_enum(path, *size, visibility, ed, location),
             IDI::Bitflags(bd) => build_bitflags(path, *size, visibility, bd, location),
+            IDI::TypeAlias(ta) => build_type_alias(type_registry, path, visibility, ta, location),
         },
         ItemCategory::Predefined => Ok(quote! {}),
         ItemCategory::Extern => Ok(quote! {}),
@@ -655,6 +656,91 @@ fn build_bitflags(
         #singleton_impl
         #default_impl
     })
+}
+
+fn build_type_alias(
+    type_registry: &TypeRegistry,
+    path: &ItemPath,
+    visibility: Visibility,
+    type_alias: &TypeAliasDefinition,
+    location: &ItemLocation,
+) -> Result<proc_macro2::TokenStream> {
+    let name = path.last().ok_or_else(|| BackendError::TypeCodeGenFailed {
+        type_path: path.clone(),
+        reason: "failed to get last component of item path".to_string(),
+        location: location.clone(),
+    })?;
+
+    let TypeAliasDefinition { type_, doc } = type_alias;
+
+    let name_ident = str_to_ident(name.as_str());
+    let visibility = visibility_to_tokens(visibility);
+    let doc = doc_to_tokens(false, doc);
+    let aliased_type = sa_type_to_syn_type(type_)?;
+
+    // For type aliases that alias extern types (like SharedPtr<Texture>),
+    // the ident string contains the full generic syntax
+    let type_str = type_.to_string();
+    if type_str.contains('<') {
+        // This is a generic type like SharedPtr<Texture>, use it as a raw string
+        let raw_type: proc_macro2::TokenStream =
+            type_str
+                .parse()
+                .map_err(|_| BackendError::TypeCodeGenFailed {
+                    type_path: path.clone(),
+                    reason: format!("failed to parse type alias target: {type_str}"),
+                    location: location.clone(),
+                })?;
+        Ok(quote! {
+            #doc
+            #visibility type #name_ident = #raw_type;
+        })
+    } else {
+        // Regular type alias (non-generic)
+        // Check if this is a pointer type or a simple type name
+        match type_ {
+            Type::ConstPointer(_) | Type::MutPointer(_) => {
+                // Use the proper syn type for pointers
+                Ok(quote! {
+                    #doc
+                    #visibility type #name_ident = #aliased_type;
+                })
+            }
+            Type::Array(_, _) => {
+                // Use the proper syn type for arrays
+                Ok(quote! {
+                    #doc
+                    #visibility type #name_ident = #aliased_type;
+                })
+            }
+            Type::Raw(raw_path) => {
+                // For raw types, try to use the syn type (handles path resolution)
+                // But if it's an extern type with generics in the name, use the full path
+                let raw_str = raw_path.to_string().replace("::", "_");
+                if let Ok(item) = type_registry.get(raw_path, location) {
+                    if matches!(item.category(), ItemCategory::Extern) {
+                        // External types - use their name as-is (may contain generics)
+                        let extern_name = raw_path.last().map(|s| s.as_str()).unwrap_or(&raw_str);
+                        let extern_tokens: proc_macro2::TokenStream = extern_name
+                            .parse()
+                            .unwrap_or_else(|_| aliased_type.to_token_stream());
+                        return Ok(quote! {
+                            #doc
+                            #visibility type #name_ident = #extern_tokens;
+                        });
+                    }
+                }
+                Ok(quote! {
+                    #doc
+                    #visibility type #name_ident = #aliased_type;
+                })
+            }
+            _ => Ok(quote! {
+                #doc
+                #visibility type #name_ident = #aliased_type;
+            }),
+        }
+    }
 }
 
 fn build_function(function: &Function) -> Result<proc_macro2::TokenStream> {

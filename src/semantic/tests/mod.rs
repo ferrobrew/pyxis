@@ -1502,3 +1502,205 @@ fn can_resolve_freestanding_functions() {
     assert_eq!(func2.calling_convention, SCC::System);
     assert!(matches!(func2.body, SFB::Address { address: 0x789 }));
 }
+
+#[test]
+fn can_resolve_type_alias_to_primitive() {
+    // Test type alias to a primitive type
+    assert_ast_produces_type_definitions(
+        M::new().with_definitions([ID::new((V::Public, "MyInt"), TAD::new(T::ident("i32")))]),
+        [SID::defined_resolved(
+            (SV::Public, "test::MyInt"),
+            SISR::new((4, 4), STAD::new(ST::raw("i32"))),
+        )],
+    );
+}
+
+#[test]
+fn can_resolve_type_alias_to_pointer() {
+    // Test type alias to a pointer type
+    assert_ast_produces_type_definitions(
+        M::new().with_definitions([ID::new(
+            (V::Public, "TexturePtr"),
+            TAD::new(T::ident("i32").const_pointer()),
+        )]),
+        [SID::defined_resolved(
+            (SV::Public, "test::TexturePtr"),
+            SISR::new(
+                (pointer_size(), pointer_size()),
+                STAD::new(ST::raw("i32").const_pointer()),
+            ),
+        )],
+    );
+}
+
+#[test]
+fn can_resolve_type_alias_to_user_defined_type() {
+    // Test type alias to a user-defined type
+    assert_ast_produces_type_definitions(
+        M::new().with_definitions([
+            ID::new(
+                (V::Public, "Vector3"),
+                TD::new([
+                    TS::field((V::Public, "x"), T::ident("f32")),
+                    TS::field((V::Public, "y"), T::ident("f32")),
+                    TS::field((V::Public, "z"), T::ident("f32")),
+                ])
+                .with_attributes([A::align(4)]),
+            ),
+            ID::new((V::Public, "Position"), TAD::new(T::ident("Vector3"))),
+        ]),
+        [
+            SID::defined_resolved(
+                (SV::Public, "test::Vector3"),
+                SISR::new(
+                    (12, 4),
+                    STD::new().with_regions([
+                        SR::field((SV::Public, "x"), ST::raw("f32")),
+                        SR::field((SV::Public, "y"), ST::raw("f32")),
+                        SR::field((SV::Public, "z"), ST::raw("f32")),
+                    ]),
+                ),
+            ),
+            SID::defined_resolved(
+                (SV::Public, "test::Position"),
+                SISR::new((12, 4), STAD::new(ST::raw("test::Vector3"))),
+            ),
+        ],
+    );
+}
+
+#[test]
+fn can_resolve_type_alias_to_array() {
+    // Test type alias to an array type
+    assert_ast_produces_type_definitions(
+        M::new().with_definitions([ID::new(
+            (V::Public, "Matrix4"),
+            TAD::new(T::ident("f32").array(16)),
+        )]),
+        [SID::defined_resolved(
+            (SV::Public, "test::Matrix4"),
+            SISR::new((64, 4), STAD::new(ST::raw("f32").array(16))),
+        )],
+    );
+}
+
+#[test]
+fn can_use_type_alias_in_another_type() {
+    // Test that a type alias can be used as a field type
+    assert_ast_produces_type_definitions(
+        M::new().with_definitions([
+            ID::new((V::Public, "MyInt"), TAD::new(T::ident("i32"))),
+            ID::new(
+                (V::Public, "Container"),
+                TD::new([TS::field((V::Public, "value"), T::ident("MyInt"))]),
+            ),
+        ]),
+        [
+            SID::defined_resolved(
+                (SV::Public, "test::MyInt"),
+                SISR::new((4, 4), STAD::new(ST::raw("i32"))),
+            ),
+            SID::defined_resolved(
+                (SV::Public, "test::Container"),
+                SISR::new(
+                    (4, 4),
+                    STD::new()
+                        .with_regions([SR::field((SV::Public, "value"), ST::raw("test::MyInt"))]),
+                ),
+            ),
+        ],
+    );
+}
+
+#[test]
+fn can_use_type_alias_cross_module() {
+    // Test that a type alias can be imported and used from another module
+    let module1 = M::new()
+        .with_uses([IP::from("types::MyInt")])
+        .with_definitions([ID::new(
+            (V::Public, "Container"),
+            TD::new([TS::field((V::Public, "value"), T::ident("MyInt"))]),
+        )]);
+    let module_types =
+        M::new().with_definitions([ID::new((V::Public, "MyInt"), TAD::new(T::ident("i32")))]);
+
+    let mut semantic_state = SemanticState::new(4);
+    semantic_state
+        .add_module(&module1, &IP::from("module1"), None)
+        .unwrap();
+    semantic_state
+        .add_module(&module_types, &IP::from("types"), None)
+        .unwrap();
+    let semantic_state = semantic_state.build().unwrap();
+
+    // Verify the Container type was resolved correctly
+    let container_path = IP::from("module1::Container");
+    let resolved_type = semantic_state
+        .type_registry()
+        .get(&container_path, &ItemLocation::test())
+        .cloned()
+        .expect("failed to get Container type");
+    assert_eq!(
+        resolved_type,
+        SID::defined_resolved(
+            (SV::Public, container_path.clone()),
+            SISR::new(
+                (4, 4),
+                STD::new()
+                    .with_regions([SR::field((SV::Public, "value"), ST::raw("types::MyInt"))])
+            )
+        )
+    );
+
+    // Verify the type alias was also resolved
+    let alias_path = IP::from("types::MyInt");
+    let resolved_alias = semantic_state
+        .type_registry()
+        .get(&alias_path, &ItemLocation::test())
+        .cloned()
+        .expect("failed to get MyInt type alias");
+    assert_eq!(
+        resolved_alias,
+        SID::defined_resolved(
+            (SV::Public, alias_path.clone()),
+            SISR::new((4, 4), STAD::new(ST::raw("i32")))
+        )
+    );
+}
+
+#[test]
+fn can_chain_type_aliases() {
+    // Test that type aliases can alias other type aliases (chaining)
+    let module1 = M::new()
+        .with_uses([IP::from("types::MyInt")])
+        .with_definitions([ID::new(
+            (V::Public, "AnotherInt"),
+            TAD::new(T::ident("MyInt")),
+        )]);
+    let module_types =
+        M::new().with_definitions([ID::new((V::Public, "MyInt"), TAD::new(T::ident("i32")))]);
+
+    let mut semantic_state = SemanticState::new(4);
+    semantic_state
+        .add_module(&module1, &IP::from("module1"), None)
+        .unwrap();
+    semantic_state
+        .add_module(&module_types, &IP::from("types"), None)
+        .unwrap();
+    let semantic_state = semantic_state.build().unwrap();
+
+    // Verify the chained type alias
+    let alias_path = IP::from("module1::AnotherInt");
+    let resolved_alias = semantic_state
+        .type_registry()
+        .get(&alias_path, &ItemLocation::test())
+        .cloned()
+        .expect("failed to get AnotherInt type alias");
+    assert_eq!(
+        resolved_alias,
+        SID::defined_resolved(
+            (SV::Public, alias_path.clone()),
+            SISR::new((4, 4), STAD::new(ST::raw("types::MyInt")))
+        )
+    );
+}

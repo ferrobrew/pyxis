@@ -86,6 +86,7 @@ impl PrettyPrinter {
                     ItemDefinitionInner::Type(td) => !td.attributes.0.is_empty(),
                     ItemDefinitionInner::Enum(ed) => !ed.attributes.0.is_empty(),
                     ItemDefinitionInner::Bitflags(bf) => !bf.attributes.0.is_empty(),
+                    ItemDefinitionInner::TypeAlias(_) => false, // Type aliases don't have attributes
                 };
 
                 if !def.doc_comments.is_empty() && has_attrs {
@@ -527,6 +528,18 @@ impl PrettyPrinter {
             writeln!(&mut self.output, "///{doc}").unwrap();
         }
 
+        // Type aliases are handled separately (they don't have attributes/comments like other types)
+        if let ItemDefinitionInner::TypeAlias(ta) = &def.inner {
+            self.write_indent();
+            if def.visibility == Visibility::Public {
+                write!(&mut self.output, "pub ").unwrap();
+            }
+            write!(&mut self.output, "type {} = ", def.name).unwrap();
+            self.print_type(&ta.type_);
+            writeln!(&mut self.output, ";").unwrap();
+            return;
+        }
+
         // Print attributes and comments from the inner definition
         let (attributes, inline_trailing_comments, following_comments) = match &def.inner {
             ItemDefinitionInner::Type(td) => (
@@ -544,6 +557,7 @@ impl PrettyPrinter {
                 &bf.inline_trailing_comments,
                 &bf.following_comments,
             ),
+            ItemDefinitionInner::TypeAlias(_) => unreachable!("Type aliases handled above"),
         };
 
         // Print attributes with inline trailing comments
@@ -648,6 +662,9 @@ impl PrettyPrinter {
                 self.dedent();
                 self.write_indent();
                 writeln!(&mut self.output, "}}").unwrap();
+            }
+            ItemDefinitionInner::TypeAlias(_) => {
+                unreachable!("Type aliases are handled early in this function")
             }
         }
     }
