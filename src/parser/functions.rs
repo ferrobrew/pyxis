@@ -1,5 +1,5 @@
 use crate::{
-    span::{HasLocation, ItemLocation, Located, Span},
+    span::{HasLocation, ItemLocation, Span},
     tokenizer::TokenKind,
 };
 
@@ -168,6 +168,12 @@ pub struct FunctionBlock {
     pub name: Ident,
     pub items: Vec<ImplItem>,
     pub attributes: Attributes,
+    pub location: ItemLocation,
+}
+impl HasLocation for FunctionBlock {
+    fn location(&self) -> &ItemLocation {
+        &self.location
+    }
 }
 #[cfg(test)]
 impl StripLocations for FunctionBlock {
@@ -183,6 +189,7 @@ impl StripLocations for FunctionBlock {
                 })
                 .collect(),
             attributes: self.attributes.strip_locations(),
+            location: ItemLocation::test(),
         }
     }
 }
@@ -193,6 +200,7 @@ impl FunctionBlock {
             name: name.into(),
             items: functions.into_iter().map(ImplItem::Function).collect(),
             attributes: Default::default(),
+            location: ItemLocation::test(),
         }
     }
     pub fn with_attributes(mut self, attributes: impl Into<Attributes>) -> Self {
@@ -210,7 +218,7 @@ impl FunctionBlock {
 }
 
 impl Parser {
-    pub(crate) fn parse_impl_block(&mut self) -> Result<Located<FunctionBlock>, ParseError> {
+    pub(crate) fn parse_impl_block(&mut self) -> Result<FunctionBlock, ParseError> {
         let start_pos = self.current().location.span.start;
         let attributes = if matches!(self.peek(), TokenKind::Hash) {
             self.parse_attributes()?
@@ -245,14 +253,12 @@ impl Parser {
         let last_token = self.expect(TokenKind::RBrace)?;
 
         let location = self.item_location_from_locations(start_pos, last_token.end_location());
-        Ok(Located::new(
-            FunctionBlock {
-                name,
-                items,
-                attributes,
-            },
+        Ok(FunctionBlock {
+            name,
+            items,
+            attributes,
             location,
-        ))
+        })
     }
 
     pub(crate) fn parse_functions_in_block(&mut self) -> Result<Vec<Function>, ParseError> {

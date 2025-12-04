@@ -360,7 +360,10 @@ impl Parser {
                             Located::new(ModuleItem::Definition(def), location)
                         })
                     }
-                    TokenKind::Impl => self.parse_impl_block().map(|l| l.map(ModuleItem::Impl)),
+                    TokenKind::Impl => self.parse_impl_block().map(|block| {
+                        let location = block.location.clone();
+                        Located::new(ModuleItem::Impl(block), location)
+                    }),
                     TokenKind::Fn => self.parse_function().map(|f| {
                         let location = f.location.clone();
                         Located::new(ModuleItem::Function(f), location)
@@ -424,7 +427,10 @@ impl Parser {
                     Located::new(ModuleItem::Definition(def), location)
                 })
             }
-            TokenKind::Impl => self.parse_impl_block().map(|l| l.map(ModuleItem::Impl)),
+            TokenKind::Impl => self.parse_impl_block().map(|block| {
+                let location = block.location.clone();
+                Located::new(ModuleItem::Impl(block), location)
+            }),
             TokenKind::Fn => {
                 // Freestanding function with attributes
                 self.parse_function().map(|f| {
