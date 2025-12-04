@@ -1,5 +1,6 @@
 use crate::{
-    span::{HasLocation, ItemLocation, Span},
+    grammar::ItemPath,
+    span::{EqualsIgnoringLocations, HasLocation, ItemLocation, Span},
     tokenizer::TokenKind,
 };
 
@@ -12,7 +13,6 @@ use super::{
     core::Parser,
     expressions::{Expr, StringFormat},
     module::ModuleItem,
-    paths::UseTree,
     types::{Ident, Type},
 };
 
@@ -133,6 +133,112 @@ impl ExternValue {
     pub fn with_doc_comments(mut self, doc_comments: Vec<String>) -> Self {
         self.doc_comments = doc_comments;
         self
+    }
+}
+
+/// Represents a use tree for braced imports.
+/// Examples:
+/// - `Vector3` → `UseTree::Path { path: ["Vector3"], location }`
+/// - `math::{Vector3, Matrix4}` → `UseTree::Group { prefix: ["math"], items: [Path(...), Path(...)] }`
+/// - `types::{math::{V3, V4}, Game}` → nested groups
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum UseTree {
+    /// A leaf path like `Vector3` or `math::Vector3`
+    Path {
+        path: ItemPath,
+        location: ItemLocation,
+    },
+    /// A group like `{A, B}` or `path::{A, B}`
+    Group {
+        prefix: ItemPath,
+        items: Vec<UseTree>,
+        location: ItemLocation,
+    },
+}
+impl UseTree {
+    /// Flatten this UseTree into a list of complete ItemPaths.
+    /// For example, `math::{Vector3, Matrix4}` becomes `["math::Vector3", "math::Matrix4"]`
+    pub fn flatten(&self) -> Vec<ItemPath> {
+        match self {
+            UseTree::Path { path, .. } => vec![path.clone()],
+            UseTree::Group { prefix, items, .. } => items
+                .iter()
+                .flat_map(|item| {
+                    item.flatten().into_iter().map(|item_path| {
+                        prefix
+                            .iter()
+                            .chain(item_path.iter())
+                            .cloned()
+                            .collect::<ItemPath>()
+                    })
+                })
+                .collect(),
+        }
+    }
+}
+impl HasLocation for UseTree {
+    fn location(&self) -> &ItemLocation {
+        match self {
+            UseTree::Path { location, .. } => location,
+            UseTree::Group { location, .. } => location,
+        }
+    }
+}
+#[cfg(test)]
+impl UseTree {
+    /// Create a Path variant with a test location (for use in tests)
+    pub fn path(path: impl Into<ItemPath>) -> Self {
+        UseTree::Path {
+            path: path.into(),
+            location: ItemLocation::test(),
+        }
+    }
+
+    /// Create a Group variant with a test location (for use in tests)
+    pub fn group(prefix: impl Into<ItemPath>, items: impl IntoIterator<Item = UseTree>) -> Self {
+        UseTree::Group {
+            prefix: prefix.into(),
+            items: items.into_iter().collect(),
+            location: ItemLocation::test(),
+        }
+    }
+}
+#[cfg(test)]
+impl StripLocations for UseTree {
+    fn strip_locations(&self) -> Self {
+        match self {
+            UseTree::Path { path, .. } => UseTree::Path {
+                path: path.strip_locations(),
+                location: ItemLocation::test(),
+            },
+            UseTree::Group { prefix, items, .. } => UseTree::Group {
+                prefix: prefix.strip_locations(),
+                items: items.iter().map(|i| i.strip_locations()).collect(),
+                location: ItemLocation::test(),
+            },
+        }
+    }
+}
+impl EqualsIgnoringLocations for UseTree {
+    fn equals_ignoring_locations(&self, other: &Self) -> bool {
+        match (self, other) {
+            (UseTree::Path { path: a, .. }, UseTree::Path { path: b, .. }) => {
+                a.equals_ignoring_locations(b)
+            }
+            (
+                UseTree::Group {
+                    prefix: p1,
+                    items: i1,
+                    ..
+                },
+                UseTree::Group {
+                    prefix: p2,
+                    items: i2,
+                    ..
+                },
+            ) => p1.equals_ignoring_locations(p2) && i1.equals_ignoring_locations(i2),
+            _ => false,
+        }
     }
 }
 

@@ -1,20 +1,18 @@
-use crate::{
-    span::{HasLocation, ItemLocation},
-    tokenizer::TokenKind,
-};
-
 #[cfg(test)]
 use crate::span::StripLocations;
 
-use super::{
-    ParseError,
-    attributes::Attributes,
-    core::Parser,
-    external::{Backend, ExternValue},
-    functions::{Function, FunctionBlock},
-    items::{Comment, ItemDefinition},
-    paths::UseTree,
-    types::Ident,
+use crate::{
+    parser::{
+        ParseError,
+        attributes::Attributes,
+        core::Parser,
+        external::{Backend, ExternValue, UseTree},
+        functions::{Function, FunctionBlock},
+        items::{Comment, ItemDefinition},
+        types::Ident,
+    },
+    span::{HasLocation, ItemLocation},
+    tokenizer::TokenKind,
 };
 
 #[cfg(test)]

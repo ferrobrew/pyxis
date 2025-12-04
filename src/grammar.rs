@@ -2,7 +2,7 @@
 pub use crate::parser::{
     attributes::{Attribute, AttributeItem, AttributeItems, Attributes, Visibility},
     expressions::{Expr, ExprField, IntFormat, StringFormat},
-    external::{Backend, ExternValue},
+    external::{Backend, ExternValue, UseTree},
     functions::{Argument, Function, FunctionBlock, ImplItem},
     items::{
         BitflagsDefItem, BitflagsDefinition, BitflagsStatement, Comment, EnumDefItem,
@@ -10,7 +10,7 @@ pub use crate::parser::{
         TypeDefinition, TypeField, TypeStatement,
     },
     module::{Module, ModuleItem},
-    paths::{ItemPath, ItemPathSegment, UseTree},
+    paths::{ItemPath, ItemPathSegment},
     types::{Ident, Type},
 };
 
