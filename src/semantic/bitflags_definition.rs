@@ -5,7 +5,7 @@ use crate::{
         error::{BitflagsExpectedType, Result, SemanticError, TypeResolutionContext},
         types::{ItemStateResolved, Type},
     },
-    span::{HasLocation, Located},
+    span::{HasLocation, ItemLocation},
 };
 
 #[cfg(test)]
@@ -82,10 +82,11 @@ impl BitflagsDefinition {
 pub fn build(
     semantic: &SemanticState,
     resolvee_path: &ItemPath,
-    definition: Located<&grammar::BitflagsDefinition>,
+    definition: &grammar::BitflagsDefinition,
+    location: &ItemLocation,
     doc_comments: &[String],
 ) -> Result<Option<ItemStateResolved>> {
-    let module = semantic.get_module_for_path(resolvee_path, &definition.location)?;
+    let module = semantic.get_module_for_path(resolvee_path, location)?;
 
     let type_location = definition.type_.location().clone();
 
@@ -174,7 +175,7 @@ pub fn build(
                     if default.is_some() {
                         return Err(SemanticError::BitflagsMultipleDefaults {
                             item_path: resolvee_path.clone(),
-                            location: definition.location.clone(),
+                            location: location.clone(),
                         });
                     }
                     default = Some(fields.len() - 1);
@@ -214,14 +215,14 @@ pub fn build(
     if !defaultable && default.is_some() {
         return Err(SemanticError::BitflagsDefaultWithoutDefaultable {
             item_path: resolvee_path.clone(),
-            location: definition.location.clone(),
+            location: location.clone(),
         });
     }
 
     if defaultable && default.is_none() {
         return Err(SemanticError::BitflagsDefaultableMissingDefault {
             item_path: resolvee_path.clone(),
-            location: definition.location.clone(),
+            location: location.clone(),
         });
     }
 

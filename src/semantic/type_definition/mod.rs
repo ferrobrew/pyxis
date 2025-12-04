@@ -9,7 +9,7 @@ use crate::{
         type_registry::TypeRegistry,
         types::{Function, FunctionBody, ItemState, ItemStateResolved, Type, Visibility},
     },
-    span::{HasLocation, ItemLocation, Located},
+    span::{HasLocation, ItemLocation},
     util,
 };
 
@@ -200,10 +200,11 @@ pub fn build(
     semantic: &mut SemanticState,
     resolvee_path: &ItemPath,
     visibility: Visibility,
-    definition: Located<&grammar::TypeDefinition>,
+    definition: &grammar::TypeDefinition,
+    location: &ItemLocation,
     doc_comments: &[String],
 ) -> Result<Option<ItemStateResolved>> {
-    let module = semantic.get_module_for_path(resolvee_path, &definition.location)?;
+    let module = semantic.get_module_for_path(resolvee_path, location)?;
 
     // Handle attributes
     let mut target_size: Option<usize> = None;
@@ -250,7 +251,7 @@ pub fn build(
                 attr1: "size".into(),
                 attr2: "min_size".into(),
                 item_path: resolvee_path.clone(),
-                location: definition.location.clone(),
+                location: location.clone(),
             }
         });
     }
@@ -400,14 +401,14 @@ pub fn build(
         min_size.is_some(),
         pending_regions,
         vftable_functions,
-        &definition.location,
+        location,
     )?
     else {
         return Ok(None);
     };
 
     // Reborrow the module after resolving regions
-    let module = semantic.get_module_for_path(resolvee_path, &definition.location)?;
+    let module = semantic.get_module_for_path(resolvee_path, location)?;
 
     // Handle functions
     let mut associated_functions = vec![];
@@ -459,7 +460,7 @@ pub fn build(
                     name: function.name.0.clone(),
                     item_path: resolvee_path.clone(),
                     message: "function already defined in type or base type".into(),
-                    location: definition.location.clone(),
+                    location: location.clone(),
                 });
             }
 
@@ -526,7 +527,7 @@ pub fn build(
                 attr1: "packed".into(),
                 attr2: "align".into(),
                 item_path: resolvee_path.clone(),
-                location: definition.location.clone(),
+                location: location.clone(),
             });
         }
 
@@ -553,7 +554,7 @@ pub fn build(
                 alignment,
                 required_alignment,
                 item_path: resolvee_path.clone(),
-                location: definition.location.clone(),
+                location: location.clone(),
             });
         }
 
@@ -569,7 +570,7 @@ pub fn build(
                         item_path: resolvee_path.clone(),
                         address: last_address,
                         required_alignment: field_alignment,
-                        location: definition.location.clone(),
+                        location: location.clone(),
                     });
                 }
                 last_address += region.size(&semantic.type_registry).unwrap();
@@ -582,7 +583,7 @@ pub fn build(
                 size,
                 alignment,
                 item_path: resolvee_path.clone(),
-                location: definition.location.clone(),
+                location: location.clone(),
             });
         }
 

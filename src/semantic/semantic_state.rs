@@ -15,7 +15,7 @@ use crate::{
             PredefinedItem, Type, TypeDefinition, Visibility,
         },
     },
-    span::{HasLocation, ItemLocation, Located},
+    span::{HasLocation, ItemLocation},
 };
 
 pub struct SemanticState {
@@ -245,25 +245,28 @@ impl SemanticState {
 
                 let visibility: Visibility = definition.visibility.into();
 
-                let def_location = definition.location.clone();
+                let def_location = &definition.location;
                 let item = match &definition.inner {
                     grammar::ItemDefinitionInner::Type(ty) => type_definition::build(
                         &mut self,
                         resolvee_path,
                         visibility,
-                        Located::new(ty, def_location.clone()),
+                        ty,
+                        def_location,
                         &definition.doc_comments,
                     )?,
                     grammar::ItemDefinitionInner::Enum(e) => enum_definition::build(
                         &self,
                         resolvee_path,
-                        Located::new(e, def_location.clone()),
+                        e,
+                        def_location,
                         &definition.doc_comments,
                     )?,
                     grammar::ItemDefinitionInner::Bitflags(b) => bitflags_definition::build(
                         &self,
                         resolvee_path,
-                        Located::new(b, def_location.clone()),
+                        b,
+                        def_location,
                         &definition.doc_comments,
                     )?,
                 };
