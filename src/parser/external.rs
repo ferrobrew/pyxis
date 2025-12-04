@@ -159,18 +159,32 @@ impl UseTree {
     /// Flatten this UseTree into a list of complete ItemPaths.
     /// For example, `math::{Vector3, Matrix4}` becomes `["math::Vector3", "math::Matrix4"]`
     pub fn flatten(&self) -> Vec<ItemPath> {
+        self.flatten_with_locations()
+            .into_iter()
+            .map(|(path, _)| path)
+            .collect()
+    }
+
+    /// Flatten this UseTree into a list of (ItemPath, ItemLocation) pairs.
+    /// The location points to the original use tree item for error reporting.
+    pub fn flatten_with_locations(&self) -> Vec<(ItemPath, ItemLocation)> {
         match self {
-            UseTree::Path { path, .. } => vec![path.clone()],
+            UseTree::Path { path, location } => vec![(path.clone(), location.clone())],
             UseTree::Group { prefix, items, .. } => items
                 .iter()
                 .flat_map(|item| {
-                    item.flatten().into_iter().map(|item_path| {
-                        prefix
-                            .iter()
-                            .chain(item_path.iter())
-                            .cloned()
-                            .collect::<ItemPath>()
-                    })
+                    item.flatten_with_locations()
+                        .into_iter()
+                        .map(|(item_path, location)| {
+                            (
+                                prefix
+                                    .iter()
+                                    .chain(item_path.iter())
+                                    .cloned()
+                                    .collect::<ItemPath>(),
+                                location,
+                            )
+                        })
                 })
                 .collect(),
         }

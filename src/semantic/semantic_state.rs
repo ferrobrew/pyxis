@@ -229,6 +229,9 @@ impl SemanticState {
     }
 
     pub fn build(mut self) -> Result<ResolvedSemanticState> {
+        // Validate all use statements before resolving types
+        self.validate_uses()?;
+
         loop {
             let to_resolve = self.type_registry.unresolved();
             if to_resolve.is_empty() {
@@ -322,6 +325,45 @@ impl SemanticState {
                 path: path.clone(),
                 location: from_location.clone(),
             })
+    }
+
+    /// Validate that all items referenced in use statements actually exist.
+    /// This checks that each path in a use statement refers to either:
+    /// - A type in the type registry (whose parent module also exists)
+    /// - A module that exists
+    fn validate_uses(&self) -> Result<()> {
+        for module in self.modules.values() {
+            for use_item in module.uses() {
+                let grammar::ModuleItem::Use { tree, .. } = use_item else {
+                    continue;
+                };
+
+                for (path, location) in tree.flatten_with_locations() {
+                    // Check if the path is a type in the type registry
+                    let is_type = self.type_registry.contains(&path);
+
+                    // Check if the path is a module
+                    let is_module = self.modules.contains_key(&path);
+
+                    if is_type || is_module {
+                        continue;
+                    }
+
+                    // The path doesn't exist directly. Check if the parent module exists
+                    // to provide a better error - if parent doesn't exist, the import
+                    // definitely can't work.
+                    if let Some(parent) = path.parent() {
+                        if !self.modules.contains_key(&parent) {
+                            return Err(SemanticError::UseItemNotFound { path, location });
+                        }
+                    }
+
+                    // Parent exists but the item doesn't
+                    return Err(SemanticError::UseItemNotFound { path, location });
+                }
+            }
+        }
+        Ok(())
     }
 }
 

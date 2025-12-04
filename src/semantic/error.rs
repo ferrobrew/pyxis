@@ -106,6 +106,11 @@ pub enum SemanticError {
         path: ItemPath,
         location: ItemLocation,
     },
+    /// Failed to find an item referenced in a use statement
+    UseItemNotFound {
+        path: ItemPath,
+        location: ItemLocation,
+    },
     /// Missing required attribute for extern type
     MissingExternAttribute {
         attribute_name: String,
@@ -330,6 +335,9 @@ impl SemanticError {
             }
             SemanticError::TypeNotFound { path, .. } => {
                 format!("Type not found: `{path}`")
+            }
+            SemanticError::UseItemNotFound { path, .. } => {
+                format!("Item in use statement not found: `{path}`")
             }
             SemanticError::MissingExternAttribute {
                 attribute_name,
@@ -606,6 +614,7 @@ impl SemanticError {
         match self {
             SemanticError::ModuleNotFound { location, .. } => Some(location),
             SemanticError::TypeNotFound { location, .. } => Some(location),
+            SemanticError::UseItemNotFound { location, .. } => Some(location),
             SemanticError::MissingExternAttribute { location, .. } => Some(location),
             SemanticError::MissingAttribute { location, .. } => Some(location),
             SemanticError::InvalidAttributeFunctionArgumentCount { location, .. } => Some(location),

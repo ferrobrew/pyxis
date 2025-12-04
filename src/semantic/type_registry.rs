@@ -28,6 +28,11 @@ impl TypeRegistry {
         self.pointer_size
     }
 
+    /// Check if a type exists in the registry
+    pub fn contains(&self, item_path: &ItemPath) -> bool {
+        self.types.contains_key(item_path)
+    }
+
     pub fn get(
         &self,
         item_path: &ItemPath,
