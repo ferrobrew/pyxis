@@ -140,7 +140,7 @@ impl BackendError {
             ("<unknown>", 0, 0, String::new())
         };
 
-        let report_builder = Report::build(ReportKind::Error, filename, offset)
+        let report_builder = Report::build(ReportKind::Error, (filename, offset..offset + length))
             .with_message(message)
             .with_label(
                 Label::new((filename, offset..offset + length))
