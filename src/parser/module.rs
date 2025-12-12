@@ -259,6 +259,46 @@ impl Module {
 }
 
 impl Parser {
+    /// Skip over attributes during lookahead, returning the position after all attributes.
+    /// Uses safe token access that won't panic on out-of-bounds.
+    fn skip_attributes_lookahead(&self, start_pos: usize) -> usize {
+        let mut pos = start_pos;
+
+        // Skip past attributes
+        while self
+            .tokens
+            .get(pos)
+            .is_some_and(|t| matches!(t.kind, TokenKind::Hash))
+        {
+            pos += 1; // skip #
+            if self
+                .tokens
+                .get(pos)
+                .is_some_and(|t| matches!(t.kind, TokenKind::LBracket))
+            {
+                pos += 1; // skip [
+                // Skip until matching ]
+                let mut depth = 1;
+                while depth > 0 {
+                    match self.tokens.get(pos).map(|t| &t.kind) {
+                        Some(TokenKind::LBracket) => depth += 1,
+                        Some(TokenKind::RBracket) => depth -= 1,
+                        None => break, // EOF reached
+                        _ => {}
+                    }
+                    pos += 1;
+                }
+            }
+        }
+
+        pos
+    }
+
+    /// Get the token kind at a position, returning None if out of bounds.
+    fn peek_at(&self, pos: usize) -> Option<&TokenKind> {
+        self.tokens.get(pos).map(|t| &t.kind)
+    }
+
     /// Skip over all comments and whitespace
     pub fn parse_module(&mut self) -> Result<Module, ParseError> {
         let mut items = Vec::new();
@@ -333,55 +373,35 @@ impl Parser {
                 .map(|backend| ModuleItem::Backend { backend }),
             TokenKind::Hash => {
                 // Attributes - need to peek ahead to see what comes after
-                let mut pos = self.pos;
-                // Skip past attributes
-                while matches!(self.tokens[pos].kind, TokenKind::Hash) {
-                    pos += 1; // skip #
-                    if matches!(self.tokens[pos].kind, TokenKind::LBracket) {
-                        pos += 1; // skip [
-                        // Skip until ]
-                        let mut depth = 1;
-                        while depth > 0 && pos < self.tokens.len() {
-                            match &self.tokens[pos].kind {
-                                TokenKind::LBracket => depth += 1,
-                                TokenKind::RBracket => depth -= 1,
-                                _ => {}
-                            }
-                            pos += 1;
-                        }
-                    }
-                }
+                let mut pos = self.skip_attributes_lookahead(self.pos);
 
                 // Skip over any comments (including doc comments) after attributes in lookahead
-                while pos < self.tokens.len()
-                    && matches!(
-                        &self.tokens[pos].kind,
+                while matches!(
+                    self.peek_at(pos),
+                    Some(
                         TokenKind::Comment(_)
                             | TokenKind::MultiLineComment(_)
                             | TokenKind::DocOuter(_)
                             | TokenKind::DocInner(_)
                     )
-                {
+                ) {
                     pos += 1;
                 }
 
                 // Now check what comes after attributes (and comments)
-                match &self.tokens[pos].kind {
-                    TokenKind::Extern => {
+                match self.peek_at(pos) {
+                    Some(TokenKind::Extern) => {
                         // Could be extern type or extern value
-                        if matches!(
-                            self.tokens.get(pos + 1).map(|t| &t.kind),
-                            Some(TokenKind::Type)
-                        ) {
+                        if matches!(self.peek_at(pos + 1), Some(TokenKind::Type)) {
                             self.parse_extern_type()
                         } else {
                             self.parse_extern_value()
                                 .map(|extern_value| ModuleItem::ExternValue { extern_value })
                         }
                     }
-                    TokenKind::Pub => {
+                    Some(TokenKind::Pub) => {
                         // Could be pub extern value, pub fn, or pub item definition
-                        match self.tokens.get(pos + 1).map(|t| &t.kind) {
+                        match self.peek_at(pos + 1) {
                             Some(TokenKind::Extern) => self
                                 .parse_extern_value()
                                 .map(|extern_value| ModuleItem::ExternValue { extern_value }),
@@ -393,60 +413,40 @@ impl Parser {
                                 .map(|definition| ModuleItem::Definition { definition }),
                         }
                     }
-                    TokenKind::Type | TokenKind::Enum | TokenKind::Bitflags => self
+                    Some(TokenKind::Type | TokenKind::Enum | TokenKind::Bitflags) => self
                         .parse_item_definition()
                         .map(|definition| ModuleItem::Definition { definition }),
-                    TokenKind::Impl => self
+                    Some(TokenKind::Impl) => self
                         .parse_impl_block()
                         .map(|impl_block| ModuleItem::Impl { impl_block }),
-                    TokenKind::Fn => self
+                    Some(TokenKind::Fn) => self
                         .parse_function()
                         .map(|function| ModuleItem::Function { function }),
-                    _ => Err(ParseError::UnexpectedTokenAfterAttributes {
-                        found: self.tokens[pos].kind.clone(),
-                        location: self.tokens[pos].location,
-                    }),
+                    _ => {
+                        // Lookahead couldn't determine item type - this often happens with
+                        // malformed attributes. Let parse_item_definition handle it, which
+                        // will properly parse (and error on) the attributes.
+                        self.parse_item_definition()
+                            .map(|definition| ModuleItem::Definition { definition })
+                    }
                 }
             }
             TokenKind::DocOuter(_) => {
                 // Peek ahead to see what comes after doc comments
                 let mut pos = self.pos;
-                while matches!(
-                    self.tokens.get(pos).map(|t| &t.kind),
-                    Some(TokenKind::DocOuter(_))
-                ) {
+                while matches!(self.peek_at(pos), Some(TokenKind::DocOuter(_))) {
                     pos += 1;
                 }
 
-                // Check if this is an extern type
-                if matches!(self.tokens.get(pos).map(|t| &t.kind), Some(TokenKind::Hash)) {
-                    // Skip attributes
-                    while matches!(self.tokens[pos].kind, TokenKind::Hash) {
-                        pos += 1; // skip #
-                        if matches!(self.tokens[pos].kind, TokenKind::LBracket) {
-                            pos += 1; // skip [
-                            // Skip until ]
-                            let mut depth = 1;
-                            while depth > 0 && pos < self.tokens.len() {
-                                match &self.tokens[pos].kind {
-                                    TokenKind::LBracket => depth += 1,
-                                    TokenKind::RBracket => depth -= 1,
-                                    _ => {}
-                                }
-                                pos += 1;
-                            }
-                        }
-                    }
+                // Check if this is an extern type - skip any attributes first
+                if matches!(self.peek_at(pos), Some(TokenKind::Hash)) {
+                    pos = self.skip_attributes_lookahead(pos);
                 }
 
                 // Now check what comes after doc comments (and possibly attributes)
-                if matches!(
-                    self.tokens.get(pos).map(|t| &t.kind),
-                    Some(TokenKind::Extern)
-                ) && matches!(
-                    self.tokens.get(pos + 1).map(|t| &t.kind),
-                    Some(TokenKind::Type)
-                ) {
+                if matches!(self.peek_at(pos), Some(TokenKind::Extern))
+                    && matches!(self.peek_at(pos + 1), Some(TokenKind::Type))
+                {
                     self.parse_extern_type()
                 } else {
                     self.parse_item_definition()

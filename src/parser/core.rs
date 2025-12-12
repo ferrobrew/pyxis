@@ -90,7 +90,7 @@ impl Parser {
             Ok(self.advance())
         } else {
             Err(ParseError::ExpectedToken {
-                expected: kind,
+                expected: vec![kind],
                 found: self.peek().clone(),
                 location: self.current().location,
             })
