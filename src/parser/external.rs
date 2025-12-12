@@ -1,6 +1,6 @@
 use crate::{
     grammar::ItemPath,
-    span::{EqualsIgnoringLocations, HasLocation, ItemLocation, Span},
+    span::{EqualsIgnoringLocations, HasLocation, ItemLocation},
     tokenizer::TokenKind,
 };
 
@@ -169,7 +169,7 @@ impl UseTree {
     /// The location points to the original use tree item for error reporting.
     pub fn flatten_with_locations(&self) -> Vec<(ItemPath, ItemLocation)> {
         match self {
-            UseTree::Path { path, location } => vec![(path.clone(), location.clone())],
+            UseTree::Path { path, location } => vec![(path.clone(), *location)],
             UseTree::Group { prefix, items, .. } => items
                 .iter()
                 .flat_map(|item| {
@@ -267,7 +267,7 @@ impl Parser {
             && name == "super"
         {
             return Err(ParseError::SuperNotSupported {
-                location: self.current().location.clone(),
+                location: self.current().location,
             });
         }
 
@@ -390,7 +390,7 @@ impl Parser {
         } else {
             self.current().location.span.end
         };
-        let location = ItemLocation::new(self.filename.clone(), Span::new(start_pos, end_pos));
+        let location = self.item_location_from_locations(start_pos, end_pos);
         Ok(ModuleItem::ExternType {
             name,
             attributes,
@@ -460,7 +460,7 @@ impl Parser {
                         } else {
                             return Err(ParseError::ExpectedStringLiteral {
                                 found: self.peek().clone(),
-                                location: expr.location().clone(),
+                                location: *expr.location(),
                             });
                         }
                         self.expect(TokenKind::Semi)?;
@@ -474,7 +474,7 @@ impl Parser {
                         } else {
                             return Err(ParseError::ExpectedStringLiteral {
                                 found: self.peek().clone(),
-                                location: expr.location().clone(),
+                                location: *expr.location(),
                             });
                         }
                         self.expect(TokenKind::Semi)?;
@@ -482,7 +482,7 @@ impl Parser {
                     _ => {
                         return Err(ParseError::ExpectedPrologueOrEpilogue {
                             found: self.peek().clone(),
-                            location: self.current().location.clone(),
+                            location: self.current().location,
                         });
                     }
                 }
@@ -501,7 +501,7 @@ impl Parser {
                     } else {
                         return Err(ParseError::ExpectedStringLiteral {
                             found: self.peek().clone(),
-                            location: expr.location().clone(),
+                            location: *expr.location(),
                         });
                     }
                     self.expect(TokenKind::Semi)?
@@ -515,7 +515,7 @@ impl Parser {
                     } else {
                         return Err(ParseError::ExpectedStringLiteral {
                             found: self.peek().clone(),
-                            location: expr.location().clone(),
+                            location: *expr.location(),
                         });
                     }
                     self.expect(TokenKind::Semi)?
@@ -523,7 +523,7 @@ impl Parser {
                 _ => {
                     return Err(ParseError::ExpectedBackendContent {
                         found: self.peek().clone(),
-                        location: self.current().location.clone(),
+                        location: self.current().location,
                     });
                 }
             }

@@ -38,7 +38,7 @@ pub fn assert_function_argument_count<'a>(
             attribute_name: target_name.into(),
             expected_count: length,
             actual_count: exprs.len(),
-            location: fallback_location.clone(),
+            location: *fallback_location,
         });
     }
     Ok(exprs)
@@ -69,7 +69,7 @@ fn integer_expr<T: TryFrom<isize> + Display>(expr: &Expr, attribute_name: &str) 
         return Err(SemanticError::InvalidAttributeValue {
             attribute_name: attribute_name.into(),
             expected_type: std::any::type_name::<T>().into(),
-            location: expr.location().clone(),
+            location: *expr.location(),
         });
     };
     let value = (*value)
@@ -77,7 +77,7 @@ fn integer_expr<T: TryFrom<isize> + Display>(expr: &Expr, attribute_name: &str) 
         .map_err(|_| SemanticError::IntegerConversion {
             value: value.to_string(),
             target_type: std::any::type_name::<T>().into(),
-            location: expr.location().clone(),
+            location: *expr.location(),
         })?;
     Ok(value)
 }

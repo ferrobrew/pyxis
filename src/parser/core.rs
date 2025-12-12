@@ -1,9 +1,8 @@
 use crate::{
     grammar::{Comment, Ident},
-    span::{ItemLocation, Location, Span},
+    span::{FileId, ItemLocation, Location, Span},
     tokenizer::{Token, TokenKind},
 };
-use std::sync::Arc;
 
 use super::ParseError;
 
@@ -11,17 +10,17 @@ pub struct Parser {
     pub(crate) tokens: Vec<Token>,
     pub(crate) pos: usize,
     pub(crate) pending_comments: Vec<Comment>,
-    pub(crate) filename: Arc<str>,
+    pub(crate) file_id: FileId,
     pub(crate) source: String,
 }
 
 impl Parser {
-    pub fn new(tokens: Vec<Token>, filename: impl Into<Arc<str>>, source: String) -> Self {
+    pub fn new(tokens: Vec<Token>, file_id: FileId, source: String) -> Self {
         Self {
             tokens,
             pos: 0,
             pending_comments: Vec::new(),
-            filename: filename.into(),
+            file_id,
             source,
         }
     }
@@ -93,7 +92,7 @@ impl Parser {
             Err(ParseError::ExpectedToken {
                 expected: kind,
                 found: self.peek().clone(),
-                location: self.current().location.clone(),
+                location: self.current().location,
             })
         }
     }
@@ -119,7 +118,7 @@ impl Parser {
             }
             _ => Err(ParseError::ExpectedIdentifier {
                 found: self.peek().clone(),
-                location: self.current().location.clone(),
+                location: self.current().location,
             }),
         }
     }
@@ -177,7 +176,7 @@ impl Parser {
     }
 
     pub(crate) fn item_location_from_span(&self, span: Span) -> ItemLocation {
-        ItemLocation::new(self.filename.clone(), span)
+        ItemLocation::new(self.file_id, span)
     }
 
     pub(crate) fn item_location_from_locations(

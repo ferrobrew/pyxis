@@ -378,7 +378,7 @@ impl Parser {
                 }
 
                 let expr = self.parse_expr()?;
-                let location = expr.location().clone();
+                let location = *expr.location();
                 items.push(AttributeItem::Expr { expr, location });
 
                 // Collect trailing comments after the expression
@@ -394,7 +394,7 @@ impl Parser {
                     };
                     items.push(AttributeItem::Comment {
                         text: comment_text,
-                        location: token.location.clone(),
+                        location: token.location,
                     });
                 }
 
@@ -435,7 +435,7 @@ impl Parser {
 
             let expr = self.parse_expr()?;
             let mut end_pos = expr.location().span.end;
-            let expr_location = expr.location().clone();
+            let expr_location = *expr.location();
             items.push(AttributeItem::Expr {
                 expr,
                 location: expr_location,
@@ -454,7 +454,7 @@ impl Parser {
                 };
                 items.push(AttributeItem::Comment {
                     text: comment_text,
-                    location: token.location.clone(),
+                    location: token.location,
                 });
                 end_pos = token.location.span.end;
             }

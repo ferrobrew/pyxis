@@ -161,7 +161,7 @@ impl Parser {
             }
             _ => Err(ParseError::ExpectedExpression {
                 found: self.peek().clone(),
-                location: self.current().location.clone(),
+                location: self.current().location,
             }),
         }
     }
@@ -190,7 +190,7 @@ impl Parser {
                         .map_err(|_| ParseError::InvalidIntLiteral {
                             kind: "hex".to_string(),
                             value: s.clone(),
-                            location: token.location.clone(),
+                            location: token.location,
                         })
                 } else if s.starts_with("0b") || s.starts_with("-0b") {
                     // Binary
@@ -205,7 +205,7 @@ impl Parser {
                         .map_err(|_| ParseError::InvalidIntLiteral {
                             kind: "binary".to_string(),
                             value: s.clone(),
-                            location: token.location.clone(),
+                            location: token.location,
                         })
                 } else if s.starts_with("0o") || s.starts_with("-0o") {
                     // Octal
@@ -220,7 +220,7 @@ impl Parser {
                         .map_err(|_| ParseError::InvalidIntLiteral {
                             kind: "octal".to_string(),
                             value: s.clone(),
-                            location: token.location.clone(),
+                            location: token.location,
                         })
                 } else {
                     // Decimal
@@ -228,7 +228,7 @@ impl Parser {
                         .map_err(|_| ParseError::InvalidIntLiteral {
                             kind: "integer".to_string(),
                             value: s.clone(),
-                            location: token.location.clone(),
+                            location: token.location,
                         })
                 }?;
 
@@ -236,7 +236,7 @@ impl Parser {
             }
             _ => Err(ParseError::ExpectedIntLiteral {
                 found: self.peek().clone(),
-                location: self.current().location.clone(),
+                location: self.current().location,
             }),
         }
     }
@@ -252,7 +252,7 @@ impl Parser {
             }
             _ => Err(ParseError::ExpectedStringLiteral {
                 found: self.peek().clone(),
-                location: self.current().location.clone(),
+                location: self.current().location,
             }),
         }
     }

@@ -208,10 +208,10 @@ fn can_use_type_from_another_module() {
 
     let mut semantic_state = SemanticState::new(4);
     semantic_state
-        .add_module(&module1, &IP::from("module1"), None)
+        .add_module(&module1, &IP::from("module1"))
         .unwrap();
     semantic_state
-        .add_module(&module2, &IP::from("module2"), None)
+        .add_module(&module2, &IP::from("module2"))
         .unwrap();
     let semantic_state = semantic_state.build().unwrap();
 
@@ -269,10 +269,10 @@ fn can_use_braced_imports_from_another_module() {
 
     let mut semantic_state = SemanticState::new(4);
     semantic_state
-        .add_module(&module1, &IP::from("module1"), None)
+        .add_module(&module1, &IP::from("module1"))
         .unwrap();
     semantic_state
-        .add_module(&module_math, &IP::from("math"), None)
+        .add_module(&module_math, &IP::from("math"))
         .unwrap();
     let semantic_state = semantic_state.build().unwrap();
 
@@ -310,7 +310,7 @@ fn will_fail_on_use_of_nonexistent_type() {
 
     let mut semantic_state = SemanticState::new(4);
     semantic_state
-        .add_module(&module1, &IP::from("module1"), None)
+        .add_module(&module1, &IP::from("module1"))
         .unwrap();
 
     let err = semantic_state.build().unwrap_err();
@@ -339,10 +339,10 @@ fn will_fail_on_braced_import_with_nonexistent_type() {
 
     let mut semantic_state = SemanticState::new(4);
     semantic_state
-        .add_module(&module1, &IP::from("module1"), None)
+        .add_module(&module1, &IP::from("module1"))
         .unwrap();
     semantic_state
-        .add_module(&module_math, &IP::from("math"), None)
+        .add_module(&module_math, &IP::from("math"))
         .unwrap();
 
     let err = semantic_state.build().unwrap_err();
@@ -364,7 +364,7 @@ fn will_fail_on_use_of_nonexistent_module() {
 
     let mut semantic_state = SemanticState::new(4);
     semantic_state
-        .add_module(&module1, &IP::from("module1"), None)
+        .add_module(&module1, &IP::from("module1"))
         .unwrap();
 
     let err = semantic_state.build().unwrap_err();
@@ -391,10 +391,10 @@ fn can_use_module_in_use_statement() {
 
     let mut semantic_state = SemanticState::new(4);
     semantic_state
-        .add_module(&module1, &IP::from("module1"), None)
+        .add_module(&module1, &IP::from("module1"))
         .unwrap();
     semantic_state
-        .add_module(&module_math, &IP::from("math"), None)
+        .add_module(&module_math, &IP::from("math"))
         .unwrap();
 
     // Should succeed because "math" is a valid module
@@ -804,7 +804,7 @@ fn can_define_extern_value() {
 
     let mut semantic_state = SemanticState::new(4);
     semantic_state
-        .add_module(&module1, &IP::from("module1"), None)
+        .add_module(&module1, &IP::from("module1"))
         .unwrap();
     let semantic_state = semantic_state.build().unwrap();
 

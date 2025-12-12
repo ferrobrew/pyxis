@@ -126,7 +126,7 @@ pub fn build(
                 return Err(SemanticError::EnumUnsupportedValue {
                     item_path: resolvee_path.clone(),
                     case_name: name.0.clone(),
-                    location: e.location().clone(),
+                    location: *e.location(),
                 });
             }
             None => last_field,
@@ -139,7 +139,7 @@ pub fn build(
                     if default.is_some() {
                         return Err(SemanticError::EnumMultipleDefaults {
                             item_path: resolvee_path.clone(),
-                            location: location.clone(),
+                            location: *location,
                         });
                     }
                     default = Some(fields.len() - 1);
@@ -181,14 +181,14 @@ pub fn build(
     if !defaultable && default.is_some() {
         return Err(SemanticError::EnumDefaultWithoutDefaultable {
             item_path: resolvee_path.clone(),
-            location: location.clone(),
+            location: *location,
         });
     }
 
     if defaultable && default.is_none() {
         return Err(SemanticError::EnumDefaultableMissingDefault {
             item_path: resolvee_path.clone(),
-            location: location.clone(),
+            location: *location,
         });
     }
 
@@ -214,7 +214,7 @@ pub fn build(
                 resolution_context: TypeResolutionContext::EnumBaseTypeAlignment {
                     enum_path: resolvee_path.clone(),
                 },
-                location: location.clone(),
+                location: *location,
             }
         })?,
         inner: EnumDefinition {

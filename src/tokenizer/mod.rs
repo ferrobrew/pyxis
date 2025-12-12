@@ -1,7 +1,6 @@
-use crate::source_store::SourceStore;
-use crate::span::{self, ItemLocation, Location, Span};
+use crate::source_store::FileStore;
+use crate::span::{self, FileId, ItemLocation, Location, Span};
 use ariadne::{Color, Label, Report, ReportKind, Source};
-use std::sync::Arc;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TokenKind {
@@ -91,15 +90,16 @@ pub struct LexError {
 }
 
 impl LexError {
-    /// Format the error using ariadne with the provided source store.
+    /// Format the error using ariadne with the provided file store.
     /// Always produces ariadne-formatted output.
-    pub fn format_with_ariadne(&self, source_store: &mut dyn SourceStore) -> String {
-        if let Some(source) = source_store.get(self.location.filename.as_ref()) {
-            let offset = span::span_to_offset(source, &self.location.span);
-            let report = Report::build(ReportKind::Error, self.location.filename.as_ref(), offset)
+    pub fn format_with_ariadne(&self, file_store: &FileStore) -> String {
+        let filename = file_store.filename(self.location.file_id);
+        if let Some(source) = file_store.source(self.location.file_id) {
+            let offset = span::span_to_offset(&source, &self.location.span);
+            let report = Report::build(ReportKind::Error, filename, offset)
                 .with_message(&self.message)
                 .with_label(
-                    Label::new((self.location.filename.as_ref(), offset..offset + 1))
+                    Label::new((filename, offset..offset + 1))
                         .with_message(&self.message)
                         .with_color(Color::Red),
                 )
@@ -107,10 +107,7 @@ impl LexError {
 
             let mut buffer = Vec::new();
             if report
-                .write(
-                    (self.location.filename.as_ref(), Source::from(source)),
-                    &mut buffer,
-                )
+                .write((filename, Source::from(source)), &mut buffer)
                 .is_ok()
             {
                 return String::from_utf8_lossy(&buffer).to_string();
@@ -118,22 +115,15 @@ impl LexError {
         }
 
         // Source not available - create a report without source code labels
-        let placeholder_filename = self.location.filename.as_ref();
-        let report = Report::<(&str, std::ops::Range<usize>)>::build(
-            ReportKind::Error,
-            placeholder_filename,
-            0,
-        )
-        .with_message(&self.message)
-        .with_note(format!(
-            "Error location: {}:{}:{}",
-            self.location.filename, self.location.span.start.line, self.location.span.start.column
-        ))
-        .finish();
+        let report =
+            Report::<(&str, std::ops::Range<usize>)>::build(ReportKind::Error, filename, 0)
+                .with_message(&self.message)
+                .with_note(format!("Error location: {}:{}", filename, self.location))
+                .finish();
 
         let mut buffer = Vec::new();
         if report
-            .write((placeholder_filename, Source::from("")), &mut buffer)
+            .write((filename, Source::from("")), &mut buffer)
             .is_ok()
         {
             return String::from_utf8_lossy(&buffer).to_string();
@@ -157,11 +147,11 @@ pub struct Lexer {
     pos: usize,
     line: usize,
     column: usize,
-    filename: Arc<str>,
+    file_id: FileId,
 }
 
 impl Lexer {
-    pub fn new(input: String, filename: impl Into<Arc<str>>) -> Self {
+    pub fn new(input: String, file_id: FileId) -> Self {
         let chars: Vec<char> = input.chars().collect();
         Self {
             input,
@@ -169,15 +159,15 @@ impl Lexer {
             pos: 0,
             line: 1,
             column: 1,
-            filename: filename.into(),
+            file_id,
         }
     }
 
-    /// Helper to create a LexError with filename and source context
+    /// Helper to create a LexError with file ID and source context
     fn error(&self, message: String, location: Location) -> LexError {
         LexError {
             message,
-            location: ItemLocation::new(self.filename.clone(), Span::new(location, location)),
+            location: ItemLocation::new(self.file_id, Span::new(location, location)),
             source: self.input.clone(),
         }
     }
@@ -191,7 +181,7 @@ impl Lexer {
                 let loc = self.current_location();
                 tokens.push(Token::new(
                     TokenKind::Eof,
-                    ItemLocation::new(self.filename.clone(), Span::new(loc, loc)),
+                    ItemLocation::new(self.file_id, Span::new(loc, loc)),
                 ));
                 break;
             }
@@ -305,13 +295,13 @@ impl Lexer {
                     let end = self.current_location();
                     Ok(Token::new(
                         TokenKind::ColonColon,
-                        ItemLocation::new(self.filename.clone(), Span::new(start, end)),
+                        ItemLocation::new(self.file_id, Span::new(start, end)),
                     ))
                 } else {
                     let end = self.current_location();
                     Ok(Token::new(
                         TokenKind::Colon,
-                        ItemLocation::new(self.filename.clone(), Span::new(start, end)),
+                        ItemLocation::new(self.file_id, Span::new(start, end)),
                     ))
                 }
             }
@@ -322,7 +312,7 @@ impl Lexer {
                     let end = self.current_location();
                     Ok(Token::new(
                         TokenKind::Arrow,
-                        ItemLocation::new(self.filename.clone(), Span::new(start, end)),
+                        ItemLocation::new(self.file_id, Span::new(start, end)),
                     ))
                 } else {
                     // Could be negative number
@@ -339,7 +329,7 @@ impl Lexer {
                 let end = self.current_location();
                 Ok(Token::new(
                     TokenKind::Amp,
-                    ItemLocation::new(self.filename.clone(), Span::new(start, end)),
+                    ItemLocation::new(self.file_id, Span::new(start, end)),
                 ))
             }
             '*' => {
@@ -347,7 +337,7 @@ impl Lexer {
                 let end = self.current_location();
                 Ok(Token::new(
                     TokenKind::Star,
-                    ItemLocation::new(self.filename.clone(), Span::new(start, end)),
+                    ItemLocation::new(self.file_id, Span::new(start, end)),
                 ))
             }
             '[' => {
@@ -355,7 +345,7 @@ impl Lexer {
                 let end = self.current_location();
                 Ok(Token::new(
                     TokenKind::LBracket,
-                    ItemLocation::new(self.filename.clone(), Span::new(start, end)),
+                    ItemLocation::new(self.file_id, Span::new(start, end)),
                 ))
             }
             ']' => {
@@ -363,7 +353,7 @@ impl Lexer {
                 let end = self.current_location();
                 Ok(Token::new(
                     TokenKind::RBracket,
-                    ItemLocation::new(self.filename.clone(), Span::new(start, end)),
+                    ItemLocation::new(self.file_id, Span::new(start, end)),
                 ))
             }
             '{' => {
@@ -371,7 +361,7 @@ impl Lexer {
                 let end = self.current_location();
                 Ok(Token::new(
                     TokenKind::LBrace,
-                    ItemLocation::new(self.filename.clone(), Span::new(start, end)),
+                    ItemLocation::new(self.file_id, Span::new(start, end)),
                 ))
             }
             '}' => {
@@ -379,7 +369,7 @@ impl Lexer {
                 let end = self.current_location();
                 Ok(Token::new(
                     TokenKind::RBrace,
-                    ItemLocation::new(self.filename.clone(), Span::new(start, end)),
+                    ItemLocation::new(self.file_id, Span::new(start, end)),
                 ))
             }
             '(' => {
@@ -387,7 +377,7 @@ impl Lexer {
                 let end = self.current_location();
                 Ok(Token::new(
                     TokenKind::LParen,
-                    ItemLocation::new(self.filename.clone(), Span::new(start, end)),
+                    ItemLocation::new(self.file_id, Span::new(start, end)),
                 ))
             }
             ')' => {
@@ -395,7 +385,7 @@ impl Lexer {
                 let end = self.current_location();
                 Ok(Token::new(
                     TokenKind::RParen,
-                    ItemLocation::new(self.filename.clone(), Span::new(start, end)),
+                    ItemLocation::new(self.file_id, Span::new(start, end)),
                 ))
             }
             '<' => {
@@ -403,7 +393,7 @@ impl Lexer {
                 let end = self.current_location();
                 Ok(Token::new(
                     TokenKind::Lt,
-                    ItemLocation::new(self.filename.clone(), Span::new(start, end)),
+                    ItemLocation::new(self.file_id, Span::new(start, end)),
                 ))
             }
             '>' => {
@@ -411,7 +401,7 @@ impl Lexer {
                 let end = self.current_location();
                 Ok(Token::new(
                     TokenKind::Gt,
-                    ItemLocation::new(self.filename.clone(), Span::new(start, end)),
+                    ItemLocation::new(self.file_id, Span::new(start, end)),
                 ))
             }
             '=' => {
@@ -419,7 +409,7 @@ impl Lexer {
                 let end = self.current_location();
                 Ok(Token::new(
                     TokenKind::Eq,
-                    ItemLocation::new(self.filename.clone(), Span::new(start, end)),
+                    ItemLocation::new(self.file_id, Span::new(start, end)),
                 ))
             }
             ';' => {
@@ -427,7 +417,7 @@ impl Lexer {
                 let end = self.current_location();
                 Ok(Token::new(
                     TokenKind::Semi,
-                    ItemLocation::new(self.filename.clone(), Span::new(start, end)),
+                    ItemLocation::new(self.file_id, Span::new(start, end)),
                 ))
             }
             ',' => {
@@ -435,7 +425,7 @@ impl Lexer {
                 let end = self.current_location();
                 Ok(Token::new(
                     TokenKind::Comma,
-                    ItemLocation::new(self.filename.clone(), Span::new(start, end)),
+                    ItemLocation::new(self.file_id, Span::new(start, end)),
                 ))
             }
             '!' => {
@@ -443,7 +433,7 @@ impl Lexer {
                 let end = self.current_location();
                 Ok(Token::new(
                     TokenKind::Bang,
-                    ItemLocation::new(self.filename.clone(), Span::new(start, end)),
+                    ItemLocation::new(self.file_id, Span::new(start, end)),
                 ))
             }
             '#' => {
@@ -451,7 +441,7 @@ impl Lexer {
                 let end = self.current_location();
                 Ok(Token::new(
                     TokenKind::Hash,
-                    ItemLocation::new(self.filename.clone(), Span::new(start, end)),
+                    ItemLocation::new(self.file_id, Span::new(start, end)),
                 ))
             }
             _ => Err(self.error(format!("Unexpected character: '{ch}'"), start)),
@@ -493,7 +483,7 @@ impl Lexer {
 
         Ok(Token::new(
             kind,
-            ItemLocation::new(self.filename.clone(), Span::new(start, end)),
+            ItemLocation::new(self.file_id, Span::new(start, end)),
         ))
     }
 
@@ -530,7 +520,7 @@ impl Lexer {
 
         Ok(Token::new(
             TokenKind::MultiLineComment(text.clone()),
-            ItemLocation::new(self.filename.clone(), Span::new(start, end)),
+            ItemLocation::new(self.file_id, Span::new(start, end)),
         ))
     }
 
@@ -576,7 +566,7 @@ impl Lexer {
 
         Ok(Token::new(
             kind,
-            ItemLocation::new(self.filename.clone(), Span::new(start, end)),
+            ItemLocation::new(self.file_id, Span::new(start, end)),
         ))
     }
 
@@ -652,7 +642,7 @@ impl Lexer {
 
         Ok(Token::new(
             TokenKind::IntLiteral(text.clone()),
-            ItemLocation::new(self.filename.clone(), Span::new(start, end)),
+            ItemLocation::new(self.file_id, Span::new(start, end)),
         ))
     }
 
@@ -705,7 +695,7 @@ impl Lexer {
 
         Ok(Token::new(
             TokenKind::StringLiteral(value),
-            ItemLocation::new(self.filename.clone(), Span::new(start, end)),
+            ItemLocation::new(self.file_id, Span::new(start, end)),
         ))
     }
 
@@ -766,7 +756,7 @@ impl Lexer {
 
         Ok(Token::new(
             TokenKind::StringLiteral(value),
-            ItemLocation::new(self.filename.clone(), Span::new(start, end)),
+            ItemLocation::new(self.file_id, Span::new(start, end)),
         ))
     }
 
@@ -821,20 +811,17 @@ impl Lexer {
 
         Ok(Token::new(
             TokenKind::CharLiteral(ch),
-            ItemLocation::new(self.filename.clone(), Span::new(start, end)),
+            ItemLocation::new(self.file_id, Span::new(start, end)),
         ))
     }
 }
 
 pub fn tokenize(input: String) -> Result<Vec<Token>, LexError> {
-    tokenize_with_filename(input, "<input>")
+    tokenize_with_file_id(input, FileId::INTERNAL)
 }
 
-pub fn tokenize_with_filename(
-    input: String,
-    filename: impl Into<Arc<str>>,
-) -> Result<Vec<Token>, LexError> {
-    Lexer::new(input, filename).tokenize()
+pub fn tokenize_with_file_id(input: String, file_id: FileId) -> Result<Vec<Token>, LexError> {
+    Lexer::new(input, file_id).tokenize()
 }
 
 #[cfg(test)]

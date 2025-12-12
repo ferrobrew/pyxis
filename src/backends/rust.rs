@@ -152,7 +152,7 @@ fn build_item(
         .ok_or_else(|| BackendError::TypeCodeGenFailed {
             type_path: definition.path.clone(),
             reason: "type was not resolved".to_string(),
-            location: definition.location.clone(),
+            location: definition.location,
         })?;
 
     let ItemStateResolved {
@@ -196,7 +196,7 @@ fn build_type(
     let name = path.last().ok_or_else(|| BackendError::TypeCodeGenFailed {
         type_path: path.clone(),
         reason: "failed to get last component of item path".to_string(),
-        location: location.clone(),
+        location: *location,
     })?;
 
     let TypeDefinition {
@@ -230,7 +230,7 @@ fn build_type(
                     type_path: path.clone(),
                     field_name: "unnamed".to_string(),
                     reason: "field name not present".to_string(),
-                    location: location.clone(),
+                    location: *location,
                 })?;
             let field_ident = str_to_ident(field_name);
             let visibility = visibility_to_tokens(*visibility);
@@ -459,7 +459,7 @@ fn build_enum(
     let name = path.last().ok_or_else(|| BackendError::TypeCodeGenFailed {
         type_path: path.clone(),
         reason: "failed to get last component of item path".to_string(),
-        location: location.clone(),
+        location: *location,
     })?;
 
     let EnumDefinition {
@@ -572,7 +572,7 @@ fn build_bitflags(
     let name = path.last().ok_or_else(|| BackendError::TypeCodeGenFailed {
         type_path: path.clone(),
         reason: "failed to get last component of item path".to_string(),
-        location: location.clone(),
+        location: *location,
     })?;
 
     let BitflagsDefinition {

@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 mod equals_ignoring_location;
 pub use equals_ignoring_location::*;
 
@@ -61,12 +59,50 @@ impl std::fmt::Display for Span {
     }
 }
 
-/// Location of an item in source code (filename + span)
+/// A lightweight identifier for a source file.
+///
+/// This is an index into a [`FileStore`](crate::source_store::FileStore), which
+/// maps file IDs to filenames and provides access to source content.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct FileId(u32);
+
+impl FileId {
+    /// File ID for internal/generated items that don't have a source file.
+    pub const INTERNAL: FileId = FileId(0);
+
+    /// File ID for test items.
+    #[cfg(test)]
+    pub const TEST: FileId = FileId(1);
+
+    /// Create a new FileId from a raw index.
+    /// This should only be used by FileStore.
+    pub(crate) fn new(index: u32) -> Self {
+        FileId(index)
+    }
+
+    /// Get the raw index of this FileId.
+    pub(crate) fn index(self) -> usize {
+        self.0 as usize
+    }
+}
+
+impl std::fmt::Display for FileId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.0 {
+            0 => write!(f, "<internal>"),
+            #[cfg(test)]
+            1 => write!(f, "<test>"),
+            n => write!(f, "<file:{n}>"),
+        }
+    }
+}
+
+/// Location of an item in source code (file ID + span)
 /// Every grammar and semantic item should have an ItemLocation for error reporting
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ItemLocation {
     /// Source file containing the item
-    pub filename: Arc<str>,
+    pub file_id: FileId,
     /// Span of the item in the source file
     pub span: Span,
 }
@@ -77,17 +113,14 @@ impl StripLocations for ItemLocation {
     }
 }
 impl ItemLocation {
-    pub fn new(filename: impl Into<Arc<str>>, span: Span) -> Self {
-        Self {
-            filename: filename.into(),
-            span,
-        }
+    pub fn new(file_id: FileId, span: Span) -> Self {
+        Self { file_id, span }
     }
 
     /// Used only for internal items that don't have a source file
     pub fn internal() -> Self {
         Self {
-            filename: "<internal>".into(),
+            file_id: FileId::INTERNAL,
             span: Span::synthetic(),
         }
     }
@@ -96,14 +129,15 @@ impl ItemLocation {
     /// Create a test location for generated/test content
     pub fn test() -> Self {
         Self {
-            filename: "<test>".into(),
+            file_id: FileId::TEST,
             span: Span::synthetic(),
         }
     }
 }
+
 impl std::fmt::Display for ItemLocation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}:{}", self.filename, self.span)
+        write!(f, "{}", self.span.start)
     }
 }
 

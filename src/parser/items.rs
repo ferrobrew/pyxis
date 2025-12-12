@@ -805,7 +805,7 @@ impl Parser {
             }
             _ => Err(ParseError::ExpectedItemDefinition {
                 found: self.peek().clone(),
-                location: self.current().location.clone(),
+                location: self.current().location,
             }),
         }
     }

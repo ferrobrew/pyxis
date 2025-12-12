@@ -14,22 +14,21 @@ pub use module::Module;
 mod core;
 mod error;
 
-use std::sync::Arc;
+use crate::span::FileId;
 
 #[cfg(test)]
 /// Parse a Pyxis module from a string for tests, with the spans stripped out
 pub fn parse_str_for_tests(input: &str) -> Result<Module, ParseError> {
-    parse_str_with_filename(input, "<test>")
+    parse_str_with_file_id(input, FileId::TEST)
 }
 
-/// Parse a Pyxis module from a string with a specific filename for error reporting
-pub fn parse_str_with_filename(input: &str, filename: &str) -> Result<Module, ParseError> {
+/// Parse a Pyxis module from a string with a specific file ID for error reporting
+pub fn parse_str_with_file_id(input: &str, file_id: FileId) -> Result<Module, ParseError> {
     // First tokenize
-    let tokens = crate::tokenizer::tokenize_with_filename(input.to_string(), filename.to_string())?;
+    let tokens = crate::tokenizer::tokenize_with_file_id(input.to_string(), file_id)?;
 
     // Then parse
-    let filename_arc: Arc<str> = filename.into();
-    let mut parser = Parser::new(tokens, filename_arc, input.to_string());
+    let mut parser = Parser::new(tokens, file_id, input.to_string());
     let module = parser.parse_module()?;
 
     Ok(module)

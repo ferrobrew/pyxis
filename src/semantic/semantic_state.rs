@@ -15,6 +15,7 @@ use crate::{
             PredefinedItem, Type, TypeDefinition, Visibility,
         },
     },
+    source_store::FileStore,
     span::{HasLocation, ItemLocation},
 };
 
@@ -67,6 +68,7 @@ impl SemanticState {
 
     pub fn add_file(
         &mut self,
+        file_store: &mut FileStore,
         base_path: &Path,
         path: &Path,
     ) -> std::result::Result<(), BuildError> {
@@ -76,20 +78,17 @@ impl SemanticState {
         })?;
         let filename = path.display().to_string();
 
+        // Register the file and get its ID
+        let file_id = file_store.register_path(filename, path.to_path_buf());
+
         self.add_module(
-            &parser::parse_str_with_filename(&source, &filename)?,
+            &parser::parse_str_with_file_id(&source, file_id)?,
             &ItemPath::from_path(path.strip_prefix(base_path).unwrap_or(path)),
-            Some(filename.into()),
         )
         .map_err(Into::into)
     }
 
-    pub fn add_module(
-        &mut self,
-        module: &grammar::Module,
-        path: &ItemPath,
-        _filename: Option<std::sync::Arc<str>>,
-    ) -> Result<()> {
+    pub fn add_module(&mut self, module: &grammar::Module, path: &ItemPath) -> Result<()> {
         let extern_values = module
             .extern_values()
             .map(|ev| {
@@ -110,7 +109,7 @@ impl SemanticState {
                     attribute_name: "address".into(),
                     item_kind: "extern value".into(),
                     item_path: path.join(name.as_str().into()),
-                    location: ev.location.clone(),
+                    location: ev.location,
                 })?;
 
                 Ok(ExternValue {
@@ -118,7 +117,7 @@ impl SemanticState {
                     name: name.as_str().to_owned(),
                     type_: Type::Unresolved(ev.type_.clone()),
                     address,
-                    location: ev.location.clone(),
+                    location: ev.location,
                 })
             })
             .collect::<Result<Vec<_>>>()?;
@@ -146,7 +145,7 @@ impl SemanticState {
                 state: ItemState::Unresolved(definition.clone()),
                 category: ItemCategory::Defined,
                 predefined: None,
-                location: definition.location.clone(),
+                location: definition.location,
             })?;
         }
 
@@ -178,14 +177,14 @@ impl SemanticState {
                 extern_kind: "extern type".into(),
                 type_name: extern_name.as_str().into(),
                 module_name: path.to_string(),
-                location: extern_location.clone(),
+                location: *extern_location,
             })?;
             let alignment = alignment.ok_or_else(|| SemanticError::MissingExternAttribute {
                 attribute_name: "align".into(),
                 extern_kind: "extern type".into(),
                 type_name: extern_name.as_str().into(),
                 module_name: path.to_string(),
-                location: extern_location.clone(),
+                location: *extern_location,
             })?;
 
             let extern_path = path.join(extern_name.as_str().into());
@@ -200,7 +199,7 @@ impl SemanticState {
                 }),
                 category: ItemCategory::Extern,
                 predefined: None,
-                location: extern_location.clone(),
+                location: *extern_location,
             })?;
         }
 
@@ -214,13 +213,13 @@ impl SemanticState {
                 .parent()
                 .ok_or_else(|| SemanticError::ModuleNotFound {
                     path: item_definition.path.clone(),
-                    location: item_definition.location().clone(),
+                    location: *item_definition.location(),
                 })?;
         self.modules
             .get_mut(parent_path)
             .ok_or_else(|| SemanticError::ModuleNotFound {
                 path: parent_path.clone(),
-                location: item_definition.location().clone(),
+                location: *item_definition.location(),
             })?
             .definition_paths
             .insert(item_definition.path.clone());
@@ -323,7 +322,7 @@ impl SemanticState {
             .and_then(|parent| self.modules.get(&parent))
             .ok_or_else(|| SemanticError::ModuleNotFound {
                 path: path.clone(),
-                location: from_location.clone(),
+                location: *from_location,
             })
     }
 

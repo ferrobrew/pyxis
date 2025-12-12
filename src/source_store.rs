@@ -1,68 +1,100 @@
-use std::collections::BTreeMap;
+use std::path::PathBuf;
 
-/// Trait for providing source code for error reporting
-pub trait SourceStore {
-    /// Get the source code for a given filename
-    fn get(&mut self, filename: &str) -> Option<&str>;
+use crate::span::FileId;
+
+/// Entry in the file store representing a source file.
+#[derive(Debug)]
+enum FileEntry {
+    /// A file on the filesystem - content is read on demand.
+    Path { filename: String, path: PathBuf },
+    /// An in-memory file (for tests or internal use).
+    InMemory { filename: String, content: String },
 }
 
-/// In-memory source store
-#[derive(Debug, Default)]
-pub struct InMemorySourceStore {
-    sources: BTreeMap<String, String>,
+impl FileEntry {
+    fn filename(&self) -> &str {
+        match self {
+            FileEntry::Path { filename, .. } => filename,
+            FileEntry::InMemory { filename, .. } => filename,
+        }
+    }
+
+    fn source(&self) -> Option<String> {
+        match self {
+            FileEntry::Path { path, .. } => std::fs::read_to_string(path).ok(),
+            FileEntry::InMemory { content, .. } => Some(content.clone()),
+        }
+    }
 }
 
-impl InMemorySourceStore {
+/// A store that maps file IDs to filenames and provides access to source content.
+///
+/// Files are registered during compilation and assigned sequential IDs.
+/// The store is shared across all compilation phases and used for error reporting.
+#[derive(Debug)]
+pub struct FileStore {
+    files: Vec<FileEntry>,
+}
+
+impl Default for FileStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl FileStore {
+    /// Create a new file store with predefined entries.
     pub fn new() -> Self {
-        Self {
-            sources: BTreeMap::new(),
-        }
+        let mut store = Self { files: Vec::new() };
+
+        // Register predefined files at known indices
+        // FileId::INTERNAL = 0
+        store.files.push(FileEntry::InMemory {
+            filename: "<internal>".to_string(),
+            content: String::new(),
+        });
+
+        // FileId::TEST = 1 (only meaningful in tests, but we always reserve the slot)
+        store.files.push(FileEntry::InMemory {
+            filename: "<test>".to_string(),
+            content: String::new(),
+        });
+
+        store
     }
 
-    pub fn insert(&mut self, filename: String, source: String) {
-        self.sources.insert(filename, source);
+    /// Register a filesystem file and return its ID.
+    ///
+    /// The `filename` is the display name (e.g., relative path shown in errors),
+    /// while `path` is the actual filesystem path to read content from.
+    pub fn register_path(&mut self, filename: String, path: PathBuf) -> FileId {
+        let id = FileId::new(self.files.len() as u32);
+        self.files.push(FileEntry::Path { filename, path });
+        id
     }
-}
 
-impl SourceStore for InMemorySourceStore {
-    fn get(&mut self, filename: &str) -> Option<&str> {
-        self.sources.get(filename).map(|s| s.as_str())
+    /// Register an in-memory file and return its ID.
+    ///
+    /// This is useful for tests or dynamically generated content.
+    pub fn register_in_memory(&mut self, filename: String, content: String) -> FileId {
+        let id = FileId::new(self.files.len() as u32);
+        self.files.push(FileEntry::InMemory { filename, content });
+        id
     }
-}
 
-/// Filesystem source store that reads files on demand and caches them
-#[derive(Debug, Default)]
-pub struct FilesystemSourceStore {
-    cache: BTreeMap<String, String>,
-}
-
-impl FilesystemSourceStore {
-    pub fn new() -> Self {
-        Self {
-            cache: BTreeMap::new(),
-        }
+    /// Get the filename for a file ID.
+    ///
+    /// # Panics
+    /// Panics if the file ID is invalid.
+    pub fn filename(&self, id: FileId) -> &str {
+        self.files[id.index()].filename()
     }
-}
 
-impl SourceStore for FilesystemSourceStore {
-    fn get(&mut self, filename: &str) -> Option<&str> {
-        // Check if already cached
-        if self.cache.contains_key(filename) {
-            return self.cache.get(filename).map(|s| s.as_str());
-        }
-
-        // Try to read from filesystem
-        if let Ok(content) = std::fs::read_to_string(filename) {
-            self.cache.insert(filename.to_string(), content);
-            self.cache.get(filename).map(|s| s.as_str())
-        } else {
-            None
-        }
-    }
-}
-
-impl SourceStore for BTreeMap<String, String> {
-    fn get(&mut self, filename: &str) -> Option<&str> {
-        BTreeMap::get(self, filename).map(|s| s.as_str())
+    /// Get the source content for a file ID.
+    ///
+    /// For filesystem files, this reads the file on demand.
+    /// Returns `None` if the file cannot be read.
+    pub fn source(&self, id: FileId) -> Option<String> {
+        self.files.get(id.index()).and_then(|entry| entry.source())
     }
 }
