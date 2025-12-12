@@ -111,7 +111,7 @@ impl BuildError {
             BuildError::Config(_) | BuildError::Glob(_) | BuildError::Io { .. } => {
                 let message = self.error_message();
                 let report =
-                    Report::<(&str, std::ops::Range<usize>)>::build(ReportKind::Error, "", 0)
+                    Report::<(&str, std::ops::Range<usize>)>::build(ReportKind::Error, ("", 0..0))
                         .with_message(&message)
                         .finish();
 

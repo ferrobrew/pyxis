@@ -722,13 +722,14 @@ impl SemanticError {
         };
 
         // Build the report with the primary label
-        let mut report_builder = Report::build(ReportKind::Error, filename, offset)
-            .with_message(&message)
-            .with_label(
-                Label::new((filename, offset..offset + length))
-                    .with_message("error occurred here")
-                    .with_color(ariadne::Color::Red),
-            );
+        let mut report_builder =
+            Report::build(ReportKind::Error, (filename, offset..offset + length))
+                .with_message(&message)
+                .with_label(
+                    Label::new((filename, offset..offset + length))
+                        .with_message("error occurred here")
+                        .with_color(ariadne::Color::Red),
+                );
 
         report_builder = self.augment_builder(report_builder);
 

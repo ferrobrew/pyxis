@@ -96,10 +96,11 @@ impl LexError {
         let filename = file_store.filename(self.location.file_id);
         if let Some(source) = file_store.source(self.location.file_id) {
             let offset = span::span_to_offset(&source, &self.location.span);
-            let report = Report::build(ReportKind::Error, filename, offset)
+            let length = span::span_length(&source, &self.location.span).max(1);
+            let report = Report::build(ReportKind::Error, (filename, offset..offset + length))
                 .with_message(&self.message)
                 .with_label(
-                    Label::new((filename, offset..offset + 1))
+                    Label::new((filename, offset..offset + length))
                         .with_message(&self.message)
                         .with_color(Color::Red),
                 )
@@ -116,7 +117,7 @@ impl LexError {
 
         // Source not available - create a report without source code labels
         let report =
-            Report::<(&str, std::ops::Range<usize>)>::build(ReportKind::Error, filename, 0)
+            Report::<(&str, std::ops::Range<usize>)>::build(ReportKind::Error, (filename, 0..0))
                 .with_message(&self.message)
                 .with_note(format!("Error location: {}:{}", filename, self.location))
                 .finish();
@@ -164,10 +165,10 @@ impl Lexer {
     }
 
     /// Helper to create a LexError with file ID and source context
-    fn error(&self, message: String, location: Location) -> LexError {
+    fn error(&self, message: String, start: Location, end: Location) -> LexError {
         LexError {
             message,
-            location: ItemLocation::new(self.file_id, Span::new(location, location)),
+            location: ItemLocation::new(self.file_id, Span::new(start, end)),
             source: self.input.clone(),
         }
     }
@@ -321,7 +322,11 @@ impl Lexer {
                     {
                         return self.lex_number(start, start_pos);
                     }
-                    Err(self.error("Unexpected '-' character".to_string(), start))
+                    Err(self.error(
+                        "Unexpected '-' character".to_string(),
+                        start,
+                        self.current_location(),
+                    ))
                 }
             }
             '&' => {
@@ -444,7 +449,11 @@ impl Lexer {
                     ItemLocation::new(self.file_id, Span::new(start, end)),
                 ))
             }
-            _ => Err(self.error(format!("Unexpected character: '{ch}'"), start)),
+            _ => Err(self.error(
+                format!("Unexpected character: '{ch}'"),
+                start,
+                self.current_location(),
+            )),
         }
     }
 
@@ -512,7 +521,11 @@ impl Lexer {
         }
 
         if depth > 0 {
-            return Err(self.error("Unterminated multiline comment".to_string(), start));
+            return Err(self.error(
+                "Unterminated multiline comment".to_string(),
+                start,
+                self.current_location(),
+            ));
         }
 
         let end = self.current_location();
@@ -661,6 +674,7 @@ impl Lexer {
                 self.advance(); // consume closing '"'
                 break;
             } else if ch == '\\' {
+                let escape_start = self.current_location();
                 self.advance();
                 if let Some(escaped) = self.peek() {
                     self.advance();
@@ -675,6 +689,7 @@ impl Lexer {
                         _ => {
                             return Err(self.error(
                                 format!("Invalid escape sequence: \\{escaped}"),
+                                escape_start,
                                 self.current_location(),
                             ));
                         }
@@ -682,6 +697,7 @@ impl Lexer {
                 } else {
                     return Err(self.error(
                         "Unexpected end of file in string literal".to_string(),
+                        start,
                         self.current_location(),
                     ));
                 }
@@ -712,6 +728,7 @@ impl Lexer {
         if self.peek() != Some('"') {
             return Err(self.error(
                 "Expected '\"' after 'r' and '#' in raw string literal".to_string(),
+                start,
                 self.current_location(),
             ));
         }
@@ -722,7 +739,11 @@ impl Lexer {
 
         loop {
             if self.is_eof() {
-                return Err(self.error("Unterminated raw string literal".to_string(), start));
+                return Err(self.error(
+                    "Unterminated raw string literal".to_string(),
+                    start,
+                    self.current_location(),
+                ));
             }
 
             if self.peek() == Some('"') {
@@ -764,6 +785,7 @@ impl Lexer {
         self.advance(); // consume opening '\''
 
         let ch = if self.peek() == Some('\\') {
+            let escape_start = self.current_location();
             self.advance();
             if let Some(escaped) = self.peek() {
                 self.advance();
@@ -778,6 +800,7 @@ impl Lexer {
                     _ => {
                         return Err(self.error(
                             format!("Invalid escape sequence: \\{escaped}"),
+                            escape_start,
                             self.current_location(),
                         ));
                     }
@@ -785,6 +808,7 @@ impl Lexer {
             } else {
                 return Err(self.error(
                     "Unexpected end of file in char literal".to_string(),
+                    start,
                     self.current_location(),
                 ));
             }
@@ -794,6 +818,7 @@ impl Lexer {
         } else {
             return Err(self.error(
                 "Unexpected end of file in char literal".to_string(),
+                start,
                 self.current_location(),
             ));
         };
@@ -801,6 +826,7 @@ impl Lexer {
         if self.peek() != Some('\'') {
             return Err(self.error(
                 "Expected closing '\'' in char literal".to_string(),
+                start,
                 self.current_location(),
             ));
         }

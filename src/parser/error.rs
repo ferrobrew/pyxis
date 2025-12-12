@@ -94,16 +94,20 @@ impl ParseError {
         label_message: &str,
     ) -> String {
         let filename = file_store.filename(location.file_id);
-        let (offset, source) = if let Some(source) = file_store.source(location.file_id) {
-            (crate::span::span_to_offset(&source, &location.span), source)
+        let (offset, length, source) = if let Some(source) = file_store.source(location.file_id) {
+            (
+                crate::span::span_to_offset(&source, &location.span),
+                crate::span::span_length(&source, &location.span).max(1),
+                source,
+            )
         } else {
-            (0, String::new())
+            (0, 1, String::new())
         };
 
-        let report = Report::build(ReportKind::Error, filename, offset)
+        let report = Report::build(ReportKind::Error, (filename, offset..offset + length))
             .with_message(message)
             .with_label(
-                Label::new((filename, offset..offset + 1))
+                Label::new((filename, offset..offset + length))
                     .with_message(label_message)
                     .with_color(Color::Red),
             )
