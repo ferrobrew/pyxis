@@ -82,26 +82,91 @@ impl Token {
     }
 }
 
+/// Lexer errors
 #[derive(Debug, Clone, PartialEq)]
-pub struct LexError {
-    pub message: String,
-    pub location: ItemLocation,
-    pub source: String,
+pub enum LexError {
+    /// Unexpected character encountered during tokenization
+    UnexpectedCharacter {
+        character: char,
+        location: ItemLocation,
+    },
+    /// Unterminated multiline comment (/* without closing */)
+    UnterminatedMultilineComment { location: ItemLocation },
+    /// Invalid escape sequence in string or char literal
+    InvalidEscapeSequence {
+        character: char,
+        location: ItemLocation,
+    },
+    /// Unexpected end of file while parsing a string literal
+    UnexpectedEofInStringLiteral { location: ItemLocation },
+    /// Invalid raw string literal start (expected '"' after 'r' and '#')
+    InvalidRawStringStart { location: ItemLocation },
+    /// Unterminated raw string literal
+    UnterminatedRawString { location: ItemLocation },
+    /// Unexpected end of file while parsing a char literal
+    UnexpectedEofInCharLiteral { location: ItemLocation },
+    /// Unclosed char literal (missing closing quote)
+    UnclosedCharLiteral { location: ItemLocation },
 }
 
 impl LexError {
+    /// Returns the core error message without location prefix
+    pub fn error_message(&self) -> String {
+        match self {
+            LexError::UnexpectedCharacter { character, .. } => {
+                format!("Unexpected character: '{character}'")
+            }
+            LexError::UnterminatedMultilineComment { .. } => {
+                "Unterminated multiline comment".to_string()
+            }
+            LexError::InvalidEscapeSequence { character, .. } => {
+                format!("Invalid escape sequence: \\{character}")
+            }
+            LexError::UnexpectedEofInStringLiteral { .. } => {
+                "Unexpected end of file in string literal".to_string()
+            }
+            LexError::InvalidRawStringStart { .. } => {
+                "Expected '\"' after 'r' and '#' in raw string literal".to_string()
+            }
+            LexError::UnterminatedRawString { .. } => "Unterminated raw string literal".to_string(),
+            LexError::UnexpectedEofInCharLiteral { .. } => {
+                "Unexpected end of file in char literal".to_string()
+            }
+            LexError::UnclosedCharLiteral { .. } => {
+                "Expected closing '\\'' in char literal".to_string()
+            }
+        }
+    }
+
+    /// Returns the location of the error
+    pub fn location(&self) -> &ItemLocation {
+        match self {
+            LexError::UnexpectedCharacter { location, .. } => location,
+            LexError::UnterminatedMultilineComment { location } => location,
+            LexError::InvalidEscapeSequence { location, .. } => location,
+            LexError::UnexpectedEofInStringLiteral { location } => location,
+            LexError::InvalidRawStringStart { location } => location,
+            LexError::UnterminatedRawString { location } => location,
+            LexError::UnexpectedEofInCharLiteral { location } => location,
+            LexError::UnclosedCharLiteral { location } => location,
+        }
+    }
+
     /// Format the error using ariadne with the provided file store.
     /// Always produces ariadne-formatted output.
     pub fn format_with_ariadne(&self, file_store: &FileStore) -> String {
-        let filename = file_store.filename(self.location.file_id);
-        if let Some(source) = file_store.source(self.location.file_id) {
-            let offset = span::span_to_offset(&source, &self.location.span);
-            let length = span::span_length(&source, &self.location.span).max(1);
+        let message = self.error_message();
+        let location = self.location();
+        let filename = file_store.filename(location.file_id);
+
+        if let Some(source) = file_store.source(location.file_id) {
+            let offset = span::span_to_offset(&source, &location.span);
+            let length = span::span_length(&source, &location.span).max(1);
             let report = Report::build(ReportKind::Error, (filename, offset..offset + length))
-                .with_message(&self.message)
+                .with_message(&message)
                 .with_label(
                     Label::new((filename, offset..offset + length))
-                        .with_message(&self.message)
+                        .with_message(&message)
                         .with_color(Color::Red),
                 )
                 .finish();
@@ -118,8 +183,8 @@ impl LexError {
         // Source not available - create a report without source code labels
         let report =
             Report::<(&str, std::ops::Range<usize>)>::build(ReportKind::Error, (filename, 0..0))
-                .with_message(&self.message)
-                .with_note(format!("Error location: {}:{}", filename, self.location))
+                .with_message(&message)
+                .with_note(format!("Error location: {filename}:{location}"))
                 .finish();
 
         let mut buffer = Vec::new();
@@ -130,13 +195,18 @@ impl LexError {
             return String::from_utf8_lossy(&buffer).to_string();
         }
 
-        self.message.clone()
+        message
     }
 }
 
 impl std::fmt::Display for LexError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Lexer error at {}: {}", self.location, self.message)
+        write!(
+            f,
+            "Lexer error at {}: {}",
+            self.location(),
+            self.error_message()
+        )
     }
 }
 
@@ -164,13 +234,14 @@ impl Lexer {
         }
     }
 
-    /// Helper to create a LexError with file ID and source context
-    fn error(&self, message: String, start: Location, end: Location) -> LexError {
-        LexError {
-            message,
-            location: ItemLocation::new(self.file_id, Span::new(start, end)),
-            source: self.input.clone(),
-        }
+    /// Helper to create an ItemLocation from start and end locations
+    fn make_location(&self, start: Location, end: Location) -> ItemLocation {
+        ItemLocation::new(self.file_id, Span::new(start, end))
+    }
+
+    /// Helper to create an ItemLocation from start to current location
+    fn loc_to_current(&self, start: Location) -> ItemLocation {
+        self.make_location(start, self.current_location())
     }
 
     pub fn tokenize(mut self) -> Result<Vec<Token>, LexError> {
@@ -322,11 +393,10 @@ impl Lexer {
                     {
                         return self.lex_number(start, start_pos);
                     }
-                    Err(self.error(
-                        "Unexpected '-' character".to_string(),
-                        start,
-                        self.current_location(),
-                    ))
+                    Err(LexError::UnexpectedCharacter {
+                        character: '-',
+                        location: self.loc_to_current(start),
+                    })
                 }
             }
             '&' => {
@@ -449,11 +519,10 @@ impl Lexer {
                     ItemLocation::new(self.file_id, Span::new(start, end)),
                 ))
             }
-            _ => Err(self.error(
-                format!("Unexpected character: '{ch}'"),
-                start,
-                self.current_location(),
-            )),
+            _ => Err(LexError::UnexpectedCharacter {
+                character: ch,
+                location: self.loc_to_current(start),
+            }),
         }
     }
 
@@ -521,11 +590,9 @@ impl Lexer {
         }
 
         if depth > 0 {
-            return Err(self.error(
-                "Unterminated multiline comment".to_string(),
-                start,
-                self.current_location(),
-            ));
+            return Err(LexError::UnterminatedMultilineComment {
+                location: self.loc_to_current(start),
+            });
         }
 
         let end = self.current_location();
@@ -687,19 +754,16 @@ impl Lexer {
                         '\'' => value.push('\''),
                         '0' => value.push('\0'),
                         _ => {
-                            return Err(self.error(
-                                format!("Invalid escape sequence: \\{escaped}"),
-                                escape_start,
-                                self.current_location(),
-                            ));
+                            return Err(LexError::InvalidEscapeSequence {
+                                character: escaped,
+                                location: self.loc_to_current(escape_start),
+                            });
                         }
                     }
                 } else {
-                    return Err(self.error(
-                        "Unexpected end of file in string literal".to_string(),
-                        start,
-                        self.current_location(),
-                    ));
+                    return Err(LexError::UnexpectedEofInStringLiteral {
+                        location: self.loc_to_current(start),
+                    });
                 }
             } else {
                 value.push(ch);
@@ -726,11 +790,9 @@ impl Lexer {
         }
 
         if self.peek() != Some('"') {
-            return Err(self.error(
-                "Expected '\"' after 'r' and '#' in raw string literal".to_string(),
-                start,
-                self.current_location(),
-            ));
+            return Err(LexError::InvalidRawStringStart {
+                location: self.loc_to_current(start),
+            });
         }
 
         self.advance(); // consume opening '"'
@@ -739,11 +801,9 @@ impl Lexer {
 
         loop {
             if self.is_eof() {
-                return Err(self.error(
-                    "Unterminated raw string literal".to_string(),
-                    start,
-                    self.current_location(),
-                ));
+                return Err(LexError::UnterminatedRawString {
+                    location: self.loc_to_current(start),
+                });
             }
 
             if self.peek() == Some('"') {
@@ -798,37 +858,30 @@ impl Lexer {
                     '"' => '"',
                     '0' => '\0',
                     _ => {
-                        return Err(self.error(
-                            format!("Invalid escape sequence: \\{escaped}"),
-                            escape_start,
-                            self.current_location(),
-                        ));
+                        return Err(LexError::InvalidEscapeSequence {
+                            character: escaped,
+                            location: self.loc_to_current(escape_start),
+                        });
                     }
                 }
             } else {
-                return Err(self.error(
-                    "Unexpected end of file in char literal".to_string(),
-                    start,
-                    self.current_location(),
-                ));
+                return Err(LexError::UnexpectedEofInCharLiteral {
+                    location: self.loc_to_current(start),
+                });
             }
         } else if let Some(ch) = self.peek() {
             self.advance();
             ch
         } else {
-            return Err(self.error(
-                "Unexpected end of file in char literal".to_string(),
-                start,
-                self.current_location(),
-            ));
+            return Err(LexError::UnexpectedEofInCharLiteral {
+                location: self.loc_to_current(start),
+            });
         };
 
         if self.peek() != Some('\'') {
-            return Err(self.error(
-                "Expected closing '\'' in char literal".to_string(),
-                start,
-                self.current_location(),
-            ));
+            return Err(LexError::UnclosedCharLiteral {
+                location: self.loc_to_current(start),
+            });
         }
 
         self.advance(); // consume closing '\''
