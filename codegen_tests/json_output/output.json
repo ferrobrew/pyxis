@@ -3068,6 +3068,229 @@
         "packed": false
       }
     },
+    "type_aliases::DataContainer": {
+      "path": "type_aliases::DataContainer",
+      "visibility": "public",
+      "size": 68,
+      "alignment": 4,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": " Type with array alias",
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "raw_data",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "type_aliases::Matrix4Data"
+            },
+            "offset": 0,
+            "size": 64,
+            "alignment": 4,
+            "is_base": false
+          },
+          {
+            "visibility": "public",
+            "name": "value",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "type_aliases::MyInt"
+            },
+            "offset": 64,
+            "size": 4,
+            "alignment": 4,
+            "is_base": false
+          }
+        ],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false
+      }
+    },
+    "type_aliases::Matrix4Data": {
+      "path": "type_aliases::Matrix4Data",
+      "visibility": "public",
+      "size": 64,
+      "alignment": 4,
+      "category": "defined",
+      "kind": {
+        "type": "type_alias",
+        "doc": " Type alias to an array type",
+        "aliased_type": {
+          "type": "array",
+          "inner": {
+            "type": "raw",
+            "path": "f32"
+          },
+          "size": 16
+        }
+      }
+    },
+    "type_aliases::MutableMatrixPtr": {
+      "path": "type_aliases::MutableMatrixPtr",
+      "visibility": "public",
+      "size": 8,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "type_alias",
+        "doc": " Type alias to a mutable pointer",
+        "aliased_type": {
+          "type": "mut_pointer",
+          "inner": {
+            "type": "raw",
+            "path": "math::Matrix4"
+          }
+        }
+      }
+    },
+    "type_aliases::MyInt": {
+      "path": "type_aliases::MyInt",
+      "visibility": "public",
+      "size": 4,
+      "alignment": 4,
+      "category": "defined",
+      "kind": {
+        "type": "type_alias",
+        "doc": " Simple type alias to a primitive",
+        "aliased_type": {
+          "type": "raw",
+          "path": "i32"
+        }
+      }
+    },
+    "type_aliases::MyU64": {
+      "path": "type_aliases::MyU64",
+      "visibility": "public",
+      "size": 8,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "type_alias",
+        "doc": " Type alias to an unsigned integer",
+        "aliased_type": {
+          "type": "raw",
+          "path": "u64"
+        }
+      }
+    },
+    "type_aliases::PointerContainer": {
+      "path": "type_aliases::PointerContainer",
+      "visibility": "public",
+      "size": 16,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": " Type with pointer aliases (properly aligned)",
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "position_ptr",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "type_aliases::VectorPtr"
+            },
+            "offset": 0,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false
+          },
+          {
+            "visibility": "public",
+            "name": "matrix_ptr",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "type_aliases::MutableMatrixPtr"
+            },
+            "offset": 8,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false
+          }
+        ],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false
+      }
+    },
+    "type_aliases::SimpleContainer": {
+      "path": "type_aliases::SimpleContainer",
+      "visibility": "public",
+      "size": 8,
+      "alignment": 4,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": " Simple type that uses a primitive type alias",
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "value1",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "type_aliases::MyInt"
+            },
+            "offset": 0,
+            "size": 4,
+            "alignment": 4,
+            "is_base": false
+          },
+          {
+            "visibility": "public",
+            "name": "value2",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "type_aliases::MyInt"
+            },
+            "offset": 4,
+            "size": 4,
+            "alignment": 4,
+            "is_base": false
+          }
+        ],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false
+      }
+    },
+    "type_aliases::VectorPtr": {
+      "path": "type_aliases::VectorPtr",
+      "visibility": "public",
+      "size": 8,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "type_alias",
+        "doc": " Type alias to a pointer type",
+        "aliased_type": {
+          "type": "const_pointer",
+          "inner": {
+            "type": "raw",
+            "path": "math::Vector3"
+          }
+        }
+      }
+    },
     "u128": {
       "path": "u128",
       "visibility": "public",
@@ -3371,6 +3594,23 @@
         "two_base_classes::BaseBVftable",
         "two_base_classes::Derived",
         "two_base_classes::DerivedVftable"
+      ],
+      "submodules": {},
+      "extern_values": [],
+      "functions": [],
+      "backends": {}
+    },
+    "type_aliases": {
+      "doc": null,
+      "items": [
+        "type_aliases::DataContainer",
+        "type_aliases::Matrix4Data",
+        "type_aliases::MutableMatrixPtr",
+        "type_aliases::MyInt",
+        "type_aliases::MyU64",
+        "type_aliases::PointerContainer",
+        "type_aliases::SimpleContainer",
+        "type_aliases::VectorPtr"
       ],
       "submodules": {},
       "extern_values": [],
