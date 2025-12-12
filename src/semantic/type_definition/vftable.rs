@@ -103,14 +103,14 @@ pub fn convert_grammar_functions_to_semantic_functions(
                 name: name.clone(),
                 doc: vec![],
                 arguments: vec![Argument::MutSelf {
-                    location: location.clone(),
+                    location: *location,
                 }],
                 return_type: None,
                 body: FunctionBody::Vftable {
                     function_name: name,
                 },
                 calling_convention,
-                location: location.clone(),
+                location: *location,
             });
         }
     }
@@ -157,9 +157,9 @@ pub fn build(
                 // Note: We always expect at least one function in either list, so the fallback should never trigger
                 let error_location = vftable_functions
                     .last()
-                    .map(|f| f.location().clone())
-                    .or_else(|| base_vftable.functions.first().map(|f| f.location().clone()))
-                    .unwrap_or_else(|| location.clone());
+                    .map(|f| *f.location())
+                    .or_else(|| base_vftable.functions.first().map(|f| *f.location()))
+                    .unwrap_or(*location);
                 return Err({
                     SemanticError::VftableMissingFunctions {
                         item_path: resolvee_path.clone(),
@@ -184,7 +184,7 @@ pub fn build(
                         index: idx,
                         derived_function: derived_vfunc.to_string(),
                         base_function: base_vfunc.to_string(),
-                        location: derived_vfunc.location().clone(),
+                        location: *derived_vfunc.location(),
                     });
                 }
             }
@@ -202,8 +202,8 @@ pub fn build(
             // Use the first vftable function's location for the generated vftable field
             let vftable_location = vftable_functions
                 .first()
-                .map(|f| f.location().clone())
-                .unwrap_or_else(|| location.clone());
+                .map(|f| *f.location())
+                .unwrap_or_else(|| *location);
 
             let region = Region {
                 visibility: Visibility::Private,
@@ -263,8 +263,8 @@ fn build_type(
     // Use the first function's location for the generated vftable type
     let vftable_type_location = functions
         .first()
-        .map(|f| f.location().clone())
-        .unwrap_or_else(|| location.clone());
+        .map(|f| *f.location())
+        .unwrap_or_else(|| *location);
 
     Some(ItemDefinition {
         visibility,
@@ -318,7 +318,7 @@ fn function_to_region(resolvee_path: &ItemPath, function: &Function) -> Region {
         doc: function.doc.clone(),
         type_ref: Type::Function(function.calling_convention, arguments, return_type),
         is_base: false,
-        location: function.location.clone(),
+        location: function.location,
     }
 }
 

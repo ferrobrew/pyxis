@@ -3,7 +3,7 @@ use std::fmt;
 use crate::{
     grammar::ItemPath,
     semantic::SemanticError,
-    source_store::SourceStore,
+    source_store::FileStore,
     span::{self, ItemLocation},
 };
 use ariadne::{Label, Report, ReportKind, Source};
@@ -46,7 +46,7 @@ impl fmt::Display for BackendError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // Add location prefix if available
         if let Some(location) = self.location() {
-            write!(f, "{location}")?;
+            write!(f, "{location}: ")?;
         }
         write!(f, "{}", self.error_message())
     }
@@ -115,26 +115,29 @@ impl BackendError {
         }
     }
 
-    /// Format the error using ariadne with the provided source store
-    pub fn format_with_ariadne(&self, source_store: &mut dyn SourceStore) -> String {
+    /// Format the error using ariadne with the provided file store
+    pub fn format_with_ariadne(&self, file_store: &FileStore) -> String {
         // For semantic errors, delegate to SemanticError's format_with_ariadne
         if let BackendError::Semantic(err) = self {
-            return err.format_with_ariadne(source_store);
+            return err.format_with_ariadne(file_store);
         }
 
         let message = self.error_message();
 
-        let (filename, offset, length, source) = if let Some(location) = self.location()
-            && let Some(source) = source_store.get(location.filename.as_ref())
-        {
-            (
-                location.filename.as_ref(),
-                span::span_to_offset(source, &location.span),
-                span::span_length(source, &location.span),
-                source,
-            )
+        let (filename, offset, length, source) = if let Some(location) = self.location() {
+            let filename = file_store.filename(location.file_id);
+            if let Some(source) = file_store.source(location.file_id) {
+                (
+                    filename,
+                    span::span_to_offset(&source, &location.span),
+                    span::span_length(&source, &location.span),
+                    source,
+                )
+            } else {
+                (filename, 0, 0, String::new())
+            }
         } else {
-            ("<unknown>", 0, 0, "")
+            ("<unknown>", 0, 0, String::new())
         };
 
         let report_builder = Report::build(ReportKind::Error, filename, offset)

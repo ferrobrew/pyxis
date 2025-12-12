@@ -88,7 +88,7 @@ pub fn build(
 ) -> Result<Option<ItemStateResolved>> {
     let module = semantic.get_module_for_path(resolvee_path, location)?;
 
-    let type_location = definition.type_.location().clone();
+    let type_location = *definition.type_.location();
 
     // Retrieve the type for this bitflags, and validate it, before getting its size
     let Some(ty) = semantic
@@ -103,7 +103,7 @@ pub fn build(
             expected: BitflagsExpectedType::RawType,
             found: ty.clone(),
             item_path: resolvee_path.clone(),
-            location: type_location.clone(),
+            location: type_location,
         })?;
     let Ok(ty_item) = semantic.type_registry.get(ty_raw_path, &type_location) else {
         return Ok(None);
@@ -114,7 +114,7 @@ pub fn build(
                 expected: BitflagsExpectedType::PredefinedType,
                 found: ty.clone(),
                 item_path: resolvee_path.clone(),
-                location: type_location.clone(),
+                location: type_location,
             }
         });
     };
@@ -124,7 +124,7 @@ pub fn build(
                 expected: BitflagsExpectedType::UnsignedInteger,
                 found: ty.clone(),
                 item_path: resolvee_path.clone(),
-                location: type_location.clone(),
+                location: type_location,
             }
         });
     }
@@ -136,7 +136,7 @@ pub fn build(
             resolution_context: TypeResolutionContext::BitflagsBaseTypeAlignment {
                 bitflags_path: resolvee_path.clone(),
             },
-            location: type_location.clone(),
+            location: type_location,
         })?;
 
     let mut fields: Vec<(String, usize)> = vec![];
@@ -154,7 +154,7 @@ pub fn build(
                 return Err(SemanticError::BitflagsUnsupportedValue {
                     item_path: resolvee_path.clone(),
                     case_name: name.0.clone(),
-                    location: expr.location().clone(),
+                    location: *expr.location(),
                 });
             }
         };
@@ -165,7 +165,7 @@ pub fn build(
                 .map_err(|_| SemanticError::IntegerConversion {
                     value: value.to_string(),
                     target_type: "usize".into(),
-                    location: expr.location().clone(),
+                    location: *expr.location(),
                 })?,
         ));
 
@@ -175,7 +175,7 @@ pub fn build(
                     if default.is_some() {
                         return Err(SemanticError::BitflagsMultipleDefaults {
                             item_path: resolvee_path.clone(),
-                            location: location.clone(),
+                            location: *location,
                         });
                     }
                     default = Some(fields.len() - 1);
@@ -215,14 +215,14 @@ pub fn build(
     if !defaultable && default.is_some() {
         return Err(SemanticError::BitflagsDefaultWithoutDefaultable {
             item_path: resolvee_path.clone(),
-            location: location.clone(),
+            location: *location,
         });
     }
 
     if defaultable && default.is_none() {
         return Err(SemanticError::BitflagsDefaultableMissingDefault {
             item_path: resolvee_path.clone(),
-            location: location.clone(),
+            location: *location,
         });
     }
 

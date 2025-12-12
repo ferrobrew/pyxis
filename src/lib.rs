@@ -99,14 +99,14 @@ impl BuildError {
     }
 
     /// Format the error with rich diagnostics using ariadne
-    pub fn format_with_ariadne(&self, source_store: &mut dyn source_store::SourceStore) -> String {
+    pub fn format_with_ariadne(&self, file_store: &source_store::FileStore) -> String {
         use ariadne::{Report, ReportKind, Source};
 
         match self {
             // Delegate to inner types that have their own ariadne formatting
-            BuildError::Semantic(err) => err.format_with_ariadne(source_store),
-            BuildError::Parser(err) => err.format_with_ariadne(source_store),
-            BuildError::Backend(err) => err.format_with_ariadne(source_store),
+            BuildError::Semantic(err) => err.format_with_ariadne(file_store),
+            BuildError::Parser(err) => err.format_with_ariadne(file_store),
+            BuildError::Backend(err) => err.format_with_ariadne(file_store),
             // Other error types don't have location information - create simple ariadne report
             BuildError::Config(_) | BuildError::Glob(_) | BuildError::Io { .. } => {
                 let message = self.error_message();
@@ -126,12 +126,26 @@ impl BuildError {
 }
 
 pub fn build(in_dir: &Path, out_dir: &Path, backend: Backend) -> Result<(), BuildError> {
+    let mut file_store = source_store::FileStore::new();
+    build_with_store(in_dir, out_dir, backend, &mut file_store)
+}
+
+/// Build with an externally-managed FileStore.
+///
+/// This allows callers to access the file store for error formatting
+/// even when the build fails.
+pub fn build_with_store(
+    in_dir: &Path,
+    out_dir: &Path,
+    backend: Backend,
+    file_store: &mut source_store::FileStore,
+) -> Result<(), BuildError> {
     let config = config::Config::load(&in_dir.join("pyxis.toml"))?;
 
     let mut semantic_state = semantic::SemanticState::new(config.project.pointer_size);
 
     for path in glob::glob(&format!("{}/**/*.pyxis", in_dir.display()))?.filter_map(Result::ok) {
-        semantic_state.add_file(in_dir, &path)?;
+        semantic_state.add_file(file_store, in_dir, &path)?;
     }
 
     let resolved_semantic_state = semantic_state.build()?;
@@ -166,14 +180,13 @@ pub fn build_script(in_dir: &Path, out_dir: Option<&Path>) -> Result<(), BuildEr
             BuildError::Config(config::ConfigError::Other("OUT_DIR not set".to_string()))
         })?;
 
-    match build(in_dir, &out_dir, Backend::Rust) {
-        Ok(()) => Ok(()),
-        Err(err) => {
-            // Format errors with ariadne before returning
-            let mut store = source_store::FilesystemSourceStore::new();
-            let formatted = err.format_with_ariadne(&mut store);
-            eprintln!("{formatted}");
-            Err(err)
-        }
+    let mut file_store = source_store::FileStore::new();
+    let result = build_with_store(in_dir, &out_dir, Backend::Rust, &mut file_store);
+
+    if let Err(ref err) = result {
+        let formatted = err.format_with_ariadne(&file_store);
+        eprintln!("{formatted}");
     }
+
+    result
 }

@@ -251,7 +251,7 @@ pub fn build(
                 attr1: "size".into(),
                 attr2: "min_size".into(),
                 item_path: resolvee_path.clone(),
-                location: location.clone(),
+                location: *location,
             }
         });
     }
@@ -312,7 +312,7 @@ pub fn build(
                         doc,
                         type_ref: type_,
                         is_base,
-                        location: statement.location.clone(),
+                        location: statement.location,
                     },
                 ));
             }
@@ -323,7 +323,7 @@ pub fn build(
                 if idx != 0 {
                     return Err(SemanticError::VftableMustBeFirst {
                         item_path: resolvee_path.clone(),
-                        location: statement.location.clone(),
+                        location: statement.location,
                     });
                 }
 
@@ -460,7 +460,7 @@ pub fn build(
                     name: function.name.0.clone(),
                     item_path: resolvee_path.clone(),
                     message: "function already defined in type or base type".into(),
-                    location: location.clone(),
+                    location: *location,
                 });
             }
 
@@ -496,7 +496,7 @@ pub fn build(
                     field_name: name.into(),
                     item_path: resolvee_path.clone(),
                     message: "is not a defaultable type (pointer or function?)".into(),
-                    location: region.location.clone(),
+                    location: region.location,
                 });
             };
 
@@ -515,7 +515,7 @@ pub fn build(
                     field_name: name.into(),
                     item_path: resolvee_path.clone(),
                     message: "is not a defaultable type".into(),
-                    location: region.location.clone(),
+                    location: region.location,
                 });
             }
         }
@@ -527,7 +527,7 @@ pub fn build(
                 attr1: "packed".into(),
                 attr2: "align".into(),
                 item_path: resolvee_path.clone(),
-                location: location.clone(),
+                location: *location,
             });
         }
 
@@ -554,7 +554,7 @@ pub fn build(
                 alignment,
                 required_alignment,
                 item_path: resolvee_path.clone(),
-                location: location.clone(),
+                location: *location,
             });
         }
 
@@ -570,7 +570,7 @@ pub fn build(
                         item_path: resolvee_path.clone(),
                         address: last_address,
                         required_alignment: field_alignment,
-                        location: location.clone(),
+                        location: *location,
                     });
                 }
                 last_address += region.size(&semantic.type_registry).unwrap();
@@ -583,7 +583,7 @@ pub fn build(
                 size,
                 alignment,
                 item_path: resolvee_path.clone(),
-                location: location.clone(),
+                location: *location,
             });
         }
 
@@ -676,12 +676,12 @@ fn resolve_regions(
                     region_name: existing_region,
                     address: offset,
                     existing_end: resolved.last_address,
-                    location: region.location().clone(),
+                    location: *region.location(),
                 });
             };
             let padding_region = Region::unnamed_field(
                 semantic.type_registry.padding_type(size),
-                region.location().clone(),
+                *region.location(),
             );
             if resolved
                 .push(&semantic.type_registry, padding_region)
@@ -704,7 +704,7 @@ fn resolve_regions(
             semantic
                 .type_registry
                 .padding_type(target_size - resolved.last_address),
-            type_location.clone(),
+            *type_location,
         );
         if resolved
             .push(&semantic.type_registry, padding_region)
@@ -723,7 +723,7 @@ fn resolve_regions(
 
         if region.name.is_none() {
             let type_ref = region.type_ref.clone();
-            let location = region.location.clone();
+            let location = region.location;
             *region = Region {
                 visibility: Visibility::Private,
                 name: Some(format!("_field_{size:x}")),
@@ -743,8 +743,8 @@ fn resolve_regions(
         let error_location = resolved
             .regions
             .first()
-            .map(|r| r.location().clone())
-            .unwrap_or_else(|| type_location.clone());
+            .map(|r| *r.location())
+            .unwrap_or_else(|| *type_location);
         if is_min_size {
             // For min_size, the final size should be >= target_size (which was already rounded)
             if size < target_size {
@@ -752,7 +752,7 @@ fn resolve_regions(
                     minimum_size: target_size,
                     actual_size: size,
                     item_path: resolvee_path.clone(),
-                    location: error_location.clone(),
+                    location: error_location,
                 });
             }
         } else {
@@ -789,7 +789,7 @@ pub(super) fn get_region_name_and_type_definition<'a>(
                 found: region.type_ref.human_friendly_type().into(),
                 item_path: type_path.clone(),
                 context_description: format!("region field `{region_name}`"),
-                location: region.location().clone(),
+                location: *region.location(),
             }
         });
     };
@@ -807,7 +807,7 @@ pub(super) fn get_region_name_and_type_definition<'a>(
                 found: region_type.inner.human_friendly_type().into(),
                 item_path: type_path.clone(),
                 context_description: format!("region field `{region_name}`"),
-                location: region.location.clone(),
+                location: region.location,
             }
         });
     };

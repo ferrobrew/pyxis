@@ -59,7 +59,7 @@ impl Module {
                 .push(Backend {
                     prologue: backend.prologue.clone(),
                     epilogue: backend.epilogue.clone(),
-                    location: backend.location.clone(),
+                    location: backend.location,
                 });
         }
 
@@ -117,7 +117,7 @@ impl Module {
                         resolution_context: TypeResolutionContext::ExternValue {
                             extern_name: ev.name.clone(),
                         },
-                        location: type_ref.location().clone(),
+                        location: *type_ref.location(),
                     })?;
             }
         }

@@ -42,7 +42,7 @@ impl TypeRegistry {
             .get(item_path)
             .ok_or_else(|| SemanticError::TypeNotFound {
                 path: item_path.clone(),
-                location: from_location.clone(),
+                location: *from_location,
             })
     }
 
@@ -55,7 +55,7 @@ impl TypeRegistry {
             .get_mut(item_path)
             .ok_or_else(|| SemanticError::TypeNotFound {
                 path: item_path.clone(),
-                location: from_location.clone(),
+                location: *from_location,
             })
     }
 

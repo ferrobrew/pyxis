@@ -69,21 +69,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             out_dir,
         } => {
             std::fs::create_dir_all(&out_dir)?;
-            match pyxis::build(&in_dir, &out_dir, backend.into()) {
-                Ok(()) => Ok(()),
-                Err(err) => {
-                    // Format errors with ariadne before displaying
-                    let mut store = pyxis::source_store::FilesystemSourceStore::new();
-                    let formatted = err.format_with_ariadne(&mut store);
-                    eprintln!("{formatted}");
-                    std::process::exit(1);
-                }
+            let mut file_store = pyxis::source_store::FileStore::new();
+            let result =
+                pyxis::build_with_store(&in_dir, &out_dir, backend.into(), &mut file_store);
+            if let Err(err) = result {
+                // Format errors with ariadne using the file store
+                let formatted = err.format_with_ariadne(&file_store);
+                eprintln!("{formatted}");
+                std::process::exit(1);
             }
+            Ok(())
         }
         Command::AstDump { file, pretty } => {
             let content = std::fs::read_to_string(&file)?;
             let filename = file.display().to_string();
-            let module = pyxis::parser::parse_str_with_filename(&content, &filename)?;
+            let mut file_store = pyxis::source_store::FileStore::new();
+            let file_id = file_store.register_in_memory(filename, content.clone());
+            let module = pyxis::parser::parse_str_with_file_id(&content, file_id)?;
 
             if pretty {
                 // Use pretty printer
@@ -189,7 +191,9 @@ fn find_pyxis_files_recursive(
 fn format_file(file: &PathBuf, check: bool) -> Result<bool, Box<dyn std::error::Error>> {
     let content = std::fs::read_to_string(file)?;
     let filename = file.display().to_string();
-    let module = pyxis::parser::parse_str_with_filename(&content, &filename)?;
+    let mut file_store = pyxis::source_store::FileStore::new();
+    let file_id = file_store.register_in_memory(filename, content.clone());
+    let module = pyxis::parser::parse_str_with_file_id(&content, file_id)?;
     let formatted = pyxis::pretty_print::pretty_print(&module);
 
     // Ensure the formatted output ends with a newline

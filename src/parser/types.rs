@@ -247,7 +247,7 @@ impl Parser {
                     })
                 } else {
                     Err(ParseError::MissingPointerQualifier {
-                        location: self.current().location.clone(),
+                        location: self.current().location,
                     })
                 }
             }
@@ -309,7 +309,7 @@ impl Parser {
             }
             _ => Err(ParseError::ExpectedType {
                 found: self.peek().clone(),
-                location: self.current().location.clone(),
+                location: self.current().location,
             }),
         }
     }

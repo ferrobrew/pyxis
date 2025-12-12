@@ -3,8 +3,8 @@
 use crate::{
     grammar::{self, ItemPath},
     semantic::types::{CallingConvention, Type as SemanticType},
-    source_store::SourceStore,
-    span::{self, ItemLocation, Span},
+    source_store::FileStore,
+    span::{self, ItemLocation},
 };
 use ariadne::{Label, Report, ReportKind, Source};
 use std::fmt;
@@ -699,34 +699,36 @@ impl SemanticError {
         }
     }
 
-    /// Format the error using ariadne with the provided source store.
+    /// Format the error using ariadne with the provided file store.
     /// Always produces an ariadne-formatted error, even without source code.
-    pub fn format_with_ariadne(&self, source_store: &mut dyn SourceStore) -> String {
+    pub fn format_with_ariadne(&self, file_store: &FileStore) -> String {
         let message = self.error_message();
         let location = self.location();
 
-        let (offset, length, location, source) = if let Some(location) = location
-            && let Some(source) = source_store.get(location.filename.as_ref())
-        {
-            (
-                span::span_to_offset(source, &location.span),
-                span::span_length(source, &location.span),
-                location.clone(),
-                source,
-            )
+        let (offset, length, filename, source) = if let Some(location) = location {
+            let filename = file_store.filename(location.file_id);
+            if let Some(source) = file_store.source(location.file_id) {
+                (
+                    span::span_to_offset(&source, &location.span),
+                    span::span_length(&source, &location.span),
+                    filename,
+                    source,
+                )
+            } else {
+                (0, 0, filename, String::new())
+            }
         } else {
-            (0, 0, ItemLocation::new("<unknown>", Span::synthetic()), "")
+            (0, 0, "<unknown>", String::new())
         };
 
         // Build the report with the primary label
-        let mut report_builder =
-            Report::build(ReportKind::Error, location.filename.as_ref(), offset)
-                .with_message(&message)
-                .with_label(
-                    Label::new((location.filename.as_ref(), offset..offset + length))
-                        .with_message("error occurred here")
-                        .with_color(ariadne::Color::Red),
-                );
+        let mut report_builder = Report::build(ReportKind::Error, filename, offset)
+            .with_message(&message)
+            .with_label(
+                Label::new((filename, offset..offset + length))
+                    .with_message("error occurred here")
+                    .with_color(ariadne::Color::Red),
+            );
 
         report_builder = self.augment_builder(report_builder);
 
@@ -734,10 +736,7 @@ impl SemanticError {
 
         let mut buffer = Vec::new();
         report
-            .write(
-                (location.filename.as_ref(), Source::from(source)),
-                &mut buffer,
-            )
+            .write((filename, Source::from(source)), &mut buffer)
             .expect("writing to Vec should not fail");
 
         String::from_utf8_lossy(&buffer).to_string()
@@ -748,7 +747,7 @@ impl fmt::Display for SemanticError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // Get the location prefix if available
         if let Some(location) = self.location() {
-            write!(f, "{location}")?;
+            write!(f, "{location}: ")?;
         }
         // Write the core message
         write!(f, "{}", self.error_message())

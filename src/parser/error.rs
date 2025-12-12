@@ -1,5 +1,5 @@
 use crate::{
-    source_store::SourceStore,
+    source_store::FileStore,
     span::ItemLocation,
     tokenizer::{LexError, TokenKind},
 };
@@ -69,20 +69,21 @@ impl ParseError {
     /// Helper to build ariadne report with source
     fn format_ariadne_with_source(
         location: &ItemLocation,
-        source_store: &mut dyn SourceStore,
+        file_store: &FileStore,
         message: &str,
         label_message: &str,
     ) -> String {
-        let (offset, source) = if let Some(source) = source_store.get(location.filename.as_ref()) {
-            (crate::span::span_to_offset(source, &location.span), source)
+        let filename = file_store.filename(location.file_id);
+        let (offset, source) = if let Some(source) = file_store.source(location.file_id) {
+            (crate::span::span_to_offset(&source, &location.span), source)
         } else {
-            (0, "")
+            (0, String::new())
         };
 
-        let report = Report::build(ReportKind::Error, location.filename.as_ref(), offset)
+        let report = Report::build(ReportKind::Error, filename, offset)
             .with_message(message)
             .with_label(
-                Label::new((location.filename.as_ref(), offset..offset + 1))
+                Label::new((filename, offset..offset + 1))
                     .with_message(label_message)
                     .with_color(Color::Red),
             )
@@ -90,16 +91,13 @@ impl ParseError {
 
         let mut buffer = Vec::new();
         report
-            .write(
-                (location.filename.as_ref(), Source::from(source)),
-                &mut buffer,
-            )
+            .write((filename, Source::from(source)), &mut buffer)
             .expect("writing to Vec should not fail");
         String::from_utf8_lossy(&buffer).to_string()
     }
 
-    /// Format error with ariadne using a source store. Always produces ariadne-formatted output.
-    pub fn format_with_ariadne(&self, source_store: &mut dyn SourceStore) -> String {
+    /// Format error with ariadne using a file store. Always produces ariadne-formatted output.
+    pub fn format_with_ariadne(&self, file_store: &FileStore) -> String {
         match self {
             ParseError::ExpectedToken {
                 expected,
@@ -107,38 +105,38 @@ impl ParseError {
                 location,
             } => Self::format_ariadne_with_source(
                 location,
-                source_store,
+                file_store,
                 &format!("Expected {expected:?}, found {found:?}"),
                 &format!("expected {expected:?} here"),
             ),
             ParseError::ExpectedIdentifier { found, location } => Self::format_ariadne_with_source(
                 location,
-                source_store,
+                file_store,
                 &format!("Expected identifier, found {found:?}"),
                 "expected identifier here",
             ),
             ParseError::ExpectedType { found, location } => Self::format_ariadne_with_source(
                 location,
-                source_store,
+                file_store,
                 &format!("Expected type, found {found:?}"),
                 "expected type here",
             ),
             ParseError::ExpectedExpression { found, location } => Self::format_ariadne_with_source(
                 location,
-                source_store,
+                file_store,
                 &format!("Expected expression, found {found:?}"),
                 "expected expression here",
             ),
             ParseError::ExpectedIntLiteral { found, location } => Self::format_ariadne_with_source(
                 location,
-                source_store,
+                file_store,
                 &format!("Expected integer literal, found {found:?}"),
                 "expected integer literal here",
             ),
             ParseError::ExpectedStringLiteral { found, location } => {
                 Self::format_ariadne_with_source(
                     location,
-                    source_store,
+                    file_store,
                     &format!("Expected string literal, found {found:?}"),
                     "expected string literal here",
                 )
@@ -149,26 +147,26 @@ impl ParseError {
                 location,
             } => Self::format_ariadne_with_source(
                 location,
-                source_store,
+                file_store,
                 &format!("Invalid {kind} literal: {value}"),
                 "invalid literal",
             ),
             ParseError::MissingPointerQualifier { location } => Self::format_ariadne_with_source(
                 location,
-                source_store,
+                file_store,
                 "Expected const or mut after *",
                 "expected 'const' or 'mut' here",
             ),
             ParseError::SuperNotSupported { location } => Self::format_ariadne_with_source(
                 location,
-                source_store,
+                file_store,
                 "super not supported",
                 "super keyword not supported",
             ),
             ParseError::UnexpectedModuleToken { found, location } => {
                 Self::format_ariadne_with_source(
                     location,
-                    source_store,
+                    file_store,
                     &format!("Unexpected token at module level: {found:?}"),
                     "unexpected token",
                 )
@@ -176,7 +174,7 @@ impl ParseError {
             ParseError::UnexpectedTokenAfterAttributes { found, location } => {
                 Self::format_ariadne_with_source(
                     location,
-                    source_store,
+                    file_store,
                     &format!("Unexpected token after attributes: {found:?}"),
                     "unexpected token after attributes",
                 )
@@ -184,7 +182,7 @@ impl ParseError {
             ParseError::ExpectedItemDefinition { found, location } => {
                 Self::format_ariadne_with_source(
                     location,
-                    source_store,
+                    file_store,
                     &format!("Expected type, enum, or bitflags, found {found:?}"),
                     "expected type, enum, or bitflags here",
                 )
@@ -192,7 +190,7 @@ impl ParseError {
             ParseError::ExpectedBackendContent { found, location } => {
                 Self::format_ariadne_with_source(
                     location,
-                    source_store,
+                    file_store,
                     &format!("Expected LBrace, Prologue, or Epilogue, found {found:?}"),
                     "expected backend content here",
                 )
@@ -200,12 +198,12 @@ impl ParseError {
             ParseError::ExpectedPrologueOrEpilogue { found, location } => {
                 Self::format_ariadne_with_source(
                     location,
-                    source_store,
+                    file_store,
                     &format!("Expected prologue or epilogue, found {found:?}"),
                     "expected prologue or epilogue here",
                 )
             }
-            ParseError::Tokenizer(err) => err.format_with_ariadne(source_store),
+            ParseError::Tokenizer(err) => err.format_with_ariadne(file_store),
         }
     }
 }

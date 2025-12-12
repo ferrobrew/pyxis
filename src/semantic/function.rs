@@ -422,7 +422,7 @@ pub fn build(
                     attribute_context: AttributeNotSupportedContext::VirtualFunction {
                         function_name: function.name.0.clone(),
                     },
-                    location: function.location.clone(),
+                    location: function.location,
                 });
             }
             body = Some(FunctionBody::Address {
@@ -437,7 +437,7 @@ pub fn build(
                     attribute_context: AttributeNotSupportedContext::NonVirtualFunction {
                         function_name: function.name.0.clone(),
                     },
-                    location: function.location.clone(),
+                    location: function.location,
                 });
             }
             // ignore index attribute, this is handled by vftable construction
@@ -453,7 +453,7 @@ pub fn build(
                 return Err(SemanticError::InvalidAttributeValue {
                     attribute_name: "calling_convention".into(),
                     expected_type: std::any::type_name::<CallingConvention>().into(),
-                    location: expr.location().clone(),
+                    location: *expr.location(),
                 });
             };
 
@@ -464,7 +464,7 @@ pub fn build(
                         .map_err(|_| SemanticError::InvalidCallingConvention {
                             convention: value.clone(),
                             function_name: function.name.0.clone(),
-                            location: expr.location().clone(),
+                            location: *expr.location(),
                         })?,
                 );
         }
@@ -473,7 +473,7 @@ pub fn build(
     if !is_vfunc && body.is_none() {
         return Err(SemanticError::FunctionMissingImplementation {
             function_name: function.name.0.clone(),
-            location: function.location.clone(),
+            location: function.location,
         });
     }
 
@@ -488,7 +488,7 @@ pub fn build(
         .arguments
         .iter()
         .map(|a| {
-            let location = a.location().clone();
+            let location = *a.location();
             match a {
                 grammar::Argument::ConstSelf { .. } => Ok(Argument::ConstSelf { location }),
                 grammar::Argument::MutSelf { .. } => Ok(Argument::MutSelf { location }),
@@ -502,7 +502,7 @@ pub fn build(
                                 argument_name: ident.0.clone(),
                                 function_name: function.name.0.clone(),
                             },
-                            location: location.clone(),
+                            location,
                         })?,
                     location,
                 }),
@@ -535,6 +535,6 @@ pub fn build(
         arguments,
         return_type,
         calling_convention,
-        location: function.location.clone(),
+        location: function.location,
     })
 }

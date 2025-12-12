@@ -28,7 +28,7 @@ pub fn build_state(
     module_path: &IP,
 ) -> crate::semantic::error::Result<ResolvedSemanticState> {
     let mut semantic_state = SemanticState::new(pointer_size());
-    semantic_state.add_module(module, module_path, None)?;
+    semantic_state.add_module(module, module_path)?;
     semantic_state.build()
 }
 

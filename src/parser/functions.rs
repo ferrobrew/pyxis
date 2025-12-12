@@ -1,5 +1,5 @@
 use crate::{
-    span::{HasLocation, ItemLocation, Span},
+    span::{HasLocation, ItemLocation},
     tokenizer::TokenKind,
 };
 
@@ -74,7 +74,7 @@ impl Argument {
         let type_ = type_.into();
         Argument::Named {
             ident: ident.into(),
-            location: type_.location().clone(),
+            location: *type_.location(),
             type_,
         }
     }
@@ -331,7 +331,7 @@ impl Parser {
         } else {
             self.current().location.span.end
         };
-        let location = ItemLocation::new(self.filename.clone(), Span::new(start_pos, end_pos));
+        let location = self.item_location_from_locations(start_pos, end_pos);
 
         Ok(Function {
             visibility,
@@ -351,12 +351,12 @@ impl Parser {
                 self.advance();
                 let tok = self.expect(TokenKind::SelfValue)?;
                 Ok(Argument::MutSelf {
-                    location: tok.location.clone(),
+                    location: tok.location,
                 })
             } else {
                 let tok = self.expect(TokenKind::SelfValue)?;
                 Ok(Argument::ConstSelf {
-                    location: tok.location.clone(),
+                    location: tok.location,
                 })
             }
         } else {
@@ -365,7 +365,7 @@ impl Parser {
             self.expect(TokenKind::Colon)?;
             let type_ = self.parse_type()?;
             let end_pos = self.current().location.span.end;
-            let location = ItemLocation::new(self.filename.clone(), Span::new(start_pos, end_pos));
+            let location = self.item_location_from_locations(start_pos, end_pos);
 
             Ok(Argument::Named {
                 ident: name,

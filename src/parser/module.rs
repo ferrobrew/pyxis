@@ -404,7 +404,7 @@ impl Parser {
                         .map(|function| ModuleItem::Function { function }),
                     _ => Err(ParseError::UnexpectedTokenAfterAttributes {
                         found: self.tokens[pos].kind.clone(),
-                        location: self.tokens[pos].location.clone(),
+                        location: self.tokens[pos].location,
                     }),
                 }
             }
@@ -466,7 +466,7 @@ impl Parser {
             }
             _ => Err(ParseError::UnexpectedModuleToken {
                 found: self.peek().clone(),
-                location: self.current().location.clone(),
+                location: self.current().location,
             }),
         }
     }
