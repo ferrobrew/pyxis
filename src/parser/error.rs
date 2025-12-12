@@ -8,7 +8,7 @@ use ariadne::{Color, Label, Report, ReportKind, Source};
 #[derive(Debug, Clone, PartialEq)]
 pub enum ParseError {
     ExpectedToken {
-        expected: TokenKind,
+        expected: Vec<TokenKind>,
         found: TokenKind,
         location: ItemLocation,
     },
@@ -66,6 +66,26 @@ pub enum ParseError {
     Tokenizer(LexError),
 }
 impl ParseError {
+    /// Format a list of expected tokens for display
+    fn format_expected_tokens(expected: &[TokenKind]) -> String {
+        match expected.len() {
+            0 => "nothing".to_string(),
+            1 => format!("{:?}", expected[0]),
+            2 => format!("{:?} or {:?}", expected[0], expected[1]),
+            _ => {
+                let all_but_last: Vec<_> = expected[..expected.len() - 1]
+                    .iter()
+                    .map(|t| format!("{t:?}"))
+                    .collect();
+                format!(
+                    "{}, or {:?}",
+                    all_but_last.join(", "),
+                    expected.last().unwrap()
+                )
+            }
+        }
+    }
+
     /// Helper to build ariadne report with source
     fn format_ariadne_with_source(
         location: &ItemLocation,
@@ -103,12 +123,15 @@ impl ParseError {
                 expected,
                 found,
                 location,
-            } => Self::format_ariadne_with_source(
-                location,
-                file_store,
-                &format!("Expected {expected:?}, found {found:?}"),
-                &format!("expected {expected:?} here"),
-            ),
+            } => {
+                let expected_str = Self::format_expected_tokens(expected);
+                Self::format_ariadne_with_source(
+                    location,
+                    file_store,
+                    &format!("Expected {expected_str}, found {found:?}"),
+                    &format!("expected {expected_str} here"),
+                )
+            }
             ParseError::ExpectedIdentifier { found, location } => Self::format_ariadne_with_source(
                 location,
                 file_store,
@@ -213,7 +236,10 @@ impl std::fmt::Display for ParseError {
         match self {
             ParseError::ExpectedToken {
                 expected, found, ..
-            } => write!(f, "Expected {expected:?}, found {found:?}"),
+            } => {
+                let expected_str = Self::format_expected_tokens(expected);
+                write!(f, "Expected {expected_str}, found {found:?}")
+            }
             ParseError::ExpectedIdentifier { found, .. } => {
                 write!(f, "Expected identifier, found {found:?}")
             }
@@ -324,12 +350,12 @@ mod tests {
         let err = parse_str_for_tests(text).unwrap_err();
         assert!(
             matches!(
-                err,
+                &err,
                 ParseError::ExpectedToken {
-                    expected: TokenKind::Colon,
+                    expected,
                     found: TokenKind::LBrace,
                     ..
-                }
+                } if expected == &[TokenKind::Colon]
             ),
             "Expected ExpectedToken with Colon/LBrace, got: {err:?}"
         );
@@ -346,12 +372,12 @@ mod tests {
         let err = parse_str_for_tests(text).unwrap_err();
         assert!(
             matches!(
-                err,
+                &err,
                 ParseError::ExpectedToken {
-                    expected: TokenKind::Eq,
+                    expected,
                     found: TokenKind::IntLiteral(_),
                     ..
-                }
+                } if expected == &[TokenKind::Eq]
             ),
             "Expected ExpectedToken with Eq/IntLiteral, got: {err:?}"
         );
@@ -381,12 +407,12 @@ mod tests {
         let err = parse_str_for_tests(text).unwrap_err();
         assert!(
             matches!(
-                err,
+                &err,
                 ParseError::ExpectedToken {
-                    expected: TokenKind::Semi,
+                    expected,
                     found: TokenKind::Eof,
                     ..
-                }
+                } if expected == &[TokenKind::Semi]
             ),
             "Expected ExpectedToken with Semi/Eof, got: {err:?}"
         );
@@ -408,6 +434,182 @@ mod tests {
                 }
             ),
             "Expected ExpectedItemDefinition with Fn, got: {err:?}"
+        );
+    }
+
+    // ========================================================================
+    // Parser bounds checking tests - ensure no panics on truncated input
+    // ========================================================================
+
+    #[test]
+    fn should_not_panic_on_attribute_at_eof() {
+        // Just a # with nothing after - should error about missing [
+        let text = "#";
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert!(
+            matches!(
+                &err,
+                ParseError::ExpectedToken {
+                    expected,
+                    found: TokenKind::Eof,
+                    ..
+                } if expected == &[TokenKind::LBracket]
+            ),
+            "Expected ExpectedToken with LBracket/Eof, got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn should_not_panic_on_incomplete_attribute_bracket() {
+        // #[ with nothing after - should error about missing attribute name
+        let text = "#[";
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert!(
+            matches!(
+                err,
+                ParseError::ExpectedIdentifier {
+                    found: TokenKind::Eof,
+                    ..
+                }
+            ),
+            "Expected ExpectedIdentifier with Eof, got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn should_not_panic_on_unclosed_attribute() {
+        // #[foo without closing ] - should error about missing ] or ,
+        let text = "#[foo";
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert!(
+            matches!(
+                err,
+                ParseError::ExpectedToken {
+                    found: TokenKind::Eof,
+                    ..
+                }
+            ),
+            "Expected ExpectedToken with Eof, got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn should_not_panic_on_attribute_without_item() {
+        // Complete attribute but nothing after - should error about missing item
+        let text = "#[size(4)]";
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert!(
+            matches!(
+                err,
+                ParseError::ExpectedItemDefinition {
+                    found: TokenKind::Eof,
+                    ..
+                }
+            ),
+            "Expected ExpectedItemDefinition with Eof, got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn should_not_panic_on_multiple_attributes_at_eof() {
+        // Multiple attributes but nothing after - should error about missing item
+        let text = "#[size(4)] #[align(4)]";
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert!(
+            matches!(
+                err,
+                ParseError::ExpectedItemDefinition {
+                    found: TokenKind::Eof,
+                    ..
+                }
+            ),
+            "Expected ExpectedItemDefinition with Eof, got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn should_not_panic_on_doc_comment_then_incomplete_attribute() {
+        // Doc comment followed by incomplete attribute - should error about missing attribute name
+        let text = "/// My doc\n#[";
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert!(
+            matches!(
+                err,
+                ParseError::ExpectedIdentifier {
+                    found: TokenKind::Eof,
+                    ..
+                }
+            ),
+            "Expected ExpectedIdentifier with Eof, got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn should_not_panic_on_doc_comment_then_attribute_at_eof() {
+        // Doc comment followed by complete attribute but nothing else - should error about missing item
+        let text = "/// My doc\n#[size(4)]";
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert!(
+            matches!(
+                err,
+                ParseError::ExpectedItemDefinition {
+                    found: TokenKind::Eof,
+                    ..
+                }
+            ),
+            "Expected ExpectedItemDefinition with Eof, got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn should_not_panic_on_unclosed_attribute_with_parens() {
+        // #[size(4) without closing ] - should error about missing ] or ,
+        // This is the case from the issue: #[size(0x3540) followed by more code
+        let text = "#[size(4)";
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert!(
+            matches!(
+                err,
+                ParseError::ExpectedToken {
+                    found: TokenKind::Eof,
+                    ..
+                }
+            ),
+            "Expected ExpectedToken with Eof, got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn should_not_panic_on_multiple_attrs_missing_bracket() {
+        // #[size(0x3540), align(4) without closing ] - should error about missing ] or ,
+        let text = "#[size(0x3540), align(4)";
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert!(
+            matches!(
+                err,
+                ParseError::ExpectedToken {
+                    found: TokenKind::Eof,
+                    ..
+                }
+            ),
+            "Expected ExpectedToken with Eof, got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn should_not_panic_on_multiple_attrs_missing_bracket_with_item() {
+        // #[size(0x3540), align(4) followed by item - should error about missing ] or ,
+        let text = "#[size(0x3540), align(4)\npub type Foo {}";
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert!(
+            matches!(
+                err,
+                ParseError::ExpectedToken {
+                    found: TokenKind::Pub,
+                    ..
+                }
+            ),
+            "Expected ExpectedToken with Pub, got: {err:?}"
         );
     }
 }

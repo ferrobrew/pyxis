@@ -331,8 +331,13 @@ impl Parser {
                 attrs.push(self.parse_attribute()?);
                 if matches!(self.peek(), TokenKind::Comma) {
                     self.advance();
-                } else {
-                    break;
+                } else if !matches!(self.peek(), TokenKind::RBracket) {
+                    // Not a comma and not a closing bracket - error
+                    return Err(ParseError::ExpectedToken {
+                        expected: vec![TokenKind::RBracket, TokenKind::Comma],
+                        found: self.peek().clone(),
+                        location: self.current().location,
+                    });
                 }
             }
 
