@@ -1,7 +1,7 @@
 import type { JsonRegion } from '@pyxis/types';
 import { TypeRef } from './TypeRef';
 import { SmallBadge } from './Badge';
-import { SourceLink } from './SourceLink';
+import { SourceName } from './SourceLink';
 
 interface FieldTableProps {
   fields: JsonRegion[];
@@ -32,9 +32,6 @@ export function FieldTable({ fields, modulePath }: FieldTableProps) {
             <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-slate-200">
               Notes
             </th>
-            <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-slate-200">
-              Source
-            </th>
           </tr>
         </thead>
         <tbody>
@@ -54,7 +51,13 @@ export function FieldTable({ fields, modulePath }: FieldTableProps) {
                 <td className="px-4 py-2 text-sm text-gray-600 dark:text-slate-400 font-mono">
                   0x{field.offset.toString(16).toUpperCase()}
                 </td>
-                <td className={nameClasses}>{field.name || '<anonymous>'}</td>
+                <td className={nameClasses}>
+                  {field.source ? (
+                    <SourceName source={field.source}>{field.name || '<anonymous>'}</SourceName>
+                  ) : (
+                    field.name || '<anonymous>'
+                  )}
+                </td>
                 <td className={`px-4 py-2 font-mono text-sm ${typeClasses}`}>
                   <TypeRef type={field.type_ref} currentModule={modulePath} />
                 </td>
@@ -69,9 +72,6 @@ export function FieldTable({ fields, modulePath }: FieldTableProps) {
                   {field.doc && (
                     <div className="text-gray-600 dark:text-slate-400 mt-1">{field.doc}</div>
                   )}
-                </td>
-                <td className="px-4 py-2 text-sm">
-                  {field.source && <SourceLink source={field.source} />}
                 </td>
               </tr>
             );

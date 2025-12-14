@@ -1,7 +1,7 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import type { JsonFunction } from '@pyxis/types';
 import { TypeRef } from './TypeRef';
-import { SourceLink } from './SourceLink';
+import { SourceName } from './SourceLink';
 
 interface FunctionDisplayProps {
   func: JsonFunction;
@@ -41,7 +41,13 @@ export function FunctionDisplay({ func, modulePath, id }: FunctionDisplayProps) 
         <span className="text-violet-600 dark:text-slate-500 font-mono text-sm">fn</span>
         <div className="flex-1">
           <div className="font-mono text-sm">
-            <span className={nameClasses}>{func.name}</span>
+            <span className={nameClasses}>
+              {func.source ? (
+                <SourceName source={func.source}>{func.name}</SourceName>
+              ) : (
+                func.name
+              )}
+            </span>
             <span className="text-gray-600 dark:text-slate-400">(</span>
             {func.arguments.map((arg, i) => (
               <span key={i}>
@@ -72,19 +78,11 @@ export function FunctionDisplay({ func, modulePath, id }: FunctionDisplayProps) 
           {func.doc && (
             <div className="mt-2 text-sm text-gray-600 dark:text-slate-400">{func.doc}</div>
           )}
-          <div className="mt-2 text-xs text-gray-500 dark:text-slate-500 flex items-center gap-2 flex-wrap">
-            <span>
-              {func.body.type === 'address' && `Address: 0x${func.body.address.toString(16)}`}
-              {func.body.type === 'field' && `Field: ${func.body.field}`}
-              {func.body.type === 'vftable' && `VFTable: ${func.body.function_name}`}
-              {func.calling_convention !== 'c' && ` • ${func.calling_convention}`}
-            </span>
-            {func.source && (
-              <>
-                <span>•</span>
-                <SourceLink source={func.source} />
-              </>
-            )}
+          <div className="mt-2 text-xs text-gray-500 dark:text-slate-500">
+            {func.body.type === 'address' && `Address: 0x${func.body.address.toString(16)}`}
+            {func.body.type === 'field' && `Field: ${func.body.field}`}
+            {func.body.type === 'vftable' && `VFTable: ${func.body.function_name}`}
+            {func.calling_convention !== 'c' && ` • ${func.calling_convention}`}
           </div>
         </div>
       </div>

@@ -9,7 +9,7 @@ import { FunctionDisplay } from './FunctionDisplay';
 import { FieldTable } from './FieldTable';
 import { NestedFieldView } from './NestedFieldView';
 import { Breadcrumbs } from './Breadcrumbs';
-import { SourceLink } from './SourceLink';
+import { SourceLink, SourceName } from './SourceLink';
 import type { JsonTypeDefinition, JsonEnumDefinition, JsonBitflagsDefinition, JsonTypeAliasDefinition } from '@pyxis/types';
 
 // Documentation display component for code blocks
@@ -185,9 +185,6 @@ function EnumView({ def, modulePath }: { def: JsonEnumDefinition; modulePath: st
                 <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-slate-200">
                   Value
                 </th>
-                <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-slate-200">
-                  Source
-                </th>
               </tr>
             </thead>
             <tbody>
@@ -198,14 +195,15 @@ function EnumView({ def, modulePath }: { def: JsonEnumDefinition; modulePath: st
                   className="border-b border-gray-200 dark:border-slate-800"
                 >
                   <td className="px-4 py-2 font-mono text-sm text-gray-900 dark:text-slate-200">
-                    {variant.name}
+                    {variant.source ? (
+                      <SourceName source={variant.source}>{variant.name}</SourceName>
+                    ) : (
+                      variant.name
+                    )}
                     {def.default === idx && <SmallBadge variant="purple">default</SmallBadge>}
                   </td>
                   <td className="px-4 py-2 text-sm text-gray-600 dark:text-slate-400 font-mono">
                     {variant.value}
-                  </td>
-                  <td className="px-4 py-2 text-sm">
-                    {variant.source && <SourceLink source={variant.source} />}
                   </td>
                 </tr>
               ))}
@@ -270,9 +268,6 @@ function BitflagsView({ def, modulePath }: { def: JsonBitflagsDefinition; module
                 <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-slate-200">
                   Value (Bin)
                 </th>
-                <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-slate-200">
-                  Source
-                </th>
               </tr>
             </thead>
             <tbody>
@@ -283,7 +278,11 @@ function BitflagsView({ def, modulePath }: { def: JsonBitflagsDefinition; module
                   className="border-b border-gray-200 dark:border-slate-800"
                 >
                   <td className="px-4 py-2 font-mono text-sm text-gray-900 dark:text-slate-200">
-                    {flag.name}
+                    {flag.source ? (
+                      <SourceName source={flag.source}>{flag.name}</SourceName>
+                    ) : (
+                      flag.name
+                    )}
                     {def.default === idx && <SmallBadge variant="purple">default</SmallBadge>}
                   </td>
                   <td className="px-4 py-2 text-sm text-gray-600 dark:text-slate-400 font-mono">
@@ -294,9 +293,6 @@ function BitflagsView({ def, modulePath }: { def: JsonBitflagsDefinition; module
                   </td>
                   <td className="px-4 py-2 text-sm text-gray-600 dark:text-slate-400 font-mono">
                     0b{flag.value.toString(2).padStart(8, '0')}
-                  </td>
-                  <td className="px-4 py-2 text-sm">
-                    {flag.source && <SourceLink source={flag.source} />}
                   </td>
                 </tr>
               ))}

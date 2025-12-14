@@ -46,6 +46,54 @@ function buildGitHubUrl(sourcePath: string, line: number, selectedSource: string
   return `${PYXIS_DEFS_REPO}/blob/main/projects/${projectName}/${sourcePath}#L${line}`;
 }
 
+interface SourceNameProps {
+  source: JsonSourceLocation;
+  children: React.ReactNode;
+  className?: string;
+}
+
+/**
+ * Wraps a name/label to make it a clickable source link.
+ * For pyxis-defs sources, renders as a GitHub link.
+ * For local sources, renders children with a dotted underline indicating source info.
+ */
+export function SourceName({ source, children, className = '' }: SourceNameProps) {
+  const { selectedSource } = useDocumentation();
+  const sourcePath = useSourcePath(source.file_index);
+  const isPyxisDefs = useIsPyxisDefsSource();
+
+  if (!sourcePath) {
+    return <>{children}</>;
+  }
+
+  const tooltip = `${sourcePath}:${source.line}`;
+
+  if (isPyxisDefs) {
+    const githubUrl = buildGitHubUrl(sourcePath, source.line, selectedSource);
+    return (
+      <a
+        href={githubUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={`hover:underline text-blue-600 dark:text-blue-400 ${className}`}
+        title={tooltip}
+      >
+        {children}
+      </a>
+    );
+  }
+
+  // For local sources, show with dotted underline to indicate source info available
+  return (
+    <span
+      className={`border-b border-dotted border-gray-400 dark:border-slate-500 ${className}`}
+      title={tooltip}
+    >
+      {children}
+    </span>
+  );
+}
+
 export function SourceLink({ source }: SourceLinkProps) {
   const { selectedSource } = useDocumentation();
   const sourcePath = useSourcePath(source.file_index);
@@ -55,7 +103,7 @@ export function SourceLink({ source }: SourceLinkProps) {
     return null;
   }
 
-  const displayText = `${sourcePath}:${source.line}`;
+  const tooltip = `${sourcePath}:${source.line}`;
 
   if (isPyxisDefs) {
     const githubUrl = buildGitHubUrl(sourcePath, source.line, selectedSource);
@@ -64,18 +112,18 @@ export function SourceLink({ source }: SourceLinkProps) {
         href={githubUrl}
         target="_blank"
         rel="noopener noreferrer"
-        className="text-sm text-blue-600 dark:text-blue-400 hover:underline font-mono"
-        title="View source on GitHub"
+        className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+        title={tooltip}
       >
-        {displayText}
+        Source
       </a>
     );
   }
 
-  // For local sources, just display the path without a link
+  // For local sources, just display without a link
   return (
-    <span className="text-sm text-gray-600 dark:text-slate-400 font-mono" title="Source location">
-      {displayText}
+    <span className="text-xs text-gray-500 dark:text-slate-500" title={tooltip}>
+      Source
     </span>
   );
 }
