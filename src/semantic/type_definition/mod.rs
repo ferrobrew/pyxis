@@ -310,7 +310,7 @@ pub fn build(
                         };
                         return Ok(BuildOutcome::NotFoundType(UnresolvedTypeReference {
                             type_name,
-                            location: statement.location,
+                            location: *type_.location(),
                             context: format!("field `{field_name}` of type `{resolvee_path}`"),
                         }));
                     }
