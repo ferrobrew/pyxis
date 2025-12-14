@@ -9,6 +9,7 @@ import { FunctionDisplay } from './FunctionDisplay';
 import { FieldTable } from './FieldTable';
 import { NestedFieldView } from './NestedFieldView';
 import { Breadcrumbs } from './Breadcrumbs';
+import { SourceLink } from './SourceLink';
 import type { JsonTypeDefinition, JsonEnumDefinition, JsonBitflagsDefinition, JsonTypeAliasDefinition } from '@pyxis/types';
 
 // Documentation display component for code blocks
@@ -385,6 +386,7 @@ export function ItemView() {
         <span>Alignment: {item.alignment} bytes</span>
         <span className="capitalize">{item.category}</span>
         <span className="capitalize">{item.visibility}</span>
+        {item.source && <SourceLink source={item.source} />}
       </div>
 
       {item.kind.type === 'type' && <TypeView def={item.kind} modulePath={modulePath} />}

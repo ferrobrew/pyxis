@@ -76,7 +76,11 @@ items: { [key in string]: JsonItem };
 /**
  * Nested module hierarchy
  */
-modules: { [key in string]: JsonModule } };
+modules: { [key in string]: JsonModule }; 
+/**
+ * Source file paths indexed by file ID (index 0 and 1 are reserved for internal/test)
+ */
+source_paths: string[] };
 
 export type JsonEnumDefinition = { 
 /**
@@ -201,7 +205,11 @@ category: JsonItemCategory;
 /**
  * Item kind and details
  */
-kind: JsonItemKind };
+kind: JsonItemKind; 
+/**
+ * Source location (file and line) - None for predefined/internal items
+ */
+source: JsonSourceLocation | null };
 
 export type JsonItemCategory = "defined" | "predefined" | "extern";
 
@@ -269,6 +277,19 @@ alignment: number;
  * Whether this is a base class field
  */
 is_base: boolean };
+
+/**
+ * Source location of an item (file index and line number)
+ */
+export type JsonSourceLocation = { 
+/**
+ * Index into the source_paths array in JsonDocumentation
+ */
+file_index: number; 
+/**
+ * Line number (1-indexed)
+ */
+line: number };
 
 export type JsonType = { type: "raw"; path: string } | { type: "const_pointer"; inner: JsonType } | { type: "mut_pointer"; inner: JsonType } | { type: "array"; inner: JsonType; size: number } | { type: "function"; calling_convention: JsonCallingConvention; arguments: JsonFunctionArgument[]; return_type: JsonType | null };
 

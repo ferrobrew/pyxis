@@ -159,7 +159,12 @@ pub fn build_with_store(
         }
         #[cfg(feature = "json")]
         Backend::Json => {
-            backends::json::build(out_dir, &resolved_semantic_state, &config.project.name)?;
+            backends::json::build(
+                out_dir,
+                &resolved_semantic_state,
+                &config.project.name,
+                file_store,
+            )?;
             Ok(())
         }
     }

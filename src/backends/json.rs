@@ -3,6 +3,8 @@ use std::{collections::BTreeMap, path::Path};
 use crate::{
     backends::{BackendError, Result},
     semantic::types::{Backend, Type},
+    source_store::FileStore,
+    span::FileId,
 };
 use serde::{Deserialize, Serialize};
 
@@ -29,6 +31,8 @@ pub struct JsonDocumentation {
     pub items: BTreeMap<String, JsonItem>,
     /// Nested module hierarchy
     pub modules: BTreeMap<String, JsonModule>,
+    /// Source file paths indexed by file ID (index 0 and 1 are reserved for internal/test)
+    pub source_paths: Vec<String>,
 }
 
 /// A module containing items and potentially submodules
@@ -58,6 +62,15 @@ pub struct JsonBackend {
     pub epilogue: Option<String>,
 }
 
+/// Source location of an item (file index and line number)
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+pub struct JsonSourceLocation {
+    /// Index into the source_paths array in JsonDocumentation
+    pub file_index: usize,
+    /// Line number (1-indexed)
+    pub line: usize,
+}
+
 /// An item (type, enum, or bitflags) in the documentation
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 pub struct JsonItem {
@@ -73,6 +86,8 @@ pub struct JsonItem {
     pub category: JsonItemCategory,
     /// Item kind and details
     pub kind: JsonItemKind,
+    /// Source location (file and line) - None for predefined/internal items
+    pub source: Option<JsonSourceLocation>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
@@ -342,8 +357,26 @@ pub fn build(
     out_dir: &Path,
     semantic_state: &ResolvedSemanticState,
     project_name: &str,
+    file_store: &FileStore,
 ) -> Result<()> {
     let type_registry = semantic_state.type_registry();
+
+    // Build source_paths from file store
+    // We collect all unique file IDs from items, then build the paths list
+    let mut max_file_id = 0usize;
+    for module in semantic_state.modules().values() {
+        for definition in module.definitions(type_registry) {
+            let file_index = definition.location.file_id.index();
+            if file_index > max_file_id {
+                max_file_id = file_index;
+            }
+        }
+    }
+
+    // Build source paths array (indices 0 and 1 are reserved for internal/test)
+    let source_paths: Vec<String> = (0..=max_file_id)
+        .map(|i| file_store.filename(FileId::new(i as u32)).to_string())
+        .collect();
 
     // Build items map
     let mut items = BTreeMap::new();
@@ -364,6 +397,7 @@ pub fn build(
         project_name: project_name.to_string(),
         items,
         modules,
+        source_paths,
     };
 
     // Write to file
@@ -603,6 +637,16 @@ fn convert_item(item: &ItemDefinition, type_registry: &TypeRegistry) -> Option<J
         }
     };
 
+    // Build source location for defined items (not predefined/internal)
+    let source = if item.location.file_id != FileId::INTERNAL {
+        Some(JsonSourceLocation {
+            file_index: item.location.file_id.index(),
+            line: item.location.span.start.line,
+        })
+    } else {
+        None
+    };
+
     Some(JsonItem {
         path: item.path.to_string(),
         visibility: item.visibility.into(),
@@ -610,6 +654,7 @@ fn convert_item(item: &ItemDefinition, type_registry: &TypeRegistry) -> Option<J
         alignment: resolved.alignment,
         category: item.category.into(),
         kind,
+        source,
     })
 }
 
