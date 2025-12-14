@@ -182,13 +182,20 @@ fn will_eventually_terminate_with_an_unknown_type() {
             (V::Public, "TestType2"),
             TD::new([TS::field((V::Private, "field_2"), T::ident("TestType1"))]),
         )]),
-        |err| {
-            matches!(
-                err,
-                SemanticError::TypeResolutionStalled { unresolved_types, resolved_types, .. }
-                if unresolved_types.contains(&"test::TestType2".to_string())
+        |err| match err {
+            SemanticError::TypeResolutionStalled {
+                unresolved_types,
+                resolved_types,
+                unresolved_references,
+            } => {
+                unresolved_types == &["test::TestType2".to_string()]
                     && resolved_types.is_empty()
-            )
+                    && unresolved_references.len() == 1
+                    && unresolved_references[0].type_name == "TestType1"
+                    && unresolved_references[0].context
+                        == "field `field_2` of type `test::TestType2`"
+            }
+            _ => false,
         },
     );
 }
@@ -213,8 +220,8 @@ fn unresolved_type_includes_type_name_in_error() {
                     // Should have exactly one unresolved reference
                     unresolved_references.len() == 1
                         && unresolved_references[0].type_name == "NonexistentType"
-                        && unresolved_references[0].context.contains("my_field")
-                        && unresolved_references[0].context.contains("MyType")
+                        && unresolved_references[0].context
+                            == "field `my_field` of type `test::MyType`"
                 }
                 _ => false,
             }
@@ -241,8 +248,7 @@ fn unresolved_type_in_enum_includes_context() {
             } => {
                 unresolved_references.len() == 1
                     && unresolved_references[0].type_name == "NonexistentBase"
-                    && unresolved_references[0].context.contains("enum")
-                    && unresolved_references[0].context.contains("MyEnum")
+                    && unresolved_references[0].context == "base type of enum `test::MyEnum`"
             }
             _ => false,
         },
@@ -269,12 +275,23 @@ fn multiple_unresolved_types_are_all_reported() {
                     unresolved_references,
                     ..
                 } => {
-                    // Should have two unresolved references
-                    let type_names: Vec<_> = unresolved_references
+                    // Should have two unresolved references (order may vary)
+                    if unresolved_references.len() != 2 {
+                        return false;
+                    }
+                    let ref1 = unresolved_references
                         .iter()
-                        .map(|r| r.type_name.as_str())
-                        .collect();
-                    type_names.contains(&"Missing1") && type_names.contains(&"Missing2")
+                        .find(|r| r.type_name == "Missing1");
+                    let ref2 = unresolved_references
+                        .iter()
+                        .find(|r| r.type_name == "Missing2");
+                    match (ref1, ref2) {
+                        (Some(r1), Some(r2)) => {
+                            r1.context == "field `field_a` of type `test::Type1`"
+                                && r2.context == "field `field_b` of type `test::Type2`"
+                        }
+                        _ => false,
+                    }
                 }
                 _ => false,
             }
