@@ -125,6 +125,24 @@ impl TypeRegistry {
         }
     }
 
+    /// Resolves a path, checking if it's a qualified path or needs scope lookup.
+    pub(crate) fn resolve_path(&self, scope: &[ItemPath], path: &ItemPath) -> Option<Type> {
+        // If path has multiple segments, try to resolve it directly first
+        if path.len() > 1 {
+            if self.types.contains_key(path) {
+                return Some(self.resolve_type_alias(Type::Raw(path.clone())));
+            }
+        }
+
+        // For single-segment paths or unresolved multi-segment paths,
+        // try scope-based resolution using the last segment
+        if let Some(last_segment) = path.last() {
+            self.resolve_string(scope, last_segment.as_str())
+        } else {
+            None
+        }
+    }
+
     pub(crate) fn resolve_grammar_type(
         &self,
         scope: &[ItemPath],
@@ -141,7 +159,7 @@ impl TypeRegistry {
             grammar::Type::Array { element, size, .. } => self
                 .resolve_grammar_type(scope, element)
                 .map(|t| Type::Array(Box::new(t), *size)),
-            grammar::Type::Ident { ident, .. } => self.resolve_string(scope, ident.as_str()),
+            grammar::Type::Ident { path, .. } => self.resolve_path(scope, path),
             grammar::Type::Unknown { size, .. } => Some(self.padding_type(*size)),
         }
     }

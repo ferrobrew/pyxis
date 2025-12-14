@@ -8,7 +8,7 @@ use crate::{
 #[cfg(test)]
 use crate::span::StripLocations;
 
-use super::{ParseError, core::Parser};
+use super::{ParseError, core::Parser, paths::ItemPath};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Ident(pub String);
@@ -60,7 +60,7 @@ pub enum Type {
         location: ItemLocation,
     },
     Ident {
-        ident: Ident,
+        path: ItemPath,
         location: ItemLocation,
     },
     Unknown {
@@ -104,8 +104,8 @@ impl EqualsIgnoringLocations for Type {
             ) => {
                 element.equals_ignoring_locations(element2) && size.equals_ignoring_locations(size2)
             }
-            (Type::Ident { ident, .. }, Type::Ident { ident: ident2, .. }) => {
-                ident.equals_ignoring_locations(ident2)
+            (Type::Ident { path, .. }, Type::Ident { path: path2, .. }) => {
+                path.equals_ignoring_locations(path2)
             }
             (Type::Unknown { size, .. }, Type::Unknown { size: size2, .. }) => {
                 size.equals_ignoring_locations(size2)
@@ -131,8 +131,8 @@ impl StripLocations for Type {
                 size: size.strip_locations(),
                 location: ItemLocation::test(),
             },
-            Type::Ident { ident, .. } => Type::Ident {
-                ident: ident.strip_locations(),
+            Type::Ident { path, .. } => Type::Ident {
+                path: path.strip_locations(),
                 location: ItemLocation::test(),
             },
             Type::Unknown { size, .. } => Type::Unknown {
@@ -146,14 +146,14 @@ impl StripLocations for Type {
 impl Type {
     pub fn ident(name: &str) -> Type {
         Type::Ident {
-            ident: name.into(),
+            path: name.into(),
             location: ItemLocation::test(),
         }
     }
 
-    pub fn as_ident(&self) -> Option<&Ident> {
+    pub fn as_path(&self) -> Option<&ItemPath> {
         match self {
-            Type::Ident { ident, .. } => Some(ident),
+            Type::Ident { path, .. } => Some(path),
             _ => None,
         }
     }
@@ -190,7 +190,7 @@ impl Type {
 impl From<&str> for Type {
     fn from(item: &str) -> Self {
         Type::Ident {
-            ident: item.into(),
+            path: item.into(),
             location: ItemLocation::internal(),
         }
     }
@@ -202,7 +202,7 @@ impl fmt::Display for Type {
             Type::ConstPointer { pointee, .. } => write!(f, "*const {pointee}"),
             Type::MutPointer { pointee, .. } => write!(f, "*mut {pointee}"),
             Type::Array { element, size, .. } => write!(f, "[{element}; {size}]"),
-            Type::Ident { ident, .. } => write!(f, "{ident}"),
+            Type::Ident { path, .. } => write!(f, "{path}"),
             Type::Unknown { size, .. } => write!(f, "unknown({size})"),
         }
     }
@@ -266,57 +266,63 @@ impl Parser {
                 })
             }
             TokenKind::Ident(_) => {
-                let (mut ident, ident_span) = self.expect_ident()?;
+                let (first_ident, ident_span) = self.expect_ident()?;
                 let start_pos = ident_span.start;
                 let mut end_pos = ident_span.end;
+                let mut segments = vec![first_ident.0];
 
                 // Handle paths like module::Type - continue parsing while we see ::
                 while matches!(self.peek(), TokenKind::ColonColon) {
-                    let mut type_str = ident.0;
-                    type_str.push_str("::");
                     self.advance(); // consume ::
                     let (next_ident, next_span) = self.expect_ident()?;
-                    type_str.push_str(&next_ident.0);
+                    segments.push(next_ident.0);
                     end_pos = next_span.end;
-                    ident = Ident(type_str);
                 }
 
-                // Check for generic arguments - treat them as part of the identifier string
+                // Check for generic arguments on the last segment
                 // This is needed for extern types that need exact reproduction
                 if matches!(self.peek(), TokenKind::Lt) {
-                    let mut type_str = ident.0;
-                    type_str.push('<');
+                    let mut generic_str = String::from("<");
                     end_pos = self.advance().end_location(); // consume <
 
                     let mut depth = 1;
                     while depth > 0 && !matches!(self.peek(), TokenKind::Eof) {
                         match self.peek().clone() {
                             TokenKind::Lt => {
-                                type_str.push('<');
+                                generic_str.push('<');
                                 depth += 1;
                             }
                             TokenKind::Gt => {
-                                type_str.push('>');
+                                generic_str.push('>');
                                 depth -= 1;
                             }
                             TokenKind::Comma => {
-                                type_str.push_str(", ");
+                                generic_str.push_str(", ");
                             }
                             TokenKind::Ident(name) => {
-                                type_str.push_str(&name);
+                                generic_str.push_str(&name);
                             }
                             TokenKind::ColonColon => {
-                                type_str.push_str("::");
+                                generic_str.push_str("::");
                             }
                             _ => {}
                         }
                         end_pos = self.advance().end_location();
                     }
-                    ident = Ident(type_str);
+                    // Append generic args to the last segment
+                    if let Some(last) = segments.last_mut() {
+                        last.push_str(&generic_str);
+                    }
                 }
 
+                let path: ItemPath = segments
+                    .into_iter()
+                    .map(|s| s.into())
+                    .collect::<Vec<_>>()
+                    .into_iter()
+                    .collect();
                 let location = self.item_location_from_locations(start_pos, end_pos);
-                Ok(Type::Ident { ident, location })
+                Ok(Type::Ident { path, location })
             }
             _ => Err(ParseError::ExpectedType {
                 found: self.peek().clone(),

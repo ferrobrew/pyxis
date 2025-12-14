@@ -277,18 +277,22 @@ impl PrettyPrinter {
 
     /// Get the bit width from a type (e.g., u8 -> 8, u32 -> 32)
     fn get_type_bit_width(&self, type_: &Type) -> Option<usize> {
-        if let Type::Ident { ident, .. } = type_ {
-            match ident.as_str() {
-                "u8" | "i8" => Some(8),
-                "u16" | "i16" => Some(16),
-                "u32" | "i32" => Some(32),
-                "u64" | "i64" => Some(64),
-                "u128" | "i128" => Some(128),
-                _ => None,
+        if let Type::Ident { path, .. } = type_ {
+            // For bit width, we only care about single-segment primitive types
+            if path.len() == 1 {
+                if let Some(segment) = path.last() {
+                    return match segment.as_str() {
+                        "u8" | "i8" => Some(8),
+                        "u16" | "i16" => Some(16),
+                        "u32" | "i32" => Some(32),
+                        "u64" | "i64" => Some(64),
+                        "u128" | "i128" => Some(128),
+                        _ => None,
+                    };
+                }
             }
-        } else {
-            None
         }
+        None
     }
 
     fn print_attribute(&mut self, attr: &Attribute) {
@@ -806,7 +810,7 @@ impl PrettyPrinter {
 
     fn print_type(&mut self, type_: &Type) {
         match type_ {
-            Type::Ident { ident, .. } => write!(&mut self.output, "{ident}").unwrap(),
+            Type::Ident { path, .. } => write!(&mut self.output, "{path}").unwrap(),
             Type::ConstPointer { pointee, .. } => {
                 write!(&mut self.output, "*const ").unwrap();
                 self.print_type(pointee);
