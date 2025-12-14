@@ -5,7 +5,7 @@ use crate::{
     semantic::{
         attribute,
         error::{AttributeNotSupportedContext, Result, SemanticError, TypeResolutionContext},
-        type_registry::TypeRegistry,
+        type_registry::{TypeLookupResult, TypeRegistry},
         types::{Type, Visibility},
     },
     span::{EqualsIgnoringLocations, HasLocation, ItemLocation},
@@ -492,28 +492,36 @@ pub fn build(
             match a {
                 grammar::Argument::ConstSelf { .. } => Ok(Argument::ConstSelf { location }),
                 grammar::Argument::MutSelf { .. } => Ok(Argument::MutSelf { location }),
-                grammar::Argument::Named { ident, type_, .. } => Ok(Argument::Field {
-                    name: ident.0.clone(),
-                    type_: type_registry
-                        .resolve_grammar_type(scope, type_)
-                        .ok_or_else(|| SemanticError::TypeResolutionFailed {
-                            type_: type_.clone(),
-                            resolution_context: TypeResolutionContext::FunctionArgument {
-                                argument_name: ident.0.clone(),
-                                function_name: function.name.0.clone(),
-                            },
-                            location,
-                        })?,
-                    location,
-                }),
+                grammar::Argument::Named { ident, type_, .. } => {
+                    let resolved_type = match type_registry.resolve_grammar_type(scope, type_) {
+                        TypeLookupResult::Found(t) => t,
+                        TypeLookupResult::NotYetResolved | TypeLookupResult::NotFound { .. } => {
+                            return Err(SemanticError::TypeResolutionFailed {
+                                type_: type_.clone(),
+                                resolution_context: TypeResolutionContext::FunctionArgument {
+                                    argument_name: ident.0.clone(),
+                                    function_name: function.name.0.clone(),
+                                },
+                                location,
+                            });
+                        }
+                    };
+                    Ok(Argument::Field {
+                        name: ident.0.clone(),
+                        type_: resolved_type,
+                        location,
+                    })
+                }
             }
         })
         .collect::<Result<Vec<_>>>()?;
 
-    let return_type = function
-        .return_type
-        .as_ref()
-        .and_then(|t| type_registry.resolve_grammar_type(scope, t));
+    let return_type = function.return_type.as_ref().and_then(|t| {
+        match type_registry.resolve_grammar_type(scope, t) {
+            TypeLookupResult::Found(resolved) => Some(resolved),
+            TypeLookupResult::NotYetResolved | TypeLookupResult::NotFound { .. } => None,
+        }
+    });
 
     let calling_convention = calling_convention.unwrap_or_else(|| {
         let has_self = arguments

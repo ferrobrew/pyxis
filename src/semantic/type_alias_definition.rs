@@ -62,7 +62,7 @@ pub fn build(
     // no additional scope/visibility checks are needed
     let resolved_target = match semantic
         .type_registry
-        .resolve_grammar_type_with_reason(&module.scope(), &definition.target)
+        .resolve_grammar_type(&module.scope(), &definition.target)
     {
         TypeLookupResult::Found(t) => t,
         TypeLookupResult::NotYetResolved => return Ok(BuildOutcome::Deferred),

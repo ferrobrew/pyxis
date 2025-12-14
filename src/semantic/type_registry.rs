@@ -94,30 +94,6 @@ impl TypeRegistry {
         self.types.insert(type_.path.clone(), type_);
     }
 
-    pub(crate) fn resolve_string(&self, scope: &[ItemPath], name: &str) -> Option<Type> {
-        // todo: take scope_modules and scope_types instead of scope so that we don't need
-        // to do this partitioning
-        let (scope_types, scope_modules): (Vec<&ItemPath>, Vec<&ItemPath>) =
-            scope.iter().partition(|ip| self.types.contains_key(ip));
-
-        // If we find the relevant type within our scope, take the last one
-        let found_path = scope_types
-            .into_iter()
-            .rev()
-            .find(|st| st.last().map(|i| i.as_str()) == Some(name))
-            .cloned()
-            .or_else(|| {
-                // Otherwise, search our scopes
-                std::iter::once(&ItemPath::empty())
-                    .chain(scope_modules.iter().copied())
-                    .map(|ip| ip.join(name.into()))
-                    .find(|ip| self.types.contains_key(ip))
-            });
-
-        // If we found a type, check if it's a type alias and follow it
-        found_path.map(|ip| self.resolve_type_alias(Type::Raw(ip)))
-    }
-
     /// Follows type aliases recursively to get the final resolved type.
     /// If the type is not an alias, returns it unchanged.
     fn resolve_type_alias(&self, type_: Type) -> Type {
@@ -140,55 +116,16 @@ impl TypeRegistry {
         }
     }
 
-    /// Resolves a path, checking if it's a qualified path or needs scope lookup.
-    pub(crate) fn resolve_path(&self, scope: &[ItemPath], path: &ItemPath) -> Option<Type> {
-        // If path has multiple segments, try to resolve it directly first
-        if path.len() > 1 {
-            if self.types.contains_key(path) {
-                return Some(self.resolve_type_alias(Type::Raw(path.clone())));
-            }
-        }
-
-        // For single-segment paths or unresolved multi-segment paths,
-        // try scope-based resolution using the last segment
-        if let Some(last_segment) = path.last() {
-            self.resolve_string(scope, last_segment.as_str())
-        } else {
-            None
-        }
-    }
-
-    pub(crate) fn resolve_grammar_type(
-        &self,
-        scope: &[ItemPath],
-        type_: &grammar::Type,
-    ) -> Option<Type> {
-        // todo: consider building a better module import/scope system
-        match type_ {
-            grammar::Type::ConstPointer { pointee, .. } => self
-                .resolve_grammar_type(scope, pointee)
-                .map(|t| Type::ConstPointer(Box::new(t))),
-            grammar::Type::MutPointer { pointee, .. } => self
-                .resolve_grammar_type(scope, pointee)
-                .map(|t| Type::MutPointer(Box::new(t))),
-            grammar::Type::Array { element, size, .. } => self
-                .resolve_grammar_type(scope, element)
-                .map(|t| Type::Array(Box::new(t), *size)),
-            grammar::Type::Ident { path, .. } => self.resolve_path(scope, path),
-            grammar::Type::Unknown { size, .. } => Some(self.padding_type(*size)),
-        }
-    }
-
     pub(crate) fn padding_type(&self, bytes: usize) -> Type {
-        Type::Array(Box::new(self.resolve_string(&[], "u8").unwrap()), bytes)
+        match self.resolve_string(&[], "u8") {
+            TypeLookupResult::Found(t) => Type::Array(Box::new(t), bytes),
+            _ => panic!("u8 type not found in type registry"),
+        }
     }
 
-    /// Like resolve_string but returns TypeLookupResult to distinguish failure modes
-    pub(crate) fn resolve_string_with_reason(
-        &self,
-        scope: &[ItemPath],
-        name: &str,
-    ) -> TypeLookupResult {
+    /// Resolves a type name in the given scope, returning detailed information
+    /// about why resolution failed if it does.
+    pub(crate) fn resolve_string(&self, scope: &[ItemPath], name: &str) -> TypeLookupResult {
         let (scope_types, scope_modules): (Vec<&ItemPath>, Vec<&ItemPath>) =
             scope.iter().partition(|ip| self.types.contains_key(ip));
 
@@ -227,12 +164,9 @@ impl TypeRegistry {
         }
     }
 
-    /// Like resolve_path but returns TypeLookupResult to distinguish failure modes
-    pub(crate) fn resolve_path_with_reason(
-        &self,
-        scope: &[ItemPath],
-        path: &ItemPath,
-    ) -> TypeLookupResult {
+    /// Resolves a path, checking if it's a qualified path or needs scope lookup.
+    /// Returns detailed information about why resolution failed if it does.
+    pub(crate) fn resolve_path(&self, scope: &[ItemPath], path: &ItemPath) -> TypeLookupResult {
         // If path has multiple segments, try to resolve it directly first
         if path.len() > 1 {
             if let Some(item_def) = self.types.get(path) {
@@ -249,7 +183,7 @@ impl TypeRegistry {
         // For single-segment paths or unresolved multi-segment paths,
         // try scope-based resolution using the last segment
         if let Some(last_segment) = path.last() {
-            self.resolve_string_with_reason(scope, last_segment.as_str())
+            self.resolve_string(scope, last_segment.as_str())
         } else {
             TypeLookupResult::NotFound {
                 type_name: path.to_string(),
@@ -257,16 +191,16 @@ impl TypeRegistry {
         }
     }
 
-    /// Like resolve_grammar_type but returns TypeLookupResult to distinguish failure modes.
-    /// When a type can't be found, this returns NotFound with the specific type name.
-    pub(crate) fn resolve_grammar_type_with_reason(
+    /// Resolves a grammar type to a semantic type.
+    /// Returns detailed information about why resolution failed if it does.
+    pub(crate) fn resolve_grammar_type(
         &self,
         scope: &[ItemPath],
         type_: &grammar::Type,
     ) -> TypeLookupResult {
         match type_ {
             grammar::Type::ConstPointer { pointee, .. } => {
-                match self.resolve_grammar_type_with_reason(scope, pointee) {
+                match self.resolve_grammar_type(scope, pointee) {
                     TypeLookupResult::Found(t) => {
                         TypeLookupResult::Found(Type::ConstPointer(Box::new(t)))
                     }
@@ -274,7 +208,7 @@ impl TypeRegistry {
                 }
             }
             grammar::Type::MutPointer { pointee, .. } => {
-                match self.resolve_grammar_type_with_reason(scope, pointee) {
+                match self.resolve_grammar_type(scope, pointee) {
                     TypeLookupResult::Found(t) => {
                         TypeLookupResult::Found(Type::MutPointer(Box::new(t)))
                     }
@@ -282,14 +216,14 @@ impl TypeRegistry {
                 }
             }
             grammar::Type::Array { element, size, .. } => {
-                match self.resolve_grammar_type_with_reason(scope, element) {
+                match self.resolve_grammar_type(scope, element) {
                     TypeLookupResult::Found(t) => {
                         TypeLookupResult::Found(Type::Array(Box::new(t), *size))
                     }
                     other => other,
                 }
             }
-            grammar::Type::Ident { path, .. } => self.resolve_path_with_reason(scope, path),
+            grammar::Type::Ident { path, .. } => self.resolve_path(scope, path),
             grammar::Type::Unknown { size, .. } => {
                 TypeLookupResult::Found(self.padding_type(*size))
             }

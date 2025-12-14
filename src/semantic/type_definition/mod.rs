@@ -298,7 +298,7 @@ pub fn build(
                 // Push field
                 let type_ = match semantic
                     .type_registry
-                    .resolve_grammar_type_with_reason(&module.scope(), type_)
+                    .resolve_grammar_type(&module.scope(), type_)
                 {
                     TypeLookupResult::Found(t) => t,
                     TypeLookupResult::NotYetResolved => return Ok(BuildOutcome::Deferred),

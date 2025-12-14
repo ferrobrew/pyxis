@@ -124,7 +124,7 @@ pub fn build(
     // Retrieve the type for this bitflags, and validate it, before getting its size
     let ty = match semantic
         .type_registry
-        .resolve_grammar_type_with_reason(&module.scope(), &definition.type_)
+        .resolve_grammar_type(&module.scope(), &definition.type_)
     {
         TypeLookupResult::Found(t) => t,
         TypeLookupResult::NotYetResolved => return Ok(BuildOutcome::Deferred),
