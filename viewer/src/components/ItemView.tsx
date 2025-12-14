@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useDocumentation } from '../contexts/DocumentationContext';
 import { getModulePath, findLongestValidAncestor } from '../utils/pathUtils';
@@ -7,6 +7,7 @@ import { TypeRef } from './TypeRef';
 import { Badge, SmallBadge } from './Badge';
 import { FunctionDisplay } from './FunctionDisplay';
 import { FieldTable } from './FieldTable';
+import { NestedFieldView } from './NestedFieldView';
 import { Breadcrumbs } from './Breadcrumbs';
 import type { JsonTypeDefinition, JsonEnumDefinition, JsonBitflagsDefinition, JsonTypeAliasDefinition } from '@pyxis/types';
 
@@ -49,8 +50,46 @@ function MetadataBadges({
   );
 }
 
+type FieldViewMode = 'flat' | 'nested';
+
+// View mode toggle button component
+function ViewModeToggle({
+  mode,
+  onModeChange,
+}: {
+  mode: FieldViewMode;
+  onModeChange: (mode: FieldViewMode) => void;
+}) {
+  const baseClasses =
+    'px-3 py-1 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1';
+  const activeClasses = 'bg-blue-600 text-white';
+  const inactiveClasses =
+    'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600';
+
+  return (
+    <div className="inline-flex rounded-md overflow-hidden border border-gray-300 dark:border-slate-600">
+      <button
+        onClick={() => onModeChange('flat')}
+        className={`${baseClasses} ${mode === 'flat' ? activeClasses : inactiveClasses}`}
+        aria-pressed={mode === 'flat'}
+      >
+        Flat
+      </button>
+      <button
+        onClick={() => onModeChange('nested')}
+        className={`${baseClasses} ${mode === 'nested' ? activeClasses : inactiveClasses}`}
+        aria-pressed={mode === 'nested'}
+      >
+        Nested
+      </button>
+    </div>
+  );
+}
+
 // Type view component
 function TypeView({ def, modulePath }: { def: JsonTypeDefinition; modulePath: string }) {
+  const [fieldViewMode, setFieldViewMode] = useState<FieldViewMode>('flat');
+
   return (
     <div>
       {def.doc && <DocBlock doc={def.doc} />}
@@ -65,8 +104,15 @@ function TypeView({ def, modulePath }: { def: JsonTypeDefinition; modulePath: st
 
       {def.fields.length > 0 && (
         <div id="fields" className="mb-6">
-          <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-slate-200">Fields</h2>
-          <FieldTable fields={def.fields} modulePath={modulePath} />
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-200">Fields</h2>
+            <ViewModeToggle mode={fieldViewMode} onModeChange={setFieldViewMode} />
+          </div>
+          {fieldViewMode === 'flat' ? (
+            <FieldTable fields={def.fields} modulePath={modulePath} />
+          ) : (
+            <NestedFieldView fields={def.fields} modulePath={modulePath} />
+          )}
         </div>
       )}
 
