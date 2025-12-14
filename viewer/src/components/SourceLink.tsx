@@ -36,14 +36,16 @@ function useIsPyxisDefsSource(): boolean {
  */
 function buildGitHubUrl(sourcePath: string, line: number, selectedSource: string): string {
   // The sourcePath is relative to the project directory (e.g., "game.pyxis")
-  // We need to construct the full path: projects/{project_name}/{sourcePath}
+  // We need to construct the full path: projects/{project_path}/{sourcePath}
   // selectedSource looks like "docs/JustCause3_Steam_1227440/output.json"
+  // The project name has _ where the original path had / (see build_json.py)
   const match = selectedSource.match(/^docs\/([^/]+)\//);
   if (!match) {
     return '#';
   }
-  const projectName = match[1];
-  return `${PYXIS_DEFS_REPO}/blob/main/projects/${projectName}/${sourcePath}#L${line}`;
+  // Convert underscores back to slashes for the actual GitHub path
+  const projectPath = match[1].replace(/_/g, '/');
+  return `${PYXIS_DEFS_REPO}/blob/main/projects/${projectPath}/${sourcePath}#L${line}`;
 }
 
 interface SourceNameProps {
@@ -112,7 +114,7 @@ export function SourceLink({ source }: SourceLinkProps) {
         href={githubUrl}
         target="_blank"
         rel="noopener noreferrer"
-        className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+        className="text-blue-600 dark:text-blue-400 hover:underline"
         title={tooltip}
       >
         Source
@@ -122,7 +124,7 @@ export function SourceLink({ source }: SourceLinkProps) {
 
   // For local sources, just display without a link
   return (
-    <span className="text-xs text-gray-500 dark:text-slate-500" title={tooltip}>
+    <span className="text-gray-500 dark:text-slate-500" title={tooltip}>
       Source
     </span>
   );
