@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import type { JsonRegion, JsonType } from '@pyxis/types';
+import { useState, useMemo } from 'react';
+import type { JsonRegion, JsonType, JsonDocumentation } from '@pyxis/types';
 import { useDocumentation } from '../contexts/DocumentationContext';
 import { TypeRef } from './TypeRef';
 import { SmallBadge } from './Badge';
@@ -28,6 +28,45 @@ function getRawTypePath(type: JsonType): string | null {
     return type.path;
   }
   return null;
+}
+
+/**
+ * Recursively collect all expandable field paths for default expansion.
+ */
+function collectExpandablePaths(
+  fields: JsonRegion[],
+  documentation: JsonDocumentation | null,
+  basePath: string = '',
+  visited: Set<string> = new Set()
+): Set<string> {
+  const paths = new Set<string>();
+
+  for (let idx = 0; idx < fields.length; idx++) {
+    const field = fields[idx];
+    const fieldPath = basePath
+      ? `${basePath}.${field.name || idx}`
+      : field.name || `field-${idx}`;
+
+    const rawTypePath = getRawTypePath(field.type_ref);
+    if (!rawTypePath || visited.has(rawTypePath)) continue;
+
+    const nestedItem = documentation?.items[rawTypePath];
+    if (nestedItem?.kind.type === 'type' && nestedItem.kind.fields.length > 0) {
+      paths.add(fieldPath);
+
+      // Recurse into nested fields, tracking visited types to avoid cycles
+      const nextVisited = new Set(visited).add(rawTypePath);
+      const nestedPaths = collectExpandablePaths(
+        nestedItem.kind.fields,
+        documentation,
+        fieldPath,
+        nextVisited
+      );
+      nestedPaths.forEach((p) => paths.add(p));
+    }
+  }
+
+  return paths;
 }
 
 /**
@@ -147,7 +186,15 @@ function NestedFieldRow({
  * to see their internal structure with relative offsets.
  */
 export function NestedFieldView({ fields, modulePath }: NestedFieldViewProps) {
-  const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
+  const { documentation } = useDocumentation();
+
+  // Compute all expandable paths for default expansion
+  const initialExpandedPaths = useMemo(
+    () => collectExpandablePaths(fields, documentation),
+    [fields, documentation]
+  );
+
+  const [expandedPaths, setExpandedPaths] = useState<Set<string>>(initialExpandedPaths);
 
   const handleToggleExpand = (path: string) => {
     setExpandedPaths((prev) => {
