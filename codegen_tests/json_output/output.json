@@ -125,7 +125,11 @@
             "offset": 0,
             "size": 64,
             "alignment": 4,
-            "is_base": false
+            "is_base": false,
+            "source": {
+              "file_index": 3,
+              "line": 7
+            }
           },
           {
             "visibility": "public",
@@ -138,7 +142,11 @@
             "offset": 64,
             "size": 12,
             "alignment": 4,
-            "is_base": false
+            "is_base": false,
+            "source": {
+              "file_index": 3,
+              "line": 8
+            }
           }
         ],
         "associated_functions": [],
@@ -178,7 +186,11 @@
             "offset": 0,
             "size": 8,
             "alignment": 8,
-            "is_base": false
+            "is_base": false,
+            "source": {
+              "file_index": 4,
+              "line": 3
+            }
           }
         ],
         "associated_functions": [],
@@ -198,7 +210,11 @@
                 }
               ],
               "return_type": null,
-              "calling_convention": "system"
+              "calling_convention": "system",
+              "source": {
+                "file_index": 4,
+                "line": 3
+              }
             }
           ]
         },
@@ -234,7 +250,11 @@
             "offset": 0,
             "size": 8,
             "alignment": 8,
-            "is_base": true
+            "is_base": true,
+            "source": {
+              "file_index": 4,
+              "line": 12
+            }
           }
         ],
         "associated_functions": [
@@ -252,7 +272,11 @@
               }
             ],
             "return_type": null,
-            "calling_convention": "system"
+            "calling_convention": "system",
+            "source": {
+              "file_index": 4,
+              "line": 16
+            }
           }
         ],
         "vftable": {
@@ -271,7 +295,11 @@
                 }
               ],
               "return_type": null,
-              "calling_convention": "system"
+              "calling_convention": "system",
+              "source": {
+                "file_index": 4,
+                "line": 9
+              }
             }
           ]
         },
@@ -320,7 +348,11 @@
             "offset": 0,
             "size": 8,
             "alignment": 8,
-            "is_base": false
+            "is_base": false,
+            "source": {
+              "file_index": 4,
+              "line": 9
+            }
           }
         ],
         "associated_functions": [],
@@ -357,7 +389,11 @@
             "offset": 0,
             "size": 8,
             "alignment": 8,
-            "is_base": true
+            "is_base": true,
+            "source": {
+              "file_index": 4,
+              "line": 25
+            }
           }
         ],
         "associated_functions": [
@@ -375,7 +411,11 @@
               }
             ],
             "return_type": null,
-            "calling_convention": "system"
+            "calling_convention": "system",
+            "source": {
+              "file_index": 4,
+              "line": 29
+            }
           }
         ],
         "vftable": {
@@ -394,7 +434,11 @@
                 }
               ],
               "return_type": null,
-              "calling_convention": "system"
+              "calling_convention": "system",
+              "source": {
+                "file_index": 4,
+                "line": 22
+              }
             }
           ]
         },
@@ -443,7 +487,11 @@
             "offset": 0,
             "size": 8,
             "alignment": 8,
-            "is_base": false
+            "is_base": false,
+            "source": {
+              "file_index": 4,
+              "line": 22
+            }
           }
         ],
         "associated_functions": [],
@@ -493,7 +541,11 @@
             "offset": 0,
             "size": 8,
             "alignment": 8,
-            "is_base": false
+            "is_base": false,
+            "source": {
+              "file_index": 4,
+              "line": 3
+            }
           }
         ],
         "associated_functions": [],
@@ -530,7 +582,11 @@
             "offset": 0,
             "size": 8,
             "alignment": 8,
-            "is_base": true
+            "is_base": true,
+            "source": {
+              "file_index": 4,
+              "line": 38
+            }
           },
           {
             "visibility": "public",
@@ -543,7 +599,11 @@
             "offset": 8,
             "size": 8,
             "alignment": 8,
-            "is_base": true
+            "is_base": true,
+            "source": {
+              "file_index": 4,
+              "line": 40
+            }
           }
         ],
         "associated_functions": [
@@ -562,7 +622,11 @@
               }
             ],
             "return_type": null,
-            "calling_convention": "system"
+            "calling_convention": "system",
+            "source": {
+              "file_index": 4,
+              "line": 16
+            }
           },
           {
             "visibility": "public",
@@ -579,7 +643,11 @@
               }
             ],
             "return_type": null,
-            "calling_convention": "system"
+            "calling_convention": "system",
+            "source": {
+              "file_index": 4,
+              "line": 29
+            }
           },
           {
             "visibility": "public",
@@ -596,7 +664,11 @@
               }
             ],
             "return_type": null,
-            "calling_convention": "system"
+            "calling_convention": "system",
+            "source": {
+              "file_index": 4,
+              "line": 22
+            }
           }
         ],
         "vftable": {
@@ -615,7 +687,11 @@
                 }
               ],
               "return_type": null,
-              "calling_convention": "system"
+              "calling_convention": "system",
+              "source": {
+                "file_index": 4,
+                "line": 35
+              }
             }
           ]
         },
@@ -664,7 +740,11 @@
             "offset": 0,
             "size": 8,
             "alignment": 8,
-            "is_base": false
+            "is_base": false,
+            "source": {
+              "file_index": 4,
+              "line": 35
+            }
           }
         ],
         "associated_functions": [],
@@ -704,7 +784,11 @@
             "offset": 0,
             "size": 8,
             "alignment": 8,
-            "is_base": false
+            "is_base": false,
+            "source": {
+              "file_index": 5,
+              "line": 5
+            }
           },
           {
             "visibility": "public",
@@ -717,7 +801,11 @@
             "offset": 8,
             "size": 8,
             "alignment": 8,
-            "is_base": false
+            "is_base": false,
+            "source": {
+              "file_index": 5,
+              "line": 9
+            }
           }
         ],
         "associated_functions": [
@@ -735,7 +823,11 @@
               }
             ],
             "return_type": null,
-            "calling_convention": "system"
+            "calling_convention": "system",
+            "source": {
+              "file_index": 5,
+              "line": 14
+            }
           }
         ],
         "vftable": {
@@ -754,7 +846,11 @@
                 }
               ],
               "return_type": null,
-              "calling_convention": "system"
+              "calling_convention": "system",
+              "source": {
+                "file_index": 5,
+                "line": 5
+              }
             }
           ]
         },
@@ -803,7 +899,11 @@
             "offset": 0,
             "size": 8,
             "alignment": 8,
-            "is_base": false
+            "is_base": false,
+            "source": {
+              "file_index": 5,
+              "line": 5
+            }
           }
         ],
         "associated_functions": [],
@@ -857,7 +957,11 @@
             },
             "arguments": [],
             "return_type": null,
-            "calling_convention": "system"
+            "calling_convention": "system",
+            "source": {
+              "file_index": 6,
+              "line": 9
+            }
           },
           {
             "visibility": "public",
@@ -876,7 +980,11 @@
               "type": "raw",
               "path": "i32"
             },
-            "calling_convention": "system"
+            "calling_convention": "system",
+            "source": {
+              "file_index": 6,
+              "line": 12
+            }
           }
         ],
         "singleton": null,
@@ -959,7 +1067,11 @@
             },
             "arguments": [],
             "return_type": null,
-            "calling_convention": "system"
+            "calling_convention": "system",
+            "source": {
+              "file_index": 7,
+              "line": 5
+            }
           }
         ],
         "singleton": null,
@@ -1097,7 +1209,11 @@
             "offset": 0,
             "size": 64,
             "alignment": 4,
-            "is_base": false
+            "is_base": false,
+            "source": {
+              "file_index": 8,
+              "line": 4
+            }
           }
         ],
         "associated_functions": [],
@@ -1134,7 +1250,11 @@
             "offset": 0,
             "size": 4,
             "alignment": 4,
-            "is_base": false
+            "is_base": false,
+            "source": {
+              "file_index": 8,
+              "line": 10
+            }
           },
           {
             "visibility": "public",
@@ -1147,7 +1267,11 @@
             "offset": 4,
             "size": 4,
             "alignment": 4,
-            "is_base": false
+            "is_base": false,
+            "source": {
+              "file_index": 8,
+              "line": 11
+            }
           },
           {
             "visibility": "public",
@@ -1160,7 +1284,11 @@
             "offset": 8,
             "size": 4,
             "alignment": 4,
-            "is_base": false
+            "is_base": false,
+            "source": {
+              "file_index": 8,
+              "line": 12
+            }
           }
         ],
         "associated_functions": [],
@@ -1197,7 +1325,11 @@
             "offset": 0,
             "size": 8,
             "alignment": 8,
-            "is_base": false
+            "is_base": false,
+            "source": {
+              "file_index": 9,
+              "line": 11
+            }
           },
           {
             "visibility": "private",
@@ -1214,7 +1346,11 @@
             "offset": 8,
             "size": 24,
             "alignment": 1,
-            "is_base": false
+            "is_base": false,
+            "source": {
+              "file_index": 9,
+              "line": 8
+            }
           }
         ],
         "associated_functions": [],
@@ -1251,7 +1387,11 @@
             "offset": 0,
             "size": 4,
             "alignment": 4,
-            "is_base": false
+            "is_base": false,
+            "source": {
+              "file_index": 9,
+              "line": 4
+            }
           },
           {
             "visibility": "public",
@@ -1264,7 +1404,11 @@
             "offset": 4,
             "size": 4,
             "alignment": 4,
-            "is_base": false
+            "is_base": false,
+            "source": {
+              "file_index": 9,
+              "line": 5
+            }
           },
           {
             "visibility": "private",
@@ -1281,7 +1425,11 @@
             "offset": 8,
             "size": 24,
             "alignment": 1,
-            "is_base": false
+            "is_base": false,
+            "source": {
+              "file_index": 9,
+              "line": 1
+            }
           }
         ],
         "associated_functions": [],
@@ -1321,7 +1469,11 @@
             "offset": 0,
             "size": 8,
             "alignment": 8,
-            "is_base": false
+            "is_base": false,
+            "source": {
+              "file_index": 10,
+              "line": 4
+            }
           },
           {
             "visibility": "public",
@@ -1334,7 +1486,11 @@
             "offset": 8,
             "size": 8,
             "alignment": 8,
-            "is_base": false
+            "is_base": false,
+            "source": {
+              "file_index": 10,
+              "line": 7
+            }
           }
         ],
         "associated_functions": [
@@ -1363,7 +1519,11 @@
               "type": "raw",
               "path": "i32"
             },
-            "calling_convention": "system"
+            "calling_convention": "system",
+            "source": {
+              "file_index": 10,
+              "line": 11
+            }
           }
         ],
         "vftable": {
@@ -1393,7 +1553,11 @@
                 "type": "raw",
                 "path": "i32"
               },
-              "calling_convention": "system"
+              "calling_convention": "system",
+              "source": {
+                "file_index": 10,
+                "line": 4
+              }
             }
           ]
         },
@@ -1452,7 +1616,11 @@
             "offset": 0,
             "size": 8,
             "alignment": 8,
-            "is_base": false
+            "is_base": false,
+            "source": {
+              "file_index": 10,
+              "line": 4
+            }
           }
         ],
         "associated_functions": [],
@@ -1489,7 +1657,11 @@
             "offset": 0,
             "size": 16,
             "alignment": 8,
-            "is_base": true
+            "is_base": true,
+            "source": {
+              "file_index": 10,
+              "line": 22
+            }
           },
           {
             "visibility": "public",
@@ -1502,7 +1674,11 @@
             "offset": 16,
             "size": 8,
             "alignment": 8,
-            "is_base": false
+            "is_base": false,
+            "source": {
+              "file_index": 10,
+              "line": 24
+            }
           }
         ],
         "associated_functions": [
@@ -1532,7 +1708,11 @@
               "type": "raw",
               "path": "i32"
             },
-            "calling_convention": "system"
+            "calling_convention": "system",
+            "source": {
+              "file_index": 10,
+              "line": 11
+            }
           },
           {
             "visibility": "public",
@@ -1559,7 +1739,11 @@
               "type": "raw",
               "path": "i32"
             },
-            "calling_convention": "system"
+            "calling_convention": "system",
+            "source": {
+              "file_index": 10,
+              "line": 27
+            }
           }
         ],
         "vftable": {
@@ -1589,7 +1773,11 @@
                 "type": "raw",
                 "path": "i32"
               },
-              "calling_convention": "system"
+              "calling_convention": "system",
+              "source": {
+                "file_index": 10,
+                "line": 18
+              }
             },
             {
               "visibility": "public",
@@ -1616,7 +1804,11 @@
                 "type": "raw",
                 "path": "i32"
               },
-              "calling_convention": "system"
+              "calling_convention": "system",
+              "source": {
+                "file_index": 10,
+                "line": 19
+              }
             }
           ]
         },
@@ -1652,7 +1844,11 @@
             "offset": 0,
             "size": 24,
             "alignment": 8,
-            "is_base": true
+            "is_base": true,
+            "source": {
+              "file_index": 10,
+              "line": 39
+            }
           },
           {
             "visibility": "public",
@@ -1665,7 +1861,11 @@
             "offset": 24,
             "size": 8,
             "alignment": 8,
-            "is_base": false
+            "is_base": false,
+            "source": {
+              "file_index": 10,
+              "line": 41
+            }
           }
         ],
         "associated_functions": [
@@ -1695,7 +1895,11 @@
               "type": "raw",
               "path": "i32"
             },
-            "calling_convention": "system"
+            "calling_convention": "system",
+            "source": {
+              "file_index": 10,
+              "line": 11
+            }
           },
           {
             "visibility": "public",
@@ -1723,7 +1927,11 @@
               "type": "raw",
               "path": "i32"
             },
-            "calling_convention": "system"
+            "calling_convention": "system",
+            "source": {
+              "file_index": 10,
+              "line": 27
+            }
           },
           {
             "visibility": "public",
@@ -1750,7 +1958,11 @@
               "type": "raw",
               "path": "i32"
             },
-            "calling_convention": "system"
+            "calling_convention": "system",
+            "source": {
+              "file_index": 10,
+              "line": 44
+            }
           }
         ],
         "vftable": {
@@ -1780,7 +1992,11 @@
                 "type": "raw",
                 "path": "i32"
               },
-              "calling_convention": "system"
+              "calling_convention": "system",
+              "source": {
+                "file_index": 10,
+                "line": 34
+              }
             },
             {
               "visibility": "public",
@@ -1807,7 +2023,11 @@
                 "type": "raw",
                 "path": "i32"
               },
-              "calling_convention": "system"
+              "calling_convention": "system",
+              "source": {
+                "file_index": 10,
+                "line": 35
+              }
             },
             {
               "visibility": "public",
@@ -1834,7 +2054,11 @@
                 "type": "raw",
                 "path": "i32"
               },
-              "calling_convention": "system"
+              "calling_convention": "system",
+              "source": {
+                "file_index": 10,
+                "line": 36
+              }
             }
           ]
         },
@@ -1870,7 +2094,11 @@
             "offset": 0,
             "size": 32,
             "alignment": 8,
-            "is_base": true
+            "is_base": true,
+            "source": {
+              "file_index": 10,
+              "line": 57
+            }
           },
           {
             "visibility": "public",
@@ -1883,7 +2111,11 @@
             "offset": 32,
             "size": 8,
             "alignment": 8,
-            "is_base": false
+            "is_base": false,
+            "source": {
+              "file_index": 10,
+              "line": 59
+            }
           }
         ],
         "associated_functions": [
@@ -1913,7 +2145,11 @@
               "type": "raw",
               "path": "i32"
             },
-            "calling_convention": "system"
+            "calling_convention": "system",
+            "source": {
+              "file_index": 10,
+              "line": 11
+            }
           },
           {
             "visibility": "public",
@@ -1941,7 +2177,11 @@
               "type": "raw",
               "path": "i32"
             },
-            "calling_convention": "system"
+            "calling_convention": "system",
+            "source": {
+              "file_index": 10,
+              "line": 27
+            }
           },
           {
             "visibility": "public",
@@ -1969,7 +2209,11 @@
               "type": "raw",
               "path": "i32"
             },
-            "calling_convention": "system"
+            "calling_convention": "system",
+            "source": {
+              "file_index": 10,
+              "line": 44
+            }
           },
           {
             "visibility": "public",
@@ -1996,7 +2240,11 @@
               "type": "raw",
               "path": "i32"
             },
-            "calling_convention": "system"
+            "calling_convention": "system",
+            "source": {
+              "file_index": 10,
+              "line": 62
+            }
           }
         ],
         "vftable": {
@@ -2026,7 +2274,11 @@
                 "type": "raw",
                 "path": "i32"
               },
-              "calling_convention": "system"
+              "calling_convention": "system",
+              "source": {
+                "file_index": 10,
+                "line": 51
+              }
             },
             {
               "visibility": "public",
@@ -2053,7 +2305,11 @@
                 "type": "raw",
                 "path": "i32"
               },
-              "calling_convention": "system"
+              "calling_convention": "system",
+              "source": {
+                "file_index": 10,
+                "line": 52
+              }
             },
             {
               "visibility": "public",
@@ -2080,7 +2336,11 @@
                 "type": "raw",
                 "path": "i32"
               },
-              "calling_convention": "system"
+              "calling_convention": "system",
+              "source": {
+                "file_index": 10,
+                "line": 53
+              }
             },
             {
               "visibility": "public",
@@ -2107,7 +2367,11 @@
                 "type": "raw",
                 "path": "i32"
               },
-              "calling_convention": "system"
+              "calling_convention": "system",
+              "source": {
+                "file_index": 10,
+                "line": 54
+              }
             }
           ]
         },
@@ -2166,7 +2430,11 @@
             "offset": 0,
             "size": 8,
             "alignment": 8,
-            "is_base": false
+            "is_base": false,
+            "source": {
+              "file_index": 10,
+              "line": 51
+            }
           },
           {
             "visibility": "public",
@@ -2202,7 +2470,11 @@
             "offset": 8,
             "size": 8,
             "alignment": 8,
-            "is_base": false
+            "is_base": false,
+            "source": {
+              "file_index": 10,
+              "line": 52
+            }
           },
           {
             "visibility": "public",
@@ -2238,7 +2510,11 @@
             "offset": 16,
             "size": 8,
             "alignment": 8,
-            "is_base": false
+            "is_base": false,
+            "source": {
+              "file_index": 10,
+              "line": 53
+            }
           },
           {
             "visibility": "public",
@@ -2274,7 +2550,11 @@
             "offset": 24,
             "size": 8,
             "alignment": 8,
-            "is_base": false
+            "is_base": false,
+            "source": {
+              "file_index": 10,
+              "line": 54
+            }
           }
         ],
         "associated_functions": [],
@@ -2334,7 +2614,11 @@
             "offset": 0,
             "size": 8,
             "alignment": 8,
-            "is_base": false
+            "is_base": false,
+            "source": {
+              "file_index": 10,
+              "line": 34
+            }
           },
           {
             "visibility": "public",
@@ -2370,7 +2654,11 @@
             "offset": 8,
             "size": 8,
             "alignment": 8,
-            "is_base": false
+            "is_base": false,
+            "source": {
+              "file_index": 10,
+              "line": 35
+            }
           },
           {
             "visibility": "public",
@@ -2406,7 +2694,11 @@
             "offset": 16,
             "size": 8,
             "alignment": 8,
-            "is_base": false
+            "is_base": false,
+            "source": {
+              "file_index": 10,
+              "line": 36
+            }
           }
         ],
         "associated_functions": [],
@@ -2466,7 +2758,11 @@
             "offset": 0,
             "size": 8,
             "alignment": 8,
-            "is_base": false
+            "is_base": false,
+            "source": {
+              "file_index": 10,
+              "line": 18
+            }
           },
           {
             "visibility": "public",
@@ -2502,7 +2798,11 @@
             "offset": 8,
             "size": 8,
             "alignment": 8,
-            "is_base": false
+            "is_base": false,
+            "source": {
+              "file_index": 10,
+              "line": 19
+            }
           }
         ],
         "associated_functions": [],
@@ -2539,7 +2839,11 @@
             "offset": 0,
             "size": 4,
             "alignment": 4,
-            "is_base": false
+            "is_base": false,
+            "source": {
+              "file_index": 11,
+              "line": 3
+            }
           }
         ],
         "associated_functions": [],
@@ -2579,7 +2883,11 @@
             "offset": 0,
             "size": 8,
             "alignment": 8,
-            "is_base": false
+            "is_base": false,
+            "source": {
+              "file_index": 12,
+              "line": 4
+            }
           },
           {
             "visibility": "public",
@@ -2592,7 +2900,11 @@
             "offset": 8,
             "size": 8,
             "alignment": 8,
-            "is_base": false
+            "is_base": false,
+            "source": {
+              "file_index": 12,
+              "line": 7
+            }
           }
         ],
         "associated_functions": [
@@ -2621,7 +2933,11 @@
               "type": "raw",
               "path": "i32"
             },
-            "calling_convention": "system"
+            "calling_convention": "system",
+            "source": {
+              "file_index": 12,
+              "line": 11
+            }
           }
         ],
         "vftable": {
@@ -2651,7 +2967,11 @@
                 "type": "raw",
                 "path": "i32"
               },
-              "calling_convention": "system"
+              "calling_convention": "system",
+              "source": {
+                "file_index": 12,
+                "line": 4
+              }
             }
           ]
         },
@@ -2710,7 +3030,11 @@
             "offset": 0,
             "size": 8,
             "alignment": 8,
-            "is_base": false
+            "is_base": false,
+            "source": {
+              "file_index": 12,
+              "line": 4
+            }
           }
         ],
         "associated_functions": [],
@@ -2750,7 +3074,11 @@
             "offset": 0,
             "size": 8,
             "alignment": 8,
-            "is_base": false
+            "is_base": false,
+            "source": {
+              "file_index": 12,
+              "line": 18
+            }
           },
           {
             "visibility": "public",
@@ -2763,7 +3091,11 @@
             "offset": 8,
             "size": 8,
             "alignment": 8,
-            "is_base": false
+            "is_base": false,
+            "source": {
+              "file_index": 12,
+              "line": 21
+            }
           }
         ],
         "associated_functions": [
@@ -2792,7 +3124,11 @@
               "type": "raw",
               "path": "i32"
             },
-            "calling_convention": "system"
+            "calling_convention": "system",
+            "source": {
+              "file_index": 12,
+              "line": 25
+            }
           }
         ],
         "vftable": {
@@ -2822,7 +3158,11 @@
                 "type": "raw",
                 "path": "i32"
               },
-              "calling_convention": "system"
+              "calling_convention": "system",
+              "source": {
+                "file_index": 12,
+                "line": 18
+              }
             }
           ]
         },
@@ -2881,7 +3221,11 @@
             "offset": 0,
             "size": 8,
             "alignment": 8,
-            "is_base": false
+            "is_base": false,
+            "source": {
+              "file_index": 12,
+              "line": 18
+            }
           }
         ],
         "associated_functions": [],
@@ -2918,7 +3262,11 @@
             "offset": 0,
             "size": 16,
             "alignment": 8,
-            "is_base": true
+            "is_base": true,
+            "source": {
+              "file_index": 12,
+              "line": 36
+            }
           },
           {
             "visibility": "public",
@@ -2931,7 +3279,11 @@
             "offset": 16,
             "size": 16,
             "alignment": 8,
-            "is_base": true
+            "is_base": true,
+            "source": {
+              "file_index": 12,
+              "line": 38
+            }
           }
         ],
         "associated_functions": [
@@ -2961,7 +3313,11 @@
               "type": "raw",
               "path": "i32"
             },
-            "calling_convention": "system"
+            "calling_convention": "system",
+            "source": {
+              "file_index": 12,
+              "line": 11
+            }
           },
           {
             "visibility": "public",
@@ -2989,7 +3345,11 @@
               "type": "raw",
               "path": "i32"
             },
-            "calling_convention": "system"
+            "calling_convention": "system",
+            "source": {
+              "file_index": 12,
+              "line": 25
+            }
           },
           {
             "visibility": "public",
@@ -3017,7 +3377,11 @@
               "type": "raw",
               "path": "i32"
             },
-            "calling_convention": "system"
+            "calling_convention": "system",
+            "source": {
+              "file_index": 12,
+              "line": 18
+            }
           },
           {
             "visibility": "public",
@@ -3044,7 +3408,11 @@
               "type": "raw",
               "path": "i32"
             },
-            "calling_convention": "system"
+            "calling_convention": "system",
+            "source": {
+              "file_index": 12,
+              "line": 42
+            }
           }
         ],
         "vftable": {
@@ -3074,7 +3442,11 @@
                 "type": "raw",
                 "path": "i32"
               },
-              "calling_convention": "system"
+              "calling_convention": "system",
+              "source": {
+                "file_index": 12,
+                "line": 32
+              }
             },
             {
               "visibility": "public",
@@ -3101,7 +3473,11 @@
                 "type": "raw",
                 "path": "i32"
               },
-              "calling_convention": "system"
+              "calling_convention": "system",
+              "source": {
+                "file_index": 12,
+                "line": 33
+              }
             }
           ]
         },
@@ -3160,7 +3536,11 @@
             "offset": 0,
             "size": 8,
             "alignment": 8,
-            "is_base": false
+            "is_base": false,
+            "source": {
+              "file_index": 12,
+              "line": 32
+            }
           },
           {
             "visibility": "public",
@@ -3196,7 +3576,11 @@
             "offset": 8,
             "size": 8,
             "alignment": 8,
-            "is_base": false
+            "is_base": false,
+            "source": {
+              "file_index": 12,
+              "line": 33
+            }
           }
         ],
         "associated_functions": [],
@@ -3236,7 +3620,11 @@
             "offset": 0,
             "size": 8,
             "alignment": 8,
-            "is_base": false
+            "is_base": false,
+            "source": {
+              "file_index": 13,
+              "line": 10
+            }
           }
         ],
         "associated_functions": [],
@@ -3276,7 +3664,11 @@
             "offset": 0,
             "size": 8,
             "alignment": 8,
-            "is_base": false
+            "is_base": false,
+            "source": {
+              "file_index": 14,
+              "line": 12
+            }
           },
           {
             "visibility": "public",
@@ -3292,7 +3684,11 @@
             "offset": 8,
             "size": 8,
             "alignment": 8,
-            "is_base": false
+            "is_base": false,
+            "source": {
+              "file_index": 14,
+              "line": 13
+            }
           }
         ],
         "associated_functions": [],
@@ -3551,7 +3947,11 @@
           },
           "arguments": [],
           "return_type": null,
-          "calling_convention": "system"
+          "calling_convention": "system",
+          "source": {
+            "file_index": 7,
+            "line": 9
+          }
         },
         {
           "visibility": "private",
@@ -3575,7 +3975,11 @@
             "type": "raw",
             "path": "i32"
           },
-          "calling_convention": "system"
+          "calling_convention": "system",
+          "source": {
+            "file_index": 7,
+            "line": 12
+          }
         }
       ],
       "backends": {}
@@ -3693,18 +4097,18 @@
   "source_paths": [
     "<internal>",
     "<test>",
-    "/home/user/pyxis/codegen_tests/input/bitflags.pyxis",
-    "/home/user/pyxis/codegen_tests/input/braced_imports.pyxis",
-    "/home/user/pyxis/codegen_tests/input/diamond_inheritance.pyxis",
-    "/home/user/pyxis/codegen_tests/input/doc_comments.pyxis",
-    "/home/user/pyxis/codegen_tests/input/enums.pyxis",
-    "/home/user/pyxis/codegen_tests/input/freestanding_functions.pyxis",
-    "/home/user/pyxis/codegen_tests/input/math.pyxis",
-    "/home/user/pyxis/codegen_tests/input/min_size.pyxis",
-    "/home/user/pyxis/codegen_tests/input/multiple_levels.pyxis",
-    "/home/user/pyxis/codegen_tests/input/singleton.pyxis",
-    "/home/user/pyxis/codegen_tests/input/two_base_classes.pyxis",
-    "/home/user/pyxis/codegen_tests/input/type_alias_reexport.pyxis",
-    "/home/user/pyxis/codegen_tests/input/type_aliases.pyxis"
+    "bitflags.pyxis",
+    "braced_imports.pyxis",
+    "diamond_inheritance.pyxis",
+    "doc_comments.pyxis",
+    "enums.pyxis",
+    "freestanding_functions.pyxis",
+    "math.pyxis",
+    "min_size.pyxis",
+    "multiple_levels.pyxis",
+    "singleton.pyxis",
+    "two_base_classes.pyxis",
+    "type_alias_reexport.pyxis",
+    "type_aliases.pyxis"
   ]
 }

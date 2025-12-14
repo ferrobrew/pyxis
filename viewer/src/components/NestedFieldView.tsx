@@ -3,6 +3,7 @@ import type { JsonRegion, JsonType, JsonDocumentation } from '@pyxis/types';
 import { useDocumentation } from '../contexts/DocumentationContext';
 import { TypeRef } from './TypeRef';
 import { SmallBadge } from './Badge';
+import { SourceLink } from './SourceLink';
 
 interface NestedFieldViewProps {
   fields: JsonRegion[];
@@ -155,6 +156,9 @@ function NestedFieldRow({
             </div>
           )}
         </td>
+        <td className="px-4 py-2 text-sm">
+          {field.source && <SourceLink source={field.source} />}
+        </td>
       </tr>
 
       {/* Render nested fields if expanded */}
@@ -235,6 +239,9 @@ export function NestedFieldView({ fields, modulePath }: NestedFieldViewProps) {
             </th>
             <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-slate-200">
               Notes
+            </th>
+            <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-slate-200">
+              Source
             </th>
           </tr>
         </thead>

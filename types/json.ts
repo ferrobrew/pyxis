@@ -172,7 +172,11 @@ return_type: JsonType | null;
 /**
  * Calling convention
  */
-calling_convention: JsonCallingConvention };
+calling_convention: JsonCallingConvention; 
+/**
+ * Source location (file and line)
+ */
+source: JsonSourceLocation | null };
 
 export type JsonFunctionArgument = { name: string; type_ref: JsonType };
 
@@ -276,7 +280,11 @@ alignment: number;
 /**
  * Whether this is a base class field
  */
-is_base: boolean };
+is_base: boolean; 
+/**
+ * Source location (file and line) - None for generated/padding fields
+ */
+source: JsonSourceLocation | null };
 
 /**
  * Source location of an item (file index and line number)

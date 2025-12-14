@@ -76,14 +76,16 @@ impl SemanticState {
             error: e,
             context: format!("reading file {}", path.display()),
         })?;
-        let filename = path.display().to_string();
+        // Use relative path from base_path for the filename (for display/linking purposes)
+        let relative_path = path.strip_prefix(base_path).unwrap_or(path);
+        let filename = relative_path.display().to_string();
 
         // Register the file and get its ID
         let file_id = file_store.register_path(filename, path.to_path_buf());
 
         self.add_module(
             &parser::parse_str_with_file_id(&source, file_id)?,
-            &ItemPath::from_path(path.strip_prefix(base_path).unwrap_or(path)),
+            &ItemPath::from_path(relative_path),
         )
         .map_err(Into::into)
     }

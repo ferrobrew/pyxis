@@ -147,6 +147,8 @@ pub struct JsonRegion {
     pub alignment: usize,
     /// Whether this is a base class field
     pub is_base: bool,
+    /// Source location (file and line) - None for generated/padding fields
+    pub source: Option<JsonSourceLocation>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
@@ -225,6 +227,8 @@ pub struct JsonFunction {
     pub return_type: Option<JsonType>,
     /// Calling convention
     pub calling_convention: JsonCallingConvention,
+    /// Source location (file and line)
+    pub source: Option<JsonSourceLocation>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
@@ -349,6 +353,18 @@ impl From<CallingConvention> for JsonCallingConvention {
             CallingConvention::Vectorcall => JsonCallingConvention::Vectorcall,
             CallingConvention::System => JsonCallingConvention::System,
         }
+    }
+}
+
+/// Convert an ItemLocation to JsonSourceLocation, returning None for internal/synthetic locations
+fn convert_location(location: &crate::span::ItemLocation) -> Option<JsonSourceLocation> {
+    if location.file_id != FileId::INTERNAL && location.span.start.line > 0 {
+        Some(JsonSourceLocation {
+            file_index: location.file_id.index(),
+            line: location.span.start.line,
+        })
+    } else {
+        None
     }
 }
 
@@ -493,6 +509,7 @@ fn convert_function(func: &Function) -> JsonFunction {
         arguments: func.arguments.iter().map(convert_argument).collect(),
         return_type: func.return_type.as_ref().map(convert_type),
         calling_convention: func.calling_convention.into(),
+        source: convert_location(&func.location),
     }
 }
 
@@ -513,6 +530,7 @@ fn convert_region(region: &Region, type_registry: &TypeRegistry, offset: usize) 
         size,
         alignment,
         is_base: region.is_base,
+        source: convert_location(&region.location),
     }
 }
 
@@ -638,14 +656,7 @@ fn convert_item(item: &ItemDefinition, type_registry: &TypeRegistry) -> Option<J
     };
 
     // Build source location for defined items (not predefined/internal)
-    let source = if item.location.file_id != FileId::INTERNAL {
-        Some(JsonSourceLocation {
-            file_index: item.location.file_id.index(),
-            line: item.location.span.start.line,
-        })
-    } else {
-        None
-    };
+    let source = convert_location(&item.location);
 
     Some(JsonItem {
         path: item.path.to_string(),

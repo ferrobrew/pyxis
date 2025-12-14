@@ -1,6 +1,7 @@
 import type { JsonRegion } from '@pyxis/types';
 import { TypeRef } from './TypeRef';
 import { SmallBadge } from './Badge';
+import { SourceLink } from './SourceLink';
 
 interface FieldTableProps {
   fields: JsonRegion[];
@@ -30,6 +31,9 @@ export function FieldTable({ fields, modulePath }: FieldTableProps) {
             </th>
             <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-slate-200">
               Notes
+            </th>
+            <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-slate-200">
+              Source
             </th>
           </tr>
         </thead>
@@ -65,6 +69,9 @@ export function FieldTable({ fields, modulePath }: FieldTableProps) {
                   {field.doc && (
                     <div className="text-gray-600 dark:text-slate-400 mt-1">{field.doc}</div>
                   )}
+                </td>
+                <td className="px-4 py-2 text-sm">
+                  {field.source && <SourceLink source={field.source} />}
                 </td>
               </tr>
             );
