@@ -10,11 +10,34 @@ use crate::{
     span::{HasLocation, ItemLocation},
 };
 
+/// A single variant in an enum definition
+#[derive(PartialEq, Eq, Debug, Clone, Hash)]
+pub struct EnumVariant {
+    pub name: String,
+    pub value: isize,
+    pub location: ItemLocation,
+}
+impl HasLocation for EnumVariant {
+    fn location(&self) -> &ItemLocation {
+        &self.location
+    }
+}
+#[cfg(test)]
+impl StripLocations for EnumVariant {
+    fn strip_locations(&self) -> Self {
+        EnumVariant {
+            name: self.name.clone(),
+            value: self.value,
+            location: ItemLocation::internal(),
+        }
+    }
+}
+
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]
 pub struct EnumDefinition {
     pub type_: Type,
     pub doc: Vec<String>,
-    pub fields: Vec<(String, isize)>,
+    pub variants: Vec<EnumVariant>,
     pub associated_functions: Vec<Function>,
     pub singleton: Option<usize>,
     pub copyable: bool,
@@ -27,7 +50,7 @@ impl StripLocations for EnumDefinition {
         EnumDefinition {
             type_: self.type_.strip_locations(),
             doc: self.doc.strip_locations(),
-            fields: self.fields.strip_locations(),
+            variants: self.variants.strip_locations(),
             associated_functions: self.associated_functions.strip_locations(),
             singleton: self.singleton.strip_locations(),
             copyable: self.copyable.strip_locations(),
@@ -42,7 +65,7 @@ impl EnumDefinition {
         EnumDefinition {
             type_,
             doc: vec![],
-            fields: Vec::new(),
+            variants: Vec::new(),
             associated_functions: Vec::new(),
             singleton: None,
             copyable: false,
@@ -54,10 +77,17 @@ impl EnumDefinition {
         self.doc = doc.into_iter().map(|s| s.into()).collect();
         self
     }
-    pub fn with_fields<'a>(mut self, fields: impl IntoIterator<Item = (&'a str, isize)>) -> Self {
-        self.fields = fields
+    pub fn with_variants<'a>(
+        mut self,
+        variants: impl IntoIterator<Item = (&'a str, isize)>,
+    ) -> Self {
+        self.variants = variants
             .into_iter()
-            .map(|(n, v)| (n.to_string(), v))
+            .map(|(n, v)| EnumVariant {
+                name: n.to_string(),
+                value: v,
+                location: ItemLocation::internal(),
+            })
             .collect();
         self
     }
@@ -110,14 +140,15 @@ pub fn build(
         return Ok(None);
     };
 
-    let mut fields: Vec<(String, isize)> = vec![];
-    let mut last_field = 0;
+    let mut variants: Vec<EnumVariant> = vec![];
+    let mut last_value = 0;
     let mut default = None;
     for statement in definition.statements() {
         let grammar::EnumStatement {
             name,
             expr,
             attributes,
+            location: stmt_location,
             ..
         } = statement;
         let value = match expr {
@@ -129,9 +160,13 @@ pub fn build(
                     location: *e.location(),
                 });
             }
-            None => last_field,
+            None => last_value,
         };
-        fields.push((name.0.clone(), value));
+        variants.push(EnumVariant {
+            name: name.0.clone(),
+            value,
+            location: *stmt_location,
+        });
 
         for attribute in attributes {
             match attribute {
@@ -142,13 +177,13 @@ pub fn build(
                             location: *location,
                         });
                     }
-                    default = Some(fields.len() - 1);
+                    default = Some(variants.len() - 1);
                 }
                 _ => {}
             }
         }
 
-        last_field = value + 1;
+        last_value = value + 1;
     }
 
     let mut singleton = None;
@@ -220,7 +255,7 @@ pub fn build(
         inner: EnumDefinition {
             type_: ty,
             doc,
-            fields,
+            variants,
             associated_functions,
             singleton,
             copyable,

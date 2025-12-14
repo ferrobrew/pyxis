@@ -3,15 +3,17 @@ use std::{collections::BTreeMap, path::Path};
 use crate::{
     backends::{BackendError, Result},
     semantic::types::{Backend, Type},
+    source_store::FileStore,
+    span::FileId,
 };
 use serde::{Deserialize, Serialize};
 
 use crate::semantic::{
     ResolvedSemanticState, TypeRegistry,
     types::{
-        Argument, BitflagsDefinition, CallingConvention, EnumDefinition, ExternValue, Function,
-        FunctionBody, ItemCategory, ItemDefinition, ItemDefinitionInner, Region,
-        TypeAliasDefinition, TypeDefinition, TypeVftable, Visibility,
+        Argument, BitflagField, BitflagsDefinition, CallingConvention, EnumDefinition, EnumVariant,
+        ExternValue, Function, FunctionBody, ItemCategory, ItemDefinition, ItemDefinitionInner,
+        Region, TypeAliasDefinition, TypeDefinition, TypeVftable, Visibility,
     },
 };
 
@@ -29,6 +31,8 @@ pub struct JsonDocumentation {
     pub items: BTreeMap<String, JsonItem>,
     /// Nested module hierarchy
     pub modules: BTreeMap<String, JsonModule>,
+    /// Source file paths indexed by file ID (index 0 and 1 are reserved for internal/test)
+    pub source_paths: Vec<String>,
 }
 
 /// A module containing items and potentially submodules
@@ -58,6 +62,15 @@ pub struct JsonBackend {
     pub epilogue: Option<String>,
 }
 
+/// Source location of an item (file index and line number)
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+pub struct JsonSourceLocation {
+    /// Index into the source_paths array in JsonDocumentation
+    pub file_index: usize,
+    /// Line number (1-indexed)
+    pub line: usize,
+}
+
 /// An item (type, enum, or bitflags) in the documentation
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 pub struct JsonItem {
@@ -73,6 +86,8 @@ pub struct JsonItem {
     pub category: JsonItemCategory,
     /// Item kind and details
     pub kind: JsonItemKind,
+    /// Source location (file and line) - None for predefined/internal items
+    pub source: Option<JsonSourceLocation>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
@@ -132,6 +147,8 @@ pub struct JsonRegion {
     pub alignment: usize,
     /// Whether this is a base class field
     pub is_base: bool,
+    /// Source location (file and line) - None for generated/padding fields
+    pub source: Option<JsonSourceLocation>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
@@ -166,6 +183,8 @@ pub struct JsonEnumVariant {
     pub name: String,
     /// Variant value
     pub value: isize,
+    /// Source location (file and line)
+    pub source: Option<JsonSourceLocation>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
@@ -192,6 +211,8 @@ pub struct JsonBitflag {
     pub name: String,
     /// Flag value
     pub value: usize,
+    /// Source location (file and line)
+    pub source: Option<JsonSourceLocation>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
@@ -210,6 +231,8 @@ pub struct JsonFunction {
     pub return_type: Option<JsonType>,
     /// Calling convention
     pub calling_convention: JsonCallingConvention,
+    /// Source location (file and line)
+    pub source: Option<JsonSourceLocation>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
@@ -337,13 +360,43 @@ impl From<CallingConvention> for JsonCallingConvention {
     }
 }
 
+/// Convert an ItemLocation to JsonSourceLocation, returning None for internal/synthetic locations
+fn convert_location(location: &crate::span::ItemLocation) -> Option<JsonSourceLocation> {
+    if location.file_id != FileId::INTERNAL && location.span.start.line > 0 {
+        Some(JsonSourceLocation {
+            file_index: location.file_id.index(),
+            line: location.span.start.line,
+        })
+    } else {
+        None
+    }
+}
+
 /// Generate the JSON documentation for the entire project
 pub fn build(
     out_dir: &Path,
     semantic_state: &ResolvedSemanticState,
     project_name: &str,
+    file_store: &FileStore,
 ) -> Result<()> {
     let type_registry = semantic_state.type_registry();
+
+    // Build source_paths from file store
+    // We collect all unique file IDs from items, then build the paths list
+    let mut max_file_id = 0usize;
+    for module in semantic_state.modules().values() {
+        for definition in module.definitions(type_registry) {
+            let file_index = definition.location.file_id.index();
+            if file_index > max_file_id {
+                max_file_id = file_index;
+            }
+        }
+    }
+
+    // Build source paths array (indices 0 and 1 are reserved for internal/test)
+    let source_paths: Vec<String> = (0..=max_file_id)
+        .map(|i| file_store.filename(FileId::new(i as u32)).to_string())
+        .collect();
 
     // Build items map
     let mut items = BTreeMap::new();
@@ -364,6 +417,7 @@ pub fn build(
         project_name: project_name.to_string(),
         items,
         modules,
+        source_paths,
     };
 
     // Write to file
@@ -459,6 +513,7 @@ fn convert_function(func: &Function) -> JsonFunction {
         arguments: func.arguments.iter().map(convert_argument).collect(),
         return_type: func.return_type.as_ref().map(convert_type),
         calling_convention: func.calling_convention.into(),
+        source: convert_location(&func.location),
     }
 }
 
@@ -479,6 +534,7 @@ fn convert_region(region: &Region, type_registry: &TypeRegistry, offset: usize) 
         size,
         alignment,
         is_base: region.is_base,
+        source: convert_location(&region.location),
     }
 }
 
@@ -525,6 +581,14 @@ fn convert_type_definition(
     }
 }
 
+fn convert_enum_variant(variant: &EnumVariant) -> JsonEnumVariant {
+    JsonEnumVariant {
+        name: variant.name.clone(),
+        value: variant.value,
+        source: convert_location(&variant.location),
+    }
+}
+
 fn convert_enum_definition(ed: &EnumDefinition) -> JsonEnumDefinition {
     JsonEnumDefinition {
         doc: if !ed.doc.is_empty() {
@@ -533,14 +597,7 @@ fn convert_enum_definition(ed: &EnumDefinition) -> JsonEnumDefinition {
             None
         },
         underlying_type: convert_type(&ed.type_),
-        variants: ed
-            .fields
-            .iter()
-            .map(|(name, value)| JsonEnumVariant {
-                name: name.clone(),
-                value: *value,
-            })
-            .collect(),
+        variants: ed.variants.iter().map(convert_enum_variant).collect(),
         associated_functions: ed
             .associated_functions
             .iter()
@@ -553,6 +610,14 @@ fn convert_enum_definition(ed: &EnumDefinition) -> JsonEnumDefinition {
     }
 }
 
+fn convert_bitflag_field(flag: &BitflagField) -> JsonBitflag {
+    JsonBitflag {
+        name: flag.name.clone(),
+        value: flag.value,
+        source: convert_location(&flag.location),
+    }
+}
+
 fn convert_bitflags_definition(bd: &BitflagsDefinition) -> JsonBitflagsDefinition {
     JsonBitflagsDefinition {
         doc: if !bd.doc.is_empty() {
@@ -561,14 +626,7 @@ fn convert_bitflags_definition(bd: &BitflagsDefinition) -> JsonBitflagsDefinitio
             None
         },
         underlying_type: convert_type(&bd.type_),
-        flags: bd
-            .fields
-            .iter()
-            .map(|(name, value)| JsonBitflag {
-                name: name.clone(),
-                value: *value,
-            })
-            .collect(),
+        flags: bd.flags.iter().map(convert_bitflag_field).collect(),
         singleton: bd.singleton,
         copyable: bd.copyable,
         cloneable: bd.cloneable,
@@ -603,6 +661,9 @@ fn convert_item(item: &ItemDefinition, type_registry: &TypeRegistry) -> Option<J
         }
     };
 
+    // Build source location for defined items (not predefined/internal)
+    let source = convert_location(&item.location);
+
     Some(JsonItem {
         path: item.path.to_string(),
         visibility: item.visibility.into(),
@@ -610,6 +671,7 @@ fn convert_item(item: &ItemDefinition, type_registry: &TypeRegistry) -> Option<J
         alignment: resolved.alignment,
         category: item.category.into(),
         kind,
+        source,
     })
 }
 

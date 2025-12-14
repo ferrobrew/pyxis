@@ -1,6 +1,7 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import type { JsonFunction } from '@pyxis/types';
 import { TypeRef } from './TypeRef';
+import { SourceName } from './SourceLink';
 
 interface FunctionDisplayProps {
   func: JsonFunction;
@@ -40,7 +41,13 @@ export function FunctionDisplay({ func, modulePath, id }: FunctionDisplayProps) 
         <span className="text-violet-600 dark:text-slate-500 font-mono text-sm">fn</span>
         <div className="flex-1">
           <div className="font-mono text-sm">
-            <span className={nameClasses}>{func.name}</span>
+            <span className={nameClasses}>
+              {func.source ? (
+                <SourceName source={func.source}>{func.name}</SourceName>
+              ) : (
+                func.name
+              )}
+            </span>
             <span className="text-gray-600 dark:text-slate-400">(</span>
             {func.arguments.map((arg, i) => (
               <span key={i}>

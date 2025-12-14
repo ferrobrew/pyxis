@@ -465,7 +465,7 @@ fn build_enum(
 
     let EnumDefinition {
         singleton,
-        fields,
+        variants,
         doc,
         type_,
         copyable,
@@ -517,8 +517,9 @@ fn build_enum(
         extra_derives.push(quote! { Default });
     }
 
-    let syn_fields = fields.iter().enumerate().map(|(idx, (name, value))| {
-        let name_ident = str_to_ident(name);
+    let syn_fields = variants.iter().enumerate().map(|(idx, variant)| {
+        let name_ident = str_to_ident(&variant.name);
+        let value = variant.value;
         let field = quote! {
             #name_ident = #value as _
         };
@@ -578,7 +579,7 @@ fn build_bitflags(
 
     let BitflagsDefinition {
         singleton,
-        fields,
+        flags,
         doc,
         type_,
         copyable,
@@ -619,7 +620,7 @@ fn build_bitflags(
     });
 
     let default_impl = default.map(|idx| {
-        let field_ident = str_to_ident(&fields[idx].0);
+        let field_ident = str_to_ident(&flags[idx].name);
         quote! {
             impl Default for #name_ident {
                 fn default() -> Self {
@@ -637,8 +638,9 @@ fn build_bitflags(
         extra_derives.push(quote! { Clone });
     }
 
-    let syn_fields = fields.iter().map(|(name, value)| {
-        let name_ident = str_to_ident(name);
+    let syn_fields = flags.iter().map(|flag| {
+        let name_ident = str_to_ident(&flag.name);
+        let value = flag.value;
         quote! {
             const #name_ident = #value as _;
         }

@@ -1,6 +1,7 @@
 import type { JsonRegion } from '@pyxis/types';
 import { TypeRef } from './TypeRef';
 import { SmallBadge } from './Badge';
+import { SourceName } from './SourceLink';
 
 interface FieldTableProps {
   fields: JsonRegion[];
@@ -50,7 +51,13 @@ export function FieldTable({ fields, modulePath }: FieldTableProps) {
                 <td className="px-4 py-2 text-sm text-gray-600 dark:text-slate-400 font-mono">
                   0x{field.offset.toString(16).toUpperCase()}
                 </td>
-                <td className={nameClasses}>{field.name || '<anonymous>'}</td>
+                <td className={nameClasses}>
+                  {field.source ? (
+                    <SourceName source={field.source}>{field.name || '<anonymous>'}</SourceName>
+                  ) : (
+                    field.name || '<anonymous>'
+                  )}
+                </td>
                 <td className={`px-4 py-2 font-mono text-sm ${typeClasses}`}>
                   <TypeRef type={field.type_ref} currentModule={modulePath} />
                 </td>

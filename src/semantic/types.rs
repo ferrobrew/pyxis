@@ -10,8 +10,8 @@ use crate::{
 use crate::span::StripLocations;
 
 pub use crate::semantic::{
-    bitflags_definition::BitflagsDefinition,
-    enum_definition::EnumDefinition,
+    bitflags_definition::{BitflagField, BitflagsDefinition},
+    enum_definition::{EnumDefinition, EnumVariant},
     function::{Argument, CallingConvention, Function, FunctionBody},
     type_alias_definition::TypeAliasDefinition,
     type_definition::{Region, TypeDefinition, TypeVftable},
