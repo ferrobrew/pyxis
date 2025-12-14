@@ -185,10 +185,99 @@ fn will_eventually_terminate_with_an_unknown_type() {
         |err| {
             matches!(
                 err,
-                SemanticError::TypeResolutionStalled { unresolved_types, resolved_types }
+                SemanticError::TypeResolutionStalled { unresolved_types, resolved_types, .. }
                 if unresolved_types.contains(&"test::TestType2".to_string())
                     && resolved_types.is_empty()
             )
+        },
+    );
+}
+
+#[test]
+fn unresolved_type_includes_type_name_in_error() {
+    // Test that when a type can't be resolved, the error includes the specific missing type name
+    assert_ast_produces_error(
+        M::new().with_definitions([ID::new(
+            (V::Public, "MyType"),
+            TD::new([TS::field(
+                (V::Private, "my_field"),
+                T::ident("NonexistentType"),
+            )]),
+        )]),
+        |err| {
+            match err {
+                SemanticError::TypeResolutionStalled {
+                    unresolved_references,
+                    ..
+                } => {
+                    // Should have exactly one unresolved reference
+                    unresolved_references.len() == 1
+                        && unresolved_references[0].type_name == "NonexistentType"
+                        && unresolved_references[0].context.contains("my_field")
+                        && unresolved_references[0].context.contains("MyType")
+                }
+                _ => false,
+            }
+        },
+    );
+}
+
+#[test]
+fn unresolved_type_in_enum_includes_context() {
+    // Test that enum base type errors include proper context
+    assert_ast_produces_error(
+        M::new().with_definitions([ID::new(
+            (V::Public, "MyEnum"),
+            ED::new(
+                T::ident("NonexistentBase"),
+                [ES::field("A"), ES::field("B")],
+                [],
+            ),
+        )]),
+        |err| match err {
+            SemanticError::TypeResolutionStalled {
+                unresolved_references,
+                ..
+            } => {
+                unresolved_references.len() == 1
+                    && unresolved_references[0].type_name == "NonexistentBase"
+                    && unresolved_references[0].context.contains("enum")
+                    && unresolved_references[0].context.contains("MyEnum")
+            }
+            _ => false,
+        },
+    );
+}
+
+#[test]
+fn multiple_unresolved_types_are_all_reported() {
+    // Test that multiple missing types are all reported
+    assert_ast_produces_error(
+        M::new().with_definitions([
+            ID::new(
+                (V::Public, "Type1"),
+                TD::new([TS::field((V::Private, "field_a"), T::ident("Missing1"))]),
+            ),
+            ID::new(
+                (V::Public, "Type2"),
+                TD::new([TS::field((V::Private, "field_b"), T::ident("Missing2"))]),
+            ),
+        ]),
+        |err| {
+            match err {
+                SemanticError::TypeResolutionStalled {
+                    unresolved_references,
+                    ..
+                } => {
+                    // Should have two unresolved references
+                    let type_names: Vec<_> = unresolved_references
+                        .iter()
+                        .map(|r| r.type_name.as_str())
+                        .collect();
+                    type_names.contains(&"Missing1") && type_names.contains(&"Missing2")
+                }
+                _ => false,
+            }
         },
     );
 }

@@ -4,9 +4,9 @@ use crate::{
     grammar::{self, ItemPath},
     semantic::{
         SemanticState, attribute,
-        error::{Result, SemanticError},
+        error::{BuildOutcome, Result, SemanticError, UnresolvedTypeReference},
         function,
-        type_registry::TypeRegistry,
+        type_registry::{TypeLookupResult, TypeRegistry},
         types::{Function, FunctionBody, ItemState, ItemStateResolved, Type, Visibility},
     },
     span::{HasLocation, ItemLocation},
@@ -203,7 +203,7 @@ pub fn build(
     definition: &grammar::TypeDefinition,
     location: &ItemLocation,
     doc_comments: &[String],
-) -> Result<Option<ItemStateResolved>> {
+) -> Result<BuildOutcome<ItemStateResolved>> {
     let module = semantic.get_module_for_path(resolvee_path, location)?;
 
     // Handle attributes
@@ -296,11 +296,24 @@ pub fn build(
                 }
 
                 // Push field
-                let Some(type_) = semantic
+                let type_ = match semantic
                     .type_registry
-                    .resolve_grammar_type(&module.scope(), type_)
-                else {
-                    return Ok(None);
+                    .resolve_grammar_type_with_reason(&module.scope(), type_)
+                {
+                    TypeLookupResult::Found(t) => t,
+                    TypeLookupResult::NotYetResolved => return Ok(BuildOutcome::Deferred),
+                    TypeLookupResult::NotFound { type_name } => {
+                        let field_name = if field_ident.0 == "_" {
+                            "<anonymous>".to_string()
+                        } else {
+                            field_ident.0.clone()
+                        };
+                        return Ok(BuildOutcome::NotFoundType(UnresolvedTypeReference {
+                            type_name,
+                            location: statement.location,
+                            context: format!("field `{field_name}` of type `{resolvee_path}`"),
+                        }));
+                    }
                 };
 
                 let ident = (field_ident.0 != "_").then(|| field_ident.0.clone());
@@ -404,7 +417,7 @@ pub fn build(
         location,
     )?
     else {
-        return Ok(None);
+        return Ok(BuildOutcome::Deferred);
     };
 
     // Reborrow the module after resolving regions
@@ -590,7 +603,7 @@ pub fn build(
         alignment
     };
 
-    Ok(Some(ItemStateResolved {
+    Ok(BuildOutcome::Resolved(ItemStateResolved {
         size,
         alignment,
         inner: TypeDefinition {

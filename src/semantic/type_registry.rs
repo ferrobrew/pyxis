@@ -10,6 +10,21 @@ use crate::{
     span::ItemLocation,
 };
 
+/// Result of attempting to look up a type in the registry.
+/// This distinguishes between different failure modes for better error reporting.
+#[derive(Debug, Clone)]
+pub enum TypeLookupResult {
+    /// Type was found and resolved successfully
+    Found(Type),
+    /// Type exists in the registry but is not yet resolved (should defer)
+    NotYetResolved,
+    /// Type doesn't exist in the registry at all
+    NotFound {
+        /// The type name that wasn't found (as written in source)
+        type_name: String,
+    },
+}
+
 #[derive(Debug)]
 pub struct TypeRegistry {
     types: BTreeMap<ItemPath, ItemDefinition>,
@@ -166,5 +181,118 @@ impl TypeRegistry {
 
     pub(crate) fn padding_type(&self, bytes: usize) -> Type {
         Type::Array(Box::new(self.resolve_string(&[], "u8").unwrap()), bytes)
+    }
+
+    /// Like resolve_string but returns TypeLookupResult to distinguish failure modes
+    pub(crate) fn resolve_string_with_reason(
+        &self,
+        scope: &[ItemPath],
+        name: &str,
+    ) -> TypeLookupResult {
+        let (scope_types, scope_modules): (Vec<&ItemPath>, Vec<&ItemPath>) =
+            scope.iter().partition(|ip| self.types.contains_key(ip));
+
+        // If we find the relevant type within our scope, take the last one
+        let found_path = scope_types
+            .into_iter()
+            .rev()
+            .find(|st| st.last().map(|i| i.as_str()) == Some(name))
+            .cloned()
+            .or_else(|| {
+                // Otherwise, search our scopes
+                std::iter::once(&ItemPath::empty())
+                    .chain(scope_modules.iter().copied())
+                    .map(|ip| ip.join(name.into()))
+                    .find(|ip| self.types.contains_key(ip))
+            });
+
+        match found_path {
+            Some(path) => {
+                // Check if the type is resolved
+                if let Some(item_def) = self.types.get(&path) {
+                    if item_def.is_resolved() {
+                        TypeLookupResult::Found(self.resolve_type_alias(Type::Raw(path)))
+                    } else {
+                        TypeLookupResult::NotYetResolved
+                    }
+                } else {
+                    TypeLookupResult::NotFound {
+                        type_name: name.to_string(),
+                    }
+                }
+            }
+            None => TypeLookupResult::NotFound {
+                type_name: name.to_string(),
+            },
+        }
+    }
+
+    /// Like resolve_path but returns TypeLookupResult to distinguish failure modes
+    pub(crate) fn resolve_path_with_reason(
+        &self,
+        scope: &[ItemPath],
+        path: &ItemPath,
+    ) -> TypeLookupResult {
+        // If path has multiple segments, try to resolve it directly first
+        if path.len() > 1 {
+            if let Some(item_def) = self.types.get(path) {
+                if item_def.is_resolved() {
+                    return TypeLookupResult::Found(
+                        self.resolve_type_alias(Type::Raw(path.clone())),
+                    );
+                } else {
+                    return TypeLookupResult::NotYetResolved;
+                }
+            }
+        }
+
+        // For single-segment paths or unresolved multi-segment paths,
+        // try scope-based resolution using the last segment
+        if let Some(last_segment) = path.last() {
+            self.resolve_string_with_reason(scope, last_segment.as_str())
+        } else {
+            TypeLookupResult::NotFound {
+                type_name: path.to_string(),
+            }
+        }
+    }
+
+    /// Like resolve_grammar_type but returns TypeLookupResult to distinguish failure modes.
+    /// When a type can't be found, this returns NotFound with the specific type name.
+    pub(crate) fn resolve_grammar_type_with_reason(
+        &self,
+        scope: &[ItemPath],
+        type_: &grammar::Type,
+    ) -> TypeLookupResult {
+        match type_ {
+            grammar::Type::ConstPointer { pointee, .. } => {
+                match self.resolve_grammar_type_with_reason(scope, pointee) {
+                    TypeLookupResult::Found(t) => {
+                        TypeLookupResult::Found(Type::ConstPointer(Box::new(t)))
+                    }
+                    other => other,
+                }
+            }
+            grammar::Type::MutPointer { pointee, .. } => {
+                match self.resolve_grammar_type_with_reason(scope, pointee) {
+                    TypeLookupResult::Found(t) => {
+                        TypeLookupResult::Found(Type::MutPointer(Box::new(t)))
+                    }
+                    other => other,
+                }
+            }
+            grammar::Type::Array { element, size, .. } => {
+                match self.resolve_grammar_type_with_reason(scope, element) {
+                    TypeLookupResult::Found(t) => {
+                        TypeLookupResult::Found(Type::Array(Box::new(t), *size))
+                    }
+                    other => other,
+                }
+            }
+            grammar::Type::Ident { path, .. } => self.resolve_path_with_reason(scope, path),
+            grammar::Type::Unknown { size, .. } => {
+                TypeLookupResult::Found(self.padding_type(*size))
+            }
+        }
     }
 }
