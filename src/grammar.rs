@@ -6,8 +6,8 @@ pub use crate::parser::{
     functions::{Argument, Function, FunctionBlock, ImplItem},
     items::{
         BitflagsDefItem, BitflagsDefinition, BitflagsStatement, Comment, EnumDefItem,
-        EnumDefinition, EnumStatement, ItemDefinition, ItemDefinitionInner, TypeDefItem,
-        TypeDefinition, TypeField, TypeStatement,
+        EnumDefinition, EnumStatement, ItemDefinition, ItemDefinitionInner, TypeAliasDefinition,
+        TypeDefItem, TypeDefinition, TypeField, TypeStatement,
     },
     module::{Module, ModuleItem},
     paths::{ItemPath, ItemPathSegment},
@@ -26,6 +26,7 @@ pub mod test_aliases {
     pub type ED = super::EnumDefinition;
     pub type BFS = super::BitflagsStatement;
     pub type BFD = super::BitflagsDefinition;
+    pub type TAD = super::TypeAliasDefinition;
     pub type T = super::Type;
     pub type A = super::Attribute;
     pub type AI = super::AttributeItem;

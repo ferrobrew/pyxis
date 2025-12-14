@@ -31,6 +31,7 @@ export function Breadcrumbs({ path, isItem = false }: BreadcrumbsProps) {
       if (item.kind.type === 'type') finalItemType = 'type';
       else if (item.kind.type === 'enum') finalItemType = 'enum';
       else if (item.kind.type === 'bitflags') finalItemType = 'bitflags';
+      else if (item.kind.type === 'type_alias') finalItemType = 'type_alias';
     }
   } else {
     finalItemType = 'module';

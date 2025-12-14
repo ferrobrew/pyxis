@@ -1,0 +1,11 @@
+// This module tests cross-module type alias re-export.
+// It imports Vec3Ptr from type_aliases (NOT math::Vector3 directly),
+// demonstrating that type aliases work as re-exports.
+
+use type_aliases::Vec3Ptr;
+
+/// Uses an alias from another module as a re-export.
+/// This works because visibility is checked at alias definition time.
+pub type Wrapper {
+    pub data: Vec3Ptr,
+}

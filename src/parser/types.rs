@@ -270,6 +270,17 @@ impl Parser {
                 let start_pos = ident_span.start;
                 let mut end_pos = ident_span.end;
 
+                // Handle paths like module::Type - continue parsing while we see ::
+                while matches!(self.peek(), TokenKind::ColonColon) {
+                    let mut type_str = ident.0;
+                    type_str.push_str("::");
+                    self.advance(); // consume ::
+                    let (next_ident, next_span) = self.expect_ident()?;
+                    type_str.push_str(&next_ident.0);
+                    end_pos = next_span.end;
+                    ident = Ident(type_str);
+                }
+
                 // Check for generic arguments - treat them as part of the identifier string
                 // This is needed for extern types that need exact reproduction
                 if matches!(self.peek(), TokenKind::Lt) {

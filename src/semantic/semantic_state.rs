@@ -8,7 +8,7 @@ use crate::{
         attribute, bitflags_definition, enum_definition,
         error::{Result, SemanticError},
         module::Module,
-        type_definition,
+        type_alias_definition, type_definition,
         type_registry::TypeRegistry,
         types::{
             ExternValue, ItemCategory, ItemDefinition, ItemState, ItemStateResolved,
@@ -268,6 +268,13 @@ impl SemanticState {
                         &self,
                         resolvee_path,
                         b,
+                        def_location,
+                        &definition.doc_comments,
+                    )?,
+                    grammar::ItemDefinitionInner::TypeAlias(ta) => type_alias_definition::build(
+                        &self,
+                        resolvee_path,
+                        ta,
                         def_location,
                         &definition.doc_comments,
                     )?,

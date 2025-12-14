@@ -7,6 +7,7 @@ mod enum_definition;
 mod function;
 mod module;
 mod semantic_state;
+mod type_alias_definition;
 mod type_definition;
 mod type_registry;
 

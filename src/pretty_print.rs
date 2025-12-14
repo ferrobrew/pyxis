@@ -86,6 +86,7 @@ impl PrettyPrinter {
                     ItemDefinitionInner::Type(td) => !td.attributes.0.is_empty(),
                     ItemDefinitionInner::Enum(ed) => !ed.attributes.0.is_empty(),
                     ItemDefinitionInner::Bitflags(bf) => !bf.attributes.0.is_empty(),
+                    ItemDefinitionInner::TypeAlias(ta) => !ta.attributes.0.is_empty(),
                 };
 
                 if !def.doc_comments.is_empty() && has_attrs {
@@ -544,6 +545,7 @@ impl PrettyPrinter {
                 &bf.inline_trailing_comments,
                 &bf.following_comments,
             ),
+            ItemDefinitionInner::TypeAlias(ta) => (&ta.attributes, &Vec::new(), &Vec::new()),
         };
 
         // Print attributes with inline trailing comments
@@ -648,6 +650,11 @@ impl PrettyPrinter {
                 self.dedent();
                 self.write_indent();
                 writeln!(&mut self.output, "}}").unwrap();
+            }
+            ItemDefinitionInner::TypeAlias(ta) => {
+                write!(&mut self.output, "type {} = ", def.name).unwrap();
+                self.print_type(&ta.target);
+                writeln!(&mut self.output, ";").unwrap();
             }
         }
     }

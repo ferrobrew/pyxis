@@ -86,19 +86,43 @@ impl TypeRegistry {
             scope.iter().partition(|ip| self.types.contains_key(ip));
 
         // If we find the relevant type within our scope, take the last one
-        scope_types
+        let found_path = scope_types
             .into_iter()
             .rev()
             .find(|st| st.last().map(|i| i.as_str()) == Some(name))
-            .map(|ip| Type::Raw(ip.clone()))
+            .cloned()
             .or_else(|| {
                 // Otherwise, search our scopes
                 std::iter::once(&ItemPath::empty())
                     .chain(scope_modules.iter().copied())
                     .map(|ip| ip.join(name.into()))
                     .find(|ip| self.types.contains_key(ip))
-                    .map(Type::Raw)
-            })
+            });
+
+        // If we found a type, check if it's a type alias and follow it
+        found_path.map(|ip| self.resolve_type_alias(Type::Raw(ip)))
+    }
+
+    /// Follows type aliases recursively to get the final resolved type.
+    /// If the type is not an alias, returns it unchanged.
+    fn resolve_type_alias(&self, type_: Type) -> Type {
+        match &type_ {
+            Type::Raw(path) => {
+                // Check if this path refers to a type alias
+                if let Some(item_def) = self.types.get(path) {
+                    if let Some(resolved) = item_def.resolved() {
+                        if let Some(type_alias) = resolved.inner.as_type_alias() {
+                            // Return the target type (which is already resolved)
+                            return type_alias.target.clone();
+                        }
+                    }
+                }
+                type_
+            }
+            // For compound types, we don't need to resolve here since the inner types
+            // would have been resolved when they were constructed
+            _ => type_,
+        }
     }
 
     pub(crate) fn resolve_grammar_type(

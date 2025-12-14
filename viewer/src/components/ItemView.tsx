@@ -8,7 +8,7 @@ import { Badge, SmallBadge } from './Badge';
 import { FunctionDisplay } from './FunctionDisplay';
 import { FieldTable } from './FieldTable';
 import { Breadcrumbs } from './Breadcrumbs';
-import type { JsonTypeDefinition, JsonEnumDefinition, JsonBitflagsDefinition } from '@pyxis/types';
+import type { JsonTypeDefinition, JsonEnumDefinition, JsonBitflagsDefinition, JsonTypeAliasDefinition } from '@pyxis/types';
 
 // Documentation display component for code blocks
 function DocBlock({ doc }: { doc: string }) {
@@ -249,6 +249,24 @@ function BitflagsView({ def, modulePath }: { def: JsonBitflagsDefinition; module
   );
 }
 
+// Type alias view component
+function TypeAliasView({ def, modulePath }: { def: JsonTypeAliasDefinition; modulePath: string }) {
+  return (
+    <div>
+      {def.doc && <DocBlock doc={def.doc} />}
+
+      <div className="mb-6">
+        <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-slate-200">Target Type</h2>
+        <div className="p-4 bg-gray-50 dark:bg-slate-800 rounded-md">
+          <span className="font-mono text-lg">
+            <TypeRef type={def.target} currentModule={modulePath} />
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Main ItemView component
 export function ItemView() {
   const { itemPath = '' } = useParams();
@@ -305,9 +323,10 @@ export function ItemView() {
   const modulePath = getModulePath(decodedPath);
 
   // Determine item type for color coding
-  let itemType: 'type' | 'enum' | 'bitflags' = 'type';
+  let itemType: 'type' | 'enum' | 'bitflags' | 'type_alias' = 'type';
   if (item.kind.type === 'enum') itemType = 'enum';
   else if (item.kind.type === 'bitflags') itemType = 'bitflags';
+  else if (item.kind.type === 'type_alias') itemType = 'type_alias';
 
   return (
     <div className="p-4 md:p-6 lg:p-8 max-w-6xl">
@@ -325,6 +344,7 @@ export function ItemView() {
       {item.kind.type === 'type' && <TypeView def={item.kind} modulePath={modulePath} />}
       {item.kind.type === 'enum' && <EnumView def={item.kind} modulePath={modulePath} />}
       {item.kind.type === 'bitflags' && <BitflagsView def={item.kind} modulePath={modulePath} />}
+      {item.kind.type === 'type_alias' && <TypeAliasView def={item.kind} modulePath={modulePath} />}
     </div>
   );
 }

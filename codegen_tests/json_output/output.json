@@ -3068,6 +3068,130 @@
         "packed": false
       }
     },
+    "type_alias_reexport::Wrapper": {
+      "path": "type_alias_reexport::Wrapper",
+      "visibility": "public",
+      "size": 8,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": " Uses an alias from another module as a re-export.\n This works because visibility is checked at alias definition time.",
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "data",
+            "doc": null,
+            "type_ref": {
+              "type": "const_pointer",
+              "inner": {
+                "type": "raw",
+                "path": "math::Vector3"
+              }
+            },
+            "offset": 0,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false
+          }
+        ],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false
+      }
+    },
+    "type_aliases::Container": {
+      "path": "type_aliases::Container",
+      "visibility": "public",
+      "size": 16,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": " Container using the alias",
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "ptr",
+            "doc": null,
+            "type_ref": {
+              "type": "const_pointer",
+              "inner": {
+                "type": "raw",
+                "path": "math::Vector3"
+              }
+            },
+            "offset": 0,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false
+          },
+          {
+            "visibility": "public",
+            "name": "int_ptr",
+            "doc": null,
+            "type_ref": {
+              "type": "mut_pointer",
+              "inner": {
+                "type": "raw",
+                "path": "i32"
+              }
+            },
+            "offset": 8,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false
+          }
+        ],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false
+      }
+    },
+    "type_aliases::IntMutPtr": {
+      "path": "type_aliases::IntMutPtr",
+      "visibility": "public",
+      "size": 0,
+      "alignment": 1,
+      "category": "defined",
+      "kind": {
+        "type": "type_alias",
+        "doc": " Alias for a mutable i32 pointer.",
+        "target": {
+          "type": "mut_pointer",
+          "inner": {
+            "type": "raw",
+            "path": "i32"
+          }
+        }
+      }
+    },
+    "type_aliases::Vec3Ptr": {
+      "path": "type_aliases::Vec3Ptr",
+      "visibility": "public",
+      "size": 0,
+      "alignment": 1,
+      "category": "defined",
+      "kind": {
+        "type": "type_alias",
+        "doc": " Alias for a Vector3 pointer.\n Demonstrates doc comments on type aliases.",
+        "target": {
+          "type": "const_pointer",
+          "inner": {
+            "type": "raw",
+            "path": "math::Vector3"
+          }
+        }
+      }
+    },
     "u128": {
       "path": "u128",
       "visibility": "public",
@@ -3371,6 +3495,28 @@
         "two_base_classes::BaseBVftable",
         "two_base_classes::Derived",
         "two_base_classes::DerivedVftable"
+      ],
+      "submodules": {},
+      "extern_values": [],
+      "functions": [],
+      "backends": {}
+    },
+    "type_alias_reexport": {
+      "doc": null,
+      "items": [
+        "type_alias_reexport::Wrapper"
+      ],
+      "submodules": {},
+      "extern_values": [],
+      "functions": [],
+      "backends": {}
+    },
+    "type_aliases": {
+      "doc": null,
+      "items": [
+        "type_aliases::Container",
+        "type_aliases::IntMutPtr",
+        "type_aliases::Vec3Ptr"
       ],
       "submodules": {},
       "extern_values": [],

@@ -5,6 +5,7 @@ export type ItemType =
   | 'enum'
   | 'enum-variant'
   | 'bitflags'
+  | 'type_alias'
   | 'function'
   | 'extern'
   | 'field';
@@ -21,6 +22,8 @@ export function getItemTypeColor(type: ItemType): string {
       return 'text-green-700 dark:text-green-500';
     case 'bitflags':
       return 'text-orange-600 dark:text-orange-400';
+    case 'type_alias':
+      return 'text-cyan-600 dark:text-cyan-400';
     case 'function':
       return 'text-indigo-600 dark:text-indigo-400';
     case 'extern':
@@ -44,6 +47,8 @@ export function getItemTypeHoverColor(type: ItemType): string {
       return 'hover:text-green-600 dark:hover:text-green-400';
     case 'bitflags':
       return 'hover:text-orange-500 dark:hover:text-orange-300';
+    case 'type_alias':
+      return 'hover:text-cyan-500 dark:hover:text-cyan-300';
     case 'function':
       return 'hover:text-indigo-500 dark:hover:text-indigo-300';
     case 'extern':
@@ -67,6 +72,8 @@ export function getItemTypeBgColor(type: ItemType): string {
       return 'bg-green-100 dark:bg-green-900/30';
     case 'bitflags':
       return 'bg-orange-100 dark:bg-orange-900/30';
+    case 'type_alias':
+      return 'bg-cyan-100 dark:bg-cyan-900/30';
     case 'function':
       return 'bg-indigo-100 dark:bg-indigo-900/30';
     case 'extern':
