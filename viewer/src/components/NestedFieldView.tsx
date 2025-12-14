@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import type { JsonRegion, JsonType, JsonDocumentation } from '@pyxis/types';
 import { useDocumentation } from '../contexts/DocumentationContext';
 import { TypeRef } from './TypeRef';
@@ -195,6 +195,11 @@ export function NestedFieldView({ fields, modulePath }: NestedFieldViewProps) {
   );
 
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(initialExpandedPaths);
+
+  // Reset expanded paths when fields change (e.g., navigating to a different type)
+  useEffect(() => {
+    setExpandedPaths(initialExpandedPaths);
+  }, [initialExpandedPaths]);
 
   const handleToggleExpand = (path: string) => {
     setExpandedPaths((prev) => {
