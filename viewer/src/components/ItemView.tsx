@@ -185,6 +185,9 @@ function EnumView({ def, modulePath }: { def: JsonEnumDefinition; modulePath: st
                 <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-slate-200">
                   Value
                 </th>
+                <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-slate-200">
+                  Source
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -200,6 +203,9 @@ function EnumView({ def, modulePath }: { def: JsonEnumDefinition; modulePath: st
                   </td>
                   <td className="px-4 py-2 text-sm text-gray-600 dark:text-slate-400 font-mono">
                     {variant.value}
+                  </td>
+                  <td className="px-4 py-2 text-sm">
+                    {variant.source && <SourceLink source={variant.source} />}
                   </td>
                 </tr>
               ))}
@@ -264,6 +270,9 @@ function BitflagsView({ def, modulePath }: { def: JsonBitflagsDefinition; module
                 <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-slate-200">
                   Value (Bin)
                 </th>
+                <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-slate-200">
+                  Source
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -285,6 +294,9 @@ function BitflagsView({ def, modulePath }: { def: JsonBitflagsDefinition; module
                   </td>
                   <td className="px-4 py-2 text-sm text-gray-600 dark:text-slate-400 font-mono">
                     0b{flag.value.toString(2).padStart(8, '0')}
+                  </td>
+                  <td className="px-4 py-2 text-sm">
+                    {flag.source && <SourceLink source={flag.source} />}
                   </td>
                 </tr>
               ))}

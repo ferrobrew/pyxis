@@ -11,11 +11,34 @@ use crate::{
 #[cfg(test)]
 use crate::span::StripLocations;
 
+/// A single flag in a bitflags definition
+#[derive(PartialEq, Eq, Debug, Clone, Hash)]
+pub struct BitflagField {
+    pub name: String,
+    pub value: usize,
+    pub location: ItemLocation,
+}
+impl HasLocation for BitflagField {
+    fn location(&self) -> &ItemLocation {
+        &self.location
+    }
+}
+#[cfg(test)]
+impl StripLocations for BitflagField {
+    fn strip_locations(&self) -> Self {
+        BitflagField {
+            name: self.name.clone(),
+            value: self.value,
+            location: ItemLocation::internal(),
+        }
+    }
+}
+
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]
 pub struct BitflagsDefinition {
     pub type_: Type,
     pub doc: Vec<String>,
-    pub fields: Vec<(String, usize)>,
+    pub flags: Vec<BitflagField>,
     pub singleton: Option<usize>,
     pub copyable: bool,
     pub cloneable: bool,
@@ -27,7 +50,7 @@ impl StripLocations for BitflagsDefinition {
         BitflagsDefinition {
             type_: self.type_.strip_locations(),
             doc: self.doc.strip_locations(),
-            fields: self.fields.strip_locations(),
+            flags: self.flags.strip_locations(),
             singleton: self.singleton.strip_locations(),
             copyable: self.copyable.strip_locations(),
             cloneable: self.cloneable.strip_locations(),
@@ -40,7 +63,7 @@ impl BitflagsDefinition {
         BitflagsDefinition {
             type_,
             doc: vec![],
-            fields: Vec::new(),
+            flags: Vec::new(),
             singleton: None,
             copyable: false,
             cloneable: false,
@@ -51,10 +74,14 @@ impl BitflagsDefinition {
         self.doc = doc.into_iter().map(|s| s.into()).collect();
         self
     }
-    pub fn with_fields<'a>(mut self, fields: impl IntoIterator<Item = (&'a str, usize)>) -> Self {
-        self.fields = fields
+    pub fn with_flags<'a>(mut self, flags: impl IntoIterator<Item = (&'a str, usize)>) -> Self {
+        self.flags = flags
             .into_iter()
-            .map(|(n, v)| (n.to_string(), v))
+            .map(|(n, v)| BitflagField {
+                name: n.to_string(),
+                value: v,
+                location: ItemLocation::internal(),
+            })
             .collect();
         self
     }
@@ -139,13 +166,14 @@ pub fn build(
             location: type_location,
         })?;
 
-    let mut fields: Vec<(String, usize)> = vec![];
+    let mut flags: Vec<BitflagField> = vec![];
     let mut default = None;
     for statement in definition.statements() {
         let grammar::BitflagsStatement {
             name,
             expr,
             attributes,
+            location: stmt_location,
             ..
         } = statement;
         let value = match expr {
@@ -158,16 +186,17 @@ pub fn build(
                 });
             }
         };
-        fields.push((
-            name.0.clone(),
-            value
+        flags.push(BitflagField {
+            name: name.0.clone(),
+            value: value
                 .try_into()
                 .map_err(|_| SemanticError::IntegerConversion {
                     value: value.to_string(),
                     target_type: "usize".into(),
                     location: *expr.location(),
                 })?,
-        ));
+            location: *stmt_location,
+        });
 
         for attribute in attributes {
             match attribute {
@@ -178,7 +207,7 @@ pub fn build(
                             location: *location,
                         });
                     }
-                    default = Some(fields.len() - 1);
+                    default = Some(flags.len() - 1);
                 }
                 _ => {}
             }
@@ -232,7 +261,7 @@ pub fn build(
         inner: BitflagsDefinition {
             type_: ty,
             doc,
-            fields,
+            flags,
             singleton,
             copyable,
             cloneable,

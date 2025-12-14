@@ -11,9 +11,9 @@ use serde::{Deserialize, Serialize};
 use crate::semantic::{
     ResolvedSemanticState, TypeRegistry,
     types::{
-        Argument, BitflagsDefinition, CallingConvention, EnumDefinition, ExternValue, Function,
-        FunctionBody, ItemCategory, ItemDefinition, ItemDefinitionInner, Region,
-        TypeAliasDefinition, TypeDefinition, TypeVftable, Visibility,
+        Argument, BitflagField, BitflagsDefinition, CallingConvention, EnumDefinition, EnumVariant,
+        ExternValue, Function, FunctionBody, ItemCategory, ItemDefinition, ItemDefinitionInner,
+        Region, TypeAliasDefinition, TypeDefinition, TypeVftable, Visibility,
     },
 };
 
@@ -183,6 +183,8 @@ pub struct JsonEnumVariant {
     pub name: String,
     /// Variant value
     pub value: isize,
+    /// Source location (file and line)
+    pub source: Option<JsonSourceLocation>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
@@ -209,6 +211,8 @@ pub struct JsonBitflag {
     pub name: String,
     /// Flag value
     pub value: usize,
+    /// Source location (file and line)
+    pub source: Option<JsonSourceLocation>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
@@ -577,6 +581,14 @@ fn convert_type_definition(
     }
 }
 
+fn convert_enum_variant(variant: &EnumVariant) -> JsonEnumVariant {
+    JsonEnumVariant {
+        name: variant.name.clone(),
+        value: variant.value,
+        source: convert_location(&variant.location),
+    }
+}
+
 fn convert_enum_definition(ed: &EnumDefinition) -> JsonEnumDefinition {
     JsonEnumDefinition {
         doc: if !ed.doc.is_empty() {
@@ -585,14 +597,7 @@ fn convert_enum_definition(ed: &EnumDefinition) -> JsonEnumDefinition {
             None
         },
         underlying_type: convert_type(&ed.type_),
-        variants: ed
-            .fields
-            .iter()
-            .map(|(name, value)| JsonEnumVariant {
-                name: name.clone(),
-                value: *value,
-            })
-            .collect(),
+        variants: ed.variants.iter().map(convert_enum_variant).collect(),
         associated_functions: ed
             .associated_functions
             .iter()
@@ -605,6 +610,14 @@ fn convert_enum_definition(ed: &EnumDefinition) -> JsonEnumDefinition {
     }
 }
 
+fn convert_bitflag_field(flag: &BitflagField) -> JsonBitflag {
+    JsonBitflag {
+        name: flag.name.clone(),
+        value: flag.value,
+        source: convert_location(&flag.location),
+    }
+}
+
 fn convert_bitflags_definition(bd: &BitflagsDefinition) -> JsonBitflagsDefinition {
     JsonBitflagsDefinition {
         doc: if !bd.doc.is_empty() {
@@ -613,14 +626,7 @@ fn convert_bitflags_definition(bd: &BitflagsDefinition) -> JsonBitflagsDefinitio
             None
         },
         underlying_type: convert_type(&bd.type_),
-        flags: bd
-            .fields
-            .iter()
-            .map(|(name, value)| JsonBitflag {
-                name: name.clone(),
-                value: *value,
-            })
-            .collect(),
+        flags: bd.flags.iter().map(convert_bitflag_field).collect(),
         singleton: bd.singleton,
         copyable: bd.copyable,
         cloneable: bd.cloneable,

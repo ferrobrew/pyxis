@@ -18,19 +18,35 @@
         "flags": [
           {
             "name": "NONE",
-            "value": 0
+            "value": 0,
+            "source": {
+              "file_index": 2,
+              "line": 2
+            }
           },
           {
             "name": "FLAG_1",
-            "value": 1
+            "value": 1,
+            "source": {
+              "file_index": 2,
+              "line": 3
+            }
           },
           {
             "name": "FLAG_2",
-            "value": 2
+            "value": 2,
+            "source": {
+              "file_index": 2,
+              "line": 4
+            }
           },
           {
             "name": "FLAG_3",
-            "value": 4
+            "value": 4,
+            "source": {
+              "file_index": 2,
+              "line": 5
+            }
           }
         ],
         "singleton": null,
@@ -59,19 +75,35 @@
         "flags": [
           {
             "name": "NONE",
-            "value": 0
+            "value": 0,
+            "source": {
+              "file_index": 2,
+              "line": 10
+            }
           },
           {
             "name": "FLAG_1",
-            "value": 1
+            "value": 1,
+            "source": {
+              "file_index": 2,
+              "line": 11
+            }
           },
           {
             "name": "FLAG_2",
-            "value": 2
+            "value": 2,
+            "source": {
+              "file_index": 2,
+              "line": 12
+            }
           },
           {
             "name": "FLAG_3",
-            "value": 4
+            "value": 4,
+            "source": {
+              "file_index": 2,
+              "line": 14
+            }
           }
         ],
         "singleton": null,
@@ -935,15 +967,27 @@
         "variants": [
           {
             "name": "None",
-            "value": 0
+            "value": 0,
+            "source": {
+              "file_index": 6,
+              "line": 3
+            }
           },
           {
             "name": "Some",
-            "value": 1
+            "value": 1,
+            "source": {
+              "file_index": 6,
+              "line": 5
+            }
           },
           {
             "name": "Value",
-            "value": 2
+            "value": 2,
+            "source": {
+              "file_index": 6,
+              "line": 6
+            }
           }
         ],
         "associated_functions": [
@@ -1053,7 +1097,11 @@
         "variants": [
           {
             "name": "None",
-            "value": 0
+            "value": 0,
+            "source": {
+              "file_index": 7,
+              "line": 2
+            }
           }
         ],
         "associated_functions": [

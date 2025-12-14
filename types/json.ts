@@ -23,7 +23,11 @@ name: string;
 /**
  * Flag value
  */
-value: number };
+value: number; 
+/**
+ * Source location (file and line)
+ */
+source: JsonSourceLocation | null };
 
 export type JsonBitflagsDefinition = { 
 /**
@@ -124,7 +128,11 @@ name: string;
 /**
  * Variant value
  */
-value: number };
+value: number; 
+/**
+ * Source location (file and line)
+ */
+source: JsonSourceLocation | null };
 
 export type JsonExternValue = { 
 /**

@@ -850,7 +850,7 @@ fn can_resolve_enum() {
             SISR::new(
                 (4, 4),
                 SED::new(ST::raw("u32"))
-                    .with_fields([
+                    .with_variants([
                         ("Item0", -2),
                         ("Item1", -1),
                         ("Item2", 0),
@@ -889,7 +889,7 @@ fn can_resolve_enum_with_associated_functions() {
             SISR::new(
                 (4, 4),
                 SED::new(ST::raw("u32"))
-                    .with_fields([("None", 0), ("Some", 1), ("Value", 2)])
+                    .with_variants([("None", 0), ("Some", 1), ("Value", 2)])
                     .with_associated_functions([
                         SF::new((SV::Public, "test"), SFB::address(0x123), SCC::System),
                         SF::new(
@@ -998,7 +998,7 @@ fn can_extract_copyable_and_cloneable_for_enum_correctly() {
             SISR::new(
                 (4, 4),
                 SED::new(ST::raw("u32"))
-                    .with_fields([("Item1", 0), ("Item2", 1)])
+                    .with_variants([("Item1", 0), ("Item2", 1)])
                     .with_cloneable(true),
             ),
         )],
@@ -1019,7 +1019,7 @@ fn can_extract_copyable_and_cloneable_for_enum_correctly() {
             SISR::new(
                 (4, 4),
                 SED::new(ST::raw("u32"))
-                    .with_fields([("Item1", 0), ("Item2", 1)])
+                    .with_variants([("Item1", 0), ("Item2", 1)])
                     .with_copyable(true)
                     .with_cloneable(true),
             ),
@@ -1154,7 +1154,7 @@ fn can_handle_defaultable_on_enum_with_default_field() {
             SISR::new(
                 (4, 4),
                 SED::new(ST::raw("u32"))
-                    .with_fields([("Item1", 0), ("Item2", 1)])
+                    .with_variants([("Item1", 0), ("Item2", 1)])
                     .with_default(1),
             ),
         )],
@@ -1324,7 +1324,7 @@ fn can_resolve_bitflags() {
             SISR::new(
                 (4, 4),
                 SBFD::new(ST::raw("u32"))
-                    .with_fields([
+                    .with_flags([
                         ("Item1", 0b0001),
                         ("Item2", 0b0010),
                         ("Item3", 0b0100),
@@ -1396,7 +1396,7 @@ fn bitflags_handle_defaultable_correctly() {
             SISR::new(
                 (4, 4),
                 SBFD::new(ST::raw("u32"))
-                    .with_fields([("Item1", 0b0001), ("Item2", 0b0010)])
+                    .with_flags([("Item1", 0b0001), ("Item2", 0b0010)])
                     .with_default(1),
             ),
         )],
@@ -1450,7 +1450,7 @@ fn bitflags_with_invalid_underlying_type_are_rejected() {
             (SV::Public, "test::TestType"),
             SISR::new(
                 (4, 4),
-                SBFD::new(ST::raw("u32")).with_fields([("Item1", 0b0001), ("Item2", 0b0010)]),
+                SBFD::new(ST::raw("u32")).with_flags([("Item1", 0b0001), ("Item2", 0b0010)]),
             ),
         )],
     );
