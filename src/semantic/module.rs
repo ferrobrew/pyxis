@@ -5,7 +5,7 @@ use crate::{
     semantic::{
         error::{Result, SemanticError, TypeResolutionContext},
         function::Function,
-        type_registry::TypeRegistry,
+        type_registry::{TypeLookupResult, TypeRegistry},
         types::{Backend, ExternValue, ItemDefinition, Type},
     },
     span::{HasLocation, ItemLocation},
@@ -110,15 +110,18 @@ impl Module {
 
         for ev in &mut self.extern_values {
             if let Type::Unresolved(type_ref) = &ev.type_ {
-                ev.type_ = type_registry
-                    .resolve_grammar_type(&scope, type_ref)
-                    .ok_or_else(|| SemanticError::TypeResolutionFailed {
-                        type_: type_ref.clone(),
-                        resolution_context: TypeResolutionContext::ExternValue {
-                            extern_name: ev.name.clone(),
-                        },
-                        location: *type_ref.location(),
-                    })?;
+                ev.type_ = match type_registry.resolve_grammar_type(&scope, type_ref) {
+                    TypeLookupResult::Found(t) => t,
+                    TypeLookupResult::NotYetResolved | TypeLookupResult::NotFound { .. } => {
+                        return Err(SemanticError::TypeResolutionFailed {
+                            type_: type_ref.clone(),
+                            resolution_context: TypeResolutionContext::ExternValue {
+                                extern_name: ev.name.clone(),
+                            },
+                            location: *type_ref.location(),
+                        });
+                    }
+                };
             }
         }
 

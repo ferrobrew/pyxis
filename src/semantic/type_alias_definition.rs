@@ -4,10 +4,11 @@ use crate::{
     grammar::{self, ItemPath},
     semantic::{
         SemanticState,
-        error::Result,
+        error::{BuildOutcome, Result, UnresolvedTypeReference},
+        type_registry::TypeLookupResult,
         types::{ItemStateResolved, Type},
     },
-    span::ItemLocation,
+    span::{HasLocation, ItemLocation},
 };
 
 #[cfg(test)]
@@ -52,23 +53,31 @@ pub fn build(
     definition: &grammar::TypeAliasDefinition,
     _location: &ItemLocation,
     doc_comments: &[String],
-) -> Result<Option<ItemStateResolved>> {
+) -> Result<BuildOutcome> {
     let module = semantic.get_module_for_path(resolvee_path, &definition.location)?;
 
     // Resolve the target type in the module's scope
     // This is where the cross-module re-export semantics come from:
     // the alias stores the fully resolved type, so when used elsewhere,
     // no additional scope/visibility checks are needed
-    let Some(resolved_target) = semantic
+    let resolved_target = match semantic
         .type_registry
         .resolve_grammar_type(&module.scope(), &definition.target)
-    else {
-        return Ok(None);
+    {
+        TypeLookupResult::Found(t) => t,
+        TypeLookupResult::NotYetResolved => return Ok(BuildOutcome::Deferred),
+        TypeLookupResult::NotFound { type_name } => {
+            return Ok(BuildOutcome::NotFoundType(UnresolvedTypeReference {
+                type_name,
+                location: *definition.target.location(),
+                context: format!("target of type alias `{resolvee_path}`"),
+            }));
+        }
     };
 
     // Type aliases don't have their own size/alignment - they're just references
     // We use size 0 and alignment 1 as sentinels
-    Ok(Some(ItemStateResolved {
+    Ok(BuildOutcome::Resolved(ItemStateResolved {
         size: 0,
         alignment: 1,
         inner: TypeAliasDefinition {

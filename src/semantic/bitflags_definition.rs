@@ -2,7 +2,11 @@ use crate::{
     grammar::{self, ItemPath},
     semantic::{
         SemanticState, attribute,
-        error::{BitflagsExpectedType, Result, SemanticError, TypeResolutionContext},
+        error::{
+            BitflagsExpectedType, BuildOutcome, Result, SemanticError, TypeResolutionContext,
+            UnresolvedTypeReference,
+        },
+        type_registry::TypeLookupResult,
         types::{ItemStateResolved, Type},
     },
     span::{HasLocation, ItemLocation},
@@ -112,17 +116,25 @@ pub fn build(
     definition: &grammar::BitflagsDefinition,
     location: &ItemLocation,
     doc_comments: &[String],
-) -> Result<Option<ItemStateResolved>> {
+) -> Result<BuildOutcome> {
     let module = semantic.get_module_for_path(resolvee_path, location)?;
 
     let type_location = *definition.type_.location();
 
     // Retrieve the type for this bitflags, and validate it, before getting its size
-    let Some(ty) = semantic
+    let ty = match semantic
         .type_registry
         .resolve_grammar_type(&module.scope(), &definition.type_)
-    else {
-        return Ok(None);
+    {
+        TypeLookupResult::Found(t) => t,
+        TypeLookupResult::NotYetResolved => return Ok(BuildOutcome::Deferred),
+        TypeLookupResult::NotFound { type_name } => {
+            return Ok(BuildOutcome::NotFoundType(UnresolvedTypeReference {
+                type_name,
+                location: type_location,
+                context: format!("base type of bitflags `{resolvee_path}`"),
+            }));
+        }
     };
     let ty_raw_path = ty
         .as_raw()
@@ -133,7 +145,7 @@ pub fn build(
             location: type_location,
         })?;
     let Ok(ty_item) = semantic.type_registry.get(ty_raw_path, &type_location) else {
-        return Ok(None);
+        return Ok(BuildOutcome::Deferred);
     };
     let Some(predefined_item) = ty_item.predefined else {
         return Err({
@@ -255,7 +267,7 @@ pub fn build(
         });
     }
 
-    Ok(Some(ItemStateResolved {
+    Ok(BuildOutcome::Resolved(ItemStateResolved {
         size,
         alignment,
         inner: BitflagsDefinition {

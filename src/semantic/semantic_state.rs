@@ -6,7 +6,7 @@ use crate::{
     parser,
     semantic::{
         attribute, bitflags_definition, enum_definition,
-        error::{Result, SemanticError},
+        error::{BuildOutcome, Result, SemanticError, UnresolvedTypeReference},
         module::Module,
         type_alias_definition, type_definition,
         type_registry::TypeRegistry,
@@ -233,11 +233,18 @@ impl SemanticState {
         // Validate all use statements before resolving types
         self.validate_uses()?;
 
+        // Track unresolved type references across iterations
+        let mut unresolved_references: Vec<UnresolvedTypeReference> = vec![];
+
         loop {
             let to_resolve = self.type_registry.unresolved();
             if to_resolve.is_empty() {
                 break;
             }
+
+            // Clear references at start of each iteration - we only care about
+            // references that couldn't be resolved in the final iteration
+            unresolved_references.clear();
 
             for resolvee_path in &to_resolve {
                 let item_def = self
@@ -250,7 +257,7 @@ impl SemanticState {
                 let visibility: Visibility = definition.visibility.into();
 
                 let def_location = &definition.location;
-                let item = match &definition.inner {
+                let outcome = match &definition.inner {
                     grammar::ItemDefinitionInner::Type(ty) => type_definition::build(
                         &mut self,
                         resolvee_path,
@@ -282,15 +289,25 @@ impl SemanticState {
                     )?,
                 };
 
-                let Some(item) = item else { continue };
-                self.type_registry
-                    .get_mut(resolvee_path, &definition.location)?
-                    .state = ItemState::Resolved(item);
+                match outcome {
+                    BuildOutcome::Resolved(item) => {
+                        self.type_registry
+                            .get_mut(resolvee_path, &definition.location)?
+                            .state = ItemState::Resolved(item);
+                    }
+                    BuildOutcome::Deferred => {
+                        // Type exists but not yet resolved - keep trying
+                    }
+                    BuildOutcome::NotFoundType(unresolved_ref) => {
+                        // Track this unresolved reference for better error reporting
+                        unresolved_references.push(unresolved_ref);
+                    }
+                }
             }
 
             if to_resolve == self.type_registry.unresolved() {
                 // Oh no! We failed to resolve any new types!
-                // Bail from the loop.
+                // Bail from the loop with collected unresolved references.
                 return Err(SemanticError::TypeResolutionStalled {
                     unresolved_types: to_resolve.iter().map(|s| s.to_string()).collect(),
                     resolved_types: self
@@ -299,6 +316,7 @@ impl SemanticState {
                         .iter()
                         .map(|s| s.to_string())
                         .collect(),
+                    unresolved_references,
                 });
             }
         }

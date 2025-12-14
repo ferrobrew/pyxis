@@ -182,13 +182,119 @@ fn will_eventually_terminate_with_an_unknown_type() {
             (V::Public, "TestType2"),
             TD::new([TS::field((V::Private, "field_2"), T::ident("TestType1"))]),
         )]),
-        |err| {
-            matches!(
-                err,
-                SemanticError::TypeResolutionStalled { unresolved_types, resolved_types }
-                if unresolved_types.contains(&"test::TestType2".to_string())
+        |err| match err {
+            SemanticError::TypeResolutionStalled {
+                unresolved_types,
+                resolved_types,
+                unresolved_references,
+            } => {
+                unresolved_types == &["test::TestType2".to_string()]
                     && resolved_types.is_empty()
-            )
+                    && unresolved_references.len() == 1
+                    && unresolved_references[0].type_name == "TestType1"
+                    && unresolved_references[0].context
+                        == "field `field_2` of type `test::TestType2`"
+            }
+            _ => false,
+        },
+    );
+}
+
+#[test]
+fn unresolved_type_includes_type_name_in_error() {
+    // Test that when a type can't be resolved, the error includes the specific missing type name
+    assert_ast_produces_error(
+        M::new().with_definitions([ID::new(
+            (V::Public, "MyType"),
+            TD::new([TS::field(
+                (V::Private, "my_field"),
+                T::ident("NonexistentType"),
+            )]),
+        )]),
+        |err| {
+            match err {
+                SemanticError::TypeResolutionStalled {
+                    unresolved_references,
+                    ..
+                } => {
+                    // Should have exactly one unresolved reference
+                    unresolved_references.len() == 1
+                        && unresolved_references[0].type_name == "NonexistentType"
+                        && unresolved_references[0].context
+                            == "field `my_field` of type `test::MyType`"
+                }
+                _ => false,
+            }
+        },
+    );
+}
+
+#[test]
+fn unresolved_type_in_enum_includes_context() {
+    // Test that enum base type errors include proper context
+    assert_ast_produces_error(
+        M::new().with_definitions([ID::new(
+            (V::Public, "MyEnum"),
+            ED::new(
+                T::ident("NonexistentBase"),
+                [ES::field("A"), ES::field("B")],
+                [],
+            ),
+        )]),
+        |err| match err {
+            SemanticError::TypeResolutionStalled {
+                unresolved_references,
+                ..
+            } => {
+                unresolved_references.len() == 1
+                    && unresolved_references[0].type_name == "NonexistentBase"
+                    && unresolved_references[0].context == "base type of enum `test::MyEnum`"
+            }
+            _ => false,
+        },
+    );
+}
+
+#[test]
+fn multiple_unresolved_types_are_all_reported() {
+    // Test that multiple missing types are all reported
+    assert_ast_produces_error(
+        M::new().with_definitions([
+            ID::new(
+                (V::Public, "Type1"),
+                TD::new([TS::field((V::Private, "field_a"), T::ident("Missing1"))]),
+            ),
+            ID::new(
+                (V::Public, "Type2"),
+                TD::new([TS::field((V::Private, "field_b"), T::ident("Missing2"))]),
+            ),
+        ]),
+        |err| {
+            match err {
+                SemanticError::TypeResolutionStalled {
+                    unresolved_references,
+                    ..
+                } => {
+                    // Should have two unresolved references (order may vary)
+                    if unresolved_references.len() != 2 {
+                        return false;
+                    }
+                    let ref1 = unresolved_references
+                        .iter()
+                        .find(|r| r.type_name == "Missing1");
+                    let ref2 = unresolved_references
+                        .iter()
+                        .find(|r| r.type_name == "Missing2");
+                    match (ref1, ref2) {
+                        (Some(r1), Some(r2)) => {
+                            r1.context == "field `field_a` of type `test::Type1`"
+                                && r2.context == "field `field_b` of type `test::Type2`"
+                        }
+                        _ => false,
+                    }
+                }
+                _ => false,
+            }
         },
     );
 }

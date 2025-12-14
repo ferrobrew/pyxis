@@ -4,7 +4,10 @@ use crate::{
     grammar::{self, ItemPath},
     semantic::{
         SemanticState, attribute,
-        error::{Result, SemanticError, TypeResolutionContext},
+        error::{
+            BuildOutcome, Result, SemanticError, TypeResolutionContext, UnresolvedTypeReference,
+        },
+        type_registry::TypeLookupResult,
         types::{Function, ItemStateResolved, Type},
     },
     span::{HasLocation, ItemLocation},
@@ -125,19 +128,27 @@ pub fn build(
     definition: &grammar::EnumDefinition,
     location: &ItemLocation,
     doc_comments: &[String],
-) -> Result<Option<ItemStateResolved>> {
+) -> Result<BuildOutcome> {
     let module = semantic.get_module_for_path(resolvee_path, location)?;
 
-    let Some(ty) = semantic
+    let ty = match semantic
         .type_registry
         .resolve_grammar_type(&module.scope(), &definition.type_)
-    else {
-        return Ok(None);
+    {
+        TypeLookupResult::Found(t) => t,
+        TypeLookupResult::NotYetResolved => return Ok(BuildOutcome::Deferred),
+        TypeLookupResult::NotFound { type_name } => {
+            return Ok(BuildOutcome::NotFoundType(UnresolvedTypeReference {
+                type_name,
+                location: *definition.type_.location(),
+                context: format!("base type of enum `{resolvee_path}`"),
+            }));
+        }
     };
 
     // TODO: verify that `ty` actually makes sense for an enum
     let Some(size) = ty.size(&semantic.type_registry) else {
-        return Ok(None);
+        return Ok(BuildOutcome::Deferred);
     };
 
     let mut variants: Vec<EnumVariant> = vec![];
@@ -241,7 +252,7 @@ pub fn build(
         }
     }
 
-    Ok(Some(ItemStateResolved {
+    Ok(BuildOutcome::Resolved(ItemStateResolved {
         size,
         alignment: ty.alignment(&semantic.type_registry).ok_or_else(|| {
             SemanticError::TypeResolutionFailed {

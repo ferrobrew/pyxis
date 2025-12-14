@@ -52,6 +52,23 @@ impl fmt::Display for AttributeNotSupportedContext {
     }
 }
 
+/// Information about a type reference that couldn't be resolved
+#[derive(Debug, Clone)]
+pub struct UnresolvedTypeReference {
+    /// The type that couldn't be resolved (as written in source)
+    pub type_name: String,
+    /// Where it was referenced
+    pub location: ItemLocation,
+    /// Context describing where this type was used (e.g., "field `foo` of type `Bar`")
+    pub context: String,
+}
+
+impl fmt::Display for UnresolvedTypeReference {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "type `{}` in {}", self.type_name, self.context)
+    }
+}
+
 /// Context for type resolution failures
 #[derive(Debug, Clone)]
 pub enum TypeResolutionContext {
@@ -156,6 +173,8 @@ pub enum SemanticError {
     TypeResolutionStalled {
         unresolved_types: Vec<String>,
         resolved_types: Vec<String>,
+        /// Specific type references that couldn't be resolved (with locations and context)
+        unresolved_references: Vec<UnresolvedTypeReference>,
     },
     /// Invalid type for bitflags definition
     BitflagsInvalidType {
@@ -397,18 +416,32 @@ impl SemanticError {
             SemanticError::TypeResolutionStalled {
                 unresolved_types,
                 resolved_types,
+                unresolved_references,
             } => {
-                let unresolved_quoted: Vec<String> = unresolved_types
-                    .iter()
-                    .map(|s| format!("\"{s}\""))
-                    .collect();
-                let resolved_quoted: Vec<String> =
-                    resolved_types.iter().map(|s| format!("\"{s}\"")).collect();
-                format!(
-                    "type resolution will not terminate, failed on types: [{}] (resolved types: [{}])",
-                    unresolved_quoted.join(", "),
-                    resolved_quoted.join(", ")
-                )
+                // If we have specific unresolved references, show those prominently
+                if !unresolved_references.is_empty() {
+                    let refs_formatted: Vec<String> = unresolved_references
+                        .iter()
+                        .map(|r| format!("  - {r}"))
+                        .collect();
+                    format!(
+                        "type resolution failed due to unresolved type references:\n{}",
+                        refs_formatted.join("\n")
+                    )
+                } else {
+                    // Fallback to the old message if no specific references
+                    let unresolved_quoted: Vec<String> = unresolved_types
+                        .iter()
+                        .map(|s| format!("\"{s}\""))
+                        .collect();
+                    let resolved_quoted: Vec<String> =
+                        resolved_types.iter().map(|s| format!("\"{s}\"")).collect();
+                    format!(
+                        "type resolution will not terminate, failed on types: [{}] (resolved types: [{}])",
+                        unresolved_quoted.join(", "),
+                        resolved_quoted.join(", ")
+                    )
+                }
             }
             SemanticError::BitflagsInvalidType {
                 expected,
@@ -702,6 +735,17 @@ impl SemanticError {
     /// Format the error using ariadne with the provided file store.
     /// Always produces an ariadne-formatted error, even without source code.
     pub fn format_with_ariadne(&self, file_store: &FileStore) -> String {
+        // Handle TypeResolutionStalled specially to show all unresolved references
+        if let SemanticError::TypeResolutionStalled {
+            unresolved_references,
+            ..
+        } = self
+        {
+            if !unresolved_references.is_empty() {
+                return self.format_unresolved_references(file_store, unresolved_references);
+            }
+        }
+
         let message = self.error_message();
         let location = self.location();
 
@@ -742,6 +786,51 @@ impl SemanticError {
 
         String::from_utf8_lossy(&buffer).to_string()
     }
+
+    /// Format unresolved type references with their source locations
+    fn format_unresolved_references(
+        &self,
+        file_store: &FileStore,
+        refs: &[UnresolvedTypeReference],
+    ) -> String {
+        let mut output = String::new();
+
+        for (i, unresolved_ref) in refs.iter().enumerate() {
+            let location = &unresolved_ref.location;
+            let filename = file_store.filename(location.file_id);
+            let source = file_store.source(location.file_id).unwrap_or_default();
+
+            let offset = span::span_to_offset(&source, &location.span);
+            let length = span::span_length(&source, &location.span);
+
+            let message = format!(
+                "cannot find type `{}` in this scope",
+                unresolved_ref.type_name
+            );
+
+            let report = Report::build(ReportKind::Error, (filename, offset..offset + length))
+                .with_message(&message)
+                .with_label(
+                    Label::new((filename, offset..offset + length))
+                        .with_message("not found in this scope")
+                        .with_color(ariadne::Color::Red),
+                )
+                .with_note(format!("in {}", unresolved_ref.context))
+                .finish();
+
+            let mut buffer = Vec::new();
+            report
+                .write((filename, Source::from(source)), &mut buffer)
+                .expect("writing to Vec should not fail");
+
+            if i > 0 {
+                output.push('\n');
+            }
+            output.push_str(&String::from_utf8_lossy(&buffer));
+        }
+
+        output
+    }
 }
 
 impl fmt::Display for SemanticError {
@@ -760,3 +849,39 @@ impl std::error::Error for SemanticError {}
 /// Result type for semantic analysis
 #[allow(clippy::result_large_err)]
 pub type Result<T> = std::result::Result<T, SemanticError>;
+
+/// Outcome of attempting to build/resolve an item definition.
+/// This is more informative than `Option<ItemStateResolved>` as it distinguishes
+/// between different reasons for deferral.
+#[derive(Debug)]
+pub enum BuildOutcome {
+    /// Item was successfully resolved
+    Resolved(crate::semantic::types::ItemStateResolved),
+    /// Item resolution should be deferred (dependency exists but not yet resolved)
+    Deferred,
+    /// Item resolution failed because a referenced type doesn't exist
+    NotFoundType(UnresolvedTypeReference),
+}
+
+impl BuildOutcome {
+    /// Convert to Option, collapsing Deferred and NotFoundType to None
+    pub fn into_option(self) -> Option<crate::semantic::types::ItemStateResolved> {
+        match self {
+            BuildOutcome::Resolved(t) => Some(t),
+            _ => None,
+        }
+    }
+
+    /// Returns true if this is a NotFoundType outcome
+    pub fn is_not_found(&self) -> bool {
+        matches!(self, BuildOutcome::NotFoundType(_))
+    }
+
+    /// Extract the unresolved reference if this is a NotFoundType outcome
+    pub fn unresolved_reference(self) -> Option<UnresolvedTypeReference> {
+        match self {
+            BuildOutcome::NotFoundType(r) => Some(r),
+            _ => None,
+        }
+    }
+}
