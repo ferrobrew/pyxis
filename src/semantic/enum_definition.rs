@@ -128,7 +128,7 @@ pub fn build(
     definition: &grammar::EnumDefinition,
     location: &ItemLocation,
     doc_comments: &[String],
-) -> Result<BuildOutcome<ItemStateResolved>> {
+) -> Result<BuildOutcome> {
     let module = semantic.get_module_for_path(resolvee_path, location)?;
 
     let ty = match semantic

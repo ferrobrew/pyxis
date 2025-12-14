@@ -854,18 +854,18 @@ pub type Result<T> = std::result::Result<T, SemanticError>;
 /// This is more informative than `Option<ItemStateResolved>` as it distinguishes
 /// between different reasons for deferral.
 #[derive(Debug)]
-pub enum BuildOutcome<T> {
+pub enum BuildOutcome {
     /// Item was successfully resolved
-    Resolved(T),
+    Resolved(crate::semantic::types::ItemStateResolved),
     /// Item resolution should be deferred (dependency exists but not yet resolved)
     Deferred,
     /// Item resolution failed because a referenced type doesn't exist
     NotFoundType(UnresolvedTypeReference),
 }
 
-impl<T> BuildOutcome<T> {
+impl BuildOutcome {
     /// Convert to Option, collapsing Deferred and NotFoundType to None
-    pub fn into_option(self) -> Option<T> {
+    pub fn into_option(self) -> Option<crate::semantic::types::ItemStateResolved> {
         match self {
             BuildOutcome::Resolved(t) => Some(t),
             _ => None,

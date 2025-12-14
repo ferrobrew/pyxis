@@ -203,7 +203,7 @@ pub fn build(
     definition: &grammar::TypeDefinition,
     location: &ItemLocation,
     doc_comments: &[String],
-) -> Result<BuildOutcome<ItemStateResolved>> {
+) -> Result<BuildOutcome> {
     let module = semantic.get_module_for_path(resolvee_path, location)?;
 
     // Handle attributes

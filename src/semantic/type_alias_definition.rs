@@ -53,7 +53,7 @@ pub fn build(
     definition: &grammar::TypeAliasDefinition,
     _location: &ItemLocation,
     doc_comments: &[String],
-) -> Result<BuildOutcome<ItemStateResolved>> {
+) -> Result<BuildOutcome> {
     let module = semantic.get_module_for_path(resolvee_path, &definition.location)?;
 
     // Resolve the target type in the module's scope
