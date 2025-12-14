@@ -580,12 +580,50 @@ impl BitflagsDefinition {
     }
 }
 
+// type aliases
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct TypeAliasDefinition {
+    pub target: Type,
+    pub attributes: Attributes,
+    pub location: ItemLocation,
+}
+impl HasLocation for TypeAliasDefinition {
+    fn location(&self) -> &ItemLocation {
+        &self.location
+    }
+}
+#[cfg(test)]
+impl StripLocations for TypeAliasDefinition {
+    fn strip_locations(&self) -> Self {
+        TypeAliasDefinition {
+            target: self.target.strip_locations(),
+            attributes: self.attributes.strip_locations(),
+            location: ItemLocation::test(),
+        }
+    }
+}
+#[cfg(test)]
+impl TypeAliasDefinition {
+    pub fn new(target: Type) -> Self {
+        Self {
+            target,
+            attributes: Default::default(),
+            location: ItemLocation::test(),
+        }
+    }
+    pub fn with_attributes(mut self, attributes: impl IntoIterator<Item = Attribute>) -> Self {
+        self.attributes = Attributes::from_iter(attributes);
+        self
+    }
+}
+
 // items
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ItemDefinitionInner {
     Type(TypeDefinition),
     Enum(EnumDefinition),
     Bitflags(BitflagsDefinition),
+    TypeAlias(TypeAliasDefinition),
 }
 #[cfg(test)]
 impl StripLocations for ItemDefinitionInner {
@@ -594,6 +632,9 @@ impl StripLocations for ItemDefinitionInner {
             ItemDefinitionInner::Type(t) => ItemDefinitionInner::Type(t.strip_locations()),
             ItemDefinitionInner::Enum(e) => ItemDefinitionInner::Enum(e.strip_locations()),
             ItemDefinitionInner::Bitflags(b) => ItemDefinitionInner::Bitflags(b.strip_locations()),
+            ItemDefinitionInner::TypeAlias(a) => {
+                ItemDefinitionInner::TypeAlias(a.strip_locations())
+            }
         }
     }
 }
@@ -610,6 +651,11 @@ impl From<EnumDefinition> for ItemDefinitionInner {
 impl From<BitflagsDefinition> for ItemDefinitionInner {
     fn from(item: BitflagsDefinition) -> Self {
         ItemDefinitionInner::Bitflags(item)
+    }
+}
+impl From<TypeAliasDefinition> for ItemDefinitionInner {
+    fn from(item: TypeAliasDefinition) -> Self {
+        ItemDefinitionInner::TypeAlias(item)
     }
 }
 
@@ -709,37 +755,67 @@ impl Parser {
             TokenKind::Type => {
                 self.advance();
                 let (name, _) = self.expect_ident()?;
-                let mut def = TypeDefinition {
-                    items: Vec::new(),
-                    attributes,
-                    inline_trailing_comments: inline_trailing_comments.clone(),
-                    following_comments: following_comments.clone(),
-                };
 
-                // Support both "type Name;" and "type Name { ... }"
-                if matches!(self.peek(), TokenKind::Semi) {
-                    self.advance(); // Consume semicolon
+                // Check if this is a type alias (= Type;) or a type definition ({ ... } or ;)
+                if matches!(self.peek(), TokenKind::Eq) {
+                    // Type alias: type Name = TargetType;
+                    self.advance(); // Consume '='
+                    let target = self.parse_type()?;
+                    self.expect(TokenKind::Semi)?;
+
+                    // Capture the end position
+                    let end_pos = if self.pos > 0 {
+                        self.tokens[self.pos - 1].location.span.end
+                    } else {
+                        self.current().location.span.end
+                    };
+
+                    let location = self.item_location_from_locations(start_pos, end_pos);
+                    Ok(ItemDefinition {
+                        visibility,
+                        name,
+                        doc_comments,
+                        inner: ItemDefinitionInner::TypeAlias(TypeAliasDefinition {
+                            target,
+                            attributes,
+                            location,
+                        }),
+                        location,
+                    })
                 } else {
-                    self.expect(TokenKind::LBrace)?;
-                    def.items = self.parse_type_def_items()?;
-                    self.expect(TokenKind::RBrace)?;
+                    // Type definition: type Name { ... } or type Name;
+                    let mut def = TypeDefinition {
+                        items: Vec::new(),
+                        attributes,
+                        inline_trailing_comments: inline_trailing_comments.clone(),
+                        following_comments: following_comments.clone(),
+                    };
+
+                    // Support both "type Name;" and "type Name { ... }"
+                    if matches!(self.peek(), TokenKind::Semi) {
+                        self.advance(); // Consume semicolon
+                    } else {
+                        self.expect(TokenKind::LBrace)?;
+                        def.items = self.parse_type_def_items()?;
+                        self.expect(TokenKind::RBrace)?;
+                    }
+
+                    // Capture the end position
+                    let end_pos = if self.pos > 0 {
+                        self.tokens[self.pos - 1].location.span.end
+                    } else {
+                        self.current().location.span.end
+                    };
+
+                    let location = self.item_location_from_locations(start_pos, end_pos);
+                    Ok(ItemDefinition {
+                        visibility,
+                        name,
+                        doc_comments,
+                        inner: ItemDefinitionInner::Type(def),
+                        location,
+                    })
                 }
-
-                // Capture the end position
-                let end_pos = if self.pos > 0 {
-                    self.tokens[self.pos - 1].location.span.end
-                } else {
-                    self.current().location.span.end
-                };
-
-                let location = self.item_location_from_locations(start_pos, end_pos);
-                Ok(ItemDefinition {
-                    visibility,
-                    name,
-                    doc_comments,
-                    inner: ItemDefinitionInner::Type(def),
-                    location,
-                })
             }
             TokenKind::Enum => {
                 self.advance();
@@ -1151,6 +1227,48 @@ mod tests {
                 ],
                 [A::singleton(0x1234)],
             ),
+        )]);
+
+        assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
+    }
+
+    #[test]
+    fn can_parse_type_alias() {
+        let text = r#"
+        pub type IntPtr = *const i32;
+        "#;
+
+        let ast = M::new().with_definitions([ID::new(
+            (V::Public, "IntPtr"),
+            TAD::new(T::const_pointer(T::ident("i32"))),
+        )]);
+
+        assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
+    }
+
+    #[test]
+    fn can_parse_type_alias_with_complex_type() {
+        let text = r#"
+        pub type ArrayPtr = *mut [u32; 16];
+        "#;
+
+        let ast = M::new().with_definitions([ID::new(
+            (V::Public, "ArrayPtr"),
+            TAD::new(T::mut_pointer(T::array(T::ident("u32"), 16))),
+        )]);
+
+        assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
+    }
+
+    #[test]
+    fn can_parse_type_alias_with_path() {
+        let text = r#"
+        pub type TexturePtr = *const module::Texture;
+        "#;
+
+        let ast = M::new().with_definitions([ID::new(
+            (V::Public, "TexturePtr"),
+            TAD::new(T::const_pointer(T::ident("module::Texture"))),
         )]);
 
         assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);

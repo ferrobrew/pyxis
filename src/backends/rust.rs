@@ -8,7 +8,7 @@ use crate::{
         types::{
             Argument, BitflagsDefinition, EnumDefinition, ExternValue, Function, FunctionBody,
             ItemCategory, ItemDefinition, ItemDefinitionInner, ItemStateResolved, Region, Type,
-            TypeDefinition, Visibility,
+            TypeAliasDefinition, TypeDefinition, Visibility,
         },
     },
     span::ItemLocation,
@@ -178,6 +178,7 @@ fn build_item(
             ),
             IDI::Enum(ed) => build_enum(path, *size, visibility, ed, location),
             IDI::Bitflags(bd) => build_bitflags(path, *size, visibility, bd, location),
+            IDI::TypeAlias(ta) => build_type_alias(type_registry, path, visibility, ta, location),
         },
         ItemCategory::Predefined => Ok(quote! {}),
         ItemCategory::Extern => Ok(quote! {}),
@@ -654,6 +655,32 @@ fn build_bitflags(
         #size_check_impl
         #singleton_impl
         #default_impl
+    })
+}
+
+fn build_type_alias(
+    _type_registry: &TypeRegistry,
+    path: &ItemPath,
+    visibility: Visibility,
+    type_alias_definition: &TypeAliasDefinition,
+    location: &ItemLocation,
+) -> Result<proc_macro2::TokenStream> {
+    let name = path.last().ok_or_else(|| BackendError::TypeCodeGenFailed {
+        type_path: path.clone(),
+        reason: "failed to get last component of item path".to_string(),
+        location: *location,
+    })?;
+
+    let TypeAliasDefinition { target, doc } = type_alias_definition;
+
+    let name_ident = str_to_ident(name.as_str());
+    let visibility = visibility_to_tokens(visibility);
+    let doc = doc_to_tokens(false, doc);
+    let target_type = sa_type_to_syn_type(target)?;
+
+    Ok(quote! {
+        #doc
+        #visibility type #name_ident = #target_type;
     })
 }
 

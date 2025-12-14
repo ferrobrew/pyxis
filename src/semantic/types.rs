@@ -13,6 +13,7 @@ pub use crate::semantic::{
     bitflags_definition::BitflagsDefinition,
     enum_definition::EnumDefinition,
     function::{Argument, CallingConvention, Function, FunctionBody},
+    type_alias_definition::TypeAliasDefinition,
     type_definition::{Region, TypeDefinition, TypeVftable},
 };
 
@@ -22,6 +23,7 @@ pub mod test_aliases {
     pub type STD = super::TypeDefinition;
     pub type SED = super::EnumDefinition;
     pub type SBFD = super::BitflagsDefinition;
+    pub type STAD = super::TypeAliasDefinition;
     pub type ST = super::Type;
     pub type SAr = super::Argument;
     pub type SF = super::Function;
@@ -237,6 +239,7 @@ pub enum ItemDefinitionInner {
     Type(TypeDefinition),
     Enum(EnumDefinition),
     Bitflags(BitflagsDefinition),
+    TypeAlias(TypeAliasDefinition),
 }
 #[cfg(test)]
 impl StripLocations for ItemDefinitionInner {
@@ -246,6 +249,9 @@ impl StripLocations for ItemDefinitionInner {
             ItemDefinitionInner::Enum(ed) => ItemDefinitionInner::Enum(ed.strip_locations()),
             ItemDefinitionInner::Bitflags(bd) => {
                 ItemDefinitionInner::Bitflags(bd.strip_locations())
+            }
+            ItemDefinitionInner::TypeAlias(ta) => {
+                ItemDefinitionInner::TypeAlias(ta.strip_locations())
             }
         }
     }
@@ -265,12 +271,18 @@ impl From<BitflagsDefinition> for ItemDefinitionInner {
         ItemDefinitionInner::Bitflags(bd)
     }
 }
+impl From<TypeAliasDefinition> for ItemDefinitionInner {
+    fn from(ta: TypeAliasDefinition) -> Self {
+        ItemDefinitionInner::TypeAlias(ta)
+    }
+}
 impl ItemDefinitionInner {
     pub fn defaultable(&self) -> bool {
         match self {
             ItemDefinitionInner::Type(td) => td.defaultable,
             ItemDefinitionInner::Enum(ed) => ed.default.is_some(),
             ItemDefinitionInner::Bitflags(bd) => bd.default.is_some(),
+            ItemDefinitionInner::TypeAlias(_) => false, // Type aliases don't have defaultable
         }
     }
     pub fn as_type(&self) -> Option<&TypeDefinition> {
@@ -290,6 +302,13 @@ impl ItemDefinitionInner {
             ItemDefinitionInner::Type(_) => "a type",
             ItemDefinitionInner::Enum(_) => "an enum",
             ItemDefinitionInner::Bitflags(_) => "a bitflags",
+            ItemDefinitionInner::TypeAlias(_) => "a type alias",
+        }
+    }
+    pub fn as_type_alias(&self) -> Option<&TypeAliasDefinition> {
+        match self {
+            Self::TypeAlias(v) => Some(v),
+            _ => None,
         }
     }
 }

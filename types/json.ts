@@ -205,7 +205,7 @@ kind: JsonItemKind };
 
 export type JsonItemCategory = "defined" | "predefined" | "extern";
 
-export type JsonItemKind = ({ type: "type" } & JsonTypeDefinition) | ({ type: "enum" } & JsonEnumDefinition) | ({ type: "bitflags" } & JsonBitflagsDefinition);
+export type JsonItemKind = ({ type: "type" } & JsonTypeDefinition) | ({ type: "enum" } & JsonEnumDefinition) | ({ type: "bitflags" } & JsonBitflagsDefinition) | ({ type: "type_alias" } & JsonTypeAliasDefinition);
 
 /**
  * A module containing items and potentially submodules
@@ -271,6 +271,16 @@ alignment: number;
 is_base: boolean };
 
 export type JsonType = { type: "raw"; path: string } | { type: "const_pointer"; inner: JsonType } | { type: "mut_pointer"; inner: JsonType } | { type: "array"; inner: JsonType; size: number } | { type: "function"; calling_convention: JsonCallingConvention; arguments: JsonFunctionArgument[]; return_type: JsonType | null };
+
+export type JsonTypeAliasDefinition = { 
+/**
+ * Documentation
+ */
+doc: string | null; 
+/**
+ * The resolved target type that this alias refers to
+ */
+target: JsonType };
 
 export type JsonTypeDefinition = { 
 /**

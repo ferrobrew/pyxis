@@ -1,0 +1,14 @@
+use math::Vector3;
+
+/// Alias for a Vector3 pointer.
+/// Demonstrates doc comments on type aliases.
+pub type Vec3Ptr = *const Vector3;
+
+/// Alias for a mutable i32 pointer.
+pub type IntMutPtr = *mut i32;
+
+/// Container using the alias
+pub type Container {
+    pub ptr: Vec3Ptr,
+    pub int_ptr: IntMutPtr,
+}
