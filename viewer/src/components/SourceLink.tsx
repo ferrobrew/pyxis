@@ -117,7 +117,7 @@ export function SourceLink({ source }: SourceLinkProps) {
         className="text-blue-600 dark:text-blue-400 hover:underline"
         title={tooltip}
       >
-        Source
+        [source]
       </a>
     );
   }
@@ -125,7 +125,7 @@ export function SourceLink({ source }: SourceLinkProps) {
   // For local sources, just display without a link
   return (
     <span className="text-gray-500 dark:text-slate-500" title={tooltip}>
-      Source
+      [source]
     </span>
   );
 }

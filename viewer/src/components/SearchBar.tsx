@@ -224,9 +224,7 @@ export function SearchBar() {
                 </button>
               ))
             ) : query.trim() ? (
-              <div className="p-4 text-sm text-gray-500 dark:text-slate-400">
-                No results found
-              </div>
+              <div className="p-4 text-sm text-gray-500 dark:text-slate-400">No results found</div>
             ) : (
               <div className="p-4 text-sm text-gray-500 dark:text-slate-400">
                 Start typing to search...

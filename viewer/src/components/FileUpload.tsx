@@ -313,7 +313,11 @@ export function FileUpload() {
         </>
       )}
 
-      {isLoading && <span className="text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap self-center">Loading...</span>}
+      {isLoading && (
+        <span className="text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap self-center">
+          Loading...
+        </span>
+      )}
     </div>
   );
 }

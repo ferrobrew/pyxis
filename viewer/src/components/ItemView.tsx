@@ -10,43 +10,18 @@ import { FieldTable } from './FieldTable';
 import { NestedFieldView } from './NestedFieldView';
 import { Breadcrumbs } from './Breadcrumbs';
 import { SourceLink, SourceName } from './SourceLink';
-import type { JsonTypeDefinition, JsonEnumDefinition, JsonBitflagsDefinition, JsonTypeAliasDefinition } from '@pyxis/types';
+import type {
+  JsonTypeDefinition,
+  JsonEnumDefinition,
+  JsonBitflagsDefinition,
+  JsonTypeAliasDefinition,
+} from '@pyxis/types';
 
 // Documentation display component for code blocks
 function DocBlock({ doc }: { doc: string }) {
   return (
     <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 rounded">
       <p className="text-gray-700 dark:text-slate-400">{doc}</p>
-    </div>
-  );
-}
-
-// Metadata badges for types/enums/bitflags
-interface MetadataBadgesProps {
-  copyable?: boolean;
-  cloneable?: boolean;
-  defaultable?: boolean;
-  packed?: boolean;
-  singleton?: number | null;
-  defaultIndex?: number | null;
-}
-
-function MetadataBadges({
-  copyable,
-  cloneable,
-  defaultable,
-  packed,
-  singleton,
-}: MetadataBadgesProps) {
-  return (
-    <div className="mb-6 flex flex-wrap gap-2">
-      {copyable && <Badge variant="green">Copy</Badge>}
-      {cloneable && <Badge variant="blue">Clone</Badge>}
-      {defaultable && <Badge variant="purple">Default</Badge>}
-      {packed && <Badge variant="orange">Packed</Badge>}
-      {singleton !== null && singleton !== undefined && (
-        <Badge variant="gray">Singleton: 0x{singleton.toString(16)}</Badge>
-      )}
     </div>
   );
 }
@@ -94,14 +69,6 @@ function TypeView({ def, modulePath }: { def: JsonTypeDefinition; modulePath: st
   return (
     <div>
       {def.doc && <DocBlock doc={def.doc} />}
-
-      <MetadataBadges
-        copyable={def.copyable}
-        cloneable={def.cloneable}
-        defaultable={def.defaultable}
-        packed={def.packed}
-        singleton={def.singleton}
-      />
 
       {def.fields.length > 0 && (
         <div id="fields" className="mb-6">
@@ -162,15 +129,8 @@ function EnumView({ def, modulePath }: { def: JsonEnumDefinition; modulePath: st
     <div>
       {def.doc && <DocBlock doc={def.doc} />}
 
-      <div className="mb-6">
-        <div className="text-sm text-gray-600 dark:text-slate-400 mb-2">
-          Underlying type: <TypeRef type={def.underlying_type} currentModule={modulePath} />
-        </div>
-        <MetadataBadges
-          copyable={def.copyable}
-          cloneable={def.cloneable}
-          singleton={def.singleton}
-        />
+      <div className="mb-6 text-sm text-gray-600 dark:text-slate-400">
+        Underlying type: <TypeRef type={def.underlying_type} currentModule={modulePath} />
       </div>
 
       <div id="variants" className="mb-6">
@@ -200,7 +160,11 @@ function EnumView({ def, modulePath }: { def: JsonEnumDefinition; modulePath: st
                     ) : (
                       variant.name
                     )}
-                    {def.default === idx && <SmallBadge variant="purple">default</SmallBadge>}
+                    {def.default === idx && (
+                      <SmallBadge variant="purple" className="ml-2">
+                        default
+                      </SmallBadge>
+                    )}
                   </td>
                   <td className="px-4 py-2 text-sm text-gray-600 dark:text-slate-400 font-mono">
                     {variant.value}
@@ -239,15 +203,8 @@ function BitflagsView({ def, modulePath }: { def: JsonBitflagsDefinition; module
     <div>
       {def.doc && <DocBlock doc={def.doc} />}
 
-      <div className="mb-6">
-        <div className="text-sm text-gray-600 dark:text-slate-400 mb-2">
-          Underlying type: <TypeRef type={def.underlying_type} currentModule={modulePath} />
-        </div>
-        <MetadataBadges
-          copyable={def.copyable}
-          cloneable={def.cloneable}
-          singleton={def.singleton}
-        />
+      <div className="mb-6 text-sm text-gray-600 dark:text-slate-400">
+        Underlying type: <TypeRef type={def.underlying_type} currentModule={modulePath} />
       </div>
 
       <div id="flags" className="mb-6">
@@ -283,7 +240,11 @@ function BitflagsView({ def, modulePath }: { def: JsonBitflagsDefinition; module
                     ) : (
                       flag.name
                     )}
-                    {def.default === idx && <SmallBadge variant="purple">default</SmallBadge>}
+                    {def.default === idx && (
+                      <SmallBadge variant="purple" className="ml-2">
+                        default
+                      </SmallBadge>
+                    )}
                   </td>
                   <td className="px-4 py-2 text-sm text-gray-600 dark:text-slate-400 font-mono">
                     {flag.value}
@@ -311,7 +272,9 @@ function TypeAliasView({ def, modulePath }: { def: JsonTypeAliasDefinition; modu
       {def.doc && <DocBlock doc={def.doc} />}
 
       <div className="mb-6">
-        <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-slate-200">Target Type</h2>
+        <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-slate-200">
+          Target Type
+        </h2>
         <div className="p-4 bg-gray-50 dark:bg-slate-800 rounded-md">
           <span className="font-mono text-lg">
             <TypeRef type={def.target} currentModule={modulePath} />
@@ -383,18 +346,33 @@ export function ItemView() {
   else if (item.kind.type === 'bitflags') itemType = 'bitflags';
   else if (item.kind.type === 'type_alias') itemType = 'type_alias';
 
+  // Extract trait badges from kind
+  const kind = item.kind;
+  const copyable = kind.type !== 'type_alias' && kind.copyable;
+  const cloneable = kind.type !== 'type_alias' && kind.cloneable;
+  const defaultable = kind.type === 'type' && kind.defaultable;
+  const packed = kind.type === 'type' && kind.packed;
+  const singleton = kind.type !== 'type_alias' ? kind.singleton : null;
+
   return (
     <div className="p-4 md:p-6 lg:p-8 max-w-6xl">
-      <Breadcrumbs path={decodedPath} isItem={true} itemType={itemType} />
-      <div className="mb-4 flex flex-wrap items-center gap-2 md:gap-3 text-sm text-gray-600 dark:text-slate-400">
-        <span className="px-2 py-1 bg-gray-100 dark:bg-slate-800 rounded capitalize">
-          {item.kind.type}
-        </span>
-        <span>Size: {item.size} bytes</span>
-        <span>Alignment: {item.alignment} bytes</span>
-        <span className="capitalize">{item.category}</span>
-        <span className="capitalize">{item.visibility}</span>
+      <div className="mb-4 flex items-center gap-3">
+        <Breadcrumbs path={decodedPath} isItem={true} itemType={itemType} />
         {item.source && <SourceLink source={item.source} />}
+      </div>
+      <div className="mb-6 flex flex-wrap items-center gap-2">
+        <Badge variant="blue">{item.kind.type}</Badge>
+        <Badge variant="cyan">size: {item.size}</Badge>
+        <Badge variant="teal">align: {item.alignment}</Badge>
+        <Badge variant="orange">{item.category}</Badge>
+        <Badge variant="gray">{item.visibility}</Badge>
+        {copyable && <Badge variant="green">copy</Badge>}
+        {cloneable && <Badge variant="indigo">clone</Badge>}
+        {defaultable && <Badge variant="purple">default</Badge>}
+        {packed && <Badge variant="yellow">packed</Badge>}
+        {singleton !== null && singleton !== undefined && (
+          <Badge variant="red">singleton: 0x{singleton.toString(16)}</Badge>
+        )}
       </div>
 
       {item.kind.type === 'type' && <TypeView def={item.kind} modulePath={modulePath} />}

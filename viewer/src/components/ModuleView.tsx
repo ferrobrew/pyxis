@@ -274,7 +274,9 @@ export function ModuleView() {
 
   return (
     <div className="p-4 md:p-6 lg:p-8 max-w-6xl">
-      <Breadcrumbs path={decodedPath} />
+      <div className="mb-4">
+        <Breadcrumbs path={decodedPath} />
+      </div>
 
       {module.doc && (
         <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 rounded">

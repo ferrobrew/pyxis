@@ -44,9 +44,7 @@ function collectExpandablePaths(
 
   for (let idx = 0; idx < fields.length; idx++) {
     const field = fields[idx];
-    const fieldPath = basePath
-      ? `${basePath}.${field.name || idx}`
-      : field.name || `field-${idx}`;
+    const fieldPath = basePath ? `${basePath}.${field.name || idx}` : field.name || `field-${idx}`;
 
     const rawTypePath = getRawTypePath(field.type_ref);
     if (!rawTypePath || visited.has(rawTypePath)) continue;
@@ -90,8 +88,7 @@ function NestedFieldRow({
   // Check if this field's type can be expanded (is a struct type)
   const rawTypePath = getRawTypePath(field.type_ref);
   const nestedItem = rawTypePath ? documentation?.items[rawTypePath] : null;
-  const isExpandable =
-    nestedItem?.kind.type === 'type' && nestedItem.kind.fields.length > 0;
+  const isExpandable = nestedItem?.kind.type === 'type' && nestedItem.kind.fields.length > 0;
   const isExpanded = expandedPaths.has(fieldPath);
 
   const nameClasses = isPrivate
@@ -146,19 +143,11 @@ function NestedFieldRow({
         <td className={`px-4 py-2 font-mono text-sm ${typeClasses}`}>
           <TypeRef type={field.type_ref} currentModule={modulePath} />
         </td>
-        <td className="px-4 py-2 text-sm text-gray-600 dark:text-slate-400">
-          {field.size}
-        </td>
-        <td className="px-4 py-2 text-sm text-gray-600 dark:text-slate-400">
-          {field.alignment}
-        </td>
+        <td className="px-4 py-2 text-sm text-gray-600 dark:text-slate-400">{field.size}</td>
+        <td className="px-4 py-2 text-sm text-gray-600 dark:text-slate-400">{field.alignment}</td>
         <td className="px-4 py-2 text-sm">
           {field.is_base && <SmallBadge variant="violet">base</SmallBadge>}
-          {field.doc && (
-            <div className="text-gray-600 dark:text-slate-400 mt-1">
-              {field.doc}
-            </div>
-          )}
+          {field.doc && <div className="text-gray-600 dark:text-slate-400 mt-1">{field.doc}</div>}
         </td>
       </tr>
 

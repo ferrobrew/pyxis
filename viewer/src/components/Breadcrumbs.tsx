@@ -15,7 +15,7 @@ export function Breadcrumbs({ path, isItem = false }: BreadcrumbsProps) {
   if (!path) {
     // Root module
     return (
-      <nav className="mb-4 flex items-center text-sm text-gray-600 dark:text-slate-400">
+      <nav className="flex items-center text-sm text-gray-600 dark:text-slate-400">
         <span className="font-semibold text-blue-600 dark:text-blue-400">Root</span>
       </nav>
     );
@@ -41,7 +41,7 @@ export function Breadcrumbs({ path, isItem = false }: BreadcrumbsProps) {
   const hoverColor = getItemTypeHoverColor(finalItemType);
 
   return (
-    <nav className="mb-4 flex items-center text-sm text-gray-600 dark:text-slate-400">
+    <nav className="flex items-center text-sm text-gray-600 dark:text-slate-400">
       {/* All breadcrumbs including current */}
       {pathSegments.map((segment, idx) => {
         const partialPath = pathSegments.slice(0, idx + 1).join('::');

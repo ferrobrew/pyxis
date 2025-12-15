@@ -42,11 +42,7 @@ export function FunctionDisplay({ func, modulePath, id }: FunctionDisplayProps) 
         <div className="flex-1">
           <div className="font-mono text-sm">
             <span className={nameClasses}>
-              {func.source ? (
-                <SourceName source={func.source}>{func.name}</SourceName>
-              ) : (
-                func.name
-              )}
+              {func.source ? <SourceName source={func.source}>{func.name}</SourceName> : func.name}
             </span>
             <span className="text-gray-600 dark:text-slate-400">(</span>
             {func.arguments.map((arg, i) => (
