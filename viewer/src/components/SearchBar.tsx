@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
+import { HEADER_INPUT_HEIGHT } from '../utils/styles';
 import { useNavigate } from 'react-router-dom';
 import { useDocumentation } from '../contexts/DocumentationContext';
 import { searchDocumentation, type SearchResult } from '../utils/searchUtils';
@@ -104,7 +105,7 @@ export function SearchBar() {
       </button>
 
       {/* Desktop: Full search bar */}
-      <div ref={searchRef} className="hidden lg:flex relative w-full flex-1 min-w-0">
+      <div ref={searchRef} className="hidden lg:flex relative lg:w-full lg:flex-1 lg:min-w-0">
         <div className="relative w-full">
           <input
             type="text"
@@ -158,15 +159,15 @@ export function SearchBar() {
 
       {/* Mobile: Full-screen search modal */}
       {isMobileSearchOpen && (
-        <div className="lg:hidden fixed inset-0 z-50 bg-white dark:bg-slate-950 flex flex-col">
-          <div className="flex items-center gap-2 p-3 border-b border-gray-200 dark:border-slate-800">
+        <div className="lg:hidden fixed inset-0 z-50 bg-white dark:bg-slate-950 flex flex-col overflow-hidden">
+          <div className="flex items-stretch gap-2 p-3 border-b border-gray-200 dark:border-slate-800">
             <button
               onClick={() => {
                 setIsMobileSearchOpen(false);
                 setQuery('');
                 setIsOpen(false);
               }}
-              className="p-2 rounded-md border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex-shrink-0"
+              className="px-2 rounded-md border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex-shrink-0 flex items-center justify-center"
               aria-label="Close search"
             >
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -186,10 +187,10 @@ export function SearchBar() {
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder="Search documentation..."
-                className="w-full px-4 py-2 text-sm border rounded-md bg-white dark:bg-slate-800 border-gray-300 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+                className={`w-full ${HEADER_INPUT_HEIGHT} px-4 text-[16px] border rounded-md bg-white dark:bg-slate-800 border-gray-300 dark:border-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400`}
               />
               <svg
-                className="absolute right-3 top-2.5 w-5 h-5 text-gray-400"
+                className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -214,7 +215,7 @@ export function SearchBar() {
                     index === selectedIndex ? 'bg-gray-100 dark:bg-slate-900' : ''
                   }`}
                 >
-                  <div className="font-mono text-sm text-gray-900 dark:text-slate-200">
+                  <div className="font-mono text-sm text-gray-900 dark:text-slate-200 break-all">
                     {result.path}
                   </div>
                   <div className="text-xs text-gray-500 dark:text-slate-500 capitalize mt-1">

@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { HEADER_INPUT_HEIGHT } from '../utils/styles';
 
 interface DropdownOption {
   value: string;
@@ -101,7 +102,7 @@ export function CustomDropdown({ value, onChange, options, disabled }: CustomDro
         onClick={() => !disabled && setIsOpen(!isOpen)}
         onKeyDown={handleKeyDown}
         disabled={disabled}
-        className="w-full px-3 py-2 text-sm text-left border border-gray-300 dark:border-slate-700 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 flex items-center justify-between"
+        className={`w-full ${HEADER_INPUT_HEIGHT} px-3 text-sm text-left border border-gray-300 dark:border-slate-700 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 flex items-center justify-between`}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
       >

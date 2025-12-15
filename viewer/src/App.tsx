@@ -46,12 +46,12 @@ function AppLayout() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-white dark:bg-slate-950 text-gray-900 dark:text-slate-200 pt-[60px]">
+    <div className="fixed inset-0 flex flex-col text-gray-900 dark:text-slate-200">
       <Header
         isSidebarOpen={isSidebarOpen}
         onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
       />
-      <div className="flex h-[calc(100vh-60px)]">
+      <div className="flex flex-1 overflow-hidden">
         {/* Desktop: always show sidebar */}
         {isDesktop && <Sidebar onClose={() => {}} />}
         {/* Mobile: show sidebar OR content, not both */}

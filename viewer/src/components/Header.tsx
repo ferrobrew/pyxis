@@ -13,8 +13,8 @@ export function Header({ isSidebarOpen, onToggleSidebar }: HeaderProps) {
   const { documentation } = useDocumentation();
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 border-b bg-white dark:bg-slate-950 border-gray-200 dark:border-slate-800">
-      <div className="flex items-stretch px-3 md:px-6 py-3 gap-2">
+    <header className="flex-shrink-0 border-b border-gray-200 dark:border-slate-800">
+      <div className="flex items-stretch p-3 gap-2">
         {/* Sidebar toggle button (mobile only) */}
         {documentation && (
           <button
@@ -39,7 +39,7 @@ export function Header({ isSidebarOpen, onToggleSidebar }: HeaderProps) {
         </div>
 
         {/* Right side: Search + Theme toggle */}
-        <div className="flex items-stretch gap-2 flex-shrink-0 lg:flex-1 lg:min-w-0">
+        <div className="flex items-stretch gap-2 min-w-0 lg:flex-1">
           {documentation && <SearchBar />}
           <button
             onClick={toggleTheme}
