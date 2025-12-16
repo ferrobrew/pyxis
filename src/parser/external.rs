@@ -559,11 +559,16 @@ mod tests {
         }
         "#;
 
+        // Use paths preserve generic syntax in the path (as "TestType<Hey>")
+        // Type references parse generics properly
         let ast = M::new()
             .with_uses([IP::from("hello::TestType<Hey>")])
             .with_definitions([ID::new(
                 (V::Private, "Test"),
-                TD::new([TS::field((V::Private, "test"), T::ident("TestType<Hey>"))]),
+                TD::new([TS::field(
+                    (V::Private, "test"),
+                    T::generic("TestType", [T::ident("Hey")]),
+                )]),
             )]);
 
         assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
@@ -717,11 +722,16 @@ mod tests {
         }
         "#;
 
+        // Extern type names preserve the generic syntax literally in the name
+        // But type references now parse generics properly
         let ast = M::new()
             .with_extern_types([("TestType<Hey>".into(), As::from_iter([A::size_decimal(12)]))])
             .with_definitions([ID::new(
                 (V::Private, "Test"),
-                TD::new([TS::field((V::Private, "test"), T::ident("TestType<Hey>"))]),
+                TD::new([TS::field(
+                    (V::Private, "test"),
+                    T::generic("TestType", [T::ident("Hey")]),
+                )]),
             )]);
 
         assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);

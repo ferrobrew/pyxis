@@ -193,14 +193,26 @@ impl TypeRegistry {
 
     /// Resolves a grammar type to a semantic type.
     /// Returns detailed information about why resolution failed if it does.
+    /// The `type_params` parameter contains the names of type parameters in scope
+    /// (for resolving `T` to `Type::TypeParameter("T")` inside generic types).
     pub(crate) fn resolve_grammar_type(
         &self,
         scope: &[ItemPath],
         type_: &grammar::Type,
     ) -> TypeLookupResult {
+        self.resolve_grammar_type_with_params(scope, type_, &[])
+    }
+
+    /// Resolves a grammar type with type parameters in scope.
+    pub(crate) fn resolve_grammar_type_with_params(
+        &self,
+        scope: &[ItemPath],
+        type_: &grammar::Type,
+        type_params: &[String],
+    ) -> TypeLookupResult {
         match type_ {
             grammar::Type::ConstPointer { pointee, .. } => {
-                match self.resolve_grammar_type(scope, pointee) {
+                match self.resolve_grammar_type_with_params(scope, pointee, type_params) {
                     TypeLookupResult::Found(t) => {
                         TypeLookupResult::Found(Type::ConstPointer(Box::new(t)))
                     }
@@ -208,7 +220,7 @@ impl TypeRegistry {
                 }
             }
             grammar::Type::MutPointer { pointee, .. } => {
-                match self.resolve_grammar_type(scope, pointee) {
+                match self.resolve_grammar_type_with_params(scope, pointee, type_params) {
                     TypeLookupResult::Found(t) => {
                         TypeLookupResult::Found(Type::MutPointer(Box::new(t)))
                     }
@@ -216,14 +228,51 @@ impl TypeRegistry {
                 }
             }
             grammar::Type::Array { element, size, .. } => {
-                match self.resolve_grammar_type(scope, element) {
+                match self.resolve_grammar_type_with_params(scope, element, type_params) {
                     TypeLookupResult::Found(t) => {
                         TypeLookupResult::Found(Type::Array(Box::new(t), *size))
                     }
                     other => other,
                 }
             }
-            grammar::Type::Ident { path, .. } => self.resolve_path(scope, path),
+            grammar::Type::Ident {
+                path, generic_args, ..
+            } => {
+                // Check if this is a type parameter reference
+                if path.len() == 1 && generic_args.is_empty() {
+                    let name = path.iter().next().unwrap().as_str();
+                    if type_params.contains(&name.to_string()) {
+                        return TypeLookupResult::Found(Type::TypeParameter(name.to_string()));
+                    }
+                }
+
+                // Resolve generic arguments recursively
+                if !generic_args.is_empty() {
+                    let mut resolved_args = Vec::new();
+                    for arg in generic_args {
+                        match self.resolve_grammar_type_with_params(scope, arg, type_params) {
+                            TypeLookupResult::Found(t) => resolved_args.push(Box::new(t)),
+                            other => return other,
+                        }
+                    }
+
+                    // Resolve the base type path
+                    match self.resolve_path(scope, path) {
+                        TypeLookupResult::Found(Type::Raw(base_path)) => {
+                            TypeLookupResult::Found(Type::Generic(base_path, resolved_args))
+                        }
+                        TypeLookupResult::Found(_) => {
+                            // For now, only support generic instantiation of raw types
+                            TypeLookupResult::NotFound {
+                                type_name: path.to_string(),
+                            }
+                        }
+                        other => other,
+                    }
+                } else {
+                    self.resolve_path(scope, path)
+                }
+            }
             grammar::Type::Unknown { size, .. } => {
                 TypeLookupResult::Found(self.padding_type(*size))
             }

@@ -269,6 +269,7 @@ fn build_type(
     Some(ItemDefinition {
         visibility,
         path: resolvee_vtable_path.clone(),
+        type_parameters: vec![], // Generated vftable types are not generic
         state: ItemState::Resolved(ItemStateResolved {
             size: regions.iter().map(|r| r.size(type_registry).unwrap()).sum(),
             alignment: type_registry.pointer_size(),

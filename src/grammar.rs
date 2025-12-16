@@ -11,7 +11,7 @@ pub use crate::parser::{
     },
     module::{Module, ModuleItem},
     paths::{ItemPath, ItemPathSegment},
-    types::{Ident, Type},
+    types::{Ident, Type, TypeParameter},
 };
 
 #[cfg(test)]
@@ -28,6 +28,7 @@ pub mod test_aliases {
     pub type BFD = super::BitflagsDefinition;
     pub type TAD = super::TypeAliasDefinition;
     pub type T = super::Type;
+    pub type TP = super::TypeParameter;
     pub type A = super::Attribute;
     pub type AI = super::AttributeItem;
     pub type AIs = super::AttributeItems;

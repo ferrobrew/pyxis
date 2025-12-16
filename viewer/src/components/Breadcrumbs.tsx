@@ -61,12 +61,22 @@ export function Breadcrumbs({ path, isItem = false }: BreadcrumbsProps) {
             )}
             {isLast ? (
               isItem ? (
-                <Link
-                  to={buildItemUrl(path, selectedSource)}
-                  className={`font-semibold ${typeColor} ${hoverColor}`}
-                >
-                  {segment}
-                </Link>
+                <>
+                  <Link
+                    to={buildItemUrl(path, selectedSource)}
+                    className={`font-semibold ${typeColor} ${hoverColor}`}
+                  >
+                    {segment}
+                  </Link>
+                  {documentation?.items[path]?.type_parameters &&
+                    documentation.items[path].type_parameters!.length > 0 && (
+                      <span className="text-emerald-600 dark:text-emerald-400 font-mono">
+                        &lt;
+                        {documentation.items[path].type_parameters!.join(', ')}
+                        &gt;
+                      </span>
+                    )}
+                </>
               ) : (
                 <span className={`font-semibold ${typeColor}`}>{segment}</span>
               )

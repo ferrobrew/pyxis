@@ -203,6 +203,7 @@ pub fn build(
     definition: &grammar::TypeDefinition,
     location: &ItemLocation,
     doc_comments: &[String],
+    type_parameters: &[String],
 ) -> Result<BuildOutcome> {
     let module = semantic.get_module_for_path(resolvee_path, location)?;
 
@@ -295,11 +296,12 @@ pub fn build(
                     }
                 }
 
-                // Push field
-                let type_ = match semantic
-                    .type_registry
-                    .resolve_grammar_type(&module.scope(), type_)
-                {
+                // Push field - use type parameters for resolution inside generic types
+                let type_ = match semantic.type_registry.resolve_grammar_type_with_params(
+                    &module.scope(),
+                    type_,
+                    type_parameters,
+                ) {
                     TypeLookupResult::Found(t) => t,
                     TypeLookupResult::NotYetResolved => return Ok(BuildOutcome::Deferred),
                     TypeLookupResult::NotFound { type_name } => {

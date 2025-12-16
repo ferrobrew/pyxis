@@ -64,6 +64,43 @@ export function TypeRef({ type, currentModule = '' }: TypeRefProps) {
           </>
         );
 
+      case 'generic': {
+        // Generic type instantiation, e.g., SharedPtr<GameObject>
+        const displayBase = currentModule
+          ? getRelativePath(currentModule, t.base, predefinedTypes)
+          : t.base;
+        const isPredefined = predefinedTypes.has(t.base);
+
+        return (
+          <>
+            <Link
+              to={buildItemUrl(t.base, selectedSource)}
+              className={
+                isPredefined
+                  ? 'text-violet-600 dark:text-violet-500 hover:underline'
+                  : 'text-blue-600 dark:text-blue-400 hover:underline'
+              }
+            >
+              {displayBase}
+            </Link>
+            <span className="text-gray-600 dark:text-slate-400">&lt;</span>
+            {t.args.map((arg, i) => (
+              <span key={i}>
+                {i > 0 && <span className="text-gray-600 dark:text-slate-400">, </span>}
+                {renderType(arg)}
+              </span>
+            ))}
+            <span className="text-gray-600 dark:text-slate-400">&gt;</span>
+          </>
+        );
+      }
+
+      case 'type_parameter':
+        // Type parameter reference, e.g., T inside a generic type
+        return (
+          <span className="text-emerald-600 dark:text-emerald-400 italic">{t.name}</span>
+        );
+
       case 'function': {
         const cc = getCallingConvention(t.calling_convention);
         return (

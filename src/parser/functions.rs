@@ -438,7 +438,7 @@ mod tests {
                     TS::vftable([]),
                     TS::field(
                         (V::Public, "instance"),
-                        T::ident("SharedPtr<PfxInstanceInterface>"),
+                        T::generic("SharedPtr", [T::ident("PfxInstanceInterface")]),
                     ),
                 ])
                 .with_attributes([A::size(0x10)]),

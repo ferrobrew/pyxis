@@ -10,6 +10,41 @@ use crate::span::StripLocations;
 
 use super::{ParseError, core::Parser, paths::ItemPath};
 
+/// A type parameter in a generic type definition (e.g., `T` in `type Shared<T>`)
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct TypeParameter {
+    pub name: String,
+    pub location: ItemLocation,
+}
+impl HasLocation for TypeParameter {
+    fn location(&self) -> &ItemLocation {
+        &self.location
+    }
+}
+#[cfg(test)]
+impl StripLocations for TypeParameter {
+    fn strip_locations(&self) -> Self {
+        TypeParameter {
+            name: self.name.clone(),
+            location: ItemLocation::test(),
+        }
+    }
+}
+impl EqualsIgnoringLocations for TypeParameter {
+    fn equals_ignoring_locations(&self, other: &Self) -> bool {
+        self.name == other.name
+    }
+}
+#[cfg(test)]
+impl TypeParameter {
+    pub fn new(name: &str) -> Self {
+        TypeParameter {
+            name: name.to_string(),
+            location: ItemLocation::test(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Ident(pub String);
 #[cfg(test)]
@@ -61,6 +96,8 @@ pub enum Type {
     },
     Ident {
         path: ItemPath,
+        /// Generic type arguments (e.g., `[GameObject, u32]` in `Map<GameObject, u32>`)
+        generic_args: Vec<Type>,
         location: ItemLocation,
     },
     Unknown {
@@ -104,8 +141,18 @@ impl EqualsIgnoringLocations for Type {
             ) => {
                 element.equals_ignoring_locations(element2) && size.equals_ignoring_locations(size2)
             }
-            (Type::Ident { path, .. }, Type::Ident { path: path2, .. }) => {
+            (
+                Type::Ident {
+                    path, generic_args, ..
+                },
+                Type::Ident {
+                    path: path2,
+                    generic_args: generic_args2,
+                    ..
+                },
+            ) => {
                 path.equals_ignoring_locations(path2)
+                    && generic_args.equals_ignoring_locations(generic_args2)
             }
             (Type::Unknown { size, .. }, Type::Unknown { size: size2, .. }) => {
                 size.equals_ignoring_locations(size2)
@@ -131,8 +178,11 @@ impl StripLocations for Type {
                 size: size.strip_locations(),
                 location: ItemLocation::test(),
             },
-            Type::Ident { path, .. } => Type::Ident {
+            Type::Ident {
+                path, generic_args, ..
+            } => Type::Ident {
                 path: path.strip_locations(),
+                generic_args: generic_args.strip_locations(),
                 location: ItemLocation::test(),
             },
             Type::Unknown { size, .. } => Type::Unknown {
@@ -147,6 +197,15 @@ impl Type {
     pub fn ident(name: &str) -> Type {
         Type::Ident {
             path: name.into(),
+            generic_args: vec![],
+            location: ItemLocation::test(),
+        }
+    }
+
+    pub fn generic(name: &str, args: impl IntoIterator<Item = Type>) -> Type {
+        Type::Ident {
+            path: name.into(),
+            generic_args: args.into_iter().collect(),
             location: ItemLocation::test(),
         }
     }
@@ -191,6 +250,7 @@ impl From<&str> for Type {
     fn from(item: &str) -> Self {
         Type::Ident {
             path: item.into(),
+            generic_args: vec![],
             location: ItemLocation::internal(),
         }
     }
@@ -202,7 +262,22 @@ impl fmt::Display for Type {
             Type::ConstPointer { pointee, .. } => write!(f, "*const {pointee}"),
             Type::MutPointer { pointee, .. } => write!(f, "*mut {pointee}"),
             Type::Array { element, size, .. } => write!(f, "[{element}; {size}]"),
-            Type::Ident { path, .. } => write!(f, "{path}"),
+            Type::Ident {
+                path, generic_args, ..
+            } => {
+                write!(f, "{path}")?;
+                if !generic_args.is_empty() {
+                    write!(f, "<")?;
+                    for (i, arg) in generic_args.iter().enumerate() {
+                        if i > 0 {
+                            write!(f, ", ")?;
+                        }
+                        write!(f, "{arg}")?;
+                    }
+                    write!(f, ">")?;
+                }
+                Ok(())
+            }
             Type::Unknown { size, .. } => write!(f, "unknown({size})"),
         }
     }
@@ -279,41 +354,28 @@ impl Parser {
                     end_pos = next_span.end;
                 }
 
-                // Check for generic arguments on the last segment
-                // This is needed for extern types that need exact reproduction
-                if matches!(self.peek(), TokenKind::Lt) {
-                    let mut generic_str = String::from("<");
-                    end_pos = self.advance().end_location(); // consume <
+                // Parse generic arguments properly as types
+                let generic_args = if matches!(self.peek(), TokenKind::Lt) {
+                    self.advance(); // consume <
+                    let mut args = Vec::new();
 
-                    let mut depth = 1;
-                    while depth > 0 && !matches!(self.peek(), TokenKind::Eof) {
-                        match self.peek().clone() {
-                            TokenKind::Lt => {
-                                generic_str.push('<');
-                                depth += 1;
-                            }
-                            TokenKind::Gt => {
-                                generic_str.push('>');
-                                depth -= 1;
-                            }
-                            TokenKind::Comma => {
-                                generic_str.push_str(", ");
-                            }
-                            TokenKind::Ident(name) => {
-                                generic_str.push_str(&name);
-                            }
-                            TokenKind::ColonColon => {
-                                generic_str.push_str("::");
-                            }
-                            _ => {}
+                    // Parse first type argument (if any)
+                    if !matches!(self.peek(), TokenKind::Gt) {
+                        args.push(self.parse_type()?);
+
+                        // Parse remaining comma-separated type arguments
+                        while matches!(self.peek(), TokenKind::Comma) {
+                            self.advance(); // consume ,
+                            args.push(self.parse_type()?);
                         }
-                        end_pos = self.advance().end_location();
                     }
-                    // Append generic args to the last segment
-                    if let Some(last) = segments.last_mut() {
-                        last.push_str(&generic_str);
-                    }
-                }
+
+                    let gt_token = self.expect(TokenKind::Gt)?;
+                    end_pos = gt_token.location.span.end;
+                    args
+                } else {
+                    vec![]
+                };
 
                 let path: ItemPath = segments
                     .into_iter()
@@ -322,7 +384,11 @@ impl Parser {
                     .into_iter()
                     .collect();
                 let location = self.item_location_from_locations(start_pos, end_pos);
-                Ok(Type::Ident { path, location })
+                Ok(Type::Ident {
+                    path,
+                    generic_args,
+                    location,
+                })
             }
             _ => Err(ParseError::ExpectedType {
                 found: self.peek().clone(),
