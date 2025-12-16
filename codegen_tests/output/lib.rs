@@ -4,6 +4,8 @@ pub mod diamond_inheritance;
 pub mod doc_comments;
 pub mod enums;
 pub mod freestanding_functions;
+pub mod generics;
+pub mod generics_cross_module;
 pub mod math;
 pub mod min_size;
 pub mod multiple_levels;

@@ -1,0 +1,35 @@
+// Tests cross-module generic type usage.
+// Imports generic types from generics module and uses them.
+
+use generics::{Shared, WeakPtr, MapEntry};
+
+/// Entity type for testing
+#[size(0x8)]
+pub type Entity {
+    pub id: u32,
+    pub flags: u32,
+}
+
+/// Uses Shared<T> from another module with a local type
+#[size(0x8)]
+pub type SharedEntity {
+    pub shared: Shared<Entity>,
+}
+
+/// Uses WeakPtr<T> from another module
+#[size(0x8)]
+pub type WeakEntity {
+    pub weak: WeakPtr<Entity>,
+}
+
+/// Uses MapEntry<K, V> from another module
+#[size(0x10)]
+pub type EntityMap {
+    pub entry: MapEntry<u32, Entity>,
+}
+
+/// Nested generic from another module
+#[size(0x8)]
+pub type NestedShared {
+    pub shared: Shared<Shared<Entity>>,
+}
