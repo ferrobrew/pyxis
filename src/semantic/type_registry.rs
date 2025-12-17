@@ -434,6 +434,33 @@ impl TypeRegistry {
 
                 // Resolve generic arguments recursively
                 if !generic_args.is_empty() {
+                    // First, check if there's an exact-match extern type with the full name
+                    // (e.g., "SharedPtr<u32>" as a literal type name rather than a generic instantiation)
+                    let full_type_name = format!("{type_}");
+                    let exact_match_path = if path.len() == 1 {
+                        // Single-segment path: try scope-based resolution with the full name
+                        ItemPath::from(full_type_name.as_str())
+                    } else {
+                        // Multi-segment path: replace the last segment with the full type name
+                        let mut segments: Vec<_> = path.iter().take(path.len() - 1).cloned().collect();
+                        segments.push(full_type_name.clone().into());
+                        segments.into_iter().collect()
+                    };
+
+                    // Try to find an exact match first (check single-segment path with scope resolution)
+                    if path.len() == 1 {
+                        if let TypeLookupResult::Found(t) = self.resolve_string(scope, &full_type_name) {
+                            return TypeLookupResult::Found(t);
+                        }
+                    } else if let Some(item_def) = self.types.get(&exact_match_path) {
+                        if item_def.is_resolved() {
+                            return TypeLookupResult::Found(self.resolve_type_alias(Type::Raw(exact_match_path)));
+                        } else {
+                            return TypeLookupResult::NotYetResolved;
+                        }
+                    }
+
+                    // No exact match found, proceed with generic type resolution
                     let mut resolved_args = Vec::new();
                     for arg in generic_args {
                         match self.resolve_grammar_type(scope, arg, type_params) {
