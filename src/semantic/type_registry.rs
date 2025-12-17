@@ -143,13 +143,13 @@ impl TypeRegistry {
 
     /// Substitutes type parameters in a type with concrete types.
     /// `param_names` are the type parameter names, `args` are the concrete types.
-    fn substitute_type_params(type_: &Type, param_names: &[String], args: &[Box<Type>]) -> Type {
+    fn substitute_type_params(type_: &Type, param_names: &[String], args: &[Type]) -> Type {
         match type_ {
             Type::TypeParameter(name) => {
                 // Find the parameter index and substitute
                 if let Some(idx) = param_names.iter().position(|p| p == name) {
                     if idx < args.len() {
-                        return (*args[idx]).clone();
+                        return args[idx].clone();
                     }
                 }
                 type_.clone()
@@ -168,9 +168,9 @@ impl TypeRegistry {
             ),
             Type::Generic(path, inner_args) => {
                 // Substitute in the generic arguments too
-                let substituted_args: Vec<Box<Type>> = inner_args
+                let substituted_args: Vec<Type> = inner_args
                     .iter()
-                    .map(|a| Box::new(Self::substitute_type_params(a, param_names, args)))
+                    .map(|a| Self::substitute_type_params(a, param_names, args))
                     .collect();
                 Type::Generic(path.clone(), substituted_args)
             }
@@ -191,8 +191,7 @@ impl TypeRegistry {
     /// Applies generic arguments to a compound type.
     /// This handles cases where a non-generic type alias resolves to a type containing
     /// type parameters (e.g., `type Ptr<T> = *mut T` used as `Ptr<u32>`).
-    #[allow(clippy::vec_box)] // Consistent with resolved_args type used throughout
-    fn apply_generic_args_to_type(type_: Type, args: Vec<Box<Type>>) -> TypeLookupResult {
+    fn apply_generic_args_to_type(type_: Type, args: Vec<Type>) -> TypeLookupResult {
         match type_ {
             Type::MutPointer(inner) => {
                 let substituted = Self::apply_generic_args_to_inner(*inner, &args);
@@ -208,9 +207,9 @@ impl TypeRegistry {
             }
             Type::Generic(path, existing_args) => {
                 // Apply generic args to each existing argument
-                let substituted_args: Vec<Box<Type>> = existing_args
+                let substituted_args: Vec<Type> = existing_args
                     .into_iter()
-                    .map(|arg| Box::new(Self::apply_generic_args_to_inner(*arg, &args)))
+                    .map(|arg| Self::apply_generic_args_to_inner(arg, &args))
                     .collect();
                 TypeLookupResult::Found(Type::Generic(path, substituted_args))
             }
@@ -222,7 +221,7 @@ impl TypeRegistry {
 
     /// Helper to apply generic arguments to the inner parts of a type.
     /// Type parameters are replaced by their corresponding arguments.
-    fn apply_generic_args_to_inner(type_: Type, args: &[Box<Type>]) -> Type {
+    fn apply_generic_args_to_inner(type_: Type, args: &[Type]) -> Type {
         match type_ {
             Type::TypeParameter(ref name) => {
                 // Type parameters from generic aliases are named T, U, V, etc.
@@ -239,7 +238,7 @@ impl TypeRegistry {
                 };
                 if let Some(idx) = param_index {
                     if idx < args.len() {
-                        return (*args[idx]).clone();
+                        return args[idx].clone();
                     }
                 }
                 type_
@@ -255,9 +254,9 @@ impl TypeRegistry {
                 size,
             ),
             Type::Generic(path, existing_args) => {
-                let substituted_args: Vec<Box<Type>> = existing_args
+                let substituted_args: Vec<Type> = existing_args
                     .into_iter()
-                    .map(|arg| Box::new(Self::apply_generic_args_to_inner(*arg, args)))
+                    .map(|arg| Self::apply_generic_args_to_inner(arg, args))
                     .collect();
                 Type::Generic(path, substituted_args)
             }
@@ -385,7 +384,7 @@ impl TypeRegistry {
                     let mut resolved_args = Vec::new();
                     for arg in generic_args {
                         match self.resolve_grammar_type(scope, arg, type_params) {
-                            TypeLookupResult::Found(t) => resolved_args.push(Box::new(t)),
+                            TypeLookupResult::Found(t) => resolved_args.push(t),
                             other => return other,
                         }
                     }

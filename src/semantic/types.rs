@@ -71,7 +71,7 @@ pub enum Type {
     Raw(ItemPath),
     /// A generic type instantiation, e.g., `SharedPtr<GameObject>`
     /// The ItemPath is the base type (e.g., "SharedPtr") and the Vec contains the type arguments
-    Generic(ItemPath, Vec<Box<Type>>),
+    Generic(ItemPath, Vec<Type>),
     /// A type parameter reference (e.g., `T` inside a generic type definition)
     TypeParameter(String),
     ConstPointer(Box<Type>),
@@ -189,7 +189,7 @@ impl Type {
         Type::Raw(path.into())
     }
     pub fn generic(path: impl Into<ItemPath>, args: impl IntoIterator<Item = Type>) -> Self {
-        Type::Generic(path.into(), args.into_iter().map(Box::new).collect())
+        Type::Generic(path.into(), args.into_iter().collect())
     }
     pub fn type_parameter(name: impl Into<String>) -> Self {
         Type::TypeParameter(name.into())

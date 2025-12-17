@@ -463,7 +463,7 @@ fn convert_type(type_ref: &Type) -> JsonType {
         },
         Type::Generic(base_path, args) => JsonType::Generic {
             base: base_path.to_string(),
-            args: args.iter().map(|a| convert_type(a)).collect(),
+            args: args.iter().map(convert_type).collect(),
         },
         Type::TypeParameter(name) => JsonType::TypeParameter { name: name.clone() },
         Type::ConstPointer(inner) => JsonType::ConstPointer {
