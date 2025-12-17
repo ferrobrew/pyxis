@@ -449,8 +449,12 @@ impl TypeRegistry {
 
                     // Try to find an exact match first (check single-segment path with scope resolution)
                     if path.len() == 1 {
-                        if let TypeLookupResult::Found(t) = self.resolve_string(scope, &full_type_name) {
-                            return TypeLookupResult::Found(t);
+                        match self.resolve_string(scope, &full_type_name) {
+                            TypeLookupResult::Found(t) => return TypeLookupResult::Found(t),
+                            TypeLookupResult::NotYetResolved => return TypeLookupResult::NotYetResolved,
+                            TypeLookupResult::NotFound { .. } => {
+                                // No exact match, proceed with generic resolution below
+                            }
                         }
                     } else if let Some(item_def) = self.types.get(&exact_match_path) {
                         if item_def.is_resolved() {
@@ -505,7 +509,13 @@ impl TypeRegistry {
                                 original_param_names,
                             )
                         }
-                        other => other,
+                        TypeLookupResult::NotYetResolved => TypeLookupResult::NotYetResolved,
+                        TypeLookupResult::NotFound { .. } => {
+                            // Report the full type name including generic args, not just the base
+                            TypeLookupResult::NotFound {
+                                type_name: full_type_name,
+                            }
+                        }
                     }
                 } else {
                     self.resolve_path(scope, path)
