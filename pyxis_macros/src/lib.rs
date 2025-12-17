@@ -59,51 +59,77 @@ pub fn derive_has_location(input: TokenStream) -> TokenStream {
         }
         Data::Enum(data) => {
             // For enums, match each variant and return its location field
-            let arms = data.variants.iter().map(|variant| {
-                let variant_name = &variant.ident;
-                match &variant.fields {
-                    Fields::Named(fields) => {
-                        let has_location = fields
-                            .named
-                            .iter()
-                            .any(|f| f.ident.as_ref().is_some_and(|i| i == "location"));
-                        if has_location {
-                            quote! {
-                                #name::#variant_name { location, .. } => location
-                            }
-                        } else {
-                            // Variant delegates to an inner type that implements HasLocation
-                            if let Some(first_field) = fields.named.first() {
+            let mut errors = Vec::new();
+            let arms: Vec<_> = data
+                .variants
+                .iter()
+                .filter_map(|variant| {
+                    let variant_name = &variant.ident;
+                    match &variant.fields {
+                        Fields::Named(fields) => {
+                            let has_location = fields
+                                .named
+                                .iter()
+                                .any(|f| f.ident.as_ref().is_some_and(|i| i == "location"));
+                            if has_location {
+                                Some(quote! {
+                                    #name::#variant_name { location, .. } => location
+                                })
+                            } else if let Some(first_field) = fields.named.first() {
+                                // Variant delegates to an inner type that implements HasLocation
                                 let field_name = first_field.ident.as_ref().unwrap();
-                                quote! {
+                                Some(quote! {
                                     #name::#variant_name { #field_name, .. } => #field_name.location()
-                                }
+                                })
                             } else {
-                                quote! {
-                                    #name::#variant_name { .. } => unreachable!()
-                                }
+                                errors.push(syn::Error::new(
+                                    variant.span(),
+                                    format!(
+                                        "variant `{}` has no fields; cannot derive HasLocation",
+                                        variant_name
+                                    ),
+                                ));
+                                None
                             }
                         }
-                    }
-                    Fields::Unnamed(fields) => {
-                        // For tuple variants like Variant(InnerType), delegate to inner
-                        if fields.unnamed.len() == 1 {
-                            quote! {
-                                #name::#variant_name(inner) => inner.location()
-                            }
-                        } else {
-                            quote! {
-                                #name::#variant_name(..) => unreachable!()
+                        Fields::Unnamed(fields) => {
+                            // For tuple variants like Variant(InnerType), delegate to inner
+                            if fields.unnamed.len() == 1 {
+                                Some(quote! {
+                                    #name::#variant_name(inner) => inner.location()
+                                })
+                            } else {
+                                errors.push(syn::Error::new(
+                                    variant.span(),
+                                    format!(
+                                        "variant `{}` must have exactly one field to derive HasLocation",
+                                        variant_name
+                                    ),
+                                ));
+                                None
                             }
                         }
-                    }
-                    Fields::Unit => {
-                        quote! {
-                            #name::#variant_name => unreachable!()
+                        Fields::Unit => {
+                            errors.push(syn::Error::new(
+                                variant.span(),
+                                format!(
+                                    "unit variant `{}` cannot derive HasLocation",
+                                    variant_name
+                                ),
+                            ));
+                            None
                         }
                     }
-                }
-            });
+                })
+                .collect();
+
+            if let Some(first_error) = errors.into_iter().reduce(|mut acc, e| {
+                acc.combine(e);
+                acc
+            }) {
+                return first_error.to_compile_error().into();
+            }
+
             quote! {
                 match self {
                     #(#arms),*
