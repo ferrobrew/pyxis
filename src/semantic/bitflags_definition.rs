@@ -39,6 +39,7 @@ impl StripLocations for BitflagField {
 }
 
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]
+#[cfg_attr(test, derive(StripLocations))]
 pub struct BitflagsDefinition {
     pub type_: Type,
     pub doc: Vec<String>,
@@ -47,20 +48,6 @@ pub struct BitflagsDefinition {
     pub copyable: bool,
     pub cloneable: bool,
     pub default: Option<usize>,
-}
-#[cfg(test)]
-impl StripLocations for BitflagsDefinition {
-    fn strip_locations(&self) -> Self {
-        BitflagsDefinition {
-            type_: self.type_.strip_locations(),
-            doc: self.doc.strip_locations(),
-            flags: self.flags.strip_locations(),
-            singleton: self.singleton.strip_locations(),
-            copyable: self.copyable.strip_locations(),
-            cloneable: self.cloneable.strip_locations(),
-            default: self.default.strip_locations(),
-        }
-    }
 }
 impl BitflagsDefinition {
     pub fn new(type_: Type) -> Self {

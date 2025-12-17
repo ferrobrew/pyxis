@@ -22,7 +22,8 @@ pub enum FunctionBuildOutcome {
     Deferred,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, HasLocation)]
+#[cfg_attr(test, derive(StripLocations))]
 pub enum Argument {
     ConstSelf {
         location: ItemLocation,
@@ -35,33 +36,6 @@ pub enum Argument {
         type_: Type,
         location: ItemLocation,
     },
-}
-impl HasLocation for Argument {
-    fn location(&self) -> &ItemLocation {
-        match self {
-            Argument::ConstSelf { location } => location,
-            Argument::MutSelf { location } => location,
-            Argument::Field { location, .. } => location,
-        }
-    }
-}
-#[cfg(test)]
-impl StripLocations for Argument {
-    fn strip_locations(&self) -> Self {
-        match self {
-            Argument::ConstSelf { .. } => Argument::ConstSelf {
-                location: ItemLocation::test(),
-            },
-            Argument::MutSelf { .. } => Argument::MutSelf {
-                location: ItemLocation::test(),
-            },
-            Argument::Field { name, type_, .. } => Argument::Field {
-                name: name.strip_locations(),
-                type_: type_.strip_locations(),
-                location: ItemLocation::test(),
-            },
-        }
-    }
 }
 impl EqualsIgnoringLocations for Argument {
     fn equals_ignoring_locations(&self, other: &Self) -> bool {
@@ -116,6 +90,8 @@ impl Argument {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(test, derive(StripLocations))]
+#[cfg_attr(test, strip_locations(copy))]
 pub enum CallingConvention {
     C,
     Cdecl,
@@ -124,12 +100,6 @@ pub enum CallingConvention {
     Thiscall,
     Vectorcall,
     System,
-}
-#[cfg(test)]
-impl StripLocations for CallingConvention {
-    fn strip_locations(&self) -> Self {
-        *self
-    }
 }
 impl EqualsIgnoringLocations for CallingConvention {
     fn equals_ignoring_locations(&self, other: &Self) -> bool {
@@ -192,6 +162,7 @@ impl FromStr for CallingConvention {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(test, derive(StripLocations))]
 pub enum FunctionBody {
     Address {
         address: usize,
@@ -209,26 +180,6 @@ pub enum FunctionBody {
         /// for inheritance reasons
         function_name: String,
     },
-}
-#[cfg(test)]
-impl StripLocations for FunctionBody {
-    fn strip_locations(&self) -> Self {
-        match self {
-            FunctionBody::Address { address } => FunctionBody::Address {
-                address: address.strip_locations(),
-            },
-            FunctionBody::Field {
-                field,
-                function_name,
-            } => FunctionBody::Field {
-                field: field.strip_locations(),
-                function_name: function_name.strip_locations(),
-            },
-            FunctionBody::Vftable { function_name } => FunctionBody::Vftable {
-                function_name: function_name.strip_locations(),
-            },
-        }
-    }
 }
 impl EqualsIgnoringLocations for FunctionBody {
     fn equals_ignoring_locations(&self, other: &Self) -> bool {
@@ -281,7 +232,8 @@ impl FunctionBody {
         matches!(self, FunctionBody::Field { .. })
     }
 }
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, HasLocation)]
+#[cfg_attr(test, derive(StripLocations))]
 pub struct Function {
     pub visibility: Visibility,
     pub name: String,
@@ -291,11 +243,6 @@ pub struct Function {
     pub return_type: Option<Type>,
     pub calling_convention: CallingConvention,
     pub location: ItemLocation,
-}
-impl HasLocation for Function {
-    fn location(&self) -> &ItemLocation {
-        &self.location
-    }
 }
 impl fmt::Display for Function {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -351,21 +298,6 @@ impl Function {
     }
     pub fn is_public(&self) -> bool {
         matches!(self.visibility, Visibility::Public)
-    }
-}
-#[cfg(test)]
-impl StripLocations for Function {
-    fn strip_locations(&self) -> Self {
-        Function {
-            visibility: self.visibility.strip_locations(),
-            name: self.name.strip_locations(),
-            doc: self.doc.strip_locations(),
-            body: self.body.strip_locations(),
-            arguments: self.arguments.strip_locations(),
-            return_type: self.return_type.strip_locations(),
-            calling_convention: self.calling_convention.strip_locations(),
-            location: ItemLocation::test(),
-        }
     }
 }
 #[cfg(test)]

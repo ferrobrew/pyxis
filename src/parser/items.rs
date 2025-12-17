@@ -19,7 +19,8 @@ use super::{
 use super::attributes::Attribute;
 
 /// Comment node types
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, HasLocation)]
+#[cfg_attr(test, derive(StripLocations))]
 pub enum Comment {
     /// Doc comment for outer items (///)
     DocOuter {
@@ -42,58 +43,13 @@ pub enum Comment {
         location: ItemLocation,
     },
 }
-impl HasLocation for Comment {
-    fn location(&self) -> &ItemLocation {
-        match self {
-            Comment::DocOuter { location, .. } => location,
-            Comment::DocInner { location, .. } => location,
-            Comment::Regular { location, .. } => location,
-            Comment::MultiLine { location, .. } => location,
-        }
-    }
-}
-#[cfg(test)]
-impl StripLocations for Comment {
-    fn strip_locations(&self) -> Self {
-        match self {
-            Comment::DocOuter { lines, .. } => Comment::DocOuter {
-                lines: lines.strip_locations(),
-                location: ItemLocation::test(),
-            },
-            Comment::DocInner { lines, .. } => Comment::DocInner {
-                lines: lines.strip_locations(),
-                location: ItemLocation::test(),
-            },
-            Comment::Regular { text, .. } => Comment::Regular {
-                text: text.strip_locations(),
-                location: ItemLocation::test(),
-            },
-            Comment::MultiLine { lines, .. } => Comment::MultiLine {
-                lines: lines.strip_locations(),
-                location: ItemLocation::test(),
-            },
-        }
-    }
-}
 
 // types
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(test, derive(StripLocations))]
 pub enum TypeField {
     Field(Visibility, Ident, Type),
     Vftable(Vec<Function>),
-}
-#[cfg(test)]
-impl StripLocations for TypeField {
-    fn strip_locations(&self) -> Self {
-        match self {
-            TypeField::Field(v, n, t) => TypeField::Field(
-                v.strip_locations(),
-                n.strip_locations(),
-                t.strip_locations(),
-            ),
-            TypeField::Vftable(funcs) => TypeField::Vftable(funcs.strip_locations()),
-        }
-    }
 }
 #[cfg(test)]
 impl TypeField {
@@ -116,57 +72,24 @@ impl TypeField {
 }
 
 /// Items in a type definition body (preserves ordering and comments)
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, HasLocation)]
+#[cfg_attr(test, derive(StripLocations))]
 pub enum TypeDefItem {
     Comment(Comment),
     Statement(TypeStatement),
 }
-impl HasLocation for TypeDefItem {
-    fn location(&self) -> &ItemLocation {
-        match self {
-            TypeDefItem::Comment(c) => c.location(),
-            TypeDefItem::Statement(s) => s.location(),
-        }
-    }
-}
-#[cfg(test)]
-impl StripLocations for TypeDefItem {
-    fn strip_locations(&self) -> Self {
-        match self {
-            TypeDefItem::Comment(comment) => TypeDefItem::Comment(comment.strip_locations()),
-            TypeDefItem::Statement(statement) => {
-                TypeDefItem::Statement(statement.strip_locations())
-            }
-        }
-    }
-}
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, HasLocation)]
+#[cfg_attr(test, derive(StripLocations))]
 pub struct TypeStatement {
     pub field: TypeField,
     pub attributes: Attributes,
     pub doc_comments: Vec<String>,
+    #[cfg_attr(test, strip_locations(skip))]
     pub inline_trailing_comments: Vec<Comment>, // Comments on same line as field
-    pub following_comments: Vec<Comment>,       // Comments on lines after field
+    #[cfg_attr(test, strip_locations(skip))]
+    pub following_comments: Vec<Comment>, // Comments on lines after field
     pub location: ItemLocation,
-}
-impl HasLocation for TypeStatement {
-    fn location(&self) -> &ItemLocation {
-        &self.location
-    }
-}
-#[cfg(test)]
-impl StripLocations for TypeStatement {
-    fn strip_locations(&self) -> Self {
-        TypeStatement {
-            field: self.field.strip_locations(),
-            attributes: self.attributes.strip_locations(),
-            doc_comments: self.doc_comments.strip_locations(),
-            inline_trailing_comments: Vec::new(), // Strip trailing comments
-            following_comments: Vec::new(),
-            location: ItemLocation::test(),
-        }
-    }
 }
 #[cfg(test)]
 impl TypeStatement {
@@ -266,59 +189,25 @@ impl TypeDefinition {
 
 // enums
 /// Items in an enum definition (preserves ordering and comments)
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, HasLocation)]
+#[cfg_attr(test, derive(StripLocations))]
 pub enum EnumDefItem {
     Comment(Comment),
     Statement(EnumStatement),
 }
-impl HasLocation for EnumDefItem {
-    fn location(&self) -> &ItemLocation {
-        match self {
-            EnumDefItem::Comment(c) => c.location(),
-            EnumDefItem::Statement(s) => s.location(),
-        }
-    }
-}
-#[cfg(test)]
-impl StripLocations for EnumDefItem {
-    fn strip_locations(&self) -> Self {
-        match self {
-            EnumDefItem::Comment(comment) => EnumDefItem::Comment(comment.strip_locations()),
-            EnumDefItem::Statement(statement) => {
-                EnumDefItem::Statement(statement.strip_locations())
-            }
-        }
-    }
-}
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, HasLocation)]
+#[cfg_attr(test, derive(StripLocations))]
 pub struct EnumStatement {
     pub name: Ident,
     pub expr: Option<Expr>,
     pub attributes: Attributes,
     pub doc_comments: Vec<String>,
+    #[cfg_attr(test, strip_locations(skip))]
     pub inline_trailing_comments: Vec<Comment>, // Comments on same line as enum variant
-    pub following_comments: Vec<Comment>,       // Comments on lines after enum variant
+    #[cfg_attr(test, strip_locations(skip))]
+    pub following_comments: Vec<Comment>, // Comments on lines after enum variant
     pub location: ItemLocation,
-}
-impl HasLocation for EnumStatement {
-    fn location(&self) -> &ItemLocation {
-        &self.location
-    }
-}
-#[cfg(test)]
-impl StripLocations for EnumStatement {
-    fn strip_locations(&self) -> Self {
-        EnumStatement {
-            name: self.name.strip_locations(),
-            expr: self.expr.strip_locations(),
-            attributes: self.attributes.strip_locations(),
-            doc_comments: self.doc_comments.strip_locations(),
-            inline_trailing_comments: Vec::new(), // Strip trailing comments
-            following_comments: Vec::new(),
-            location: ItemLocation::test(),
-        }
-    }
 }
 #[cfg(test)]
 impl EnumStatement {
@@ -422,61 +311,25 @@ impl EnumDefinition {
 
 // bitflags
 /// Items in a bitflags definition (preserves ordering and comments)
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, HasLocation)]
+#[cfg_attr(test, derive(StripLocations))]
 pub enum BitflagsDefItem {
     Comment(Comment),
     Statement(BitflagsStatement),
 }
-impl HasLocation for BitflagsDefItem {
-    fn location(&self) -> &ItemLocation {
-        match self {
-            BitflagsDefItem::Comment(c) => c.location(),
-            BitflagsDefItem::Statement(s) => s.location(),
-        }
-    }
-}
-#[cfg(test)]
-impl StripLocations for BitflagsDefItem {
-    fn strip_locations(&self) -> Self {
-        match self {
-            BitflagsDefItem::Comment(comment) => {
-                BitflagsDefItem::Comment(comment.strip_locations())
-            }
-            BitflagsDefItem::Statement(statement) => {
-                BitflagsDefItem::Statement(statement.strip_locations())
-            }
-        }
-    }
-}
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, HasLocation)]
+#[cfg_attr(test, derive(StripLocations))]
 pub struct BitflagsStatement {
     pub name: Ident,
     pub expr: Expr,
     pub attributes: Attributes,
     pub doc_comments: Vec<String>,
+    #[cfg_attr(test, strip_locations(skip))]
     pub inline_trailing_comments: Vec<Comment>, // Comments on same line as bitflag
-    pub following_comments: Vec<Comment>,       // Comments on lines after bitflag
+    #[cfg_attr(test, strip_locations(skip))]
+    pub following_comments: Vec<Comment>, // Comments on lines after bitflag
     pub location: ItemLocation,
-}
-impl HasLocation for BitflagsStatement {
-    fn location(&self) -> &ItemLocation {
-        &self.location
-    }
-}
-#[cfg(test)]
-impl StripLocations for BitflagsStatement {
-    fn strip_locations(&self) -> Self {
-        BitflagsStatement {
-            name: self.name.strip_locations(),
-            expr: self.expr.strip_locations(),
-            attributes: self.attributes.strip_locations(),
-            doc_comments: self.doc_comments.strip_locations(),
-            inline_trailing_comments: Vec::new(), // Strip trailing comments
-            following_comments: Vec::new(),
-            location: ItemLocation::test(),
-        }
-    }
 }
 #[cfg(test)]
 impl BitflagsStatement {
@@ -581,26 +434,12 @@ impl BitflagsDefinition {
 }
 
 // type aliases
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, HasLocation)]
+#[cfg_attr(test, derive(StripLocations))]
 pub struct TypeAliasDefinition {
     pub target: Type,
     pub attributes: Attributes,
     pub location: ItemLocation,
-}
-impl HasLocation for TypeAliasDefinition {
-    fn location(&self) -> &ItemLocation {
-        &self.location
-    }
-}
-#[cfg(test)]
-impl StripLocations for TypeAliasDefinition {
-    fn strip_locations(&self) -> Self {
-        TypeAliasDefinition {
-            target: self.target.strip_locations(),
-            attributes: self.attributes.strip_locations(),
-            location: ItemLocation::test(),
-        }
-    }
 }
 #[cfg(test)]
 impl TypeAliasDefinition {
@@ -619,24 +458,12 @@ impl TypeAliasDefinition {
 
 // items
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(test, derive(StripLocations))]
 pub enum ItemDefinitionInner {
     Type(TypeDefinition),
     Enum(EnumDefinition),
     Bitflags(BitflagsDefinition),
     TypeAlias(TypeAliasDefinition),
-}
-#[cfg(test)]
-impl StripLocations for ItemDefinitionInner {
-    fn strip_locations(&self) -> Self {
-        match self {
-            ItemDefinitionInner::Type(t) => ItemDefinitionInner::Type(t.strip_locations()),
-            ItemDefinitionInner::Enum(e) => ItemDefinitionInner::Enum(e.strip_locations()),
-            ItemDefinitionInner::Bitflags(b) => ItemDefinitionInner::Bitflags(b.strip_locations()),
-            ItemDefinitionInner::TypeAlias(a) => {
-                ItemDefinitionInner::TypeAlias(a.strip_locations())
-            }
-        }
-    }
 }
 impl From<TypeDefinition> for ItemDefinitionInner {
     fn from(item: TypeDefinition) -> Self {
@@ -659,7 +486,8 @@ impl From<TypeAliasDefinition> for ItemDefinitionInner {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, HasLocation)]
+#[cfg_attr(test, derive(StripLocations))]
 pub struct ItemDefinition {
     pub visibility: Visibility,
     pub name: Ident,
@@ -668,24 +496,6 @@ pub struct ItemDefinition {
     pub doc_comments: Vec<String>,
     pub inner: ItemDefinitionInner,
     pub location: ItemLocation,
-}
-impl HasLocation for ItemDefinition {
-    fn location(&self) -> &ItemLocation {
-        &self.location
-    }
-}
-#[cfg(test)]
-impl StripLocations for ItemDefinition {
-    fn strip_locations(&self) -> Self {
-        ItemDefinition {
-            visibility: self.visibility.strip_locations(),
-            name: self.name.strip_locations(),
-            type_parameters: self.type_parameters.strip_locations(),
-            doc_comments: self.doc_comments.strip_locations(),
-            inner: self.inner.strip_locations(),
-            location: ItemLocation::test(),
-        }
-    }
 }
 #[cfg(test)]
 impl ItemDefinition {

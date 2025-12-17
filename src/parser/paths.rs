@@ -11,13 +11,8 @@ use crate::span::StripLocations;
 use super::{ParseError, core::Parser};
 
 #[derive(PartialEq, Hash, Eq, Clone, Debug, PartialOrd, Ord)]
+#[cfg_attr(test, derive(StripLocations))]
 pub struct ItemPathSegment(String);
-#[cfg(test)]
-impl StripLocations for ItemPathSegment {
-    fn strip_locations(&self) -> Self {
-        ItemPathSegment(self.0.strip_locations())
-    }
-}
 impl EqualsIgnoringLocations for ItemPathSegment {
     fn equals_ignoring_locations(&self, other: &Self) -> bool {
         self.0 == other.0
@@ -45,13 +40,8 @@ impl fmt::Display for ItemPathSegment {
 }
 
 #[derive(PartialEq, Hash, Eq, Clone, Debug, PartialOrd, Ord)]
+#[cfg_attr(test, derive(StripLocations))]
 pub struct ItemPath(Vec<ItemPathSegment>);
-#[cfg(test)]
-impl StripLocations for ItemPath {
-    fn strip_locations(&self) -> Self {
-        ItemPath(self.0.strip_locations())
-    }
-}
 impl EqualsIgnoringLocations for ItemPath {
     fn equals_ignoring_locations(&self, other: &Self) -> bool {
         self.0.equals_ignoring_locations(&other.0)

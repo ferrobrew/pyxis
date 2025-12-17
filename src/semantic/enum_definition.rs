@@ -37,6 +37,7 @@ impl StripLocations for EnumVariant {
 }
 
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]
+#[cfg_attr(test, derive(StripLocations))]
 pub struct EnumDefinition {
     pub type_: Type,
     pub doc: Vec<String>,
@@ -46,21 +47,6 @@ pub struct EnumDefinition {
     pub copyable: bool,
     pub cloneable: bool,
     pub default: Option<usize>,
-}
-#[cfg(test)]
-impl StripLocations for EnumDefinition {
-    fn strip_locations(&self) -> Self {
-        EnumDefinition {
-            type_: self.type_.strip_locations(),
-            doc: self.doc.strip_locations(),
-            variants: self.variants.strip_locations(),
-            associated_functions: self.associated_functions.strip_locations(),
-            singleton: self.singleton.strip_locations(),
-            copyable: self.copyable.strip_locations(),
-            cloneable: self.cloneable.strip_locations(),
-            default: self.default.strip_locations(),
-        }
-    }
 }
 #[cfg(test)]
 impl EnumDefinition {
