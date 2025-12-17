@@ -338,6 +338,16 @@ pub enum JsonCallingConvention {
     System,
 }
 
+/// Convert a doc comment slice to an optional string.
+/// Returns Some(joined_string) if the slice is non-empty, None otherwise.
+fn doc_to_option(doc: &[String]) -> Option<String> {
+    if doc.is_empty() {
+        None
+    } else {
+        Some(doc.join("\n"))
+    }
+}
+
 // Conversion functions from semantic types to JSON types
 impl From<Visibility> for JsonVisibility {
     fn from(v: Visibility) -> Self {
@@ -521,11 +531,7 @@ fn convert_function(func: &Function) -> JsonFunction {
     JsonFunction {
         visibility: func.visibility.into(),
         name: func.name.clone(),
-        doc: if !func.doc.is_empty() {
-            Some(func.doc.join("\n"))
-        } else {
-            None
-        },
+        doc: doc_to_option(&func.doc),
         body: convert_function_body(&func.body),
         arguments: func.arguments.iter().map(convert_argument).collect(),
         return_type: func.return_type.as_ref().map(convert_type),
@@ -541,11 +547,7 @@ fn convert_region(region: &Region, type_registry: &TypeRegistry, offset: usize) 
     JsonRegion {
         visibility: region.visibility.into(),
         name: region.name.clone(),
-        doc: if !region.doc.is_empty() {
-            Some(region.doc.join("\n"))
-        } else {
-            None
-        },
+        doc: doc_to_option(&region.doc),
         type_ref: convert_type(&region.type_ref),
         offset,
         size,
@@ -578,11 +580,7 @@ fn convert_type_definition(
         .collect();
 
     JsonTypeDefinition {
-        doc: if !td.doc.is_empty() {
-            Some(td.doc.join("\n"))
-        } else {
-            None
-        },
+        doc: doc_to_option(&td.doc),
         fields,
         associated_functions: td
             .associated_functions
@@ -608,11 +606,7 @@ fn convert_enum_variant(variant: &EnumVariant) -> JsonEnumVariant {
 
 fn convert_enum_definition(ed: &EnumDefinition) -> JsonEnumDefinition {
     JsonEnumDefinition {
-        doc: if !ed.doc.is_empty() {
-            Some(ed.doc.join("\n"))
-        } else {
-            None
-        },
+        doc: doc_to_option(&ed.doc),
         underlying_type: convert_type(&ed.type_),
         variants: ed.variants.iter().map(convert_enum_variant).collect(),
         associated_functions: ed
@@ -637,11 +631,7 @@ fn convert_bitflag_field(flag: &BitflagField) -> JsonBitflag {
 
 fn convert_bitflags_definition(bd: &BitflagsDefinition) -> JsonBitflagsDefinition {
     JsonBitflagsDefinition {
-        doc: if !bd.doc.is_empty() {
-            Some(bd.doc.join("\n"))
-        } else {
-            None
-        },
+        doc: doc_to_option(&bd.doc),
         underlying_type: convert_type(&bd.type_),
         flags: bd.flags.iter().map(convert_bitflag_field).collect(),
         singleton: bd.singleton,
@@ -653,11 +643,7 @@ fn convert_bitflags_definition(bd: &BitflagsDefinition) -> JsonBitflagsDefinitio
 
 fn convert_type_alias_definition(ta: &TypeAliasDefinition) -> JsonTypeAliasDefinition {
     JsonTypeAliasDefinition {
-        doc: if !ta.doc.is_empty() {
-            Some(ta.doc.join("\n"))
-        } else {
-            None
-        },
+        doc: doc_to_option(&ta.doc),
         target: convert_type(&ta.target),
     }
 }
@@ -748,11 +734,7 @@ fn build_module_hierarchy(semantic_state: &ResolvedSemanticState) -> BTreeMap<St
             .collect();
 
         let json_module = JsonModule {
-            doc: if !module.doc().is_empty() {
-                Some(module.doc().join("\n"))
-            } else {
-                None
-            },
+            doc: doc_to_option(module.doc()),
             items,
             submodules: BTreeMap::new(),
             extern_values,

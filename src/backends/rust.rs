@@ -205,11 +205,7 @@ fn build_type(
     location: &ItemLocation,
     type_parameters: &[String],
 ) -> Result<proc_macro2::TokenStream> {
-    let name = path.last().ok_or_else(|| BackendError::TypeCodeGenFailed {
-        type_path: path.clone(),
-        reason: "failed to get last component of item path".to_string(),
-        location: *location,
-    })?;
+    let name = get_type_name(path, location)?;
 
     let TypeDefinition {
         singleton,
@@ -256,18 +252,7 @@ fn build_type(
         .collect::<Result<Vec<_>>>()?;
 
     let name_ident = str_to_ident(name.as_str());
-    let size_check_ident = quote::format_ident!("_{}_size_check", name.as_str());
-    let size_check_impl = (size > 0).then(|| {
-        let size = hex_literal(size);
-        quote! {
-            fn #size_check_ident() {
-                unsafe {
-                    ::std::mem::transmute::<[u8; #size], #name_ident>([0u8; #size]);
-                }
-                unreachable!()
-            }
-        }
-    });
+    let size_check_impl = generate_size_check(name.as_str(), size);
 
     let singleton_impl = singleton.map(|address| {
         quote! {
@@ -320,16 +305,7 @@ fn build_type(
         .transpose()?
         .unwrap_or_default();
 
-    let mut extra_derives = vec![];
-    if *copyable {
-        extra_derives.push(quote! { Copy });
-    }
-    if *cloneable {
-        extra_derives.push(quote! { Clone });
-    }
-    if *defaultable {
-        extra_derives.push(quote! { Default });
-    }
+    let extra_derives = build_extra_derives(*copyable, *cloneable, *defaultable);
 
     let derives = if extra_derives.is_empty() {
         quote! {}
@@ -444,14 +420,7 @@ fn build_type(
     };
 
     // Generate type parameters for generic types
-    let type_param_idents: Vec<proc_macro2::Ident> =
-        type_parameters.iter().map(|p| str_to_ident(p)).collect();
-
-    let generic_params = if type_param_idents.is_empty() {
-        quote! {}
-    } else {
-        quote! { < #(#type_param_idents),* > }
-    };
+    let generic_params = build_generic_params(type_parameters);
 
     // For generic types, we can't do compile-time size checks (size depends on T)
     // and we skip some impl blocks that don't make sense for generics
@@ -493,11 +462,7 @@ fn build_enum(
     enum_definition: &EnumDefinition,
     location: &ItemLocation,
 ) -> Result<proc_macro2::TokenStream> {
-    let name = path.last().ok_or_else(|| BackendError::TypeCodeGenFailed {
-        type_path: path.clone(),
-        reason: "failed to get last component of item path".to_string(),
-        location: *location,
-    })?;
+    let name = get_type_name(path, location)?;
 
     let EnumDefinition {
         singleton,
@@ -516,18 +481,7 @@ fn build_enum(
     let visibility = visibility_to_tokens(visibility);
     let doc = doc_to_tokens(false, doc);
 
-    let size_check_ident = quote::format_ident!("_{}_size_check", name.as_str());
-    let size_check_impl = (size > 0).then(|| {
-        let size = hex_literal(size);
-        quote! {
-            fn #size_check_ident() {
-                unsafe {
-                    ::std::mem::transmute::<[u8; #size], #name_ident>([0u8; #size]);
-                }
-                unreachable!()
-            }
-        }
-    });
+    let size_check_impl = generate_size_check(name.as_str(), size);
 
     let singleton_impl = singleton.map(|address| {
         let address = hex_literal(address);
@@ -542,16 +496,7 @@ fn build_enum(
         }
     });
 
-    let mut extra_derives = vec![];
-    if *copyable {
-        extra_derives.push(quote! { Copy });
-    }
-    if *cloneable {
-        extra_derives.push(quote! { Clone });
-    }
-    if default.is_some() {
-        extra_derives.push(quote! { Default });
-    }
+    let extra_derives = build_extra_derives(*copyable, *cloneable, default.is_some());
 
     let syn_fields = variants.iter().enumerate().map(|(idx, variant)| {
         let name_ident = str_to_ident(&variant.name);
@@ -607,11 +552,7 @@ fn build_bitflags(
     bitflags_definition: &BitflagsDefinition,
     location: &ItemLocation,
 ) -> Result<proc_macro2::TokenStream> {
-    let name = path.last().ok_or_else(|| BackendError::TypeCodeGenFailed {
-        type_path: path.clone(),
-        reason: "failed to get last component of item path".to_string(),
-        location: *location,
-    })?;
+    let name = get_type_name(path, location)?;
 
     let BitflagsDefinition {
         singleton,
@@ -629,18 +570,7 @@ fn build_bitflags(
     let visibility = visibility_to_tokens(visibility);
     let doc = doc_to_tokens(false, doc);
 
-    let size_check_ident = quote::format_ident!("_{}_size_check", name.as_str());
-    let size_check_impl = (size > 0).then(|| {
-        let size = hex_literal(size);
-        quote! {
-            fn #size_check_ident() {
-                unsafe {
-                    ::std::mem::transmute::<[u8; #size], #name_ident>([0u8; #size]);
-                }
-                unreachable!()
-            }
-        }
-    });
+    let size_check_impl = generate_size_check(name.as_str(), size);
 
     let singleton_impl = singleton.map(|address| {
         let address = hex_literal(address);
@@ -666,13 +596,8 @@ fn build_bitflags(
         }
     });
 
-    let mut extra_derives = vec![];
-    if *copyable {
-        extra_derives.push(quote! { Copy });
-    }
-    if *cloneable {
-        extra_derives.push(quote! { Clone });
-    }
+    // Bitflags handles Default differently (via a separate impl block)
+    let extra_derives = build_extra_derives(*copyable, *cloneable, false);
 
     let syn_fields = flags.iter().map(|flag| {
         let name_ident = str_to_ident(&flag.name);
@@ -704,11 +629,7 @@ fn build_type_alias(
     location: &ItemLocation,
     type_parameters: &[String],
 ) -> Result<proc_macro2::TokenStream> {
-    let name = path.last().ok_or_else(|| BackendError::TypeCodeGenFailed {
-        type_path: path.clone(),
-        reason: "failed to get last component of item path".to_string(),
-        location: *location,
-    })?;
+    let name = get_type_name(path, location)?;
 
     let TypeAliasDefinition { target, doc } = type_alias_definition;
 
@@ -717,15 +638,7 @@ fn build_type_alias(
     let doc = doc_to_tokens(false, doc);
     let target_type = sa_type_to_syn_type(target)?;
 
-    // Generate type parameters for generic type aliases
-    let type_param_idents: Vec<proc_macro2::Ident> =
-        type_parameters.iter().map(|p| str_to_ident(p)).collect();
-
-    let generic_params = if type_param_idents.is_empty() {
-        quote! {}
-    } else {
-        quote! { < #(#type_param_idents),* > }
-    };
+    let generic_params = build_generic_params(type_parameters);
 
     Ok(quote! {
         #doc
@@ -855,6 +768,65 @@ fn build_extern_value(ev: &ExternValue) -> Result<proc_macro2::TokenStream> {
 
 fn str_to_ident(s: &str) -> syn::Ident {
     quote::format_ident!("{}", s)
+}
+
+/// Extract the type name from an ItemPath, returning an error if the path is empty.
+fn get_type_name<'a>(
+    path: &'a ItemPath,
+    location: &ItemLocation,
+) -> Result<&'a crate::grammar::ItemPathSegment> {
+    path.last().ok_or_else(|| BackendError::TypeCodeGenFailed {
+        type_path: path.clone(),
+        reason: "failed to get last component of item path".to_string(),
+        location: *location,
+    })
+}
+
+/// Generate a compile-time size check function for a type.
+fn generate_size_check(name: &str, size: usize) -> Option<proc_macro2::TokenStream> {
+    (size > 0).then(|| {
+        let name_ident = str_to_ident(name);
+        let size_check_ident = quote::format_ident!("_{}_size_check", name);
+        let size = hex_literal(size);
+        quote! {
+            fn #size_check_ident() {
+                unsafe {
+                    ::std::mem::transmute::<[u8; #size], #name_ident>([0u8; #size]);
+                }
+                unreachable!()
+            }
+        }
+    })
+}
+
+/// Build the extra derive attributes based on type properties.
+fn build_extra_derives(
+    copyable: bool,
+    cloneable: bool,
+    defaultable: bool,
+) -> Vec<proc_macro2::TokenStream> {
+    let mut derives = vec![];
+    if copyable {
+        derives.push(quote! { Copy });
+    }
+    if cloneable {
+        derives.push(quote! { Clone });
+    }
+    if defaultable {
+        derives.push(quote! { Default });
+    }
+    derives
+}
+
+/// Generate type parameter tokens for generic types.
+fn build_generic_params(type_parameters: &[String]) -> proc_macro2::TokenStream {
+    if type_parameters.is_empty() {
+        quote! {}
+    } else {
+        let type_param_idents: Vec<proc_macro2::Ident> =
+            type_parameters.iter().map(|p| str_to_ident(p)).collect();
+        quote! { < #(#type_param_idents),* > }
+    }
 }
 
 fn fully_qualified_type_ref_impl(
