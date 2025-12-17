@@ -143,6 +143,9 @@ impl TypeRegistry {
 
     /// Substitutes type parameters in a type with concrete types.
     /// `param_names` are the type parameter names, `args` are the concrete types.
+    ///
+    /// This handles all compound types (pointers, arrays, generics) by recursively
+    /// substituting in their inner types.
     fn substitute_type_params(type_: &Type, param_names: &[String], args: &[Type]) -> Type {
         match type_ {
             Type::TypeParameter(name) => {
@@ -188,29 +191,41 @@ impl TypeRegistry {
         }
     }
 
+    /// Helper to compute a property over a generic type's fields.
+    /// Handles the common logic of resolving the type definition and substituting
+    /// type parameters, then applies a fold operation over the resulting field types.
+    fn fold_generic_fields<T, F>(
+        &self,
+        base: &ItemPath,
+        args: &[Type],
+        initial: T,
+        mut fold_fn: F,
+    ) -> Option<T>
+    where
+        F: FnMut(T, &Type, &TypeRegistry) -> Option<T>,
+    {
+        let item_def = self.types.get(base)?;
+        let resolved = item_def.resolved()?;
+        let type_def = resolved.inner.as_type()?;
+        let param_names = &item_def.type_parameters;
+
+        let mut accumulator = initial;
+        for region in &type_def.regions {
+            let substituted_type =
+                Self::substitute_type_params(&region.type_ref, param_names, args);
+            accumulator = fold_fn(accumulator, &substituted_type, self)?;
+        }
+
+        Some(accumulator)
+    }
+
     /// Computes the size of a generic type instantiation.
     /// Returns the size by substituting type parameters with the provided arguments
     /// and computing the size of each field.
     pub(crate) fn compute_generic_size(&self, base: &ItemPath, args: &[Type]) -> Option<usize> {
-        let item_def = self.types.get(base)?;
-        let resolved = item_def.resolved()?;
-
-        // Get the type definition (struct with fields)
-        let type_def = resolved.inner.as_type()?;
-
-        // Get the type parameters for substitution
-        let param_names = &item_def.type_parameters;
-
-        // Compute total size from all regions (fields)
-        let mut size = 0usize;
-        for region in &type_def.regions {
-            let substituted_type =
-                Self::substitute_type_params(&region.type_ref, param_names, args);
-            let field_size = substituted_type.size(self)?;
-            size += field_size;
-        }
-
-        Some(size)
+        self.fold_generic_fields(base, args, 0usize, |acc, field_type, registry| {
+            Some(acc + field_type.size(registry)?)
+        })
     }
 
     /// Computes the alignment of a generic type instantiation.
@@ -221,101 +236,9 @@ impl TypeRegistry {
         base: &ItemPath,
         args: &[Type],
     ) -> Option<usize> {
-        let item_def = self.types.get(base)?;
-        let resolved = item_def.resolved()?;
-
-        // Get the type definition (struct with fields)
-        let type_def = resolved.inner.as_type()?;
-
-        // Get the type parameters for substitution
-        let param_names = &item_def.type_parameters;
-
-        // Compute max alignment from all regions (fields)
-        let mut max_alignment = 1usize;
-        for region in &type_def.regions {
-            let substituted_type =
-                Self::substitute_type_params(&region.type_ref, param_names, args);
-            if let Some(field_alignment) = substituted_type.alignment(self) {
-                max_alignment = max_alignment.max(field_alignment);
-            }
-        }
-
-        Some(max_alignment)
-    }
-
-    /// Applies generic arguments to a compound type.
-    /// This handles cases where a non-generic type alias resolves to a type containing
-    /// type parameters (e.g., `type Ptr<T> = *mut T` used as `Ptr<u32>`).
-    fn apply_generic_args_to_type(
-        type_: Type,
-        args: Vec<Type>,
-        param_names: &[String],
-    ) -> TypeLookupResult {
-        match type_ {
-            Type::MutPointer(inner) => {
-                let substituted = Self::apply_generic_args_to_inner(*inner, &args, param_names);
-                TypeLookupResult::Found(Type::MutPointer(Box::new(substituted)))
-            }
-            Type::ConstPointer(inner) => {
-                let substituted = Self::apply_generic_args_to_inner(*inner, &args, param_names);
-                TypeLookupResult::Found(Type::ConstPointer(Box::new(substituted)))
-            }
-            Type::Array(inner, size) => {
-                let substituted = Self::apply_generic_args_to_inner(*inner, &args, param_names);
-                TypeLookupResult::Found(Type::Array(Box::new(substituted), size))
-            }
-            Type::Generic(path, existing_args) => {
-                // Apply generic args to each existing argument
-                let substituted_args: Vec<Type> = existing_args
-                    .into_iter()
-                    .map(|arg| Self::apply_generic_args_to_inner(arg, &args, param_names))
-                    .collect();
-                TypeLookupResult::Found(Type::Generic(path, substituted_args))
-            }
-            // TypeParameter, Raw, etc. - these shouldn't have type arguments applied
-            // directly at the top level, but we handle them for completeness
-            other => TypeLookupResult::Found(Self::apply_generic_args_to_inner(
-                other,
-                &args,
-                param_names,
-            )),
-        }
-    }
-
-    /// Helper to apply generic arguments to the inner parts of a type.
-    /// Type parameters are replaced by their corresponding arguments based on
-    /// their position in `param_names`.
-    fn apply_generic_args_to_inner(type_: Type, args: &[Type], param_names: &[String]) -> Type {
-        match type_ {
-            Type::TypeParameter(ref name) => {
-                // Find the parameter index by looking up the name in param_names
-                if let Some(idx) = param_names.iter().position(|p| p == name) {
-                    if idx < args.len() {
-                        return args[idx].clone();
-                    }
-                }
-                type_
-            }
-            Type::MutPointer(inner) => Type::MutPointer(Box::new(
-                Self::apply_generic_args_to_inner(*inner, args, param_names),
-            )),
-            Type::ConstPointer(inner) => Type::ConstPointer(Box::new(
-                Self::apply_generic_args_to_inner(*inner, args, param_names),
-            )),
-            Type::Array(inner, size) => Type::Array(
-                Box::new(Self::apply_generic_args_to_inner(*inner, args, param_names)),
-                size,
-            ),
-            Type::Generic(path, existing_args) => {
-                let substituted_args: Vec<Type> = existing_args
-                    .into_iter()
-                    .map(|arg| Self::apply_generic_args_to_inner(arg, args, param_names))
-                    .collect();
-                Type::Generic(path, substituted_args)
-            }
-            // Raw, Unresolved, Function - no substitution needed
-            other => other,
-        }
+        self.fold_generic_fields(base, args, 1usize, |acc, field_type, registry| {
+            Some(acc.max(field_type.alignment(registry)?))
+        })
     }
 
     /// Resolves a type name in the given scope, returning detailed information
@@ -488,6 +411,56 @@ impl TypeRegistry {
         }
     }
 
+    /// Helper for resolving pointer types (both const and mut).
+    /// Handles the common logic for partial resolution of unresolved pointees.
+    fn resolve_pointer_type<F>(
+        &self,
+        scope: &[ItemPath],
+        pointee: &grammar::Type,
+        type_params: &[String],
+        wrap_pointer: F,
+    ) -> TypeLookupResult
+    where
+        F: Fn(Box<Type>) -> Type,
+    {
+        match self.resolve_grammar_type(scope, pointee, type_params) {
+            TypeLookupResult::Found(t) => TypeLookupResult::Found(wrap_pointer(Box::new(t))),
+            TypeLookupResult::NotYetResolved => {
+                // For pointers, we can resolve even if the pointee isn't fully resolved yet.
+                // This allows mutually recursive types to resolve.
+                // We just need to find the path to the pointee type.
+                if let grammar::Type::Ident {
+                    path, generic_args, ..
+                } = pointee
+                {
+                    if generic_args.is_empty() {
+                        // Non-generic type reference - just find its path
+                        if let Some(last) = path.last() {
+                            if let Some(full_path) = self.find_type_path(scope, last.as_str()) {
+                                return TypeLookupResult::Found(wrap_pointer(Box::new(Type::Raw(
+                                    full_path,
+                                ))));
+                            }
+                        }
+                    } else {
+                        // Generic type with potentially unresolved arguments.
+                        // Try partial resolution for self-referential generics.
+                        if let Some(partial) = self.try_resolve_generic_partially(
+                            scope,
+                            path,
+                            generic_args,
+                            type_params,
+                        ) {
+                            return TypeLookupResult::Found(wrap_pointer(Box::new(partial)));
+                        }
+                    }
+                }
+                TypeLookupResult::NotYetResolved
+            }
+            other => other,
+        }
+    }
+
     /// Resolves a grammar type to a semantic type.
     /// Returns detailed information about why resolution failed if it does.
     /// The `type_params` parameter contains the names of type parameters in scope
@@ -500,92 +473,10 @@ impl TypeRegistry {
     ) -> TypeLookupResult {
         match type_ {
             grammar::Type::ConstPointer { pointee, .. } => {
-                match self.resolve_grammar_type(scope, pointee, type_params) {
-                    TypeLookupResult::Found(t) => {
-                        TypeLookupResult::Found(Type::ConstPointer(Box::new(t)))
-                    }
-                    TypeLookupResult::NotYetResolved => {
-                        // For pointers, we can resolve even if the pointee isn't fully resolved yet.
-                        // This allows mutually recursive types to resolve (e.g., A has *const B, B has *const A).
-                        // We just need to find the path to the pointee type.
-                        if let grammar::Type::Ident {
-                            path, generic_args, ..
-                        } = pointee.as_ref()
-                        {
-                            if generic_args.is_empty() {
-                                // Non-generic type reference - just find its path
-                                if let Some(last) = path.last() {
-                                    if let Some(full_path) =
-                                        self.find_type_path(scope, last.as_str())
-                                    {
-                                        return TypeLookupResult::Found(Type::ConstPointer(
-                                            Box::new(Type::Raw(full_path)),
-                                        ));
-                                    }
-                                }
-                            } else {
-                                // Generic type with potentially unresolved arguments.
-                                // Try partial resolution for self-referential generics.
-                                if let Some(partial) = self.try_resolve_generic_partially(
-                                    scope,
-                                    path,
-                                    generic_args,
-                                    type_params,
-                                ) {
-                                    return TypeLookupResult::Found(Type::ConstPointer(Box::new(
-                                        partial,
-                                    )));
-                                }
-                            }
-                        }
-                        TypeLookupResult::NotYetResolved
-                    }
-                    other => other,
-                }
+                self.resolve_pointer_type(scope, pointee, type_params, Type::ConstPointer)
             }
             grammar::Type::MutPointer { pointee, .. } => {
-                match self.resolve_grammar_type(scope, pointee, type_params) {
-                    TypeLookupResult::Found(t) => {
-                        TypeLookupResult::Found(Type::MutPointer(Box::new(t)))
-                    }
-                    TypeLookupResult::NotYetResolved => {
-                        // For pointers, we can resolve even if the pointee isn't fully resolved yet.
-                        // This allows mutually recursive types to resolve (e.g., A has *mut B, B has *mut A).
-                        // We just need to find the path to the pointee type.
-                        if let grammar::Type::Ident {
-                            path, generic_args, ..
-                        } = pointee.as_ref()
-                        {
-                            if generic_args.is_empty() {
-                                // Non-generic type reference - just find its path
-                                if let Some(last) = path.last() {
-                                    if let Some(full_path) =
-                                        self.find_type_path(scope, last.as_str())
-                                    {
-                                        return TypeLookupResult::Found(Type::MutPointer(
-                                            Box::new(Type::Raw(full_path)),
-                                        ));
-                                    }
-                                }
-                            } else {
-                                // Generic type with potentially unresolved arguments.
-                                // Try partial resolution for self-referential generics.
-                                if let Some(partial) = self.try_resolve_generic_partially(
-                                    scope,
-                                    path,
-                                    generic_args,
-                                    type_params,
-                                ) {
-                                    return TypeLookupResult::Found(Type::MutPointer(Box::new(
-                                        partial,
-                                    )));
-                                }
-                            }
-                        }
-                        TypeLookupResult::NotYetResolved
-                    }
-                    other => other,
-                }
+                self.resolve_pointer_type(scope, pointee, type_params, Type::MutPointer)
             }
             grammar::Type::Array { element, size, .. } => {
                 match self.resolve_grammar_type(scope, element, type_params) {
@@ -729,11 +620,11 @@ impl TypeRegistry {
                                 .get(path)
                                 .map(|def| def.type_parameters.as_slice())
                                 .unwrap_or(&[]);
-                            Self::apply_generic_args_to_type(
-                                other_type,
-                                resolved_args,
+                            TypeLookupResult::Found(Self::substitute_type_params(
+                                &other_type,
                                 original_param_names,
-                            )
+                                &resolved_args,
+                            ))
                         }
                         TypeLookupResult::NotYetResolved => TypeLookupResult::NotYetResolved,
                         TypeLookupResult::NotFound { .. } => {
