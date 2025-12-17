@@ -16,26 +16,13 @@ use crate::{
 use crate::span::StripLocations;
 
 /// A single flag in a bitflags definition
-#[derive(PartialEq, Eq, Debug, Clone, Hash)]
+#[derive(PartialEq, Eq, Debug, Clone, Hash, HasLocation)]
+#[cfg_attr(test, derive(StripLocations))]
+#[cfg_attr(test, strip_locations(internal))]
 pub struct BitflagField {
     pub name: String,
     pub value: usize,
     pub location: ItemLocation,
-}
-impl HasLocation for BitflagField {
-    fn location(&self) -> &ItemLocation {
-        &self.location
-    }
-}
-#[cfg(test)]
-impl StripLocations for BitflagField {
-    fn strip_locations(&self) -> Self {
-        BitflagField {
-            name: self.name.clone(),
-            value: self.value,
-            location: ItemLocation::internal(),
-        }
-    }
 }
 
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]

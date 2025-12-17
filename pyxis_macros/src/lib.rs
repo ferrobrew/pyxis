@@ -137,6 +137,7 @@ pub fn derive_has_location(input: TokenStream) -> TokenStream {
 ///
 /// # Attributes
 /// - `#[strip_locations(copy)]` - For Copy types, just returns `*self`
+/// - `#[strip_locations(internal)]` - Use `ItemLocation::internal()` instead of `test()`
 /// - `#[strip_locations(skip)]` - Skip this field entirely (set to default or empty Vec)
 /// - `#[strip_locations(filter_comments)]` - Filter out Comment variants from a Vec of enum items
 ///
@@ -156,6 +157,14 @@ pub fn derive_has_location(input: TokenStream) -> TokenStream {
 ///     Public,
 ///     Private,
 /// }
+///
+/// #[derive(StripLocations)]
+/// #[strip_locations(internal)]
+/// pub struct EnumVariant {
+///     pub name: String,
+///     pub value: isize,
+///     pub location: ItemLocation,
+/// }
 /// ```
 #[proc_macro_derive(StripLocations, attributes(strip_locations))]
 pub fn derive_strip_locations(input: TokenStream) -> TokenStream {
@@ -164,17 +173,10 @@ pub fn derive_strip_locations(input: TokenStream) -> TokenStream {
     let generics = &input.generics;
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
-    // Check for top-level #[strip_locations(copy)] attribute
-    let is_copy = input.attrs.iter().any(|attr| {
-        if attr.path().is_ident("strip_locations") {
-            attr.parse_args::<Ident>()
-                .is_ok_and(|ident| ident == "copy")
-        } else {
-            false
-        }
-    });
+    // Check for top-level attributes
+    let top_level_attr = get_top_level_strip_locations_attr(&input.attrs);
 
-    if is_copy {
+    if top_level_attr == Some(TopLevelAttr::Copy) {
         let expanded = quote! {
             #[cfg(test)]
             impl #impl_generics crate::span::StripLocations for #name #ty_generics #where_clause {
@@ -186,12 +188,19 @@ pub fn derive_strip_locations(input: TokenStream) -> TokenStream {
         return TokenStream::from(expanded);
     }
 
+    let use_internal = top_level_attr == Some(TopLevelAttr::Internal);
+
     let body = match &input.data {
-        Data::Struct(data) => generate_struct_strip_locations(name, &data.fields),
+        Data::Struct(data) => generate_struct_strip_locations(name, &data.fields, use_internal),
         Data::Enum(data) => {
             let arms = data.variants.iter().map(|variant| {
                 let variant_name = &variant.ident;
-                generate_enum_variant_strip_locations(name, variant_name, &variant.fields)
+                generate_enum_variant_strip_locations(
+                    name,
+                    variant_name,
+                    &variant.fields,
+                    use_internal,
+                )
             });
             quote! {
                 match self {
@@ -218,7 +227,38 @@ pub fn derive_strip_locations(input: TokenStream) -> TokenStream {
     TokenStream::from(expanded)
 }
 
-fn generate_struct_strip_locations(name: &Ident, fields: &Fields) -> proc_macro2::TokenStream {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TopLevelAttr {
+    Copy,
+    Internal,
+}
+
+fn get_top_level_strip_locations_attr(attrs: &[syn::Attribute]) -> Option<TopLevelAttr> {
+    for attr in attrs {
+        if attr.path().is_ident("strip_locations")
+            && let Ok(ident) = attr.parse_args::<Ident>()
+        {
+            if ident == "copy" {
+                return Some(TopLevelAttr::Copy);
+            } else if ident == "internal" {
+                return Some(TopLevelAttr::Internal);
+            }
+        }
+    }
+    None
+}
+
+fn generate_struct_strip_locations(
+    name: &Ident,
+    fields: &Fields,
+    use_internal: bool,
+) -> proc_macro2::TokenStream {
+    let location_expr = if use_internal {
+        quote! { crate::span::ItemLocation::internal() }
+    } else {
+        quote! { crate::span::ItemLocation::test() }
+    };
+
     match fields {
         Fields::Named(fields) => {
             let field_assignments: Vec<_> = fields
@@ -229,7 +269,7 @@ fn generate_struct_strip_locations(name: &Ident, fields: &Fields) -> proc_macro2
                     let field_attr = get_strip_locations_attr(field);
 
                     if field_name == "location" {
-                        quote! { #field_name: crate::span::ItemLocation::test() }
+                        quote! { #field_name: #location_expr }
                     } else if field_attr == Some(FieldAttr::Skip) {
                         // Skip fields get their default value
                         quote! { #field_name: Default::default() }
@@ -278,7 +318,14 @@ fn generate_enum_variant_strip_locations(
     enum_name: &Ident,
     variant_name: &Ident,
     fields: &Fields,
+    use_internal: bool,
 ) -> proc_macro2::TokenStream {
+    let location_expr = if use_internal {
+        quote! { crate::span::ItemLocation::internal() }
+    } else {
+        quote! { crate::span::ItemLocation::test() }
+    };
+
     match fields {
         Fields::Named(fields) => {
             let field_names: Vec<_> = fields
@@ -294,7 +341,7 @@ fn generate_enum_variant_strip_locations(
                     let field_name = field.ident.as_ref().unwrap();
 
                     if field_name == "location" {
-                        quote! { #field_name: crate::span::ItemLocation::test() }
+                        quote! { #field_name: #location_expr }
                     } else {
                         quote! { #field_name: #field_name.strip_locations() }
                     }
