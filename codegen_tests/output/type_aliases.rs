@@ -5,6 +5,29 @@
     clippy::unnecessary_cast
 )]
 #![cfg_attr(any(), rustfmt::skip)]
+#[repr(C, align(8))]
+/// Container using concrete aliases
+pub struct ConcreteAliasContainer {
+    pub vec_shared: *mut crate::generics::Shared<crate::math::Vector3>,
+    pub vec_entry: crate::generics::MapEntry<u32, crate::math::Vector3>,
+}
+fn _ConcreteAliasContainer_size_check() {
+    unsafe {
+        ::std::mem::transmute::<[u8; 0x18], ConcreteAliasContainer>([0u8; 0x18]);
+    }
+    unreachable!()
+}
+impl ConcreteAliasContainer {}
+impl std::convert::AsRef<ConcreteAliasContainer> for ConcreteAliasContainer {
+    fn as_ref(&self) -> &ConcreteAliasContainer {
+        self
+    }
+}
+impl std::convert::AsMut<ConcreteAliasContainer> for ConcreteAliasContainer {
+    fn as_mut(&mut self) -> &mut ConcreteAliasContainer {
+        self
+    }
+}
 /// Generic const pointer type alias
 pub type ConstPtr<T> = *const T;
 #[repr(C, align(8))]
@@ -69,5 +92,9 @@ pub type SharedRef<T> = crate::generics::Shared<T>;
 /// Alias for a Vector3 pointer.
 /// Demonstrates doc comments on type aliases.
 pub type Vec3Ptr = *const crate::math::Vector3;
+/// Concrete alias to Entry<u32, Vector3>
+pub type VecEntry = crate::generics::MapEntry<u32, crate::math::Vector3>;
+/// Concrete alias to SharedPtr<Vector3>
+pub type VecSharedPtr = *mut crate::generics::Shared<crate::math::Vector3>;
 /// Alias for weak pointer to a type
 pub type WeakRef<T> = crate::generics::WeakPtr<T>;

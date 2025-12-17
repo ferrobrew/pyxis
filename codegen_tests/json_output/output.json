@@ -4304,6 +4304,83 @@
         "line": 7
       }
     },
+    "type_aliases::ConcreteAliasContainer": {
+      "path": "type_aliases::ConcreteAliasContainer",
+      "visibility": "public",
+      "size": 24,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": " Container using concrete aliases",
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "vec_shared",
+            "doc": null,
+            "type_ref": {
+              "type": "mut_pointer",
+              "inner": {
+                "type": "generic",
+                "base": "generics::Shared",
+                "args": [
+                  {
+                    "type": "raw",
+                    "path": "math::Vector3"
+                  }
+                ]
+              }
+            },
+            "offset": 0,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 16,
+              "line": 62
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "vec_entry",
+            "doc": null,
+            "type_ref": {
+              "type": "generic",
+              "base": "generics::MapEntry",
+              "args": [
+                {
+                  "type": "raw",
+                  "path": "u32"
+                },
+                {
+                  "type": "raw",
+                  "path": "math::Vector3"
+                }
+              ]
+            },
+            "offset": 8,
+            "size": 16,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 16,
+              "line": 63
+            }
+          }
+        ],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false
+      },
+      "source": {
+        "file_index": 16,
+        "line": 59
+      }
+    },
     "type_aliases::ConstPtr": {
       "path": "type_aliases::ConstPtr",
       "visibility": "public",
@@ -4689,6 +4766,63 @@
       "source": {
         "file_index": 16,
         "line": 4
+      }
+    },
+    "type_aliases::VecEntry": {
+      "path": "type_aliases::VecEntry",
+      "visibility": "public",
+      "size": 0,
+      "alignment": 1,
+      "category": "defined",
+      "kind": {
+        "type": "type_alias",
+        "doc": " Concrete alias to Entry<u32, Vector3>",
+        "target": {
+          "type": "generic",
+          "base": "generics::MapEntry",
+          "args": [
+            {
+              "type": "raw",
+              "path": "u32"
+            },
+            {
+              "type": "raw",
+              "path": "math::Vector3"
+            }
+          ]
+        }
+      },
+      "source": {
+        "file_index": 16,
+        "line": 56
+      }
+    },
+    "type_aliases::VecSharedPtr": {
+      "path": "type_aliases::VecSharedPtr",
+      "visibility": "public",
+      "size": 0,
+      "alignment": 1,
+      "category": "defined",
+      "kind": {
+        "type": "type_alias",
+        "doc": " Concrete alias to SharedPtr<Vector3>",
+        "target": {
+          "type": "mut_pointer",
+          "inner": {
+            "type": "generic",
+            "base": "generics::Shared",
+            "args": [
+              {
+                "type": "raw",
+                "path": "math::Vector3"
+              }
+            ]
+          }
+        }
+      },
+      "source": {
+        "file_index": 16,
+        "line": 53
       }
     },
     "type_aliases::WeakRef": {
@@ -5084,6 +5218,7 @@
     "type_aliases": {
       "doc": null,
       "items": [
+        "type_aliases::ConcreteAliasContainer",
         "type_aliases::ConstPtr",
         "type_aliases::Container",
         "type_aliases::Entry",
@@ -5093,6 +5228,8 @@
         "type_aliases::SharedPtr",
         "type_aliases::SharedRef",
         "type_aliases::Vec3Ptr",
+        "type_aliases::VecEntry",
+        "type_aliases::VecSharedPtr",
         "type_aliases::WeakRef"
       ],
       "submodules": {},

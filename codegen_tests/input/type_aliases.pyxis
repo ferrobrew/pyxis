@@ -47,3 +47,18 @@ pub type GenericAliasContainer {
     pub vec_ptr: Ptr<Vector3>,
     pub const_vec_ptr: ConstPtr<Vector3>,
 }
+
+// ========== Non-generic aliases to instantiated generic types ==========
+
+/// Concrete alias to SharedPtr<Vector3>
+pub type VecSharedPtr = SharedPtr<Vector3>;
+
+/// Concrete alias to Entry<u32, Vector3>
+pub type VecEntry = Entry<u32, Vector3>;
+
+/// Container using concrete aliases
+#[size(0x18)]
+pub type ConcreteAliasContainer {
+    pub vec_shared: VecSharedPtr,
+    pub vec_entry: VecEntry,
+}
