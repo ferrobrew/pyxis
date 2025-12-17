@@ -9,13 +9,14 @@ import sys
 import subprocess
 
 
-def run_command(cmd, env=None):
+def run_command(cmd, env=None, cwd=None):
     """Run a command and exit if it fails."""
     print(f"\n{'=' * 60}")
-    print(f"Running: {' '.join(cmd)}")
+    cwd_info = f" (in {cwd})" if cwd else ""
+    print(f"Running: {' '.join(cmd)}{cwd_info}")
     print(f"{'=' * 60}\n")
 
-    result = subprocess.run(cmd, env=env)
+    result = subprocess.run(cmd, env=env, cwd=cwd)
     if result.returncode != 0:
         print(f"\n[FAIL] Command failed with exit code {result.returncode}")
         sys.exit(result.returncode)
@@ -42,6 +43,9 @@ def main():
 
     # Run codegen tests
     run_command(["cargo", "run", "--example", "codegen_tests"])
+
+    # Check codegen_tests formatting (fail if any changes needed)
+    run_command(["cargo", "run", "-q", "-p", "pyxis-driver", "--", "fmt", "--check"], cwd="codegen_tests/input")
 
     # Run clippy (with RUSTFLAGS to treat warnings as errors, matching CI)
     clippy_env = os.environ.copy()
