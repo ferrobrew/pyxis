@@ -1,5 +1,5 @@
 [workspace]
-members = [".", "driver", "codegen_tests"]
+members = [".", "driver", "codegen_tests", "pyxis_macros"]
 default-members = [".", "driver"]
 
 [workspace.dependencies]
@@ -23,6 +23,7 @@ prettyplease = "0.2"
 toml = "0.9.8"
 serde = { version = "1.0", features = ["derive"] }
 ariadne = "0.6.0"
+pyxis_macros = { path = "pyxis_macros" }
 
 # driver-only
 serde_json = { version = "1.0", optional = true }

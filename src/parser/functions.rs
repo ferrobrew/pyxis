@@ -17,7 +17,8 @@ use super::{
 #[cfg(test)]
 use super::attributes::Attribute;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, HasLocation)]
+#[cfg_attr(test, derive(StripLocations))]
 pub enum Argument {
     ConstSelf {
         location: ItemLocation,
@@ -30,33 +31,6 @@ pub enum Argument {
         type_: Type,
         location: ItemLocation,
     },
-}
-impl HasLocation for Argument {
-    fn location(&self) -> &ItemLocation {
-        match self {
-            Argument::ConstSelf { location } => location,
-            Argument::MutSelf { location } => location,
-            Argument::Named { location, .. } => location,
-        }
-    }
-}
-#[cfg(test)]
-impl StripLocations for Argument {
-    fn strip_locations(&self) -> Self {
-        match self {
-            Argument::ConstSelf { .. } => Argument::ConstSelf {
-                location: ItemLocation::test(),
-            },
-            Argument::MutSelf { .. } => Argument::MutSelf {
-                location: ItemLocation::test(),
-            },
-            Argument::Named { ident, type_, .. } => Argument::Named {
-                ident: ident.strip_locations(),
-                type_: type_.strip_locations(),
-                location: ItemLocation::test(),
-            },
-        }
-    }
 }
 #[cfg(test)]
 impl Argument {
@@ -80,7 +54,8 @@ impl Argument {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, HasLocation)]
+#[cfg_attr(test, derive(StripLocations))]
 pub struct Function {
     pub visibility: Visibility,
     pub name: Ident,
@@ -89,25 +64,6 @@ pub struct Function {
     pub arguments: Vec<Argument>,
     pub return_type: Option<Type>,
     pub location: ItemLocation,
-}
-impl HasLocation for Function {
-    fn location(&self) -> &ItemLocation {
-        &self.location
-    }
-}
-#[cfg(test)]
-impl StripLocations for Function {
-    fn strip_locations(&self) -> Self {
-        Function {
-            visibility: self.visibility.strip_locations(),
-            name: self.name.strip_locations(),
-            attributes: self.attributes.strip_locations(),
-            doc_comments: self.doc_comments.strip_locations(),
-            arguments: self.arguments.strip_locations(),
-            return_type: self.return_type.strip_locations(),
-            location: ItemLocation::test(),
-        }
-    }
 }
 #[cfg(test)]
 impl Function {
@@ -140,40 +96,19 @@ impl Function {
 }
 
 /// Items in an impl block (preserves ordering and comments)
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, HasLocation)]
+#[cfg_attr(test, derive(StripLocations))]
 pub enum ImplItem {
     Comment(Comment),
     Function(Function),
 }
-impl HasLocation for ImplItem {
-    fn location(&self) -> &ItemLocation {
-        match self {
-            ImplItem::Comment(c) => c.location(),
-            ImplItem::Function(f) => f.location(),
-        }
-    }
-}
-#[cfg(test)]
-impl StripLocations for ImplItem {
-    fn strip_locations(&self) -> Self {
-        match self {
-            ImplItem::Comment(c) => ImplItem::Comment(c.strip_locations()),
-            ImplItem::Function(f) => ImplItem::Function(f.strip_locations()),
-        }
-    }
-}
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, HasLocation)]
 pub struct FunctionBlock {
     pub name: Ident,
     pub items: Vec<ImplItem>,
     pub attributes: Attributes,
     pub location: ItemLocation,
-}
-impl HasLocation for FunctionBlock {
-    fn location(&self) -> &ItemLocation {
-        &self.location
-    }
 }
 #[cfg(test)]
 impl StripLocations for FunctionBlock {

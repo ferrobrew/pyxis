@@ -6,6 +6,11 @@ mod strip_locations;
 #[cfg(test)]
 pub use strip_locations::*;
 
+// Re-export derive macros
+pub use pyxis_macros::HasLocation;
+#[cfg(test)]
+pub use pyxis_macros::StripLocations;
+
 /// A location in source code (line and column, both 1-indexed)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Location {
