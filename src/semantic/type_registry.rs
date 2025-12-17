@@ -246,72 +246,70 @@ impl TypeRegistry {
     /// Applies generic arguments to a compound type.
     /// This handles cases where a non-generic type alias resolves to a type containing
     /// type parameters (e.g., `type Ptr<T> = *mut T` used as `Ptr<u32>`).
-    fn apply_generic_args_to_type(type_: Type, args: Vec<Type>) -> TypeLookupResult {
+    fn apply_generic_args_to_type(
+        type_: Type,
+        args: Vec<Type>,
+        param_names: &[String],
+    ) -> TypeLookupResult {
         match type_ {
             Type::MutPointer(inner) => {
-                let substituted = Self::apply_generic_args_to_inner(*inner, &args);
+                let substituted = Self::apply_generic_args_to_inner(*inner, &args, param_names);
                 TypeLookupResult::Found(Type::MutPointer(Box::new(substituted)))
             }
             Type::ConstPointer(inner) => {
-                let substituted = Self::apply_generic_args_to_inner(*inner, &args);
+                let substituted = Self::apply_generic_args_to_inner(*inner, &args, param_names);
                 TypeLookupResult::Found(Type::ConstPointer(Box::new(substituted)))
             }
             Type::Array(inner, size) => {
-                let substituted = Self::apply_generic_args_to_inner(*inner, &args);
+                let substituted = Self::apply_generic_args_to_inner(*inner, &args, param_names);
                 TypeLookupResult::Found(Type::Array(Box::new(substituted), size))
             }
             Type::Generic(path, existing_args) => {
                 // Apply generic args to each existing argument
                 let substituted_args: Vec<Type> = existing_args
                     .into_iter()
-                    .map(|arg| Self::apply_generic_args_to_inner(arg, &args))
+                    .map(|arg| Self::apply_generic_args_to_inner(arg, &args, param_names))
                     .collect();
                 TypeLookupResult::Found(Type::Generic(path, substituted_args))
             }
             // TypeParameter, Raw, etc. - these shouldn't have type arguments applied
             // directly at the top level, but we handle them for completeness
-            other => TypeLookupResult::Found(Self::apply_generic_args_to_inner(other, &args)),
+            other => TypeLookupResult::Found(Self::apply_generic_args_to_inner(
+                other,
+                &args,
+                param_names,
+            )),
         }
     }
 
     /// Helper to apply generic arguments to the inner parts of a type.
-    /// Type parameters are replaced by their corresponding arguments.
-    fn apply_generic_args_to_inner(type_: Type, args: &[Type]) -> Type {
+    /// Type parameters are replaced by their corresponding arguments based on
+    /// their position in `param_names`.
+    fn apply_generic_args_to_inner(type_: Type, args: &[Type], param_names: &[String]) -> Type {
         match type_ {
             Type::TypeParameter(ref name) => {
-                // Type parameters from generic aliases are named T, U, V, etc.
-                // We match them positionally: first param gets first arg, etc.
-                // This is a simplified approach - in practice, the params should
-                // have been substituted during alias resolution.
-                // This handles edge cases where type params leak through.
-                let param_index = match name.as_str() {
-                    "T" => Some(0),
-                    "U" => Some(1),
-                    "V" => Some(2),
-                    "W" => Some(3),
-                    _ => None,
-                };
-                if let Some(idx) = param_index {
+                // Find the parameter index by looking up the name in param_names
+                if let Some(idx) = param_names.iter().position(|p| p == name) {
                     if idx < args.len() {
                         return args[idx].clone();
                     }
                 }
                 type_
             }
-            Type::MutPointer(inner) => {
-                Type::MutPointer(Box::new(Self::apply_generic_args_to_inner(*inner, args)))
-            }
-            Type::ConstPointer(inner) => {
-                Type::ConstPointer(Box::new(Self::apply_generic_args_to_inner(*inner, args)))
-            }
+            Type::MutPointer(inner) => Type::MutPointer(Box::new(
+                Self::apply_generic_args_to_inner(*inner, args, param_names),
+            )),
+            Type::ConstPointer(inner) => Type::ConstPointer(Box::new(
+                Self::apply_generic_args_to_inner(*inner, args, param_names),
+            )),
             Type::Array(inner, size) => Type::Array(
-                Box::new(Self::apply_generic_args_to_inner(*inner, args)),
+                Box::new(Self::apply_generic_args_to_inner(*inner, args, param_names)),
                 size,
             ),
             Type::Generic(path, existing_args) => {
                 let substituted_args: Vec<Type> = existing_args
                     .into_iter()
-                    .map(|arg| Self::apply_generic_args_to_inner(arg, args))
+                    .map(|arg| Self::apply_generic_args_to_inner(arg, args, param_names))
                     .collect();
                 Type::Generic(path, substituted_args)
             }
@@ -468,9 +466,17 @@ impl TypeRegistry {
                         TypeLookupResult::Found(other_type) => {
                             // The base type resolved to a compound type (e.g., non-generic
                             // alias to a pointer). Apply the generic arguments to it.
-                            // This handles cases like: type Ptr<T> = *mut T; type X = Ptr<u32>;
-                            // where X resolves to *mut u32 which is Type::MutPointer.
-                            Self::apply_generic_args_to_type(other_type, resolved_args)
+                            // Get parameter names from the original path before alias resolution.
+                            let original_param_names = self
+                                .types
+                                .get(path)
+                                .map(|def| def.type_parameters.as_slice())
+                                .unwrap_or(&[]);
+                            Self::apply_generic_args_to_type(
+                                other_type,
+                                resolved_args,
+                                original_param_names,
+                            )
                         }
                         other => other,
                     }
