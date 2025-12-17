@@ -423,7 +423,9 @@ impl TypeRegistry {
                         if nested_args.is_empty() {
                             // Simple unresolved type - just use its path
                             if let Some(arg_name) = arg_path.last() {
-                                if let Some(full_path) = self.find_type_path(scope, arg_name.as_str()) {
+                                if let Some(full_path) =
+                                    self.find_type_path(scope, arg_name.as_str())
+                                {
                                     resolved_args.push(Type::Raw(full_path));
                                     continue;
                                 }
@@ -451,7 +453,12 @@ impl TypeRegistry {
             }
         }
 
-        Some(Type::Generic(base_path, resolved_args))
+        // If no generic args, return Raw type instead of Generic with empty args
+        if resolved_args.is_empty() {
+            Some(Type::Raw(base_path))
+        } else {
+            Some(Type::Generic(base_path, resolved_args))
+        }
     }
 
     /// Resolves a path, checking if it's a qualified path or needs scope lookup.
@@ -519,10 +526,15 @@ impl TypeRegistry {
                             } else {
                                 // Generic type with potentially unresolved arguments.
                                 // Try partial resolution for self-referential generics.
-                                if let Some(partial) =
-                                    self.try_resolve_generic_partially(scope, path, generic_args, type_params)
-                                {
-                                    return TypeLookupResult::Found(Type::ConstPointer(Box::new(partial)));
+                                if let Some(partial) = self.try_resolve_generic_partially(
+                                    scope,
+                                    path,
+                                    generic_args,
+                                    type_params,
+                                ) {
+                                    return TypeLookupResult::Found(Type::ConstPointer(Box::new(
+                                        partial,
+                                    )));
                                 }
                             }
                         }
@@ -558,10 +570,15 @@ impl TypeRegistry {
                             } else {
                                 // Generic type with potentially unresolved arguments.
                                 // Try partial resolution for self-referential generics.
-                                if let Some(partial) =
-                                    self.try_resolve_generic_partially(scope, path, generic_args, type_params)
-                                {
-                                    return TypeLookupResult::Found(Type::MutPointer(Box::new(partial)));
+                                if let Some(partial) = self.try_resolve_generic_partially(
+                                    scope,
+                                    path,
+                                    generic_args,
+                                    type_params,
+                                ) {
+                                    return TypeLookupResult::Found(Type::MutPointer(Box::new(
+                                        partial,
+                                    )));
                                 }
                             }
                         }
@@ -642,7 +659,11 @@ impl TypeRegistry {
                                         // Non-ident type that's unresolved - can't proceed
                                         return TypeLookupResult::NotYetResolved;
                                     },
-                                    if let grammar::Type::Ident { generic_args: nested_args, .. } = arg {
+                                    if let grammar::Type::Ident {
+                                        generic_args: nested_args,
+                                        ..
+                                    } = arg
+                                    {
                                         nested_args
                                     } else {
                                         &[]

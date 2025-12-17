@@ -2610,19 +2610,39 @@ fn can_resolve_self_referential_generic_type_with_pointer() {
                     .with_attributes([A::size(pointer_size())]),
             ),
             // Type that uses the generic with a self-reference
+            // Note: pointer field comes first for proper alignment
             ID::new(
                 (V::Public, "GameObject"),
                 TD::new([
-                    TS::field((V::Public, "id"), T::ident("u32")),
                     TS::field(
                         (V::Public, "parent"),
                         T::generic("SharedPtr", [T::ident("GameObject")]),
                     ),
+                    TS::field((V::Public, "id"), T::ident("u32")),
                 ])
-                .with_attributes([A::size(pointer_size() + 4)]),
+                .with_attributes([A::size(pointer_size() * 2)]),
             ),
         ]),
         [
+            // Alphabetical order: GameObject < SharedPtr
+            SID::defined_resolved(
+                (SV::Public, "test::GameObject"),
+                SISR::new(
+                    (pointer_size() * 2, pointer_size()),
+                    STD::new().with_regions(filter_out_empty_regions([
+                        SR::field(
+                            (SV::Public, "parent"),
+                            ST::generic("test::SharedPtr", [ST::raw("test::GameObject")]),
+                        ),
+                        SR::field((SV::Public, "id"), ST::raw("u32")),
+                        // Padding to align struct to pointer_size (only when pointer_size > 4)
+                        SR::field(
+                            (SV::Private, "_field_c"),
+                            ST::array(ST::raw("u8"), pointer_size() - 4),
+                        ),
+                    ])),
+                ),
+            ),
             SID::generic_defined_resolved(
                 (SV::Public, "test::SharedPtr"),
                 ["T"],
@@ -2632,19 +2652,6 @@ fn can_resolve_self_referential_generic_type_with_pointer() {
                         (SV::Public, "px"),
                         ST::type_parameter("T").mut_pointer(),
                     )]),
-                ),
-            ),
-            SID::defined_resolved(
-                (SV::Public, "test::GameObject"),
-                SISR::new(
-                    (pointer_size() + 4, pointer_size()),
-                    STD::new().with_regions([
-                        SR::field((SV::Public, "id"), ST::raw("u32")),
-                        SR::field(
-                            (SV::Public, "parent"),
-                            ST::generic("test::SharedPtr", [ST::raw("test::GameObject")]),
-                        ),
-                    ]),
                 ),
             ),
         ],
@@ -2668,10 +2675,10 @@ fn can_resolve_generic_type_with_multiple_self_referential_pointers() {
                 TD::new([TS::field((V::Public, "px"), T::ident("T").const_pointer())])
                     .with_attributes([A::size(pointer_size())]),
             ),
+            // Note: pointer fields come first for proper alignment
             ID::new(
                 (V::Public, "Node"),
                 TD::new([
-                    TS::field((V::Public, "data"), T::ident("u32")),
                     TS::field(
                         (V::Public, "parent"),
                         T::generic("SharedPtr", [T::ident("Node")]),
@@ -2680,11 +2687,35 @@ fn can_resolve_generic_type_with_multiple_self_referential_pointers() {
                         (V::Public, "weak_self"),
                         T::generic("WeakPtr", [T::ident("Node")]),
                     ),
+                    TS::field((V::Public, "data"), T::ident("u32")),
                 ])
-                .with_attributes([A::size(pointer_size() * 2 + 4)]),
+                .with_attributes([A::size(pointer_size() * 3)]),
             ),
         ]),
         [
+            // Alphabetical order: Node < SharedPtr < WeakPtr
+            SID::defined_resolved(
+                (SV::Public, "test::Node"),
+                SISR::new(
+                    (pointer_size() * 3, pointer_size()),
+                    STD::new().with_regions(filter_out_empty_regions([
+                        SR::field(
+                            (SV::Public, "parent"),
+                            ST::generic("test::SharedPtr", [ST::raw("test::Node")]),
+                        ),
+                        SR::field(
+                            (SV::Public, "weak_self"),
+                            ST::generic("test::WeakPtr", [ST::raw("test::Node")]),
+                        ),
+                        SR::field((SV::Public, "data"), ST::raw("u32")),
+                        // Padding to align struct to pointer_size (only when pointer_size > 4)
+                        SR::field(
+                            (SV::Private, "_field_14"),
+                            ST::array(ST::raw("u8"), pointer_size() - 4),
+                        ),
+                    ])),
+                ),
+            ),
             SID::generic_defined_resolved(
                 (SV::Public, "test::SharedPtr"),
                 ["T"],
@@ -2705,23 +2736,6 @@ fn can_resolve_generic_type_with_multiple_self_referential_pointers() {
                         (SV::Public, "px"),
                         ST::type_parameter("T").const_pointer(),
                     )]),
-                ),
-            ),
-            SID::defined_resolved(
-                (SV::Public, "test::Node"),
-                SISR::new(
-                    (pointer_size() * 2 + 4, pointer_size()),
-                    STD::new().with_regions([
-                        SR::field((SV::Public, "data"), ST::raw("u32")),
-                        SR::field(
-                            (SV::Public, "parent"),
-                            ST::generic("test::SharedPtr", [ST::raw("test::Node")]),
-                        ),
-                        SR::field(
-                            (SV::Public, "weak_self"),
-                            ST::generic("test::WeakPtr", [ST::raw("test::Node")]),
-                        ),
-                    ]),
                 ),
             ),
         ],

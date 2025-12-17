@@ -3539,9 +3539,8 @@
               "base": "self_referential_generics::SharedPtr",
               "args": [
                 {
-                  "type": "generic",
-                  "base": "self_referential_generics::GameObject",
-                  "args": []
+                  "type": "raw",
+                  "path": "self_referential_generics::GameObject"
                 }
               ]
             },
@@ -3563,9 +3562,8 @@
               "base": "self_referential_generics::WeakPtr",
               "args": [
                 {
-                  "type": "generic",
-                  "base": "self_referential_generics::GameObject",
-                  "args": []
+                  "type": "raw",
+                  "path": "self_referential_generics::GameObject"
                 }
               ]
             },
@@ -3587,9 +3585,8 @@
               "base": "self_referential_generics::SharedPtr",
               "args": [
                 {
-                  "type": "generic",
-                  "base": "self_referential_generics::GameObject",
-                  "args": []
+                  "type": "raw",
+                  "path": "self_referential_generics::GameObject"
                 }
               ]
             },
@@ -3741,9 +3738,8 @@
               "base": "self_referential_generics::SharedPtr",
               "args": [
                 {
-                  "type": "generic",
-                  "base": "self_referential_generics::TreeNode",
-                  "args": []
+                  "type": "raw",
+                  "path": "self_referential_generics::TreeNode"
                 }
               ]
             },
@@ -3765,9 +3761,8 @@
               "base": "self_referential_generics::SharedPtr",
               "args": [
                 {
-                  "type": "generic",
-                  "base": "self_referential_generics::TreeNode",
-                  "args": []
+                  "type": "raw",
+                  "path": "self_referential_generics::TreeNode"
                 }
               ]
             },
