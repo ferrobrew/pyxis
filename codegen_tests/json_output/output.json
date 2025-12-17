@@ -1516,7 +1516,7 @@
             "is_base": false,
             "source": {
               "file_index": 9,
-              "line": 9
+              "line": 8
             }
           },
           {
@@ -1533,7 +1533,7 @@
             "is_base": false,
             "source": {
               "file_index": 9,
-              "line": 10
+              "line": 9
             }
           }
         ],
@@ -1547,7 +1547,7 @@
       },
       "source": {
         "file_index": 9,
-        "line": 6
+        "line": 5
       }
     },
     "generics_cross_module::EntityMap": {
@@ -1584,7 +1584,7 @@
             "is_base": false,
             "source": {
               "file_index": 9,
-              "line": 28
+              "line": 27
             }
           }
         ],
@@ -1598,7 +1598,7 @@
       },
       "source": {
         "file_index": 9,
-        "line": 25
+        "line": 24
       }
     },
     "generics_cross_module::NestedShared": {
@@ -1637,7 +1637,7 @@
             "is_base": false,
             "source": {
               "file_index": 9,
-              "line": 34
+              "line": 33
             }
           }
         ],
@@ -1651,7 +1651,7 @@
       },
       "source": {
         "file_index": 9,
-        "line": 31
+        "line": 30
       }
     },
     "generics_cross_module::SharedEntity": {
@@ -1684,7 +1684,7 @@
             "is_base": false,
             "source": {
               "file_index": 9,
-              "line": 16
+              "line": 15
             }
           }
         ],
@@ -1698,7 +1698,7 @@
       },
       "source": {
         "file_index": 9,
-        "line": 13
+        "line": 12
       }
     },
     "generics_cross_module::WeakEntity": {
@@ -1731,7 +1731,7 @@
             "is_base": false,
             "source": {
               "file_index": 9,
-              "line": 22
+              "line": 21
             }
           }
         ],
@@ -1745,7 +1745,7 @@
       },
       "source": {
         "file_index": 9,
-        "line": 19
+        "line": 18
       }
     },
     "i128": {
@@ -3506,7 +3506,7 @@
             "is_base": false,
             "source": {
               "file_index": 13,
-              "line": 21
+              "line": 20
             }
           },
           {
@@ -3705,7 +3705,7 @@
             "is_base": false,
             "source": {
               "file_index": 13,
-              "line": 32
+              "line": 31
             }
           },
           {
@@ -4641,7 +4641,7 @@
             "is_base": false,
             "source": {
               "file_index": 16,
-              "line": 10
+              "line": 9
             }
           }
         ],
@@ -4655,7 +4655,7 @@
       },
       "source": {
         "file_index": 16,
-        "line": 7
+        "line": 6
       }
     },
     "type_aliases::ConcreteAliasContainer": {
@@ -4691,7 +4691,7 @@
             "is_base": false,
             "source": {
               "file_index": 17,
-              "line": 62
+              "line": 59
             }
           },
           {
@@ -4718,7 +4718,7 @@
             "is_base": false,
             "source": {
               "file_index": 17,
-              "line": 63
+              "line": 60
             }
           }
         ],
@@ -4732,7 +4732,7 @@
       },
       "source": {
         "file_index": 17,
-        "line": 59
+        "line": 56
       }
     },
     "type_aliases::ConstPtr": {
@@ -4757,7 +4757,7 @@
       },
       "source": {
         "file_index": 17,
-        "line": 16
+        "line": 15
       }
     },
     "type_aliases::Container": {
@@ -4787,7 +4787,7 @@
             "is_base": false,
             "source": {
               "file_index": 17,
-              "line": 35
+              "line": 33
             }
           },
           {
@@ -4807,7 +4807,7 @@
             "is_base": false,
             "source": {
               "file_index": 17,
-              "line": 36
+              "line": 34
             }
           }
         ],
@@ -4821,7 +4821,7 @@
       },
       "source": {
         "file_index": 17,
-        "line": 33
+        "line": 31
       }
     },
     "type_aliases::Entry": {
@@ -4854,7 +4854,7 @@
       },
       "source": {
         "file_index": 17,
-        "line": 25
+        "line": 24
       }
     },
     "type_aliases::GenericAliasContainer": {
@@ -4887,7 +4887,7 @@
             "is_base": false,
             "source": {
               "file_index": 17,
-              "line": 44
+              "line": 42
             }
           },
           {
@@ -4910,7 +4910,7 @@
             "is_base": false,
             "source": {
               "file_index": 17,
-              "line": 45
+              "line": 43
             }
           },
           {
@@ -4937,7 +4937,7 @@
             "is_base": false,
             "source": {
               "file_index": 17,
-              "line": 46
+              "line": 44
             }
           },
           {
@@ -4957,7 +4957,7 @@
             "is_base": false,
             "source": {
               "file_index": 17,
-              "line": 47
+              "line": 45
             }
           },
           {
@@ -4977,7 +4977,7 @@
             "is_base": false,
             "source": {
               "file_index": 17,
-              "line": 48
+              "line": 46
             }
           }
         ],
@@ -4991,7 +4991,7 @@
       },
       "source": {
         "file_index": 17,
-        "line": 41
+        "line": 39
       }
     },
     "type_aliases::IntMutPtr": {
@@ -5038,7 +5038,7 @@
       },
       "source": {
         "file_index": 17,
-        "line": 13
+        "line": 12
       }
     },
     "type_aliases::SharedPtr": {
@@ -5069,7 +5069,7 @@
       },
       "source": {
         "file_index": 17,
-        "line": 28
+        "line": 27
       }
     },
     "type_aliases::SharedRef": {
@@ -5097,7 +5097,7 @@
       },
       "source": {
         "file_index": 17,
-        "line": 19
+        "line": 18
       }
     },
     "type_aliases::Vec3Ptr": {
@@ -5148,7 +5148,7 @@
       },
       "source": {
         "file_index": 17,
-        "line": 56
+        "line": 53
       }
     },
     "type_aliases::VecSharedPtr": {
@@ -5176,7 +5176,7 @@
       },
       "source": {
         "file_index": 17,
-        "line": 53
+        "line": 50
       }
     },
     "type_aliases::WeakRef": {
@@ -5204,7 +5204,7 @@
       },
       "source": {
         "file_index": 17,
-        "line": 22
+        "line": 21
       }
     },
     "u128": {

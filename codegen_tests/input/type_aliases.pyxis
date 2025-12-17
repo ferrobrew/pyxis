@@ -9,7 +9,6 @@ pub type Vec3Ptr = *const Vector3;
 pub type IntMutPtr = *mut i32;
 
 // ========== Generic type aliases ==========
-
 /// Generic pointer type alias
 pub type Ptr<T> = *mut T;
 
@@ -29,7 +28,6 @@ pub type Entry<K, V> = MapEntry<K, V>;
 pub type SharedPtr<T> = *mut Shared<T>;
 
 // ========== Container using non-generic aliases ==========
-
 /// Container using the non-generic type aliases
 pub type Container {
     pub ptr: Vec3Ptr,
@@ -49,7 +47,6 @@ pub type GenericAliasContainer {
 }
 
 // ========== Non-generic aliases to instantiated generic types ==========
-
 /// Concrete alias to SharedPtr<Vector3>
 pub type VecSharedPtr = SharedPtr<Vector3>;
 

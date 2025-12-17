@@ -427,6 +427,15 @@ impl PrettyPrinter {
             .join("::")
     }
 
+    fn format_type_parameters(&self, type_parameters: &[TypeParameter]) -> String {
+        if type_parameters.is_empty() {
+            String::new()
+        } else {
+            let params: Vec<&str> = type_parameters.iter().map(|p| p.name.as_str()).collect();
+            format!("<{}>", params.join(", "))
+        }
+    }
+
     /// Format a UseTree for pretty printing
     fn format_use_tree(&self, tree: &UseTree) -> String {
         match tree {
@@ -583,13 +592,15 @@ impl PrettyPrinter {
             write!(&mut self.output, "pub ").unwrap();
         }
 
+        let type_params = self.format_type_parameters(&def.type_parameters);
+
         match &def.inner {
             ItemDefinitionInner::Type(td) => {
                 // Use semicolon for empty types
                 if td.items.is_empty() {
-                    writeln!(&mut self.output, "type {};", def.name).unwrap();
+                    writeln!(&mut self.output, "type {}{};", def.name, type_params).unwrap();
                 } else {
-                    writeln!(&mut self.output, "type {} {{", def.name).unwrap();
+                    writeln!(&mut self.output, "type {}{} {{", def.name, type_params).unwrap();
                     self.indent();
                     for (i, item) in td.items.iter().enumerate() {
                         let next_item = td.items.get(i + 1);
@@ -656,7 +667,7 @@ impl PrettyPrinter {
                 writeln!(&mut self.output, "}}").unwrap();
             }
             ItemDefinitionInner::TypeAlias(ta) => {
-                write!(&mut self.output, "type {} = ", def.name).unwrap();
+                write!(&mut self.output, "type {}{} = ", def.name, type_params).unwrap();
                 self.print_type(&ta.target);
                 writeln!(&mut self.output, ";").unwrap();
             }
@@ -810,7 +821,21 @@ impl PrettyPrinter {
 
     fn print_type(&mut self, type_: &Type) {
         match type_ {
-            Type::Ident { path, .. } => write!(&mut self.output, "{path}").unwrap(),
+            Type::Ident {
+                path, generic_args, ..
+            } => {
+                write!(&mut self.output, "{path}").unwrap();
+                if !generic_args.is_empty() {
+                    write!(&mut self.output, "<").unwrap();
+                    for (i, arg) in generic_args.iter().enumerate() {
+                        if i > 0 {
+                            write!(&mut self.output, ", ").unwrap();
+                        }
+                        self.print_type(arg);
+                    }
+                    write!(&mut self.output, ">").unwrap();
+                }
+            }
             Type::ConstPointer { pointee, .. } => {
                 write!(&mut self.output, "*const ").unwrap();
                 self.print_type(pointee);

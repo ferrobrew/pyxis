@@ -1,6 +1,5 @@
 // Tests cross-module generic type usage.
 // Imports generic types from generics module and uses them.
-
 use generics::{Shared, WeakPtr, MapEntry};
 
 /// Entity type for testing
