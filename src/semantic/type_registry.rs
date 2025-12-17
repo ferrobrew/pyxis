@@ -359,6 +359,29 @@ impl TypeRegistry {
         }
     }
 
+    /// Finds the full ItemPath for a type name in the given scope, without requiring
+    /// the type to be resolved. This is useful for pointer types which only need
+    /// to know the path, not the full type definition.
+    /// Returns Some(path) if the type exists (resolved or not), None if not found.
+    fn find_type_path(&self, scope: &[ItemPath], name: &str) -> Option<ItemPath> {
+        let (scope_types, scope_modules): (Vec<&ItemPath>, Vec<&ItemPath>) =
+            scope.iter().partition(|ip| self.types.contains_key(ip));
+
+        // If we find the relevant type within our scope, take the last one
+        scope_types
+            .into_iter()
+            .rev()
+            .find(|st| st.last().map(|i| i.as_str()) == Some(name))
+            .cloned()
+            .or_else(|| {
+                // Otherwise, search our scopes
+                std::iter::once(&ItemPath::empty())
+                    .chain(scope_modules.iter().copied())
+                    .map(|ip| ip.join(name.into()))
+                    .find(|ip| self.types.contains_key(ip))
+            })
+    }
+
     /// Resolves a path, checking if it's a qualified path or needs scope lookup.
     /// Returns detailed information about why resolution failed if it does.
     pub(crate) fn resolve_path(&self, scope: &[ItemPath], path: &ItemPath) -> TypeLookupResult {
@@ -402,6 +425,28 @@ impl TypeRegistry {
                     TypeLookupResult::Found(t) => {
                         TypeLookupResult::Found(Type::ConstPointer(Box::new(t)))
                     }
+                    TypeLookupResult::NotYetResolved => {
+                        // For pointers, we can resolve even if the pointee isn't fully resolved yet.
+                        // This allows mutually recursive types to resolve (e.g., A has *const B, B has *const A).
+                        // We just need to find the path to the pointee type.
+                        if let grammar::Type::Ident {
+                            path, generic_args, ..
+                        } = pointee.as_ref()
+                        {
+                            if generic_args.is_empty() {
+                                if let Some(last) = path.last() {
+                                    if let Some(full_path) =
+                                        self.find_type_path(scope, last.as_str())
+                                    {
+                                        return TypeLookupResult::Found(Type::ConstPointer(
+                                            Box::new(Type::Raw(full_path)),
+                                        ));
+                                    }
+                                }
+                            }
+                        }
+                        TypeLookupResult::NotYetResolved
+                    }
                     other => other,
                 }
             }
@@ -409,6 +454,28 @@ impl TypeRegistry {
                 match self.resolve_grammar_type(scope, pointee, type_params) {
                     TypeLookupResult::Found(t) => {
                         TypeLookupResult::Found(Type::MutPointer(Box::new(t)))
+                    }
+                    TypeLookupResult::NotYetResolved => {
+                        // For pointers, we can resolve even if the pointee isn't fully resolved yet.
+                        // This allows mutually recursive types to resolve (e.g., A has *mut B, B has *mut A).
+                        // We just need to find the path to the pointee type.
+                        if let grammar::Type::Ident {
+                            path, generic_args, ..
+                        } = pointee.as_ref()
+                        {
+                            if generic_args.is_empty() {
+                                if let Some(last) = path.last() {
+                                    if let Some(full_path) =
+                                        self.find_type_path(scope, last.as_str())
+                                    {
+                                        return TypeLookupResult::Found(Type::MutPointer(
+                                            Box::new(Type::Raw(full_path)),
+                                        ));
+                                    }
+                                }
+                            }
+                        }
+                        TypeLookupResult::NotYetResolved
                     }
                     other => other,
                 }
@@ -442,7 +509,8 @@ impl TypeRegistry {
                         ItemPath::from(full_type_name.as_str())
                     } else {
                         // Multi-segment path: replace the last segment with the full type name
-                        let mut segments: Vec<_> = path.iter().take(path.len() - 1).cloned().collect();
+                        let mut segments: Vec<_> =
+                            path.iter().take(path.len() - 1).cloned().collect();
                         segments.push(full_type_name.clone().into());
                         segments.into_iter().collect()
                     };
@@ -451,14 +519,18 @@ impl TypeRegistry {
                     if path.len() == 1 {
                         match self.resolve_string(scope, &full_type_name) {
                             TypeLookupResult::Found(t) => return TypeLookupResult::Found(t),
-                            TypeLookupResult::NotYetResolved => return TypeLookupResult::NotYetResolved,
+                            TypeLookupResult::NotYetResolved => {
+                                return TypeLookupResult::NotYetResolved;
+                            }
                             TypeLookupResult::NotFound { .. } => {
                                 // No exact match, proceed with generic resolution below
                             }
                         }
                     } else if let Some(item_def) = self.types.get(&exact_match_path) {
                         if item_def.is_resolved() {
-                            return TypeLookupResult::Found(self.resolve_type_alias(Type::Raw(exact_match_path)));
+                            return TypeLookupResult::Found(
+                                self.resolve_type_alias(Type::Raw(exact_match_path)),
+                            );
                         } else {
                             return TypeLookupResult::NotYetResolved;
                         }

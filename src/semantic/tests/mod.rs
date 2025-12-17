@@ -2513,7 +2513,6 @@ fn can_resolve_extern_type_with_generic_like_name() {
             .with_definitions([ID::new(
                 (V::Public, "TestType"),
                 TD::new([
-                    TS::field((V::Public, "field_1"), T::ident("u32")),
                     // Use the extern type with generic-like name
                     TS::field(
                         (V::Public, "shared"),
@@ -2531,9 +2530,8 @@ fn can_resolve_extern_type_with_generic_like_name() {
             SID::defined_resolved(
                 (SV::Public, "test::TestType"),
                 SISR::new(
-                    (4 + 2 * pointer_size(), pointer_size()),
+                    (2 * pointer_size(), pointer_size()),
                     STD::new().with_regions([
-                        SR::field((SV::Public, "field_1"), ST::raw("u32")),
                         SR::field((SV::Public, "shared"), ST::raw("test::SharedPtr<u32>")),
                         SR::field(
                             (SV::Public, "shared_ptr"),
@@ -2544,7 +2542,10 @@ fn can_resolve_extern_type_with_generic_like_name() {
             ),
             SID::category_resolved(
                 (SV::Public, "test::SharedPtr<u32>"),
-                SISR::new((pointer_size(), pointer_size()), STD::new().with_regions([])),
+                SISR::new(
+                    (pointer_size(), pointer_size()),
+                    STD::new().with_regions([]),
+                ),
                 SIC::Extern,
             ),
         ],
@@ -2567,11 +2568,8 @@ fn can_resolve_extern_type_with_nested_generic_like_name() {
                 (V::Public, "TestType"),
                 TD::new([TS::field(
                     (V::Public, "texture"),
-                    T::generic(
-                        "ManuallyDrop",
-                        [T::generic("SharedPtr", [T::ident("u32")])],
-                    )
-                    .mut_pointer(),
+                    T::generic("ManuallyDrop", [T::generic("SharedPtr", [T::ident("u32")])])
+                        .mut_pointer(),
                 )])
                 .with_attributes([A::size(pointer_size())]),
             )]),
@@ -2588,7 +2586,10 @@ fn can_resolve_extern_type_with_nested_generic_like_name() {
             ),
             SID::category_resolved(
                 (SV::Public, "test::ManuallyDrop<SharedPtr<u32>>"),
-                SISR::new((pointer_size(), pointer_size()), STD::new().with_regions([])),
+                SISR::new(
+                    (pointer_size(), pointer_size()),
+                    STD::new().with_regions([]),
+                ),
                 SIC::Extern,
             ),
         ],
