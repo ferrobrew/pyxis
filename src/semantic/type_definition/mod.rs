@@ -19,7 +19,8 @@ use crate::span::StripLocations;
 mod vftable;
 pub use vftable::TypeVftable;
 
-#[derive(PartialEq, Eq, Hash, Debug, Clone)]
+#[derive(PartialEq, Eq, Hash, Debug, Clone, HasLocation)]
+#[cfg_attr(test, derive(StripLocations))]
 pub struct Region {
     pub visibility: Visibility,
     pub name: Option<String>,
@@ -27,24 +28,6 @@ pub struct Region {
     pub type_ref: Type,
     pub is_base: bool,
     pub location: ItemLocation,
-}
-impl HasLocation for Region {
-    fn location(&self) -> &ItemLocation {
-        &self.location
-    }
-}
-#[cfg(test)]
-impl StripLocations for Region {
-    fn strip_locations(&self) -> Self {
-        Region {
-            visibility: self.visibility.strip_locations(),
-            name: self.name.strip_locations(),
-            doc: self.doc.strip_locations(),
-            type_ref: self.type_ref.strip_locations(),
-            is_base: self.is_base.strip_locations(),
-            location: ItemLocation::test(),
-        }
-    }
 }
 impl Region {
     #[cfg(test)]
@@ -86,6 +69,7 @@ impl Region {
 }
 
 #[derive(PartialEq, Eq, Debug, Clone, Default, Hash)]
+#[cfg_attr(test, derive(StripLocations))]
 pub struct TypeDefinition {
     pub regions: Vec<Region>,
     pub doc: Vec<String>,
@@ -96,22 +80,6 @@ pub struct TypeDefinition {
     pub cloneable: bool,
     pub defaultable: bool,
     pub packed: bool,
-}
-#[cfg(test)]
-impl StripLocations for TypeDefinition {
-    fn strip_locations(&self) -> Self {
-        TypeDefinition {
-            regions: self.regions.strip_locations(),
-            doc: self.doc.strip_locations(),
-            associated_functions: self.associated_functions.strip_locations(),
-            vftable: self.vftable.strip_locations(),
-            singleton: self.singleton.strip_locations(),
-            copyable: self.copyable.strip_locations(),
-            cloneable: self.cloneable.strip_locations(),
-            defaultable: self.defaultable.strip_locations(),
-            packed: self.packed.strip_locations(),
-        }
-    }
 }
 #[cfg(test)]
 impl TypeDefinition {

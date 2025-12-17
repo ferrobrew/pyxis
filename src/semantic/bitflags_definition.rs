@@ -16,29 +16,16 @@ use crate::{
 use crate::span::StripLocations;
 
 /// A single flag in a bitflags definition
-#[derive(PartialEq, Eq, Debug, Clone, Hash)]
+#[derive(PartialEq, Eq, Debug, Clone, Hash, HasLocation)]
+#[cfg_attr(test, derive(StripLocations))]
 pub struct BitflagField {
     pub name: String,
     pub value: usize,
     pub location: ItemLocation,
 }
-impl HasLocation for BitflagField {
-    fn location(&self) -> &ItemLocation {
-        &self.location
-    }
-}
-#[cfg(test)]
-impl StripLocations for BitflagField {
-    fn strip_locations(&self) -> Self {
-        BitflagField {
-            name: self.name.clone(),
-            value: self.value,
-            location: ItemLocation::internal(),
-        }
-    }
-}
 
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]
+#[cfg_attr(test, derive(StripLocations))]
 pub struct BitflagsDefinition {
     pub type_: Type,
     pub doc: Vec<String>,
@@ -49,19 +36,6 @@ pub struct BitflagsDefinition {
     pub default: Option<usize>,
 }
 #[cfg(test)]
-impl StripLocations for BitflagsDefinition {
-    fn strip_locations(&self) -> Self {
-        BitflagsDefinition {
-            type_: self.type_.strip_locations(),
-            doc: self.doc.strip_locations(),
-            flags: self.flags.strip_locations(),
-            singleton: self.singleton.strip_locations(),
-            copyable: self.copyable.strip_locations(),
-            cloneable: self.cloneable.strip_locations(),
-            default: self.default.strip_locations(),
-        }
-    }
-}
 impl BitflagsDefinition {
     pub fn new(type_: Type) -> Self {
         BitflagsDefinition {
@@ -84,7 +58,7 @@ impl BitflagsDefinition {
             .map(|(n, v)| BitflagField {
                 name: n.to_string(),
                 value: v,
-                location: ItemLocation::internal(),
+                location: ItemLocation::test(),
             })
             .collect();
         self
@@ -105,6 +79,8 @@ impl BitflagsDefinition {
         self.default = Some(default);
         self
     }
+}
+impl BitflagsDefinition {
     pub fn doc(&self) -> &[String] {
         &self.doc
     }

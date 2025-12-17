@@ -11,24 +11,11 @@ use crate::span::StripLocations;
 use super::{ParseError, core::Parser, paths::ItemPath};
 
 /// A type parameter in a generic type definition (e.g., `T` in `type Shared<T>`)
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, HasLocation)]
+#[cfg_attr(test, derive(StripLocations))]
 pub struct TypeParameter {
     pub name: String,
     pub location: ItemLocation,
-}
-impl HasLocation for TypeParameter {
-    fn location(&self) -> &ItemLocation {
-        &self.location
-    }
-}
-#[cfg(test)]
-impl StripLocations for TypeParameter {
-    fn strip_locations(&self) -> Self {
-        TypeParameter {
-            name: self.name.clone(),
-            location: ItemLocation::test(),
-        }
-    }
 }
 impl EqualsIgnoringLocations for TypeParameter {
     fn equals_ignoring_locations(&self, other: &Self) -> bool {
@@ -46,13 +33,8 @@ impl TypeParameter {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(test, derive(StripLocations))]
 pub struct Ident(pub String);
-#[cfg(test)]
-impl StripLocations for Ident {
-    fn strip_locations(&self) -> Self {
-        Ident(self.0.strip_locations())
-    }
-}
 impl EqualsIgnoringLocations for Ident {
     fn equals_ignoring_locations(&self, other: &Self) -> bool {
         self.0 == other.0
@@ -79,7 +61,8 @@ impl fmt::Display for Ident {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, HasLocation)]
+#[cfg_attr(test, derive(StripLocations))]
 pub enum Type {
     ConstPointer {
         pointee: Box<Type>,
@@ -104,17 +87,6 @@ pub enum Type {
         size: usize,
         location: ItemLocation,
     },
-}
-impl HasLocation for Type {
-    fn location(&self) -> &ItemLocation {
-        match self {
-            Type::ConstPointer { location, .. } => location,
-            Type::MutPointer { location, .. } => location,
-            Type::Array { location, .. } => location,
-            Type::Ident { location, .. } => location,
-            Type::Unknown { location, .. } => location,
-        }
-    }
 }
 impl EqualsIgnoringLocations for Type {
     fn equals_ignoring_locations(&self, other: &Self) -> bool {
@@ -158,37 +130,6 @@ impl EqualsIgnoringLocations for Type {
                 size.equals_ignoring_locations(size2)
             }
             _ => false,
-        }
-    }
-}
-#[cfg(test)]
-impl StripLocations for Type {
-    fn strip_locations(&self) -> Self {
-        match self {
-            Type::ConstPointer { pointee, .. } => Type::ConstPointer {
-                pointee: pointee.strip_locations(),
-                location: ItemLocation::test(),
-            },
-            Type::MutPointer { pointee, .. } => Type::MutPointer {
-                pointee: pointee.strip_locations(),
-                location: ItemLocation::test(),
-            },
-            Type::Array { element, size, .. } => Type::Array {
-                element: element.strip_locations(),
-                size: size.strip_locations(),
-                location: ItemLocation::test(),
-            },
-            Type::Ident {
-                path, generic_args, ..
-            } => Type::Ident {
-                path: path.strip_locations(),
-                generic_args: generic_args.strip_locations(),
-                location: ItemLocation::test(),
-            },
-            Type::Unknown { size, .. } => Type::Unknown {
-                size: size.strip_locations(),
-                location: ItemLocation::test(),
-            },
         }
     }
 }

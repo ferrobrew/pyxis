@@ -14,29 +14,16 @@ use crate::{
 };
 
 /// A single variant in an enum definition
-#[derive(PartialEq, Eq, Debug, Clone, Hash)]
+#[derive(PartialEq, Eq, Debug, Clone, Hash, HasLocation)]
+#[cfg_attr(test, derive(StripLocations))]
 pub struct EnumVariant {
     pub name: String,
     pub value: isize,
     pub location: ItemLocation,
 }
-impl HasLocation for EnumVariant {
-    fn location(&self) -> &ItemLocation {
-        &self.location
-    }
-}
-#[cfg(test)]
-impl StripLocations for EnumVariant {
-    fn strip_locations(&self) -> Self {
-        EnumVariant {
-            name: self.name.clone(),
-            value: self.value,
-            location: ItemLocation::internal(),
-        }
-    }
-}
 
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]
+#[cfg_attr(test, derive(StripLocations))]
 pub struct EnumDefinition {
     pub type_: Type,
     pub doc: Vec<String>,
@@ -46,21 +33,6 @@ pub struct EnumDefinition {
     pub copyable: bool,
     pub cloneable: bool,
     pub default: Option<usize>,
-}
-#[cfg(test)]
-impl StripLocations for EnumDefinition {
-    fn strip_locations(&self) -> Self {
-        EnumDefinition {
-            type_: self.type_.strip_locations(),
-            doc: self.doc.strip_locations(),
-            variants: self.variants.strip_locations(),
-            associated_functions: self.associated_functions.strip_locations(),
-            singleton: self.singleton.strip_locations(),
-            copyable: self.copyable.strip_locations(),
-            cloneable: self.cloneable.strip_locations(),
-            default: self.default.strip_locations(),
-        }
-    }
 }
 #[cfg(test)]
 impl EnumDefinition {
@@ -89,7 +61,7 @@ impl EnumDefinition {
             .map(|(n, v)| EnumVariant {
                 name: n.to_string(),
                 value: v,
-                location: ItemLocation::internal(),
+                location: ItemLocation::test(),
             })
             .collect();
         self

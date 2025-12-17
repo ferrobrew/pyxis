@@ -253,6 +253,7 @@ dependencies = [
  "pretty_assertions",
  "prettyplease",
  "proc-macro2",
+ "pyxis_macros",
  "quote",
  "serde",
  "serde_json",
@@ -268,6 +269,15 @@ dependencies = [
  "clap",
  "pyxis",
  "specta-typescript",
+]
+
+[[package]]
+name = "pyxis_macros"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]

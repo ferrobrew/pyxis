@@ -41,6 +41,8 @@ pub mod test_aliases {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(test, derive(StripLocations))]
+#[cfg_attr(test, strip_locations(copy))]
 pub enum Visibility {
     Public,
     Private,
@@ -48,12 +50,6 @@ pub enum Visibility {
 impl EqualsIgnoringLocations for Visibility {
     fn equals_ignoring_locations(&self, other: &Self) -> bool {
         self == other
-    }
-}
-#[cfg(test)]
-impl StripLocations for Visibility {
-    fn strip_locations(&self) -> Self {
-        *self
     }
 }
 impl From<grammar::Visibility> for Visibility {
@@ -66,6 +62,7 @@ impl From<grammar::Visibility> for Visibility {
 }
 
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]
+#[cfg_attr(test, derive(StripLocations))]
 pub enum Type {
     Unresolved(grammar::Type),
     Raw(ItemPath),
@@ -108,28 +105,6 @@ impl EqualsIgnoringLocations for Type {
                     && t.equals_ignoring_locations(t2)
             }
             _ => false,
-        }
-    }
-}
-#[cfg(test)]
-impl StripLocations for Type {
-    fn strip_locations(&self) -> Self {
-        match self {
-            Type::Unresolved(located) => Type::Unresolved(located.strip_locations()),
-            Type::Raw(item_path) => Type::Raw(item_path.strip_locations()),
-            Type::Generic(base, args) => Type::Generic(
-                base.strip_locations(),
-                args.iter().map(|a| a.strip_locations()).collect(),
-            ),
-            Type::TypeParameter(name) => Type::TypeParameter(name.clone()),
-            Type::ConstPointer(t) => Type::ConstPointer(t.strip_locations()),
-            Type::MutPointer(t) => Type::MutPointer(t.strip_locations()),
-            Type::Array(t, n) => Type::Array(t.strip_locations(), n.strip_locations()),
-            Type::Function(calling_convention, items, return_type) => Type::Function(
-                calling_convention.strip_locations(),
-                items.strip_locations(),
-                return_type.strip_locations(),
-            ),
         }
     }
 }
@@ -284,26 +259,12 @@ impl fmt::Display for Type {
 }
 
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]
+#[cfg_attr(test, derive(StripLocations))]
 pub enum ItemDefinitionInner {
     Type(TypeDefinition),
     Enum(EnumDefinition),
     Bitflags(BitflagsDefinition),
     TypeAlias(TypeAliasDefinition),
-}
-#[cfg(test)]
-impl StripLocations for ItemDefinitionInner {
-    fn strip_locations(&self) -> Self {
-        match self {
-            ItemDefinitionInner::Type(td) => ItemDefinitionInner::Type(td.strip_locations()),
-            ItemDefinitionInner::Enum(ed) => ItemDefinitionInner::Enum(ed.strip_locations()),
-            ItemDefinitionInner::Bitflags(bd) => {
-                ItemDefinitionInner::Bitflags(bd.strip_locations())
-            }
-            ItemDefinitionInner::TypeAlias(ta) => {
-                ItemDefinitionInner::TypeAlias(ta.strip_locations())
-            }
-        }
-    }
 }
 impl From<TypeDefinition> for ItemDefinitionInner {
     fn from(td: TypeDefinition) -> Self {
@@ -363,20 +324,11 @@ impl ItemDefinitionInner {
 }
 
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]
+#[cfg_attr(test, derive(StripLocations))]
 pub struct ItemStateResolved {
     pub size: usize,
     pub alignment: usize,
     pub inner: ItemDefinitionInner,
-}
-#[cfg(test)]
-impl StripLocations for ItemStateResolved {
-    fn strip_locations(&self) -> Self {
-        ItemStateResolved {
-            size: self.size.strip_locations(),
-            alignment: self.alignment.strip_locations(),
-            inner: self.inner.strip_locations(),
-        }
-    }
 }
 impl From<ItemStateResolved> for ItemState {
     fn from(isr: ItemStateResolved) -> Self {
@@ -394,31 +346,19 @@ impl ItemStateResolved {
 }
 
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]
+#[cfg_attr(test, derive(StripLocations))]
 pub enum ItemState {
     Unresolved(grammar::ItemDefinition),
     Resolved(ItemStateResolved),
 }
-#[cfg(test)]
-impl StripLocations for ItemState {
-    fn strip_locations(&self) -> Self {
-        match self {
-            ItemState::Unresolved(def) => ItemState::Unresolved(def.strip_locations()),
-            ItemState::Resolved(resolved) => ItemState::Resolved(resolved.strip_locations()),
-        }
-    }
-}
 
 #[derive(PartialEq, Eq, Debug, Copy, Clone, Hash)]
+#[cfg_attr(test, derive(StripLocations))]
+#[cfg_attr(test, strip_locations(copy))]
 pub enum ItemCategory {
     Defined,
     Predefined,
     Extern,
-}
-#[cfg(test)]
-impl StripLocations for ItemCategory {
-    fn strip_locations(&self) -> Self {
-        *self
-    }
 }
 macro_rules! predefined_items {
     ($(($variant:ident, $name:expr, $size:expr)),* $(,)?) => {
@@ -469,7 +409,8 @@ predefined_items! {
     (F64, "f64", 8),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, HasLocation)]
+#[cfg_attr(test, derive(StripLocations))]
 pub struct ItemDefinition {
     pub visibility: Visibility,
     pub path: ItemPath,
@@ -479,26 +420,6 @@ pub struct ItemDefinition {
     pub category: ItemCategory,
     pub predefined: Option<PredefinedItem>,
     pub location: ItemLocation,
-}
-impl HasLocation for ItemDefinition {
-    fn location(&self) -> &ItemLocation {
-        &self.location
-    }
-}
-#[cfg(test)]
-// StripSpans implementations for testing
-impl StripLocations for ItemDefinition {
-    fn strip_locations(&self) -> Self {
-        ItemDefinition {
-            visibility: self.visibility.strip_locations(),
-            path: self.path.strip_locations(),
-            type_parameters: self.type_parameters.clone(),
-            state: self.state.strip_locations(),
-            category: self.category.strip_locations(),
-            predefined: self.predefined.strip_locations(),
-            location: ItemLocation::test(),
-        }
-    }
 }
 impl ItemDefinition {
     /// Test-only constructor for category_resolved that uses a synthetic location
@@ -582,16 +503,12 @@ impl ItemDefinition {
     }
 }
 
-#[derive(PartialEq, Eq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone, HasLocation)]
+#[cfg_attr(test, derive(StripLocations))]
 pub struct Backend {
     pub prologue: Option<String>,
     pub epilogue: Option<String>,
     pub location: ItemLocation,
-}
-impl HasLocation for Backend {
-    fn location(&self) -> &ItemLocation {
-        &self.location
-    }
 }
 #[cfg(test)]
 impl Backend {
@@ -604,16 +521,12 @@ impl Backend {
     }
 }
 
-#[derive(PartialEq, Eq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone, HasLocation)]
+#[cfg_attr(test, derive(StripLocations))]
 pub struct ExternValue {
     pub visibility: Visibility,
     pub name: String,
     pub type_: Type,
     pub address: usize,
     pub location: ItemLocation,
-}
-impl HasLocation for ExternValue {
-    fn location(&self) -> &ItemLocation {
-        &self.location
-    }
 }

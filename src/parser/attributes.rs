@@ -10,7 +10,8 @@ use super::{ParseError, core::Parser, expressions::Expr, types::Ident};
 #[cfg(test)]
 use super::expressions::{IntFormat, StringFormat};
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, HasLocation)]
+#[cfg_attr(test, derive(StripLocations))]
 pub enum AttributeItem {
     Expr {
         expr: Expr,
@@ -21,38 +22,10 @@ pub enum AttributeItem {
         location: ItemLocation,
     },
 }
-impl HasLocation for AttributeItem {
-    fn location(&self) -> &ItemLocation {
-        match self {
-            AttributeItem::Expr { location, .. } => location,
-            AttributeItem::Comment { location, .. } => location,
-        }
-    }
-}
-#[cfg(test)]
-impl StripLocations for AttributeItem {
-    fn strip_locations(&self) -> Self {
-        match self {
-            AttributeItem::Expr { expr, .. } => AttributeItem::Expr {
-                expr: expr.strip_locations(),
-                location: ItemLocation::test(),
-            },
-            AttributeItem::Comment { text, .. } => AttributeItem::Comment {
-                text: text.strip_locations(),
-                location: ItemLocation::test(),
-            },
-        }
-    }
-}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(test, derive(StripLocations))]
 pub struct AttributeItems(pub Vec<AttributeItem>);
-#[cfg(test)]
-impl StripLocations for AttributeItems {
-    fn strip_locations(&self) -> Self {
-        AttributeItems(self.0.strip_locations())
-    }
-}
 #[cfg(test)]
 impl FromIterator<AttributeItem> for AttributeItems {
     fn from_iter<I: IntoIterator<Item = AttributeItem>>(iter: I) -> Self {
@@ -87,7 +60,8 @@ impl AttributeItems {
 
 use crate::span::HasLocation;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, HasLocation)]
+#[cfg_attr(test, derive(StripLocations))]
 pub enum Attribute {
     Ident {
         ident: Ident,
@@ -107,36 +81,6 @@ pub enum Attribute {
         items: AttributeItems,
         location: ItemLocation,
     },
-}
-impl HasLocation for Attribute {
-    fn location(&self) -> &ItemLocation {
-        match self {
-            Attribute::Ident { location, .. } => location,
-            Attribute::Function { location, .. } => location,
-            Attribute::Assign { location, .. } => location,
-        }
-    }
-}
-#[cfg(test)]
-impl StripLocations for Attribute {
-    fn strip_locations(&self) -> Self {
-        match self {
-            Attribute::Ident { ident, .. } => Attribute::Ident {
-                ident: ident.strip_locations(),
-                location: ItemLocation::test(),
-            },
-            Attribute::Function { name, items, .. } => Attribute::Function {
-                name: name.clone(),
-                items: items.strip_locations(),
-                location: ItemLocation::test(),
-            },
-            Attribute::Assign { name, items, .. } => Attribute::Assign {
-                name: name.clone(),
-                items: items.strip_locations(),
-                location: ItemLocation::test(),
-            },
-        }
-    }
 }
 #[cfg(test)]
 impl Attribute {
@@ -259,13 +203,8 @@ impl Attribute {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+#[cfg_attr(test, derive(StripLocations))]
 pub struct Attributes(pub Vec<Attribute>);
-#[cfg(test)]
-impl StripLocations for Attributes {
-    fn strip_locations(&self) -> Self {
-        Attributes(self.0.strip_locations())
-    }
-}
 #[cfg(test)]
 impl FromIterator<Attribute> for Attributes {
     fn from_iter<I: IntoIterator<Item = Attribute>>(iter: I) -> Self {
@@ -299,15 +238,11 @@ impl DerefMut for Attributes {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(test, derive(StripLocations))]
+#[cfg_attr(test, strip_locations(copy))]
 pub enum Visibility {
     Public,
     Private,
-}
-#[cfg(test)]
-impl StripLocations for Visibility {
-    fn strip_locations(&self) -> Self {
-        *self
-    }
 }
 
 impl Parser {

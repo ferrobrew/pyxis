@@ -16,21 +16,12 @@ use crate::span::StripLocations;
 
 /// Semantic type alias definition - stores the resolved target type
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]
+#[cfg_attr(test, derive(StripLocations))]
 pub struct TypeAliasDefinition {
     /// The resolved target type that this alias refers to
     pub target: Type,
     /// Documentation comments
     pub doc: Vec<String>,
-}
-
-#[cfg(test)]
-impl StripLocations for TypeAliasDefinition {
-    fn strip_locations(&self) -> Self {
-        TypeAliasDefinition {
-            target: self.target.strip_locations(),
-            doc: self.doc.clone(),
-        }
-    }
 }
 
 impl TypeAliasDefinition {

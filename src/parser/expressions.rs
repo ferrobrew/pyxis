@@ -10,33 +10,26 @@ use super::{ParseError, core::Parser, types::Ident};
 
 /// Format information for integer literals
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(test, derive(StripLocations))]
+#[cfg_attr(test, strip_locations(copy))]
 pub enum IntFormat {
     Decimal,
     Hex,
     Binary,
     Octal,
 }
-#[cfg(test)]
-impl StripLocations for IntFormat {
-    fn strip_locations(&self) -> Self {
-        *self
-    }
-}
 
 /// Format information for string literals
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(test, derive(StripLocations))]
+#[cfg_attr(test, strip_locations(copy))]
 pub enum StringFormat {
     Regular,
     Raw,
 }
-#[cfg(test)]
-impl StripLocations for StringFormat {
-    fn strip_locations(&self) -> Self {
-        *self
-    }
-}
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, HasLocation)]
+#[cfg_attr(test, derive(StripLocations))]
 pub enum Expr {
     IntLiteral {
         value: isize,
@@ -52,36 +45,6 @@ pub enum Expr {
         ident: Ident,
         location: ItemLocation,
     },
-}
-impl HasLocation for Expr {
-    fn location(&self) -> &ItemLocation {
-        match self {
-            Expr::IntLiteral { location, .. } => location,
-            Expr::StringLiteral { location, .. } => location,
-            Expr::Ident { location, .. } => location,
-        }
-    }
-}
-#[cfg(test)]
-impl StripLocations for Expr {
-    fn strip_locations(&self) -> Self {
-        match self {
-            Expr::IntLiteral { value, format, .. } => Expr::IntLiteral {
-                value: value.strip_locations(),
-                format: format.strip_locations(),
-                location: ItemLocation::test(),
-            },
-            Expr::StringLiteral { value, format, .. } => Expr::StringLiteral {
-                value: value.strip_locations(),
-                format: format.strip_locations(),
-                location: ItemLocation::test(),
-            },
-            Expr::Ident { ident, .. } => Expr::Ident {
-                ident: ident.strip_locations(),
-                location: ItemLocation::test(),
-            },
-        }
-    }
 }
 impl Expr {
     pub fn int_literal(&self) -> Option<isize> {

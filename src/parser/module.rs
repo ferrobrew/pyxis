@@ -19,7 +19,8 @@ use crate::{
 use super::paths::ItemPath;
 
 /// Module-level items (preserves ordering and comments)
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, HasLocation)]
+#[cfg_attr(test, derive(StripLocations))]
 pub enum ModuleItem {
     Comment {
         comment: Comment,
@@ -49,60 +50,6 @@ pub enum ModuleItem {
     Function {
         function: Function,
     },
-}
-impl HasLocation for ModuleItem {
-    fn location(&self) -> &ItemLocation {
-        match self {
-            ModuleItem::Comment { comment } => comment.location(),
-            ModuleItem::Use { location, .. } => location,
-            ModuleItem::ExternType { location, .. } => location,
-            ModuleItem::Backend { backend } => backend.location(),
-            ModuleItem::Definition { definition } => definition.location(),
-            ModuleItem::Impl { impl_block } => impl_block.location(),
-            ModuleItem::ExternValue { extern_value } => extern_value.location(),
-            ModuleItem::Function { function } => function.location(),
-        }
-    }
-}
-#[cfg(test)]
-impl StripLocations for ModuleItem {
-    fn strip_locations(&self) -> Self {
-        match self {
-            ModuleItem::Comment { comment } => ModuleItem::Comment {
-                comment: comment.strip_locations(),
-            },
-            ModuleItem::Use { tree, .. } => ModuleItem::Use {
-                tree: tree.strip_locations(),
-                location: ItemLocation::test(),
-            },
-            ModuleItem::ExternType {
-                name,
-                attributes,
-                doc_comments,
-                ..
-            } => ModuleItem::ExternType {
-                name: name.strip_locations(),
-                attributes: attributes.strip_locations(),
-                doc_comments: doc_comments.strip_locations(),
-                location: ItemLocation::test(),
-            },
-            ModuleItem::Backend { backend } => ModuleItem::Backend {
-                backend: backend.strip_locations(),
-            },
-            ModuleItem::Definition { definition } => ModuleItem::Definition {
-                definition: definition.strip_locations(),
-            },
-            ModuleItem::Impl { impl_block } => ModuleItem::Impl {
-                impl_block: impl_block.strip_locations(),
-            },
-            ModuleItem::ExternValue { extern_value } => ModuleItem::ExternValue {
-                extern_value: extern_value.strip_locations(),
-            },
-            ModuleItem::Function { function } => ModuleItem::Function {
-                function: function.strip_locations(),
-            },
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]

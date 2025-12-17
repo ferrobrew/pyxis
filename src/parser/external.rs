@@ -19,7 +19,8 @@ use super::{
 #[cfg(test)]
 use super::attributes::Attribute;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, HasLocation)]
+#[cfg_attr(test, derive(StripLocations))]
 pub struct Backend {
     pub name: Ident,
     pub prologue: Option<String>,
@@ -27,24 +28,6 @@ pub struct Backend {
     pub epilogue: Option<String>,
     pub epilogue_format: StringFormat,
     pub location: ItemLocation,
-}
-impl HasLocation for Backend {
-    fn location(&self) -> &ItemLocation {
-        &self.location
-    }
-}
-#[cfg(test)]
-impl StripLocations for Backend {
-    fn strip_locations(&self) -> Self {
-        Backend {
-            name: self.name.strip_locations(),
-            prologue: self.prologue.strip_locations(),
-            prologue_format: self.prologue_format.strip_locations(),
-            epilogue: self.epilogue.strip_locations(),
-            epilogue_format: self.epilogue_format.strip_locations(),
-            location: ItemLocation::test(),
-        }
-    }
 }
 #[cfg(test)]
 impl Backend {
@@ -86,7 +69,8 @@ impl Backend {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, HasLocation)]
+#[cfg_attr(test, derive(StripLocations))]
 pub struct ExternValue {
     pub visibility: Visibility,
     pub name: Ident,
@@ -94,24 +78,6 @@ pub struct ExternValue {
     pub attributes: Attributes,
     pub doc_comments: Vec<String>,
     pub location: ItemLocation,
-}
-impl HasLocation for ExternValue {
-    fn location(&self) -> &ItemLocation {
-        &self.location
-    }
-}
-#[cfg(test)]
-impl StripLocations for ExternValue {
-    fn strip_locations(&self) -> Self {
-        ExternValue {
-            visibility: self.visibility.strip_locations(),
-            name: self.name.strip_locations(),
-            type_: self.type_.strip_locations(),
-            attributes: self.attributes.strip_locations(),
-            doc_comments: self.doc_comments.strip_locations(),
-            location: ItemLocation::test(),
-        }
-    }
 }
 #[cfg(test)]
 impl ExternValue {
@@ -141,7 +107,8 @@ impl ExternValue {
 /// - `Vector3` → `UseTree::Path { path: ["Vector3"], location }`
 /// - `math::{Vector3, Matrix4}` → `UseTree::Group { prefix: ["math"], items: [Path(...), Path(...)] }`
 /// - `types::{math::{V3, V4}, Game}` → nested groups
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, HasLocation)]
+#[cfg_attr(test, derive(StripLocations))]
 pub enum UseTree {
     /// A leaf path like `Vector3` or `math::Vector3`
     Path {
@@ -190,14 +157,6 @@ impl UseTree {
         }
     }
 }
-impl HasLocation for UseTree {
-    fn location(&self) -> &ItemLocation {
-        match self {
-            UseTree::Path { location, .. } => location,
-            UseTree::Group { location, .. } => location,
-        }
-    }
-}
 #[cfg(test)]
 impl UseTree {
     /// Create a Path variant with a test location (for use in tests)
@@ -214,22 +173,6 @@ impl UseTree {
             prefix: prefix.into(),
             items: items.into_iter().collect(),
             location: ItemLocation::test(),
-        }
-    }
-}
-#[cfg(test)]
-impl StripLocations for UseTree {
-    fn strip_locations(&self) -> Self {
-        match self {
-            UseTree::Path { path, .. } => UseTree::Path {
-                path: path.strip_locations(),
-                location: ItemLocation::test(),
-            },
-            UseTree::Group { prefix, items, .. } => UseTree::Group {
-                prefix: prefix.strip_locations(),
-                items: items.iter().map(|i| i.strip_locations()).collect(),
-                location: ItemLocation::test(),
-            },
         }
     }
 }
