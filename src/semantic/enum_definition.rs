@@ -16,7 +16,6 @@ use crate::{
 /// A single variant in an enum definition
 #[derive(PartialEq, Eq, Debug, Clone, Hash, HasLocation)]
 #[cfg_attr(test, derive(StripLocations))]
-#[cfg_attr(test, strip_locations(internal))]
 pub struct EnumVariant {
     pub name: String,
     pub value: isize,
@@ -62,7 +61,7 @@ impl EnumDefinition {
             .map(|(n, v)| EnumVariant {
                 name: n.to_string(),
                 value: v,
-                location: ItemLocation::internal(),
+                location: ItemLocation::test(),
             })
             .collect();
         self

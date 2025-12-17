@@ -18,7 +18,6 @@ use crate::span::StripLocations;
 /// A single flag in a bitflags definition
 #[derive(PartialEq, Eq, Debug, Clone, Hash, HasLocation)]
 #[cfg_attr(test, derive(StripLocations))]
-#[cfg_attr(test, strip_locations(internal))]
 pub struct BitflagField {
     pub name: String,
     pub value: usize,
@@ -36,6 +35,7 @@ pub struct BitflagsDefinition {
     pub cloneable: bool,
     pub default: Option<usize>,
 }
+#[cfg(test)]
 impl BitflagsDefinition {
     pub fn new(type_: Type) -> Self {
         BitflagsDefinition {
@@ -58,7 +58,7 @@ impl BitflagsDefinition {
             .map(|(n, v)| BitflagField {
                 name: n.to_string(),
                 value: v,
-                location: ItemLocation::internal(),
+                location: ItemLocation::test(),
             })
             .collect();
         self
@@ -79,6 +79,8 @@ impl BitflagsDefinition {
         self.default = Some(default);
         self
     }
+}
+impl BitflagsDefinition {
     pub fn doc(&self) -> &[String] {
         &self.doc
     }
