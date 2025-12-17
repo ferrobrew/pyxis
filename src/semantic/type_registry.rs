@@ -188,6 +188,61 @@ impl TypeRegistry {
         }
     }
 
+    /// Computes the size of a generic type instantiation.
+    /// Returns the size by substituting type parameters with the provided arguments
+    /// and computing the size of each field.
+    pub(crate) fn compute_generic_size(&self, base: &ItemPath, args: &[Type]) -> Option<usize> {
+        let item_def = self.types.get(base)?;
+        let resolved = item_def.resolved()?;
+
+        // Get the type definition (struct with fields)
+        let type_def = resolved.inner.as_type()?;
+
+        // Get the type parameters for substitution
+        let param_names = &item_def.type_parameters;
+
+        // Compute total size from all regions (fields)
+        let mut size = 0usize;
+        for region in &type_def.regions {
+            let substituted_type =
+                Self::substitute_type_params(&region.type_ref, param_names, args);
+            let field_size = substituted_type.size(self)?;
+            size += field_size;
+        }
+
+        Some(size)
+    }
+
+    /// Computes the alignment of a generic type instantiation.
+    /// Returns the alignment by substituting type parameters with the provided arguments
+    /// and finding the maximum alignment of all fields.
+    pub(crate) fn compute_generic_alignment(
+        &self,
+        base: &ItemPath,
+        args: &[Type],
+    ) -> Option<usize> {
+        let item_def = self.types.get(base)?;
+        let resolved = item_def.resolved()?;
+
+        // Get the type definition (struct with fields)
+        let type_def = resolved.inner.as_type()?;
+
+        // Get the type parameters for substitution
+        let param_names = &item_def.type_parameters;
+
+        // Compute max alignment from all regions (fields)
+        let mut max_alignment = 1usize;
+        for region in &type_def.regions {
+            let substituted_type =
+                Self::substitute_type_params(&region.type_ref, param_names, args);
+            if let Some(field_alignment) = substituted_type.alignment(self) {
+                max_alignment = max_alignment.max(field_alignment);
+            }
+        }
+
+        Some(max_alignment)
+    }
+
     /// Applies generic arguments to a compound type.
     /// This handles cases where a non-generic type alias resolves to a type containing
     /// type parameters (e.g., `type Ptr<T> = *mut T` used as `Ptr<u32>`).

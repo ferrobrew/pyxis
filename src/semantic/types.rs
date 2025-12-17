@@ -142,14 +142,9 @@ impl Type {
                 .get(path, &ItemLocation::internal())
                 .ok()
                 .and_then(|t| t.size()),
-            Type::Generic(base, _args) => {
-                // For generic instantiations, we need to look up the base type
-                // and compute size based on the instantiation
-                // For now, return the base type's size (works for pointer-based generics)
-                type_registry
-                    .get(base, &ItemLocation::internal())
-                    .ok()
-                    .and_then(|t| t.size())
+            Type::Generic(base, args) => {
+                // Compute size by substituting type parameters with concrete arguments
+                type_registry.compute_generic_size(base, args)
             }
             Type::TypeParameter(_) => {
                 // Type parameters don't have a known size until instantiated
@@ -168,12 +163,9 @@ impl Type {
                 .get(path, &ItemLocation::internal())
                 .ok()
                 .and_then(|t| t.alignment()),
-            Type::Generic(base, _args) => {
-                // For generic instantiations, use the base type's alignment
-                type_registry
-                    .get(base, &ItemLocation::internal())
-                    .ok()
-                    .and_then(|t| t.alignment())
+            Type::Generic(base, args) => {
+                // Compute alignment by substituting type parameters with concrete arguments
+                type_registry.compute_generic_alignment(base, args)
             }
             Type::TypeParameter(_) => {
                 // Type parameters don't have a known alignment until instantiated
