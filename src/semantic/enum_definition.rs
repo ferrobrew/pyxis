@@ -243,12 +243,17 @@ pub fn build(
     let mut associated_functions = vec![];
     if let Some(enum_impl) = module.impls.get(resolvee_path) {
         for function in enum_impl.functions().collect::<Vec<_>>() {
-            let function = crate::semantic::function::build(
+            let function = match crate::semantic::function::build(
                 &semantic.type_registry,
                 &module.scope(),
                 false,
                 function,
-            )?;
+            )? {
+                crate::semantic::function::FunctionBuildOutcome::Built(f) => *f,
+                crate::semantic::function::FunctionBuildOutcome::Deferred => {
+                    return Ok(BuildOutcome::Deferred);
+                }
+            };
             associated_functions.push(function);
         }
     }

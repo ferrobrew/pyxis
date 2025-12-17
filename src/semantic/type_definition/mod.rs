@@ -357,13 +357,16 @@ pub fn build(
                     }
                 }
 
-                vftable_functions = Some(vftable::convert_grammar_functions_to_semantic_functions(
+                vftable_functions = match vftable::convert_grammar_functions_to_semantic_functions(
                     &semantic.type_registry,
                     module,
                     size,
                     functions,
                     &statement.location,
-                )?);
+                )? {
+                    Some(funcs) => Some(funcs),
+                    None => return Ok(BuildOutcome::Deferred),
+                };
             }
         }
     }
@@ -480,7 +483,10 @@ pub fn build(
             }
 
             let function =
-                function::build(&semantic.type_registry, &module.scope(), false, function)?;
+                match function::build(&semantic.type_registry, &module.scope(), false, function)? {
+                    function::FunctionBuildOutcome::Built(f) => *f,
+                    function::FunctionBuildOutcome::Deferred => return Ok(BuildOutcome::Deferred),
+                };
             associated_functions_used_names.insert(function.name.clone());
             associated_functions.push(function);
         }

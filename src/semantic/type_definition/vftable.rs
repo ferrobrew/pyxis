@@ -48,14 +48,15 @@ impl crate::span::StripLocations for TypeVftable {
     }
 }
 
-/// Given a parsed size/list of functions, construct the list of semantic functions
+/// Given a parsed size/list of functions, construct the list of semantic functions.
+/// Returns Ok(None) if function building should be deferred (a type isn't resolved yet).
 pub fn convert_grammar_functions_to_semantic_functions(
     type_registry: &TypeRegistry,
     module: &Module,
     size: Option<usize>,
     functions: &[grammar::Function],
     location: &ItemLocation,
-) -> Result<Vec<Function>> {
+) -> Result<Option<Vec<Function>>> {
     // Insert function, with padding if necessary
     let mut output = vec![];
     let calling_convention = CallingConvention::for_member_function(type_registry.pointer_size());
@@ -76,12 +77,10 @@ pub fn convert_grammar_functions_to_semantic_functions(
         if let Some(index) = index {
             make_padding_functions(&mut output, index, calling_convention, location);
         }
-        output.push(function::build(
-            type_registry,
-            &module.scope(),
-            true,
-            function,
-        )?);
+        match function::build(type_registry, &module.scope(), true, function)? {
+            function::FunctionBuildOutcome::Built(f) => output.push(*f),
+            function::FunctionBuildOutcome::Deferred => return Ok(None),
+        }
     }
 
     // Pad out to target size
@@ -115,7 +114,7 @@ pub fn convert_grammar_functions_to_semantic_functions(
         }
     }
 
-    Ok(output)
+    Ok(Some(output))
 }
 
 pub fn build(

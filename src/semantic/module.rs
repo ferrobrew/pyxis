@@ -132,12 +132,20 @@ impl Module {
         let scope = self.scope();
 
         for function in self.ast.functions().collect::<Vec<_>>() {
-            self.functions.push(crate::semantic::function::build(
+            let resolved_function = match crate::semantic::function::build(
                 type_registry,
                 &scope,
                 false, // is_vfunc
                 function,
-            )?);
+            )? {
+                crate::semantic::function::FunctionBuildOutcome::Built(f) => *f,
+                crate::semantic::function::FunctionBuildOutcome::Deferred => {
+                    // This shouldn't happen since freestanding functions are resolved
+                    // after all types are resolved, but handle it gracefully
+                    continue;
+                }
+            };
+            self.functions.push(resolved_function);
         }
 
         Ok(())
