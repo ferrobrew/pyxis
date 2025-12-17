@@ -382,6 +382,78 @@ impl TypeRegistry {
             })
     }
 
+    /// Attempts to partially resolve a generic type even when some of its arguments
+    /// aren't fully resolved yet. This is crucial for self-referential generic types.
+    /// For example, `SharedPtr<GameObject>` where `GameObject` contains `SharedPtr<GameObject>`.
+    /// Returns a Type::Generic with the base path and whatever arguments could be resolved.
+    fn try_resolve_generic_partially(
+        &self,
+        scope: &[ItemPath],
+        path: &ItemPath,
+        generic_args: &[grammar::Type],
+        type_params: &[String],
+    ) -> Option<Type> {
+        // First, find the base type path
+        let base_path = if path.len() == 1 {
+            let name = path.last()?.as_str();
+            self.find_type_path(scope, name)?
+        } else {
+            // Multi-segment path - check if it exists
+            if self.types.contains_key(path) {
+                path.clone()
+            } else {
+                return None;
+            }
+        };
+
+        // Try to resolve each generic argument. If any can't be resolved,
+        // we'll try to at least find their path
+        let mut resolved_args = Vec::new();
+        for arg in generic_args {
+            match self.resolve_grammar_type(scope, arg, type_params) {
+                TypeLookupResult::Found(t) => resolved_args.push(t),
+                TypeLookupResult::NotYetResolved => {
+                    // Try to get at least the path for this unresolved argument
+                    if let grammar::Type::Ident {
+                        path: arg_path,
+                        generic_args: nested_args,
+                        ..
+                    } = arg
+                    {
+                        if nested_args.is_empty() {
+                            // Simple unresolved type - just use its path
+                            if let Some(arg_name) = arg_path.last() {
+                                if let Some(full_path) = self.find_type_path(scope, arg_name.as_str()) {
+                                    resolved_args.push(Type::Raw(full_path));
+                                    continue;
+                                }
+                            }
+                        } else {
+                            // Nested generic - try partial resolution recursively
+                            if let Some(partial) = self.try_resolve_generic_partially(
+                                scope,
+                                arg_path,
+                                nested_args,
+                                type_params,
+                            ) {
+                                resolved_args.push(partial);
+                                continue;
+                            }
+                        }
+                    }
+                    // Couldn't resolve this argument at all - give up
+                    return None;
+                }
+                TypeLookupResult::NotFound { .. } => {
+                    // Type doesn't exist - give up
+                    return None;
+                }
+            }
+        }
+
+        Some(Type::Generic(base_path, resolved_args))
+    }
+
     /// Resolves a path, checking if it's a qualified path or needs scope lookup.
     /// Returns detailed information about why resolution failed if it does.
     pub(crate) fn resolve_path(&self, scope: &[ItemPath], path: &ItemPath) -> TypeLookupResult {
@@ -434,6 +506,7 @@ impl TypeRegistry {
                         } = pointee.as_ref()
                         {
                             if generic_args.is_empty() {
+                                // Non-generic type reference - just find its path
                                 if let Some(last) = path.last() {
                                     if let Some(full_path) =
                                         self.find_type_path(scope, last.as_str())
@@ -442,6 +515,14 @@ impl TypeRegistry {
                                             Box::new(Type::Raw(full_path)),
                                         ));
                                     }
+                                }
+                            } else {
+                                // Generic type with potentially unresolved arguments.
+                                // Try partial resolution for self-referential generics.
+                                if let Some(partial) =
+                                    self.try_resolve_generic_partially(scope, path, generic_args, type_params)
+                                {
+                                    return TypeLookupResult::Found(Type::ConstPointer(Box::new(partial)));
                                 }
                             }
                         }
@@ -464,6 +545,7 @@ impl TypeRegistry {
                         } = pointee.as_ref()
                         {
                             if generic_args.is_empty() {
+                                // Non-generic type reference - just find its path
                                 if let Some(last) = path.last() {
                                     if let Some(full_path) =
                                         self.find_type_path(scope, last.as_str())
@@ -472,6 +554,14 @@ impl TypeRegistry {
                                             Box::new(Type::Raw(full_path)),
                                         ));
                                     }
+                                }
+                            } else {
+                                // Generic type with potentially unresolved arguments.
+                                // Try partial resolution for self-referential generics.
+                                if let Some(partial) =
+                                    self.try_resolve_generic_partially(scope, path, generic_args, type_params)
+                                {
+                                    return TypeLookupResult::Found(Type::MutPointer(Box::new(partial)));
                                 }
                             }
                         }
@@ -538,9 +628,33 @@ impl TypeRegistry {
 
                     // No exact match found, proceed with generic type resolution
                     let mut resolved_args = Vec::new();
+                    let mut has_unresolved_args = false;
                     for arg in generic_args {
                         match self.resolve_grammar_type(scope, arg, type_params) {
                             TypeLookupResult::Found(t) => resolved_args.push(t),
+                            TypeLookupResult::NotYetResolved => {
+                                // Try to at least get the path for the unresolved argument
+                                if let Some(partial) = self.try_resolve_generic_partially(
+                                    scope,
+                                    if let grammar::Type::Ident { path: arg_path, .. } = arg {
+                                        arg_path
+                                    } else {
+                                        // Non-ident type that's unresolved - can't proceed
+                                        return TypeLookupResult::NotYetResolved;
+                                    },
+                                    if let grammar::Type::Ident { generic_args: nested_args, .. } = arg {
+                                        nested_args
+                                    } else {
+                                        &[]
+                                    },
+                                    type_params,
+                                ) {
+                                    resolved_args.push(partial);
+                                    has_unresolved_args = true;
+                                } else {
+                                    return TypeLookupResult::NotYetResolved;
+                                }
+                            }
                             other => return other,
                         }
                     }
@@ -550,6 +664,25 @@ impl TypeRegistry {
                     let resolved_path = self.resolve_path(scope, path);
                     match resolved_path {
                         TypeLookupResult::Found(Type::Raw(base_path)) => {
+                            // If we have unresolved arguments, check if the base type has a fixed size.
+                            // Types with #[size(...)] don't depend on their type parameters for size/alignment.
+                            if has_unresolved_args {
+                                // Check if the base type is resolved and has a fixed size
+                                if let Some(item_def) = self.types.get(&base_path) {
+                                    if !item_def.is_resolved() {
+                                        // Base type isn't resolved yet, can't proceed
+                                        return TypeLookupResult::NotYetResolved;
+                                    }
+                                    // Base is resolved, we can create the generic type even with unresolved args
+                                    // because the size is determined by the base type's #[size(...)] attribute
+                                } else {
+                                    // Base type doesn't exist
+                                    return TypeLookupResult::NotFound {
+                                        type_name: base_path.to_string(),
+                                    };
+                                }
+                            }
+
                             // Check if this is a generic type alias
                             if let Some((param_names, type_alias)) =
                                 self.get_generic_type_alias(&base_path)

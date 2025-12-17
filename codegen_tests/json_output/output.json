@@ -3482,6 +3482,365 @@
         "line": 18
       }
     },
+    "self_referential_generics::GameObject": {
+      "path": "self_referential_generics::GameObject",
+      "visibility": "public",
+      "size": 40,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": " A game object that contains self-referential generic types.\n This tests that the compiler can handle cycles where:\n - GameObject contains SharedPtr<GameObject>\n - SharedPtr<T> contains *mut T\n - The pointer breaks the cycle, but only after generic substitution",
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "id",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "u32"
+            },
+            "offset": 0,
+            "size": 4,
+            "alignment": 4,
+            "is_base": false,
+            "source": {
+              "file_index": 13,
+              "line": 21
+            }
+          },
+          {
+            "visibility": "private",
+            "name": "_field_4",
+            "doc": null,
+            "type_ref": {
+              "type": "array",
+              "inner": {
+                "type": "raw",
+                "path": "u8"
+              },
+              "size": 4
+            },
+            "offset": 4,
+            "size": 4,
+            "alignment": 1,
+            "is_base": false,
+            "source": {
+              "file_index": 13,
+              "line": 22
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "parent_object",
+            "doc": null,
+            "type_ref": {
+              "type": "generic",
+              "base": "self_referential_generics::SharedPtr",
+              "args": [
+                {
+                  "type": "generic",
+                  "base": "self_referential_generics::GameObject",
+                  "args": []
+                }
+              ]
+            },
+            "offset": 8,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 13,
+              "line": 22
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "weak_this",
+            "doc": null,
+            "type_ref": {
+              "type": "generic",
+              "base": "self_referential_generics::WeakPtr",
+              "args": [
+                {
+                  "type": "generic",
+                  "base": "self_referential_generics::GameObject",
+                  "args": []
+                }
+              ]
+            },
+            "offset": 16,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 13,
+              "line": 24
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "first_child",
+            "doc": null,
+            "type_ref": {
+              "type": "generic",
+              "base": "self_referential_generics::SharedPtr",
+              "args": [
+                {
+                  "type": "generic",
+                  "base": "self_referential_generics::GameObject",
+                  "args": []
+                }
+              ]
+            },
+            "offset": 24,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 13,
+              "line": 25
+            }
+          },
+          {
+            "visibility": "private",
+            "name": "_field_20",
+            "doc": null,
+            "type_ref": {
+              "type": "array",
+              "inner": {
+                "type": "raw",
+                "path": "u8"
+              },
+              "size": 8
+            },
+            "offset": 32,
+            "size": 8,
+            "alignment": 1,
+            "is_base": false,
+            "source": {
+              "file_index": 13,
+              "line": 13
+            }
+          }
+        ],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false
+      },
+      "source": {
+        "file_index": 13,
+        "line": 13
+      }
+    },
+    "self_referential_generics::SharedPtr": {
+      "path": "self_referential_generics::SharedPtr",
+      "visibility": "public",
+      "type_parameters": [
+        "T"
+      ],
+      "size": 8,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": " A shared pointer to a type.",
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "px",
+            "doc": null,
+            "type_ref": {
+              "type": "mut_pointer",
+              "inner": {
+                "type": "type_parameter",
+                "name": "T"
+              }
+            },
+            "offset": 0,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 13,
+              "line": 4
+            }
+          }
+        ],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false
+      },
+      "source": {
+        "file_index": 13,
+        "line": 1
+      }
+    },
+    "self_referential_generics::TreeNode": {
+      "path": "self_referential_generics::TreeNode",
+      "visibility": "public",
+      "size": 24,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": " A tree node with self-referential pointers.",
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "value",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "u32"
+            },
+            "offset": 0,
+            "size": 4,
+            "alignment": 4,
+            "is_base": false,
+            "source": {
+              "file_index": 13,
+              "line": 32
+            }
+          },
+          {
+            "visibility": "private",
+            "name": "_field_4",
+            "doc": null,
+            "type_ref": {
+              "type": "array",
+              "inner": {
+                "type": "raw",
+                "path": "u8"
+              },
+              "size": 4
+            },
+            "offset": 4,
+            "size": 4,
+            "alignment": 1,
+            "is_base": false,
+            "source": {
+              "file_index": 13,
+              "line": 33
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "left",
+            "doc": null,
+            "type_ref": {
+              "type": "generic",
+              "base": "self_referential_generics::SharedPtr",
+              "args": [
+                {
+                  "type": "generic",
+                  "base": "self_referential_generics::TreeNode",
+                  "args": []
+                }
+              ]
+            },
+            "offset": 8,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 13,
+              "line": 33
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "right",
+            "doc": null,
+            "type_ref": {
+              "type": "generic",
+              "base": "self_referential_generics::SharedPtr",
+              "args": [
+                {
+                  "type": "generic",
+                  "base": "self_referential_generics::TreeNode",
+                  "args": []
+                }
+              ]
+            },
+            "offset": 16,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 13,
+              "line": 35
+            }
+          }
+        ],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false
+      },
+      "source": {
+        "file_index": 13,
+        "line": 28
+      }
+    },
+    "self_referential_generics::WeakPtr": {
+      "path": "self_referential_generics::WeakPtr",
+      "visibility": "public",
+      "type_parameters": [
+        "T"
+      ],
+      "size": 8,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": " A weak pointer to a type.",
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "px",
+            "doc": null,
+            "type_ref": {
+              "type": "const_pointer",
+              "inner": {
+                "type": "type_parameter",
+                "name": "T"
+              }
+            },
+            "offset": 0,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 13,
+              "line": 10
+            }
+          }
+        ],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false
+      },
+      "source": {
+        "file_index": 13,
+        "line": 7
+      }
+    },
     "singleton::TestType": {
       "path": "singleton::TestType",
       "visibility": "public",
@@ -3505,7 +3864,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 13,
+              "file_index": 14,
               "line": 3
             }
           }
@@ -3519,7 +3878,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 13,
+        "file_index": 14,
         "line": 1
       }
     },
@@ -3549,7 +3908,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 14,
+              "file_index": 15,
               "line": 4
             }
           },
@@ -3566,7 +3925,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 14,
+              "file_index": 15,
               "line": 7
             }
           }
@@ -3599,7 +3958,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 14,
+              "file_index": 15,
               "line": 11
             }
           }
@@ -3633,7 +3992,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 14,
+                "file_index": 15,
                 "line": 4
               }
             }
@@ -3646,7 +4005,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 14,
+        "file_index": 15,
         "line": 1
       }
     },
@@ -3696,7 +4055,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 14,
+              "file_index": 15,
               "line": 4
             }
           }
@@ -3710,7 +4069,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 14,
+        "file_index": 15,
         "line": 4
       }
     },
@@ -3740,7 +4099,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 14,
+              "file_index": 15,
               "line": 18
             }
           },
@@ -3757,7 +4116,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 14,
+              "file_index": 15,
               "line": 21
             }
           }
@@ -3790,7 +4149,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 14,
+              "file_index": 15,
               "line": 25
             }
           }
@@ -3824,7 +4183,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 14,
+                "file_index": 15,
                 "line": 18
               }
             }
@@ -3837,7 +4196,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 14,
+        "file_index": 15,
         "line": 15
       }
     },
@@ -3887,7 +4246,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 14,
+              "file_index": 15,
               "line": 18
             }
           }
@@ -3901,7 +4260,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 14,
+        "file_index": 15,
         "line": 18
       }
     },
@@ -3928,7 +4287,7 @@
             "alignment": 8,
             "is_base": true,
             "source": {
-              "file_index": 14,
+              "file_index": 15,
               "line": 36
             }
           },
@@ -3945,7 +4304,7 @@
             "alignment": 8,
             "is_base": true,
             "source": {
-              "file_index": 14,
+              "file_index": 15,
               "line": 38
             }
           }
@@ -3979,7 +4338,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 14,
+              "file_index": 15,
               "line": 11
             }
           },
@@ -4011,7 +4370,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 14,
+              "file_index": 15,
               "line": 25
             }
           },
@@ -4043,7 +4402,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 14,
+              "file_index": 15,
               "line": 18
             }
           },
@@ -4074,7 +4433,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 14,
+              "file_index": 15,
               "line": 42
             }
           }
@@ -4108,7 +4467,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 14,
+                "file_index": 15,
                 "line": 32
               }
             },
@@ -4139,7 +4498,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 14,
+                "file_index": 15,
                 "line": 33
               }
             }
@@ -4152,7 +4511,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 14,
+        "file_index": 15,
         "line": 29
       }
     },
@@ -4202,7 +4561,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 14,
+              "file_index": 15,
               "line": 32
             }
           },
@@ -4242,7 +4601,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 14,
+              "file_index": 15,
               "line": 33
             }
           }
@@ -4256,7 +4615,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 14,
+        "file_index": 15,
         "line": 32
       }
     },
@@ -4286,7 +4645,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 15,
+              "file_index": 16,
               "line": 10
             }
           }
@@ -4300,7 +4659,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 15,
+        "file_index": 16,
         "line": 7
       }
     },
@@ -4336,7 +4695,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 16,
+              "file_index": 17,
               "line": 62
             }
           },
@@ -4363,7 +4722,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 16,
+              "file_index": 17,
               "line": 63
             }
           }
@@ -4377,7 +4736,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 16,
+        "file_index": 17,
         "line": 59
       }
     },
@@ -4402,7 +4761,7 @@
         }
       },
       "source": {
-        "file_index": 16,
+        "file_index": 17,
         "line": 16
       }
     },
@@ -4432,7 +4791,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 16,
+              "file_index": 17,
               "line": 35
             }
           },
@@ -4452,7 +4811,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 16,
+              "file_index": 17,
               "line": 36
             }
           }
@@ -4466,7 +4825,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 16,
+        "file_index": 17,
         "line": 33
       }
     },
@@ -4499,7 +4858,7 @@
         }
       },
       "source": {
-        "file_index": 16,
+        "file_index": 17,
         "line": 25
       }
     },
@@ -4532,7 +4891,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 16,
+              "file_index": 17,
               "line": 44
             }
           },
@@ -4555,7 +4914,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 16,
+              "file_index": 17,
               "line": 45
             }
           },
@@ -4582,7 +4941,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 16,
+              "file_index": 17,
               "line": 46
             }
           },
@@ -4602,7 +4961,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 16,
+              "file_index": 17,
               "line": 47
             }
           },
@@ -4622,7 +4981,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 16,
+              "file_index": 17,
               "line": 48
             }
           }
@@ -4636,7 +4995,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 16,
+        "file_index": 17,
         "line": 41
       }
     },
@@ -4658,7 +5017,7 @@
         }
       },
       "source": {
-        "file_index": 16,
+        "file_index": 17,
         "line": 8
       }
     },
@@ -4683,7 +5042,7 @@
         }
       },
       "source": {
-        "file_index": 16,
+        "file_index": 17,
         "line": 13
       }
     },
@@ -4714,7 +5073,7 @@
         }
       },
       "source": {
-        "file_index": 16,
+        "file_index": 17,
         "line": 28
       }
     },
@@ -4742,7 +5101,7 @@
         }
       },
       "source": {
-        "file_index": 16,
+        "file_index": 17,
         "line": 19
       }
     },
@@ -4764,7 +5123,7 @@
         }
       },
       "source": {
-        "file_index": 16,
+        "file_index": 17,
         "line": 4
       }
     },
@@ -4793,7 +5152,7 @@
         }
       },
       "source": {
-        "file_index": 16,
+        "file_index": 17,
         "line": 56
       }
     },
@@ -4821,7 +5180,7 @@
         }
       },
       "source": {
-        "file_index": 16,
+        "file_index": 17,
         "line": 53
       }
     },
@@ -4849,7 +5208,7 @@
         }
       },
       "source": {
-        "file_index": 16,
+        "file_index": 17,
         "line": 22
       }
     },
@@ -5180,6 +5539,19 @@
       "functions": [],
       "backends": {}
     },
+    "self_referential_generics": {
+      "doc": null,
+      "items": [
+        "self_referential_generics::GameObject",
+        "self_referential_generics::SharedPtr",
+        "self_referential_generics::TreeNode",
+        "self_referential_generics::WeakPtr"
+      ],
+      "submodules": {},
+      "extern_values": [],
+      "functions": [],
+      "backends": {}
+    },
     "singleton": {
       "doc": null,
       "items": [
@@ -5252,6 +5624,7 @@
     "math.pyxis",
     "min_size.pyxis",
     "multiple_levels.pyxis",
+    "self_referential_generics.pyxis",
     "singleton.pyxis",
     "two_base_classes.pyxis",
     "type_alias_reexport.pyxis",

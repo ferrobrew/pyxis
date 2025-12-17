@@ -9,6 +9,7 @@ pub mod generics_cross_module;
 pub mod math;
 pub mod min_size;
 pub mod multiple_levels;
+pub mod self_referential_generics;
 pub mod singleton;
 pub mod two_base_classes;
 pub mod type_alias_reexport;
