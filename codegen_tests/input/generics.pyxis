@@ -1,0 +1,42 @@
+use math::Vector3;
+
+/// A shared pointer to a type.
+/// The inner pointer is mutable.
+#[size(0x8)]
+pub type Shared<T> {
+    pub ptr: *mut T,
+}
+
+/// A weak pointer to a type.
+/// The inner pointer is const.
+#[size(0x8)]
+pub type WeakPtr<T> {
+    pub ptr: *const T,
+}
+
+/// A key-value map entry.
+#[size(0x10)]
+pub type MapEntry<K, V> {
+    pub key: *mut K,
+    pub value: *mut V,
+}
+
+/// Container using generic types
+#[size(0x20)]
+pub type Container {
+    pub entity: Shared<Vector3>,
+    pub weak_entity: WeakPtr<Vector3>,
+    pub entry: MapEntry<u32, Vector3>,
+}
+
+/// Array of generic types
+#[size(0x20)]
+pub type GenericArray {
+    pub items: [Shared<Vector3>; 4],
+}
+
+/// Pointer to generic type
+#[size(0x8)]
+pub type GenericPointer {
+    pub ptr: *mut Shared<Vector3>,
+}

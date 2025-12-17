@@ -203,6 +203,7 @@ pub fn build(
     definition: &grammar::TypeDefinition,
     location: &ItemLocation,
     doc_comments: &[String],
+    type_parameters: &[String],
 ) -> Result<BuildOutcome> {
     let module = semantic.get_module_for_path(resolvee_path, location)?;
 
@@ -295,11 +296,12 @@ pub fn build(
                     }
                 }
 
-                // Push field
-                let type_ = match semantic
-                    .type_registry
-                    .resolve_grammar_type(&module.scope(), type_)
-                {
+                // Push field - use type parameters for resolution inside generic types
+                let type_ = match semantic.type_registry.resolve_grammar_type(
+                    &module.scope(),
+                    type_,
+                    type_parameters,
+                ) {
                     TypeLookupResult::Found(t) => t,
                     TypeLookupResult::NotYetResolved => return Ok(BuildOutcome::Deferred),
                     TypeLookupResult::NotFound { type_name } => {
@@ -355,13 +357,16 @@ pub fn build(
                     }
                 }
 
-                vftable_functions = Some(vftable::convert_grammar_functions_to_semantic_functions(
+                vftable_functions = match vftable::convert_grammar_functions_to_semantic_functions(
                     &semantic.type_registry,
                     module,
                     size,
                     functions,
                     &statement.location,
-                )?);
+                )? {
+                    Some(funcs) => Some(funcs),
+                    None => return Ok(BuildOutcome::Deferred),
+                };
             }
         }
     }
@@ -478,7 +483,10 @@ pub fn build(
             }
 
             let function =
-                function::build(&semantic.type_registry, &module.scope(), false, function)?;
+                match function::build(&semantic.type_registry, &module.scope(), false, function)? {
+                    function::FunctionBuildOutcome::Built(f) => *f,
+                    function::FunctionBuildOutcome::Deferred => return Ok(BuildOutcome::Deferred),
+                };
             associated_functions_used_names.insert(function.name.clone());
             associated_functions.push(function);
         }

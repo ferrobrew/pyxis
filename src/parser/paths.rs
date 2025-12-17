@@ -139,9 +139,11 @@ impl Parser {
             end_pos = self.current().location.span.end;
             self.advance();
 
-            // Handle generics in the path
+            // Skip generic arguments in paths (they should be handled separately
+            // by parse_type for proper type argument parsing)
             if matches!(self.peek(), TokenKind::Lt) {
-                // Parse generic arguments as part of the segment
+                // For use statements and other item paths, we need to skip over
+                // generic-like syntax to get to the end of the path segment
                 let (generic_str, generic_end) = self.parse_generic_args_as_string()?;
                 let last = segments.last_mut().unwrap();
                 *last = ItemPathSegment::from(format!("{}{}", last.as_str(), generic_str));
@@ -158,6 +160,8 @@ impl Parser {
         Ok((ItemPath::from_iter(segments), location))
     }
 
+    /// Parse generic arguments as a string (for use statements and extern types)
+    /// This preserves the old behavior for backward compatibility with extern types
     pub(crate) fn parse_generic_args_as_string(
         &mut self,
     ) -> Result<(String, Location), ParseError> {
@@ -165,33 +169,54 @@ impl Parser {
         result.push('<');
         self.expect(TokenKind::Lt)?;
 
-        let mut first = true;
-        while !matches!(self.peek(), TokenKind::Gt) {
-            if !first {
-                self.expect(TokenKind::Comma)?;
-                result.push_str(", ");
+        let mut depth = 1;
+        while depth > 0 && !matches!(self.peek(), TokenKind::Eof) {
+            match self.peek().clone() {
+                TokenKind::Lt => {
+                    result.push('<');
+                    depth += 1;
+                    self.advance();
+                }
+                TokenKind::Gt => {
+                    result.push('>');
+                    depth -= 1;
+                    self.advance(); // Always advance past >
+                }
+                TokenKind::Comma => {
+                    result.push_str(", ");
+                    self.advance();
+                }
+                TokenKind::Ident(name) => {
+                    result.push_str(&name);
+                    self.advance();
+                }
+                TokenKind::ColonColon => {
+                    result.push_str("::");
+                    self.advance();
+                }
+                TokenKind::Star => {
+                    result.push('*');
+                    self.advance();
+                }
+                TokenKind::Const => {
+                    result.push_str("const ");
+                    self.advance();
+                }
+                TokenKind::Mut => {
+                    result.push_str("mut ");
+                    self.advance();
+                }
+                _ => {
+                    self.advance();
+                }
             }
-            first = false;
-
-            // Parse type as string for now
-            result.push_str(&self.parse_type_as_string()?);
         }
 
-        let gt_token = self.expect(TokenKind::Gt)?;
-        result.push('>');
-        Ok((result, gt_token.location.span.end))
-    }
-
-    pub(crate) fn parse_type_as_string(&mut self) -> Result<String, ParseError> {
-        let start_pos = self.pos;
-        self.parse_type()?; // Parse but discard
-        let end_pos = self.pos;
-
-        // Reconstruct the string from tokens
-        let mut result = String::new();
-        for i in start_pos..end_pos {
-            result.push_str(self.span_text(&self.tokens[i].location.span));
-        }
-        Ok(result)
+        let end_pos = if self.pos > 0 {
+            self.tokens[self.pos - 1].location.span.end
+        } else {
+            self.current().location.span.end
+        };
+        Ok((result, end_pos))
     }
 }

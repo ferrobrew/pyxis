@@ -1,4 +1,5 @@
 use math::Vector3;
+use generics::{Shared, WeakPtr, MapEntry};
 
 /// Alias for a Vector3 pointer.
 /// Demonstrates doc comments on type aliases.
@@ -7,8 +8,57 @@ pub type Vec3Ptr = *const Vector3;
 /// Alias for a mutable i32 pointer.
 pub type IntMutPtr = *mut i32;
 
-/// Container using the alias
+// ========== Generic type aliases ==========
+
+/// Generic pointer type alias
+pub type Ptr<T> = *mut T;
+
+/// Generic const pointer type alias
+pub type ConstPtr<T> = *const T;
+
+/// Alias that wraps a generic type with a type parameter
+pub type SharedRef<T> = Shared<T>;
+
+/// Alias for weak pointer to a type
+pub type WeakRef<T> = WeakPtr<T>;
+
+/// Alias for MapEntry with type parameters
+pub type Entry<K, V> = MapEntry<K, V>;
+
+/// Pointer to a generic type
+pub type SharedPtr<T> = *mut Shared<T>;
+
+// ========== Container using non-generic aliases ==========
+
+/// Container using the non-generic type aliases
 pub type Container {
     pub ptr: Vec3Ptr,
     pub int_ptr: IntMutPtr,
+}
+
+// ========== Container using generic type aliases ==========
+
+/// Container using generic aliases with concrete types
+#[size(0x30)]
+pub type GenericAliasContainer {
+    pub shared_vec: SharedRef<Vector3>,
+    pub weak_vec: WeakRef<Vector3>,
+    pub entry: Entry<u32, Vector3>,
+    pub vec_ptr: Ptr<Vector3>,
+    pub const_vec_ptr: ConstPtr<Vector3>,
+}
+
+// ========== Non-generic aliases to instantiated generic types ==========
+
+/// Concrete alias to SharedPtr<Vector3>
+pub type VecSharedPtr = SharedPtr<Vector3>;
+
+/// Concrete alias to Entry<u32, Vector3>
+pub type VecEntry = Entry<u32, Vector3>;
+
+/// Container using concrete aliases
+#[size(0x18)]
+pub type ConcreteAliasContainer {
+    pub vec_shared: VecSharedPtr,
+    pub vec_entry: VecEntry,
 }

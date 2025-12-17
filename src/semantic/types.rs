@@ -69,6 +69,11 @@ impl From<grammar::Visibility> for Visibility {
 pub enum Type {
     Unresolved(grammar::Type),
     Raw(ItemPath),
+    /// A generic type instantiation, e.g., `SharedPtr<GameObject>`
+    /// The ItemPath is the base type (e.g., "SharedPtr") and the Vec contains the type arguments
+    Generic(ItemPath, Vec<Type>),
+    /// A type parameter reference (e.g., `T` inside a generic type definition)
+    TypeParameter(String),
     ConstPointer(Box<Type>),
     MutPointer(Box<Type>),
     Array(Box<Type>, usize),
@@ -85,6 +90,10 @@ impl EqualsIgnoringLocations for Type {
             (Type::Raw(item_path), Type::Raw(item_path2)) => {
                 item_path.equals_ignoring_locations(item_path2)
             }
+            (Type::Generic(base, args), Type::Generic(base2, args2)) => {
+                base.equals_ignoring_locations(base2) && args.equals_ignoring_locations(args2)
+            }
+            (Type::TypeParameter(name), Type::TypeParameter(name2)) => name == name2,
             (Type::ConstPointer(t), Type::ConstPointer(t2)) => t.equals_ignoring_locations(t2),
             (Type::MutPointer(t), Type::MutPointer(t2)) => t.equals_ignoring_locations(t2),
             (Type::Array(t, n), Type::Array(t2, n2)) => {
@@ -108,6 +117,11 @@ impl StripLocations for Type {
         match self {
             Type::Unresolved(located) => Type::Unresolved(located.strip_locations()),
             Type::Raw(item_path) => Type::Raw(item_path.strip_locations()),
+            Type::Generic(base, args) => Type::Generic(
+                base.strip_locations(),
+                args.iter().map(|a| a.strip_locations()).collect(),
+            ),
+            Type::TypeParameter(name) => Type::TypeParameter(name.clone()),
             Type::ConstPointer(t) => Type::ConstPointer(t.strip_locations()),
             Type::MutPointer(t) => Type::MutPointer(t.strip_locations()),
             Type::Array(t, n) => Type::Array(t.strip_locations(), n.strip_locations()),
@@ -120,7 +134,7 @@ impl StripLocations for Type {
     }
 }
 impl Type {
-    /// Returns `None` if this type is unresolved
+    /// Returns `None` if this type is unresolved or depends on unresolved type parameters
     pub(crate) fn size(&self, type_registry: &type_registry::TypeRegistry) -> Option<usize> {
         match self {
             Type::Unresolved(_) => None,
@@ -128,6 +142,14 @@ impl Type {
                 .get(path, &ItemLocation::internal())
                 .ok()
                 .and_then(|t| t.size()),
+            Type::Generic(base, args) => {
+                // Compute size by substituting type parameters with concrete arguments
+                type_registry.compute_generic_size(base, args)
+            }
+            Type::TypeParameter(_) => {
+                // Type parameters don't have a known size until instantiated
+                None
+            }
             Type::ConstPointer(_) => Some(type_registry.pointer_size()),
             Type::MutPointer(_) => Some(type_registry.pointer_size()),
             Type::Array(tr, count) => tr.size(type_registry).map(|s| s * count),
@@ -141,6 +163,14 @@ impl Type {
                 .get(path, &ItemLocation::internal())
                 .ok()
                 .and_then(|t| t.alignment()),
+            Type::Generic(base, args) => {
+                // Compute alignment by substituting type parameters with concrete arguments
+                type_registry.compute_generic_alignment(base, args)
+            }
+            Type::TypeParameter(_) => {
+                // Type parameters don't have a known alignment until instantiated
+                None
+            }
             Type::ConstPointer(_) => Some(type_registry.pointer_size()),
             Type::MutPointer(_) => Some(type_registry.pointer_size()),
             Type::Array(tr, _) => Some(tr.alignment(type_registry)?),
@@ -149,6 +179,12 @@ impl Type {
     }
     pub fn raw(path: impl Into<ItemPath>) -> Self {
         Type::Raw(path.into())
+    }
+    pub fn generic(path: impl Into<ItemPath>, args: impl IntoIterator<Item = Type>) -> Self {
+        Type::Generic(path.into(), args.into_iter().collect())
+    }
+    pub fn type_parameter(name: impl Into<String>) -> Self {
+        Type::TypeParameter(name.into())
     }
     pub fn const_pointer(self) -> Self {
         Type::ConstPointer(Box::new(self))
@@ -183,6 +219,8 @@ impl Type {
         match self {
             Type::Unresolved(_) => "an unresolved type",
             Type::Raw(_) => "a type",
+            Type::Generic(_, _) => "a generic type",
+            Type::TypeParameter(_) => "a type parameter",
             Type::ConstPointer(_) => "a const pointer",
             Type::MutPointer(_) => "a mut pointer",
             Type::Array(_, _) => "an array",
@@ -201,6 +239,17 @@ impl fmt::Display for Type {
         match self {
             Type::Unresolved(tr) => write!(f, "unresolved:{tr:?}"),
             Type::Raw(path) => write!(f, "{path}"),
+            Type::Generic(base, args) => {
+                write!(f, "{base}<")?;
+                for (i, arg) in args.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    arg.fmt(f)?;
+                }
+                write!(f, ">")
+            }
+            Type::TypeParameter(name) => write!(f, "{name}"),
             Type::ConstPointer(tr) => {
                 write!(f, "*const ")?;
                 tr.fmt(f)
@@ -424,6 +473,8 @@ predefined_items! {
 pub struct ItemDefinition {
     pub visibility: Visibility,
     pub path: ItemPath,
+    /// Type parameters for generic types (e.g., `["T", "U"]` for `type Map<T, U>`)
+    pub type_parameters: Vec<String>,
     pub state: ItemState,
     pub category: ItemCategory,
     pub predefined: Option<PredefinedItem>,
@@ -441,6 +492,7 @@ impl StripLocations for ItemDefinition {
         ItemDefinition {
             visibility: self.visibility.strip_locations(),
             path: self.path.strip_locations(),
+            type_parameters: self.type_parameters.clone(),
             state: self.state.strip_locations(),
             category: self.category.strip_locations(),
             predefined: self.predefined.strip_locations(),
@@ -459,6 +511,7 @@ impl ItemDefinition {
         ItemDefinition {
             visibility,
             path: path.into(),
+            type_parameters: vec![],
             state: ItemState::Resolved(resolved),
             category,
             predefined: None,
@@ -475,11 +528,35 @@ impl ItemDefinition {
         ItemDefinition {
             visibility,
             path: path.into(),
+            type_parameters: vec![],
             state: ItemState::Resolved(resolved),
             category: ItemCategory::Defined,
             predefined: None,
             location: ItemLocation::test(),
         }
+    }
+
+    /// Test-only constructor for generic defined_resolved that uses a synthetic location
+    #[cfg(test)]
+    pub fn generic_defined_resolved(
+        (visibility, path): (Visibility, impl Into<crate::grammar::ItemPath>),
+        type_params: impl IntoIterator<Item = impl Into<String>>,
+        resolved: ItemStateResolved,
+    ) -> Self {
+        ItemDefinition {
+            visibility,
+            path: path.into(),
+            type_parameters: type_params.into_iter().map(|s| s.into()).collect(),
+            state: ItemState::Resolved(resolved),
+            category: ItemCategory::Defined,
+            predefined: None,
+            location: ItemLocation::test(),
+        }
+    }
+
+    /// Returns true if this is a generic type definition
+    pub fn is_generic(&self) -> bool {
+        !self.type_parameters.is_empty()
     }
 
     pub fn resolved(&self) -> Option<&ItemStateResolved> {

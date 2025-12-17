@@ -45,6 +45,7 @@ impl SemanticState {
                 .add_item(ItemDefinition {
                     visibility: Visibility::Public,
                     path,
+                    type_parameters: vec![],
                     state: ItemState::Resolved(ItemStateResolved {
                         size,
                         alignment,
@@ -141,9 +142,17 @@ impl SemanticState {
         for definition in module.definitions() {
             let new_path = path.join(definition.name.as_str().into());
 
+            // Extract type parameter names from the grammar definition
+            let type_parameters: Vec<String> = definition
+                .type_parameters
+                .iter()
+                .map(|tp| tp.name.clone())
+                .collect();
+
             self.add_item(ItemDefinition {
                 visibility: definition.visibility.into(),
                 path: new_path,
+                type_parameters,
                 state: ItemState::Unresolved(definition.clone()),
                 category: ItemCategory::Defined,
                 predefined: None,
@@ -194,6 +203,7 @@ impl SemanticState {
             self.add_item(ItemDefinition {
                 visibility: Visibility::Public,
                 path: extern_path.clone(),
+                type_parameters: vec![], // Extern types don't have type parameters (generics are in the name)
                 state: ItemState::Resolved(ItemStateResolved {
                     size,
                     alignment,
@@ -257,6 +267,13 @@ impl SemanticState {
                 let visibility: Visibility = definition.visibility.into();
 
                 let def_location = &definition.location;
+                // Extract type parameter names from the definition
+                let type_param_names: Vec<String> = definition
+                    .type_parameters
+                    .iter()
+                    .map(|tp| tp.name.clone())
+                    .collect();
+
                 let outcome = match &definition.inner {
                     grammar::ItemDefinitionInner::Type(ty) => type_definition::build(
                         &mut self,
@@ -265,6 +282,7 @@ impl SemanticState {
                         ty,
                         def_location,
                         &definition.doc_comments,
+                        &type_param_names,
                     )?,
                     grammar::ItemDefinitionInner::Enum(e) => enum_definition::build(
                         &self,
@@ -286,6 +304,7 @@ impl SemanticState {
                         ta,
                         def_location,
                         &definition.doc_comments,
+                        &type_param_names,
                     )?,
                 };
 

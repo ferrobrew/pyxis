@@ -203,6 +203,10 @@ path: string;
  */
 visibility: JsonVisibility; 
 /**
+ * Type parameters for generic types (e.g., ["T", "U"] for `type Map<T, U>`)
+ */
+type_parameters?: string[]; 
+/**
  * Size in bytes
  */
 size: number; 
@@ -307,7 +311,15 @@ file_index: number;
  */
 line: number };
 
-export type JsonType = { type: "raw"; path: string } | { type: "const_pointer"; inner: JsonType } | { type: "mut_pointer"; inner: JsonType } | { type: "array"; inner: JsonType; size: number } | { type: "function"; calling_convention: JsonCallingConvention; arguments: JsonFunctionArgument[]; return_type: JsonType | null };
+export type JsonType = { type: "raw"; path: string } | 
+/**
+ * A generic type instantiation, e.g., `SharedPtr<GameObject>`
+ */
+{ type: "generic"; base: string; args: JsonType[] } | 
+/**
+ * A type parameter reference, e.g., `T` inside a generic type definition
+ */
+{ type: "type_parameter"; name: string } | { type: "const_pointer"; inner: JsonType } | { type: "mut_pointer"; inner: JsonType } | { type: "array"; inner: JsonType; size: number } | { type: "function"; calling_convention: JsonCallingConvention; arguments: JsonFunctionArgument[]; return_type: JsonType | null };
 
 export type JsonTypeAliasDefinition = { 
 /**

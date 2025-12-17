@@ -78,6 +78,9 @@ pub struct JsonItem {
     pub path: String,
     /// Visibility
     pub visibility: JsonVisibility,
+    /// Type parameters for generic types (e.g., ["T", "U"] for `type Map<T, U>`)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub type_parameters: Vec<String>,
     /// Size in bytes
     pub size: usize,
     /// Alignment in bytes
@@ -276,6 +279,15 @@ pub enum JsonType {
     Raw {
         path: String,
     },
+    /// A generic type instantiation, e.g., `SharedPtr<GameObject>`
+    Generic {
+        base: String,
+        args: Vec<JsonType>,
+    },
+    /// A type parameter reference, e.g., `T` inside a generic type definition
+    TypeParameter {
+        name: String,
+    },
     ConstPointer {
         inner: Box<JsonType>,
     },
@@ -449,6 +461,11 @@ fn convert_type(type_ref: &Type) -> JsonType {
         Type::Raw(path) => JsonType::Raw {
             path: path.to_string(),
         },
+        Type::Generic(base_path, args) => JsonType::Generic {
+            base: base_path.to_string(),
+            args: args.iter().map(convert_type).collect(),
+        },
+        Type::TypeParameter(name) => JsonType::TypeParameter { name: name.clone() },
         Type::ConstPointer(inner) => JsonType::ConstPointer {
             inner: Box::new(convert_type(inner)),
         },
@@ -667,6 +684,7 @@ fn convert_item(item: &ItemDefinition, type_registry: &TypeRegistry) -> Option<J
     Some(JsonItem {
         path: item.path.to_string(),
         visibility: item.visibility.into(),
+        type_parameters: item.type_parameters.clone(),
         size: resolved.size,
         alignment: resolved.alignment,
         category: item.category.into(),

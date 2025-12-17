@@ -12,7 +12,7 @@ use super::{
     core::Parser,
     expressions::Expr,
     functions::Function,
-    types::{Ident, Type},
+    types::{Ident, Type, TypeParameter},
 };
 
 #[cfg(test)]
@@ -663,6 +663,8 @@ impl From<TypeAliasDefinition> for ItemDefinitionInner {
 pub struct ItemDefinition {
     pub visibility: Visibility,
     pub name: Ident,
+    /// Type parameters for generic types (e.g., `[T, U]` in `type Map<T, U>`)
+    pub type_parameters: Vec<TypeParameter>,
     pub doc_comments: Vec<String>,
     pub inner: ItemDefinitionInner,
     pub location: ItemLocation,
@@ -678,6 +680,7 @@ impl StripLocations for ItemDefinition {
         ItemDefinition {
             visibility: self.visibility.strip_locations(),
             name: self.name.strip_locations(),
+            type_parameters: self.type_parameters.strip_locations(),
             doc_comments: self.doc_comments.strip_locations(),
             inner: self.inner.strip_locations(),
             location: ItemLocation::test(),
@@ -693,6 +696,21 @@ impl ItemDefinition {
         Self {
             visibility,
             name: name.into(),
+            type_parameters: vec![],
+            doc_comments: vec![],
+            inner: inner.into(),
+            location: ItemLocation::test(),
+        }
+    }
+    pub fn generic(
+        (visibility, name): (Visibility, &str),
+        type_parameters: impl IntoIterator<Item = TypeParameter>,
+        inner: impl Into<ItemDefinitionInner>,
+    ) -> Self {
+        Self {
+            visibility,
+            name: name.into(),
+            type_parameters: type_parameters.into_iter().collect(),
             doc_comments: vec![],
             inner: inner.into(),
             location: ItemLocation::test(),
@@ -700,6 +718,13 @@ impl ItemDefinition {
     }
     pub fn with_doc_comments(mut self, doc_comments: Vec<String>) -> Self {
         self.doc_comments = doc_comments;
+        self
+    }
+    pub fn with_type_parameters(
+        mut self,
+        type_parameters: impl IntoIterator<Item = TypeParameter>,
+    ) -> Self {
+        self.type_parameters = type_parameters.into_iter().collect();
         self
     }
 }
@@ -756,9 +781,13 @@ impl Parser {
                 self.advance();
                 let (name, _) = self.expect_ident()?;
 
+                // Parse optional type parameters: type Name<T, U> { ... }
+                let type_parameters = self.parse_type_parameters()?;
+
                 // Check if this is a type alias (= Type;) or a type definition ({ ... } or ;)
                 if matches!(self.peek(), TokenKind::Eq) {
                     // Type alias: type Name = TargetType;
+                    // Type aliases don't support type parameters (yet)
                     self.advance(); // Consume '='
                     let target = self.parse_type()?;
                     self.expect(TokenKind::Semi)?;
@@ -774,6 +803,7 @@ impl Parser {
                     Ok(ItemDefinition {
                         visibility,
                         name,
+                        type_parameters,
                         doc_comments,
                         inner: ItemDefinitionInner::TypeAlias(TypeAliasDefinition {
                             target,
@@ -811,6 +841,7 @@ impl Parser {
                     Ok(ItemDefinition {
                         visibility,
                         name,
+                        type_parameters,
                         doc_comments,
                         inner: ItemDefinitionInner::Type(def),
                         location,
@@ -837,6 +868,7 @@ impl Parser {
                 Ok(ItemDefinition {
                     visibility,
                     name,
+                    type_parameters: vec![], // Enums don't support type parameters
                     doc_comments,
                     inner: ItemDefinitionInner::Enum(EnumDefinition {
                         type_,
@@ -868,6 +900,7 @@ impl Parser {
                 Ok(ItemDefinition {
                     visibility,
                     name,
+                    type_parameters: vec![], // Bitflags don't support type parameters
                     doc_comments,
                     inner: ItemDefinitionInner::Bitflags(BitflagsDefinition {
                         type_,
@@ -884,6 +917,40 @@ impl Parser {
                 location: self.current().location,
             }),
         }
+    }
+
+    /// Parse optional type parameters: `<T, U, V>`
+    fn parse_type_parameters(&mut self) -> Result<Vec<TypeParameter>, ParseError> {
+        if !matches!(self.peek(), TokenKind::Lt) {
+            return Ok(vec![]);
+        }
+
+        self.advance(); // consume <
+        let mut params = Vec::new();
+
+        // Parse first type parameter (if any)
+        if !matches!(self.peek(), TokenKind::Gt) {
+            let (ident, span) = self.expect_ident()?;
+            let location = self.item_location_from_locations(span.start, span.end);
+            params.push(TypeParameter {
+                name: ident.0,
+                location,
+            });
+
+            // Parse remaining comma-separated type parameters
+            while matches!(self.peek(), TokenKind::Comma) {
+                self.advance(); // consume ,
+                let (ident, span) = self.expect_ident()?;
+                let location = self.item_location_from_locations(span.start, span.end);
+                params.push(TypeParameter {
+                    name: ident.0,
+                    location,
+                });
+            }
+        }
+
+        self.expect(TokenKind::Gt)?;
+        Ok(params)
     }
 
     pub(crate) fn parse_type_def_items(&mut self) -> Result<Vec<TypeDefItem>, ParseError> {
@@ -1269,6 +1336,205 @@ mod tests {
         let ast = M::new().with_definitions([ID::new(
             (V::Public, "TexturePtr"),
             TAD::new(T::const_pointer(T::ident("module::Texture"))),
+        )]);
+
+        assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
+    }
+
+    #[test]
+    fn can_parse_generic_type_definition_single_param() {
+        // Generic type with single type parameter
+        let text = r#"
+        #[size(0x8)]
+        pub type Shared<T> {
+            pub ptr: *mut T,
+        }
+        "#;
+
+        let ast = M::new().with_definitions([ID::generic(
+            (V::Public, "Shared"),
+            [TP::new("T")],
+            TD::new([TS::field((V::Public, "ptr"), T::ident("T").mut_pointer())])
+                .with_attributes([A::size(8)]),
+        )]);
+
+        assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
+    }
+
+    #[test]
+    fn can_parse_generic_type_definition_multiple_params() {
+        // Generic type with multiple type parameters
+        let text = r#"
+        #[size(0x10)]
+        pub type Map<K, V> {
+            pub key: *mut K,
+            pub value: *mut V,
+        }
+        "#;
+
+        let ast = M::new().with_definitions([ID::generic(
+            (V::Public, "Map"),
+            [TP::new("K"), TP::new("V")],
+            TD::new([
+                TS::field((V::Public, "key"), T::ident("K").mut_pointer()),
+                TS::field((V::Public, "value"), T::ident("V").mut_pointer()),
+            ])
+            .with_attributes([A::size(16)]),
+        )]);
+
+        assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
+    }
+
+    #[test]
+    fn can_parse_field_with_generic_type_reference() {
+        // Type with a field that uses a generic type
+        let text = r#"
+        #[size(0x8)]
+        pub type Container {
+            pub shared: Shared<GameObject>,
+        }
+        "#;
+
+        let ast = M::new().with_definitions([ID::new(
+            (V::Public, "Container"),
+            TD::new([TS::field(
+                (V::Public, "shared"),
+                T::generic("Shared", [T::ident("GameObject")]),
+            )])
+            .with_attributes([A::size(8)]),
+        )]);
+
+        assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
+    }
+
+    #[test]
+    fn can_parse_field_with_nested_generic_type() {
+        // Type with a nested generic type (e.g., Shared<Map<K, V>>)
+        let text = r#"
+        #[size(0x8)]
+        pub type Container {
+            pub shared_map: Shared<Map<u32, Entity>>,
+        }
+        "#;
+
+        let ast = M::new().with_definitions([ID::new(
+            (V::Public, "Container"),
+            TD::new([TS::field(
+                (V::Public, "shared_map"),
+                T::generic(
+                    "Shared",
+                    [T::generic("Map", [T::ident("u32"), T::ident("Entity")])],
+                ),
+            )])
+            .with_attributes([A::size(8)]),
+        )]);
+
+        assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
+    }
+
+    #[test]
+    fn can_parse_pointer_to_generic_type() {
+        // Pointer to a generic type
+        let text = r#"
+        #[size(0x8)]
+        pub type Container {
+            pub ptr: *mut Shared<GameObject>,
+        }
+        "#;
+
+        let ast = M::new().with_definitions([ID::new(
+            (V::Public, "Container"),
+            TD::new([TS::field(
+                (V::Public, "ptr"),
+                T::generic("Shared", [T::ident("GameObject")]).mut_pointer(),
+            )])
+            .with_attributes([A::size(8)]),
+        )]);
+
+        assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
+    }
+
+    #[test]
+    fn can_parse_array_of_generic_type() {
+        // Array of generic type
+        let text = r#"
+        #[size(0x20)]
+        pub type Container {
+            pub items: [Shared<Entity>; 4],
+        }
+        "#;
+
+        let ast = M::new().with_definitions([ID::new(
+            (V::Public, "Container"),
+            TD::new([TS::field(
+                (V::Public, "items"),
+                T::generic("Shared", [T::ident("Entity")]).array(4),
+            )])
+            .with_attributes([A::size(32)]),
+        )]);
+
+        assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
+    }
+
+    #[test]
+    fn can_parse_generic_type_alias_single_param() {
+        // Generic type alias with single type parameter
+        let text = r#"
+        pub type SharedPtr<T> = *mut T;
+        "#;
+
+        let ast = M::new().with_definitions([ID::generic(
+            (V::Public, "SharedPtr"),
+            [TP::new("T")],
+            TAD::new(T::ident("T").mut_pointer()),
+        )]);
+
+        assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
+    }
+
+    #[test]
+    fn can_parse_generic_type_alias_multiple_params() {
+        // Generic type alias with multiple type parameters
+        let text = r#"
+        pub type MapEntry<K, V> = Pair<K, V>;
+        "#;
+
+        let ast = M::new().with_definitions([ID::generic(
+            (V::Public, "MapEntry"),
+            [TP::new("K"), TP::new("V")],
+            TAD::new(T::generic("Pair", [T::ident("K"), T::ident("V")])),
+        )]);
+
+        assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
+    }
+
+    #[test]
+    fn can_parse_generic_type_alias_with_generic_target() {
+        // Type alias that wraps a generic type
+        let text = r#"
+        pub type EntityPtr<T> = Shared<T>;
+        "#;
+
+        let ast = M::new().with_definitions([ID::generic(
+            (V::Public, "EntityPtr"),
+            [TP::new("T")],
+            TAD::new(T::generic("Shared", [T::ident("T")])),
+        )]);
+
+        assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
+    }
+
+    #[test]
+    fn can_parse_generic_type_alias_with_pointer_to_generic() {
+        // Generic type alias to pointer of generic type
+        let text = r#"
+        pub type WeakRef<T> = *const Weak<T>;
+        "#;
+
+        let ast = M::new().with_definitions([ID::generic(
+            (V::Public, "WeakRef"),
+            [TP::new("T")],
+            TAD::new(T::generic("Weak", [T::ident("T")]).const_pointer()),
         )]);
 
         assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);

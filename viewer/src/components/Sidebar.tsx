@@ -183,7 +183,14 @@ function ItemTree({ itemPath, level }: ItemTreeProps) {
           className={`flex items-center gap-2 flex-1 text-sm min-w-0 ${getItemTypeColor(itemType)} ${getItemTypeHoverColor(itemType)}`}
         >
           <Icon />
-          <span className="truncate">{itemName}</span>
+          <span className="truncate">
+            {itemName}
+            {item.type_parameters && item.type_parameters.length > 0 && (
+              <span className="text-emerald-600 dark:text-emerald-400">
+                &lt;{item.type_parameters.join(', ')}&gt;
+              </span>
+            )}
+          </span>
         </Link>
       </div>
 

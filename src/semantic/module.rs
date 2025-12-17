@@ -110,7 +110,7 @@ impl Module {
 
         for ev in &mut self.extern_values {
             if let Type::Unresolved(type_ref) = &ev.type_ {
-                ev.type_ = match type_registry.resolve_grammar_type(&scope, type_ref) {
+                ev.type_ = match type_registry.resolve_grammar_type(&scope, type_ref, &[]) {
                     TypeLookupResult::Found(t) => t,
                     TypeLookupResult::NotYetResolved | TypeLookupResult::NotFound { .. } => {
                         return Err(SemanticError::TypeResolutionFailed {
@@ -132,12 +132,20 @@ impl Module {
         let scope = self.scope();
 
         for function in self.ast.functions().collect::<Vec<_>>() {
-            self.functions.push(crate::semantic::function::build(
+            let resolved_function = match crate::semantic::function::build(
                 type_registry,
                 &scope,
                 false, // is_vfunc
                 function,
-            )?);
+            )? {
+                crate::semantic::function::FunctionBuildOutcome::Built(f) => *f,
+                crate::semantic::function::FunctionBuildOutcome::Deferred => {
+                    // This shouldn't happen since freestanding functions are resolved
+                    // after all types are resolved, but handle it gracefully
+                    continue;
+                }
+            };
+            self.functions.push(resolved_function);
         }
 
         Ok(())

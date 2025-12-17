@@ -162,6 +162,7 @@ fn build_item(
     } = resolved;
     let visibility = definition.visibility;
     let path = &definition.path;
+    let type_parameters = &definition.type_parameters;
 
     use ItemDefinitionInner as IDI;
     let location = &definition.location;
@@ -175,16 +176,25 @@ fn build_item(
                 visibility,
                 td,
                 location,
+                type_parameters,
             ),
             IDI::Enum(ed) => build_enum(path, *size, visibility, ed, location),
             IDI::Bitflags(bd) => build_bitflags(path, *size, visibility, bd, location),
-            IDI::TypeAlias(ta) => build_type_alias(type_registry, path, visibility, ta, location),
+            IDI::TypeAlias(ta) => build_type_alias(
+                type_registry,
+                path,
+                visibility,
+                ta,
+                location,
+                type_parameters,
+            ),
         },
         ItemCategory::Predefined => Ok(quote! {}),
         ItemCategory::Extern => Ok(quote! {}),
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn build_type(
     type_registry: &TypeRegistry,
     path: &ItemPath,
@@ -193,6 +203,7 @@ fn build_type(
     visibility: Visibility,
     type_definition: &TypeDefinition,
     location: &ItemLocation,
+    type_parameters: &[String],
 ) -> Result<proc_macro2::TokenStream> {
     let name = path.last().ok_or_else(|| BackendError::TypeCodeGenFailed {
         type_path: path.clone(),
@@ -432,16 +443,41 @@ fn build_type(
             .collect::<Vec<_>>()
     };
 
+    // Generate type parameters for generic types
+    let type_param_idents: Vec<proc_macro2::Ident> =
+        type_parameters.iter().map(|p| str_to_ident(p)).collect();
+
+    let generic_params = if type_param_idents.is_empty() {
+        quote! {}
+    } else {
+        quote! { < #(#type_param_idents),* > }
+    };
+
+    // For generic types, we can't do compile-time size checks (size depends on T)
+    // and we skip some impl blocks that don't make sense for generics
+    let size_check_impl = if type_parameters.is_empty() {
+        size_check_impl
+    } else {
+        None
+    };
+
+    // Skip as_ref conversions for generic types (they'd need phantom data etc.)
+    let as_ref_conversions = if type_parameters.is_empty() {
+        as_ref_conversions
+    } else {
+        vec![]
+    };
+
     Ok(quote! {
         #derives
         #[repr(C #packed #alignment)]
         #doc
-        #visibility struct #name_ident {
+        #visibility struct #name_ident #generic_params {
             #(#fields),*
         }
         #size_check_impl
         #singleton_impl
-        impl #name_ident {
+        impl #generic_params #name_ident #generic_params {
             #vftable_fn_impl
             #(#associated_functions_impl)*
             #(#vftable_function_impl)*
@@ -666,6 +702,7 @@ fn build_type_alias(
     visibility: Visibility,
     type_alias_definition: &TypeAliasDefinition,
     location: &ItemLocation,
+    type_parameters: &[String],
 ) -> Result<proc_macro2::TokenStream> {
     let name = path.last().ok_or_else(|| BackendError::TypeCodeGenFailed {
         type_path: path.clone(),
@@ -680,9 +717,19 @@ fn build_type_alias(
     let doc = doc_to_tokens(false, doc);
     let target_type = sa_type_to_syn_type(target)?;
 
+    // Generate type parameters for generic type aliases
+    let type_param_idents: Vec<proc_macro2::Ident> =
+        type_parameters.iter().map(|p| str_to_ident(p)).collect();
+
+    let generic_params = if type_param_idents.is_empty() {
+        quote! {}
+    } else {
+        quote! { < #(#type_param_idents),* > }
+    };
+
     Ok(quote! {
         #doc
-        #visibility type #name_ident = #target_type;
+        #visibility type #name_ident #generic_params = #target_type;
     })
 }
 
@@ -828,6 +875,24 @@ fn fully_qualified_type_ref_impl(
                 }
                 write!(out, "{path}")
             }
+        }
+        Type::Generic(base_path, args) => {
+            // Generate Rust generic syntax: `Base<Arg1, Arg2>`
+            if base_path.len() > 1 {
+                write!(out, "crate::")?;
+            }
+            write!(out, "{base_path}<")?;
+            for (i, arg) in args.iter().enumerate() {
+                if i > 0 {
+                    write!(out, ", ")?;
+                }
+                fully_qualified_type_ref_impl(out, arg)?;
+            }
+            write!(out, ">")
+        }
+        Type::TypeParameter(name) => {
+            // Type parameter - just output the name (e.g., `T`)
+            write!(out, "{name}")
         }
         Type::ConstPointer(tr) => {
             write!(out, "*const ")?;

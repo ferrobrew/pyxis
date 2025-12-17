@@ -628,7 +628,10 @@ mod tests {
                         (V::Public, "engine_spawn_vehicle"),
                         [
                             Ar::mut_self(),
-                            Ar::named("vehicle", T::ident("SharedPtr<Vehicle>").mut_pointer()),
+                            Ar::named(
+                                "vehicle",
+                                T::generic("SharedPtr", [T::ident("Vehicle")]).mut_pointer(),
+                            ),
                             Ar::named("context", T::ident("i32")),
                             Ar::named("unk1", T::ident("StdString").mut_pointer()),
                             Ar::named("model_id", T::ident("u32").const_pointer()),
@@ -637,7 +640,7 @@ mod tests {
                         ],
                     )
                     .with_attributes([A::address(0x84C_4C0)])
-                    .with_return_type(T::ident("SharedPtr<Vehicle>").mut_pointer()),
+                    .with_return_type(T::generic("SharedPtr", [T::ident("Vehicle")]).mut_pointer()),
                     F::new(
                         (V::Public, "request_vehicle_model"),
                         [

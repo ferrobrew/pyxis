@@ -1,0 +1,36 @@
+/// A shared pointer to a type.
+#[size(0x8)]
+pub type SharedPtr<T> {
+    pub px: *mut T,
+}
+
+/// A weak pointer to a type.
+#[size(0x8)]
+pub type WeakPtr<T> {
+    pub px: *const T,
+}
+
+/// A game object that contains self-referential generic types.
+/// This tests that the compiler can handle cycles where:
+/// - GameObject contains SharedPtr<GameObject>
+/// - SharedPtr<T> contains *mut T
+/// - The pointer breaks the cycle, but only after generic substitution
+#[size(0x28)]
+#[align(8)]
+pub type GameObject {
+    pub id: u32,
+    #[address(0x8)]
+    pub parent_object: SharedPtr<GameObject>,
+    pub weak_this: WeakPtr<GameObject>,
+    pub first_child: SharedPtr<GameObject>,
+}
+
+/// A tree node with self-referential pointers.
+#[size(0x18)]
+#[align(8)]
+pub type TreeNode {
+    pub value: u32,
+    #[address(0x8)]
+    pub left: SharedPtr<TreeNode>,
+    pub right: SharedPtr<TreeNode>,
+}

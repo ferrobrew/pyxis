@@ -14,6 +14,14 @@ use crate::{
 #[cfg(test)]
 use crate::span::StripLocations;
 
+/// Result of building a function - can indicate deferral when types aren't resolved yet
+pub enum FunctionBuildOutcome {
+    /// Function was built successfully
+    Built(Box<Function>),
+    /// Function building should be deferred (a type isn't resolved yet)
+    Deferred,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Argument {
     ConstSelf {
@@ -405,7 +413,7 @@ pub fn build(
     scope: &[ItemPath],
     is_vfunc: bool,
     function: &grammar::Function,
-) -> Result<Function> {
+) -> Result<FunctionBuildOutcome> {
     let mut body = is_vfunc.then(|| FunctionBody::Vftable {
         function_name: function.name.0.clone(),
     });
@@ -484,44 +492,51 @@ pub fn build(
         );
     };
 
-    let arguments = function
-        .arguments
-        .iter()
-        .map(|a| {
-            let location = *a.location();
-            match a {
-                grammar::Argument::ConstSelf { .. } => Ok(Argument::ConstSelf { location }),
-                grammar::Argument::MutSelf { .. } => Ok(Argument::MutSelf { location }),
-                grammar::Argument::Named { ident, type_, .. } => {
-                    let resolved_type = match type_registry.resolve_grammar_type(scope, type_) {
-                        TypeLookupResult::Found(t) => t,
-                        TypeLookupResult::NotYetResolved | TypeLookupResult::NotFound { .. } => {
-                            return Err(SemanticError::TypeResolutionFailed {
-                                type_: type_.clone(),
-                                resolution_context: TypeResolutionContext::FunctionArgument {
-                                    argument_name: ident.0.clone(),
-                                    function_name: function.name.0.clone(),
-                                },
-                                location,
-                            });
-                        }
-                    };
-                    Ok(Argument::Field {
-                        name: ident.0.clone(),
-                        type_: resolved_type,
-                        location,
-                    })
+    let mut arguments = Vec::new();
+    for a in &function.arguments {
+        let location = *a.location();
+        let arg = match a {
+            grammar::Argument::ConstSelf { .. } => Argument::ConstSelf { location },
+            grammar::Argument::MutSelf { .. } => Argument::MutSelf { location },
+            grammar::Argument::Named { ident, type_, .. } => {
+                let resolved_type = match type_registry.resolve_grammar_type(scope, type_, &[]) {
+                    TypeLookupResult::Found(t) => t,
+                    TypeLookupResult::NotYetResolved => {
+                        // Type exists but isn't resolved yet - defer function building
+                        return Ok(FunctionBuildOutcome::Deferred);
+                    }
+                    TypeLookupResult::NotFound { .. } => {
+                        return Err(SemanticError::TypeResolutionFailed {
+                            type_: type_.clone(),
+                            resolution_context: TypeResolutionContext::FunctionArgument {
+                                argument_name: ident.0.clone(),
+                                function_name: function.name.0.clone(),
+                            },
+                            location,
+                        });
+                    }
+                };
+                Argument::Field {
+                    name: ident.0.clone(),
+                    type_: resolved_type,
+                    location,
                 }
             }
-        })
-        .collect::<Result<Vec<_>>>()?;
+        };
+        arguments.push(arg);
+    }
 
-    let return_type = function.return_type.as_ref().and_then(|t| {
-        match type_registry.resolve_grammar_type(scope, t) {
+    let return_type = match function.return_type.as_ref() {
+        Some(t) => match type_registry.resolve_grammar_type(scope, t, &[]) {
             TypeLookupResult::Found(resolved) => Some(resolved),
-            TypeLookupResult::NotYetResolved | TypeLookupResult::NotFound { .. } => None,
-        }
-    });
+            TypeLookupResult::NotYetResolved => {
+                // Return type exists but isn't resolved yet - defer function building
+                return Ok(FunctionBuildOutcome::Deferred);
+            }
+            TypeLookupResult::NotFound { .. } => None,
+        },
+        None => None,
+    };
 
     let calling_convention = calling_convention.unwrap_or_else(|| {
         let has_self = arguments
@@ -535,7 +550,7 @@ pub fn build(
         }
     });
 
-    Ok(Function {
+    Ok(FunctionBuildOutcome::Built(Box::new(Function {
         visibility: function.visibility.into(),
         name: function.name.0.clone(),
         doc,
@@ -544,5 +559,5 @@ pub fn build(
         return_type,
         calling_convention,
         location: function.location,
-    })
+    })))
 }
