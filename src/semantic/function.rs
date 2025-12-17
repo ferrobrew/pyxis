@@ -493,7 +493,8 @@ pub fn build(
                 grammar::Argument::ConstSelf { .. } => Ok(Argument::ConstSelf { location }),
                 grammar::Argument::MutSelf { .. } => Ok(Argument::MutSelf { location }),
                 grammar::Argument::Named { ident, type_, .. } => {
-                    let resolved_type = match type_registry.resolve_grammar_type(scope, type_) {
+                    let resolved_type = match type_registry.resolve_grammar_type(scope, type_, &[])
+                    {
                         TypeLookupResult::Found(t) => t,
                         TypeLookupResult::NotYetResolved | TypeLookupResult::NotFound { .. } => {
                             return Err(SemanticError::TypeResolutionFailed {
@@ -517,7 +518,7 @@ pub fn build(
         .collect::<Result<Vec<_>>>()?;
 
     let return_type = function.return_type.as_ref().and_then(|t| {
-        match type_registry.resolve_grammar_type(scope, t) {
+        match type_registry.resolve_grammar_type(scope, t, &[]) {
             TypeLookupResult::Found(resolved) => Some(resolved),
             TypeLookupResult::NotYetResolved | TypeLookupResult::NotFound { .. } => None,
         }

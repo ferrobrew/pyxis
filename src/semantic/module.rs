@@ -110,7 +110,7 @@ impl Module {
 
         for ev in &mut self.extern_values {
             if let Type::Unresolved(type_ref) = &ev.type_ {
-                ev.type_ = match type_registry.resolve_grammar_type(&scope, type_ref) {
+                ev.type_ = match type_registry.resolve_grammar_type(&scope, type_ref, &[]) {
                     TypeLookupResult::Found(t) => t,
                     TypeLookupResult::NotYetResolved | TypeLookupResult::NotFound { .. } => {
                         return Err(SemanticError::TypeResolutionFailed {

@@ -61,7 +61,7 @@ pub fn build(
     // This allows generic type aliases like `type SharedPtr<T> = Shared<T>;`
     // The cross-module re-export semantics come from storing the fully resolved type,
     // so when used elsewhere, no additional scope/visibility checks are needed.
-    let resolved_target = match semantic.type_registry.resolve_grammar_type_with_params(
+    let resolved_target = match semantic.type_registry.resolve_grammar_type(
         &module.scope(),
         &definition.target,
         type_parameters,

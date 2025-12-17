@@ -131,20 +131,21 @@ pub fn build(
 ) -> Result<BuildOutcome> {
     let module = semantic.get_module_for_path(resolvee_path, location)?;
 
-    let ty = match semantic
-        .type_registry
-        .resolve_grammar_type(&module.scope(), &definition.type_)
-    {
-        TypeLookupResult::Found(t) => t,
-        TypeLookupResult::NotYetResolved => return Ok(BuildOutcome::Deferred),
-        TypeLookupResult::NotFound { type_name } => {
-            return Ok(BuildOutcome::NotFoundType(UnresolvedTypeReference {
-                type_name,
-                location: *definition.type_.location(),
-                context: format!("base type of enum `{resolvee_path}`"),
-            }));
-        }
-    };
+    let ty =
+        match semantic
+            .type_registry
+            .resolve_grammar_type(&module.scope(), &definition.type_, &[])
+        {
+            TypeLookupResult::Found(t) => t,
+            TypeLookupResult::NotYetResolved => return Ok(BuildOutcome::Deferred),
+            TypeLookupResult::NotFound { type_name } => {
+                return Ok(BuildOutcome::NotFoundType(UnresolvedTypeReference {
+                    type_name,
+                    location: *definition.type_.location(),
+                    context: format!("base type of enum `{resolvee_path}`"),
+                }));
+            }
+        };
 
     // TODO: verify that `ty` actually makes sense for an enum
     let Some(size) = ty.size(&semantic.type_registry) else {

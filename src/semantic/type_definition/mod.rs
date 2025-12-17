@@ -297,7 +297,7 @@ pub fn build(
                 }
 
                 // Push field - use type parameters for resolution inside generic types
-                let type_ = match semantic.type_registry.resolve_grammar_type_with_params(
+                let type_ = match semantic.type_registry.resolve_grammar_type(
                     &module.scope(),
                     type_,
                     type_parameters,

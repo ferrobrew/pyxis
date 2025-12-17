@@ -325,20 +325,11 @@ impl TypeRegistry {
         &self,
         scope: &[ItemPath],
         type_: &grammar::Type,
-    ) -> TypeLookupResult {
-        self.resolve_grammar_type_with_params(scope, type_, &[])
-    }
-
-    /// Resolves a grammar type with type parameters in scope.
-    pub(crate) fn resolve_grammar_type_with_params(
-        &self,
-        scope: &[ItemPath],
-        type_: &grammar::Type,
         type_params: &[String],
     ) -> TypeLookupResult {
         match type_ {
             grammar::Type::ConstPointer { pointee, .. } => {
-                match self.resolve_grammar_type_with_params(scope, pointee, type_params) {
+                match self.resolve_grammar_type(scope, pointee, type_params) {
                     TypeLookupResult::Found(t) => {
                         TypeLookupResult::Found(Type::ConstPointer(Box::new(t)))
                     }
@@ -346,7 +337,7 @@ impl TypeRegistry {
                 }
             }
             grammar::Type::MutPointer { pointee, .. } => {
-                match self.resolve_grammar_type_with_params(scope, pointee, type_params) {
+                match self.resolve_grammar_type(scope, pointee, type_params) {
                     TypeLookupResult::Found(t) => {
                         TypeLookupResult::Found(Type::MutPointer(Box::new(t)))
                     }
@@ -354,7 +345,7 @@ impl TypeRegistry {
                 }
             }
             grammar::Type::Array { element, size, .. } => {
-                match self.resolve_grammar_type_with_params(scope, element, type_params) {
+                match self.resolve_grammar_type(scope, element, type_params) {
                     TypeLookupResult::Found(t) => {
                         TypeLookupResult::Found(Type::Array(Box::new(t), *size))
                     }
@@ -376,7 +367,7 @@ impl TypeRegistry {
                 if !generic_args.is_empty() {
                     let mut resolved_args = Vec::new();
                     for arg in generic_args {
-                        match self.resolve_grammar_type_with_params(scope, arg, type_params) {
+                        match self.resolve_grammar_type(scope, arg, type_params) {
                             TypeLookupResult::Found(t) => resolved_args.push(Box::new(t)),
                             other => return other,
                         }

@@ -122,20 +122,21 @@ pub fn build(
     let type_location = *definition.type_.location();
 
     // Retrieve the type for this bitflags, and validate it, before getting its size
-    let ty = match semantic
-        .type_registry
-        .resolve_grammar_type(&module.scope(), &definition.type_)
-    {
-        TypeLookupResult::Found(t) => t,
-        TypeLookupResult::NotYetResolved => return Ok(BuildOutcome::Deferred),
-        TypeLookupResult::NotFound { type_name } => {
-            return Ok(BuildOutcome::NotFoundType(UnresolvedTypeReference {
-                type_name,
-                location: type_location,
-                context: format!("base type of bitflags `{resolvee_path}`"),
-            }));
-        }
-    };
+    let ty =
+        match semantic
+            .type_registry
+            .resolve_grammar_type(&module.scope(), &definition.type_, &[])
+        {
+            TypeLookupResult::Found(t) => t,
+            TypeLookupResult::NotYetResolved => return Ok(BuildOutcome::Deferred),
+            TypeLookupResult::NotFound { type_name } => {
+                return Ok(BuildOutcome::NotFoundType(UnresolvedTypeReference {
+                    type_name,
+                    location: type_location,
+                    context: format!("base type of bitflags `{resolvee_path}`"),
+                }));
+            }
+        };
     let ty_raw_path = ty
         .as_raw()
         .ok_or_else(|| SemanticError::BitflagsInvalidType {
