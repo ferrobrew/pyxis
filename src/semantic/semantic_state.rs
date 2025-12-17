@@ -304,6 +304,7 @@ impl SemanticState {
                         ta,
                         def_location,
                         &definition.doc_comments,
+                        &type_param_names,
                     )?,
                 };
 

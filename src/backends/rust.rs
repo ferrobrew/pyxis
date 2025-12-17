@@ -180,7 +180,14 @@ fn build_item(
             ),
             IDI::Enum(ed) => build_enum(path, *size, visibility, ed, location),
             IDI::Bitflags(bd) => build_bitflags(path, *size, visibility, bd, location),
-            IDI::TypeAlias(ta) => build_type_alias(type_registry, path, visibility, ta, location),
+            IDI::TypeAlias(ta) => build_type_alias(
+                type_registry,
+                path,
+                visibility,
+                ta,
+                location,
+                type_parameters,
+            ),
         },
         ItemCategory::Predefined => Ok(quote! {}),
         ItemCategory::Extern => Ok(quote! {}),
@@ -695,6 +702,7 @@ fn build_type_alias(
     visibility: Visibility,
     type_alias_definition: &TypeAliasDefinition,
     location: &ItemLocation,
+    type_parameters: &[String],
 ) -> Result<proc_macro2::TokenStream> {
     let name = path.last().ok_or_else(|| BackendError::TypeCodeGenFailed {
         type_path: path.clone(),
@@ -709,9 +717,19 @@ fn build_type_alias(
     let doc = doc_to_tokens(false, doc);
     let target_type = sa_type_to_syn_type(target)?;
 
+    // Generate type parameters for generic type aliases
+    let type_param_idents: Vec<proc_macro2::Ident> =
+        type_parameters.iter().map(|p| str_to_ident(p)).collect();
+
+    let generic_params = if type_param_idents.is_empty() {
+        quote! {}
+    } else {
+        quote! { < #(#type_param_idents),* > }
+    };
+
     Ok(quote! {
         #doc
-        #visibility type #name_ident = #target_type;
+        #visibility type #name_ident #generic_params = #target_type;
     })
 }
 

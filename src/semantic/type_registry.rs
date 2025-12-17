@@ -116,6 +116,67 @@ impl TypeRegistry {
         }
     }
 
+    /// Checks if a path refers to a generic type alias and returns its type parameters
+    /// and target type if so.
+    fn get_generic_type_alias(
+        &self,
+        path: &ItemPath,
+    ) -> Option<(
+        Vec<String>,
+        crate::semantic::type_alias_definition::TypeAliasDefinition,
+    )> {
+        if let Some(item_def) = self.types.get(path) {
+            if !item_def.type_parameters.is_empty() {
+                if let Some(resolved) = item_def.resolved() {
+                    if let Some(type_alias) = resolved.inner.as_type_alias() {
+                        return Some((item_def.type_parameters.clone(), type_alias.clone()));
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    /// Substitutes type parameters in a type with concrete types.
+    /// `param_names` are the type parameter names, `args` are the concrete types.
+    fn substitute_type_params(type_: &Type, param_names: &[String], args: &[Box<Type>]) -> Type {
+        match type_ {
+            Type::TypeParameter(name) => {
+                // Find the parameter index and substitute
+                if let Some(idx) = param_names.iter().position(|p| p == name) {
+                    if idx < args.len() {
+                        return (*args[idx]).clone();
+                    }
+                }
+                type_.clone()
+            }
+            Type::ConstPointer(inner) => Type::ConstPointer(Box::new(
+                Self::substitute_type_params(inner, param_names, args),
+            )),
+            Type::MutPointer(inner) => Type::MutPointer(Box::new(Self::substitute_type_params(
+                inner,
+                param_names,
+                args,
+            ))),
+            Type::Array(inner, size) => Type::Array(
+                Box::new(Self::substitute_type_params(inner, param_names, args)),
+                *size,
+            ),
+            Type::Generic(path, inner_args) => {
+                // Substitute in the generic arguments too
+                let substituted_args: Vec<Box<Type>> = inner_args
+                    .iter()
+                    .map(|a| Box::new(Self::substitute_type_params(a, param_names, args)))
+                    .collect();
+                Type::Generic(path.clone(), substituted_args)
+            }
+            // Raw types don't need substitution
+            Type::Raw(_) => type_.clone(),
+            // These shouldn't appear in type alias targets, but handle them for completeness
+            Type::Unresolved(_) | Type::Function(_, _, _) => type_.clone(),
+        }
+    }
+
     pub(crate) fn padding_type(&self, bytes: usize) -> Type {
         match self.resolve_string(&[], "u8") {
             TypeLookupResult::Found(t) => Type::Array(Box::new(t), bytes),
@@ -149,6 +210,71 @@ impl TypeRegistry {
                 if let Some(item_def) = self.types.get(&path) {
                     if item_def.is_resolved() {
                         TypeLookupResult::Found(self.resolve_type_alias(Type::Raw(path)))
+                    } else {
+                        TypeLookupResult::NotYetResolved
+                    }
+                } else {
+                    TypeLookupResult::NotFound {
+                        type_name: name.to_string(),
+                    }
+                }
+            }
+            None => TypeLookupResult::NotFound {
+                type_name: name.to_string(),
+            },
+        }
+    }
+
+    /// Resolves a path without following type aliases.
+    /// Used when we need to check if the path refers to a generic type alias.
+    fn resolve_path_raw(&self, scope: &[ItemPath], path: &ItemPath) -> TypeLookupResult {
+        // If path has multiple segments, try to resolve it directly first
+        if path.len() > 1 {
+            if let Some(item_def) = self.types.get(path) {
+                if item_def.is_resolved() {
+                    return TypeLookupResult::Found(Type::Raw(path.clone()));
+                } else {
+                    return TypeLookupResult::NotYetResolved;
+                }
+            }
+        }
+
+        // For single-segment paths or unresolved multi-segment paths,
+        // try scope-based resolution using the last segment
+        if let Some(last_segment) = path.last() {
+            self.resolve_string_raw(scope, last_segment.as_str())
+        } else {
+            TypeLookupResult::NotFound {
+                type_name: path.to_string(),
+            }
+        }
+    }
+
+    /// Resolves a type name without following type aliases.
+    fn resolve_string_raw(&self, scope: &[ItemPath], name: &str) -> TypeLookupResult {
+        let (scope_types, scope_modules): (Vec<&ItemPath>, Vec<&ItemPath>) =
+            scope.iter().partition(|ip| self.types.contains_key(ip));
+
+        // If we find the relevant type within our scope, take the last one
+        let found_path = scope_types
+            .into_iter()
+            .rev()
+            .find(|st| st.last().map(|i| i.as_str()) == Some(name))
+            .cloned()
+            .or_else(|| {
+                // Otherwise, search our scopes
+                std::iter::once(&ItemPath::empty())
+                    .chain(scope_modules.iter().copied())
+                    .map(|ip| ip.join(name.into()))
+                    .find(|ip| self.types.contains_key(ip))
+            });
+
+        match found_path {
+            Some(path) => {
+                // Check if the type is resolved
+                if let Some(item_def) = self.types.get(&path) {
+                    if item_def.is_resolved() {
+                        TypeLookupResult::Found(Type::Raw(path))
                     } else {
                         TypeLookupResult::NotYetResolved
                     }
@@ -256,10 +382,26 @@ impl TypeRegistry {
                         }
                     }
 
-                    // Resolve the base type path
-                    match self.resolve_path(scope, path) {
+                    // Resolve the base type path - but don't follow type aliases yet
+                    // We need to check if it's a generic type alias first
+                    let resolved_path = self.resolve_path_raw(scope, path);
+                    match resolved_path {
                         TypeLookupResult::Found(Type::Raw(base_path)) => {
-                            TypeLookupResult::Found(Type::Generic(base_path, resolved_args))
+                            // Check if this is a generic type alias
+                            if let Some((param_names, type_alias)) =
+                                self.get_generic_type_alias(&base_path)
+                            {
+                                // Substitute type parameters in the alias target
+                                let substituted = Self::substitute_type_params(
+                                    &type_alias.target,
+                                    &param_names,
+                                    &resolved_args,
+                                );
+                                TypeLookupResult::Found(substituted)
+                            } else {
+                                // Regular generic type instantiation
+                                TypeLookupResult::Found(Type::Generic(base_path, resolved_args))
+                            }
                         }
                         TypeLookupResult::Found(_) => {
                             // For now, only support generic instantiation of raw types

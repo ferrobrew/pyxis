@@ -53,17 +53,19 @@ pub fn build(
     definition: &grammar::TypeAliasDefinition,
     _location: &ItemLocation,
     doc_comments: &[String],
+    type_parameters: &[String],
 ) -> Result<BuildOutcome> {
     let module = semantic.get_module_for_path(resolvee_path, &definition.location)?;
 
-    // Resolve the target type in the module's scope
-    // This is where the cross-module re-export semantics come from:
-    // the alias stores the fully resolved type, so when used elsewhere,
-    // no additional scope/visibility checks are needed
-    let resolved_target = match semantic
-        .type_registry
-        .resolve_grammar_type(&module.scope(), &definition.target)
-    {
+    // Resolve the target type in the module's scope with type parameters in scope.
+    // This allows generic type aliases like `type SharedPtr<T> = Shared<T>;`
+    // The cross-module re-export semantics come from storing the fully resolved type,
+    // so when used elsewhere, no additional scope/visibility checks are needed.
+    let resolved_target = match semantic.type_registry.resolve_grammar_type_with_params(
+        &module.scope(),
+        &definition.target,
+        type_parameters,
+    ) {
         TypeLookupResult::Found(t) => t,
         TypeLookupResult::NotYetResolved => return Ok(BuildOutcome::Deferred),
         TypeLookupResult::NotFound { type_name } => {

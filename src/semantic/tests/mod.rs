@@ -2020,3 +2020,165 @@ fn can_resolve_nested_generic_types() {
         ],
     );
 }
+
+// ========== Generic type alias tests ==========
+
+#[test]
+fn can_resolve_generic_type_alias_single_param() {
+    // Generic type alias: type SharedPtr<T> = *mut T;
+    assert_ast_produces_type_definitions(
+        M::new().with_definitions([ID::generic(
+            (V::Public, "SharedPtr"),
+            [TP::new("T")],
+            TAD::new(T::ident("T").mut_pointer()),
+        )]),
+        [SID::generic_defined_resolved(
+            (SV::Public, "test::SharedPtr"),
+            ["T"],
+            SISR::new(
+                (0, 1),
+                STAD::new(ST::type_parameter("T").mut_pointer(), vec![]),
+            ),
+        )],
+    );
+}
+
+#[test]
+fn can_resolve_generic_type_alias_multiple_params() {
+    // Generic type alias: type Pair<K, V> = Map<K, V>;
+    // where Map<K, V> is a generic type
+    assert_ast_produces_type_definitions(
+        M::new().with_definitions([
+            ID::generic(
+                (V::Public, "Map"),
+                [TP::new("K"), TP::new("V")],
+                TD::new([
+                    TS::field((V::Public, "key"), T::ident("K").mut_pointer()),
+                    TS::field((V::Public, "value"), T::ident("V").mut_pointer()),
+                ])
+                .with_attributes([A::size(2 * pointer_size())]),
+            ),
+            ID::generic(
+                (V::Public, "Pair"),
+                [TP::new("A"), TP::new("B")],
+                TAD::new(T::generic("Map", [T::ident("A"), T::ident("B")])),
+            ),
+        ]),
+        [
+            SID::generic_defined_resolved(
+                (SV::Public, "test::Map"),
+                ["K", "V"],
+                SISR::new(
+                    (2 * pointer_size(), pointer_size()),
+                    STD::new().with_regions([
+                        SR::field((SV::Public, "key"), ST::type_parameter("K").mut_pointer()),
+                        SR::field((SV::Public, "value"), ST::type_parameter("V").mut_pointer()),
+                    ]),
+                ),
+            ),
+            SID::generic_defined_resolved(
+                (SV::Public, "test::Pair"),
+                ["A", "B"],
+                SISR::new(
+                    (0, 1),
+                    STAD::new(
+                        ST::generic(
+                            "test::Map",
+                            [ST::type_parameter("A"), ST::type_parameter("B")],
+                        ),
+                        vec![],
+                    ),
+                ),
+            ),
+        ],
+    );
+}
+
+#[test]
+fn can_resolve_generic_type_alias_wrapping_generic_type() {
+    // Generic type alias: type EntityPtr<T> = Shared<T>;
+    // where Shared<T> is a generic type
+    assert_ast_produces_type_definitions(
+        M::new().with_definitions([
+            ID::generic(
+                (V::Public, "Shared"),
+                [TP::new("T")],
+                TD::new([TS::field((V::Public, "ptr"), T::ident("T").mut_pointer())])
+                    .with_attributes([A::size(pointer_size())]),
+            ),
+            ID::generic(
+                (V::Public, "EntityPtr"),
+                [TP::new("T")],
+                TAD::new(T::generic("Shared", [T::ident("T")])),
+            ),
+        ]),
+        [
+            SID::generic_defined_resolved(
+                (SV::Public, "test::EntityPtr"),
+                ["T"],
+                SISR::new(
+                    (0, 1),
+                    STAD::new(
+                        ST::generic("test::Shared", [ST::type_parameter("T")]),
+                        vec![],
+                    ),
+                ),
+            ),
+            SID::generic_defined_resolved(
+                (SV::Public, "test::Shared"),
+                ["T"],
+                SISR::new(
+                    (pointer_size(), pointer_size()),
+                    STD::new().with_regions([SR::field(
+                        (SV::Public, "ptr"),
+                        ST::type_parameter("T").mut_pointer(),
+                    )]),
+                ),
+            ),
+        ],
+    );
+}
+
+#[test]
+fn can_resolve_generic_type_alias_pointer_to_generic() {
+    // Generic type alias: type WeakRef<T> = *const Weak<T>;
+    assert_ast_produces_type_definitions(
+        M::new().with_definitions([
+            ID::generic(
+                (V::Public, "Weak"),
+                [TP::new("T")],
+                TD::new([TS::field((V::Public, "ptr"), T::ident("T").const_pointer())])
+                    .with_attributes([A::size(pointer_size())]),
+            ),
+            ID::generic(
+                (V::Public, "WeakRef"),
+                [TP::new("T")],
+                TAD::new(T::generic("Weak", [T::ident("T")]).const_pointer()),
+            ),
+        ]),
+        [
+            SID::generic_defined_resolved(
+                (SV::Public, "test::Weak"),
+                ["T"],
+                SISR::new(
+                    (pointer_size(), pointer_size()),
+                    STD::new().with_regions([SR::field(
+                        (SV::Public, "ptr"),
+                        ST::type_parameter("T").const_pointer(),
+                    )]),
+                ),
+            ),
+            SID::generic_defined_resolved(
+                (SV::Public, "test::WeakRef"),
+                ["T"],
+                SISR::new(
+                    (0, 1),
+                    STAD::new(
+                        ST::generic("test::Weak", [ST::type_parameter("T")]).const_pointer(),
+                        vec![],
+                    ),
+                ),
+            ),
+        ],
+    );
+}

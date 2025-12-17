@@ -1475,4 +1475,68 @@ mod tests {
 
         assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
     }
+
+    #[test]
+    fn can_parse_generic_type_alias_single_param() {
+        // Generic type alias with single type parameter
+        let text = r#"
+        pub type SharedPtr<T> = *mut T;
+        "#;
+
+        let ast = M::new().with_definitions([ID::generic(
+            (V::Public, "SharedPtr"),
+            [TP::new("T")],
+            TAD::new(T::ident("T").mut_pointer()),
+        )]);
+
+        assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
+    }
+
+    #[test]
+    fn can_parse_generic_type_alias_multiple_params() {
+        // Generic type alias with multiple type parameters
+        let text = r#"
+        pub type MapEntry<K, V> = Pair<K, V>;
+        "#;
+
+        let ast = M::new().with_definitions([ID::generic(
+            (V::Public, "MapEntry"),
+            [TP::new("K"), TP::new("V")],
+            TAD::new(T::generic("Pair", [T::ident("K"), T::ident("V")])),
+        )]);
+
+        assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
+    }
+
+    #[test]
+    fn can_parse_generic_type_alias_with_generic_target() {
+        // Type alias that wraps a generic type
+        let text = r#"
+        pub type EntityPtr<T> = Shared<T>;
+        "#;
+
+        let ast = M::new().with_definitions([ID::generic(
+            (V::Public, "EntityPtr"),
+            [TP::new("T")],
+            TAD::new(T::generic("Shared", [T::ident("T")])),
+        )]);
+
+        assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
+    }
+
+    #[test]
+    fn can_parse_generic_type_alias_with_pointer_to_generic() {
+        // Generic type alias to pointer of generic type
+        let text = r#"
+        pub type WeakRef<T> = *const Weak<T>;
+        "#;
+
+        let ast = M::new().with_definitions([ID::generic(
+            (V::Public, "WeakRef"),
+            [TP::new("T")],
+            TAD::new(T::generic("Weak", [T::ident("T")]).const_pointer()),
+        )]);
+
+        assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
+    }
 }

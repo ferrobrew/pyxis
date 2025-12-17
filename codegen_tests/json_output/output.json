@@ -4304,6 +4304,31 @@
         "line": 7
       }
     },
+    "type_aliases::ConstPtr": {
+      "path": "type_aliases::ConstPtr",
+      "visibility": "public",
+      "type_parameters": [
+        "T"
+      ],
+      "size": 0,
+      "alignment": 1,
+      "category": "defined",
+      "kind": {
+        "type": "type_alias",
+        "doc": " Generic const pointer type alias",
+        "target": {
+          "type": "const_pointer",
+          "inner": {
+            "type": "type_parameter",
+            "name": "T"
+          }
+        }
+      },
+      "source": {
+        "file_index": 16,
+        "line": 16
+      }
+    },
     "type_aliases::Container": {
       "path": "type_aliases::Container",
       "visibility": "public",
@@ -4312,7 +4337,7 @@
       "category": "defined",
       "kind": {
         "type": "type",
-        "doc": " Container using the alias",
+        "doc": " Container using the non-generic type aliases",
         "fields": [
           {
             "visibility": "public",
@@ -4331,7 +4356,7 @@
             "is_base": false,
             "source": {
               "file_index": 16,
-              "line": 12
+              "line": 35
             }
           },
           {
@@ -4351,7 +4376,7 @@
             "is_base": false,
             "source": {
               "file_index": 16,
-              "line": 13
+              "line": 36
             }
           }
         ],
@@ -4365,7 +4390,177 @@
       },
       "source": {
         "file_index": 16,
-        "line": 10
+        "line": 33
+      }
+    },
+    "type_aliases::Entry": {
+      "path": "type_aliases::Entry",
+      "visibility": "public",
+      "type_parameters": [
+        "K",
+        "V"
+      ],
+      "size": 0,
+      "alignment": 1,
+      "category": "defined",
+      "kind": {
+        "type": "type_alias",
+        "doc": " Alias for MapEntry with type parameters",
+        "target": {
+          "type": "generic",
+          "base": "generics::MapEntry",
+          "args": [
+            {
+              "type": "type_parameter",
+              "name": "K"
+            },
+            {
+              "type": "type_parameter",
+              "name": "V"
+            }
+          ]
+        }
+      },
+      "source": {
+        "file_index": 16,
+        "line": 25
+      }
+    },
+    "type_aliases::GenericAliasContainer": {
+      "path": "type_aliases::GenericAliasContainer",
+      "visibility": "public",
+      "size": 48,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": " Container using generic aliases with concrete types",
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "shared_vec",
+            "doc": null,
+            "type_ref": {
+              "type": "generic",
+              "base": "generics::Shared",
+              "args": [
+                {
+                  "type": "raw",
+                  "path": "math::Vector3"
+                }
+              ]
+            },
+            "offset": 0,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 16,
+              "line": 44
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "weak_vec",
+            "doc": null,
+            "type_ref": {
+              "type": "generic",
+              "base": "generics::WeakPtr",
+              "args": [
+                {
+                  "type": "raw",
+                  "path": "math::Vector3"
+                }
+              ]
+            },
+            "offset": 8,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 16,
+              "line": 45
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "entry",
+            "doc": null,
+            "type_ref": {
+              "type": "generic",
+              "base": "generics::MapEntry",
+              "args": [
+                {
+                  "type": "raw",
+                  "path": "u32"
+                },
+                {
+                  "type": "raw",
+                  "path": "math::Vector3"
+                }
+              ]
+            },
+            "offset": 16,
+            "size": 16,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 16,
+              "line": 46
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "vec_ptr",
+            "doc": null,
+            "type_ref": {
+              "type": "mut_pointer",
+              "inner": {
+                "type": "raw",
+                "path": "math::Vector3"
+              }
+            },
+            "offset": 32,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 16,
+              "line": 47
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "const_vec_ptr",
+            "doc": null,
+            "type_ref": {
+              "type": "const_pointer",
+              "inner": {
+                "type": "raw",
+                "path": "math::Vector3"
+              }
+            },
+            "offset": 40,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 16,
+              "line": 48
+            }
+          }
+        ],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false
+      },
+      "source": {
+        "file_index": 16,
+        "line": 41
       }
     },
     "type_aliases::IntMutPtr": {
@@ -4387,7 +4582,91 @@
       },
       "source": {
         "file_index": 16,
-        "line": 7
+        "line": 8
+      }
+    },
+    "type_aliases::Ptr": {
+      "path": "type_aliases::Ptr",
+      "visibility": "public",
+      "type_parameters": [
+        "T"
+      ],
+      "size": 0,
+      "alignment": 1,
+      "category": "defined",
+      "kind": {
+        "type": "type_alias",
+        "doc": " Generic pointer type alias",
+        "target": {
+          "type": "mut_pointer",
+          "inner": {
+            "type": "type_parameter",
+            "name": "T"
+          }
+        }
+      },
+      "source": {
+        "file_index": 16,
+        "line": 13
+      }
+    },
+    "type_aliases::SharedPtr": {
+      "path": "type_aliases::SharedPtr",
+      "visibility": "public",
+      "type_parameters": [
+        "T"
+      ],
+      "size": 0,
+      "alignment": 1,
+      "category": "defined",
+      "kind": {
+        "type": "type_alias",
+        "doc": " Pointer to a generic type",
+        "target": {
+          "type": "mut_pointer",
+          "inner": {
+            "type": "generic",
+            "base": "generics::Shared",
+            "args": [
+              {
+                "type": "type_parameter",
+                "name": "T"
+              }
+            ]
+          }
+        }
+      },
+      "source": {
+        "file_index": 16,
+        "line": 28
+      }
+    },
+    "type_aliases::SharedRef": {
+      "path": "type_aliases::SharedRef",
+      "visibility": "public",
+      "type_parameters": [
+        "T"
+      ],
+      "size": 0,
+      "alignment": 1,
+      "category": "defined",
+      "kind": {
+        "type": "type_alias",
+        "doc": " Alias that wraps a generic type with a type parameter",
+        "target": {
+          "type": "generic",
+          "base": "generics::Shared",
+          "args": [
+            {
+              "type": "type_parameter",
+              "name": "T"
+            }
+          ]
+        }
+      },
+      "source": {
+        "file_index": 16,
+        "line": 19
       }
     },
     "type_aliases::Vec3Ptr": {
@@ -4409,7 +4688,35 @@
       },
       "source": {
         "file_index": 16,
-        "line": 3
+        "line": 4
+      }
+    },
+    "type_aliases::WeakRef": {
+      "path": "type_aliases::WeakRef",
+      "visibility": "public",
+      "type_parameters": [
+        "T"
+      ],
+      "size": 0,
+      "alignment": 1,
+      "category": "defined",
+      "kind": {
+        "type": "type_alias",
+        "doc": " Alias for weak pointer to a type",
+        "target": {
+          "type": "generic",
+          "base": "generics::WeakPtr",
+          "args": [
+            {
+              "type": "type_parameter",
+              "name": "T"
+            }
+          ]
+        }
+      },
+      "source": {
+        "file_index": 16,
+        "line": 22
       }
     },
     "u128": {
@@ -4777,9 +5084,16 @@
     "type_aliases": {
       "doc": null,
       "items": [
+        "type_aliases::ConstPtr",
         "type_aliases::Container",
+        "type_aliases::Entry",
+        "type_aliases::GenericAliasContainer",
         "type_aliases::IntMutPtr",
-        "type_aliases::Vec3Ptr"
+        "type_aliases::Ptr",
+        "type_aliases::SharedPtr",
+        "type_aliases::SharedRef",
+        "type_aliases::Vec3Ptr",
+        "type_aliases::WeakRef"
       ],
       "submodules": {},
       "extern_values": [],
