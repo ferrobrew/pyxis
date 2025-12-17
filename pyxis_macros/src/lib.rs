@@ -1,9 +1,6 @@
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
-use syn::{
-    Data, DeriveInput, Fields, Ident, parse_macro_input,
-    spanned::Spanned,
-};
+use syn::{Data, DeriveInput, Fields, Ident, parse_macro_input, spanned::Spanned};
 
 /// Derive macro for the HasLocation trait.
 ///
@@ -352,13 +349,13 @@ enum FieldAttr {
 
 fn get_strip_locations_attr(field: &syn::Field) -> Option<FieldAttr> {
     for attr in &field.attrs {
-        if attr.path().is_ident("strip_locations") {
-            if let Ok(ident) = attr.parse_args::<Ident>() {
-                if ident == "skip" {
-                    return Some(FieldAttr::Skip);
-                } else if ident == "filter_comments" {
-                    return Some(FieldAttr::FilterComments);
-                }
+        if attr.path().is_ident("strip_locations")
+            && let Ok(ident) = attr.parse_args::<Ident>()
+        {
+            if ident == "skip" {
+                return Some(FieldAttr::Skip);
+            } else if ident == "filter_comments" {
+                return Some(FieldAttr::FilterComments);
             }
         }
     }
