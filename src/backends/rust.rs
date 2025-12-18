@@ -151,7 +151,7 @@ fn build_item(
         .resolved()
         .ok_or_else(|| BackendError::TypeCodeGenFailed {
             type_path: definition.path.clone(),
-            reason: "type was not resolved".to_string(),
+            kind: crate::backends::error::TypeCodeGenFailedKind::TypeNotResolved,
             location: definition.location,
         })?;
 
@@ -237,7 +237,7 @@ fn build_type(
                 .ok_or_else(|| BackendError::FieldCodeGenFailed {
                     type_path: path.clone(),
                     field_name: "unnamed".to_string(),
-                    reason: "field name not present".to_string(),
+                    kind: crate::backends::error::FieldCodeGenFailedKind::FieldNameNotPresent,
                     location: *location,
                 })?;
             let field_ident = str_to_ident(field_name);
@@ -777,7 +777,7 @@ fn get_type_name<'a>(
 ) -> Result<&'a crate::grammar::ItemPathSegment> {
     path.last().ok_or_else(|| BackendError::TypeCodeGenFailed {
         type_path: path.clone(),
-        reason: "failed to get last component of item path".to_string(),
+        kind: crate::backends::error::TypeCodeGenFailedKind::EmptyItemPath,
         location: *location,
     })
 }

@@ -4,7 +4,7 @@ use crate::{
     grammar::{self, ItemPath},
     semantic::{
         error::{Result, SemanticError, TypeResolutionContext},
-        function::Function,
+        function::{self, Function},
         type_registry::{TypeLookupResult, TypeRegistry},
         types::{Backend, ExternValue, ItemDefinition, Type},
     },
@@ -134,14 +134,14 @@ impl Module {
         let scope = self.scope();
 
         for function in self.ast.functions().collect::<Vec<_>>() {
-            let resolved_function = match crate::semantic::function::build(
+            let resolved_function = match function::build(
                 type_registry,
                 &scope,
                 false, // is_vfunc
                 function,
             )? {
-                crate::semantic::function::FunctionBuildOutcome::Built(f) => *f,
-                crate::semantic::function::FunctionBuildOutcome::Deferred => {
+                function::FunctionBuildOutcome::Built(f) => *f,
+                function::FunctionBuildOutcome::Deferred => {
                     // This shouldn't happen since freestanding functions are resolved
                     // after all types are resolved, but handle it gracefully
                     continue;

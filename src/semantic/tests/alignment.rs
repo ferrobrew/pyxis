@@ -2,7 +2,10 @@
 
 use crate::{
     grammar::test_aliases::*,
-    semantic::{error::SemanticError, types::test_aliases::*},
+    semantic::{
+        error::{AttributeName, SemanticError},
+        types::test_aliases::*,
+    },
     span::ItemLocation,
 };
 
@@ -77,8 +80,8 @@ fn both_align_and_packed_should_be_rejected() {
                 .with_attributes([A::align(4), A::packed()]),
         )]),
         SemanticError::ConflictingAttributes {
-            attr1: "packed".to_string(),
-            attr2: "align".to_string(),
+            attr1: AttributeName::Packed,
+            attr2: AttributeName::Align,
             item_path: IP::from("test::TestType"),
             location: ItemLocation::test(),
         },

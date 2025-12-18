@@ -2,7 +2,10 @@
 
 use crate::{
     grammar::test_aliases::*,
-    semantic::{error::SemanticError, types::test_aliases::*},
+    semantic::{
+        error::{AttributeName, ExternKind, SemanticError},
+        types::test_aliases::*,
+    },
     span::ItemLocation,
 };
 
@@ -13,8 +16,8 @@ fn will_fail_on_an_extern_without_size() {
     assert_ast_produces_exact_error(
         M::new().with_extern_types([("TestType".into(), As::default())]),
         SemanticError::MissingExternAttribute {
-            attribute_name: "size".to_string(),
-            extern_kind: "extern type".to_string(),
+            attribute_name: AttributeName::Size,
+            extern_kind: ExternKind::Type,
             type_name: "TestType".to_string(),
             module_name: "test".to_string(),
             location: ItemLocation::test(),

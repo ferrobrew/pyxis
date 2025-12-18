@@ -4,7 +4,7 @@ use crate::{
         SemanticState, attribute,
         error::{
             BitflagsExpectedType, BuildOutcome, Result, SemanticError, TypeResolutionContext,
-            UnresolvedTypeReference,
+            UnresolvedTypeContext, UnresolvedTypeReference,
         },
         type_registry::TypeLookupResult,
         types::{ItemStateResolved, Type},
@@ -109,14 +109,18 @@ pub fn build(
                 return Ok(BuildOutcome::NotFoundType(UnresolvedTypeReference {
                     type_name,
                     location: type_location,
-                    context: format!("base type of bitflags `{resolvee_path}`"),
+                    context: UnresolvedTypeContext::BitflagsBaseType {
+                        bitflags_path: resolvee_path.clone(),
+                    },
                 }));
             }
             TypeLookupResult::PrivateAccess { item_path } => {
                 return Ok(BuildOutcome::NotFoundType(UnresolvedTypeReference {
                     type_name: item_path.to_string(),
                     location: type_location,
-                    context: format!("base type of bitflags `{resolvee_path}`"),
+                    context: UnresolvedTypeContext::BitflagsBaseType {
+                        bitflags_path: resolvee_path.clone(),
+                    },
                 }));
             }
         };

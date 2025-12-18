@@ -4,7 +4,10 @@ use crate::{
     grammar::{self, Expr, ItemPath},
     semantic::{
         attribute,
-        error::{AttributeNotSupportedContext, Result, SemanticError, TypeResolutionContext},
+        error::{
+            AttributeName, AttributeNotSupportedContext, Result, SemanticError,
+            TypeResolutionContext,
+        },
         type_registry::{TypeLookupResult, TypeRegistry},
         types::{Type, Visibility},
     },
@@ -358,7 +361,7 @@ pub fn build(
         if let Some(attr_address) = attribute::parse_address(ident, items, attribute.location())? {
             if is_vfunc {
                 return Err(SemanticError::AttributeNotSupported {
-                    attribute_name: "address".into(),
+                    attribute_name: AttributeName::Address,
                     attribute_context: AttributeNotSupportedContext::VirtualFunction {
                         function_name: function.name.0.clone(),
                     },
@@ -373,7 +376,7 @@ pub fn build(
         {
             if !is_vfunc {
                 return Err(SemanticError::AttributeNotSupported {
-                    attribute_name: "index".into(),
+                    attribute_name: AttributeName::Index,
                     attribute_context: AttributeNotSupportedContext::NonVirtualFunction {
                         function_name: function.name.0.clone(),
                     },
@@ -384,14 +387,14 @@ pub fn build(
         } else if ident.as_str() == "calling_convention" {
             let exprs = attribute::assert_function_argument_count(
                 items,
-                "calling_convention",
+                AttributeName::CallingConvention,
                 1,
                 attribute.location(),
             )?;
             let expr = exprs[0];
             let Expr::StringLiteral { value, .. } = expr else {
                 return Err(SemanticError::InvalidAttributeValue {
-                    attribute_name: "calling_convention".into(),
+                    attribute_name: AttributeName::CallingConvention,
                     expected_type: std::any::type_name::<CallingConvention>().into(),
                     location: *expr.location(),
                 });

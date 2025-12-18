@@ -8,6 +8,41 @@ use crate::{
 };
 use ariadne::{Label, Report, ReportKind, Source};
 
+/// Reason why type code generation failed
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TypeCodeGenFailedKind {
+    /// Type was not resolved
+    TypeNotResolved,
+    /// Failed to get last component of item path
+    EmptyItemPath,
+}
+
+impl fmt::Display for TypeCodeGenFailedKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            TypeCodeGenFailedKind::TypeNotResolved => write!(f, "type was not resolved"),
+            TypeCodeGenFailedKind::EmptyItemPath => {
+                write!(f, "failed to get last component of item path")
+            }
+        }
+    }
+}
+
+/// Reason why field code generation failed
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FieldCodeGenFailedKind {
+    /// Field name was not present
+    FieldNameNotPresent,
+}
+
+impl fmt::Display for FieldCodeGenFailedKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            FieldCodeGenFailedKind::FieldNameNotPresent => write!(f, "field name not present"),
+        }
+    }
+}
+
 /// Backend code generation errors
 #[derive(Debug)]
 pub enum BackendError {
@@ -25,20 +60,14 @@ pub enum BackendError {
     /// Failed to generate code for a specific type
     TypeCodeGenFailed {
         type_path: ItemPath,
-        reason: String,
+        kind: TypeCodeGenFailedKind,
         location: ItemLocation,
     },
     /// Failed to generate code for a specific field
     FieldCodeGenFailed {
         type_path: ItemPath,
         field_name: String,
-        reason: String,
-        location: ItemLocation,
-    },
-    /// Failed to generate vftable code
-    VftableCodeGenFailed {
-        type_path: ItemPath,
-        reason: String,
+        kind: FieldCodeGenFailedKind,
         location: ItemLocation,
     },
 }
@@ -78,39 +107,27 @@ impl BackendError {
             BackendError::Syntax(err) => format!("Syntax error: {err}"),
             BackendError::Semantic(err) => err.to_string(),
             BackendError::TypeCodeGenFailed {
-                type_path, reason, ..
+                type_path, kind, ..
             } => {
-                format!("Failed to generate code for type `{type_path}`: {reason}")
+                format!("Failed to generate code for type `{type_path}`: {kind}")
             }
             BackendError::FieldCodeGenFailed {
                 type_path,
                 field_name,
-                reason,
+                kind,
                 ..
             } => {
                 format!(
-                    "Failed to generate code for field `{field_name}` of type `{type_path}`: {reason}"
+                    "Failed to generate code for field `{field_name}` of type `{type_path}`: {kind}"
                 )
-            }
-            BackendError::VftableCodeGenFailed {
-                type_path, reason, ..
-            } => {
-                format!("Failed to generate vftable code for type `{type_path}`: {reason}")
             }
         }
     }
 
     fn location(&self) -> Option<&ItemLocation> {
         match self {
-            BackendError::TypeCodeGenFailed {
-                location: context, ..
-            }
-            | BackendError::FieldCodeGenFailed {
-                location: context, ..
-            }
-            | BackendError::VftableCodeGenFailed {
-                location: context, ..
-            } => Some(context),
+            BackendError::TypeCodeGenFailed { location, .. }
+            | BackendError::FieldCodeGenFailed { location, .. } => Some(location),
             _ => None,
         }
     }

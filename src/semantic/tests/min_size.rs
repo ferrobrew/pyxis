@@ -2,7 +2,10 @@
 
 use crate::{
     grammar::test_aliases::*,
-    semantic::{error::SemanticError, types::test_aliases::*},
+    semantic::{
+        error::{AttributeName, SemanticError},
+        types::test_aliases::*,
+    },
     span::ItemLocation,
 };
 
@@ -113,8 +116,8 @@ fn both_size_and_min_size_should_be_rejected() {
                 .with_attributes([A::size(16), A::min_size(16)]),
         )]),
         SemanticError::ConflictingAttributes {
-            attr1: "size".to_string(),
-            attr2: "min_size".to_string(),
+            attr1: AttributeName::Size,
+            attr2: AttributeName::MinSize,
             item_path: IP::from("test::TestType"),
             location: ItemLocation::test(),
         },

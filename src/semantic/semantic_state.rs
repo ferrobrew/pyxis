@@ -6,7 +6,9 @@ use crate::{
     parser,
     semantic::{
         attribute, bitflags_definition, enum_definition,
-        error::{BuildOutcome, Result, SemanticError, UnresolvedTypeReference},
+        error::{
+            AttributeName, BuildOutcome, ExternKind, Result, SemanticError, UnresolvedTypeReference,
+        },
         module::Module,
         type_alias_definition, type_definition,
         type_registry::TypeRegistry,
@@ -109,8 +111,8 @@ impl SemanticState {
                 }
 
                 let address = address.ok_or_else(|| SemanticError::MissingAttribute {
-                    attribute_name: "address".into(),
-                    item_kind: "extern value".into(),
+                    attribute_name: AttributeName::Address,
+                    extern_kind: ExternKind::Value,
                     item_path: path.join(name.as_str().into()),
                     location: ev.location,
                 })?;
@@ -184,15 +186,15 @@ impl SemanticState {
                 }
             }
             let size = size.ok_or_else(|| SemanticError::MissingExternAttribute {
-                attribute_name: "size".into(),
-                extern_kind: "extern type".into(),
+                attribute_name: AttributeName::Size,
+                extern_kind: ExternKind::Type,
                 type_name: extern_name.as_str().into(),
                 module_name: path.to_string(),
                 location: *extern_location,
             })?;
             let alignment = alignment.ok_or_else(|| SemanticError::MissingExternAttribute {
-                attribute_name: "align".into(),
-                extern_kind: "extern type".into(),
+                attribute_name: AttributeName::Align,
+                extern_kind: ExternKind::Type,
                 type_name: extern_name.as_str().into(),
                 module_name: path.to_string(),
                 location: *extern_location,

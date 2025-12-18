@@ -5,8 +5,10 @@ use crate::{
     semantic::{
         SemanticState, attribute,
         error::{
-            BuildOutcome, Result, SemanticError, TypeResolutionContext, UnresolvedTypeReference,
+            BuildOutcome, Result, SemanticError, TypeResolutionContext, UnresolvedTypeContext,
+            UnresolvedTypeReference,
         },
+        function,
         type_registry::TypeLookupResult,
         types::{Function, ItemStateResolved, Type},
     },
@@ -114,14 +116,18 @@ pub fn build(
                 return Ok(BuildOutcome::NotFoundType(UnresolvedTypeReference {
                     type_name,
                     location: *definition.type_.location(),
-                    context: format!("base type of enum `{resolvee_path}`"),
+                    context: UnresolvedTypeContext::EnumBaseType {
+                        enum_path: resolvee_path.clone(),
+                    },
                 }));
             }
             TypeLookupResult::PrivateAccess { item_path } => {
                 return Ok(BuildOutcome::NotFoundType(UnresolvedTypeReference {
                     type_name: item_path.to_string(),
                     location: *definition.type_.location(),
-                    context: format!("base type of enum `{resolvee_path}`"),
+                    context: UnresolvedTypeContext::EnumBaseType {
+                        enum_path: resolvee_path.clone(),
+                    },
                 }));
             }
         };
@@ -222,17 +228,13 @@ pub fn build(
     let mut associated_functions = vec![];
     if let Some(enum_impl) = module.impls.get(resolvee_path) {
         for function in enum_impl.functions().collect::<Vec<_>>() {
-            let function = match crate::semantic::function::build(
-                &semantic.type_registry,
-                &module.scope(),
-                false,
-                function,
-            )? {
-                crate::semantic::function::FunctionBuildOutcome::Built(f) => *f,
-                crate::semantic::function::FunctionBuildOutcome::Deferred => {
-                    return Ok(BuildOutcome::Deferred);
-                }
-            };
+            let function =
+                match function::build(&semantic.type_registry, &module.scope(), false, function)? {
+                    function::FunctionBuildOutcome::Built(f) => *f,
+                    function::FunctionBuildOutcome::Deferred => {
+                        return Ok(BuildOutcome::Deferred);
+                    }
+                };
             associated_functions.push(function);
         }
     }

@@ -4,7 +4,10 @@ use crate::{
     grammar::{self, ItemPath},
     semantic::{
         SemanticState, attribute,
-        error::{BuildOutcome, Result, SemanticError, UnresolvedTypeReference},
+        error::{
+            AttributeName, BuildOutcome, DefaultableErrorKind, DuplicateDefinitionKind, ItemKind,
+            Result, SemanticError, TypeRefKind, UnresolvedTypeContext, UnresolvedTypeReference,
+        },
         function,
         type_registry::{TypeLookupResult, TypeRegistry},
         types::{
@@ -220,8 +223,8 @@ pub fn build(
     if target_size.is_some() && min_size.is_some() {
         return Err({
             SemanticError::ConflictingAttributes {
-                attr1: "size".into(),
-                attr2: "min_size".into(),
+                attr1: AttributeName::Size,
+                attr2: AttributeName::MinSize,
                 item_path: resolvee_path.clone(),
                 location: *location,
             }
@@ -284,7 +287,10 @@ pub fn build(
                         return Ok(BuildOutcome::NotFoundType(UnresolvedTypeReference {
                             type_name,
                             location: *type_.location(),
-                            context: format!("field `{field_name}` of type `{resolvee_path}`"),
+                            context: UnresolvedTypeContext::StructField {
+                                field_name,
+                                type_path: resolvee_path.clone(),
+                            },
                         }));
                     }
                     TypeLookupResult::PrivateAccess { item_path } => {
@@ -296,7 +302,10 @@ pub fn build(
                         return Ok(BuildOutcome::NotFoundType(UnresolvedTypeReference {
                             type_name: item_path.to_string(),
                             location: *type_.location(),
-                            context: format!("field `{field_name}` of type `{resolvee_path}`"),
+                            context: UnresolvedTypeContext::StructField {
+                                field_name,
+                                type_path: resolvee_path.clone(),
+                            },
                         }));
                     }
                 };
@@ -460,7 +469,7 @@ pub fn build(
                 return Err(SemanticError::DuplicateDefinition {
                     name: function.name.0.clone(),
                     item_path: resolvee_path.clone(),
-                    message: "function already defined in type or base type".into(),
+                    kind: DuplicateDefinitionKind::FunctionInTypeOrBase,
                     location: *location,
                 });
             }
@@ -499,7 +508,7 @@ pub fn build(
                 return Err(SemanticError::DefaultableError {
                     field_name: name.into(),
                     item_path: resolvee_path.clone(),
-                    message: "is not a defaultable type (pointer or function?)".into(),
+                    kind: DefaultableErrorKind::PointerOrFunction,
                     location: region.location,
                 });
             };
@@ -518,7 +527,7 @@ pub fn build(
                 return Err(SemanticError::DefaultableError {
                     field_name: name.into(),
                     item_path: resolvee_path.clone(),
-                    message: "is not a defaultable type".into(),
+                    kind: DefaultableErrorKind::TypeNotDefaultable,
                     location: region.location,
                 });
             }
@@ -552,7 +561,6 @@ pub fn build(
                 return Err(SemanticError::CopyableError {
                     field_name: name.into(),
                     item_path: resolvee_path.clone(),
-                    message: "is not a copyable type".into(),
                     location: region.location,
                 });
             }
@@ -583,7 +591,6 @@ pub fn build(
                 return Err(SemanticError::CloneableError {
                     field_name: name.into(),
                     item_path: resolvee_path.clone(),
-                    message: "is not a cloneable type".into(),
                     location: region.location,
                 });
             }
@@ -593,8 +600,8 @@ pub fn build(
     let alignment = if packed {
         if align.is_some() {
             return Err(SemanticError::ConflictingAttributes {
-                attr1: "packed".into(),
-                attr2: "align".into(),
+                attr1: AttributeName::Packed,
+                attr2: AttributeName::Align,
                 item_path: resolvee_path.clone(),
                 location: *location,
             });
@@ -853,11 +860,10 @@ pub(super) fn get_region_name_and_type_definition<'a>(
 
     let Type::Raw(path) = &region.type_ref else {
         return Err({
-            SemanticError::InvalidType {
-                expected: "raw type".into(),
-                found: region.type_ref.human_friendly_type().into(),
+            SemanticError::RegionFieldNotRawType {
+                field_name: region_name.clone(),
                 item_path: type_path.clone(),
-                context_description: format!("region field `{region_name}`"),
+                found: TypeRefKind::from_type(&region.type_ref),
                 location: *region.location(),
             }
         });
@@ -871,11 +877,10 @@ pub(super) fn get_region_name_and_type_definition<'a>(
 
     let Some(region_type) = region_type.inner.as_type() else {
         return Err({
-            SemanticError::InvalidType {
-                expected: "type".into(),
-                found: region_type.inner.human_friendly_type().into(),
+            SemanticError::RegionFieldNotStructType {
+                field_name: region_name.clone(),
                 item_path: type_path.clone(),
-                context_description: format!("region field `{region_name}`"),
+                found: ItemKind::from_inner(&region_type.inner),
                 location: region.location,
             }
         });

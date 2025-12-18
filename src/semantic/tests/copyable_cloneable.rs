@@ -113,7 +113,6 @@ fn will_reject_copyable_on_non_copyable_field() {
         SemanticError::CopyableError {
             field_name: "inner".to_string(),
             item_path: IP::from("test::Outer"),
-            message: "is not a copyable type".to_string(),
             location: ItemLocation::test(),
         },
     );
@@ -138,7 +137,6 @@ fn will_reject_cloneable_on_non_cloneable_field() {
         SemanticError::CloneableError {
             field_name: "inner".to_string(),
             item_path: IP::from("test::Outer"),
-            message: "is not a cloneable type".to_string(),
             location: ItemLocation::test(),
         },
     );
@@ -240,7 +238,6 @@ fn will_reject_copyable_with_array_of_non_copyable() {
         SemanticError::CopyableError {
             field_name: "items".to_string(),
             item_path: IP::from("test::Outer"),
-            message: "is not a copyable type".to_string(),
             location: ItemLocation::test(),
         },
     );
@@ -349,7 +346,6 @@ fn copyable_requires_cloneable_on_fields() {
         SemanticError::CopyableError {
             field_name: "inner".to_string(),
             item_path: IP::from("test::Outer"),
-            message: "is not a copyable type".to_string(),
             location: ItemLocation::test(),
         },
     );
@@ -386,7 +382,6 @@ fn will_reject_copyable_generic_with_non_copyable_type_argument() {
         SemanticError::CopyableError {
             field_name: "wrapped".to_string(),
             item_path: IP::from("test::Container"),
-            message: "is not a copyable type".to_string(),
             location: ItemLocation::test(),
         },
     );
@@ -424,7 +419,6 @@ fn will_reject_copyable_with_non_copyable_generic_base() {
         SemanticError::CopyableError {
             field_name: "wrapped".to_string(),
             item_path: IP::from("test::Container"),
-            message: "is not a copyable type".to_string(),
             location: ItemLocation::test(),
         },
     );

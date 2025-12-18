@@ -2,7 +2,10 @@
 
 use crate::{
     grammar::test_aliases::*,
-    semantic::{error::SemanticError, types::test_aliases::*},
+    semantic::{
+        error::{DefaultableErrorKind, SemanticError},
+        types::test_aliases::*,
+    },
     span::ItemLocation,
 };
 
@@ -48,7 +51,7 @@ fn will_reject_defaultable_on_pointer() {
         SemanticError::DefaultableError {
             field_name: "field_1".to_string(),
             item_path: IP::from("test::TestType"),
-            message: "is not a defaultable type (pointer or function?)".to_string(),
+            kind: DefaultableErrorKind::PointerOrFunction,
             location: ItemLocation::test(),
         },
     );
@@ -71,7 +74,7 @@ fn will_reject_defaultable_on_enum_field() {
         SemanticError::DefaultableError {
             field_name: "field_1".to_string(),
             item_path: IP::from("test::TestType"),
-            message: "is not a defaultable type".to_string(),
+            kind: DefaultableErrorKind::TypeNotDefaultable,
             location: ItemLocation::test(),
         },
     );
@@ -158,7 +161,7 @@ fn will_reject_defaultable_on_non_defaultable_type() {
         SemanticError::DefaultableError {
             field_name: "field_1".to_string(),
             item_path: IP::from("test::TestType"),
-            message: "is not a defaultable type".to_string(),
+            kind: DefaultableErrorKind::TypeNotDefaultable,
             location: ItemLocation::test(),
         },
     );

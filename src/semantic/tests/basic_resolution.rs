@@ -2,7 +2,10 @@
 
 use crate::{
     grammar::test_aliases::*,
-    semantic::{error::SemanticError, types::test_aliases::*},
+    semantic::{
+        error::{SemanticError, UnresolvedTypeContext, UnresolvedTypeReference},
+        types::test_aliases::*,
+    },
     span::ItemLocation,
 };
 
@@ -173,8 +176,6 @@ fn can_resolve_complex_type() {
 
 #[test]
 fn will_eventually_terminate_with_an_unknown_type() {
-    use crate::semantic::error::UnresolvedTypeReference;
-
     assert_ast_produces_exact_error(
         M::new().with_definitions([ID::new(
             (V::Public, "TestType2"),
@@ -186,7 +187,10 @@ fn will_eventually_terminate_with_an_unknown_type() {
             unresolved_references: vec![UnresolvedTypeReference {
                 type_name: "TestType1".to_string(),
                 location: ItemLocation::test(),
-                context: "field `field_2` of type `test::TestType2`".to_string(),
+                context: UnresolvedTypeContext::StructField {
+                    field_name: "field_2".to_string(),
+                    type_path: IP::from("test::TestType2"),
+                },
             }],
         },
     );

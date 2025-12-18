@@ -2,7 +2,7 @@
 
 use crate::{
     grammar::test_aliases::*,
-    semantic::error::{SemanticError, UnresolvedTypeReference},
+    semantic::error::{SemanticError, UnresolvedTypeContext, UnresolvedTypeReference},
     span::ItemLocation,
 };
 
@@ -25,7 +25,10 @@ fn unresolved_type_includes_type_name_in_error() {
             unresolved_references: vec![UnresolvedTypeReference {
                 type_name: "NonexistentType".to_string(),
                 location: ItemLocation::test(),
-                context: "field `my_field` of type `test::MyType`".to_string(),
+                context: UnresolvedTypeContext::StructField {
+                    field_name: "my_field".to_string(),
+                    type_path: IP::from("test::MyType"),
+                },
             }],
         },
     );
@@ -49,7 +52,9 @@ fn unresolved_type_in_enum_includes_context() {
             unresolved_references: vec![UnresolvedTypeReference {
                 type_name: "NonexistentBase".to_string(),
                 location: ItemLocation::test(),
-                context: "base type of enum `test::MyEnum`".to_string(),
+                context: UnresolvedTypeContext::EnumBaseType {
+                    enum_path: IP::from("test::MyEnum"),
+                },
             }],
         },
     );
@@ -76,12 +81,18 @@ fn multiple_unresolved_types_are_all_reported() {
                 UnresolvedTypeReference {
                     type_name: "Missing1".to_string(),
                     location: ItemLocation::test(),
-                    context: "field `field_a` of type `test::Type1`".to_string(),
+                    context: UnresolvedTypeContext::StructField {
+                        field_name: "field_a".to_string(),
+                        type_path: IP::from("test::Type1"),
+                    },
                 },
                 UnresolvedTypeReference {
                     type_name: "Missing2".to_string(),
                     location: ItemLocation::test(),
-                    context: "field `field_b` of type `test::Type2`".to_string(),
+                    context: UnresolvedTypeContext::StructField {
+                        field_name: "field_b".to_string(),
+                        type_path: IP::from("test::Type2"),
+                    },
                 },
             ],
         },

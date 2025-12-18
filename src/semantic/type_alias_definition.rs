@@ -4,7 +4,7 @@ use crate::{
     grammar::{self, ItemPath},
     semantic::{
         SemanticState,
-        error::{BuildOutcome, Result, UnresolvedTypeReference},
+        error::{BuildOutcome, Result, UnresolvedTypeContext, UnresolvedTypeReference},
         type_registry::TypeLookupResult,
         types::{ItemStateResolved, Type},
     },
@@ -63,14 +63,18 @@ pub fn build(
             return Ok(BuildOutcome::NotFoundType(UnresolvedTypeReference {
                 type_name,
                 location: *definition.target.location(),
-                context: format!("target of type alias `{resolvee_path}`"),
+                context: UnresolvedTypeContext::TypeAliasTarget {
+                    alias_path: resolvee_path.clone(),
+                },
             }));
         }
         TypeLookupResult::PrivateAccess { item_path } => {
             return Ok(BuildOutcome::NotFoundType(UnresolvedTypeReference {
                 type_name: item_path.to_string(),
                 location: *definition.target.location(),
-                context: format!("target of type alias `{resolvee_path}`"),
+                context: UnresolvedTypeContext::TypeAliasTarget {
+                    alias_path: resolvee_path.clone(),
+                },
             }));
         }
     };

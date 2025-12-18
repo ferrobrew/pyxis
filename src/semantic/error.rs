@@ -2,7 +2,10 @@
 
 use crate::{
     grammar::{self, ItemPath},
-    semantic::types::{CallingConvention, Type as SemanticType},
+    semantic::types::{
+        CallingConvention, ItemDefinitionInner, ItemStateResolved, PredefinedItem,
+        Type as SemanticType,
+    },
     source_store::FileStore,
     span::{self, ItemLocation},
 };
@@ -57,6 +60,226 @@ impl fmt::Display for AttributeNotSupportedContext {
     }
 }
 
+/// Kind of duplicate definition error
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(test, derive(StripLocations))]
+#[cfg_attr(test, strip_locations(copy))]
+pub enum DuplicateDefinitionKind {
+    /// Function already defined in type or base type
+    FunctionInTypeOrBase,
+}
+
+impl fmt::Display for DuplicateDefinitionKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            DuplicateDefinitionKind::FunctionInTypeOrBase => {
+                write!(f, "function already defined in type or base type")
+            }
+        }
+    }
+}
+
+/// Reason why a field is not defaultable
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(test, derive(StripLocations))]
+#[cfg_attr(test, strip_locations(copy))]
+pub enum DefaultableErrorKind {
+    /// Field is a pointer or function type (never defaultable)
+    PointerOrFunction,
+    /// Field's type is not marked as defaultable
+    TypeNotDefaultable,
+}
+
+impl fmt::Display for DefaultableErrorKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            DefaultableErrorKind::PointerOrFunction => {
+                write!(f, "is not a defaultable type (pointer or function?)")
+            }
+            DefaultableErrorKind::TypeNotDefaultable => {
+                write!(f, "is not a defaultable type")
+            }
+        }
+    }
+}
+
+/// Kind of type reference (for error messages)
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(test, derive(StripLocations))]
+#[cfg_attr(test, strip_locations(copy))]
+pub enum TypeRefKind {
+    Unresolved,
+    Raw,
+    Generic,
+    TypeParameter,
+    ConstPointer,
+    MutPointer,
+    Array,
+    Function,
+}
+
+impl TypeRefKind {
+    /// Create from a semantic Type
+    pub fn from_type(ty: &SemanticType) -> Self {
+        match ty {
+            SemanticType::Unresolved(_) => TypeRefKind::Unresolved,
+            SemanticType::Raw(_) => TypeRefKind::Raw,
+            SemanticType::Generic(_, _) => TypeRefKind::Generic,
+            SemanticType::TypeParameter(_) => TypeRefKind::TypeParameter,
+            SemanticType::ConstPointer(_) => TypeRefKind::ConstPointer,
+            SemanticType::MutPointer(_) => TypeRefKind::MutPointer,
+            SemanticType::Array(_, _) => TypeRefKind::Array,
+            SemanticType::Function(_, _, _) => TypeRefKind::Function,
+        }
+    }
+}
+
+impl fmt::Display for TypeRefKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            TypeRefKind::Unresolved => write!(f, "an unresolved type"),
+            TypeRefKind::Raw => write!(f, "a type"),
+            TypeRefKind::Generic => write!(f, "a generic type"),
+            TypeRefKind::TypeParameter => write!(f, "a type parameter"),
+            TypeRefKind::ConstPointer => write!(f, "a const pointer"),
+            TypeRefKind::MutPointer => write!(f, "a mut pointer"),
+            TypeRefKind::Array => write!(f, "an array"),
+            TypeRefKind::Function => write!(f, "a function"),
+        }
+    }
+}
+
+/// Kind of item definition (for error messages)
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(test, derive(StripLocations))]
+#[cfg_attr(test, strip_locations(copy))]
+pub enum ItemKind {
+    Type,
+    Enum,
+    Bitflags,
+    TypeAlias,
+}
+
+impl ItemKind {
+    /// Create from an ItemDefinitionInner
+    pub fn from_inner(inner: &ItemDefinitionInner) -> Self {
+        match inner {
+            ItemDefinitionInner::Type(_) => ItemKind::Type,
+            ItemDefinitionInner::Enum(_) => ItemKind::Enum,
+            ItemDefinitionInner::Bitflags(_) => ItemKind::Bitflags,
+            ItemDefinitionInner::TypeAlias(_) => ItemKind::TypeAlias,
+        }
+    }
+}
+
+impl fmt::Display for ItemKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ItemKind::Type => write!(f, "a type"),
+            ItemKind::Enum => write!(f, "an enum"),
+            ItemKind::Bitflags => write!(f, "a bitflags"),
+            ItemKind::TypeAlias => write!(f, "a type alias"),
+        }
+    }
+}
+
+/// Known attribute names used in the semantic layer
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(test, derive(StripLocations))]
+#[cfg_attr(test, strip_locations(copy))]
+pub enum AttributeName {
+    /// The `address` attribute for specifying memory addresses
+    Address,
+    /// The `index` attribute for vftable function indices
+    Index,
+    /// The `calling_convention` attribute for function calling conventions
+    CallingConvention,
+    /// The `size` attribute for specifying type sizes
+    Size,
+    /// The `align` attribute for specifying type alignment
+    Align,
+    /// The `packed` attribute for packed structs
+    Packed,
+    /// The `min_size` attribute for specifying minimum type sizes
+    MinSize,
+    /// The `singleton` attribute for singleton types
+    Singleton,
+}
+
+impl fmt::Display for AttributeName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            AttributeName::Address => write!(f, "address"),
+            AttributeName::Index => write!(f, "index"),
+            AttributeName::CallingConvention => write!(f, "calling_convention"),
+            AttributeName::Size => write!(f, "size"),
+            AttributeName::Align => write!(f, "align"),
+            AttributeName::Packed => write!(f, "packed"),
+            AttributeName::MinSize => write!(f, "min_size"),
+            AttributeName::Singleton => write!(f, "singleton"),
+        }
+    }
+}
+
+/// Kind of extern item (for error messages)
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(test, derive(StripLocations))]
+#[cfg_attr(test, strip_locations(copy))]
+pub enum ExternKind {
+    /// An extern type declaration
+    Type,
+    /// An extern value declaration
+    Value,
+}
+
+impl fmt::Display for ExternKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ExternKind::Type => write!(f, "extern type"),
+            ExternKind::Value => write!(f, "extern value"),
+        }
+    }
+}
+
+/// Context describing where an unresolved type was used
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(test, derive(StripLocations))]
+pub enum UnresolvedTypeContext {
+    /// Base type of an enum definition
+    EnumBaseType { enum_path: ItemPath },
+    /// Base type of a bitflags definition
+    BitflagsBaseType { bitflags_path: ItemPath },
+    /// Target type of a type alias
+    TypeAliasTarget { alias_path: ItemPath },
+    /// Field type in a struct
+    StructField {
+        field_name: String,
+        type_path: ItemPath,
+    },
+}
+
+impl fmt::Display for UnresolvedTypeContext {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            UnresolvedTypeContext::EnumBaseType { enum_path } => {
+                write!(f, "base type of enum `{enum_path}`")
+            }
+            UnresolvedTypeContext::BitflagsBaseType { bitflags_path } => {
+                write!(f, "base type of bitflags `{bitflags_path}`")
+            }
+            UnresolvedTypeContext::TypeAliasTarget { alias_path } => {
+                write!(f, "target of type alias `{alias_path}`")
+            }
+            UnresolvedTypeContext::StructField {
+                field_name,
+                type_path,
+            } => {
+                write!(f, "field `{field_name}` of type `{type_path}`")
+            }
+        }
+    }
+}
+
 /// Information about a type reference that couldn't be resolved
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(test, derive(StripLocations))]
@@ -65,8 +288,8 @@ pub struct UnresolvedTypeReference {
     pub type_name: String,
     /// Where it was referenced
     pub location: ItemLocation,
-    /// Context describing where this type was used (e.g., "field `foo` of type `Bar`")
-    pub context: String,
+    /// Context describing where this type was used
+    pub context: UnresolvedTypeContext,
 }
 
 impl fmt::Display for UnresolvedTypeReference {
@@ -138,36 +361,36 @@ pub enum SemanticError {
     },
     /// Missing required attribute for extern type
     MissingExternAttribute {
-        attribute_name: String,
-        extern_kind: String,
+        attribute_name: AttributeName,
+        extern_kind: ExternKind,
         type_name: String,
         module_name: String,
         location: ItemLocation,
     },
     /// Missing required attribute (generic)
     MissingAttribute {
-        attribute_name: String,
-        item_kind: String,
+        attribute_name: AttributeName,
+        extern_kind: ExternKind,
         item_path: ItemPath,
         location: ItemLocation,
     },
     /// This function-attribute has the wrong number of arguments
     InvalidAttributeFunctionArgumentCount {
-        attribute_name: String,
+        attribute_name: AttributeName,
         expected_count: usize,
         actual_count: usize,
         location: ItemLocation,
     },
     /// Invalid attribute value
     InvalidAttributeValue {
-        attribute_name: String,
+        attribute_name: AttributeName,
         expected_type: String,
         location: ItemLocation,
     },
     /// Conflicting attributes
     ConflictingAttributes {
-        attr1: String,
-        attr2: String,
+        attr1: AttributeName,
+        attr2: AttributeName,
         item_path: ItemPath,
         location: ItemLocation,
     },
@@ -191,12 +414,18 @@ pub enum SemanticError {
         item_path: ItemPath,
         location: ItemLocation,
     },
-    /// Invalid type for context (generic)
-    InvalidType {
-        expected: String,
-        found: String,
+    /// Region field type reference is not a raw type
+    RegionFieldNotRawType {
+        field_name: String,
         item_path: ItemPath,
-        context_description: String,
+        found: TypeRefKind,
+        location: ItemLocation,
+    },
+    /// Region field resolved type is not a struct type
+    RegionFieldNotStructType {
+        field_name: String,
+        item_path: ItemPath,
+        found: ItemKind,
         location: ItemLocation,
     },
     /// Vftable is missing functions from base class
@@ -214,13 +443,6 @@ pub enum SemanticError {
         index: usize,
         derived_function: String,
         base_function: String,
-        location: ItemLocation,
-    },
-    /// Field or region error (generic)
-    FieldError {
-        field_name: String,
-        item_path: ItemPath,
-        message: String,
         location: ItemLocation,
     },
     /// Calculated size is below minimum required size
@@ -268,7 +490,7 @@ pub enum SemanticError {
     DuplicateDefinition {
         name: String,
         item_path: ItemPath,
-        message: String,
+        kind: DuplicateDefinitionKind,
         location: ItemLocation,
     },
     /// Function missing implementation
@@ -284,7 +506,7 @@ pub enum SemanticError {
     },
     /// Attribute not supported in context
     AttributeNotSupported {
-        attribute_name: String,
+        attribute_name: AttributeName,
         attribute_context: AttributeNotSupportedContext,
         location: ItemLocation,
     },
@@ -334,21 +556,19 @@ pub enum SemanticError {
     DefaultableError {
         field_name: String,
         item_path: ItemPath,
-        message: String,
+        kind: DefaultableErrorKind,
         location: ItemLocation,
     },
     /// Copyable type error (field is not copyable)
     CopyableError {
         field_name: String,
         item_path: ItemPath,
-        message: String,
         location: ItemLocation,
     },
     /// Cloneable type error (field is not cloneable)
     CloneableError {
         field_name: String,
         item_path: ItemPath,
-        message: String,
         location: ItemLocation,
     },
     /// Integer conversion error
@@ -401,12 +621,12 @@ impl SemanticError {
             }
             SemanticError::MissingAttribute {
                 attribute_name,
-                item_kind,
+                extern_kind,
                 item_path,
                 ..
             } => {
                 format!(
-                    "Missing required attribute `{attribute_name}` for {item_kind} `{item_path}`"
+                    "Missing required attribute `{attribute_name}` for {extern_kind} `{item_path}`"
                 )
             }
             SemanticError::InvalidAttributeFunctionArgumentCount {
@@ -483,15 +703,24 @@ impl SemanticError {
                     "bitflags definition `{item_path}` has a type that is not {expected}: {found}"
                 )
             }
-            SemanticError::InvalidType {
-                expected,
-                found,
+            SemanticError::RegionFieldNotRawType {
+                field_name,
                 item_path,
-                context_description,
+                found,
                 ..
             } => {
                 format!(
-                    "Invalid type for `{context_description}` in `{item_path}`: expected {expected}, found {found}"
+                    "region field `{field_name}` in `{item_path}` must be a raw type, found {found}"
+                )
+            }
+            SemanticError::RegionFieldNotStructType {
+                field_name,
+                item_path,
+                found,
+                ..
+            } => {
+                format!(
+                    "region field `{field_name}` in `{item_path}` must reference a struct type, found {found}"
                 )
             }
             SemanticError::VftableMissingFunctions {
@@ -516,14 +745,6 @@ impl SemanticError {
                 format!(
                     "vftable for `{item_path}` has function `{derived_function}` at index {index} but base class `{base_name}` has function `{base_function}`"
                 )
-            }
-            SemanticError::FieldError {
-                field_name,
-                item_path,
-                message,
-                ..
-            } => {
-                format!("Error in field `{field_name}` of `{item_path}`: {message}")
             }
             SemanticError::SizeBelowMinimum {
                 minimum_size,
@@ -582,10 +803,10 @@ impl SemanticError {
             SemanticError::DuplicateDefinition {
                 name,
                 item_path,
-                message,
+                kind,
                 ..
             } => {
-                format!("Duplicate definition of `{name}` in `{item_path}` ({message})")
+                format!("Duplicate definition of `{name}` in `{item_path}` ({kind})")
             }
             SemanticError::FunctionMissingImplementation { function_name, .. } => {
                 format!(
@@ -649,26 +870,24 @@ impl SemanticError {
             SemanticError::DefaultableError {
                 field_name,
                 item_path,
-                message,
+                kind,
                 ..
             } => {
-                format!("field `{field_name}` of type `{item_path}` {message}")
+                format!("field `{field_name}` of type `{item_path}` {kind}")
             }
             SemanticError::CopyableError {
                 field_name,
                 item_path,
-                message,
                 ..
             } => {
-                format!("field `{field_name}` of type `{item_path}` {message}")
+                format!("field `{field_name}` of type `{item_path}` is not a copyable type")
             }
             SemanticError::CloneableError {
                 field_name,
                 item_path,
-                message,
                 ..
             } => {
-                format!("field `{field_name}` of type `{item_path}` {message}")
+                format!("field `{field_name}` of type `{item_path}` is not a cloneable type")
             }
             SemanticError::IntegerConversion {
                 value, target_type, ..
@@ -709,10 +928,10 @@ impl SemanticError {
             SemanticError::TypeResolutionFailed { location, .. } => Some(location),
             SemanticError::TypeResolutionStalled { .. } => None,
             SemanticError::BitflagsInvalidType { location, .. } => Some(location),
-            SemanticError::InvalidType { location, .. } => Some(location),
+            SemanticError::RegionFieldNotRawType { location, .. } => Some(location),
+            SemanticError::RegionFieldNotStructType { location, .. } => Some(location),
             SemanticError::VftableMissingFunctions { location, .. } => Some(location),
             SemanticError::VftableFunctionMismatch { location, .. } => Some(location),
-            SemanticError::FieldError { location, .. } => Some(location),
             SemanticError::SizeBelowMinimum { location, .. } => Some(location),
             SemanticError::SizeMismatch { location, .. } => Some(location),
             SemanticError::AlignmentBelowMinimum { location, .. } => Some(location),
@@ -771,7 +990,7 @@ impl SemanticError {
             }
             Self::BitflagsInvalidType { found, .. } => {
                 // Generate list of unsigned integer types dynamically
-                let unsigned_types = crate::semantic::types::PredefinedItem::ALL
+                let unsigned_types = PredefinedItem::ALL
                     .iter()
                     .filter(|item| item.is_unsigned_integer())
                     .map(|item| item.name())
@@ -912,7 +1131,7 @@ pub type Result<T> = std::result::Result<T, SemanticError>;
 #[derive(Debug)]
 pub enum BuildOutcome {
     /// Item was successfully resolved
-    Resolved(crate::semantic::types::ItemStateResolved),
+    Resolved(ItemStateResolved),
     /// Item resolution should be deferred (dependency exists but not yet resolved)
     Deferred,
     /// Item resolution failed because a referenced type doesn't exist
@@ -921,7 +1140,7 @@ pub enum BuildOutcome {
 
 impl BuildOutcome {
     /// Convert to Option, collapsing Deferred and NotFoundType to None
-    pub fn into_option(self) -> Option<crate::semantic::types::ItemStateResolved> {
+    pub fn into_option(self) -> Option<ItemStateResolved> {
         match self {
             BuildOutcome::Resolved(t) => Some(t),
             _ => None,
