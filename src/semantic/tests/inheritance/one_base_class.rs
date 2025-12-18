@@ -322,6 +322,15 @@ fn b1_d1_with_associated_functions() {
     );
 }
 
+/// Helper to extract function name from a formatted function string.
+/// The format is: `pub extern "<cc>" fn <name>(<args>) -> <ret>`
+fn extract_function_name(func_str: &str) -> Option<&str> {
+    func_str
+        .split("fn ")
+        .nth(1)
+        .and_then(|s| s.split('(').next())
+}
+
 #[test]
 fn b1_d1_without_overlapping_vfuncs_will_fail() {
     assert_ast_produces_error(
@@ -363,8 +372,8 @@ fn b1_d1_without_overlapping_vfuncs_will_fail() {
                 }
                 if item_path.to_string() == "test::Derived"
                     && base_name == "base"
-                    && derived_function.contains("not_base_vfunc2")
-                    && base_function.contains("base_vfunc2")
+                    && extract_function_name(derived_function) == Some("not_base_vfunc2")
+                    && extract_function_name(base_function) == Some("base_vfunc2")
             )
         },
     );
