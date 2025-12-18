@@ -407,6 +407,16 @@ predefined_items! {
     (I128, "i128", 16),
     (F32, "f32", 4),
     (F64, "f64", 8),
+    // Atomic types
+    (AtomicBool, "AtomicBool", 1),
+    (AtomicU8, "AtomicU8", 1),
+    (AtomicU16, "AtomicU16", 2),
+    (AtomicU32, "AtomicU32", 4),
+    (AtomicU64, "AtomicU64", 8),
+    (AtomicI8, "AtomicI8", 1),
+    (AtomicI16, "AtomicI16", 2),
+    (AtomicI32, "AtomicI32", 4),
+    (AtomicI64, "AtomicI64", 8),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, HasLocation)]

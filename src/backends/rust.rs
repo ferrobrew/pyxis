@@ -861,6 +861,16 @@ fn fully_qualified_type_ref_impl(
                     PredefinedItem::I128 => "i128",
                     PredefinedItem::F32 => "f32",
                     PredefinedItem::F64 => "f64",
+                    // Atomic types
+                    PredefinedItem::AtomicBool => "::std::sync::atomic::AtomicBool",
+                    PredefinedItem::AtomicU8 => "::std::sync::atomic::AtomicU8",
+                    PredefinedItem::AtomicU16 => "::std::sync::atomic::AtomicU16",
+                    PredefinedItem::AtomicU32 => "::std::sync::atomic::AtomicU32",
+                    PredefinedItem::AtomicU64 => "::std::sync::atomic::AtomicU64",
+                    PredefinedItem::AtomicI8 => "::std::sync::atomic::AtomicI8",
+                    PredefinedItem::AtomicI16 => "::std::sync::atomic::AtomicI16",
+                    PredefinedItem::AtomicI32 => "::std::sync::atomic::AtomicI32",
+                    PredefinedItem::AtomicI64 => "::std::sync::atomic::AtomicI64",
                 };
                 (ItemPath::from(p.name()), rust_type)
             })

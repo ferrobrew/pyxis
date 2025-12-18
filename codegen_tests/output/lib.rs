@@ -1,3 +1,4 @@
+pub mod atomics;
 pub mod bitflags;
 pub mod braced_imports;
 pub mod diamond_inheritance;
