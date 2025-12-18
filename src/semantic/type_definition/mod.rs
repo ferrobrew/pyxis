@@ -522,6 +522,61 @@ pub fn build(
         }
     }
 
+    // Iterate over all of the regions and ensure their types are copyable if
+    // we have our copyable attribute set.
+    // NOTE: Check copyable first, before cloneable, because copyable implies cloneable.
+    // If we checked cloneable first, a type marked #[copyable] with a non-copyable field
+    // would report "not cloneable" instead of "not copyable".
+    if copyable {
+        for region in &regions {
+            let Region {
+                visibility: _,
+                name,
+                doc: _,
+                type_ref,
+                is_base: _,
+                location: _,
+            } = region;
+            let name = name.as_deref().unwrap_or("unnamed");
+
+            // Check if the type is copyable, recursively handling generics and arrays
+            if !is_type_copyable(type_ref, &semantic.type_registry, &region.location)? {
+                return Err(SemanticError::CopyableError {
+                    field_name: name.into(),
+                    item_path: resolvee_path.clone(),
+                    message: "is not a copyable type".into(),
+                    location: region.location,
+                });
+            }
+        }
+    }
+
+    // Iterate over all of the regions and ensure their types are cloneable if
+    // we have our cloneable attribute set (and not already covered by copyable check above).
+    if cloneable && !copyable {
+        for region in &regions {
+            let Region {
+                visibility: _,
+                name,
+                doc: _,
+                type_ref,
+                is_base: _,
+                location: _,
+            } = region;
+            let name = name.as_deref().unwrap_or("unnamed");
+
+            // Check if the type is cloneable, recursively handling generics and arrays
+            if !is_type_cloneable(type_ref, &semantic.type_registry, &region.location)? {
+                return Err(SemanticError::CloneableError {
+                    field_name: name.into(),
+                    item_path: resolvee_path.clone(),
+                    message: "is not a cloneable type".into(),
+                    location: region.location,
+                });
+            }
+        }
+    }
+
     let alignment = if packed {
         if align.is_some() {
             return Err(SemanticError::ConflictingAttributes {
@@ -814,4 +869,96 @@ pub(super) fn get_region_name_and_type_definition<'a>(
     };
 
     Ok(Some((region_name, region_type)))
+}
+
+/// Check if a type is copyable, recursively handling generics and arrays.
+/// Returns Ok(true) if copyable, Ok(false) if not copyable, Err if type lookup fails.
+fn is_type_copyable(
+    type_ref: &Type,
+    type_registry: &TypeRegistry,
+    location: &ItemLocation,
+) -> Result<bool> {
+    match type_ref {
+        // Raw types: check if the type itself is copyable
+        Type::Raw(path) => {
+            let item = type_registry.get(path, location)?.state.clone();
+            let ItemState::Resolved(ItemStateResolved { inner, .. }) = &item else {
+                // If not resolved yet, assume it's ok (will be checked later)
+                return Ok(true);
+            };
+            Ok(inner.copyable())
+        }
+        // Arrays: check if element type is copyable
+        Type::Array(inner, _) => is_type_copyable(inner, type_registry, location),
+        // Generic types: check base type AND all type arguments
+        Type::Generic(base, args) => {
+            // Check the base type
+            let item = type_registry.get(base, location)?.state.clone();
+            let ItemState::Resolved(ItemStateResolved { inner, .. }) = &item else {
+                return Ok(true);
+            };
+            if !inner.copyable() {
+                return Ok(false);
+            }
+            // Check all type arguments
+            for arg in args {
+                if !is_type_copyable(arg, type_registry, location)? {
+                    return Ok(false);
+                }
+            }
+            Ok(true)
+        }
+        // Pointers and functions are copyable (like raw pointers in Rust)
+        Type::ConstPointer(_) | Type::MutPointer(_) | Type::Function(_, _, _) => Ok(true),
+        // Type parameters: assume ok (will be checked at instantiation time)
+        Type::TypeParameter(_) => Ok(true),
+        // Unresolved: assume ok (will be resolved and checked later)
+        Type::Unresolved(_) => Ok(true),
+    }
+}
+
+/// Check if a type is cloneable, recursively handling generics and arrays.
+/// Returns Ok(true) if cloneable, Ok(false) if not cloneable, Err if type lookup fails.
+fn is_type_cloneable(
+    type_ref: &Type,
+    type_registry: &TypeRegistry,
+    location: &ItemLocation,
+) -> Result<bool> {
+    match type_ref {
+        // Raw types: check if the type itself is cloneable
+        Type::Raw(path) => {
+            let item = type_registry.get(path, location)?.state.clone();
+            let ItemState::Resolved(ItemStateResolved { inner, .. }) = &item else {
+                // If not resolved yet, assume it's ok (will be checked later)
+                return Ok(true);
+            };
+            Ok(inner.cloneable())
+        }
+        // Arrays: check if element type is cloneable
+        Type::Array(inner, _) => is_type_cloneable(inner, type_registry, location),
+        // Generic types: check base type AND all type arguments
+        Type::Generic(base, args) => {
+            // Check the base type
+            let item = type_registry.get(base, location)?.state.clone();
+            let ItemState::Resolved(ItemStateResolved { inner, .. }) = &item else {
+                return Ok(true);
+            };
+            if !inner.cloneable() {
+                return Ok(false);
+            }
+            // Check all type arguments
+            for arg in args {
+                if !is_type_cloneable(arg, type_registry, location)? {
+                    return Ok(false);
+                }
+            }
+            Ok(true)
+        }
+        // Pointers and functions are cloneable (like raw pointers in Rust)
+        Type::ConstPointer(_) | Type::MutPointer(_) | Type::Function(_, _, _) => Ok(true),
+        // Type parameters: assume ok (will be checked at instantiation time)
+        Type::TypeParameter(_) => Ok(true),
+        // Unresolved: assume ok (will be resolved and checked later)
+        Type::Unresolved(_) => Ok(true),
+    }
 }

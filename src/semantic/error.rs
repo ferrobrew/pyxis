@@ -329,6 +329,20 @@ pub enum SemanticError {
         message: String,
         location: ItemLocation,
     },
+    /// Copyable type error (field is not copyable)
+    CopyableError {
+        field_name: String,
+        item_path: ItemPath,
+        message: String,
+        location: ItemLocation,
+    },
+    /// Cloneable type error (field is not cloneable)
+    CloneableError {
+        field_name: String,
+        item_path: ItemPath,
+        message: String,
+        location: ItemLocation,
+    },
     /// Integer conversion error
     IntegerConversion {
         value: String,
@@ -632,6 +646,22 @@ impl SemanticError {
             } => {
                 format!("field `{field_name}` of type `{item_path}` {message}")
             }
+            SemanticError::CopyableError {
+                field_name,
+                item_path,
+                message,
+                ..
+            } => {
+                format!("field `{field_name}` of type `{item_path}` {message}")
+            }
+            SemanticError::CloneableError {
+                field_name,
+                item_path,
+                message,
+                ..
+            } => {
+                format!("field `{field_name}` of type `{item_path}` {message}")
+            }
             SemanticError::IntegerConversion {
                 value, target_type, ..
             } => {
@@ -694,6 +724,8 @@ impl SemanticError {
             SemanticError::BitflagsDefaultWithoutDefaultable { location, .. } => Some(location),
             SemanticError::BitflagsDefaultableMissingDefault { location, .. } => Some(location),
             SemanticError::DefaultableError { location, .. } => Some(location),
+            SemanticError::CopyableError { location, .. } => Some(location),
+            SemanticError::CloneableError { location, .. } => Some(location),
             SemanticError::IntegerConversion { location, .. } => Some(location),
             SemanticError::OverlappingRegions { location, .. } => Some(location),
             SemanticError::PrivateItemAccess { location, .. } => Some(location),

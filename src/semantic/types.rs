@@ -295,6 +295,22 @@ impl ItemDefinitionInner {
             ItemDefinitionInner::TypeAlias(_) => false, // Type aliases don't have defaultable
         }
     }
+    pub fn copyable(&self) -> bool {
+        match self {
+            ItemDefinitionInner::Type(td) => td.copyable,
+            ItemDefinitionInner::Enum(ed) => ed.copyable,
+            ItemDefinitionInner::Bitflags(bd) => bd.copyable,
+            ItemDefinitionInner::TypeAlias(_) => false, // Type aliases don't have copyable
+        }
+    }
+    pub fn cloneable(&self) -> bool {
+        match self {
+            ItemDefinitionInner::Type(td) => td.cloneable,
+            ItemDefinitionInner::Enum(ed) => ed.cloneable,
+            ItemDefinitionInner::Bitflags(bd) => bd.cloneable,
+            ItemDefinitionInner::TypeAlias(_) => false, // Type aliases don't have cloneable
+        }
+    }
     pub fn as_type(&self) -> Option<&TypeDefinition> {
         match self {
             Self::Type(v) => Some(v),
