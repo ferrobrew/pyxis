@@ -1,7 +1,7 @@
 use crate::{
     grammar::test_aliases::{int_literal, *},
     semantic::{error::SemanticError, semantic_state::SemanticState, types::test_aliases::*},
-    span::ItemLocation,
+    span::{ItemLocation, StripLocations},
 };
 
 use pretty_assertions::assert_eq;
@@ -390,6 +390,8 @@ fn can_use_braced_imports_from_another_module() {
 
 #[test]
 fn will_fail_on_use_of_nonexistent_type() {
+    use crate::span::StripLocations;
+
     // Test that using a type that doesn't exist produces an error
     let module1 = M::new()
         .with_uses([IP::from("math::NonExistent")])
@@ -404,14 +406,20 @@ fn will_fail_on_use_of_nonexistent_type() {
         .unwrap();
 
     let err = semantic_state.build().unwrap_err();
-    assert!(
-        matches!(err, SemanticError::UseItemNotFound { ref path, .. } if *path == IP::from("math::NonExistent")),
-        "Expected UseItemNotFound error for math::NonExistent, got: {err:?}"
+    assert_eq!(
+        err.strip_locations(),
+        SemanticError::UseItemNotFound {
+            path: IP::from("math::NonExistent"),
+            location: ItemLocation::test(),
+        }
+        .strip_locations()
     );
 }
 
 #[test]
 fn will_fail_on_braced_import_with_nonexistent_type() {
+    use crate::span::StripLocations;
+
     // Test that braced imports with a nonexistent type produce an error
     let module1 = M::new()
         .with_use_trees([UT::group(
@@ -436,14 +444,20 @@ fn will_fail_on_braced_import_with_nonexistent_type() {
         .unwrap();
 
     let err = semantic_state.build().unwrap_err();
-    assert!(
-        matches!(err, SemanticError::UseItemNotFound { ref path, .. } if *path == IP::from("math::NonExistent")),
-        "Expected UseItemNotFound error for math::NonExistent, got: {err:?}"
+    assert_eq!(
+        err.strip_locations(),
+        SemanticError::UseItemNotFound {
+            path: IP::from("math::NonExistent"),
+            location: ItemLocation::test(),
+        }
+        .strip_locations()
     );
 }
 
 #[test]
 fn will_fail_on_use_of_nonexistent_module() {
+    use crate::span::StripLocations;
+
     // Test that using a module that doesn't exist produces an error
     let module1 = M::new()
         .with_uses([IP::from("nonexistent::SomeType")])
@@ -458,9 +472,13 @@ fn will_fail_on_use_of_nonexistent_module() {
         .unwrap();
 
     let err = semantic_state.build().unwrap_err();
-    assert!(
-        matches!(err, SemanticError::UseItemNotFound { ref path, .. } if *path == IP::from("nonexistent::SomeType")),
-        "Expected UseItemNotFound error for nonexistent::SomeType, got: {err:?}"
+    assert_eq!(
+        err.strip_locations(),
+        SemanticError::UseItemNotFound {
+            path: IP::from("nonexistent::SomeType"),
+            location: ItemLocation::test(),
+        }
+        .strip_locations()
     );
 }
 
@@ -2005,17 +2023,20 @@ fn can_resolve_freestanding_functions() {
     assert_eq!(func1.arguments.len(), 0);
     assert_eq!(func1.return_type, None);
     assert_eq!(func1.calling_convention, SCC::System);
-    assert!(matches!(func1.body, SFB::Address { address: 0x456 }));
+    assert_eq!(func1.body, SFB::Address { address: 0x456 });
 
     // Check second freestanding function
     let func2 = &module.functions()[1];
     assert_eq!(func2.name, "another_freestanding");
     assert_eq!(func2.visibility, SV::Private);
     assert_eq!(func2.arguments.len(), 1);
-    assert!(matches!(&func2.arguments[0], SAr::Field { name, .. } if name == "arg1"));
+    assert_eq!(
+        func2.arguments[0].strip_locations(),
+        SAr::field("arg1", ST::raw("i32")).strip_locations()
+    );
     assert_eq!(func2.return_type, Some(ST::raw("i32")));
     assert_eq!(func2.calling_convention, SCC::System);
-    assert!(matches!(func2.body, SFB::Address { address: 0x789 }));
+    assert_eq!(func2.body, SFB::Address { address: 0x789 });
 }
 
 #[test]
