@@ -10,6 +10,7 @@ mod alignment;
 mod inheritance;
 mod min_size;
 mod util;
+mod visibility;
 use util::*;
 
 #[test]

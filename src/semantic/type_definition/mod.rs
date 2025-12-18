@@ -284,6 +284,18 @@ pub fn build(
                             context: format!("field `{field_name}` of type `{resolvee_path}`"),
                         }));
                     }
+                    TypeLookupResult::PrivateAccess { item_path } => {
+                        let field_name = if field_ident.0 == "_" {
+                            "<anonymous>".to_string()
+                        } else {
+                            field_ident.0.clone()
+                        };
+                        return Ok(BuildOutcome::NotFoundType(UnresolvedTypeReference {
+                            type_name: item_path.to_string(),
+                            location: *type_.location(),
+                            context: format!("field `{field_name}` of type `{resolvee_path}`"),
+                        }));
+                    }
                 };
 
                 let ident = (field_ident.0 != "_").then(|| field_ident.0.clone());

@@ -343,6 +343,14 @@ pub enum SemanticError {
         existing_end: usize,
         location: ItemLocation,
     },
+    /// Attempted to access a private item from another module
+    PrivateItemAccess {
+        /// The path of the private item being accessed
+        item_path: ItemPath,
+        /// The module from which the access was attempted
+        from_module: ItemPath,
+        location: ItemLocation,
+    },
 }
 
 impl SemanticError {
@@ -640,6 +648,13 @@ impl SemanticError {
                     "Overlapping regions in `{item_path}`: attempted to insert padding at {address:#x}, but overlapped with existing region `{region_name}` that ends at {existing_end:#x}"
                 )
             }
+            SemanticError::PrivateItemAccess {
+                item_path,
+                from_module,
+                ..
+            } => {
+                format!("cannot access private item `{item_path}` from module `{from_module}`")
+            }
         }
     }
 
@@ -681,6 +696,7 @@ impl SemanticError {
             SemanticError::DefaultableError { location, .. } => Some(location),
             SemanticError::IntegerConversion { location, .. } => Some(location),
             SemanticError::OverlappingRegions { location, .. } => Some(location),
+            SemanticError::PrivateItemAccess { location, .. } => Some(location),
         }
     }
 

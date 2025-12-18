@@ -94,6 +94,15 @@ impl ItemPath {
     pub fn last(&self) -> Option<&ItemPathSegment> {
         self.0.last()
     }
+
+    /// Check if this path starts with the given prefix.
+    /// For example, `a::b::c` starts with `a::b` but not with `a::c`.
+    pub fn starts_with(&self, prefix: &ItemPath) -> bool {
+        if prefix.0.len() > self.0.len() {
+            return false;
+        }
+        self.0[..prefix.0.len()] == prefix.0
+    }
 }
 impl fmt::Display for ItemPath {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

@@ -112,7 +112,9 @@ impl Module {
             if let Type::Unresolved(type_ref) = &ev.type_ {
                 ev.type_ = match type_registry.resolve_grammar_type(&scope, type_ref, &[]) {
                     TypeLookupResult::Found(t) => t,
-                    TypeLookupResult::NotYetResolved | TypeLookupResult::NotFound { .. } => {
+                    TypeLookupResult::NotYetResolved
+                    | TypeLookupResult::NotFound { .. }
+                    | TypeLookupResult::PrivateAccess { .. } => {
                         return Err(SemanticError::TypeResolutionFailed {
                             type_: type_ref.clone(),
                             resolution_context: TypeResolutionContext::ExternValue {

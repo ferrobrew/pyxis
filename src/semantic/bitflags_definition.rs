@@ -112,6 +112,13 @@ pub fn build(
                     context: format!("base type of bitflags `{resolvee_path}`"),
                 }));
             }
+            TypeLookupResult::PrivateAccess { item_path } => {
+                return Ok(BuildOutcome::NotFoundType(UnresolvedTypeReference {
+                    type_name: item_path.to_string(),
+                    location: type_location,
+                    context: format!("base type of bitflags `{resolvee_path}`"),
+                }));
+            }
         };
     let ty_raw_path = ty
         .as_raw()

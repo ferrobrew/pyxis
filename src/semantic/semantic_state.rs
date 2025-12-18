@@ -376,6 +376,8 @@ impl SemanticState {
     /// This checks that each path in a use statement refers to either:
     /// - A type in the type registry (whose parent module also exists)
     /// - A module that exists
+    ///
+    /// Additionally, checks that the item is visible from the importing module.
     fn validate_uses(&self) -> Result<()> {
         for module in self.modules.values() {
             for use_item in module.uses() {
@@ -390,7 +392,28 @@ impl SemanticState {
                     // Check if the path is a module
                     let is_module = self.modules.contains_key(&path);
 
-                    if is_type || is_module {
+                    if is_type {
+                        // Check visibility of the type
+                        if let Ok(item_def) =
+                            self.type_registry.get(&path, &ItemLocation::internal())
+                        {
+                            if item_def.visibility == Visibility::Private {
+                                // Private items are only visible within the same module or child modules
+                                if let Some(item_module) = path.parent() {
+                                    if !Self::can_access_private(&module.path, &item_module) {
+                                        return Err(SemanticError::PrivateItemAccess {
+                                            item_path: path,
+                                            from_module: module.path.clone(),
+                                            location,
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                        continue;
+                    }
+
+                    if is_module {
                         continue;
                     }
 
@@ -409,6 +432,21 @@ impl SemanticState {
             }
         }
         Ok(())
+    }
+
+    /// Check if a module can access a private item in another module.
+    /// In Rust-like visibility rules, private items are visible to:
+    /// - The same module
+    /// - Child modules (descendants)
+    fn can_access_private(from_module: &ItemPath, item_module: &ItemPath) -> bool {
+        // Same module can always access
+        if from_module == item_module {
+            return true;
+        }
+
+        // Child modules can access parent's private items
+        // Check if from_module starts with item_module (is a descendant)
+        from_module.starts_with(item_module)
     }
 }
 

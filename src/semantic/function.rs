@@ -437,7 +437,7 @@ pub fn build(
                         // Type exists but isn't resolved yet - defer function building
                         return Ok(FunctionBuildOutcome::Deferred);
                     }
-                    TypeLookupResult::NotFound { .. } => {
+                    TypeLookupResult::NotFound { .. } | TypeLookupResult::PrivateAccess { .. } => {
                         return Err(SemanticError::TypeResolutionFailed {
                             type_: type_.clone(),
                             resolution_context: TypeResolutionContext::FunctionArgument {
@@ -465,7 +465,7 @@ pub fn build(
                 // Return type exists but isn't resolved yet - defer function building
                 return Ok(FunctionBuildOutcome::Deferred);
             }
-            TypeLookupResult::NotFound { .. } => None,
+            TypeLookupResult::NotFound { .. } | TypeLookupResult::PrivateAccess { .. } => None,
         },
         None => None,
     };
