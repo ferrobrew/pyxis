@@ -1,6 +1,12 @@
-use super::*;
-use crate::semantic::error::SemanticError;
-use crate::span::ItemLocation;
+//! Tests for alignment validation.
+
+use crate::{
+    grammar::test_aliases::*,
+    semantic::{error::SemanticError, types::test_aliases::*},
+    span::ItemLocation,
+};
+
+use super::util::*;
 
 #[test]
 fn size_not_multiple_of_alignment_should_be_rejected() {
