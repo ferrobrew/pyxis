@@ -767,12 +767,9 @@ impl PfxInstance {
         if let ModuleItem::Definition { definition } = &module.items[1] {
             assert_eq!(definition.name.0, "PfxInstanceInterface");
             assert_eq!(
-                definition.doc_comments.len(),
-                1,
-                "PfxInstanceInterface should have 1 doc comment, got: {:?}",
-                definition.doc_comments
+                definition.doc_comments,
+                vec![" `IPfxInstance` in original game"]
             );
-            assert!(definition.doc_comments[0].contains("IPfxInstance"));
         } else {
             panic!("Expected Definition for PfxInstanceInterface");
         }
@@ -781,12 +778,9 @@ impl PfxInstance {
         if let ModuleItem::Definition { definition } = &module.items[2] {
             assert_eq!(definition.name.0, "PfxInstance");
             assert_eq!(
-                definition.doc_comments.len(),
-                1,
-                "PfxInstance should have 1 doc comment, got: {:?}",
-                definition.doc_comments
+                definition.doc_comments,
+                vec![" `CPfxInstance` in original game"]
             );
-            assert!(definition.doc_comments[0].contains("CPfxInstance"));
         } else {
             panic!("Expected Definition for PfxInstance");
         }

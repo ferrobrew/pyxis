@@ -966,11 +966,17 @@ mod tests {
         }
         "#;
 
+        let expected = r#"
+pub type Test {
+    field: i32,
+}
+        "#
+        .trim();
+
         let module = parse_str_for_tests(text).unwrap();
         let printed = pretty_print(&module);
 
-        assert!(printed.contains("pub type Test"));
-        assert!(printed.contains("field: i32"));
+        assert_eq!(printed, expected);
     }
 
     #[test]
@@ -1408,15 +1414,12 @@ backend rust prologue "
 ";
         "#;
 
+        let expected = r#"backend rust prologue "\n    use crate::shared_ptr::*;\n    use std::mem::ManuallyDrop;\n";"#;
+
         let module = parse_str_for_tests(text).unwrap();
         let printed = pretty_print(&module);
 
-        // Verify the backend is present and format is correct
-        assert!(printed.contains("backend rust prologue"));
-        // Verify it's not using raw string syntax
-        assert!(!printed.contains("r#\""));
-        // Verify the content is present with escaped newlines
-        assert!(printed.contains("\\n"));
+        assert_eq!(printed, expected);
     }
 
     #[test]
