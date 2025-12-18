@@ -23,3 +23,46 @@ jobs:
 
       - name: Run tests, clippy, and fmt
         run: python test.py
+
+  validate-pyxis-defs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout pyxis
+        uses: actions/checkout@v4
+        with:
+          path: pyxis
+
+      - name: Checkout pyxis-defs
+        uses: actions/checkout@v4
+        with:
+          repository: ferrobrew/pyxis-defs
+          path: pyxis-defs
+
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Run pyxis-defs build
+        working-directory: pyxis-defs
+        run: python build.py --path ../pyxis/driver
+
+      - name: Check for unexpected changes
+        working-directory: pyxis-defs
+        run: |
+          # Check if any files other than docs/index.json have changed
+          CHANGED_FILES=$(git diff --name-only)
+          if [ -n "$CHANGED_FILES" ]; then
+            # Filter out docs/index.json
+            OTHER_CHANGES=$(echo "$CHANGED_FILES" | grep -v '^docs/index\.json$' || true)
+            if [ -n "$OTHER_CHANGES" ]; then
+              echo "::warning::The following files changed unexpectedly after build:"
+              echo "$OTHER_CHANGES"
+              echo ""
+              echo "This may indicate that pyxis-defs needs to be rebuilt and committed."
+            fi
+          fi
