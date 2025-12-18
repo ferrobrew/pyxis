@@ -117,6 +117,13 @@ pub fn build(
                     context: format!("base type of enum `{resolvee_path}`"),
                 }));
             }
+            TypeLookupResult::PrivateAccess { item_path } => {
+                return Ok(BuildOutcome::NotFoundType(UnresolvedTypeReference {
+                    type_name: item_path.to_string(),
+                    location: *definition.type_.location(),
+                    context: format!("base type of enum `{resolvee_path}`"),
+                }));
+            }
         };
 
     // TODO: verify that `ty` actually makes sense for an enum

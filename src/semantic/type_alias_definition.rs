@@ -66,6 +66,13 @@ pub fn build(
                 context: format!("target of type alias `{resolvee_path}`"),
             }));
         }
+        TypeLookupResult::PrivateAccess { item_path } => {
+            return Ok(BuildOutcome::NotFoundType(UnresolvedTypeReference {
+                type_name: item_path.to_string(),
+                location: *definition.target.location(),
+                context: format!("target of type alias `{resolvee_path}`"),
+            }));
+        }
     };
 
     // Type aliases don't have their own size/alignment - they're just references

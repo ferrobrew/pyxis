@@ -5,7 +5,7 @@ use crate::{
     grammar::{self, ItemPath},
     semantic::{
         error::Result,
-        types::{ItemDefinition, Type},
+        types::{ItemDefinition, Type, Visibility},
     },
     span::ItemLocation,
 };
@@ -22,6 +22,11 @@ pub enum TypeLookupResult {
     NotFound {
         /// The type name that wasn't found (as written in source)
         type_name: String,
+    },
+    /// Type exists but is private and not accessible from the requesting module
+    PrivateAccess {
+        /// The path of the private type
+        item_path: ItemPath,
     },
 }
 
@@ -46,6 +51,37 @@ impl TypeRegistry {
     /// Check if a type exists in the registry
     pub fn contains(&self, item_path: &ItemPath) -> bool {
         self.types.contains_key(item_path)
+    }
+
+    /// Check if a module can access an item based on visibility rules.
+    /// Private items are only visible to:
+    /// - The same module
+    /// - Child modules (descendants)
+    fn can_access(&self, from_module: &ItemPath, item_path: &ItemPath) -> bool {
+        if let Some(item_def) = self.types.get(item_path) {
+            // Public items are always accessible
+            if item_def.visibility == Visibility::Public {
+                return true;
+            }
+
+            // Private items: check if from_module is the same as or a child of the item's module
+            if let Some(item_module) = item_path.parent() {
+                // Same module can always access
+                if from_module == &item_module {
+                    return true;
+                }
+                // Child modules can access parent's private items
+                return from_module.starts_with(&item_module);
+            }
+        }
+        // If item doesn't exist, let the caller handle it
+        true
+    }
+
+    /// Extract the current module path from the scope.
+    /// The first element of the scope is always the current module path.
+    fn get_from_module(scope: &[ItemPath]) -> Option<&ItemPath> {
+        scope.first()
     }
 
     pub fn get(
@@ -244,10 +280,12 @@ impl TypeRegistry {
     /// Resolves a type name in the given scope, returning detailed information
     /// about why resolution failed if it does.
     pub(crate) fn resolve_string(&self, scope: &[ItemPath], name: &str) -> TypeLookupResult {
+        let from_module = Self::get_from_module(scope);
         let (scope_types, scope_modules): (Vec<&ItemPath>, Vec<&ItemPath>) =
             scope.iter().partition(|ip| self.types.contains_key(ip));
 
         // If we find the relevant type within our scope, take the last one
+        // Types in scope_types were explicitly imported via `use`, so they're already visibility-checked
         let found_path = scope_types
             .into_iter()
             .rev()
@@ -255,10 +293,22 @@ impl TypeRegistry {
             .cloned()
             .or_else(|| {
                 // Otherwise, search our scopes
+                // Note: we need to check visibility for types found through module search
                 std::iter::once(&ItemPath::empty())
                     .chain(scope_modules.iter().copied())
                     .map(|ip| ip.join(name.into()))
-                    .find(|ip| self.types.contains_key(ip))
+                    .find(|ip| {
+                        if self.types.contains_key(ip) {
+                            // Check visibility - skip private types from other modules
+                            if let Some(from) = from_module {
+                                self.can_access(from, ip)
+                            } else {
+                                true
+                            }
+                        } else {
+                            false
+                        }
+                    })
             });
 
         match found_path {
@@ -369,8 +419,8 @@ impl TypeRegistry {
                     // Couldn't resolve this argument at all - give up
                     return None;
                 }
-                TypeLookupResult::NotFound { .. } => {
-                    // Type doesn't exist - give up
+                TypeLookupResult::NotFound { .. } | TypeLookupResult::PrivateAccess { .. } => {
+                    // Type doesn't exist or is private - give up
                     return None;
                 }
             }
@@ -387,9 +437,19 @@ impl TypeRegistry {
     /// Resolves a path, checking if it's a qualified path or needs scope lookup.
     /// Returns detailed information about why resolution failed if it does.
     pub(crate) fn resolve_path(&self, scope: &[ItemPath], path: &ItemPath) -> TypeLookupResult {
+        let from_module = Self::get_from_module(scope);
+
         // If path has multiple segments, try to resolve it directly first
         if path.len() > 1 {
             if let Some(item_def) = self.types.get(path) {
+                // Check visibility for directly resolved paths
+                if let Some(from) = from_module {
+                    if !self.can_access(from, path) {
+                        return TypeLookupResult::PrivateAccess {
+                            item_path: path.clone(),
+                        };
+                    }
+                }
                 if item_def.is_resolved() {
                     return TypeLookupResult::Found(
                         self.resolve_type_alias(Type::Raw(path.clone())),
@@ -520,6 +580,9 @@ impl TypeRegistry {
                             TypeLookupResult::NotYetResolved => {
                                 return TypeLookupResult::NotYetResolved;
                             }
+                            TypeLookupResult::PrivateAccess { item_path } => {
+                                return TypeLookupResult::PrivateAccess { item_path };
+                            }
                             TypeLookupResult::NotFound { .. } => {
                                 // No exact match, proceed with generic resolution below
                             }
@@ -632,6 +695,9 @@ impl TypeRegistry {
                             TypeLookupResult::NotFound {
                                 type_name: full_type_name,
                             }
+                        }
+                        TypeLookupResult::PrivateAccess { item_path } => {
+                            TypeLookupResult::PrivateAccess { item_path }
                         }
                     }
                 } else {
