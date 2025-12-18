@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Write as _, path::Path, str::FromStr};
+use std::{collections::HashMap, fmt::Write as _, path::Path, str::FromStr, sync::LazyLock};
 
 use crate::{
     backends::{BackendError, Result},
@@ -7,8 +7,8 @@ use crate::{
         Module, ResolvedSemanticState, TypeRegistry,
         types::{
             Argument, BitflagsDefinition, EnumDefinition, ExternValue, Function, FunctionBody,
-            ItemCategory, ItemDefinition, ItemDefinitionInner, ItemStateResolved, Region, Type,
-            TypeAliasDefinition, TypeDefinition, Visibility,
+            ItemCategory, ItemDefinition, ItemDefinitionInner, ItemStateResolved, PredefinedItem,
+            Region, Type, TypeAliasDefinition, TypeDefinition, Visibility,
         },
     },
     span::ItemLocation,
@@ -835,18 +835,50 @@ fn fully_qualified_type_ref_impl(
 ) -> std::result::Result<(), std::fmt::Error> {
     use std::fmt::Write;
 
+    /// Maps predefined type paths to their Rust type names.
+    ///
+    /// Most predefined types map directly to Rust primitives, but `void`
+    /// maps to `::std::ffi::c_void`. Future backends (e.g., C#) would use
+    /// different mappings (u8→byte, i32→int, etc.).
+    ///
+    /// Uses exhaustive match to ensure new predefined types are handled.
+    static PREDEFINED_TYPE_MAP: LazyLock<HashMap<ItemPath, &'static str>> = LazyLock::new(|| {
+        PredefinedItem::ALL
+            .iter()
+            .map(|p| {
+                let rust_type = match p {
+                    PredefinedItem::Void => "::std::ffi::c_void",
+                    PredefinedItem::Bool => "bool",
+                    PredefinedItem::U8 => "u8",
+                    PredefinedItem::U16 => "u16",
+                    PredefinedItem::U32 => "u32",
+                    PredefinedItem::U64 => "u64",
+                    PredefinedItem::U128 => "u128",
+                    PredefinedItem::I8 => "i8",
+                    PredefinedItem::I16 => "i16",
+                    PredefinedItem::I32 => "i32",
+                    PredefinedItem::I64 => "i64",
+                    PredefinedItem::I128 => "i128",
+                    PredefinedItem::F32 => "f32",
+                    PredefinedItem::F64 => "f64",
+                };
+                (ItemPath::from(p.name()), rust_type)
+            })
+            .collect()
+    });
+
     match type_ref {
         Type::Unresolved(_) => panic!("received unresolved type {type_ref:?}"),
         Type::Raw(path) => {
-            if path.len() == 1 && path.last() == Some(&"void".into()) {
-                write!(out, "::std::ffi::c_void")
-            } else {
-                // todo: re-evaluate this hack
-                if path.len() > 1 {
-                    write!(out, "crate::")?;
-                }
-                write!(out, "{path}")
+            // Check if this is a predefined type
+            if let Some(rust_type) = PREDEFINED_TYPE_MAP.get(path) {
+                return write!(out, "{rust_type}");
             }
+            // Not a predefined type - qualify with crate:: if needed
+            if path.len() > 1 {
+                write!(out, "crate::")?;
+            }
+            write!(out, "{path}")
         }
         Type::Generic(base_path, args) => {
             // Generate Rust generic syntax: `Base<Arg1, Arg2>`
