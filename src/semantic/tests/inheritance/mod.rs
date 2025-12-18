@@ -1,6 +1,8 @@
 //! Tests for inheritance of types with optional vftables.
 
-use super::*;
+use crate::{grammar::test_aliases::*, semantic::types::test_aliases::*};
+
+use super::util::*;
 
 mod diamond_inheritance;
 mod multiple_levels;

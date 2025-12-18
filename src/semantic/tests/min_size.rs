@@ -1,6 +1,12 @@
-use super::*;
-use crate::semantic::error::SemanticError;
-use crate::span::ItemLocation;
+//! Tests for min_size attribute.
+
+use crate::{
+    grammar::test_aliases::*,
+    semantic::{error::SemanticError, types::test_aliases::*},
+    span::ItemLocation,
+};
+
+use super::util::*;
 
 #[test]
 fn min_size_pads_to_minimum() {
