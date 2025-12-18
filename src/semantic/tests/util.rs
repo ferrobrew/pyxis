@@ -62,26 +62,13 @@ pub fn assert_ast_produces_type_definitions(
     created_module.clone()
 }
 
-/// Assert that the given AST produces a failure matching the given predicate.
-/// The predicate receives the error and should return true if it matches expectations.
+/// Assert that the given AST produces the exact expected error.
+/// Compares errors after stripping location information.
 #[track_caller]
-pub fn assert_ast_produces_error(module: M, predicate: impl FnOnce(&SemanticError) -> bool) {
+pub fn assert_ast_produces_exact_error(module: M, expected: SemanticError) {
+    use crate::span::StripLocations;
     let err = build_state(&module, &IP::from("test")).unwrap_err();
-    assert!(
-        predicate(&err),
-        "Error did not match predicate. Got error: {err:?}"
-    );
-}
-
-/// Assert that the given AST produces a specific error variant.
-/// This is a convenience macro for common error matching patterns.
-#[macro_export]
-macro_rules! assert_error_matches {
-    ($module:expr, $pattern:pat $(if $guard:expr)?) => {
-        $crate::semantic::tests::util::assert_ast_produces_error($module, |err| {
-            matches!(err, $pattern $(if $guard)?)
-        })
-    };
+    assert_eq!(err.strip_locations(), expected.strip_locations());
 }
 
 pub fn unknown(size: usize) -> ST {

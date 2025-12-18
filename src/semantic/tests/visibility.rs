@@ -7,6 +7,7 @@
 use crate::{
     grammar::test_aliases::*,
     semantic::{error::SemanticError, semantic_state::SemanticState},
+    span::{ItemLocation, StripLocations},
 };
 
 use super::util::pointer_size;
@@ -67,18 +68,15 @@ fn cannot_use_private_type_from_another_module() {
         .unwrap();
 
     // This should fail - PrivateType is private
-    let result = semantic_state.build();
-    assert!(
-        matches!(
-            result,
-            Err(SemanticError::PrivateItemAccess {
-                ref item_path,
-                ref from_module,
-                ..
-            }) if item_path.to_string() == "module_b::PrivateType"
-                && from_module.to_string() == "module_a"
-        ),
-        "Expected PrivateItemAccess error for private type, got: {result:?}"
+    let err = semantic_state.build().unwrap_err();
+    assert_eq!(
+        err.strip_locations(),
+        SemanticError::PrivateItemAccess {
+            item_path: IP::from("module_b::PrivateType"),
+            from_module: IP::from("module_a"),
+            location: ItemLocation::test(),
+        }
+        .strip_locations()
     );
 }
 
@@ -143,16 +141,15 @@ fn cannot_use_braced_import_with_private_type() {
         .unwrap();
 
     // This should fail - PrivateType is private
-    let result = semantic_state.build();
-    assert!(
-        matches!(
-            result,
-            Err(SemanticError::PrivateItemAccess {
-                ref item_path,
-                ..
-            }) if item_path.to_string() == "module_b::PrivateType"
-        ),
-        "Expected PrivateItemAccess error for private type in braced import, got: {result:?}"
+    let err = semantic_state.build().unwrap_err();
+    assert_eq!(
+        err.strip_locations(),
+        SemanticError::PrivateItemAccess {
+            item_path: IP::from("module_b::PrivateType"),
+            from_module: IP::from("module_a"),
+            location: ItemLocation::test(),
+        }
+        .strip_locations()
     );
 }
 
@@ -215,16 +212,15 @@ fn sibling_module_cannot_access_private_type() {
         .unwrap();
 
     // This should fail - sibling_b cannot access sibling_a's private type
-    let result = semantic_state.build();
-    assert!(
-        matches!(
-            result,
-            Err(SemanticError::PrivateItemAccess {
-                ref item_path,
-                ..
-            }) if item_path.to_string() == "parent::sibling_a::PrivateA"
-        ),
-        "Sibling module should not be able to access another sibling's private type, got: {result:?}"
+    let err = semantic_state.build().unwrap_err();
+    assert_eq!(
+        err.strip_locations(),
+        SemanticError::PrivateItemAccess {
+            item_path: IP::from("parent::sibling_a::PrivateA"),
+            from_module: IP::from("parent::sibling_b"),
+            location: ItemLocation::test(),
+        }
+        .strip_locations()
     );
 }
 
@@ -299,16 +295,15 @@ fn cannot_use_multiple_private_types_from_another_module() {
         .unwrap();
 
     // Should fail trying to use Private1
-    let result = semantic_state.build();
-    assert!(
-        matches!(
-            result,
-            Err(SemanticError::PrivateItemAccess {
-                ref item_path,
-                ..
-            }) if item_path.to_string() == "module_b::Private1"
-        ),
-        "Expected PrivateItemAccess error, got: {result:?}"
+    let err = semantic_state.build().unwrap_err();
+    assert_eq!(
+        err.strip_locations(),
+        SemanticError::PrivateItemAccess {
+            item_path: IP::from("module_b::Private1"),
+            from_module: IP::from("module_a"),
+            location: ItemLocation::test(),
+        }
+        .strip_locations()
     );
 }
 

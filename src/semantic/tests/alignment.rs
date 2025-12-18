@@ -1,9 +1,10 @@
 use super::*;
 use crate::semantic::error::SemanticError;
+use crate::span::ItemLocation;
 
 #[test]
 fn size_not_multiple_of_alignment_should_be_rejected() {
-    assert_ast_produces_error(
+    assert_ast_produces_exact_error(
         M::new().with_definitions([ID::new(
             (V::Public, "TestType"),
             TD::new([
@@ -12,44 +13,37 @@ fn size_not_multiple_of_alignment_should_be_rejected() {
             ])
             .with_attributes([A::align(4)]),
         )]),
-        |err| {
-            matches!(
-                err,
-                SemanticError::SizeNotAlignmentMultiple { size: 7, alignment: 4, item_path, .. }
-                if item_path.to_string() == "test::TestType"
-            )
+        SemanticError::SizeNotAlignmentMultiple {
+            size: 7,
+            alignment: 4,
+            item_path: IP::from("test::TestType"),
+            location: ItemLocation::test(),
         },
     );
 }
 
 #[test]
 fn unaligned_field_should_be_rejected() {
-    assert_ast_produces_error(
+    assert_ast_produces_exact_error(
         M::new().with_definitions([ID::new(
             (V::Public, "TestType"),
             TD::new([
                 TS::field((V::Public, "field_1"), T::ident("i32")).with_attributes([A::address(1)])
             ]),
         )]),
-        |err| {
-            matches!(
-                err,
-                SemanticError::FieldNotAligned {
-                    field_name,
-                    item_path,
-                    address: 1,
-                    required_alignment: 4,
-                    ..
-                }
-                if field_name == "field_1" && item_path.to_string() == "test::TestType"
-            )
+        SemanticError::FieldNotAligned {
+            field_name: "field_1".to_string(),
+            item_path: IP::from("test::TestType"),
+            address: 1,
+            required_alignment: 4,
+            location: ItemLocation::test(),
         },
     );
 }
 
 #[test]
 fn align_incongruent_with_fields_should_be_rejected() {
-    assert_ast_produces_error(
+    assert_ast_produces_exact_error(
         M::new().with_definitions([ID::new(
             (V::Public, "TestType"),
             TD::new([
@@ -59,64 +53,45 @@ fn align_incongruent_with_fields_should_be_rejected() {
             ])
             .with_attributes([A::align(4)]),
         )]),
-        |err| {
-            matches!(
-                err,
-                SemanticError::AlignmentBelowMinimum {
-                    alignment: 4,
-                    required_alignment: 8,
-                    item_path,
-                    ..
-                }
-                if item_path.to_string() == "test::TestType"
-            )
+        SemanticError::AlignmentBelowMinimum {
+            alignment: 4,
+            required_alignment: 8,
+            item_path: IP::from("test::TestType"),
+            location: ItemLocation::test(),
         },
     );
 }
 
 #[test]
 fn both_align_and_packed_should_be_rejected() {
-    assert_ast_produces_error(
+    assert_ast_produces_exact_error(
         M::new().with_definitions([ID::new(
             (V::Public, "TestType"),
             TD::new([TS::field((V::Public, "field_1"), T::ident("i32"))])
                 .with_attributes([A::align(4), A::packed()]),
         )]),
-        |err| {
-            matches!(
-                err,
-                SemanticError::ConflictingAttributes {
-                    attr1,
-                    attr2,
-                    item_path,
-                    ..
-                }
-                if (attr1 == "packed" && attr2 == "align" || attr1 == "align" && attr2 == "packed")
-                    && item_path.to_string() == "test::TestType"
-            )
+        SemanticError::ConflictingAttributes {
+            attr1: "packed".to_string(),
+            attr2: "align".to_string(),
+            item_path: IP::from("test::TestType"),
+            location: ItemLocation::test(),
         },
     );
 }
 
 #[test]
 fn type_with_bool_at_end_should_be_rejected_due_to_alignment() {
-    assert_ast_produces_error(
+    assert_ast_produces_exact_error(
         M::new().with_definitions([ID::new(
             (V::Public, "TestType"),
             TD::new([TS::field((V::Public, "field_1"), T::ident("bool"))
                 .with_attributes([A::address(0xEC4)])]),
         )]),
-        |err| {
-            matches!(
-                err,
-                SemanticError::SizeNotAlignmentMultiple {
-                    size: 3781,
-                    alignment,
-                    item_path,
-                    ..
-                }
-                if *alignment == pointer_size() && item_path.to_string() == "test::TestType"
-            )
+        SemanticError::SizeNotAlignmentMultiple {
+            size: 3781,
+            alignment: pointer_size(),
+            item_path: IP::from("test::TestType"),
+            location: ItemLocation::test(),
         },
     );
 

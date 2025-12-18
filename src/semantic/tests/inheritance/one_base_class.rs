@@ -324,7 +324,9 @@ fn b1_d1_with_associated_functions() {
 
 #[test]
 fn b1_d1_without_overlapping_vfuncs_will_fail() {
-    assert_ast_produces_error(
+    use crate::span::ItemLocation;
+
+    assert_ast_produces_exact_error(
         M::new().with_definitions([
             ID::new(
                 (V::Public, "Base"),
@@ -350,22 +352,13 @@ fn b1_d1_without_overlapping_vfuncs_will_fail() {
                 .with_attributes([A::align(8)]),
             ),
         ]),
-        |err| {
-            matches!(
-                err,
-                SemanticError::VftableFunctionMismatch {
-                    item_path,
-                    base_name,
-                    index: 1,
-                    derived_function,
-                    base_function,
-                    ..
-                }
-                if item_path.to_string() == "test::Derived"
-                    && base_name == "base"
-                    && derived_function.contains("not_base_vfunc2")
-                    && base_function.contains("base_vfunc2")
-            )
+        SemanticError::VftableFunctionMismatch {
+            item_path: IP::from("test::Derived"),
+            base_name: "base".to_string(),
+            index: 1,
+            derived_function: vfunc_semantic("not_base_vfunc2").to_string(),
+            base_function: vfunc_semantic("base_vfunc2").to_string(),
+            location: ItemLocation::test(),
         },
     );
 }

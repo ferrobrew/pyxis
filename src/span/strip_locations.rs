@@ -97,6 +97,11 @@ mod primitives {
             *self
         }
     }
+    impl StripLocations for char {
+        fn strip_locations(&self) -> Self {
+            *self
+        }
+    }
     impl StripLocations for usize {
         fn strip_locations(&self) -> Self {
             *self

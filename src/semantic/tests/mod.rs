@@ -1,7 +1,7 @@
 use crate::{
     grammar::test_aliases::{int_literal, *},
     semantic::{error::SemanticError, semantic_state::SemanticState, types::test_aliases::*},
-    span::ItemLocation,
+    span::{ItemLocation, StripLocations},
 };
 
 use pretty_assertions::assert_eq;
@@ -178,33 +178,31 @@ fn can_resolve_complex_type() {
 
 #[test]
 fn will_eventually_terminate_with_an_unknown_type() {
-    assert_ast_produces_error(
+    use crate::semantic::error::UnresolvedTypeReference;
+
+    assert_ast_produces_exact_error(
         M::new().with_definitions([ID::new(
             (V::Public, "TestType2"),
             TD::new([TS::field((V::Private, "field_2"), T::ident("TestType1"))]),
         )]),
-        |err| match err {
-            SemanticError::TypeResolutionStalled {
-                unresolved_types,
-                resolved_types,
-                unresolved_references,
-            } => {
-                unresolved_types == &["test::TestType2".to_string()]
-                    && resolved_types.is_empty()
-                    && unresolved_references.len() == 1
-                    && unresolved_references[0].type_name == "TestType1"
-                    && unresolved_references[0].context
-                        == "field `field_2` of type `test::TestType2`"
-            }
-            _ => false,
+        SemanticError::TypeResolutionStalled {
+            unresolved_types: vec!["test::TestType2".to_string()],
+            resolved_types: vec![],
+            unresolved_references: vec![UnresolvedTypeReference {
+                type_name: "TestType1".to_string(),
+                location: ItemLocation::test(),
+                context: "field `field_2` of type `test::TestType2`".to_string(),
+            }],
         },
     );
 }
 
 #[test]
 fn unresolved_type_includes_type_name_in_error() {
+    use crate::semantic::error::UnresolvedTypeReference;
+
     // Test that when a type can't be resolved, the error includes the specific missing type name
-    assert_ast_produces_error(
+    assert_ast_produces_exact_error(
         M::new().with_definitions([ID::new(
             (V::Public, "MyType"),
             TD::new([TS::field(
@@ -212,28 +210,24 @@ fn unresolved_type_includes_type_name_in_error() {
                 T::ident("NonexistentType"),
             )]),
         )]),
-        |err| {
-            match err {
-                SemanticError::TypeResolutionStalled {
-                    unresolved_references,
-                    ..
-                } => {
-                    // Should have exactly one unresolved reference
-                    unresolved_references.len() == 1
-                        && unresolved_references[0].type_name == "NonexistentType"
-                        && unresolved_references[0].context
-                            == "field `my_field` of type `test::MyType`"
-                }
-                _ => false,
-            }
+        SemanticError::TypeResolutionStalled {
+            unresolved_types: vec!["test::MyType".to_string()],
+            resolved_types: vec![],
+            unresolved_references: vec![UnresolvedTypeReference {
+                type_name: "NonexistentType".to_string(),
+                location: ItemLocation::test(),
+                context: "field `my_field` of type `test::MyType`".to_string(),
+            }],
         },
     );
 }
 
 #[test]
 fn unresolved_type_in_enum_includes_context() {
+    use crate::semantic::error::UnresolvedTypeReference;
+
     // Test that enum base type errors include proper context
-    assert_ast_produces_error(
+    assert_ast_produces_exact_error(
         M::new().with_definitions([ID::new(
             (V::Public, "MyEnum"),
             ED::new(
@@ -242,24 +236,24 @@ fn unresolved_type_in_enum_includes_context() {
                 [],
             ),
         )]),
-        |err| match err {
-            SemanticError::TypeResolutionStalled {
-                unresolved_references,
-                ..
-            } => {
-                unresolved_references.len() == 1
-                    && unresolved_references[0].type_name == "NonexistentBase"
-                    && unresolved_references[0].context == "base type of enum `test::MyEnum`"
-            }
-            _ => false,
+        SemanticError::TypeResolutionStalled {
+            unresolved_types: vec!["test::MyEnum".to_string()],
+            resolved_types: vec![],
+            unresolved_references: vec![UnresolvedTypeReference {
+                type_name: "NonexistentBase".to_string(),
+                location: ItemLocation::test(),
+                context: "base type of enum `test::MyEnum`".to_string(),
+            }],
         },
     );
 }
 
 #[test]
 fn multiple_unresolved_types_are_all_reported() {
+    use crate::semantic::error::UnresolvedTypeReference;
+
     // Test that multiple missing types are all reported
-    assert_ast_produces_error(
+    assert_ast_produces_exact_error(
         M::new().with_definitions([
             ID::new(
                 (V::Public, "Type1"),
@@ -270,32 +264,21 @@ fn multiple_unresolved_types_are_all_reported() {
                 TD::new([TS::field((V::Private, "field_b"), T::ident("Missing2"))]),
             ),
         ]),
-        |err| {
-            match err {
-                SemanticError::TypeResolutionStalled {
-                    unresolved_references,
-                    ..
-                } => {
-                    // Should have two unresolved references (order may vary)
-                    if unresolved_references.len() != 2 {
-                        return false;
-                    }
-                    let ref1 = unresolved_references
-                        .iter()
-                        .find(|r| r.type_name == "Missing1");
-                    let ref2 = unresolved_references
-                        .iter()
-                        .find(|r| r.type_name == "Missing2");
-                    match (ref1, ref2) {
-                        (Some(r1), Some(r2)) => {
-                            r1.context == "field `field_a` of type `test::Type1`"
-                                && r2.context == "field `field_b` of type `test::Type2`"
-                        }
-                        _ => false,
-                    }
-                }
-                _ => false,
-            }
+        SemanticError::TypeResolutionStalled {
+            unresolved_types: vec!["test::Type1".to_string(), "test::Type2".to_string()],
+            resolved_types: vec![],
+            unresolved_references: vec![
+                UnresolvedTypeReference {
+                    type_name: "Missing1".to_string(),
+                    location: ItemLocation::test(),
+                    context: "field `field_a` of type `test::Type1`".to_string(),
+                },
+                UnresolvedTypeReference {
+                    type_name: "Missing2".to_string(),
+                    location: ItemLocation::test(),
+                    context: "field `field_b` of type `test::Type2`".to_string(),
+                },
+            ],
         },
     );
 }
@@ -407,6 +390,8 @@ fn can_use_braced_imports_from_another_module() {
 
 #[test]
 fn will_fail_on_use_of_nonexistent_type() {
+    use crate::span::StripLocations;
+
     // Test that using a type that doesn't exist produces an error
     let module1 = M::new()
         .with_uses([IP::from("math::NonExistent")])
@@ -421,14 +406,20 @@ fn will_fail_on_use_of_nonexistent_type() {
         .unwrap();
 
     let err = semantic_state.build().unwrap_err();
-    assert!(
-        matches!(err, SemanticError::UseItemNotFound { ref path, .. } if *path == IP::from("math::NonExistent")),
-        "Expected UseItemNotFound error for math::NonExistent, got: {err:?}"
+    assert_eq!(
+        err.strip_locations(),
+        SemanticError::UseItemNotFound {
+            path: IP::from("math::NonExistent"),
+            location: ItemLocation::test(),
+        }
+        .strip_locations()
     );
 }
 
 #[test]
 fn will_fail_on_braced_import_with_nonexistent_type() {
+    use crate::span::StripLocations;
+
     // Test that braced imports with a nonexistent type produce an error
     let module1 = M::new()
         .with_use_trees([UT::group(
@@ -453,14 +444,20 @@ fn will_fail_on_braced_import_with_nonexistent_type() {
         .unwrap();
 
     let err = semantic_state.build().unwrap_err();
-    assert!(
-        matches!(err, SemanticError::UseItemNotFound { ref path, .. } if *path == IP::from("math::NonExistent")),
-        "Expected UseItemNotFound error for math::NonExistent, got: {err:?}"
+    assert_eq!(
+        err.strip_locations(),
+        SemanticError::UseItemNotFound {
+            path: IP::from("math::NonExistent"),
+            location: ItemLocation::test(),
+        }
+        .strip_locations()
     );
 }
 
 #[test]
 fn will_fail_on_use_of_nonexistent_module() {
+    use crate::span::StripLocations;
+
     // Test that using a module that doesn't exist produces an error
     let module1 = M::new()
         .with_uses([IP::from("nonexistent::SomeType")])
@@ -475,9 +472,13 @@ fn will_fail_on_use_of_nonexistent_module() {
         .unwrap();
 
     let err = semantic_state.build().unwrap_err();
-    assert!(
-        matches!(err, SemanticError::UseItemNotFound { ref path, .. } if *path == IP::from("nonexistent::SomeType")),
-        "Expected UseItemNotFound error for nonexistent::SomeType, got: {err:?}"
+    assert_eq!(
+        err.strip_locations(),
+        SemanticError::UseItemNotFound {
+            path: IP::from("nonexistent::SomeType"),
+            location: ItemLocation::test(),
+        }
+        .strip_locations()
     );
 }
 
@@ -510,15 +511,15 @@ fn can_use_module_in_use_statement() {
 
 #[test]
 fn will_fail_on_an_extern_without_size() {
-    let err = build_state(
-        &M::new().with_extern_types([("TestType".into(), As::default())]),
-        &IP::from("test"),
-    )
-    .unwrap_err();
-    assert!(
-        err.to_string().contains(
-            "failed to find `size` attribute for extern type `TestType` in module `test`"
-        )
+    assert_ast_produces_exact_error(
+        M::new().with_extern_types([("TestType".into(), As::default())]),
+        SemanticError::MissingExternAttribute {
+            attribute_name: "size".to_string(),
+            extern_kind: "extern type".to_string(),
+            type_name: "TestType".to_string(),
+            module_name: "test".to_string(),
+            location: ItemLocation::test(),
+        },
     );
 }
 
@@ -1137,8 +1138,8 @@ fn can_extract_copyable_and_cloneable_for_enum_correctly() {
 #[test]
 fn will_reject_copyable_on_non_copyable_field() {
     // First, create a non-copyable struct
-    let err = build_state(
-        &M::new().with_definitions([
+    assert_ast_produces_exact_error(
+        M::new().with_definitions([
             ID::new(
                 (V::Public, "Inner"),
                 TD::new([TS::field((V::Private, "field_1"), T::ident("i32"))]),
@@ -1150,20 +1151,20 @@ fn will_reject_copyable_on_non_copyable_field() {
                     .with_attributes([A::copyable()]),
             ),
         ]),
-        &IP::from("test"),
-    )
-    .unwrap_err();
-    assert!(
-        err.to_string()
-            .contains("field `inner` of type `test::Outer` is not a copyable type")
+        SemanticError::CopyableError {
+            field_name: "inner".to_string(),
+            item_path: IP::from("test::Outer"),
+            message: "is not a copyable type".to_string(),
+            location: ItemLocation::test(),
+        },
     );
 }
 
 #[test]
 fn will_reject_cloneable_on_non_cloneable_field() {
     // First, create a non-cloneable struct
-    let err = build_state(
-        &M::new().with_definitions([
+    assert_ast_produces_exact_error(
+        M::new().with_definitions([
             ID::new(
                 (V::Public, "Inner"),
                 TD::new([TS::field((V::Private, "field_1"), T::ident("i32"))]),
@@ -1175,12 +1176,12 @@ fn will_reject_cloneable_on_non_cloneable_field() {
                     .with_attributes([A::cloneable()]),
             ),
         ]),
-        &IP::from("test"),
-    )
-    .unwrap_err();
-    assert!(
-        err.to_string()
-            .contains("field `inner` of type `test::Outer` is not a cloneable type")
+        SemanticError::CloneableError {
+            field_name: "inner".to_string(),
+            item_path: IP::from("test::Outer"),
+            message: "is not a cloneable type".to_string(),
+            location: ItemLocation::test(),
+        },
     );
 }
 
@@ -1264,8 +1265,8 @@ fn can_handle_copyable_with_array_of_copyable() {
 #[test]
 fn will_reject_copyable_with_array_of_non_copyable() {
     // Arrays of non-copyable types are not copyable
-    let err = build_state(
-        &M::new().with_definitions([
+    assert_ast_produces_exact_error(
+        M::new().with_definitions([
             ID::new(
                 (V::Public, "Inner"),
                 TD::new([TS::field((V::Private, "field_1"), T::ident("i32"))]),
@@ -1277,12 +1278,12 @@ fn will_reject_copyable_with_array_of_non_copyable() {
                     .with_attributes([A::copyable()]),
             ),
         ]),
-        &IP::from("test"),
-    )
-    .unwrap_err();
-    assert!(
-        err.to_string()
-            .contains("field `items` of type `test::Outer` is not a copyable type")
+        SemanticError::CopyableError {
+            field_name: "items".to_string(),
+            item_path: IP::from("test::Outer"),
+            message: "is not a copyable type".to_string(),
+            location: ItemLocation::test(),
+        },
     );
 }
 
@@ -1373,8 +1374,8 @@ fn copyable_requires_cloneable_on_fields() {
     // already implies cloneable, we just need to check copyable.
     // This test verifies that a type marked only as cloneable cannot be
     // used in a copyable struct.
-    let err = build_state(
-        &M::new().with_definitions([
+    assert_ast_produces_exact_error(
+        M::new().with_definitions([
             ID::new(
                 (V::Public, "Inner"),
                 TD::new([TS::field((V::Private, "value"), T::ident("i32"))])
@@ -1386,12 +1387,12 @@ fn copyable_requires_cloneable_on_fields() {
                     .with_attributes([A::copyable()]),
             ),
         ]),
-        &IP::from("test"),
-    )
-    .unwrap_err();
-    assert!(
-        err.to_string()
-            .contains("field `inner` of type `test::Outer` is not a copyable type")
+        SemanticError::CopyableError {
+            field_name: "inner".to_string(),
+            item_path: IP::from("test::Outer"),
+            message: "is not a copyable type".to_string(),
+            location: ItemLocation::test(),
+        },
     );
 }
 
@@ -1399,8 +1400,8 @@ fn copyable_requires_cloneable_on_fields() {
 fn will_reject_copyable_generic_with_non_copyable_type_argument() {
     // A copyable struct containing Generic<NonCopyable> should fail
     // Use pointer to T since generic types with direct T can't compute size
-    let err = build_state(
-        &M::new().with_definitions([
+    assert_ast_produces_exact_error(
+        M::new().with_definitions([
             // A generic wrapper type marked as copyable (with pointer to T)
             ID::generic(
                 (V::Public, "Wrapper"),
@@ -1423,12 +1424,12 @@ fn will_reject_copyable_generic_with_non_copyable_type_argument() {
                 .with_attributes([A::copyable(), A::size(pointer_size())]),
             ),
         ]),
-        &IP::from("test"),
-    )
-    .unwrap_err();
-    assert!(
-        err.to_string()
-            .contains("field `wrapped` of type `test::Container` is not a copyable type")
+        SemanticError::CopyableError {
+            field_name: "wrapped".to_string(),
+            item_path: IP::from("test::Container"),
+            message: "is not a copyable type".to_string(),
+            location: ItemLocation::test(),
+        },
     );
 }
 
@@ -1436,8 +1437,8 @@ fn will_reject_copyable_generic_with_non_copyable_type_argument() {
 fn will_reject_copyable_with_non_copyable_generic_base() {
     // A copyable struct containing NonCopyableGeneric<Copyable> should fail
     // Use pointer to T since generic types with direct T can't compute size
-    let err = build_state(
-        &M::new().with_definitions([
+    assert_ast_produces_exact_error(
+        M::new().with_definitions([
             // A generic wrapper type NOT marked as copyable (with pointer to T)
             ID::generic(
                 (V::Public, "NonCopyableWrapper"),
@@ -1461,12 +1462,12 @@ fn will_reject_copyable_with_non_copyable_generic_base() {
                 .with_attributes([A::copyable(), A::size(pointer_size())]),
             ),
         ]),
-        &IP::from("test"),
-    )
-    .unwrap_err();
-    assert!(
-        err.to_string()
-            .contains("field `wrapped` of type `test::Container` is not a copyable type")
+        SemanticError::CopyableError {
+            field_name: "wrapped".to_string(),
+            item_path: IP::from("test::Container"),
+            message: "is not a copyable type".to_string(),
+            location: ItemLocation::test(),
+        },
     );
 }
 
@@ -1569,8 +1570,8 @@ fn can_handle_defaultable_on_primitive_types() {
 
 #[test]
 fn will_reject_defaultable_on_pointer() {
-    let err = build_state(
-        &M::new().with_definitions([ID::new(
+    assert_ast_produces_exact_error(
+        M::new().with_definitions([ID::new(
             (V::Public, "TestType"),
             TD::new([TS::field(
                 (V::Private, "field_1"),
@@ -1578,18 +1579,19 @@ fn will_reject_defaultable_on_pointer() {
             )])
             .with_attributes([A::defaultable()]),
         )]),
-        &IP::from("test"),
-    )
-    .unwrap_err();
-    assert!(err.to_string().contains(
-        "field `field_1` of type `test::TestType` is not a defaultable type (pointer or function?)"
-    ));
+        SemanticError::DefaultableError {
+            field_name: "field_1".to_string(),
+            item_path: IP::from("test::TestType"),
+            message: "is not a defaultable type (pointer or function?)".to_string(),
+            location: ItemLocation::test(),
+        },
+    );
 }
 
 #[test]
 fn will_reject_defaultable_on_enum_field() {
-    let err = build_state(
-        &M::new().with_definitions([
+    assert_ast_produces_exact_error(
+        M::new().with_definitions([
             ID::new(
                 (V::Public, "TestType"),
                 TD::new([TS::field((V::Private, "field_1"), T::ident("TestEnum"))])
@@ -1600,19 +1602,20 @@ fn will_reject_defaultable_on_enum_field() {
                 ED::new(T::ident("u32"), [ES::field("Item1")], []),
             ),
         ]),
-        &IP::from("test"),
-    )
-    .unwrap_err();
-    assert!(
-        err.to_string()
-            .contains("field `field_1` of type `test::TestType` is not a defaultable type")
+        SemanticError::DefaultableError {
+            field_name: "field_1".to_string(),
+            item_path: IP::from("test::TestType"),
+            message: "is not a defaultable type".to_string(),
+            location: ItemLocation::test(),
+        },
     );
 }
 
 #[test]
 fn can_handle_defaultable_on_enum_with_default_field() {
-    let err1 = build_state(
-        &M::new().with_definitions([ID::new(
+    // Enum marked as defaultable but has no default variant
+    assert_ast_produces_exact_error(
+        M::new().with_definitions([ID::new(
             (V::Public, "TestType"),
             ED::new(
                 T::ident("u32"),
@@ -1621,17 +1624,15 @@ fn can_handle_defaultable_on_enum_with_default_field() {
             )
             .with_attributes([A::defaultable()]),
         )]),
-        &IP::from("test"),
-    )
-    .unwrap_err();
-    assert!(
-        err1.to_string().contains(
-            "enum `test::TestType` is marked as defaultable but has no default variant set"
-        )
+        SemanticError::EnumDefaultableMissingDefault {
+            item_path: IP::from("test::TestType"),
+            location: ItemLocation::test(),
+        },
     );
 
-    let err2 = build_state(
-        &M::new().with_definitions([ID::new(
+    // Enum has a default variant but is not marked as defaultable
+    assert_ast_produces_exact_error(
+        M::new().with_definitions([ID::new(
             (V::Public, "TestType"),
             ED::new(
                 T::ident("u32"),
@@ -1643,12 +1644,11 @@ fn can_handle_defaultable_on_enum_with_default_field() {
             )
             .with_attributes([]),
         )]),
-        &IP::from("test"),
-    )
-    .unwrap_err();
-    assert!(err2.to_string().contains(
-        "enum `test::TestType` has a default variant set but is not marked as defaultable"
-    ));
+        SemanticError::EnumDefaultWithoutDefaultable {
+            item_path: IP::from("test::TestType"),
+            location: ItemLocation::test(),
+        },
+    );
 
     assert_ast_produces_type_definitions(
         M::new().with_definitions([ID::new(
@@ -1677,8 +1677,8 @@ fn can_handle_defaultable_on_enum_with_default_field() {
 
 #[test]
 fn will_reject_defaultable_on_non_defaultable_type() {
-    let err = build_state(
-        &M::new().with_definitions([
+    assert_ast_produces_exact_error(
+        M::new().with_definitions([
             ID::new(
                 (V::Public, "TestType"),
                 TD::new([TS::field(
@@ -1689,19 +1689,19 @@ fn will_reject_defaultable_on_non_defaultable_type() {
             ),
             ID::new((V::Public, "TestNonDefaultable"), TD::new([])),
         ]),
-        &IP::from("test"),
-    )
-    .unwrap_err();
-    assert!(
-        err.to_string()
-            .contains("field `field_1` of type `test::TestType` is not a defaultable type")
+        SemanticError::DefaultableError {
+            field_name: "field_1".to_string(),
+            item_path: IP::from("test::TestType"),
+            message: "is not a defaultable type".to_string(),
+            location: ItemLocation::test(),
+        },
     );
 }
 
 #[test]
 fn will_reject_types_that_are_larger_than_their_specified_size() {
-    let err = build_state(
-        &M::new().with_definitions([
+    assert_ast_produces_exact_error(
+        M::new().with_definitions([
             ID::new(
                 (V::Public, "Matrix4"),
                 TD::new([TS::field((V::Public, "data"), T::ident("f32").array(16))]),
@@ -1715,17 +1715,13 @@ fn will_reject_types_that_are_larger_than_their_specified_size() {
                 .with_attributes([A::size(0x100)]),
             ),
         ]),
-        &IP::from("test"),
-    )
-    .unwrap_err();
-    let err_str = err.to_string();
-    assert!(err_str.contains("while processing `test::TestType`"));
-    assert!(
-        err_str.contains(
-            "calculated size 512 for type `test::TestType` does not match target size 256"
-        )
+        SemanticError::SizeMismatch {
+            expected: 256,
+            actual: 512,
+            item_path: IP::from("test::TestType"),
+            location: ItemLocation::test(),
+        },
     );
-    assert!(err_str.contains("is your target size correct?"));
 }
 
 #[test]
@@ -1852,8 +1848,9 @@ fn can_resolve_bitflags() {
 
 #[test]
 fn bitflags_handle_defaultable_correctly() {
-    let err1 = build_state(
-        &M::new().with_definitions([ID::new(
+    // Bitflags marked as defaultable but has no default value
+    assert_ast_produces_exact_error(
+        M::new().with_definitions([ID::new(
             (V::Public, "TestType"),
             BFD::new(
                 T::ident("u32"),
@@ -1865,15 +1862,15 @@ fn bitflags_handle_defaultable_correctly() {
             )
             .with_attributes([A::defaultable()]),
         )]),
-        &IP::from("test"),
-    )
-    .unwrap_err();
-    assert!(err1.to_string().contains(
-        "bitflags `test::TestType` is marked as defaultable but has no default value set"
-    ));
+        SemanticError::BitflagsDefaultableMissingDefault {
+            item_path: IP::from("test::TestType"),
+            location: ItemLocation::test(),
+        },
+    );
 
-    let err2 = build_state(
-        &M::new().with_definitions([ID::new(
+    // Bitflags has a default value but is not marked as defaultable
+    assert_ast_produces_exact_error(
+        M::new().with_definitions([ID::new(
             (V::Public, "TestType"),
             BFD::new(
                 T::ident("u32"),
@@ -1885,12 +1882,11 @@ fn bitflags_handle_defaultable_correctly() {
             )
             .with_attributes([]),
         )]),
-        &IP::from("test"),
-    )
-    .unwrap_err();
-    assert!(err2.to_string().contains(
-        "bitflags `test::TestType` has a default value set but is not marked as defaultable"
-    ));
+        SemanticError::BitflagsDefaultWithoutDefaultable {
+            item_path: IP::from("test::TestType"),
+            location: ItemLocation::test(),
+        },
+    );
 
     assert_ast_produces_type_definitions(
         M::new().with_definitions([ID::new(
@@ -1919,9 +1915,12 @@ fn bitflags_handle_defaultable_correctly() {
 
 #[test]
 fn bitflags_with_invalid_underlying_type_are_rejected() {
-    for invalid_type in ["i8", "i16", "i32", "i64", "i128", "Lol"] {
-        let err = build_state(
-            &M::new().with_definitions([
+    use crate::semantic::error::BitflagsExpectedType;
+
+    // Test signed integer types (should fail with UnsignedInteger expected)
+    for invalid_type in ["i8", "i16", "i32", "i64", "i128"] {
+        assert_ast_produces_exact_error(
+            M::new().with_definitions([
                 ID::new((V::Public, "Lol"), TD::new([])),
                 ID::new(
                     (V::Public, "TestType"),
@@ -1935,18 +1934,38 @@ fn bitflags_with_invalid_underlying_type_are_rejected() {
                     ),
                 ),
             ]),
-            &IP::from("test"),
-        )
-        .unwrap_err();
-        let expected = if invalid_type == "Lol" {
-            "bitflags definition `test::TestType` has a type that is not a predefined type: test::Lol".to_string()
-        } else {
-            format!(
-                "bitflags definition `test::TestType` has a type that is not an unsigned integer: {invalid_type}"
-            )
-        };
-        assert!(err.to_string().contains(&expected));
+            SemanticError::BitflagsInvalidType {
+                expected: BitflagsExpectedType::UnsignedInteger,
+                found: ST::raw(invalid_type),
+                item_path: IP::from("test::TestType"),
+                location: ItemLocation::test(),
+            },
+        );
     }
+
+    // Test non-predefined type (should fail with PredefinedType expected)
+    assert_ast_produces_exact_error(
+        M::new().with_definitions([
+            ID::new((V::Public, "Lol"), TD::new([])),
+            ID::new(
+                (V::Public, "TestType"),
+                BFD::new(
+                    T::ident("Lol"),
+                    [
+                        BFS::field("Item1", int_literal(0b0001)),
+                        BFS::field("Item2", int_literal(0b0010)),
+                    ],
+                    [],
+                ),
+            ),
+        ]),
+        SemanticError::BitflagsInvalidType {
+            expected: BitflagsExpectedType::PredefinedType,
+            found: ST::raw("test::Lol"),
+            item_path: IP::from("test::TestType"),
+            location: ItemLocation::test(),
+        },
+    );
 
     assert_ast_produces_type_definitions(
         M::new().with_definitions([ID::new(
@@ -2004,17 +2023,20 @@ fn can_resolve_freestanding_functions() {
     assert_eq!(func1.arguments.len(), 0);
     assert_eq!(func1.return_type, None);
     assert_eq!(func1.calling_convention, SCC::System);
-    assert!(matches!(func1.body, SFB::Address { address: 0x456 }));
+    assert_eq!(func1.body, SFB::Address { address: 0x456 });
 
     // Check second freestanding function
     let func2 = &module.functions()[1];
     assert_eq!(func2.name, "another_freestanding");
     assert_eq!(func2.visibility, SV::Private);
     assert_eq!(func2.arguments.len(), 1);
-    assert!(matches!(&func2.arguments[0], SAr::Field { name, .. } if name == "arg1"));
+    assert_eq!(
+        func2.arguments[0].strip_locations(),
+        SAr::field("arg1", ST::raw("i32")).strip_locations()
+    );
     assert_eq!(func2.return_type, Some(ST::raw("i32")));
     assert_eq!(func2.calling_convention, SCC::System);
-    assert!(matches!(func2.body, SFB::Address { address: 0x789 }));
+    assert_eq!(func2.body, SFB::Address { address: 0x789 });
 }
 
 #[test]

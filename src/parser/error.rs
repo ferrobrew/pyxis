@@ -5,7 +5,11 @@ use crate::{
 };
 use ariadne::{Color, Label, Report, ReportKind, Source};
 
+#[cfg(test)]
+use crate::span::StripLocations;
+
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(test, derive(StripLocations))]
 pub enum ParseError {
     ExpectedToken {
         expected: Vec<TokenKind>,
@@ -298,7 +302,11 @@ impl From<LexError> for ParseError {
 
 #[cfg(test)]
 mod tests {
-    use crate::{parser::parse_str_for_tests, tokenizer::TokenKind};
+    use crate::{
+        parser::parse_str_for_tests,
+        span::{ItemLocation, StripLocations},
+        tokenizer::TokenKind,
+    };
 
     use super::ParseError;
 
@@ -310,15 +318,13 @@ mod tests {
         "#;
 
         let err = parse_str_for_tests(text).unwrap_err();
-        assert!(
-            matches!(
-                err,
-                ParseError::ExpectedIdentifier {
-                    found: TokenKind::Eof,
-                    ..
-                }
-            ),
-            "Expected ExpectedIdentifier with Eof, got: {err:?}"
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedIdentifier {
+                found: TokenKind::Eof,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
         );
     }
 
@@ -331,15 +337,13 @@ mod tests {
         "#;
 
         let err = parse_str_for_tests(text).unwrap_err();
-        assert!(
-            matches!(
-                err,
-                ParseError::ExpectedType {
-                    found: TokenKind::Comma,
-                    ..
-                }
-            ),
-            "Expected ExpectedType with Comma, got: {err:?}"
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedType {
+                found: TokenKind::Comma,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
         );
     }
 
@@ -352,16 +356,14 @@ mod tests {
         "#;
 
         let err = parse_str_for_tests(text).unwrap_err();
-        assert!(
-            matches!(
-                &err,
-                ParseError::ExpectedToken {
-                    expected,
-                    found: TokenKind::LBrace,
-                    ..
-                } if expected == &[TokenKind::Colon]
-            ),
-            "Expected ExpectedToken with Colon/LBrace, got: {err:?}"
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedToken {
+                expected: vec![TokenKind::Colon],
+                found: TokenKind::LBrace,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
         );
     }
 
@@ -374,16 +376,14 @@ mod tests {
         "#;
 
         let err = parse_str_for_tests(text).unwrap_err();
-        assert!(
-            matches!(
-                &err,
-                ParseError::ExpectedToken {
-                    expected,
-                    found: TokenKind::IntLiteral(_),
-                    ..
-                } if expected == &[TokenKind::Eq]
-            ),
-            "Expected ExpectedToken with Eq/IntLiteral, got: {err:?}"
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedToken {
+                expected: vec![TokenKind::Eq],
+                found: TokenKind::IntLiteral("0x1".to_string()),
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
         );
     }
 
@@ -396,9 +396,12 @@ mod tests {
         "#;
 
         let err = parse_str_for_tests(text).unwrap_err();
-        assert!(
-            matches!(err, ParseError::MissingPointerQualifier { .. }),
-            "Expected MissingPointerQualifier error, got: {err:?}"
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::MissingPointerQualifier {
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
         );
     }
 
@@ -409,16 +412,14 @@ mod tests {
         "#;
 
         let err = parse_str_for_tests(text).unwrap_err();
-        assert!(
-            matches!(
-                &err,
-                ParseError::ExpectedToken {
-                    expected,
-                    found: TokenKind::Eof,
-                    ..
-                } if expected == &[TokenKind::Semi]
-            ),
-            "Expected ExpectedToken with Semi/Eof, got: {err:?}"
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedToken {
+                expected: vec![TokenKind::Semi],
+                found: TokenKind::Eof,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
         );
     }
 
@@ -429,15 +430,13 @@ mod tests {
         "#;
 
         let err = parse_str_for_tests(text).unwrap_err();
-        assert!(
-            matches!(
-                err,
-                ParseError::ExpectedItemDefinition {
-                    found: TokenKind::Fn,
-                    ..
-                }
-            ),
-            "Expected ExpectedItemDefinition with Fn, got: {err:?}"
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedItemDefinition {
+                found: TokenKind::Fn,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
         );
     }
 
@@ -450,16 +449,14 @@ mod tests {
         // Just a # with nothing after - should error about missing [
         let text = "#";
         let err = parse_str_for_tests(text).unwrap_err();
-        assert!(
-            matches!(
-                &err,
-                ParseError::ExpectedToken {
-                    expected,
-                    found: TokenKind::Eof,
-                    ..
-                } if expected == &[TokenKind::LBracket]
-            ),
-            "Expected ExpectedToken with LBracket/Eof, got: {err:?}"
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedToken {
+                expected: vec![TokenKind::LBracket],
+                found: TokenKind::Eof,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
         );
     }
 
@@ -468,15 +465,13 @@ mod tests {
         // #[ with nothing after - should error about missing attribute name
         let text = "#[";
         let err = parse_str_for_tests(text).unwrap_err();
-        assert!(
-            matches!(
-                err,
-                ParseError::ExpectedIdentifier {
-                    found: TokenKind::Eof,
-                    ..
-                }
-            ),
-            "Expected ExpectedIdentifier with Eof, got: {err:?}"
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedIdentifier {
+                found: TokenKind::Eof,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
         );
     }
 
@@ -485,15 +480,14 @@ mod tests {
         // #[foo without closing ] - should error about missing ] or ,
         let text = "#[foo";
         let err = parse_str_for_tests(text).unwrap_err();
-        assert!(
-            matches!(
-                err,
-                ParseError::ExpectedToken {
-                    found: TokenKind::Eof,
-                    ..
-                }
-            ),
-            "Expected ExpectedToken with Eof, got: {err:?}"
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedToken {
+                expected: vec![TokenKind::RBracket, TokenKind::Comma],
+                found: TokenKind::Eof,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
         );
     }
 
@@ -502,15 +496,13 @@ mod tests {
         // Complete attribute but nothing after - should error about missing item
         let text = "#[size(4)]";
         let err = parse_str_for_tests(text).unwrap_err();
-        assert!(
-            matches!(
-                err,
-                ParseError::ExpectedItemDefinition {
-                    found: TokenKind::Eof,
-                    ..
-                }
-            ),
-            "Expected ExpectedItemDefinition with Eof, got: {err:?}"
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedItemDefinition {
+                found: TokenKind::Eof,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
         );
     }
 
@@ -519,15 +511,13 @@ mod tests {
         // Multiple attributes but nothing after - should error about missing item
         let text = "#[size(4)] #[align(4)]";
         let err = parse_str_for_tests(text).unwrap_err();
-        assert!(
-            matches!(
-                err,
-                ParseError::ExpectedItemDefinition {
-                    found: TokenKind::Eof,
-                    ..
-                }
-            ),
-            "Expected ExpectedItemDefinition with Eof, got: {err:?}"
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedItemDefinition {
+                found: TokenKind::Eof,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
         );
     }
 
@@ -536,15 +526,13 @@ mod tests {
         // Doc comment followed by incomplete attribute - should error about missing attribute name
         let text = "/// My doc\n#[";
         let err = parse_str_for_tests(text).unwrap_err();
-        assert!(
-            matches!(
-                err,
-                ParseError::ExpectedIdentifier {
-                    found: TokenKind::Eof,
-                    ..
-                }
-            ),
-            "Expected ExpectedIdentifier with Eof, got: {err:?}"
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedIdentifier {
+                found: TokenKind::Eof,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
         );
     }
 
@@ -553,15 +541,13 @@ mod tests {
         // Doc comment followed by complete attribute but nothing else - should error about missing item
         let text = "/// My doc\n#[size(4)]";
         let err = parse_str_for_tests(text).unwrap_err();
-        assert!(
-            matches!(
-                err,
-                ParseError::ExpectedItemDefinition {
-                    found: TokenKind::Eof,
-                    ..
-                }
-            ),
-            "Expected ExpectedItemDefinition with Eof, got: {err:?}"
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedItemDefinition {
+                found: TokenKind::Eof,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
         );
     }
 
@@ -571,15 +557,14 @@ mod tests {
         // This is the case from the issue: #[size(0x3540) followed by more code
         let text = "#[size(4)";
         let err = parse_str_for_tests(text).unwrap_err();
-        assert!(
-            matches!(
-                err,
-                ParseError::ExpectedToken {
-                    found: TokenKind::Eof,
-                    ..
-                }
-            ),
-            "Expected ExpectedToken with Eof, got: {err:?}"
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedToken {
+                expected: vec![TokenKind::RBracket, TokenKind::Comma],
+                found: TokenKind::Eof,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
         );
     }
 
@@ -588,15 +573,14 @@ mod tests {
         // #[size(0x3540), align(4) without closing ] - should error about missing ] or ,
         let text = "#[size(0x3540), align(4)";
         let err = parse_str_for_tests(text).unwrap_err();
-        assert!(
-            matches!(
-                err,
-                ParseError::ExpectedToken {
-                    found: TokenKind::Eof,
-                    ..
-                }
-            ),
-            "Expected ExpectedToken with Eof, got: {err:?}"
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedToken {
+                expected: vec![TokenKind::RBracket, TokenKind::Comma],
+                found: TokenKind::Eof,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
         );
     }
 
@@ -605,15 +589,14 @@ mod tests {
         // #[size(0x3540), align(4) followed by item - should error about missing ] or ,
         let text = "#[size(0x3540), align(4)\npub type Foo {}";
         let err = parse_str_for_tests(text).unwrap_err();
-        assert!(
-            matches!(
-                err,
-                ParseError::ExpectedToken {
-                    found: TokenKind::Pub,
-                    ..
-                }
-            ),
-            "Expected ExpectedToken with Pub, got: {err:?}"
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedToken {
+                expected: vec![TokenKind::RBracket, TokenKind::Comma],
+                found: TokenKind::Pub,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
         );
     }
 }
