@@ -1,0 +1,30 @@
+/// Test type using atomic primitives
+#[align(8)]
+pub type AtomicCounters {
+    #[address(0x0)]
+    pub bool_flag: AtomicBool,
+
+    #[address(0x1)]
+    pub counter_u8: AtomicU8,
+
+    #[address(0x2)]
+    pub counter_u16: AtomicU16,
+
+    #[address(0x4)]
+    pub counter_u32: AtomicU32,
+
+    #[address(0x8)]
+    pub counter_u64: AtomicU64,
+
+    #[address(0x10)]
+    pub counter_i8: AtomicI8,
+
+    #[address(0x12)]
+    pub counter_i16: AtomicI16,
+
+    #[address(0x14)]
+    pub counter_i32: AtomicI32,
+
+    #[address(0x18)]
+    pub counter_i64: AtomicI64,
+}
