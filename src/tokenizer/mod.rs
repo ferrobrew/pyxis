@@ -2,7 +2,11 @@ use crate::source_store::FileStore;
 use crate::span::{self, FileId, ItemLocation, Location, Span};
 use ariadne::{Color, Label, Report, ReportKind, Source};
 
+#[cfg(test)]
+use crate::span::StripLocations;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(test, derive(StripLocations))]
 pub enum TokenKind {
     // Keywords
     Pub,
@@ -84,6 +88,7 @@ impl Token {
 
 /// Lexer errors
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(test, derive(StripLocations))]
 pub enum LexError {
     /// Unexpected character encountered during tokenization
     UnexpectedCharacter {
