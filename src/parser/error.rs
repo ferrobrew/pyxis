@@ -430,10 +430,12 @@ mod tests {
         "#;
 
         let err = parse_str_for_tests(text).unwrap_err();
+        // Function is now recognized at module level, but incomplete
+        // Parser expects identifier for parameter name or ) to close
         assert_eq!(
             err.strip_locations(),
-            ParseError::ExpectedItemDefinition {
-                found: TokenKind::Fn,
+            ParseError::ExpectedIdentifier {
+                found: TokenKind::Eof,
                 location: ItemLocation::test(),
             }
             .strip_locations()
@@ -1357,22 +1359,23 @@ mod tests {
     }
 
     #[test]
-    fn pub_fn_without_attributes_fails() {
-        // `pub fn` at module level without attributes is not recognized as a function
-        // - it's parsed as an item definition (expecting type/enum/bitflags after pub)
+    fn pub_fn_without_attributes_parses_ok() {
+        // `pub fn` at module level without attributes parses at syntax level
+        // Semantic layer will catch missing address/implementation
         let text = r#"
         pub fn test();
         "#;
-        let err = parse_str_for_tests(text).unwrap_err();
-        // Parser expects type/enum/bitflags keyword after 'pub'
-        assert_eq!(
-            err.strip_locations(),
-            ParseError::ExpectedItemDefinition {
-                found: TokenKind::Fn,
-                location: ItemLocation::test(),
-            }
-            .strip_locations()
-        );
+        assert!(parse_str_for_tests(text).is_ok());
+    }
+
+    #[test]
+    fn private_fn_without_attributes_parses_ok() {
+        // Private `fn` at module level without attributes also parses
+        // Semantic layer will catch missing address/implementation
+        let text = r#"
+        fn test();
+        "#;
+        assert!(parse_str_for_tests(text).is_ok());
     }
 
     // ========================================================================
