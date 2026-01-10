@@ -667,6 +667,76 @@ mod tests {
     }
 
     #[test]
+    fn vftable_functions_using_comma_instead_of_semicolon() {
+        let text = r#"
+        type TestType {
+            vftable {
+                pub fn test1(&self),
+                pub fn test2(&self);
+            }
+        }
+        "#;
+        let err = parse_str_for_tests(text).unwrap_err();
+        // Comma is not valid after a function - expects semicolon
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedToken {
+                expected: vec![TokenKind::Semi],
+                found: TokenKind::Comma,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    #[test]
+    fn vftable_functions_missing_separator_entirely() {
+        let text = r#"
+        type TestType {
+            vftable {
+                pub fn test1(&self)
+                pub fn test2(&self);
+            }
+        }
+        "#;
+        let err = parse_str_for_tests(text).unwrap_err();
+        // After first function, expects semicolon but finds 'pub' keyword
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedToken {
+                expected: vec![TokenKind::Semi],
+                found: TokenKind::Pub,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    #[test]
+    fn vftable_functions_missing_separator_private() {
+        // Same test but with private functions (no pub keyword)
+        let text = r#"
+        type TestType {
+            vftable {
+                fn test1(&self)
+                fn test2(&self);
+            }
+        }
+        "#;
+        let err = parse_str_for_tests(text).unwrap_err();
+        // After first function, expects semicolon but finds 'fn' keyword
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedToken {
+                expected: vec![TokenKind::Semi],
+                found: TokenKind::Fn,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    #[test]
     fn vftable_function_missing_fn_keyword() {
         let text = r#"
         type TestType {
@@ -1102,6 +1172,71 @@ mod tests {
             ParseError::ExpectedToken {
                 expected: vec![TokenKind::Fn],
                 found: TokenKind::Eof,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    #[test]
+    fn impl_functions_using_comma_instead_of_semicolon() {
+        let text = r#"
+        impl TestType {
+            fn test1(&self),
+            fn test2(&self);
+        }
+        "#;
+        let err = parse_str_for_tests(text).unwrap_err();
+        // Comma is not valid after a function - expects semicolon
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedToken {
+                expected: vec![TokenKind::Semi],
+                found: TokenKind::Comma,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    #[test]
+    fn impl_functions_missing_separator_entirely() {
+        let text = r#"
+        impl TestType {
+            fn test1(&self)
+            fn test2(&self);
+        }
+        "#;
+        let err = parse_str_for_tests(text).unwrap_err();
+        // After first function, expects semicolon but finds 'fn' keyword
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedToken {
+                expected: vec![TokenKind::Semi],
+                found: TokenKind::Fn,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    #[test]
+    fn impl_functions_missing_separator_with_attributes() {
+        // Test with attributes between functions - missing semicolon
+        let text = r#"
+        impl TestType {
+            fn test1(&self)
+            #[address(0x123)]
+            fn test2(&self);
+        }
+        "#;
+        let err = parse_str_for_tests(text).unwrap_err();
+        // After first function, expects semicolon but finds '#' for attribute
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedToken {
+                expected: vec![TokenKind::Semi],
+                found: TokenKind::Hash,
                 location: ItemLocation::test(),
             }
             .strip_locations()
