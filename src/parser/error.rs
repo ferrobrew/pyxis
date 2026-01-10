@@ -1337,15 +1337,42 @@ mod tests {
     }
 
     #[test]
-    fn freestanding_function_parses_without_address() {
-        // Freestanding function without #[address(...)] should parse at syntax level
-        // Semantic layer should reject it (missing implementation)
+    fn freestanding_function_with_address_parses_ok() {
+        // Freestanding functions with #[address(...)] parse at syntax level
         let text = r#"
         #[address(0x123)]
         pub fn test();
         "#;
-        // Note: needs address attribute to parse at module level as a function
         assert!(parse_str_for_tests(text).is_ok());
+    }
+
+    #[test]
+    fn freestanding_private_function_parses_ok() {
+        // Private freestanding function (no pub) also parses
+        let text = r#"
+        #[address(0x123)]
+        fn test();
+        "#;
+        assert!(parse_str_for_tests(text).is_ok());
+    }
+
+    #[test]
+    fn pub_fn_without_attributes_fails() {
+        // `pub fn` at module level without attributes is not recognized as a function
+        // - it's parsed as an item definition (expecting type/enum/bitflags after pub)
+        let text = r#"
+        pub fn test();
+        "#;
+        let err = parse_str_for_tests(text).unwrap_err();
+        // Parser expects type/enum/bitflags keyword after 'pub'
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedItemDefinition {
+                found: TokenKind::Fn,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
     }
 
     // ========================================================================
