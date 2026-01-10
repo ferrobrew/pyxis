@@ -795,4 +795,60 @@ impl PfxInstance {
             panic!("Expected Definition for PfxInstance");
         }
     }
+
+    // ========================================================================
+    // Module-level error tests
+    // ========================================================================
+
+    use super::ParseError;
+    use crate::span::ItemLocation;
+    use crate::tokenizer::TokenKind;
+
+    #[test]
+    fn unexpected_token_at_module_level_errors() {
+        let text = r#"
+        123
+        "#;
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::UnexpectedModuleToken {
+                found: TokenKind::IntLiteral("123".to_string()),
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    #[test]
+    fn unexpected_keyword_at_module_level_errors() {
+        let text = r#"
+        const
+        "#;
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::UnexpectedModuleToken {
+                found: TokenKind::Const,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    #[test]
+    fn random_punctuation_at_module_level_errors() {
+        let text = r#"
+        ;
+        "#;
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::UnexpectedModuleToken {
+                found: TokenKind::Semi,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
 }

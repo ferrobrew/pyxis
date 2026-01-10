@@ -831,4 +831,104 @@ backend rust prologue "
 
         assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
     }
+
+    // ========================================================================
+    // Use statement error tests
+    // ========================================================================
+
+    use crate::span::ItemLocation;
+    use crate::tokenizer::TokenKind;
+
+    #[test]
+    fn use_empty_path_parses_ok() {
+        // Parser accepts `use;` - semantic layer catches it
+        let text = r#"
+        use;
+        "#;
+        // Empty use path parses OK, semantic validation would catch
+        assert!(parse_str_for_tests(text).is_ok());
+    }
+
+    #[test]
+    fn use_missing_semicolon() {
+        let text = r#"
+        use foo::bar
+        type Test {}
+        "#;
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedToken {
+                expected: vec![TokenKind::Semi],
+                found: TokenKind::Type,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    #[test]
+    fn use_braced_missing_closing_brace() {
+        let text = r#"
+        use foo::{bar, baz;
+        "#;
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedToken {
+                expected: vec![TokenKind::RBrace],
+                found: TokenKind::Semi,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    #[test]
+    fn use_braced_empty_parses_ok() {
+        // Parser accepts `use foo::{};` - empty brace group
+        let text = r#"
+        use foo::{};
+        "#;
+        // Empty braced import parses OK
+        assert!(parse_str_for_tests(text).is_ok());
+    }
+
+    // ========================================================================
+    // Extern type/value error tests
+    // ========================================================================
+
+    #[test]
+    fn extern_type_missing_name() {
+        let text = r#"
+        extern type;
+        "#;
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedIdentifier {
+                found: TokenKind::Semi,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    #[test]
+    fn extern_type_missing_semicolon() {
+        let text = r#"
+        extern type Foo
+        type Bar {}
+        "#;
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedToken {
+                expected: vec![TokenKind::Semi],
+                found: TokenKind::Type,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
 }
