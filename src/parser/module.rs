@@ -400,14 +400,24 @@ impl Parser {
                         .map(|definition| ModuleItem::Definition { definition })
                 }
             }
-            TokenKind::Pub | TokenKind::Type | TokenKind::Enum | TokenKind::Bitflags => self
+            TokenKind::Pub => {
+                // Check if this is `pub fn` (freestanding function) or pub item definition
+                if matches!(self.peek_nth(1), TokenKind::Fn) {
+                    self.parse_function()
+                        .map(|function| ModuleItem::Function { function })
+                } else {
+                    self.parse_item_definition()
+                        .map(|definition| ModuleItem::Definition { definition })
+                }
+            }
+            TokenKind::Type | TokenKind::Enum | TokenKind::Bitflags => self
                 .parse_item_definition()
                 .map(|definition| ModuleItem::Definition { definition }),
             TokenKind::Impl => self
                 .parse_impl_block()
                 .map(|impl_block| ModuleItem::Impl { impl_block }),
             TokenKind::Fn => {
-                // Freestanding function with attributes
+                // Freestanding function (private, or with attributes handled above)
                 self.parse_function()
                     .map(|function| ModuleItem::Function { function })
             }
@@ -784,5 +794,61 @@ impl PfxInstance {
         } else {
             panic!("Expected Definition for PfxInstance");
         }
+    }
+
+    // ========================================================================
+    // Module-level error tests
+    // ========================================================================
+
+    use super::ParseError;
+    use crate::span::ItemLocation;
+    use crate::tokenizer::TokenKind;
+
+    #[test]
+    fn unexpected_token_at_module_level_errors() {
+        let text = r#"
+        123
+        "#;
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::UnexpectedModuleToken {
+                found: TokenKind::IntLiteral("123".to_string()),
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    #[test]
+    fn unexpected_keyword_at_module_level_errors() {
+        let text = r#"
+        const
+        "#;
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::UnexpectedModuleToken {
+                found: TokenKind::Const,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    #[test]
+    fn random_punctuation_at_module_level_errors() {
+        let text = r#"
+        ;
+        "#;
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::UnexpectedModuleToken {
+                found: TokenKind::Semi,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
     }
 }

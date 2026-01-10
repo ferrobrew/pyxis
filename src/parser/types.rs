@@ -338,3 +338,252 @@ impl Parser {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        parser::{error::ParseError, parse_str_for_tests},
+        span::{ItemLocation, StripLocations},
+        tokenizer::TokenKind,
+    };
+
+    // ========================================================================
+    // Pointer error tests
+    // ========================================================================
+
+    #[test]
+    fn pointer_missing_qualifier_errors() {
+        let text = r#"
+        type Test {
+            field: *i32,
+        }
+        "#;
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::MissingPointerQualifier {
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    #[test]
+    fn pointer_missing_target_type_errors() {
+        let text = r#"
+        type Test {
+            field: *const,
+        }
+        "#;
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedType {
+                found: TokenKind::Comma,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    #[test]
+    fn deeply_nested_pointer_is_valid() {
+        let text = r#"
+        type Test {
+            field: *const *mut *const i32,
+        }
+        "#;
+        assert!(parse_str_for_tests(text).is_ok());
+    }
+
+    // ========================================================================
+    // Array error tests
+    // ========================================================================
+
+    #[test]
+    fn array_missing_size_errors() {
+        let text = r#"
+        type Test {
+            field: [i32;],
+        }
+        "#;
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedIntLiteral {
+                found: TokenKind::RBracket,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    #[test]
+    fn array_missing_semicolon_between_type_and_size_errors() {
+        let text = r#"
+        type Test {
+            field: [i32 4],
+        }
+        "#;
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedToken {
+                expected: vec![TokenKind::Semi],
+                found: TokenKind::IntLiteral("4".to_string()),
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    #[test]
+    fn array_missing_closing_bracket_errors() {
+        let text = r#"
+        type Test {
+            field: [i32; 4,
+        }
+        "#;
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedToken {
+                expected: vec![TokenKind::RBracket],
+                found: TokenKind::Comma,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    #[test]
+    fn array_missing_type_errors() {
+        let text = r#"
+        type Test {
+            field: [; 4],
+        }
+        "#;
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedType {
+                found: TokenKind::Semi,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    #[test]
+    fn array_size_with_invalid_hex_errors() {
+        let text = r#"
+        type Test {
+            field: [i32; 0xZZZ],
+        }
+        "#;
+        // Parser catches the invalid hex literal (0x with no valid digits)
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::InvalidIntLiteral {
+                kind: "hex".to_string(),
+                value: "0x".to_string(),
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    #[test]
+    fn array_of_pointers_is_valid() {
+        let text = r#"
+        type Test {
+            field: [*mut i32; 4],
+        }
+        "#;
+        assert!(parse_str_for_tests(text).is_ok());
+    }
+
+    #[test]
+    fn pointer_to_array_is_valid() {
+        let text = r#"
+        type Test {
+            field: *const [i32; 4],
+        }
+        "#;
+        assert!(parse_str_for_tests(text).is_ok());
+    }
+
+    #[test]
+    fn pointer_to_invalid_array_errors() {
+        let text = r#"
+        type Test {
+            field: *const [i32],
+        }
+        "#;
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedToken {
+                expected: vec![TokenKind::Semi],
+                found: TokenKind::RBracket,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    // ========================================================================
+    // Generic type error tests
+    // ========================================================================
+
+    #[test]
+    fn generic_missing_closing_angle_errors() {
+        let text = r#"
+        type Container {
+            field: Shared<i32,
+        }
+        "#;
+        let err = parse_str_for_tests(text).unwrap_err();
+        // After the comma, parser expects another type parameter
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedType {
+                found: TokenKind::RBrace,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    #[test]
+    fn generic_empty_type_params_in_field_parses_ok() {
+        // Empty generic params in a field type reference parse OK - semantic layer catches
+        let text = r#"
+        type Container {
+            field: Shared<>,
+        }
+        "#;
+        // This actually parses fine, semantic layer would catch the invalid usage
+        assert!(parse_str_for_tests(text).is_ok());
+    }
+
+    #[test]
+    fn nested_generic_missing_outer_closing_errors() {
+        let text = r#"
+        type Test {
+            field: Outer<Inner<i32>,
+        }
+        "#;
+        let err = parse_str_for_tests(text).unwrap_err();
+        // After comma, parser expects another type but finds closing brace
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedType {
+                found: TokenKind::RBrace,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+}

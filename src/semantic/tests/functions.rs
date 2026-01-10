@@ -1,6 +1,10 @@
 //! Tests for freestanding function resolution.
 
-use crate::{grammar::test_aliases::*, semantic::types::test_aliases::*, span::StripLocations};
+use crate::{
+    grammar::test_aliases::*,
+    semantic::{error::SemanticError, types::test_aliases::*},
+    span::{ItemLocation, StripLocations},
+};
 
 use super::util::*;
 use pretty_assertions::assert_eq;
@@ -53,4 +57,50 @@ fn can_resolve_freestanding_functions() {
     assert_eq!(func2.return_type, Some(ST::raw("i32")));
     assert_eq!(func2.calling_convention, SCC::System);
     assert_eq!(func2.body, SFB::Address { address: 0x789 });
+}
+
+#[test]
+fn freestanding_function_without_address_fails() {
+    // Freestanding function without #[address(...)] should fail
+    let ast = M::new().with_functions([F::new((V::Public, "test"), [])]);
+
+    assert_ast_produces_exact_error(
+        ast,
+        SemanticError::FunctionMissingImplementation {
+            function_name: "test".to_string(),
+            location: ItemLocation::test(),
+        },
+    );
+}
+
+#[test]
+fn private_freestanding_function_without_address_fails() {
+    // Private freestanding function without #[address(...)] should also fail
+    let ast = M::new().with_functions([F::new((V::Private, "internal_func"), [])]);
+
+    assert_ast_produces_exact_error(
+        ast,
+        SemanticError::FunctionMissingImplementation {
+            function_name: "internal_func".to_string(),
+            location: ItemLocation::test(),
+        },
+    );
+}
+
+#[test]
+fn freestanding_function_with_args_but_no_address_fails() {
+    // Even with arguments, missing address should fail
+    let ast = M::new().with_functions([F::new(
+        (V::Public, "compute"),
+        [Ar::named("value", T::ident("i32"))],
+    )
+    .with_return_type(T::ident("i32"))]);
+
+    assert_ast_produces_exact_error(
+        ast,
+        SemanticError::FunctionMissingImplementation {
+            function_name: "compute".to_string(),
+            location: ItemLocation::test(),
+        },
+    );
 }

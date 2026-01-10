@@ -1041,8 +1041,9 @@ mod tests {
             IntFormat,
             test_aliases::{int_literal, int_literal_with_format, *},
         },
-        parser::parse_str_for_tests,
-        span::StripLocations,
+        parser::{error::ParseError, parse_str_for_tests},
+        span::{ItemLocation, StripLocations},
+        tokenizer::TokenKind,
     };
     use pretty_assertions::assert_eq;
 
@@ -1348,5 +1349,650 @@ mod tests {
         )]);
 
         assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
+    }
+
+    // ========================================================================
+    // Type definition error tests
+    // ========================================================================
+
+    #[test]
+    fn type_missing_closing_brace() {
+        let text = r#"
+        pub type TestType {
+            field1: i32
+        "#;
+
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedIdentifier {
+                found: TokenKind::Eof,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    #[test]
+    fn type_field_missing_type() {
+        let text = r#"
+        pub type TestType {
+            field1:,
+        }
+        "#;
+
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedType {
+                found: TokenKind::Comma,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    #[test]
+    fn type_missing_name() {
+        let text = r#"
+        pub type {
+            field: i32,
+        }
+        "#;
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedIdentifier {
+                found: TokenKind::LBrace,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    #[test]
+    fn type_field_missing_colon() {
+        let text = r#"
+        type TestType {
+            field i32,
+        }
+        "#;
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedToken {
+                expected: vec![TokenKind::Colon],
+                found: TokenKind::Ident("i32".to_string()),
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    #[test]
+    fn type_alias_missing_target() {
+        let text = r#"
+        type IntPtr =;
+        "#;
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedType {
+                found: TokenKind::Semi,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    #[test]
+    fn type_alias_missing_semicolon() {
+        let text = r#"
+        type IntPtr = i32
+        type Another {}
+        "#;
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedToken {
+                expected: vec![TokenKind::Semi],
+                found: TokenKind::Type,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    #[test]
+    fn type_multiple_vftables_parses_ok() {
+        // Valid syntax but semantically wrong - parser should accept it
+        let text = r#"
+        type TestType {
+            vftable {},
+            vftable {},
+        }
+        "#;
+        // Parses fine - semantic check would catch it
+        assert!(parse_str_for_tests(text).is_ok());
+    }
+
+    #[test]
+    fn empty_type_body_is_valid() {
+        let text = r#"
+        type Test {}
+        "#;
+        assert!(parse_str_for_tests(text).is_ok());
+    }
+
+    #[test]
+    fn type_with_only_unknown_field() {
+        let text = r#"
+        type Test {
+            _: unknown<16>,
+        }
+        "#;
+        assert!(parse_str_for_tests(text).is_ok());
+    }
+
+    #[test]
+    fn generic_type_def_missing_closing_angle() {
+        let text = r#"
+        type Shared<T {
+            field: *mut T,
+        }
+        "#;
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedToken {
+                expected: vec![TokenKind::Gt],
+                found: TokenKind::LBrace,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    #[test]
+    fn generic_type_def_empty_params_parses_ok() {
+        // Empty type params parse OK - `Shared<>` is just non-generic
+        let text = r#"
+        type Shared<> {
+            field: i32,
+        }
+        "#;
+        assert!(parse_str_for_tests(text).is_ok());
+    }
+
+    // ========================================================================
+    // Vftable error tests
+    // ========================================================================
+
+    #[test]
+    fn vftable_missing_opening_brace() {
+        let text = r#"
+        type TestType {
+            vftable
+                pub fn test(&self);
+            }
+        }
+        "#;
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedToken {
+                expected: vec![TokenKind::LBrace],
+                found: TokenKind::Pub,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    #[test]
+    fn vftable_missing_closing_brace() {
+        let text = r#"
+        type TestType {
+            vftable {
+                pub fn test(&self);
+        }
+        "#;
+        let err = parse_str_for_tests(text).unwrap_err();
+        // Runs into EOF trying to parse after the unclosed vftable
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedIdentifier {
+                found: TokenKind::Eof,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    #[test]
+    fn vftable_function_missing_semicolon() {
+        let text = r#"
+        type TestType {
+            vftable {
+                pub fn test(&self)
+            }
+        }
+        "#;
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedToken {
+                expected: vec![TokenKind::Semi],
+                found: TokenKind::RBrace,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    #[test]
+    fn vftable_functions_using_comma_instead_of_semicolon() {
+        let text = r#"
+        type TestType {
+            vftable {
+                pub fn test1(&self),
+                pub fn test2(&self);
+            }
+        }
+        "#;
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedToken {
+                expected: vec![TokenKind::Semi],
+                found: TokenKind::Comma,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    #[test]
+    fn vftable_functions_missing_separator_entirely() {
+        let text = r#"
+        type TestType {
+            vftable {
+                pub fn test1(&self)
+                pub fn test2(&self);
+            }
+        }
+        "#;
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedToken {
+                expected: vec![TokenKind::Semi],
+                found: TokenKind::Pub,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    #[test]
+    fn vftable_functions_missing_separator_private() {
+        let text = r#"
+        type TestType {
+            vftable {
+                fn test1(&self)
+                fn test2(&self);
+            }
+        }
+        "#;
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedToken {
+                expected: vec![TokenKind::Semi],
+                found: TokenKind::Fn,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    #[test]
+    fn vftable_function_missing_fn_keyword() {
+        let text = r#"
+        type TestType {
+            vftable {
+                pub test(&self);
+            }
+        }
+        "#;
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedToken {
+                expected: vec![TokenKind::Fn],
+                found: TokenKind::Ident("test".to_string()),
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    #[test]
+    fn vftable_function_missing_parentheses() {
+        let text = r#"
+        type TestType {
+            vftable {
+                pub fn test;
+            }
+        }
+        "#;
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedToken {
+                expected: vec![TokenKind::LParen],
+                found: TokenKind::Semi,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    #[test]
+    fn vftable_function_missing_closing_paren() {
+        let text = r#"
+        type TestType {
+            vftable {
+                pub fn test(&self;
+            }
+        }
+        "#;
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedToken {
+                expected: vec![TokenKind::RParen],
+                found: TokenKind::Semi,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    #[test]
+    fn vftable_function_missing_return_type_after_arrow() {
+        let text = r#"
+        type TestType {
+            vftable {
+                pub fn test(&self) ->;
+            }
+        }
+        "#;
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedType {
+                found: TokenKind::Semi,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    #[test]
+    fn vftable_function_invalid_self_parameter() {
+        let text = r#"
+        type TestType {
+            vftable {
+                pub fn test(self);
+            }
+        }
+        "#;
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedIdentifier {
+                found: TokenKind::SelfValue,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    #[test]
+    fn empty_vftable_is_valid() {
+        let text = r#"
+        type Test {
+            vftable {},
+        }
+        "#;
+        assert!(parse_str_for_tests(text).is_ok());
+    }
+
+    // ========================================================================
+    // Enum error tests
+    // ========================================================================
+
+    #[test]
+    fn enum_missing_type_annotation() {
+        let text = r#"
+        pub enum State {
+            Idle = 0,
+        }
+        "#;
+
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedToken {
+                expected: vec![TokenKind::Colon],
+                found: TokenKind::LBrace,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    #[test]
+    fn enum_missing_name() {
+        let text = r#"
+        pub enum : u32 {
+            Item = 0,
+        }
+        "#;
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedIdentifier {
+                found: TokenKind::Colon,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    #[test]
+    fn enum_missing_type() {
+        let text = r#"
+        pub enum State: {
+            Item = 0,
+        }
+        "#;
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedType {
+                found: TokenKind::LBrace,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    #[test]
+    fn enum_missing_opening_brace() {
+        let text = r#"
+        pub enum State: u32
+            Item = 0,
+        }
+        "#;
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedToken {
+                expected: vec![TokenKind::LBrace],
+                found: TokenKind::Ident("Item".to_string()),
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    #[test]
+    fn enum_missing_closing_brace() {
+        let text = r#"
+        pub enum State: u32 {
+            Item = 0,
+        "#;
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedIdentifier {
+                found: TokenKind::Eof,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    #[test]
+    fn enum_variant_invalid_expression() {
+        let text = r#"
+        pub enum State: u32 {
+            Item = ,
+        }
+        "#;
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedExpression {
+                found: TokenKind::Comma,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    #[test]
+    fn empty_enum_is_valid() {
+        let text = r#"
+        enum Test: u32 {}
+        "#;
+        assert!(parse_str_for_tests(text).is_ok());
+    }
+
+    // ========================================================================
+    // Bitflags error tests
+    // ========================================================================
+
+    #[test]
+    fn bitflags_missing_equals() {
+        let text = r#"
+        pub bitflags Flags: u32 {
+            READ 0x1,
+        }
+        "#;
+
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedToken {
+                expected: vec![TokenKind::Eq],
+                found: TokenKind::IntLiteral("0x1".to_string()),
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    #[test]
+    fn bitflags_missing_name() {
+        let text = r#"
+        pub bitflags : u32 {
+            FLAG = 1,
+        }
+        "#;
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedIdentifier {
+                found: TokenKind::Colon,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    #[test]
+    fn bitflags_missing_type() {
+        let text = r#"
+        pub bitflags Flags: {
+            FLAG = 1,
+        }
+        "#;
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedType {
+                found: TokenKind::LBrace,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    #[test]
+    fn bitflags_missing_value() {
+        let text = r#"
+        pub bitflags Flags: u32 {
+            FLAG =,
+        }
+        "#;
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedExpression {
+                found: TokenKind::Comma,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    #[test]
+    fn bitflags_missing_opening_brace() {
+        let text = r#"
+        pub bitflags Flags: u32
+            FLAG = 1,
+        }
+        "#;
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedToken {
+                expected: vec![TokenKind::LBrace],
+                found: TokenKind::Ident("FLAG".to_string()),
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    #[test]
+    fn empty_bitflags_is_valid() {
+        let text = r#"
+        bitflags Test: u32 {}
+        "#;
+        assert!(parse_str_for_tests(text).is_ok());
     }
 }

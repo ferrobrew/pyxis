@@ -514,4 +514,215 @@ pub type AnarkGui {
             _ => panic!("Expected Definition"),
         }
     }
+
+    // ========================================================================
+    // Attribute error tests - parser bounds checking
+    // ========================================================================
+
+    use super::ParseError;
+    use crate::span::ItemLocation;
+    use crate::tokenizer::TokenKind;
+
+    #[test]
+    fn attribute_at_eof_errors() {
+        // Just a # with nothing after - should error about missing [
+        let text = "#";
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedToken {
+                expected: vec![TokenKind::LBracket],
+                found: TokenKind::Eof,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    #[test]
+    fn incomplete_attribute_bracket_errors() {
+        // #[ with nothing after - should error about missing attribute name
+        let text = "#[";
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedIdentifier {
+                found: TokenKind::Eof,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    #[test]
+    fn unclosed_attribute_errors() {
+        // #[foo without closing ] - should error about missing ] or ,
+        let text = "#[foo";
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedToken {
+                expected: vec![TokenKind::RBracket, TokenKind::Comma],
+                found: TokenKind::Eof,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    #[test]
+    fn attribute_without_item_errors() {
+        // Complete attribute but nothing after - should error about missing item
+        let text = "#[size(4)]";
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedItemDefinition {
+                found: TokenKind::Eof,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    #[test]
+    fn multiple_attributes_at_eof_errors() {
+        // Multiple attributes but nothing after - should error about missing item
+        let text = "#[size(4)] #[align(4)]";
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedItemDefinition {
+                found: TokenKind::Eof,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    #[test]
+    fn doc_comment_then_incomplete_attribute_errors() {
+        // Doc comment followed by incomplete attribute - should error about missing attribute name
+        let text = "/// My doc\n#[";
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedIdentifier {
+                found: TokenKind::Eof,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    #[test]
+    fn doc_comment_then_attribute_at_eof_errors() {
+        // Doc comment followed by complete attribute but nothing else
+        let text = "/// My doc\n#[size(4)]";
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedItemDefinition {
+                found: TokenKind::Eof,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    #[test]
+    fn unclosed_attribute_with_parens_errors() {
+        // #[size(4) without closing ]
+        let text = "#[size(4)";
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedToken {
+                expected: vec![TokenKind::RBracket, TokenKind::Comma],
+                found: TokenKind::Eof,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    #[test]
+    fn multiple_attrs_missing_bracket_errors() {
+        // #[size(0x3540), align(4) without closing ]
+        let text = "#[size(0x3540), align(4)";
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedToken {
+                expected: vec![TokenKind::RBracket, TokenKind::Comma],
+                found: TokenKind::Eof,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    #[test]
+    fn multiple_attrs_missing_bracket_with_item_errors() {
+        // #[size(0x3540), align(4) followed by item - should error about missing ] or ,
+        let text = "#[size(0x3540), align(4)\npub type Foo {}";
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedToken {
+                expected: vec![TokenKind::RBracket, TokenKind::Comma],
+                found: TokenKind::Pub,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    #[test]
+    fn attribute_empty_parens_parses_ok() {
+        // #[size()] is parsed as a function-like attribute with no arguments
+        // Semantic validation catches that size requires an argument
+        let text = r#"
+        #[size()]
+        type Test {}
+        "#;
+        // Parser accepts this, semantic layer validates argument count
+        assert!(parse_str_for_tests(text).is_ok());
+    }
+
+    #[test]
+    fn attribute_missing_closing_paren_errors() {
+        let text = r#"
+        #[size(4]
+        type Test {}
+        "#;
+        let err = parse_str_for_tests(text).unwrap_err();
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedToken {
+                expected: vec![TokenKind::RParen],
+                found: TokenKind::RBracket,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    #[test]
+    fn attribute_unknown_character_errors() {
+        let text = r#"
+        #[size(4) @]
+        type Test {}
+        "#;
+        let err = parse_str_for_tests(text).unwrap_err();
+        // Tokenizer error for unknown character
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::Tokenizer(crate::tokenizer::LexError::UnexpectedCharacter {
+                character: '@',
+                location: ItemLocation::test(),
+            })
+            .strip_locations()
+        );
+    }
 }
