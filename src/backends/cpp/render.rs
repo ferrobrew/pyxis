@@ -283,6 +283,19 @@ fn render_method_signature(out: &mut String, func: &Function, ctx: RenderCtx) ->
     render_doc(out, &func.doc, 1)?;
     let (return_text, sig_args_text, const_qual) = method_sig_parts(func, ctx)?;
     let static_kw = if func_has_self(func) { "" } else { "static " };
+    // Method-level template parameters (e.g. `Y` in
+    // `impl<T, Y> Foo<T> { fn cast() -> Foo<Y>; }`) become a `template
+    // <class Y>` clause on the in-class declaration. The struct's own
+    // template clause is emitted separately by `render_struct`.
+    if !func.method_type_parameters.is_empty() {
+        let params = func
+            .method_type_parameters
+            .iter()
+            .map(|p| format!("class {p}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        writeln!(out, "    template <{params}>")?;
+    }
     writeln!(
         out,
         "    {static_kw}{return_text} {fn_name}({sig_args_text}){const_qual};",

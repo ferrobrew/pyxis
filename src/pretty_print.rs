@@ -868,12 +868,22 @@ impl PrettyPrinter {
                 .map(|tp| tp.name.as_str())
                 .collect::<Vec<_>>()
                 .join(", ");
-            writeln!(
-                &mut self.output,
-                "impl<{}> {}<{}> {{",
-                params, impl_block.name, params
-            )
-            .unwrap();
+            let args = impl_block
+                .type_arguments
+                .iter()
+                .map(|tp| tp.name.as_str())
+                .collect::<Vec<_>>()
+                .join(", ");
+            if args.is_empty() {
+                writeln!(&mut self.output, "impl<{}> {} {{", params, impl_block.name).unwrap();
+            } else {
+                writeln!(
+                    &mut self.output,
+                    "impl<{}> {}<{}> {{",
+                    params, impl_block.name, args
+                )
+                .unwrap();
+            }
         }
         self.indent();
 

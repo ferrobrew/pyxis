@@ -106,9 +106,14 @@ pub enum ImplItem {
 #[derive(Debug, Clone, PartialEq, Eq, HasLocation)]
 pub struct FunctionBlock {
     pub name: Ident,
-    /// Type parameters declared on the `impl` block (e.g. `T` in
-    /// `impl<T> Foo<T> { ... }`). Empty for non-generic impls.
+    /// Type parameters declared on the `impl` block (e.g. `T, Y` in
+    /// `impl<T, Y> Foo<T> { ... }`). Empty for non-generic impls.
     pub type_parameters: Vec<crate::parser::types::TypeParameter>,
+    /// Type arguments applied to the type name (the `<T>` in `Foo<T>`).
+    /// Tracked separately from `type_parameters` because not every impl
+    /// param appears after the type name (e.g. method-level extras like
+    /// `Y` in `impl<T, Y> Foo<T>`).
+    pub type_arguments: Vec<crate::parser::types::TypeParameter>,
     pub items: Vec<ImplItem>,
     pub attributes: Attributes,
     pub location: ItemLocation,
@@ -119,6 +124,7 @@ impl StripLocations for FunctionBlock {
         FunctionBlock {
             name: self.name.strip_locations(),
             type_parameters: self.type_parameters.strip_locations(),
+            type_arguments: self.type_arguments.strip_locations(),
             items: self
                 .items
                 .iter()
@@ -138,6 +144,7 @@ impl FunctionBlock {
         Self {
             name: name.into(),
             type_parameters: vec![],
+            type_arguments: vec![],
             items: functions.into_iter().map(ImplItem::Function).collect(),
             attributes: Default::default(),
             location: ItemLocation::test(),
@@ -180,10 +187,11 @@ impl Parser {
         // the `impl<...>` parameters).
         let type_parameters = self.parse_type_parameters()?;
         let (name, _) = self.expect_ident()?;
-        if matches!(self.peek(), TokenKind::Lt) {
-            // Consume and discard `<...>` after the type name.
-            let _ = self.parse_type_parameters()?;
-        }
+        let type_arguments = if matches!(self.peek(), TokenKind::Lt) {
+            self.parse_type_parameters()?
+        } else {
+            vec![]
+        };
         self.expect(TokenKind::LBrace)?;
 
         let mut items = Vec::new();
@@ -212,6 +220,7 @@ impl Parser {
         Ok(FunctionBlock {
             name,
             type_parameters,
+            type_arguments,
             items,
             attributes,
             location,

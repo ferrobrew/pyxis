@@ -258,6 +258,12 @@ pub struct Function {
     pub arguments: Vec<Argument>,
     pub return_type: Option<Type>,
     pub calling_convention: CallingConvention,
+    /// Method-level type parameters: those declared on the impl block but
+    /// *not* corresponding to the parent struct's own type parameters
+    /// (e.g. `Y` in `impl<T, Y> Foo<T> { fn cast() -> Foo<Y>; }`). Become
+    /// method-level template parameters in C++. Empty for non-impl-block
+    /// functions or impls whose params exactly match the struct's.
+    pub method_type_parameters: Vec<String>,
     pub location: ItemLocation,
 }
 impl fmt::Display for Function {
@@ -332,6 +338,7 @@ impl Function {
             arguments: Vec::new(),
             return_type: None,
             calling_convention,
+            method_type_parameters: Vec::new(),
             location: ItemLocation::test(),
         }
     }
@@ -527,6 +534,7 @@ pub fn build(
         arguments,
         return_type,
         calling_convention,
+        method_type_parameters: Vec::new(),
         location: function.location,
     })))
 }

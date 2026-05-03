@@ -459,19 +459,43 @@ impl SemanticState {
 
         let module = self.get_module_for_path(path, &location)?;
         let scope = module.scope();
-        let (module_impls_fn, impl_type_parameters): (Vec<grammar::Function>, Vec<String>) = module
+        // A type can have multiple `impl` blocks — e.g. one per set of
+        // method-level type parameters. We iterate them in declaration
+        // order so the resolved `associated_functions` reflects the
+        // source order, and each function picks up its own impl block's
+        // type parameters.
+        struct ImplFunc {
+            func: grammar::Function,
+            impl_type_parameters: Vec<String>,
+        }
+        let impl_funcs: Vec<ImplFunc> = module
             .impls
             .get(path)
-            .map(|fb| {
-                (
-                    fb.functions().cloned().collect(),
-                    fb.type_parameters
-                        .iter()
-                        .map(|tp| tp.name.clone())
-                        .collect(),
-                )
+            .map(|fbs| {
+                fbs.iter()
+                    .flat_map(|fb| {
+                        let params: Vec<String> = fb
+                            .type_parameters
+                            .iter()
+                            .map(|tp| tp.name.clone())
+                            .collect();
+                        fb.functions().cloned().map({
+                            let params = params.clone();
+                            move |f| ImplFunc {
+                                func: f,
+                                impl_type_parameters: params.clone(),
+                            }
+                        })
+                    })
+                    .collect()
             })
             .unwrap_or_default();
+
+        let struct_param_count = self
+            .type_registry
+            .get(path, &location)?
+            .type_parameters
+            .len();
 
         let mut associated_functions: Vec<Function> = Vec::new();
         let mut used_names: HashSet<String> = vftable_function_names.clone();
@@ -530,8 +554,14 @@ impl SemanticState {
         }
 
         // Build own impl methods. Now that all types are resolved, function
-        // building never defers.
-        for grammar_fn in &module_impls_fn {
+        // building never defers. Each function picks up its own impl
+        // block's type parameters (so different impl blocks can declare
+        // different method-level template parameters).
+        for ImplFunc {
+            func: grammar_fn,
+            impl_type_parameters,
+        } in &impl_funcs
+        {
             if used_names.contains(&grammar_fn.name.0) {
                 return Err(SemanticError::DuplicateDefinition {
                     name: grammar_fn.name.0.clone(),
@@ -540,18 +570,22 @@ impl SemanticState {
                     location,
                 });
             }
-            let function = match function::build(
+            // Method-level extras for this specific function come from its
+            // own impl block, not the type's full set of impl blocks.
+            let method_extras: Vec<String> = if impl_type_parameters.len() > struct_param_count {
+                impl_type_parameters[struct_param_count..].to_vec()
+            } else {
+                Vec::new()
+            };
+            let mut function = match function::build(
                 &self.type_registry,
                 &scope,
                 false,
                 grammar_fn,
-                &impl_type_parameters,
+                impl_type_parameters,
             )? {
                 FunctionBuildOutcome::Built(f) => *f,
                 FunctionBuildOutcome::Deferred => {
-                    // After the main resolution loop completes, no type
-                    // reference should still defer; if it does, something
-                    // is structurally wrong.
                     return Err(SemanticError::TypeResolutionStalled {
                         unresolved_types: vec![grammar_fn.name.0.clone()],
                         resolved_types: vec![],
@@ -559,6 +593,7 @@ impl SemanticState {
                     });
                 }
             };
+            function.method_type_parameters = method_extras;
             used_names.insert(function.name.clone());
             associated_functions.push(function);
         }

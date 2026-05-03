@@ -49,13 +49,27 @@ impl<T> Pair<T> {
     pub fn first_ptr(&self) -> *mut T;
 }
 
+// Method-level extra type parameter: `Y` is on the impl block but not on
+// the struct itself, so it becomes a method-template parameter in C++.
+impl<T, Y> Pair<T> {
+    #[external_body]
+    pub fn cast_first(&self) -> *mut Y;
+}
+
 backend rust epilogue r#"
     impl<T> Pair<T> {
         pub fn first_ptr(&self) -> *mut T { self.first }
+        // In Rust, method-level type parameters live on the function, not
+        // the impl. Pyxis's `impl<T, Y> Pair<T> { fn cast_first ... }` form
+        // maps to this Rust shape.
+        pub fn cast_first<Y>(&self) -> *mut Y { self.first as *mut Y }
     }
 "#;
 
 backend cpp epilogue r#"
 template <class T>
 inline T* Pair<T>::first_ptr() const { return first; }
+
+template <class T> template <class Y>
+inline Y* Pair<T>::cast_first() const { return reinterpret_cast<Y*>(first); }
 "#;

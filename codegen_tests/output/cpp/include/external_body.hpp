@@ -14,6 +14,8 @@ namespace external_body {
         T* first;
         T* second;
         T* first_ptr() const;
+        template <class Y>
+        Y* cast_first() const;
     };
 
     struct alignas(4) Counter {
@@ -38,4 +40,7 @@ namespace external_body {
 
     template <class T>
     inline T* Pair<T>::first_ptr() const { return first; }
+
+    template <class T> template <class Y>
+    inline Y* Pair<T>::cast_first() const { return reinterpret_cast<Y*>(first); }
 } // namespace external_body

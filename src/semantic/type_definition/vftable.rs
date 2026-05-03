@@ -109,6 +109,7 @@ pub fn convert_grammar_functions_to_semantic_functions(
                     function_name: name,
                 },
                 calling_convention,
+                method_type_parameters: Vec::new(),
                 location: *location,
             });
         }

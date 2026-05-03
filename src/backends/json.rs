@@ -234,6 +234,10 @@ pub struct JsonFunction {
     pub return_type: Option<JsonType>,
     /// Calling convention
     pub calling_convention: JsonCallingConvention,
+    /// Method-level type parameters declared at the impl block beyond the
+    /// parent struct's own type parameters (`Y` in `impl<T, Y> Foo<T> {...}`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub method_type_parameters: Vec<String>,
     /// Source location (file and line)
     pub source: Option<JsonSourceLocation>,
 }
@@ -540,6 +544,7 @@ fn convert_function(func: &Function) -> JsonFunction {
         arguments: func.arguments.iter().map(convert_argument).collect(),
         return_type: func.return_type.as_ref().map(convert_type),
         calling_convention: func.calling_convention.into(),
+        method_type_parameters: func.method_type_parameters.clone(),
         source: convert_location(&func.location),
     }
 }

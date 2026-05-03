@@ -226,8 +226,12 @@ pub fn build(
 
     // Handle associated functions
     let mut associated_functions = vec![];
-    if let Some(enum_impl) = module.impls.get(resolvee_path) {
-        for function in enum_impl.functions().collect::<Vec<_>>() {
+    if let Some(enum_impls) = module.impls.get(resolvee_path) {
+        for function in enum_impls
+            .iter()
+            .flat_map(|fb| fb.functions())
+            .collect::<Vec<_>>()
+        {
             let function = match function::build(
                 &semantic.type_registry,
                 &module.scope(),

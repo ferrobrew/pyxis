@@ -51,4 +51,7 @@ impl<T> Pair<T> {
     pub fn first_ptr(&self) -> *mut T {
         self.first
     }
+    pub fn cast_first<Y>(&self) -> *mut Y {
+        self.first as *mut Y
+    }
 }

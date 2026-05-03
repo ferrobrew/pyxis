@@ -1602,6 +1602,34 @@
               "file_index": 8,
               "line": 48
             }
+          },
+          {
+            "visibility": "public",
+            "name": "cast_first",
+            "doc": null,
+            "body": {
+              "type": "external"
+            },
+            "arguments": [
+              {
+                "type": "const_self"
+              }
+            ],
+            "return_type": {
+              "type": "mut_pointer",
+              "inner": {
+                "type": "type_parameter",
+                "name": "Y"
+              }
+            },
+            "calling_convention": "system",
+            "method_type_parameters": [
+              "Y"
+            ],
+            "source": {
+              "file_index": 8,
+              "line": 55
+            }
           }
         ],
         "vftable": null,
@@ -6013,7 +6041,7 @@
           },
           {
             "prologue": null,
-            "epilogue": "\ntemplate <class T>\ninline T* Pair<T>::first_ptr() const { return first; }\n"
+            "epilogue": "\ntemplate <class T>\ninline T* Pair<T>::first_ptr() const { return first; }\n\ntemplate <class T> template <class Y>\ninline Y* Pair<T>::cast_first() const { return reinterpret_cast<Y*>(first); }\n"
           }
         ],
         "rust": [
@@ -6027,7 +6055,7 @@
           },
           {
             "prologue": null,
-            "epilogue": "\n    impl<T> Pair<T> {\n        pub fn first_ptr(&self) -> *mut T { self.first }\n    }\n"
+            "epilogue": "\n    impl<T> Pair<T> {\n        pub fn first_ptr(&self) -> *mut T { self.first }\n        // In Rust, method-level type parameters live on the function, not\n        // the impl. Pyxis's `impl<T, Y> Pair<T> { fn cast_first ... }` form\n        // maps to this Rust shape.\n        pub fn cast_first<Y>(&self) -> *mut Y { self.first as *mut Y }\n    }\n"
           }
         ]
       }
