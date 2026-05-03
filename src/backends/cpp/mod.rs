@@ -35,6 +35,32 @@ pub fn build(
     project: &Project,
 ) -> Result<()> {
     let bindings = build_cpp_extern_bindings(semantic_state);
+
+    // Pre-flight: detect cross-module FullDef cycles by aggregating each
+    // module's FullDef cross-module deps and running SCC over the
+    // module-level graph. A cycle here means two (or more) modules each
+    // need each other's full type definitions — irresolvable by forward
+    // declarations.
+    let registry = semantic_state.type_registry();
+    let mut module_full_deps: std::collections::BTreeMap<
+        ItemPath,
+        std::collections::BTreeSet<ItemPath>,
+    > = std::collections::BTreeMap::new();
+    for (key, module) in semantic_state.modules() {
+        if key.is_empty() {
+            continue;
+        }
+        let module_deps = deps::collect_module_deps(key, module, registry, &bindings);
+        module_full_deps.insert(key.clone(), module_deps.include_modules);
+    }
+    if let Some(cycle) = deps::first_scc_cycle(&module_full_deps) {
+        return Err(crate::backends::BackendError::CppLayoutCycle {
+            scope: crate::backends::error::CppLayoutCycleScope::CrossModule,
+            cycle,
+            location: crate::span::ItemLocation::internal(),
+        });
+    }
+
     for (key, module) in semantic_state.modules() {
         write_module(out_dir, key, semantic_state, module, &bindings)?;
     }
@@ -86,7 +112,7 @@ fn write_module(
     // is fully defined. Templates and independent items break ties by
     // template-first-then-alphabetical.
     let raw_items: Vec<_> = module.definitions(registry).collect();
-    let sorted_items = deps::topo_sort_module_items(key, raw_items, registry, bindings);
+    let sorted_items = deps::topo_sort_module_items(key, raw_items, registry, bindings)?;
     for item in sorted_items {
         let Some(rendered) = render::render_item(item, ctx)? else {
             continue;

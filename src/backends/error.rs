@@ -70,6 +70,33 @@ pub enum BackendError {
         kind: FieldCodeGenFailedKind,
         location: ItemLocation,
     },
+    /// The C++ backend's dependency analysis found a strongly-connected
+    /// component on FullDef edges — a real layout cycle that no amount of
+    /// forward-decling can resolve. The cycle is reported as the list of
+    /// items (or modules) that form it, in traversal order.
+    CppLayoutCycle {
+        scope: CppLayoutCycleScope,
+        cycle: Vec<ItemPath>,
+        location: ItemLocation,
+    },
+}
+
+/// What kind of dependency graph the cycle was detected in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CppLayoutCycleScope {
+    /// Cycle inside a single module's items.
+    IntraModule,
+    /// Cycle between modules' aggregated FullDef dependencies.
+    CrossModule,
+}
+
+impl fmt::Display for CppLayoutCycleScope {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            CppLayoutCycleScope::IntraModule => write!(f, "intra-module"),
+            CppLayoutCycleScope::CrossModule => write!(f, "cross-module"),
+        }
+    }
 }
 impl fmt::Display for BackendError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -121,13 +148,27 @@ impl BackendError {
                     "Failed to generate code for field `{field_name}` of type `{type_path}`: {kind}"
                 )
             }
+            BackendError::CppLayoutCycle { scope, cycle, .. } => {
+                let chain = cycle
+                    .iter()
+                    .map(|p| format!("`{p}`"))
+                    .collect::<Vec<_>>()
+                    .join(" → ");
+                format!(
+                    "C++ backend: detected a {scope} layout cycle on FullDef edges: {chain}. \
+                     A real value-cycle can't be resolved by forward declarations; \
+                     break the cycle by introducing a pointer/reference indirection or \
+                     by extracting a shared type into a separate module."
+                )
+            }
         }
     }
 
     fn location(&self) -> Option<&ItemLocation> {
         match self {
             BackendError::TypeCodeGenFailed { location, .. }
-            | BackendError::FieldCodeGenFailed { location, .. } => Some(location),
+            | BackendError::FieldCodeGenFailed { location, .. }
+            | BackendError::CppLayoutCycle { location, .. } => Some(location),
             _ => None,
         }
     }

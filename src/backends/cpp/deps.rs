@@ -4,16 +4,17 @@
 //! (by-value field, base, array element, FullDef-typed template arg — needs
 //! `#include`) or a **FwdOnly** edge (pointer or function param/return — a
 //! forward declaration is enough). The semantic resolver does not guarantee
-//! that the FullDef graph is acyclic, so we will eventually run SCC analysis
-//! ourselves and emit a clear diagnostic if a true value-cycle is found.
-//!
-//! Phase 1: classifier + per-module aggregation. SCC cycle detection is a
-//! later-phase concern; the codegen-tests corpus has no cycles to trigger it.
+//! that the FullDef graph is acyclic, so this module runs Tarjan's SCC
+//! algorithm over both the intra-module item graph and the cross-module
+//! aggregate graph and emits a `BackendError::CppLayoutCycle` if any real
+//! value-cycle is found (one that no forward declaration can break).
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
-    backends::cpp::extern_bindings::CppExternBinding,
+    backends::{
+        BackendError, Result, cpp::extern_bindings::CppExternBinding, error::CppLayoutCycleScope,
+    },
     grammar::ItemPath,
     semantic::{
         Module, TypeRegistry,
@@ -22,6 +23,7 @@ use crate::{
             ItemDefinitionInner, Region, Type, TypeAliasDefinition, TypeDefinition,
         },
     },
+    span::ItemLocation,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -44,16 +46,19 @@ pub struct ModuleDeps {
 
 /// Topologically sort a module's items so that any FullDef intra-module
 /// reference (by-value field, base, array element of a same-module type)
-/// produces an item ordered after its dependency. Falls back to alphabetical
-/// order for items with no intra-module deps. Items detected to be in a
-/// cycle are emitted in input order at the end (a real layout cycle would
-/// trip the backend's static_asserts later).
+/// produces an item ordered after its dependency.
+///
+/// If the FullDef graph contains a strongly-connected component (a real
+/// value-cycle that no forward declaration can resolve), returns a
+/// `BackendError::CppLayoutCycle` reporting the cycle. Otherwise the
+/// returned ordering is deterministic: templates first, then alphabetical
+/// within each topological level.
 pub fn topo_sort_module_items<'a>(
     module_path: &'a ItemPath,
     items: Vec<&'a crate::semantic::types::ItemDefinition>,
     registry: &TypeRegistry,
     bindings: &BTreeMap<ItemPath, CppExternBinding>,
-) -> Vec<&'a crate::semantic::types::ItemDefinition> {
+) -> Result<Vec<&'a crate::semantic::types::ItemDefinition>> {
     use std::collections::{BTreeMap as Map, BTreeSet as Set};
 
     let item_paths: Set<ItemPath> = items.iter().map(|i| i.path.clone()).collect();
@@ -75,31 +80,42 @@ pub fn topo_sort_module_items<'a>(
         deps.insert(item.path.clone(), item_full_deps);
     }
 
-    // Templates strictly before non-templates (templates must be fully
-    // visible before by-value instantiation in peer non-template structs;
-    // we already enforce this in the FullDef graph but tie-break ensures
-    // alphabetical-stable order between independent items.)
     let mut by_path: Map<ItemPath, &crate::semantic::types::ItemDefinition> = Map::new();
     for item in &items {
         by_path.insert(item.path.clone(), *item);
     }
 
+    // Detect SCCs in the FullDef graph. Any SCC with size > 1 is a cycle.
+    // We also flag self-loops, but `item_full_deps.remove(&item.path)` above
+    // means we never have self-edges at this point.
+    if let Some(cycle) = first_scc_cycle(&deps) {
+        let location = cycle
+            .first()
+            .and_then(|p| by_path.get(p))
+            .map(|i| i.location)
+            .unwrap_or_else(ItemLocation::internal);
+        return Err(BackendError::CppLayoutCycle {
+            scope: CppLayoutCycleScope::IntraModule,
+            cycle,
+            location,
+        });
+    }
+
+    // No cycles — produce a deterministic topological ordering.
     let mut output: Vec<&crate::semantic::types::ItemDefinition> = Vec::with_capacity(items.len());
     let mut visited: Set<ItemPath> = Set::new();
-    let mut on_stack: Set<ItemPath> = Set::new();
 
     fn visit<'a>(
         path: &ItemPath,
         deps: &std::collections::BTreeMap<ItemPath, std::collections::BTreeSet<ItemPath>>,
         by_path: &std::collections::BTreeMap<ItemPath, &'a crate::semantic::types::ItemDefinition>,
         visited: &mut std::collections::BTreeSet<ItemPath>,
-        on_stack: &mut std::collections::BTreeSet<ItemPath>,
         output: &mut Vec<&'a crate::semantic::types::ItemDefinition>,
     ) {
-        if visited.contains(path) || on_stack.contains(path) {
+        if visited.contains(path) {
             return;
         }
-        on_stack.insert(path.clone());
+        visited.insert(path.clone());
         if let Some(children) = deps.get(path) {
             // Visit deps in (templates-first, then alphabetical) order so
             // tied independent siblings stay deterministic.
@@ -110,11 +126,9 @@ pub fn topo_sort_module_items<'a>(
                 bg.cmp(&ag).then_with(|| a.cmp(b))
             });
             for child in children {
-                visit(child, deps, by_path, visited, on_stack, output);
+                visit(child, deps, by_path, visited, output);
             }
         }
-        on_stack.remove(path);
-        visited.insert(path.clone());
         if let Some(item) = by_path.get(path) {
             output.push(item);
         }
@@ -127,16 +141,95 @@ pub fn topo_sort_module_items<'a>(
         bg.cmp(&ag).then_with(|| a.cmp(b))
     });
     for path in &roots {
-        visit(
-            path,
-            &deps,
-            &by_path,
-            &mut visited,
-            &mut on_stack,
-            &mut output,
-        );
+        visit(path, &deps, &by_path, &mut visited, &mut output);
     }
-    output
+    Ok(output)
+}
+
+/// Run Tarjan's SCC algorithm over the given adjacency map; return the
+/// first non-trivial SCC found (size > 1), as a path through the cycle
+/// in deterministic order. Returns `None` if the graph is acyclic.
+pub fn first_scc_cycle<K>(adj: &BTreeMap<K, BTreeSet<K>>) -> Option<Vec<K>>
+where
+    K: Ord + Clone,
+{
+    use std::collections::BTreeMap as Map;
+
+    struct State<'a, K: Ord + Clone> {
+        adj: &'a Map<K, BTreeSet<K>>,
+        index: usize,
+        stack: Vec<K>,
+        on_stack: BTreeSet<K>,
+        indices: Map<K, usize>,
+        lowlinks: Map<K, usize>,
+        cycle: Option<Vec<K>>,
+    }
+
+    fn strongconnect<K: Ord + Clone>(node: &K, st: &mut State<'_, K>) {
+        if st.cycle.is_some() {
+            return;
+        }
+        st.indices.insert(node.clone(), st.index);
+        st.lowlinks.insert(node.clone(), st.index);
+        st.index += 1;
+        st.stack.push(node.clone());
+        st.on_stack.insert(node.clone());
+
+        if let Some(succs) = st.adj.get(node) {
+            for w in succs {
+                if !st.indices.contains_key(w) {
+                    strongconnect(w, st);
+                    if st.cycle.is_some() {
+                        return;
+                    }
+                    let w_low = *st.lowlinks.get(w).unwrap();
+                    let v_low = st.lowlinks.get_mut(node).unwrap();
+                    *v_low = (*v_low).min(w_low);
+                } else if st.on_stack.contains(w) {
+                    let w_idx = *st.indices.get(w).unwrap();
+                    let v_low = st.lowlinks.get_mut(node).unwrap();
+                    *v_low = (*v_low).min(w_idx);
+                }
+            }
+        }
+
+        if st.lowlinks.get(node) == st.indices.get(node) {
+            // Pop an SCC off the stack.
+            let mut scc = Vec::new();
+            loop {
+                let w = st.stack.pop().expect("non-empty stack at SCC root");
+                st.on_stack.remove(&w);
+                let done = w == *node;
+                scc.push(w);
+                if done {
+                    break;
+                }
+            }
+            if scc.len() > 1 {
+                scc.reverse();
+                st.cycle = Some(scc);
+            }
+        }
+    }
+
+    let mut st = State {
+        adj,
+        index: 0,
+        stack: Vec::new(),
+        on_stack: BTreeSet::new(),
+        indices: Map::new(),
+        lowlinks: Map::new(),
+        cycle: None,
+    };
+    for node in adj.keys() {
+        if !st.indices.contains_key(node) {
+            strongconnect(node, &mut st);
+            if st.cycle.is_some() {
+                break;
+            }
+        }
+    }
+    st.cycle
 }
 
 fn collect_intra_module_full_deps(
@@ -627,5 +720,61 @@ fn record_path(
                     .insert(target.clone());
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn graph(edges: &[(&str, &[&str])]) -> BTreeMap<String, BTreeSet<String>> {
+        edges
+            .iter()
+            .map(|(k, vs)| {
+                (
+                    (*k).to_string(),
+                    vs.iter().map(|v| (*v).to_string()).collect(),
+                )
+            })
+            .collect()
+    }
+
+    #[test]
+    fn first_scc_cycle_detects_two_node_cycle() {
+        let g = graph(&[("a", &["b"]), ("b", &["a"])]);
+        let cycle = first_scc_cycle(&g).expect("cycle expected");
+        let cycle: BTreeSet<_> = cycle.into_iter().collect();
+        assert_eq!(cycle, ["a", "b"].iter().map(|s| s.to_string()).collect());
+    }
+
+    #[test]
+    fn first_scc_cycle_detects_three_node_cycle() {
+        let g = graph(&[
+            ("a", &["b"]),
+            ("b", &["c"]),
+            ("c", &["a"]),
+            ("d", &[]), // a disjoint acyclic node
+        ]);
+        let cycle = first_scc_cycle(&g).expect("cycle expected");
+        let cycle: BTreeSet<_> = cycle.into_iter().collect();
+        assert_eq!(
+            cycle,
+            ["a", "b", "c"].iter().map(|s| s.to_string()).collect()
+        );
+    }
+
+    #[test]
+    fn first_scc_cycle_returns_none_for_dag() {
+        let g = graph(&[("a", &["b", "c"]), ("b", &["d"]), ("c", &["d"]), ("d", &[])]);
+        assert!(first_scc_cycle(&g).is_none());
+    }
+
+    #[test]
+    fn first_scc_cycle_ignores_disjoint_acyclic_components() {
+        // Cycle on the right side, disjoint DAG on the left.
+        let g = graph(&[("a", &["b"]), ("b", &[]), ("x", &["y"]), ("y", &["x"])]);
+        let cycle = first_scc_cycle(&g).expect("cycle expected");
+        let cycle: BTreeSet<_> = cycle.into_iter().collect();
+        assert_eq!(cycle, ["x", "y"].iter().map(|s| s.to_string()).collect());
     }
 }
