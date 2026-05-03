@@ -17,8 +17,8 @@ use crate::{
     semantic::{
         Module, TypeRegistry,
         types::{
-            BitflagsDefinition, EnumDefinition, ItemCategory, ItemDefinitionInner, Region, Type,
-            TypeAliasDefinition, TypeDefinition,
+            Argument, BitflagsDefinition, EnumDefinition, ExternValue, Function, ItemCategory,
+            ItemDefinitionInner, Region, Type, TypeAliasDefinition, TypeDefinition,
         },
     },
 };
@@ -62,11 +62,50 @@ pub fn collect_module_deps(
         }
     }
 
+    for ev in &module.extern_values {
+        walk_extern_value(ev, &mut deps, module_path, registry);
+    }
+    for func in module.functions() {
+        walk_function(func, &mut deps, module_path, registry);
+    }
+
     // Drop self-references so we don't try to include our own header.
     deps.include_modules.remove(module_path);
     deps.forward_decls.remove(module_path);
 
     deps
+}
+
+fn walk_extern_value(
+    ev: &ExternValue,
+    deps: &mut ModuleDeps,
+    module_path: &ItemPath,
+    registry: &TypeRegistry,
+) {
+    // Pointer-typed externs only need a forward decl; by-value externs
+    // (rare) need a full include. Use the conservative FullDef rule for
+    // anything that isn't already pointer-shaped.
+    let kind = match &ev.type_ {
+        Type::ConstPointer(_) | Type::MutPointer(_) | Type::Function(..) => EdgeKind::FwdOnly,
+        _ => EdgeKind::FullDef,
+    };
+    walk_type(&ev.type_, kind, deps, module_path, registry);
+}
+
+fn walk_function(
+    func: &Function,
+    deps: &mut ModuleDeps,
+    module_path: &ItemPath,
+    registry: &TypeRegistry,
+) {
+    for arg in &func.arguments {
+        if let Argument::Field { type_, .. } = arg {
+            walk_type(type_, EdgeKind::FwdOnly, deps, module_path, registry);
+        }
+    }
+    if let Some(ret) = &func.return_type {
+        walk_type(ret, EdgeKind::FwdOnly, deps, module_path, registry);
+    }
 }
 
 fn walk_type_def(
@@ -77,6 +116,17 @@ fn walk_type_def(
 ) {
     for region in &td.regions {
         walk_region(region, deps, module_path, registry);
+    }
+    if let Some(vftable) = &td.vftable {
+        // The vftable type itself is referenced via a pointer in the regions
+        // already; the functions' arg/return types contribute FwdOnly edges
+        // for cross-module type lookups in method wrappers.
+        for func in &vftable.functions {
+            walk_function(func, deps, module_path, registry);
+        }
+    }
+    for func in &td.associated_functions {
+        walk_function(func, deps, module_path, registry);
     }
 }
 
