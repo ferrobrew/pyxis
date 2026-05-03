@@ -13,6 +13,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
+    backends::cpp::extern_bindings::CppExternBinding,
     grammar::ItemPath,
     semantic::{
         Module, TypeRegistry,
@@ -36,6 +37,9 @@ pub struct ModuleDeps {
     pub include_modules: BTreeSet<ItemPath>,
     /// Items that only need a forward declaration, grouped by defining module.
     pub forward_decls: BTreeMap<ItemPath, BTreeSet<ItemPath>>,
+    /// External `#include` directives (e.g. `<atomic>`, `\"windows.h\"`)
+    /// pulled in by referenced extern types via `#[cpp_header]`.
+    pub include_headers: BTreeSet<String>,
 }
 
 /// Collect `ModuleDeps` for the given module by walking every item it owns.
@@ -43,6 +47,7 @@ pub fn collect_module_deps(
     module_path: &ItemPath,
     module: &Module,
     registry: &TypeRegistry,
+    bindings: &BTreeMap<ItemPath, CppExternBinding>,
 ) -> ModuleDeps {
     let mut deps = ModuleDeps::default();
 
@@ -51,22 +56,26 @@ pub fn collect_module_deps(
             continue;
         };
         match &resolved.inner {
-            ItemDefinitionInner::Type(td) => walk_type_def(td, &mut deps, module_path, registry),
-            ItemDefinitionInner::Enum(ed) => walk_enum_def(ed, &mut deps, module_path, registry),
+            ItemDefinitionInner::Type(td) => {
+                walk_type_def(td, &mut deps, module_path, registry, bindings)
+            }
+            ItemDefinitionInner::Enum(ed) => {
+                walk_enum_def(ed, &mut deps, module_path, registry, bindings)
+            }
             ItemDefinitionInner::Bitflags(bd) => {
-                walk_bitflags_def(bd, &mut deps, module_path, registry)
+                walk_bitflags_def(bd, &mut deps, module_path, registry, bindings)
             }
             ItemDefinitionInner::TypeAlias(ta) => {
-                walk_type_alias_def(ta, &mut deps, module_path, registry)
+                walk_type_alias_def(ta, &mut deps, module_path, registry, bindings)
             }
         }
     }
 
     for ev in &module.extern_values {
-        walk_extern_value(ev, &mut deps, module_path, registry);
+        walk_extern_value(ev, &mut deps, module_path, registry, bindings);
     }
     for func in module.functions() {
-        walk_function(func, &mut deps, module_path, registry);
+        walk_function(func, &mut deps, module_path, registry, bindings);
     }
 
     // Drop self-references so we don't try to include our own header.
@@ -81,6 +90,7 @@ fn walk_extern_value(
     deps: &mut ModuleDeps,
     module_path: &ItemPath,
     registry: &TypeRegistry,
+    bindings: &BTreeMap<ItemPath, CppExternBinding>,
 ) {
     // Pointer-typed externs only need a forward decl; by-value externs
     // (rare) need a full include. Use the conservative FullDef rule for
@@ -89,7 +99,7 @@ fn walk_extern_value(
         Type::ConstPointer(_) | Type::MutPointer(_) | Type::Function(..) => EdgeKind::FwdOnly,
         _ => EdgeKind::FullDef,
     };
-    walk_type(&ev.type_, kind, deps, module_path, registry);
+    walk_type(&ev.type_, kind, deps, module_path, registry, bindings);
 }
 
 fn walk_function(
@@ -97,14 +107,29 @@ fn walk_function(
     deps: &mut ModuleDeps,
     module_path: &ItemPath,
     registry: &TypeRegistry,
+    bindings: &BTreeMap<ItemPath, CppExternBinding>,
 ) {
     for arg in &func.arguments {
         if let Argument::Field { type_, .. } = arg {
-            walk_type(type_, EdgeKind::FwdOnly, deps, module_path, registry);
+            walk_type(
+                type_,
+                EdgeKind::FwdOnly,
+                deps,
+                module_path,
+                registry,
+                bindings,
+            );
         }
     }
     if let Some(ret) = &func.return_type {
-        walk_type(ret, EdgeKind::FwdOnly, deps, module_path, registry);
+        walk_type(
+            ret,
+            EdgeKind::FwdOnly,
+            deps,
+            module_path,
+            registry,
+            bindings,
+        );
     }
 }
 
@@ -113,20 +138,18 @@ fn walk_type_def(
     deps: &mut ModuleDeps,
     module_path: &ItemPath,
     registry: &TypeRegistry,
+    bindings: &BTreeMap<ItemPath, CppExternBinding>,
 ) {
     for region in &td.regions {
-        walk_region(region, deps, module_path, registry);
+        walk_region(region, deps, module_path, registry, bindings);
     }
     if let Some(vftable) = &td.vftable {
-        // The vftable type itself is referenced via a pointer in the regions
-        // already; the functions' arg/return types contribute FwdOnly edges
-        // for cross-module type lookups in method wrappers.
         for func in &vftable.functions {
-            walk_function(func, deps, module_path, registry);
+            walk_function(func, deps, module_path, registry, bindings);
         }
     }
     for func in &td.associated_functions {
-        walk_function(func, deps, module_path, registry);
+        walk_function(func, deps, module_path, registry, bindings);
     }
 }
 
@@ -135,8 +158,16 @@ fn walk_region(
     deps: &mut ModuleDeps,
     module_path: &ItemPath,
     registry: &TypeRegistry,
+    bindings: &BTreeMap<ItemPath, CppExternBinding>,
 ) {
-    walk_type(&region.type_ref, EdgeKind::FullDef, deps, module_path, registry);
+    walk_type(
+        &region.type_ref,
+        EdgeKind::FullDef,
+        deps,
+        module_path,
+        registry,
+        bindings,
+    );
 }
 
 fn walk_enum_def(
@@ -144,8 +175,16 @@ fn walk_enum_def(
     deps: &mut ModuleDeps,
     module_path: &ItemPath,
     registry: &TypeRegistry,
+    bindings: &BTreeMap<ItemPath, CppExternBinding>,
 ) {
-    walk_type(&ed.type_, EdgeKind::FullDef, deps, module_path, registry);
+    walk_type(
+        &ed.type_,
+        EdgeKind::FullDef,
+        deps,
+        module_path,
+        registry,
+        bindings,
+    );
 }
 
 fn walk_bitflags_def(
@@ -153,8 +192,16 @@ fn walk_bitflags_def(
     deps: &mut ModuleDeps,
     module_path: &ItemPath,
     registry: &TypeRegistry,
+    bindings: &BTreeMap<ItemPath, CppExternBinding>,
 ) {
-    walk_type(&bd.type_, EdgeKind::FullDef, deps, module_path, registry);
+    walk_type(
+        &bd.type_,
+        EdgeKind::FullDef,
+        deps,
+        module_path,
+        registry,
+        bindings,
+    );
 }
 
 fn walk_type_alias_def(
@@ -162,10 +209,16 @@ fn walk_type_alias_def(
     deps: &mut ModuleDeps,
     module_path: &ItemPath,
     registry: &TypeRegistry,
+    bindings: &BTreeMap<ItemPath, CppExternBinding>,
 ) {
-    // Aliases re-export their target; the target needs to be fully visible to
-    // anyone substituting through the alias.
-    walk_type(&ta.target, EdgeKind::FullDef, deps, module_path, registry);
+    walk_type(
+        &ta.target,
+        EdgeKind::FullDef,
+        deps,
+        module_path,
+        registry,
+        bindings,
+    );
 }
 
 fn walk_type(
@@ -174,33 +227,98 @@ fn walk_type(
     deps: &mut ModuleDeps,
     module_path: &ItemPath,
     registry: &TypeRegistry,
+    bindings: &BTreeMap<ItemPath, CppExternBinding>,
 ) {
     match ty {
         Type::Unresolved(_) | Type::TypeParameter(_) => {}
-        Type::Raw(path) => record_path(path, kind, deps, module_path, registry),
+        Type::Raw(path) => record_path(path, kind, deps, module_path, registry, bindings),
         Type::Generic(base, args) => {
-            // The template's body must be fully visible to instantiate it.
-            record_path(base, EdgeKind::FullDef, deps, module_path, registry);
-            // Phase 1: assume args are FullDef. Phase 3 introduces
-            // #[cpp(template_args_pointer_only)] to flip these to FwdOnly.
+            record_path(base, EdgeKind::FullDef, deps, module_path, registry, bindings);
+            let arg_kind = if generic_is_pointer_only(base, registry) {
+                EdgeKind::FwdOnly
+            } else {
+                EdgeKind::FullDef
+            };
             for arg in args {
-                walk_type(arg, EdgeKind::FullDef, deps, module_path, registry);
+                walk_type(arg, arg_kind, deps, module_path, registry, bindings);
             }
         }
         Type::ConstPointer(inner) | Type::MutPointer(inner) => {
-            walk_type(inner, EdgeKind::FwdOnly, deps, module_path, registry);
+            walk_type(inner, EdgeKind::FwdOnly, deps, module_path, registry, bindings);
         }
         Type::Array(inner, _) => {
-            walk_type(inner, kind, deps, module_path, registry);
+            walk_type(inner, kind, deps, module_path, registry, bindings);
         }
         Type::Function(_, args, ret) => {
             for (_, arg_ty) in args {
-                walk_type(arg_ty, EdgeKind::FwdOnly, deps, module_path, registry);
+                walk_type(
+                    arg_ty,
+                    EdgeKind::FwdOnly,
+                    deps,
+                    module_path,
+                    registry,
+                    bindings,
+                );
             }
             if let Some(ret) = ret {
-                walk_type(ret, EdgeKind::FwdOnly, deps, module_path, registry);
+                walk_type(
+                    ret,
+                    EdgeKind::FwdOnly,
+                    deps,
+                    module_path,
+                    registry,
+                    bindings,
+                );
             }
         }
+    }
+}
+
+/// Walk a generic definition's body and determine whether every reference
+/// to a `TypeParameter` is reached only through a pointer/reference/function
+/// boundary. If so, callers can pass forward-declared types as args.
+pub fn generic_is_pointer_only(base: &ItemPath, registry: &TypeRegistry) -> bool {
+    let Ok(item) = registry.get(base, &crate::span::ItemLocation::internal()) else {
+        return false;
+    };
+    if !item.is_generic() {
+        return false;
+    }
+    let Some(resolved) = item.resolved() else {
+        return false;
+    };
+    match &resolved.inner {
+        ItemDefinitionInner::Type(td) => {
+            for region in &td.regions {
+                if !type_param_only_reached_through_indirection(&region.type_ref) {
+                    return false;
+                }
+            }
+            true
+        }
+        ItemDefinitionInner::TypeAlias(ta) => {
+            type_param_only_reached_through_indirection(&ta.target)
+        }
+        _ => false,
+    }
+}
+
+fn type_param_only_reached_through_indirection(ty: &Type) -> bool {
+    match ty {
+        // Hitting a raw TypeParameter directly means it's used by-value —
+        // not pointer-only.
+        Type::TypeParameter(_) => false,
+        // Pointers and functions are an "exit" — anything inside them is
+        // safe regardless of what it contains.
+        Type::ConstPointer(_) | Type::MutPointer(_) | Type::Function(..) => true,
+        Type::Array(inner, _) => type_param_only_reached_through_indirection(inner),
+        // A nested generic instantiation is only pointer-only-safe if its
+        // own args are. For Phase 3 we conservatively require all immediate
+        // type-arg slots to be indirected.
+        Type::Generic(_, args) => args
+            .iter()
+            .all(type_param_only_reached_through_indirection),
+        Type::Raw(_) | Type::Unresolved(_) => true,
     }
 }
 
@@ -210,6 +328,7 @@ fn record_path(
     deps: &mut ModuleDeps,
     module_path: &ItemPath,
     registry: &TypeRegistry,
+    bindings: &BTreeMap<ItemPath, CppExternBinding>,
 ) {
     // Predefined items (u32, f32, bool, AtomicI32, ...) are handled by
     // `<cstdint>` / hand-rolled aliases in the runtime header; nothing to
@@ -221,9 +340,19 @@ fn record_path(
         return;
     }
     if matches!(item.category, ItemCategory::Extern) {
-        // Extern types are resolved through #[cpp_header]/#[cpp_name] in
-        // Phase 3; for now skip them so we don't try to include a module
-        // that doesn't exist.
+        // Extern types: pull in the binding's `#[cpp_header]` (if any) and
+        // emit the corresponding `using` alias from this module's header.
+        // The alias itself lives in the defining module's `.hpp`, so we
+        // also include that module unless this is the defining module.
+        if let Some(binding) = bindings.get(target) {
+            if let Some(header) = &binding.header {
+                deps.include_headers.insert(header.clone());
+            }
+        }
+        let target_module = target.parent().unwrap_or_else(ItemPath::empty);
+        if &target_module != module_path {
+            deps.include_modules.insert(target_module);
+        }
         return;
     }
     let target_module = target.parent().unwrap_or_else(ItemPath::empty);

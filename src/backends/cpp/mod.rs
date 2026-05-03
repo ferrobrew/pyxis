@@ -21,31 +21,75 @@ use crate::{
 
 mod cmake;
 mod deps;
+mod extern_bindings;
 mod render;
+
+use extern_bindings::{CppExternBinding, build_cpp_extern_bindings};
+
+/// Top-level C++-backend entry point. Builds the cross-module C++ binding
+/// map once, then emits a `.hpp` (and matching `.cpp` if needed) per module,
+/// the shared `pyxis_runtime.hpp`, and the project-level CMake glue.
+pub fn build(
+    out_dir: &Path,
+    semantic_state: &ResolvedSemanticState,
+    project: &Project,
+) -> Result<()> {
+    let bindings = build_cpp_extern_bindings(semantic_state);
+    for (key, module) in semantic_state.modules() {
+        write_module(out_dir, key, semantic_state, module, &bindings)?;
+    }
+    write_runtime_header(out_dir)?;
+    write_cmake(out_dir, project)?;
+    Ok(())
+}
 
 /// Emit `<out_dir>/include/<module>/...hpp` (and a matching `.cpp` if there
 /// are address-bound free functions or extern values to define) for a single
 /// module.
-pub fn write_module(
+fn write_module(
     out_dir: &Path,
     key: &ItemPath,
     semantic_state: &ResolvedSemanticState,
     module: &Module,
+    bindings: &std::collections::BTreeMap<ItemPath, CppExternBinding>,
 ) -> Result<()> {
     if key.is_empty() {
         return Ok(());
     }
 
     let registry = semantic_state.type_registry();
-    let module_deps = deps::collect_module_deps(key, module, registry);
+    let module_deps = deps::collect_module_deps(key, module, registry, bindings);
+    let cpp_backends = module.backends.get("cpp");
+    let prologue: String = cpp_backends
+        .map(|bs| {
+            bs.iter()
+                .filter_map(|b| b.prologue.as_deref())
+                .collect::<Vec<_>>()
+                .join("\n")
+        })
+        .unwrap_or_default();
+    let epilogue: String = cpp_backends
+        .map(|bs| {
+            bs.iter()
+                .filter_map(|b| b.epilogue.as_deref())
+                .collect::<Vec<_>>()
+                .join("\n")
+        })
+        .unwrap_or_default();
 
     let mut body = String::new();
     let mut post = String::new();
     let mut wrote_anything = false;
     let mut sorted_items: Vec<_> = module.definitions(registry).collect();
-    sorted_items.sort_by_key(|d| d.path.clone());
+    // Templates first so peers that instantiate them by-value see the full
+    // body; secondary key is the path for stable, alphabetical output.
+    sorted_items.sort_by(|a, b| {
+        b.is_generic()
+            .cmp(&a.is_generic())
+            .then_with(|| a.path.cmp(&b.path))
+    });
     for item in sorted_items {
-        let Some(rendered) = render::render_item(item, key, registry)? else {
+        let Some(rendered) = render::render_item(item, key, registry, bindings)? else {
             continue;
         };
         if !rendered.decl.is_empty() {
@@ -89,7 +133,12 @@ pub fn write_module(
         wrote_anything = true;
     }
 
-    if !wrote_anything && module_deps.include_modules.is_empty() {
+    if !wrote_anything
+        && module_deps.include_modules.is_empty()
+        && module_deps.include_headers.is_empty()
+        && prologue.is_empty()
+        && epilogue.is_empty()
+    {
         return Ok(());
     }
 
@@ -108,6 +157,14 @@ pub fn write_module(
     writeln!(out, "#include <cstdint>")?;
     writeln!(out, "#include <cstddef>")?;
     writeln!(out, "#include \"pyxis_runtime.hpp\"")?;
+
+    // External `#include`s pulled in via #[cpp_header] on extern types.
+    if !module_deps.include_headers.is_empty() {
+        writeln!(out)?;
+        for header in &module_deps.include_headers {
+            writeln!(out, "#include {header}")?;
+        }
+    }
 
     // Includes for FullDef cross-module deps.
     if !module_deps.include_modules.is_empty() {
@@ -132,17 +189,28 @@ pub fn write_module(
         }
     }
 
-    if wrote_anything {
+    // Module-level prologue (e.g. JC2's hand-written shared_ptr / atomic
+    // template specializations) is spliced in *before* the namespace block,
+    // so it can also pull in additional `#include`s if needed.
+    if !prologue.is_empty() {
+        writeln!(out)?;
+        for line in prologue.lines() {
+            writeln!(out, "{line}")?;
+        }
+    }
+
+    if wrote_anything || !epilogue.is_empty() {
         writeln!(out)?;
         open_namespace(&mut out, key)?;
-        // Intra-module forward declarations: every non-alias, non-generic
+        // Intra-module forward declarations: every non-alias, non-extern
         // resolved item gets a forward decl up top so pointer-typed fields
-        // can reference peers defined later in the file.
-        let mut intra_fwd: Vec<(&str, &'static str)> = Vec::new();
+        // (and generic instantiations of pointer-only templates) can
+        // reference peers defined later in the file. Templates need a full
+        // template-parameter signature on their forward decl.
+        let mut intra_fwd: Vec<String> = Vec::new();
         for item in module.definitions(registry) {
             if item.is_predefined()
                 || matches!(item.category, crate::semantic::types::ItemCategory::Extern)
-                || item.is_generic()
             {
                 continue;
             }
@@ -154,15 +222,26 @@ pub fn write_module(
                 ItemDefinitionInner::Enum(_) | ItemDefinitionInner::Bitflags(_) => continue,
                 ItemDefinitionInner::TypeAlias(_) => continue,
             };
-            if let Some(leaf) = item.path.last() {
-                intra_fwd.push((leaf.as_str(), kind));
+            let Some(leaf) = item.path.last() else {
+                continue;
+            };
+            if item.is_generic() {
+                let params = item
+                    .type_parameters
+                    .iter()
+                    .map(|p| format!("class {p}"))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                intra_fwd.push(format!("template <{params}> {kind} {leaf};"));
+            } else {
+                intra_fwd.push(format!("{kind} {leaf};"));
             }
         }
         intra_fwd.sort();
         intra_fwd.dedup();
         if !intra_fwd.is_empty() {
-            for (leaf, kind) in &intra_fwd {
-                writeln!(out, "    {kind} {leaf};")?;
+            for line in &intra_fwd {
+                writeln!(out, "    {line}")?;
             }
             writeln!(out)?;
         }
@@ -176,6 +255,16 @@ pub fn write_module(
         if !post.is_empty() {
             writeln!(out)?;
             for line in post.lines() {
+                if line.is_empty() {
+                    writeln!(out)?;
+                } else {
+                    writeln!(out, "    {line}")?;
+                }
+            }
+        }
+        if !epilogue.is_empty() {
+            writeln!(out)?;
+            for line in epilogue.lines() {
                 if line.is_empty() {
                     writeln!(out)?;
                 } else {

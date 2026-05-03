@@ -169,11 +169,7 @@ pub fn build_with_store(
             Ok(())
         }
         Backend::Cpp => {
-            for (key, module) in resolved_semantic_state.modules() {
-                backends::cpp::write_module(out_dir, key, &resolved_semantic_state, module)?;
-            }
-            backends::cpp::write_runtime_header(out_dir)?;
-            backends::cpp::write_cmake(out_dir, &config.project)?;
+            backends::cpp::build(out_dir, &resolved_semantic_state, &config.project)?;
             Ok(())
         }
     }

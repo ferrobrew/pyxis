@@ -7,8 +7,10 @@
 
 use std::fmt::Write;
 
+use std::collections::BTreeMap;
+
 use crate::{
-    backends::Result,
+    backends::{Result, cpp::extern_bindings::CppExternBinding},
     grammar::ItemPath,
     semantic::{
         TypeRegistry,
@@ -31,25 +33,33 @@ pub struct RenderedItem {
 }
 
 /// Render a single item as a C++ definition. Returns `None` if the item
-/// doesn't produce direct output in this phase (generics, predefined, extern).
+/// doesn't produce direct output in this phase (predefined, or an extern
+/// type without a `#[cpp_name]` binding).
 pub fn render_item(
     item: &ItemDefinition,
     module_path: &ItemPath,
     registry: &TypeRegistry,
+    bindings: &BTreeMap<ItemPath, CppExternBinding>,
 ) -> Result<Option<RenderedItem>> {
     if item.is_predefined() {
         return Ok(None);
     }
     if matches!(item.category, crate::semantic::types::ItemCategory::Extern) {
+        if let Some(binding) = bindings.get(&item.path) {
+            if let Some(name) = &binding.name {
+                let leaf = item
+                    .path
+                    .last()
+                    .map(|s| s.as_str().to_string())
+                    .unwrap_or_default();
+                return Ok(Some(RenderedItem {
+                    decl: format!("using {leaf} = {name};\n"),
+                    post: String::new(),
+                }));
+            }
+        }
         return Ok(None);
     }
-    if item.is_generic() {
-        return Ok(Some(RenderedItem {
-            decl: format!("// TODO(cpp/phase 3): generic type `{}`\n", item.path),
-            post: String::new(),
-        }));
-    }
-
     let resolved = match item.resolved() {
         Some(r) => r,
         None => return Ok(None),
@@ -70,6 +80,7 @@ pub fn render_item(
             resolved.alignment,
             registry,
             item.visibility,
+            &item.type_parameters,
         )?,
         ItemDefinitionInner::Enum(ed) => RenderedItem {
             decl: render_enum(&name, ed, resolved.size, registry)?,
@@ -80,13 +91,26 @@ pub fn render_item(
             post: String::new(),
         },
         ItemDefinitionInner::TypeAlias(ta) => RenderedItem {
-            decl: render_type_alias(&name, ta, module_path, registry)?,
+            decl: render_type_alias(&name, ta, module_path, registry, &item.type_parameters)?,
             post: String::new(),
         },
     };
     Ok(Some(rendered))
 }
 
+fn template_clause(type_parameters: &[String]) -> String {
+    if type_parameters.is_empty() {
+        return String::new();
+    }
+    let params = type_parameters
+        .iter()
+        .map(|p| format!("class {p}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!("template <{params}>\n")
+}
+
+#[allow(clippy::too_many_arguments)]
 fn render_struct(
     name: &str,
     module_path: &ItemPath,
@@ -95,13 +119,23 @@ fn render_struct(
     alignment: usize,
     registry: &TypeRegistry,
     visibility: Visibility,
+    type_parameters: &[String],
 ) -> Result<RenderedItem> {
+    let is_generic = !type_parameters.is_empty();
     let mut out = String::new();
     render_doc(&mut out, &td.doc, 0)?;
     if td.packed {
         writeln!(out, "#pragma pack(push, 1)")?;
     }
-    writeln!(out, "struct alignas({alignment}) {name} {{")?;
+    let template = template_clause(type_parameters);
+    if is_generic {
+        // Templates: alignment depends on T, so let the compiler infer via the
+        // by-value field; skip explicit `alignas(N)`.
+        write!(out, "{template}struct {name} {{")?;
+        writeln!(out)?;
+    } else {
+        writeln!(out, "struct alignas({alignment}) {name} {{")?;
+    }
 
     // Fields
     for region in &td.regions {
@@ -158,11 +192,14 @@ fn render_struct(
         writeln!(out, "#pragma pack(pop)")?;
     }
 
-    // Layout assertions.
-    if size > 0 {
-        writeln!(out, "static_assert(sizeof({name}) == 0x{size:X});")?;
+    // Layout assertions. Generic templates can't sizeof/alignof at the
+    // declaration site (size depends on T), so skip those.
+    if !is_generic {
+        if size > 0 {
+            writeln!(out, "static_assert(sizeof({name}) == 0x{size:X});")?;
+        }
+        writeln!(out, "static_assert(alignof({name}) == {alignment});")?;
     }
-    writeln!(out, "static_assert(alignof({name}) == {alignment});")?;
     // Per-field offsetof asserts come in Phase 4 once the dep graph carries
     // the resolved offsets; size+alignment asserts above are the immediate
     // load-bearing checks.
@@ -171,28 +208,31 @@ fn render_struct(
     // Out-of-class inline method definitions go in the `post` bucket so the
     // orchestrator can place them after every peer struct in the namespace
     // is fully defined (vftable structs reference parent types and vice
-    // versa).
+    // versa). Generic templates currently have no out-of-class methods —
+    // method definitions on a template can stay inline.
     let mut post = String::new();
-    if let Some(addr) = td.singleton {
-        writeln!(
-            post,
-            "inline {name}* {name}::singleton() {{ return *reinterpret_cast<{name}**>(0x{addr:X}); }}"
-        )?;
-    }
-    if let Some(vftable) = &td.vftable {
-        render_vftable_accessor_definition(&mut post, name, vftable, module_path, registry)?;
-        for func in &vftable.functions {
+    if !is_generic {
+        if let Some(addr) = td.singleton {
+            writeln!(
+                post,
+                "inline {name}* {name}::singleton() {{ return *reinterpret_cast<{name}**>(0x{addr:X}); }}"
+            )?;
+        }
+        if let Some(vftable) = &td.vftable {
+            render_vftable_accessor_definition(&mut post, name, vftable, module_path, registry)?;
+            for func in &vftable.functions {
+                if func.visibility != Visibility::Public {
+                    continue;
+                }
+                render_method_definition(&mut post, name, func, module_path, registry)?;
+            }
+        }
+        for func in &td.associated_functions {
             if func.visibility != Visibility::Public {
                 continue;
             }
             render_method_definition(&mut post, name, func, module_path, registry)?;
         }
-    }
-    for func in &td.associated_functions {
-        if func.visibility != Visibility::Public {
-            continue;
-        }
-        render_method_definition(&mut post, name, func, module_path, registry)?;
     }
 
     Ok(RenderedItem { decl: out, post })
@@ -545,11 +585,13 @@ fn render_type_alias(
     ta: &TypeAliasDefinition,
     module_path: &ItemPath,
     registry: &TypeRegistry,
+    type_parameters: &[String],
 ) -> Result<String> {
     let mut out = String::new();
     render_doc(&mut out, &ta.doc, 0)?;
     let target = render_type(&ta.target, module_path, registry)?;
-    writeln!(out, "using {name} = {target};")?;
+    let template = template_clause(type_parameters);
+    writeln!(out, "{template}using {name} = {target};")?;
     Ok(out)
 }
 
