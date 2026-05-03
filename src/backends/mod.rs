@@ -1,3 +1,4 @@
+pub mod cpp;
 pub mod error;
 #[cfg(feature = "json")]
 pub mod json;

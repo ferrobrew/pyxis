@@ -48,6 +48,7 @@ enum Command {
 enum Backend {
     Rust,
     Json,
+    Cpp,
 }
 
 impl From<Backend> for pyxis::Backend {
@@ -55,6 +56,7 @@ impl From<Backend> for pyxis::Backend {
         match backend {
             Backend::Rust => pyxis::Backend::Rust,
             Backend::Json => pyxis::Backend::Json,
+            Backend::Cpp => pyxis::Backend::Cpp,
         }
     }
 }

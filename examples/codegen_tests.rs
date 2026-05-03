@@ -64,5 +64,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let json_content = std::fs::read_to_string(&json_output_file)?;
     serde_json::from_str::<pyxis::backends::json::JsonDocumentation>(&json_content)?;
 
+    // Generate C++ backend output (smoke test only — phase 0 emits nothing).
+    let cpp_output_dir = root.join("cpp_output");
+    std::fs::create_dir_all(&cpp_output_dir)?;
+    let mut file_store = pyxis::source_store::FileStore::new();
+    let result = pyxis::build_with_store(
+        &root.join("input"),
+        &cpp_output_dir,
+        pyxis::Backend::Cpp,
+        &mut file_store,
+    );
+    if let Err(err) = result {
+        let formatted = err.format_with_ariadne(&file_store);
+        eprintln!("{formatted}");
+        std::process::exit(1);
+    }
+
     Ok(())
 }
