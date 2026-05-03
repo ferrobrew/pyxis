@@ -1,13 +1,11 @@
 //! Item → C++ text rendering for the C++ backend.
 //!
 //! Owns the conversion of resolved IR items (structs, enums, bitflags, type
-//! aliases) into the textual output for `.hpp` files. Vftables, functions,
-//! generics, externs, and per-module prologue/epilogue are introduced in
-//! later phases.
-
-use std::fmt::Write;
+//! aliases, vftables, generics, extern bindings) into the textual output for
+//! `.hpp` and `.cpp` files.
 
 use std::collections::BTreeMap;
+use std::fmt::Write;
 
 use crate::{
     backends::{Result, cpp::extern_bindings::CppExternBinding},
@@ -23,6 +21,30 @@ use crate::{
     },
 };
 
+/// Bundle of state every render call needs: the module being rendered (for
+/// "same-module → bare name vs cross-module → fully qualified" decisions),
+/// the resolved type registry, and the project's extern-binding table.
+#[derive(Copy, Clone)]
+pub struct RenderCtx<'a> {
+    pub module_path: &'a ItemPath,
+    pub registry: &'a TypeRegistry,
+    pub bindings: &'a BTreeMap<ItemPath, CppExternBinding>,
+}
+
+impl<'a> RenderCtx<'a> {
+    pub fn new(
+        module_path: &'a ItemPath,
+        registry: &'a TypeRegistry,
+        bindings: &'a BTreeMap<ItemPath, CppExternBinding>,
+    ) -> Self {
+        Self {
+            module_path,
+            registry,
+            bindings,
+        }
+    }
+}
+
 /// Two-phase output for an item: the struct/enum body that goes inside the
 /// namespace at first pass, plus any out-of-class inline method definitions
 /// that have to come after every peer type is fully declared.
@@ -34,30 +56,16 @@ pub struct RenderedItem {
 
 /// Render a single item as a C++ definition. Returns `None` if the item
 /// doesn't produce direct output in this phase (predefined, or an extern
-/// type without a `#[cpp_name]` binding).
-pub fn render_item(
-    item: &ItemDefinition,
-    module_path: &ItemPath,
-    registry: &TypeRegistry,
-    bindings: &BTreeMap<ItemPath, CppExternBinding>,
-) -> Result<Option<RenderedItem>> {
+/// type — extern bindings are inlined at use sites via `render_path`).
+pub fn render_item(item: &ItemDefinition, ctx: RenderCtx) -> Result<Option<RenderedItem>> {
     if item.is_predefined() {
         return Ok(None);
     }
     if matches!(item.category, crate::semantic::types::ItemCategory::Extern) {
-        if let Some(binding) = bindings.get(&item.path) {
-            if let Some(name) = &binding.name {
-                let leaf = item
-                    .path
-                    .last()
-                    .map(|s| s.as_str().to_string())
-                    .unwrap_or_default();
-                return Ok(Some(RenderedItem {
-                    decl: format!("using {leaf} = {name};\n"),
-                    post: String::new(),
-                }));
-            }
-        }
+        // Externs with a cpp_name binding are substituted at every use site
+        // via `render_path`; we don't emit a `using` alias because the
+        // pyxis leaf name can contain generic syntax (`Foo<Bar<u32>>`),
+        // which is invalid C++ on the LHS of `using`.
         return Ok(None);
     }
     let resolved = match item.resolved() {
@@ -74,24 +82,23 @@ pub fn render_item(
     let rendered = match &resolved.inner {
         ItemDefinitionInner::Type(td) => render_struct(
             &name,
-            module_path,
             td,
             resolved.size,
             resolved.alignment,
-            registry,
+            ctx,
             item.visibility,
             &item.type_parameters,
         )?,
         ItemDefinitionInner::Enum(ed) => RenderedItem {
-            decl: render_enum(&name, ed, resolved.size, registry)?,
+            decl: render_enum(&name, ed, resolved.size, ctx)?,
             post: String::new(),
         },
         ItemDefinitionInner::Bitflags(bd) => RenderedItem {
-            decl: render_bitflags(&name, bd, resolved.size, registry)?,
+            decl: render_bitflags(&name, bd, resolved.size, ctx)?,
             post: String::new(),
         },
         ItemDefinitionInner::TypeAlias(ta) => RenderedItem {
-            decl: render_type_alias(&name, ta, module_path, registry, &item.type_parameters)?,
+            decl: render_type_alias(&name, ta, ctx, &item.type_parameters)?,
             post: String::new(),
         },
     };
@@ -110,14 +117,12 @@ fn template_clause(type_parameters: &[String]) -> String {
     format!("template <{params}>\n")
 }
 
-#[allow(clippy::too_many_arguments)]
 fn render_struct(
     name: &str,
-    module_path: &ItemPath,
     td: &TypeDefinition,
     size: usize,
     alignment: usize,
-    registry: &TypeRegistry,
+    ctx: RenderCtx,
     visibility: Visibility,
     type_parameters: &[String],
 ) -> Result<RenderedItem> {
@@ -139,7 +144,7 @@ fn render_struct(
 
     // Fields
     for region in &td.regions {
-        render_field(&mut out, region, module_path, registry)?;
+        render_field(&mut out, region, ctx)?;
     }
 
     // Conversion operators for #[base] regions (composition-based upcast).
@@ -150,7 +155,7 @@ fn render_struct(
         let Some(field_name) = region.name.as_deref() else {
             continue;
         };
-        let base_type = render_type(&region.type_ref, module_path, registry)?;
+        let base_type = render_type(&region.type_ref, ctx)?;
         writeln!(out)?;
         writeln!(
             out,
@@ -170,12 +175,12 @@ fn render_struct(
 
     // Vftable accessor + virtual-method wrapper signatures.
     if let Some(vftable) = &td.vftable {
-        render_vftable_accessor_decl(&mut out, vftable, module_path, registry)?;
+        render_vftable_accessor_decl(&mut out, vftable, ctx)?;
         for func in &vftable.functions {
             if func.visibility != Visibility::Public {
                 continue;
             }
-            render_method_signature(&mut out, func, module_path, registry)?;
+            render_method_signature(&mut out, func, ctx)?;
         }
     }
 
@@ -184,7 +189,7 @@ fn render_struct(
         if func.visibility != Visibility::Public {
             continue;
         }
-        render_method_signature(&mut out, func, module_path, registry)?;
+        render_method_signature(&mut out, func, ctx)?;
     }
 
     writeln!(out, "}};")?;
@@ -219,19 +224,19 @@ fn render_struct(
             )?;
         }
         if let Some(vftable) = &td.vftable {
-            render_vftable_accessor_definition(&mut post, name, vftable, module_path, registry)?;
+            render_vftable_accessor_definition(&mut post, name, vftable, ctx)?;
             for func in &vftable.functions {
                 if func.visibility != Visibility::Public {
                     continue;
                 }
-                render_method_definition(&mut post, name, func, module_path, registry)?;
+                render_method_definition(&mut post, name, func, ctx)?;
             }
         }
         for func in &td.associated_functions {
             if func.visibility != Visibility::Public {
                 continue;
             }
-            render_method_definition(&mut post, name, func, module_path, registry)?;
+            render_method_definition(&mut post, name, func, ctx)?;
         }
     }
 
@@ -241,10 +246,9 @@ fn render_struct(
 fn render_vftable_accessor_decl(
     out: &mut String,
     vftable: &TypeVftable,
-    module_path: &ItemPath,
-    registry: &TypeRegistry,
+    ctx: RenderCtx,
 ) -> Result<()> {
-    let vftable_type = render_type(&vftable.type_, module_path, registry)?;
+    let vftable_type = render_type(&vftable.type_, ctx)?;
     writeln!(out)?;
     writeln!(out, "    {vftable_type} _vftable_ptr() const;")?;
     Ok(())
@@ -254,10 +258,9 @@ fn render_vftable_accessor_definition(
     out: &mut String,
     parent_name: &str,
     vftable: &TypeVftable,
-    module_path: &ItemPath,
-    registry: &TypeRegistry,
+    ctx: RenderCtx,
 ) -> Result<()> {
-    let vftable_type = render_type(&vftable.type_, module_path, registry)?;
+    let vftable_type = render_type(&vftable.type_, ctx)?;
     if let Some(base_field) = &vftable.base_field {
         writeln!(
             out,
@@ -273,17 +276,12 @@ fn render_vftable_accessor_definition(
 }
 
 /// In-class method declaration (signature only).
-fn render_method_signature(
-    out: &mut String,
-    func: &Function,
-    module_path: &ItemPath,
-    registry: &TypeRegistry,
-) -> Result<()> {
+fn render_method_signature(out: &mut String, func: &Function, ctx: RenderCtx) -> Result<()> {
     if func.name.starts_with("_vfunc_") {
         return Ok(());
     }
     render_doc(out, &func.doc, 1)?;
-    let (return_text, sig_args_text, const_qual) = method_sig_parts(func, module_path, registry)?;
+    let (return_text, sig_args_text, const_qual) = method_sig_parts(func, ctx)?;
     writeln!(
         out,
         "    {return_text} {fn_name}({sig_args_text}){const_qual};",
@@ -297,14 +295,13 @@ fn render_method_definition(
     out: &mut String,
     parent_name: &str,
     func: &Function,
-    module_path: &ItemPath,
-    registry: &TypeRegistry,
+    ctx: RenderCtx,
 ) -> Result<()> {
     if func.name.starts_with("_vfunc_") {
         return Ok(());
     }
-    let (return_text, sig_args_text, const_qual) = method_sig_parts(func, module_path, registry)?;
-    let body_lines = method_body_lines(func, module_path, registry)?;
+    let (return_text, sig_args_text, const_qual) = method_sig_parts(func, ctx)?;
+    let body_lines = method_body_lines(func, ctx)?;
     writeln!(
         out,
         "inline {return_text} {parent_name}::{fn_name}({sig_args_text}){const_qual} {{",
@@ -319,11 +316,10 @@ fn render_method_definition(
 
 fn method_sig_parts(
     func: &Function,
-    module_path: &ItemPath,
-    registry: &TypeRegistry,
+    ctx: RenderCtx,
 ) -> Result<(String, String, &'static str)> {
     let return_text = if let Some(ret) = &func.return_type {
-        render_type(ret, module_path, registry)?
+        render_type(ret, ctx)?
     } else {
         "void".to_string()
     };
@@ -335,8 +331,9 @@ fn method_sig_parts(
             Argument::ConstSelf { .. } => self_kind = Some("const"),
             Argument::MutSelf { .. } => self_kind = Some("mut"),
             Argument::Field { name, type_, .. } => {
-                let ty = render_type(type_, module_path, registry)?;
-                sig_args.push(format!("{ty} {name}"));
+                let ty = render_type(type_, ctx)?;
+                let escaped = cpp_ident(name);
+                sig_args.push(format!("{ty} {escaped}"));
             }
         }
     }
@@ -348,13 +345,9 @@ fn method_sig_parts(
     Ok((return_text, sig_args.join(", "), const_qual))
 }
 
-fn method_body_lines(
-    func: &Function,
-    module_path: &ItemPath,
-    registry: &TypeRegistry,
-) -> Result<Vec<String>> {
+fn method_body_lines(func: &Function, ctx: RenderCtx) -> Result<Vec<String>> {
     let return_text = if let Some(ret) = &func.return_type {
-        render_type(ret, module_path, registry)?
+        render_type(ret, ctx)?
     } else {
         "void".to_string()
     };
@@ -363,7 +356,7 @@ fn method_body_lines(
     for arg in &func.arguments {
         match arg {
             Argument::ConstSelf { .. } | Argument::MutSelf { .. } => has_self = true,
-            Argument::Field { name, .. } => call_args.push(name.clone()),
+            Argument::Field { name, .. } => call_args.push(cpp_ident(name).into_owned()),
         }
     }
     let ret_kw = if return_text == "void" { "" } else { "return " };
@@ -376,7 +369,7 @@ fn method_body_lines(
                 .map(|a| match a {
                     Argument::ConstSelf { .. } => Ok("const void*".to_string()),
                     Argument::MutSelf { .. } => Ok("void*".to_string()),
-                    Argument::Field { type_, .. } => render_type(type_, module_path, registry),
+                    Argument::Field { type_, .. } => render_type(type_, ctx),
                 })
                 .collect::<Result<Vec<_>>>()?
                 .join(", ");
@@ -431,38 +424,27 @@ fn calling_conv_macro(cc: CallingConvention) -> &'static str {
     }
 }
 
-fn render_field(
-    out: &mut String,
-    region: &Region,
-    module_path: &ItemPath,
-    registry: &TypeRegistry,
-) -> Result<()> {
+fn render_field(out: &mut String, region: &Region, ctx: RenderCtx) -> Result<()> {
     render_doc(out, &region.doc, 1)?;
     let Some(field_name) = region.name.as_deref() else {
         // Should not happen post-resolution, but be defensive.
         writeln!(out, "    // <unnamed region skipped>")?;
         return Ok(());
     };
+    let field_name = cpp_ident(field_name);
     // Arrays render as `T name[N]`; function pointers as `R (cc *name)(args)`;
     // everything else as a plain `T name`.
     match &region.type_ref {
         Type::Array(inner, n) => {
-            let inner_text = render_type(inner, module_path, registry)?;
+            let inner_text = render_type(inner, ctx)?;
             writeln!(out, "    {inner_text} {field_name}[{n}];")?;
         }
         Type::Function(cc, args, ret) => {
-            let decl = render_function_pointer_decl(
-                field_name,
-                *cc,
-                args,
-                ret.as_deref(),
-                module_path,
-                registry,
-            )?;
+            let decl = render_function_pointer_decl(&field_name, *cc, args, ret.as_deref(), ctx)?;
             writeln!(out, "    {decl};")?;
         }
         _ => {
-            let ty_text = render_type(&region.type_ref, module_path, registry)?;
+            let ty_text = render_type(&region.type_ref, ctx)?;
             writeln!(out, "    {ty_text} {field_name};")?;
         }
     }
@@ -476,32 +458,30 @@ fn render_function_pointer_decl(
     cc: CallingConvention,
     args: &[(String, Box<Type>)],
     ret: Option<&Type>,
-    module_path: &ItemPath,
-    registry: &TypeRegistry,
+    ctx: RenderCtx,
 ) -> Result<String> {
     let cc_macro = calling_conv_macro(cc);
     let ret_text = ret
-        .map(|t| render_type(t, module_path, registry))
+        .map(|t| render_type(t, ctx))
         .transpose()?
         .unwrap_or_else(|| "void".to_string());
     let arg_types = args
         .iter()
-        .map(|(_, t)| render_type(t, module_path, registry))
+        .map(|(_, t)| render_type(t, ctx))
         .collect::<Result<Vec<_>>>()?
         .join(", ");
     Ok(format!("{ret_text} ({cc_macro}*{name})({arg_types})"))
 }
 
-
 fn render_enum(
     name: &str,
     ed: &EnumDefinition,
     size: usize,
-    registry: &TypeRegistry,
+    ctx: RenderCtx,
 ) -> Result<String> {
     let mut out = String::new();
     render_doc(&mut out, &ed.doc, 0)?;
-    let underlying = render_type(&ed.type_, &ItemPath::empty(), registry)?;
+    let underlying = render_type(&ed.type_, ctx)?;
     writeln!(out, "enum class {name} : {underlying} {{")?;
     for variant in &ed.variants {
         let EnumVariant {
@@ -528,11 +508,11 @@ fn render_bitflags(
     name: &str,
     bd: &BitflagsDefinition,
     size: usize,
-    registry: &TypeRegistry,
+    ctx: RenderCtx,
 ) -> Result<String> {
     let mut out = String::new();
     render_doc(&mut out, &bd.doc, 0)?;
-    let underlying = render_type(&bd.type_, &ItemPath::empty(), registry)?;
+    let underlying = render_type(&bd.type_, ctx)?;
     writeln!(out, "enum class {name} : {underlying} {{")?;
     for flag in &bd.flags {
         let BitflagField {
@@ -583,13 +563,12 @@ fn render_bitflags(
 fn render_type_alias(
     name: &str,
     ta: &TypeAliasDefinition,
-    module_path: &ItemPath,
-    registry: &TypeRegistry,
+    ctx: RenderCtx,
     type_parameters: &[String],
 ) -> Result<String> {
     let mut out = String::new();
     render_doc(&mut out, &ta.doc, 0)?;
-    let target = render_type(&ta.target, module_path, registry)?;
+    let target = render_type(&ta.target, ctx)?;
     let template = template_clause(type_parameters);
     writeln!(out, "{template}using {name} = {target};")?;
     Ok(out)
@@ -598,17 +577,13 @@ fn render_type_alias(
 /// Render a free function (`fn foo()` at module scope) as an `extern const`
 /// function-pointer declaration suitable for the `.hpp`. The matching `.cpp`
 /// definition is produced by [`render_free_function_definition`].
-pub fn render_free_function_decl(
-    func: &Function,
-    module_path: &ItemPath,
-    registry: &TypeRegistry,
-) -> Result<Option<String>> {
+pub fn render_free_function_decl(func: &Function, ctx: RenderCtx) -> Result<Option<String>> {
     let FunctionBody::Address { .. } = &func.body else {
         return Ok(None);
     };
     let mut out = String::new();
     render_doc(&mut out, &func.doc, 0)?;
-    let alias = function_pointer_alias(func, module_path, registry)?;
+    let alias = function_pointer_alias(func, ctx)?;
     writeln!(out, "{alias}")?;
     writeln!(out, "extern const {0}_t {0};", func.name)?;
     Ok(Some(out))
@@ -617,13 +592,12 @@ pub fn render_free_function_decl(
 /// Render the `.cpp` definition of a free function bound by `#[address]`.
 pub fn render_free_function_definition(
     func: &Function,
-    module_path: &ItemPath,
-    registry: &TypeRegistry,
+    ctx: RenderCtx,
 ) -> Result<Option<String>> {
     let FunctionBody::Address { address } = &func.body else {
         return Ok(None);
     };
-    let alias = function_pointer_alias(func, module_path, registry)?;
+    let alias = function_pointer_alias(func, ctx)?;
     let mut out = String::new();
     writeln!(out, "{alias}")?;
     writeln!(
@@ -635,15 +609,11 @@ pub fn render_free_function_definition(
 }
 
 /// `using foo_t = R (CC*)(P1, P2);`
-fn function_pointer_alias(
-    func: &Function,
-    module_path: &ItemPath,
-    registry: &TypeRegistry,
-) -> Result<String> {
+fn function_pointer_alias(func: &Function, ctx: RenderCtx) -> Result<String> {
     let return_text = func
         .return_type
         .as_ref()
-        .map(|t| render_type(t, module_path, registry))
+        .map(|t| render_type(t, ctx))
         .transpose()?
         .unwrap_or_else(|| "void".to_string());
     let cc = calling_conv_macro(func.calling_convention);
@@ -652,7 +622,7 @@ fn function_pointer_alias(
         let ty = match arg {
             Argument::ConstSelf { .. } => "const void*".to_string(),
             Argument::MutSelf { .. } => "void*".to_string(),
-            Argument::Field { type_, .. } => render_type(type_, module_path, registry)?,
+            Argument::Field { type_, .. } => render_type(type_, ctx)?,
         };
         arg_types.push(ty);
     }
@@ -665,22 +635,14 @@ fn function_pointer_alias(
 
 /// Header-side declaration of an `extern <name>: <type>` value: a getter
 /// returning a reference to the value at the address.
-pub fn render_extern_value_decl(
-    ev: &ExternValue,
-    module_path: &ItemPath,
-    registry: &TypeRegistry,
-) -> Result<String> {
-    let ty = render_type(&ev.type_, module_path, registry)?;
+pub fn render_extern_value_decl(ev: &ExternValue, ctx: RenderCtx) -> Result<String> {
+    let ty = render_type(&ev.type_, ctx)?;
     Ok(format!("{ty}& get_{0}();\n", ev.name))
 }
 
 /// `.cpp` definition for an `extern` value's getter.
-pub fn render_extern_value_definition(
-    ev: &ExternValue,
-    module_path: &ItemPath,
-    registry: &TypeRegistry,
-) -> Result<String> {
-    let ty = render_type(&ev.type_, module_path, registry)?;
+pub fn render_extern_value_definition(ev: &ExternValue, ctx: RenderCtx) -> Result<String> {
+    let ty = render_type(&ev.type_, ctx)?;
     Ok(format!(
         "{ty}& get_{0}() {{ return *reinterpret_cast<{ty}*>(0x{1:X}); }}\n",
         ev.name, ev.address
@@ -698,30 +660,26 @@ fn render_doc(out: &mut String, doc: &[String], indent_levels: usize) -> Result<
 
 /// Render a `Type` as a C++ type expression. For arrays the caller is
 /// responsible for placing the `[N]` suffix after the field name.
-pub fn render_type(ty: &Type, module_path: &ItemPath, registry: &TypeRegistry) -> Result<String> {
+pub fn render_type(ty: &Type, ctx: RenderCtx) -> Result<String> {
     Ok(match ty {
         Type::Unresolved(_) => "/* unresolved */ void".to_string(),
         Type::TypeParameter(name) => name.clone(),
-        Type::Raw(path) => render_path(path, module_path, registry),
+        Type::Raw(path) => render_path(path, ctx),
         Type::Generic(base, args) => {
-            let base_str = render_path(base, module_path, registry);
+            let base_str = render_path(base, ctx);
             let args_str = args
                 .iter()
-                .map(|a| render_type(a, module_path, registry))
+                .map(|a| render_type(a, ctx))
                 .collect::<Result<Vec<_>>>()?
                 .join(", ");
             format!("{base_str}<{args_str}>")
         }
-        Type::ConstPointer(inner) => {
-            format!("const {}*", render_type(inner, module_path, registry)?)
-        }
-        Type::MutPointer(inner) => {
-            format!("{}*", render_type(inner, module_path, registry)?)
-        }
+        Type::ConstPointer(inner) => format!("const {}*", render_type(inner, ctx)?),
+        Type::MutPointer(inner) => format!("{}*", render_type(inner, ctx)?),
         Type::Array(inner, _n) => {
             // Fields handle the `[N]` suffix themselves; for nested contexts
             // (like template args) emit the bare element type.
-            render_type(inner, module_path, registry)?
+            render_type(inner, ctx)?
         }
         Type::Function(cc, args, ret) => {
             // Bare function-pointer expression (no name) for use in template
@@ -729,12 +687,12 @@ pub fn render_type(ty: &Type, module_path: &ItemPath, registry: &TypeRegistry) -
             // handles the with-name field/parameter case.
             let cc_macro = calling_conv_macro(*cc);
             let ret_text = match ret.as_deref() {
-                Some(t) => render_type(t, module_path, registry)?,
+                Some(t) => render_type(t, ctx)?,
                 None => "void".to_string(),
             };
             let arg_types = args
                 .iter()
-                .map(|(_, t)| render_type(t, module_path, registry))
+                .map(|(_, t)| render_type(t, ctx))
                 .collect::<Result<Vec<_>>>()?
                 .join(", ");
             format!("{ret_text} ({cc_macro}*)({arg_types})")
@@ -742,17 +700,27 @@ pub fn render_type(ty: &Type, module_path: &ItemPath, registry: &TypeRegistry) -
     })
 }
 
-fn render_path(path: &ItemPath, module_path: &ItemPath, registry: &TypeRegistry) -> String {
+fn render_path(path: &ItemPath, ctx: RenderCtx) -> String {
     // Predefined items map to C++ primitives directly (no namespace).
-    if let Ok(item) = registry.get(path, &crate::span::ItemLocation::internal())
-        && let Some(predef) = item.predefined
-    {
-        return predefined_to_cpp(predef).to_string();
+    if let Ok(item) = ctx.registry.get(path, &crate::span::ItemLocation::internal()) {
+        if let Some(predef) = item.predefined {
+            return predefined_to_cpp(predef).to_string();
+        }
+        // Externs with a #[cpp_name] binding: substitute the C++ name
+        // verbatim (the pyxis leaf is allowed to contain generic syntax
+        // that can't be a C++ identifier).
+        if matches!(item.category, crate::semantic::types::ItemCategory::Extern) {
+            if let Some(binding) = ctx.bindings.get(path) {
+                if let Some(name) = &binding.name {
+                    return name.clone();
+                }
+            }
+        }
     }
     // Same-module: bare name.
     let target_module = path.parent().unwrap_or_else(ItemPath::empty);
     let leaf = path.last().map(|s| s.as_str()).unwrap_or("");
-    if &target_module == module_path {
+    if &target_module == ctx.module_path {
         return leaf.to_string();
     }
     // Cross-module: fully qualified.
@@ -765,6 +733,29 @@ fn render_path(path: &ItemPath, module_path: &ItemPath, registry: &TypeRegistry)
         out.push_str(seg.as_str());
     }
     out
+}
+
+/// Escape pyxis identifiers that collide with C++ reserved words by
+/// suffixing an underscore. Idempotent for non-conflicting names.
+pub fn cpp_ident(name: &str) -> std::borrow::Cow<'_, str> {
+    const KEYWORDS: &[&str] = &[
+        "alignas", "alignof", "and", "and_eq", "asm", "auto", "bitand", "bitor", "bool", "break",
+        "case", "catch", "char", "char8_t", "char16_t", "char32_t", "class", "compl", "concept",
+        "const", "consteval", "constexpr", "constinit", "const_cast", "continue", "co_await",
+        "co_return", "co_yield", "decltype", "default", "delete", "do", "double", "dynamic_cast",
+        "else", "enum", "explicit", "export", "extern", "false", "float", "for", "friend", "goto",
+        "if", "inline", "int", "long", "mutable", "namespace", "new", "noexcept", "not", "not_eq",
+        "nullptr", "operator", "or", "or_eq", "private", "protected", "public", "register",
+        "reinterpret_cast", "requires", "return", "short", "signed", "sizeof", "static",
+        "static_assert", "static_cast", "struct", "switch", "template", "this", "thread_local",
+        "throw", "true", "try", "typedef", "typeid", "typename", "union", "unsigned", "using",
+        "virtual", "void", "volatile", "wchar_t", "while", "xor", "xor_eq",
+    ];
+    if KEYWORDS.contains(&name) {
+        std::borrow::Cow::Owned(format!("{name}_"))
+    } else {
+        std::borrow::Cow::Borrowed(name)
+    }
 }
 
 fn predefined_to_cpp(p: PredefinedItem) -> &'static str {

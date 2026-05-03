@@ -197,6 +197,7 @@ fn collect_intra_module_full_deps(
     }
 }
 
+#[allow(clippy::only_used_in_recursion)]
 fn walk_intra(
     ty: &Type,
     kind: EdgeKind,
