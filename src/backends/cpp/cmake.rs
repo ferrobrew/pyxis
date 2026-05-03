@@ -37,8 +37,8 @@ if(NOT CMAKE_SIZEOF_VOID_P EQUAL {pointer_size})
     message(FATAL_ERROR "pyxis project '{raw_name}' expects pointer size {pointer_size} but toolchain has ${{CMAKE_SIZEOF_VOID_P}}. Use a {bits}-bit MSVC env.")
 endif()
 
-file(GLOB_RECURSE PYXIS_SRC CONFIGURE_DEPENDS "src/**/*.cpp")
-file(GLOB_RECURSE PYXIS_HDR CONFIGURE_DEPENDS "include/**/*.hpp")
+file(GLOB_RECURSE PYXIS_SRC CONFIGURE_DEPENDS "src/*.cpp")
+file(GLOB_RECURSE PYXIS_HDR CONFIGURE_DEPENDS "include/*.hpp")
 
 if(PYXIS_SRC)
     add_library({project_name} STATIC ${{PYXIS_SRC}} ${{PYXIS_HDR}})

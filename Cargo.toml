@@ -1,5 +1,5 @@
 [workspace]
-members = [".", "driver", "codegen_tests", "pyxis_macros"]
+members = [".", "driver", "codegen_tests/output/rust", "pyxis_macros"]
 default-members = [".", "driver"]
 
 [workspace.dependencies]

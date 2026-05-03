@@ -224,21 +224,61 @@ fn walk_intra(
                 EdgeKind::FullDef
             };
             for arg in args {
-                walk_intra(arg, arg_kind, module_path, item_paths, registry, bindings, out);
+                walk_intra(
+                    arg,
+                    arg_kind,
+                    module_path,
+                    item_paths,
+                    registry,
+                    bindings,
+                    out,
+                );
             }
         }
         Type::ConstPointer(inner) | Type::MutPointer(inner) => {
-            walk_intra(inner, EdgeKind::FwdOnly, module_path, item_paths, registry, bindings, out);
+            walk_intra(
+                inner,
+                EdgeKind::FwdOnly,
+                module_path,
+                item_paths,
+                registry,
+                bindings,
+                out,
+            );
         }
         Type::Array(inner, _) => {
-            walk_intra(inner, kind, module_path, item_paths, registry, bindings, out);
+            walk_intra(
+                inner,
+                kind,
+                module_path,
+                item_paths,
+                registry,
+                bindings,
+                out,
+            );
         }
         Type::Function(_, args, ret) => {
             for (_, t) in args {
-                walk_intra(t, EdgeKind::FwdOnly, module_path, item_paths, registry, bindings, out);
+                walk_intra(
+                    t,
+                    EdgeKind::FwdOnly,
+                    module_path,
+                    item_paths,
+                    registry,
+                    bindings,
+                    out,
+                );
             }
             if let Some(t) = ret {
-                walk_intra(t, EdgeKind::FwdOnly, module_path, item_paths, registry, bindings, out);
+                walk_intra(
+                    t,
+                    EdgeKind::FwdOnly,
+                    module_path,
+                    item_paths,
+                    registry,
+                    bindings,
+                    out,
+                );
             }
         }
     }
@@ -435,7 +475,14 @@ fn walk_type(
         Type::Unresolved(_) | Type::TypeParameter(_) => {}
         Type::Raw(path) => record_path(path, kind, deps, module_path, registry, bindings),
         Type::Generic(base, args) => {
-            record_path(base, EdgeKind::FullDef, deps, module_path, registry, bindings);
+            record_path(
+                base,
+                EdgeKind::FullDef,
+                deps,
+                module_path,
+                registry,
+                bindings,
+            );
             let arg_kind = if generic_is_pointer_only(base, registry) {
                 EdgeKind::FwdOnly
             } else {
@@ -446,7 +493,14 @@ fn walk_type(
             }
         }
         Type::ConstPointer(inner) | Type::MutPointer(inner) => {
-            walk_type(inner, EdgeKind::FwdOnly, deps, module_path, registry, bindings);
+            walk_type(
+                inner,
+                EdgeKind::FwdOnly,
+                deps,
+                module_path,
+                registry,
+                bindings,
+            );
         }
         Type::Array(inner, _) => {
             walk_type(inner, kind, deps, module_path, registry, bindings);
@@ -517,9 +571,7 @@ fn type_param_only_reached_through_indirection(ty: &Type) -> bool {
         // A nested generic instantiation is only pointer-only-safe if its
         // own args are. For Phase 3 we conservatively require all immediate
         // type-arg slots to be indirected.
-        Type::Generic(_, args) => args
-            .iter()
-            .all(type_param_only_reached_through_indirection),
+        Type::Generic(_, args) => args.iter().all(type_param_only_reached_through_indirection),
         Type::Raw(_) | Type::Unresolved(_) => true,
     }
 }
@@ -577,4 +629,3 @@ fn record_path(
         }
     }
 }
-

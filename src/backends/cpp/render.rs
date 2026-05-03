@@ -314,10 +314,7 @@ fn render_method_definition(
     Ok(())
 }
 
-fn method_sig_parts(
-    func: &Function,
-    ctx: RenderCtx,
-) -> Result<(String, String, &'static str)> {
+fn method_sig_parts(func: &Function, ctx: RenderCtx) -> Result<(String, String, &'static str)> {
     let return_text = if let Some(ret) = &func.return_type {
         render_type(ret, ctx)?
     } else {
@@ -473,12 +470,7 @@ fn render_function_pointer_decl(
     Ok(format!("{ret_text} ({cc_macro}*{name})({arg_types})"))
 }
 
-fn render_enum(
-    name: &str,
-    ed: &EnumDefinition,
-    size: usize,
-    ctx: RenderCtx,
-) -> Result<String> {
+fn render_enum(name: &str, ed: &EnumDefinition, size: usize, ctx: RenderCtx) -> Result<String> {
     let mut out = String::new();
     render_doc(&mut out, &ed.doc, 0)?;
     let underlying = render_type(&ed.type_, ctx)?;
@@ -524,19 +516,28 @@ fn render_bitflags(
     }
     writeln!(out, "}};")?;
     // Bitwise operators so `a | b` and friends type-check.
-    writeln!(out, "constexpr {name} operator|({name} a, {name} b) noexcept {{")?;
+    writeln!(
+        out,
+        "constexpr {name} operator|({name} a, {name} b) noexcept {{"
+    )?;
     writeln!(
         out,
         "    return static_cast<{name}>(static_cast<{underlying}>(a) | static_cast<{underlying}>(b));"
     )?;
     writeln!(out, "}}")?;
-    writeln!(out, "constexpr {name} operator&({name} a, {name} b) noexcept {{")?;
+    writeln!(
+        out,
+        "constexpr {name} operator&({name} a, {name} b) noexcept {{"
+    )?;
     writeln!(
         out,
         "    return static_cast<{name}>(static_cast<{underlying}>(a) & static_cast<{underlying}>(b));"
     )?;
     writeln!(out, "}}")?;
-    writeln!(out, "constexpr {name} operator^({name} a, {name} b) noexcept {{")?;
+    writeln!(
+        out,
+        "constexpr {name} operator^({name} a, {name} b) noexcept {{"
+    )?;
     writeln!(
         out,
         "    return static_cast<{name}>(static_cast<{underlying}>(a) ^ static_cast<{underlying}>(b));"
@@ -590,10 +591,7 @@ pub fn render_free_function_decl(func: &Function, ctx: RenderCtx) -> Result<Opti
 }
 
 /// Render the `.cpp` definition of a free function bound by `#[address]`.
-pub fn render_free_function_definition(
-    func: &Function,
-    ctx: RenderCtx,
-) -> Result<Option<String>> {
+pub fn render_free_function_definition(func: &Function, ctx: RenderCtx) -> Result<Option<String>> {
     let FunctionBody::Address { address } = &func.body else {
         return Ok(None);
     };
@@ -702,7 +700,10 @@ pub fn render_type(ty: &Type, ctx: RenderCtx) -> Result<String> {
 
 fn render_path(path: &ItemPath, ctx: RenderCtx) -> String {
     // Predefined items map to C++ primitives directly (no namespace).
-    if let Ok(item) = ctx.registry.get(path, &crate::span::ItemLocation::internal()) {
+    if let Ok(item) = ctx
+        .registry
+        .get(path, &crate::span::ItemLocation::internal())
+    {
         if let Some(predef) = item.predefined {
             return predefined_to_cpp(predef).to_string();
         }
@@ -739,17 +740,98 @@ fn render_path(path: &ItemPath, ctx: RenderCtx) -> String {
 /// suffixing an underscore. Idempotent for non-conflicting names.
 pub fn cpp_ident(name: &str) -> std::borrow::Cow<'_, str> {
     const KEYWORDS: &[&str] = &[
-        "alignas", "alignof", "and", "and_eq", "asm", "auto", "bitand", "bitor", "bool", "break",
-        "case", "catch", "char", "char8_t", "char16_t", "char32_t", "class", "compl", "concept",
-        "const", "consteval", "constexpr", "constinit", "const_cast", "continue", "co_await",
-        "co_return", "co_yield", "decltype", "default", "delete", "do", "double", "dynamic_cast",
-        "else", "enum", "explicit", "export", "extern", "false", "float", "for", "friend", "goto",
-        "if", "inline", "int", "long", "mutable", "namespace", "new", "noexcept", "not", "not_eq",
-        "nullptr", "operator", "or", "or_eq", "private", "protected", "public", "register",
-        "reinterpret_cast", "requires", "return", "short", "signed", "sizeof", "static",
-        "static_assert", "static_cast", "struct", "switch", "template", "this", "thread_local",
-        "throw", "true", "try", "typedef", "typeid", "typename", "union", "unsigned", "using",
-        "virtual", "void", "volatile", "wchar_t", "while", "xor", "xor_eq",
+        "alignas",
+        "alignof",
+        "and",
+        "and_eq",
+        "asm",
+        "auto",
+        "bitand",
+        "bitor",
+        "bool",
+        "break",
+        "case",
+        "catch",
+        "char",
+        "char8_t",
+        "char16_t",
+        "char32_t",
+        "class",
+        "compl",
+        "concept",
+        "const",
+        "consteval",
+        "constexpr",
+        "constinit",
+        "const_cast",
+        "continue",
+        "co_await",
+        "co_return",
+        "co_yield",
+        "decltype",
+        "default",
+        "delete",
+        "do",
+        "double",
+        "dynamic_cast",
+        "else",
+        "enum",
+        "explicit",
+        "export",
+        "extern",
+        "false",
+        "float",
+        "for",
+        "friend",
+        "goto",
+        "if",
+        "inline",
+        "int",
+        "long",
+        "mutable",
+        "namespace",
+        "new",
+        "noexcept",
+        "not",
+        "not_eq",
+        "nullptr",
+        "operator",
+        "or",
+        "or_eq",
+        "private",
+        "protected",
+        "public",
+        "register",
+        "reinterpret_cast",
+        "requires",
+        "return",
+        "short",
+        "signed",
+        "sizeof",
+        "static",
+        "static_assert",
+        "static_cast",
+        "struct",
+        "switch",
+        "template",
+        "this",
+        "thread_local",
+        "throw",
+        "true",
+        "try",
+        "typedef",
+        "typeid",
+        "typename",
+        "union",
+        "unsigned",
+        "using",
+        "virtual",
+        "void",
+        "volatile",
+        "wchar_t",
+        "while",
+        "xor",
+        "xor_eq",
     ];
     if KEYWORDS.contains(&name) {
         std::borrow::Cow::Owned(format!("{name}_"))

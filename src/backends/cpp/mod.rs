@@ -86,8 +86,7 @@ fn write_module(
     // is fully defined. Templates and independent items break ties by
     // template-first-then-alphabetical.
     let raw_items: Vec<_> = module.definitions(registry).collect();
-    let sorted_items =
-        deps::topo_sort_module_items(key, raw_items, registry, bindings);
+    let sorted_items = deps::topo_sort_module_items(key, raw_items, registry, bindings);
     for item in sorted_items {
         let Some(rendered) = render::render_item(item, ctx)? else {
             continue;

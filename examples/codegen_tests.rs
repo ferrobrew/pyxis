@@ -2,25 +2,25 @@ use std::path::Path;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let root = Path::new("codegen_tests");
-    let output_dir = root.join("output");
-    let json_output_dir = root.join("json_output");
+    let input_dir = root.join("input");
+    let output_root = root.join("output");
+    let rust_output = output_root.join("rust");
+    let json_output = output_root.join("json");
+    let cpp_output = output_root.join("cpp");
 
-    // Generate Rust backend output
+    // -- Rust backend ---------------------------------------------------
+    std::fs::create_dir_all(&rust_output)?;
     let mut file_store = pyxis::source_store::FileStore::new();
-    let result = pyxis::build_with_store(
-        &root.join("input"),
-        &output_dir,
+    if let Err(err) = pyxis::build_with_store(
+        &input_dir,
+        &rust_output,
         pyxis::Backend::Rust,
         &mut file_store,
-    );
-    if let Err(err) = result {
-        // Format errors with ariadne before displaying
-        let formatted = err.format_with_ariadne(&file_store);
-        eprintln!("{formatted}");
+    ) {
+        eprintln!("{}", err.format_with_ariadne(&file_store));
         std::process::exit(1);
     }
-
-    let mut module_decls = std::fs::read_dir(&output_dir)?
+    let mut module_decls = std::fs::read_dir(&rust_output)?
         .filter_map(|entry| Some(entry.ok()?.path()))
         .filter(|path| path.extension().and_then(|p| p.to_str()) == Some("rs"))
         .filter_map(|path| path.file_stem().map(|s| s.to_string_lossy().to_string()))
@@ -28,56 +28,69 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map(|name| format!("pub mod {name};"))
         .collect::<Vec<_>>();
     module_decls.sort();
-    std::fs::write(output_dir.join("lib.rs"), module_decls.join("\n") + "\n")?;
-
+    std::fs::write(rust_output.join("lib.rs"), module_decls.join("\n") + "\n")?;
     let status = std::process::Command::new("cargo")
         .arg("clippy")
-        .current_dir(&output_dir)
+        .current_dir(&rust_output)
         .status()?;
     if !status.success() {
         return Err("cargo clippy failed".into());
     }
 
-    // Generate JSON backend output
-    std::fs::create_dir_all(&json_output_dir)?;
+    // -- JSON backend ---------------------------------------------------
+    std::fs::create_dir_all(&json_output)?;
     let mut file_store = pyxis::source_store::FileStore::new();
-    let result = pyxis::build_with_store(
-        &root.join("input"),
-        &json_output_dir,
+    if let Err(err) = pyxis::build_with_store(
+        &input_dir,
+        &json_output,
         pyxis::Backend::Json,
         &mut file_store,
-    );
-    if let Err(err) = result {
-        // Format errors with ariadne before displaying
-        let formatted = err.format_with_ariadne(&file_store);
-        eprintln!("{formatted}");
+    ) {
+        eprintln!("{}", err.format_with_ariadne(&file_store));
         std::process::exit(1);
     }
-
-    // Verify JSON output exists and is valid
-    let json_output_file = json_output_dir.join("output.json");
+    let json_output_file = json_output.join("output.json");
     if !json_output_file.exists() {
         return Err("JSON output file was not created".into());
     }
-
-    // Parse JSON to verify it's valid
     let json_content = std::fs::read_to_string(&json_output_file)?;
     serde_json::from_str::<pyxis::backends::json::JsonDocumentation>(&json_content)?;
 
-    // Generate C++ backend output (smoke test only — phase 0 emits nothing).
-    let cpp_output_dir = root.join("cpp_output");
-    std::fs::create_dir_all(&cpp_output_dir)?;
+    // -- C++ backend ----------------------------------------------------
+    std::fs::create_dir_all(&cpp_output)?;
     let mut file_store = pyxis::source_store::FileStore::new();
-    let result = pyxis::build_with_store(
-        &root.join("input"),
-        &cpp_output_dir,
+    if let Err(err) = pyxis::build_with_store(
+        &input_dir,
+        &cpp_output,
         pyxis::Backend::Cpp,
         &mut file_store,
-    );
-    if let Err(err) = result {
-        let formatted = err.format_with_ariadne(&file_store);
-        eprintln!("{formatted}");
+    ) {
+        eprintln!("{}", err.format_with_ariadne(&file_store));
         std::process::exit(1);
+    }
+    // Configure + build the emitted CMake project against the host's vanilla
+    // C++ compiler. The codegen_tests corpus uses pointer_size = 8, so the
+    // layout `static_assert`s hold on x86-64 hosts without needing xwin or
+    // an MSVC toolchain.
+    let cpp_build_dir = root.join("target").join("cpp_build");
+    std::fs::create_dir_all(&cpp_build_dir)?;
+    let configure = std::process::Command::new("cmake")
+        .args(["-S"])
+        .arg(&cpp_output)
+        .args(["-B"])
+        .arg(&cpp_build_dir)
+        .arg("-DCMAKE_BUILD_TYPE=Release")
+        .status()?;
+    if !configure.success() {
+        return Err("cmake configure failed for C++ codegen output".into());
+    }
+    let build = std::process::Command::new("cmake")
+        .args(["--build"])
+        .arg(&cpp_build_dir)
+        .arg("--parallel")
+        .status()?;
+    if !build.success() {
+        return Err("cmake build failed for C++ codegen output".into());
     }
 
     Ok(())
