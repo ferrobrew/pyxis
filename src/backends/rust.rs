@@ -647,6 +647,14 @@ fn build_type_alias(
 }
 
 fn build_function(function: &Function) -> Result<proc_macro2::TokenStream> {
+    // External-body methods declare their existence in pyxis but get their
+    // body from the user's `backend rust prologue/epilogue` block. Rust
+    // permits multiple `impl Foo` blocks, so the user's epilogue can host
+    // its own `impl Foo { fn bar(...) { ... } }` without conflict — and
+    // the rust backend skips emission entirely.
+    if function.body.is_external() {
+        return Ok(proc_macro2::TokenStream::new());
+    }
     let name = str_to_ident(&function.name);
     let doc = doc_to_tokens(false, &function.doc);
 
@@ -739,6 +747,11 @@ fn build_function(function: &Function) -> Result<proc_macro2::TokenStream> {
                 let f = (&raw const (*self.vftable()).#function_to_call_name).read();
                 f(#(#call_arguments),*)
             }
+        }
+        FunctionBody::External => {
+            // External-body functions are short-circuited at the top of
+            // build_function — we never reach here.
+            unreachable!("FunctionBody::External handled above");
         }
     };
 

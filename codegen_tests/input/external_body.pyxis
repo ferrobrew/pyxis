@@ -1,0 +1,36 @@
+// Tests #[external_body] - methods declared on a type whose bodies are
+// supplied by the target backend's prologue/epilogue rather than bound
+// to a binary address.
+#[align(4)]
+pub type Counter {
+    pub value: u32,
+}
+impl Counter {
+    #[external_body]
+    pub fn bump(&mut self) -> u32;
+    #[external_body]
+    pub fn read(&self) -> u32;
+}
+
+backend rust epilogue r#"
+    impl Counter {
+        pub fn bump(&mut self) -> u32 { self.value += 1; self.value }
+        pub fn read(&self) -> u32 { self.value }
+    }
+"#;
+
+backend cpp epilogue r#"
+inline ::std::uint32_t Counter::bump() { value += 1; return value; }
+inline ::std::uint32_t Counter::read() const { return value; }
+"#;
+
+#[external_body]
+pub fn module_hello() -> u32;
+
+backend rust epilogue r#"
+    pub fn module_hello() -> u32 { 42 }
+"#;
+
+backend cpp epilogue r#"
+inline ::std::uint32_t module_hello() { return 42; }
+"#;

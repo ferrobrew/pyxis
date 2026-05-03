@@ -251,6 +251,9 @@ pub enum JsonFunctionBody {
     Vftable {
         function_name: String,
     },
+    /// Body supplied by the target backend's prologue/epilogue (the pyxis
+    /// `#[external_body]` attribute).
+    External,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
@@ -524,6 +527,7 @@ fn convert_function_body(body: &FunctionBody) -> JsonFunctionBody {
         FunctionBody::Vftable { function_name } => JsonFunctionBody::Vftable {
             function_name: function_name.clone(),
         },
+        FunctionBody::External => JsonFunctionBody::External,
     }
 }
 

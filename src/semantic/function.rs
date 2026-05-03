@@ -183,6 +183,12 @@ pub enum FunctionBody {
         /// for inheritance reasons
         function_name: String,
     },
+    /// The function's signature is part of the type's API but its body is
+    /// supplied by the target backend's prologue/epilogue (e.g. a C++
+    /// `inline R Foo::bar() { ... }` block). Lets pyxis declare pure-
+    /// target-language methods on a struct without binding them to a
+    /// binary address.
+    External,
 }
 impl EqualsIgnoringLocations for FunctionBody {
     fn equals_ignoring_locations(&self, other: &Self) -> bool {
@@ -209,6 +215,7 @@ impl EqualsIgnoringLocations for FunctionBody {
                     function_name: function_name2,
                 },
             ) => function_name.equals_ignoring_locations(function_name2),
+            (FunctionBody::External, FunctionBody::External) => true,
             _ => false,
         }
     }
@@ -229,10 +236,16 @@ impl FunctionBody {
             function_name: function_name.into(),
         }
     }
+    pub fn external() -> Self {
+        FunctionBody::External
+    }
 }
 impl FunctionBody {
     pub fn is_field(&self) -> bool {
         matches!(self, FunctionBody::Field { .. })
+    }
+    pub fn is_external(&self) -> bool {
+        matches!(self, FunctionBody::External)
     }
 }
 #[derive(Debug, Clone, PartialEq, Eq, Hash, HasLocation)]
@@ -277,6 +290,7 @@ impl fmt::Display for Function {
                 function_name,
             } => write!(f, "self.{field}.{function_name}")?,
             FunctionBody::Vftable { function_name } => write!(f, "self.vftable.{function_name}")?,
+            FunctionBody::External => write!(f, "<external>")?,
         }
         Ok(())
     }
@@ -355,6 +369,23 @@ pub fn build(
     let doc = function.doc_comments.clone();
     let mut calling_convention = None;
     for attribute in &function.attributes {
+        // `#[external_body]` is an ident attribute (no arguments). Parse it
+        // here before the function-style attribute handling below.
+        if let grammar::Attribute::Ident { ident, .. } = attribute
+            && ident.as_str() == "external_body"
+        {
+            if is_vfunc {
+                return Err(SemanticError::AttributeNotSupported {
+                    attribute_name: AttributeName::ExternalBody,
+                    attribute_context: AttributeNotSupportedContext::VirtualFunction {
+                        function_name: function.name.0.clone(),
+                    },
+                    location: function.location,
+                });
+            }
+            body = Some(FunctionBody::External);
+            continue;
+        }
         let Some((ident, items)) = attribute.function() else {
             continue;
         };

@@ -300,6 +300,12 @@ fn render_method_definition(
     if func.name.starts_with("_vfunc_") {
         return Ok(());
     }
+    // External-body methods get their out-of-class definition from the
+    // user's `backend cpp epilogue`; the in-class declaration was already
+    // emitted by `render_method_signature`.
+    if func.body.is_external() {
+        return Ok(());
+    }
     let (return_text, sig_args_text, const_qual) = method_sig_parts(func, ctx)?;
     let body_lines = method_body_lines(func, ctx)?;
     writeln!(
@@ -402,6 +408,13 @@ fn method_body_lines(func: &Function, ctx: RenderCtx) -> Result<Vec<String>> {
             vec![format!(
                 "{ret_kw}this->{field}.{function_name}({call_payload});"
             )]
+        }
+        // External-body methods are declared in-class but defined in the
+        // user's `backend cpp epilogue` block; render_method_definition
+        // checks for this and skips emitting an out-of-class definition.
+        FunctionBody::External => {
+            let _ = (has_self, ret_kw);
+            Vec::new()
         }
     })
 }
@@ -575,22 +588,32 @@ fn render_type_alias(
     Ok(out)
 }
 
-/// Render a free function (`fn foo()` at module scope) as an `extern const`
-/// function-pointer declaration suitable for the `.hpp`. The matching `.cpp`
-/// definition is produced by [`render_free_function_definition`].
+/// Render a free function (`fn foo()` at module scope). For `#[address]`
+/// bodies this emits an `extern const fn_t name;` declaration suitable for
+/// the `.hpp`; for `#[external_body]` bodies it emits a plain function
+/// declaration whose body is supplied by the user's `backend cpp` block.
 pub fn render_free_function_decl(func: &Function, ctx: RenderCtx) -> Result<Option<String>> {
-    let FunctionBody::Address { .. } = &func.body else {
-        return Ok(None);
-    };
     let mut out = String::new();
     render_doc(&mut out, &func.doc, 0)?;
-    let alias = function_pointer_alias(func, ctx)?;
-    writeln!(out, "{alias}")?;
-    writeln!(out, "extern const {0}_t {0};", func.name)?;
-    Ok(Some(out))
+    match &func.body {
+        FunctionBody::Address { .. } => {
+            let alias = function_pointer_alias(func, ctx)?;
+            writeln!(out, "{alias}")?;
+            writeln!(out, "extern const {0}_t {0};", func.name)?;
+            Ok(Some(out))
+        }
+        FunctionBody::External => {
+            let (return_text, sig_args_text) = free_function_sig_parts(func, ctx)?;
+            writeln!(out, "{return_text} {0}({sig_args_text});", func.name)?;
+            Ok(Some(out))
+        }
+        _ => Ok(None),
+    }
 }
 
 /// Render the `.cpp` definition of a free function bound by `#[address]`.
+/// External-body functions get their definitions from the user's
+/// `backend cpp epilogue` and don't need .cpp output here.
 pub fn render_free_function_definition(func: &Function, ctx: RenderCtx) -> Result<Option<String>> {
     let FunctionBody::Address { address } = &func.body else {
         return Ok(None);
@@ -604,6 +627,24 @@ pub fn render_free_function_definition(func: &Function, ctx: RenderCtx) -> Resul
         func.name, address
     )?;
     Ok(Some(out))
+}
+
+fn free_function_sig_parts(func: &Function, ctx: RenderCtx) -> Result<(String, String)> {
+    let return_text = func
+        .return_type
+        .as_ref()
+        .map(|t| render_type(t, ctx))
+        .transpose()?
+        .unwrap_or_else(|| "void".to_string());
+    let mut sig_args = Vec::new();
+    for arg in &func.arguments {
+        if let Argument::Field { name, type_, .. } = arg {
+            let ty = render_type(type_, ctx)?;
+            let escaped = cpp_ident(name);
+            sig_args.push(format!("{ty} {escaped}"));
+        }
+    }
+    Ok((return_text, sig_args.join(", ")))
 }
 
 /// `using foo_t = R (CC*)(P1, P2);`

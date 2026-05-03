@@ -4,6 +4,7 @@ pub mod braced_imports;
 pub mod diamond_inheritance;
 pub mod doc_comments;
 pub mod enums;
+pub mod external_body;
 pub mod freestanding_functions;
 pub mod generics;
 pub mod generics_cross_module;

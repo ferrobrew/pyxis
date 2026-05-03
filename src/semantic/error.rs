@@ -204,6 +204,9 @@ pub enum AttributeName {
     MinSize,
     /// The `singleton` attribute for singleton types
     Singleton,
+    /// The `external_body` attribute marks an `impl` method whose body
+    /// is provided by the target backend's prologue/epilogue.
+    ExternalBody,
 }
 
 impl fmt::Display for AttributeName {
@@ -217,6 +220,7 @@ impl fmt::Display for AttributeName {
             AttributeName::Packed => write!(f, "packed"),
             AttributeName::MinSize => write!(f, "min_size"),
             AttributeName::Singleton => write!(f, "singleton"),
+            AttributeName::ExternalBody => write!(f, "external_body"),
         }
     }
 }
