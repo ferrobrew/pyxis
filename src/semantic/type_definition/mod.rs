@@ -1,19 +1,13 @@
-use std::collections::HashSet;
-
 use crate::{
     grammar::{self, ItemPath},
     semantic::{
         SemanticState, attribute,
         error::{
-            AttributeName, BuildOutcome, DefaultableErrorKind, DuplicateDefinitionKind, ItemKind,
-            Result, SemanticError, TypeRefKind, UnresolvedTypeContext, UnresolvedTypeReference,
+            AttributeName, BuildOutcome, DefaultableErrorKind, ItemKind, Result, SemanticError,
+            TypeRefKind, UnresolvedTypeContext, UnresolvedTypeReference,
         },
-        function,
         type_registry::{TypeLookupResult, TypeRegistry},
-        types::{
-            Function, FunctionBody, ItemDefinitionInner, ItemState, ItemStateResolved, Type,
-            Visibility,
-        },
+        types::{Function, ItemDefinitionInner, ItemState, ItemStateResolved, Type, Visibility},
     },
     span::{HasLocation, ItemLocation},
     util,
@@ -420,69 +414,13 @@ pub fn build(
     // Reborrow the module after resolving regions
     let module = semantic.get_module_for_path(resolvee_path, location)?;
 
-    // Handle functions
-    let mut associated_functions = vec![];
-    let mut associated_functions_used_names: HashSet<String> = vftable
-        .as_ref()
-        .map(|v| v.functions.iter().map(|f| f.name.clone()).collect())
-        .unwrap_or_default();
-    for (i, base_region) in regions.iter().filter(|r| r.is_base).enumerate() {
-        // Inject all base associated functions into the type
-        let Some((base_name, base_type)) = get_region_name_and_type_definition(
-            &semantic.type_registry,
-            resolvee_path,
-            base_region,
-        )?
-        else {
-            continue;
-        };
-
-        let mut add_functions = |functions: &[Function]| {
-            for function in functions.iter().filter(|f| f.is_public()) {
-                let mut function = function.clone();
-                let original_name = function.name.clone();
-                if associated_functions_used_names.contains(&original_name) {
-                    function.name = format!("{base_name}_{original_name}");
-                }
-                function.body = FunctionBody::Field {
-                    field: base_name.clone(),
-                    function_name: original_name,
-                };
-                associated_functions_used_names.insert(function.name.clone());
-                associated_functions.push(function);
-            }
-        };
-
-        // Push this base's associated functions into the type
-        add_functions(&base_type.associated_functions);
-
-        if i > 0 {
-            // Inject all non-first-base vfuncs into the type
-            if let Some(vftable) = &base_type.vftable {
-                add_functions(&vftable.functions);
-            }
-        }
-    }
-    if let Some(type_impl) = module.impls.get(resolvee_path) {
-        for function in type_impl.functions().collect::<Vec<_>>() {
-            if associated_functions_used_names.contains(&function.name.0) {
-                return Err(SemanticError::DuplicateDefinition {
-                    name: function.name.0.clone(),
-                    item_path: resolvee_path.clone(),
-                    kind: DuplicateDefinitionKind::FunctionInTypeOrBase,
-                    location: *location,
-                });
-            }
-
-            let function =
-                match function::build(&semantic.type_registry, &module.scope(), false, function)? {
-                    function::FunctionBuildOutcome::Built(f) => *f,
-                    function::FunctionBuildOutcome::Deferred => return Ok(BuildOutcome::Deferred),
-                };
-            associated_functions_used_names.insert(function.name.clone());
-            associated_functions.push(function);
-        }
-    }
+    // Associated-function resolution (own impl block + inheritance from base
+    // types) is deferred to a post-pass in `SemanticState::build` after every
+    // type has fully resolved. This prevents the resolver from defer-looping
+    // when an impl method's signature references its own enclosing type
+    // (`impl Foo { fn make() -> Foo; }`).
+    let associated_functions: Vec<Function> = Vec::new();
+    let _ = module;
 
     // Iterate over all of the regions and ensure their types are defaultable if
     // we have our defaultable attribute set.

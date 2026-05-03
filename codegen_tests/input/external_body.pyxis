@@ -7,6 +7,8 @@ pub type Counter {
 }
 impl Counter {
     #[external_body]
+    pub fn make() -> Counter;
+    #[external_body]
     pub fn bump(&mut self) -> u32;
     #[external_body]
     pub fn read(&self) -> u32;
@@ -14,12 +16,14 @@ impl Counter {
 
 backend rust epilogue r#"
     impl Counter {
+        pub fn make() -> Counter { Counter { value: 0 } }
         pub fn bump(&mut self) -> u32 { self.value += 1; self.value }
         pub fn read(&self) -> u32 { self.value }
     }
 "#;
 
 backend cpp epilogue r#"
+inline Counter Counter::make() { return Counter{0}; }
 inline ::std::uint32_t Counter::bump() { value += 1; return value; }
 inline ::std::uint32_t Counter::read() const { return value; }
 "#;

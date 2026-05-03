@@ -27,6 +27,9 @@ impl std::convert::AsMut<Counter> for Counter {
     }
 }
 impl Counter {
+    pub fn make() -> Counter {
+        Counter { value: 0 }
+    }
     pub fn bump(&mut self) -> u32 {
         self.value += 1;
         self.value

@@ -10,6 +10,7 @@ namespace external_body {
 
     struct alignas(4) Counter {
         ::std::uint32_t value;
+        Counter make();
         ::std::uint32_t bump();
         ::std::uint32_t read() const;
     };
@@ -19,6 +20,7 @@ namespace external_body {
     ::std::uint32_t module_hello();
 
 
+    inline Counter Counter::make() { return Counter{0}; }
     inline ::std::uint32_t Counter::bump() { value += 1; return value; }
     inline ::std::uint32_t Counter::read() const { return value; }
 

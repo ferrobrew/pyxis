@@ -353,10 +353,211 @@ impl SemanticState {
             module.resolve_functions(&self.type_registry)?;
         }
 
+        // Resolve associated functions (impl blocks + base inheritance) now
+        // that every type is fully resolved. This deferral lets impl methods
+        // freely reference their own enclosing type as a return / argument
+        // type without trapping the resolver in a defer loop.
+        self.resolve_associated_functions()?;
+
         Ok(ResolvedSemanticState {
             modules: self.modules,
             type_registry: self.type_registry,
         })
+    }
+
+    fn resolve_associated_functions(&mut self) -> Result<()> {
+        use std::collections::{BTreeMap, BTreeSet};
+
+        // Build a map from each type-with-regions to its `#[base]` parents.
+        // We process types in topological order (bases before derived) so
+        // that when we copy `base.associated_functions` into a derived type,
+        // the base has its own impl methods (and *its* inherited methods)
+        // already populated.
+        let mut bases_of: BTreeMap<ItemPath, Vec<(String, ItemPath)>> = BTreeMap::new();
+        let mut all_type_paths: Vec<ItemPath> = Vec::new();
+        for path in self.type_registry.resolved() {
+            let item = self
+                .type_registry
+                .get(&path, &ItemLocation::internal())?
+                .clone();
+            let Some(resolved) = item.resolved() else {
+                continue;
+            };
+            let crate::semantic::types::ItemDefinitionInner::Type(td) = &resolved.inner else {
+                continue;
+            };
+            all_type_paths.push(path.clone());
+            let mut bases = Vec::new();
+            for region in &td.regions {
+                if !region.is_base {
+                    continue;
+                }
+                let Some(name) = region.name.clone() else {
+                    continue;
+                };
+                if let crate::semantic::types::Type::Raw(base_path) = &region.type_ref {
+                    bases.push((name, base_path.clone()));
+                }
+            }
+            bases_of.insert(path, bases);
+        }
+
+        // Topologically sort by inheritance: bases before derived.
+        let mut order: Vec<ItemPath> = Vec::new();
+        let mut visited: BTreeSet<ItemPath> = BTreeSet::new();
+        fn visit(
+            path: &ItemPath,
+            bases_of: &BTreeMap<ItemPath, Vec<(String, ItemPath)>>,
+            visited: &mut BTreeSet<ItemPath>,
+            order: &mut Vec<ItemPath>,
+        ) {
+            if !visited.insert(path.clone()) {
+                return;
+            }
+            if let Some(bases) = bases_of.get(path) {
+                for (_, base) in bases {
+                    visit(base, bases_of, visited, order);
+                }
+            }
+            order.push(path.clone());
+        }
+        for p in &all_type_paths {
+            visit(p, &bases_of, &mut visited, &mut order);
+        }
+
+        // Resolve own impl + inherit base methods, in topological order.
+        for path in order {
+            self.resolve_associated_functions_for(&path)?;
+        }
+
+        Ok(())
+    }
+
+    fn resolve_associated_functions_for(&mut self, path: &ItemPath) -> Result<()> {
+        use std::collections::HashSet;
+
+        use crate::semantic::{
+            error::DuplicateDefinitionKind,
+            function::{self, FunctionBuildOutcome},
+            types::{Function, FunctionBody, ItemDefinitionInner, Type},
+        };
+
+        let item = self.type_registry.get(path, &ItemLocation::internal())?;
+        let location = item.location;
+        let Some(resolved) = item.resolved() else {
+            return Ok(());
+        };
+        let ItemDefinitionInner::Type(td) = &resolved.inner else {
+            return Ok(());
+        };
+        let regions = td.regions.clone();
+        let vftable_function_names: HashSet<String> = td
+            .vftable
+            .as_ref()
+            .map(|v| v.functions.iter().map(|f| f.name.clone()).collect())
+            .unwrap_or_default();
+
+        let module = self.get_module_for_path(path, &location)?;
+        let scope = module.scope();
+        let module_impls_fn = module
+            .impls
+            .get(path)
+            .map(|fb| fb.functions().cloned().collect::<Vec<_>>())
+            .unwrap_or_default();
+
+        let mut associated_functions: Vec<Function> = Vec::new();
+        let mut used_names: HashSet<String> = vftable_function_names.clone();
+
+        // Inherit from base regions: copy each base's already-resolved
+        // associated_functions and rewrite their bodies to delegate via the
+        // base field.
+        for (i, region) in regions.iter().filter(|r| r.is_base).enumerate() {
+            let Some(name) = region.name.clone() else {
+                continue;
+            };
+            let Type::Raw(base_path) = &region.type_ref else {
+                continue;
+            };
+            let base_item = self.type_registry.get(base_path, &location)?;
+            let Some(base_resolved) = base_item.resolved() else {
+                continue;
+            };
+            let ItemDefinitionInner::Type(base_td) = &base_resolved.inner else {
+                continue;
+            };
+
+            let add_functions = |functions: &[Function],
+                                 associated_functions: &mut Vec<Function>,
+                                 used_names: &mut HashSet<String>| {
+                for function in functions.iter().filter(|f| f.is_public()) {
+                    let mut function = function.clone();
+                    let original_name = function.name.clone();
+                    if used_names.contains(&original_name) {
+                        function.name = format!("{name}_{original_name}");
+                    }
+                    function.body = FunctionBody::Field {
+                        field: name.clone(),
+                        function_name: original_name,
+                    };
+                    used_names.insert(function.name.clone());
+                    associated_functions.push(function);
+                }
+            };
+
+            add_functions(
+                &base_td.associated_functions,
+                &mut associated_functions,
+                &mut used_names,
+            );
+
+            if i > 0 {
+                if let Some(vftable) = &base_td.vftable {
+                    add_functions(
+                        &vftable.functions,
+                        &mut associated_functions,
+                        &mut used_names,
+                    );
+                }
+            }
+        }
+
+        // Build own impl methods. Now that all types are resolved, function
+        // building never defers.
+        for grammar_fn in &module_impls_fn {
+            if used_names.contains(&grammar_fn.name.0) {
+                return Err(SemanticError::DuplicateDefinition {
+                    name: grammar_fn.name.0.clone(),
+                    item_path: path.clone(),
+                    kind: DuplicateDefinitionKind::FunctionInTypeOrBase,
+                    location,
+                });
+            }
+            let function = match function::build(&self.type_registry, &scope, false, grammar_fn)? {
+                FunctionBuildOutcome::Built(f) => *f,
+                FunctionBuildOutcome::Deferred => {
+                    // After the main resolution loop completes, no type
+                    // reference should still defer; if it does, something
+                    // is structurally wrong.
+                    return Err(SemanticError::TypeResolutionStalled {
+                        unresolved_types: vec![grammar_fn.name.0.clone()],
+                        resolved_types: vec![],
+                        unresolved_references: vec![],
+                    });
+                }
+            };
+            used_names.insert(function.name.clone());
+            associated_functions.push(function);
+        }
+
+        // Patch the result back into the type definition.
+        let item = self.type_registry.get_mut(path, &location)?;
+        if let ItemState::Resolved(state) = &mut item.state {
+            if let ItemDefinitionInner::Type(td) = &mut state.inner {
+                td.associated_functions = associated_functions;
+            }
+        }
+
+        Ok(())
     }
 }
 
