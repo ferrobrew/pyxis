@@ -34,11 +34,22 @@ list(APPEND CMAKE_TRY_COMPILE_PLATFORM_VARIABLES XWIN_ROOT)
 # and trip nix-wrapped-cc heuristics with -fPIC injection on Linux.
 set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
 
+# xwin's default splat ships only the release MSVC runtime (`msvcrt.lib`),
+# not the debug variant (`msvcrtd.lib`). Pin every config to the release
+# DLL CRT so Debug builds don't try to link against a lib that isn't there.
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreadedDLL" CACHE STRING "" FORCE)
+
 set(CMAKE_C_COMPILER clang-cl)
 set(CMAKE_CXX_COMPILER clang-cl)
 set(CMAKE_LINKER lld-link)
 set(CMAKE_AR llvm-lib)
-set(CMAKE_RC_COMPILER llvm-rc)
+# Use a no-op RC compiler. CMake on MSVC-like platforms threads `llvm-rc`
+# into the `vs_link_exe` wrapper to embed a Win32 manifest in executables;
+# `llvm-rc` then preprocesses through `cc`, which on Nix resolves to the
+# wrapped gcc and trips `-fPIC` injection. The cross-compile target doesn't
+# need the manifest, so swap RC for a stub that just creates the .res file.
+get_filename_component(_pyxis_toolchain_dir "${CMAKE_CURRENT_LIST_FILE}" DIRECTORY)
+set(CMAKE_RC_COMPILER "${_pyxis_toolchain_dir}/no-op-rc.sh" CACHE FILEPATH "RC compiler" FORCE)
 
 set(CLANG_TARGET "--target=i686-pc-windows-msvc")
 set(_XWIN_INC "/imsvc;${XWIN_ROOT}/crt/include;/imsvc;${XWIN_ROOT}/sdk/include/ucrt;/imsvc;${XWIN_ROOT}/sdk/include/um;/imsvc;${XWIN_ROOT}/sdk/include/shared")
@@ -57,3 +68,4 @@ set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
 set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
 set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
 set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
+
