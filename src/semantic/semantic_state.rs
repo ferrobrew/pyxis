@@ -459,10 +459,18 @@ impl SemanticState {
 
         let module = self.get_module_for_path(path, &location)?;
         let scope = module.scope();
-        let module_impls_fn = module
+        let (module_impls_fn, impl_type_parameters): (Vec<grammar::Function>, Vec<String>) = module
             .impls
             .get(path)
-            .map(|fb| fb.functions().cloned().collect::<Vec<_>>())
+            .map(|fb| {
+                (
+                    fb.functions().cloned().collect(),
+                    fb.type_parameters
+                        .iter()
+                        .map(|tp| tp.name.clone())
+                        .collect(),
+                )
+            })
             .unwrap_or_default();
 
         let mut associated_functions: Vec<Function> = Vec::new();
@@ -532,7 +540,13 @@ impl SemanticState {
                     location,
                 });
             }
-            let function = match function::build(&self.type_registry, &scope, false, grammar_fn)? {
+            let function = match function::build(
+                &self.type_registry,
+                &scope,
+                false,
+                grammar_fn,
+                &impl_type_parameters,
+            )? {
                 FunctionBuildOutcome::Built(f) => *f,
                 FunctionBuildOutcome::Deferred => {
                     // After the main resolution loop completes, no type

@@ -730,7 +730,7 @@ impl Parser {
     }
 
     /// Parse optional type parameters: `<T, U, V>`
-    fn parse_type_parameters(&mut self) -> Result<Vec<TypeParameter>, ParseError> {
+    pub(crate) fn parse_type_parameters(&mut self) -> Result<Vec<TypeParameter>, ParseError> {
         if !matches!(self.peek(), TokenKind::Lt) {
             return Ok(vec![]);
         }

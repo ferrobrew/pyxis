@@ -282,12 +282,19 @@ fn render_method_signature(out: &mut String, func: &Function, ctx: RenderCtx) ->
     }
     render_doc(out, &func.doc, 1)?;
     let (return_text, sig_args_text, const_qual) = method_sig_parts(func, ctx)?;
+    let static_kw = if func_has_self(func) { "" } else { "static " };
     writeln!(
         out,
-        "    {return_text} {fn_name}({sig_args_text}){const_qual};",
+        "    {static_kw}{return_text} {fn_name}({sig_args_text}){const_qual};",
         fn_name = func.name
     )?;
     Ok(())
+}
+
+fn func_has_self(func: &Function) -> bool {
+    func.arguments
+        .iter()
+        .any(|a| matches!(a, Argument::ConstSelf { .. } | Argument::MutSelf { .. }))
 }
 
 /// Out-of-class inline method definition.
@@ -308,6 +315,8 @@ fn render_method_definition(
     }
     let (return_text, sig_args_text, const_qual) = method_sig_parts(func, ctx)?;
     let body_lines = method_body_lines(func, ctx)?;
+    // Out-of-class definitions never repeat `static` — that keyword belongs
+    // only on the in-class declaration.
     writeln!(
         out,
         "inline {return_text} {parent_name}::{fn_name}({sig_args_text}){const_qual} {{",

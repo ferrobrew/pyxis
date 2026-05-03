@@ -859,7 +859,22 @@ impl PrettyPrinter {
     fn print_impl_block(&mut self, impl_block: &FunctionBlock) {
         self.print_attributes(&impl_block.attributes);
         self.write_indent();
-        writeln!(&mut self.output, "impl {} {{", impl_block.name).unwrap();
+        if impl_block.type_parameters.is_empty() {
+            writeln!(&mut self.output, "impl {} {{", impl_block.name).unwrap();
+        } else {
+            let params = impl_block
+                .type_parameters
+                .iter()
+                .map(|tp| tp.name.as_str())
+                .collect::<Vec<_>>()
+                .join(", ");
+            writeln!(
+                &mut self.output,
+                "impl<{}> {}<{}> {{",
+                params, impl_block.name, params
+            )
+            .unwrap();
+        }
         self.indent();
 
         for (i, item) in impl_block.items.iter().enumerate() {

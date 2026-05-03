@@ -38,3 +38,24 @@ backend rust epilogue r#"
 backend cpp epilogue r#"
 inline ::std::uint32_t module_hello() { return 42; }
 "#;
+
+#[size(0x10)]
+pub type Pair<T> {
+    pub first: *mut T,
+    pub second: *mut T,
+}
+impl<T> Pair<T> {
+    #[external_body]
+    pub fn first_ptr(&self) -> *mut T;
+}
+
+backend rust epilogue r#"
+    impl<T> Pair<T> {
+        pub fn first_ptr(&self) -> *mut T { self.first }
+    }
+"#;
+
+backend cpp epilogue r#"
+template <class T>
+inline T* Pair<T>::first_ptr() const { return first; }
+"#;

@@ -7,10 +7,18 @@
 
 namespace external_body {
     struct Counter;
+    template <class T> struct Pair;
+
+    template <class T>
+    struct Pair {
+        T* first;
+        T* second;
+        T* first_ptr() const;
+    };
 
     struct alignas(4) Counter {
         ::std::uint32_t value;
-        Counter make();
+        static Counter make();
         ::std::uint32_t bump();
         ::std::uint32_t read() const;
     };
@@ -26,4 +34,8 @@ namespace external_body {
 
 
     inline ::std::uint32_t module_hello() { return 42; }
+
+
+    template <class T>
+    inline T* Pair<T>::first_ptr() const { return first; }
 } // namespace external_body

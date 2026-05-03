@@ -139,6 +139,7 @@ impl Module {
                 &scope,
                 false, // is_vfunc
                 function,
+                &[],
             )? {
                 function::FunctionBuildOutcome::Built(f) => *f,
                 function::FunctionBuildOutcome::Deferred => {

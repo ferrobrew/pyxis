@@ -77,7 +77,7 @@ pub fn convert_grammar_functions_to_semantic_functions(
         if let Some(index) = index {
             make_padding_functions(&mut output, index, calling_convention, location);
         }
-        match function::build(type_registry, &module.scope(), true, function)? {
+        match function::build(type_registry, &module.scope(), true, function, &[])? {
             function::FunctionBuildOutcome::Built(f) => output.push(*f),
             function::FunctionBuildOutcome::Deferred => return Ok(None),
         }

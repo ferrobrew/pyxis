@@ -26,6 +26,12 @@ impl std::convert::AsMut<Counter> for Counter {
         self
     }
 }
+#[repr(C, align(8))]
+pub struct Pair<T> {
+    pub first: *mut T,
+    pub second: *mut T,
+}
+impl<T> Pair<T> {}
 impl Counter {
     pub fn make() -> Counter {
         Counter { value: 0 }
@@ -40,4 +46,9 @@ impl Counter {
 }
 pub fn module_hello() -> u32 {
     42
+}
+impl<T> Pair<T> {
+    pub fn first_ptr(&self) -> *mut T {
+        self.first
+    }
 }

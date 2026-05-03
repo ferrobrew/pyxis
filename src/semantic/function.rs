@@ -362,6 +362,7 @@ pub fn build(
     scope: &[ItemPath],
     is_vfunc: bool,
     function: &grammar::Function,
+    type_parameters: &[String],
 ) -> Result<FunctionBuildOutcome> {
     let mut body = is_vfunc.then(|| FunctionBody::Vftable {
         function_name: function.name.0.clone(),
@@ -465,23 +466,25 @@ pub fn build(
             grammar::Argument::ConstSelf { .. } => Argument::ConstSelf { location },
             grammar::Argument::MutSelf { .. } => Argument::MutSelf { location },
             grammar::Argument::Named { ident, type_, .. } => {
-                let resolved_type = match type_registry.resolve_grammar_type(scope, type_, &[]) {
-                    TypeLookupResult::Found(t) => t,
-                    TypeLookupResult::NotYetResolved => {
-                        // Type exists but isn't resolved yet - defer function building
-                        return Ok(FunctionBuildOutcome::Deferred);
-                    }
-                    TypeLookupResult::NotFound { .. } | TypeLookupResult::PrivateAccess { .. } => {
-                        return Err(SemanticError::TypeResolutionFailed {
-                            type_: type_.clone(),
-                            resolution_context: TypeResolutionContext::FunctionArgument {
-                                argument_name: ident.0.clone(),
-                                function_name: function.name.0.clone(),
-                            },
-                            location,
-                        });
-                    }
-                };
+                let resolved_type =
+                    match type_registry.resolve_grammar_type(scope, type_, type_parameters) {
+                        TypeLookupResult::Found(t) => t,
+                        TypeLookupResult::NotYetResolved => {
+                            // Type exists but isn't resolved yet - defer function building
+                            return Ok(FunctionBuildOutcome::Deferred);
+                        }
+                        TypeLookupResult::NotFound { .. }
+                        | TypeLookupResult::PrivateAccess { .. } => {
+                            return Err(SemanticError::TypeResolutionFailed {
+                                type_: type_.clone(),
+                                resolution_context: TypeResolutionContext::FunctionArgument {
+                                    argument_name: ident.0.clone(),
+                                    function_name: function.name.0.clone(),
+                                },
+                                location,
+                            });
+                        }
+                    };
                 Argument::Field {
                     name: ident.0.clone(),
                     type_: resolved_type,
@@ -493,7 +496,7 @@ pub fn build(
     }
 
     let return_type = match function.return_type.as_ref() {
-        Some(t) => match type_registry.resolve_grammar_type(scope, t, &[]) {
+        Some(t) => match type_registry.resolve_grammar_type(scope, t, type_parameters) {
             TypeLookupResult::Found(resolved) => Some(resolved),
             TypeLookupResult::NotYetResolved => {
                 // Return type exists but isn't resolved yet - defer function building

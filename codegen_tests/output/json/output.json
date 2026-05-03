@@ -1523,6 +1523,99 @@
         "line": 4
       }
     },
+    "external_body::Pair": {
+      "path": "external_body::Pair",
+      "visibility": "public",
+      "type_parameters": [
+        "T"
+      ],
+      "size": 16,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "first",
+            "doc": null,
+            "type_ref": {
+              "type": "mut_pointer",
+              "inner": {
+                "type": "type_parameter",
+                "name": "T"
+              }
+            },
+            "offset": 0,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 8,
+              "line": 44
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "second",
+            "doc": null,
+            "type_ref": {
+              "type": "mut_pointer",
+              "inner": {
+                "type": "type_parameter",
+                "name": "T"
+              }
+            },
+            "offset": 8,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 8,
+              "line": 45
+            }
+          }
+        ],
+        "associated_functions": [
+          {
+            "visibility": "public",
+            "name": "first_ptr",
+            "doc": null,
+            "body": {
+              "type": "external"
+            },
+            "arguments": [
+              {
+                "type": "const_self"
+              }
+            ],
+            "return_type": {
+              "type": "mut_pointer",
+              "inner": {
+                "type": "type_parameter",
+                "name": "T"
+              }
+            },
+            "calling_convention": "system",
+            "source": {
+              "file_index": 8,
+              "line": 48
+            }
+          }
+        ],
+        "vftable": null,
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false
+      },
+      "source": {
+        "file_index": 8,
+        "line": 42
+      }
+    },
     "f32": {
       "path": "f32",
       "visibility": "public",
@@ -5883,7 +5976,8 @@
     "external_body": {
       "doc": null,
       "items": [
-        "external_body::Counter"
+        "external_body::Counter",
+        "external_body::Pair"
       ],
       "submodules": {},
       "extern_values": [],
@@ -5916,6 +6010,10 @@
           {
             "prologue": null,
             "epilogue": "\ninline ::std::uint32_t module_hello() { return 42; }\n"
+          },
+          {
+            "prologue": null,
+            "epilogue": "\ntemplate <class T>\ninline T* Pair<T>::first_ptr() const { return first; }\n"
           }
         ],
         "rust": [
@@ -5926,6 +6024,10 @@
           {
             "prologue": null,
             "epilogue": "\n    pub fn module_hello() -> u32 { 42 }\n"
+          },
+          {
+            "prologue": null,
+            "epilogue": "\n    impl<T> Pair<T> {\n        pub fn first_ptr(&self) -> *mut T { self.first }\n    }\n"
           }
         ]
       }
