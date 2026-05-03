@@ -187,13 +187,13 @@ fn render_struct(
         writeln!(out, "    static {name}* singleton();")?;
     }
 
-    // Vftable accessor + virtual-method wrapper signatures.
+    // Vftable accessor + virtual-method wrapper signatures. Pyxis's
+    // pub/private distinction is rust-only; in C++ we emit every method
+    // (callers are free to ignore the rust-private ones, but `backend cpp
+    // epilogue` blocks need to be able to call into them by name).
     if let Some(vftable) = &td.vftable {
         render_vftable_accessor_decl(&mut out, vftable, ctx)?;
         for func in &vftable.functions {
-            if func.visibility != Visibility::Public {
-                continue;
-            }
             if !ctx.cfg_passes(&func.cfg) {
                 continue;
             }
@@ -203,9 +203,6 @@ fn render_struct(
 
     // Associated functions (impl block, e.g. `#[address(0x...)] pub fn foo()`).
     for func in &td.associated_functions {
-        if func.visibility != Visibility::Public {
-            continue;
-        }
         if !ctx.cfg_passes(&func.cfg) {
             continue;
         }
@@ -246,9 +243,6 @@ fn render_struct(
         if let Some(vftable) = &td.vftable {
             render_vftable_accessor_definition(&mut post, name, vftable, ctx)?;
             for func in &vftable.functions {
-                if func.visibility != Visibility::Public {
-                    continue;
-                }
                 if !ctx.cfg_passes(&func.cfg) {
                     continue;
                 }
@@ -256,9 +250,6 @@ fn render_struct(
             }
         }
         for func in &td.associated_functions {
-            if func.visibility != Visibility::Public {
-                continue;
-            }
             if !ctx.cfg_passes(&func.cfg) {
                 continue;
             }
