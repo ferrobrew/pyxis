@@ -445,6 +445,9 @@ pub struct ItemDefinition {
     pub state: ItemState,
     pub category: ItemCategory,
     pub predefined: Option<PredefinedItem>,
+    /// `#[cfg(...)]` predicate. `None` means "always emit"; otherwise each
+    /// backend evaluates against its own context.
+    pub cfg: Option<crate::parser::cfg::CfgPredicate>,
     pub location: ItemLocation,
 }
 impl ItemDefinition {
@@ -462,6 +465,7 @@ impl ItemDefinition {
             state: ItemState::Resolved(resolved),
             category,
             predefined: None,
+            cfg: None,
             location: ItemLocation::test(),
         }
     }
@@ -479,6 +483,7 @@ impl ItemDefinition {
             state: ItemState::Resolved(resolved),
             category: ItemCategory::Defined,
             predefined: None,
+            cfg: None,
             location: ItemLocation::test(),
         }
     }
@@ -497,6 +502,7 @@ impl ItemDefinition {
             state: ItemState::Resolved(resolved),
             category: ItemCategory::Defined,
             predefined: None,
+            cfg: None,
             location: ItemLocation::test(),
         }
     }

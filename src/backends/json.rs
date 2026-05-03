@@ -427,11 +427,21 @@ pub fn build(
         .map(|i| file_store.filename(FileId::new(i as u32)).to_string())
         .collect();
 
-    // Build items map
+    // Build items map. Filter items whose `#[cfg(...)]` predicate evaluates
+    // false for `backend = "json"`. Each backend treats cfg uniformly: if
+    // it's not the named backend, the item disappears from output.
+    let cfg_ctx = crate::parser::cfg::CfgContext { backend: "json" };
+    let cfg_pass = |cfg: &Option<crate::parser::cfg::CfgPredicate>| match cfg {
+        Some(p) => p.evaluate(&cfg_ctx),
+        None => true,
+    };
     let mut items = BTreeMap::new();
     for module in semantic_state.modules().values() {
         for definition in module.definitions(type_registry) {
-            if let Some(json_item) = convert_item(definition, type_registry) {
+            if !cfg_pass(&definition.cfg) {
+                continue;
+            }
+            if let Some(json_item) = convert_item(definition, type_registry, &cfg_ctx) {
                 items.insert(json_item.path.clone(), json_item);
             }
         }
@@ -566,15 +576,34 @@ fn convert_region(region: &Region, type_registry: &TypeRegistry, offset: usize) 
     }
 }
 
-fn convert_vftable(vftable: &TypeVftable) -> JsonTypeVftable {
+fn convert_vftable(
+    vftable: &TypeVftable,
+    cfg_ctx: &crate::parser::cfg::CfgContext<'_>,
+) -> JsonTypeVftable {
     JsonTypeVftable {
-        functions: vftable.functions.iter().map(convert_function).collect(),
+        functions: vftable
+            .functions
+            .iter()
+            .filter(|f| cfg_passes(&f.cfg, cfg_ctx))
+            .map(convert_function)
+            .collect(),
+    }
+}
+
+fn cfg_passes(
+    cfg: &Option<crate::parser::cfg::CfgPredicate>,
+    ctx: &crate::parser::cfg::CfgContext<'_>,
+) -> bool {
+    match cfg {
+        Some(p) => p.evaluate(ctx),
+        None => true,
     }
 }
 
 fn convert_type_definition(
     td: &TypeDefinition,
     type_registry: &TypeRegistry,
+    cfg_ctx: &crate::parser::cfg::CfgContext<'_>,
 ) -> JsonTypeDefinition {
     // Calculate field offsets
     let mut current_offset = 0;
@@ -594,9 +623,10 @@ fn convert_type_definition(
         associated_functions: td
             .associated_functions
             .iter()
+            .filter(|f| cfg_passes(&f.cfg, cfg_ctx))
             .map(convert_function)
             .collect(),
-        vftable: td.vftable.as_ref().map(convert_vftable),
+        vftable: td.vftable.as_ref().map(|v| convert_vftable(v, cfg_ctx)),
         singleton: td.singleton,
         copyable: td.copyable,
         cloneable: td.cloneable,
@@ -613,7 +643,10 @@ fn convert_enum_variant(variant: &EnumVariant) -> JsonEnumVariant {
     }
 }
 
-fn convert_enum_definition(ed: &EnumDefinition) -> JsonEnumDefinition {
+fn convert_enum_definition(
+    ed: &EnumDefinition,
+    cfg_ctx: &crate::parser::cfg::CfgContext<'_>,
+) -> JsonEnumDefinition {
     JsonEnumDefinition {
         doc: doc_to_option(&ed.doc),
         underlying_type: convert_type(&ed.type_),
@@ -621,6 +654,7 @@ fn convert_enum_definition(ed: &EnumDefinition) -> JsonEnumDefinition {
         associated_functions: ed
             .associated_functions
             .iter()
+            .filter(|f| cfg_passes(&f.cfg, cfg_ctx))
             .map(convert_function)
             .collect(),
         singleton: ed.singleton,
@@ -657,14 +691,18 @@ fn convert_type_alias_definition(ta: &TypeAliasDefinition) -> JsonTypeAliasDefin
     }
 }
 
-fn convert_item(item: &ItemDefinition, type_registry: &TypeRegistry) -> Option<JsonItem> {
+fn convert_item(
+    item: &ItemDefinition,
+    type_registry: &TypeRegistry,
+    cfg_ctx: &crate::parser::cfg::CfgContext<'_>,
+) -> Option<JsonItem> {
     let resolved = item.resolved()?;
 
     let kind = match &resolved.inner {
         ItemDefinitionInner::Type(td) => {
-            JsonItemKind::Type(convert_type_definition(td, type_registry))
+            JsonItemKind::Type(convert_type_definition(td, type_registry, cfg_ctx))
         }
-        ItemDefinitionInner::Enum(ed) => JsonItemKind::Enum(convert_enum_definition(ed)),
+        ItemDefinitionInner::Enum(ed) => JsonItemKind::Enum(convert_enum_definition(ed, cfg_ctx)),
         ItemDefinitionInner::Bitflags(bd) => {
             JsonItemKind::Bitflags(convert_bitflags_definition(bd))
         }
@@ -706,6 +744,7 @@ fn convert_backend(backend: &Backend) -> JsonBackend {
 
 /// Build the module hierarchy from a flat list of modules
 fn build_module_hierarchy(semantic_state: &ResolvedSemanticState) -> BTreeMap<String, JsonModule> {
+    let cfg_ctx = crate::parser::cfg::CfgContext { backend: "json" };
     let mut root_modules: BTreeMap<String, JsonModule> = BTreeMap::new();
 
     for (module_path, module) in semantic_state.modules() {
@@ -715,20 +754,25 @@ fn build_module_hierarchy(semantic_state: &ResolvedSemanticState) -> BTreeMap<St
             .map(|s| s.to_string())
             .collect();
 
-        // Get items for this module
+        // Get items for this module (cfg-filtered).
         let items: Vec<String> = module
             .definitions(semantic_state.type_registry())
+            .filter(|item| cfg_passes(&item.cfg, &cfg_ctx))
             .map(|item| item.path.to_string())
             .collect();
 
-        // Convert extern values and functions
+        // Convert extern values and functions (cfg-filtered).
         let extern_values: Vec<JsonExternValue> = module
             .extern_values
             .iter()
             .map(convert_extern_value)
             .collect();
-        let functions: Vec<JsonFunction> =
-            module.functions().iter().map(convert_function).collect();
+        let functions: Vec<JsonFunction> = module
+            .functions()
+            .iter()
+            .filter(|f| cfg_passes(&f.cfg, &cfg_ctx))
+            .map(convert_function)
+            .collect();
 
         // Convert backends
         let backends: BTreeMap<String, Vec<JsonBackend>> = module

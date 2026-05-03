@@ -110,6 +110,7 @@ pub fn convert_grammar_functions_to_semantic_functions(
                 },
                 calling_convention,
                 method_type_parameters: Vec::new(),
+                cfg: None,
                 location: *location,
             });
         }
@@ -288,6 +289,7 @@ fn build_type(
         }),
         category: ItemCategory::Defined,
         predefined: None,
+        cfg: None,
         location: vftable_type_location,
     })
 }

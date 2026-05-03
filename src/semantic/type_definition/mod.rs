@@ -209,7 +209,7 @@ pub fn build(
                 "packed" => packed = true,
                 _ => {}
             },
-            grammar::Attribute::Assign { .. } => {}
+            grammar::Attribute::Assign { .. } | grammar::Attribute::Cfg { .. } => {}
         }
     }
 

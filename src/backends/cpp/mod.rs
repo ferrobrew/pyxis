@@ -84,7 +84,8 @@ fn write_module(
     }
 
     let registry = semantic_state.type_registry();
-    let ctx = render::RenderCtx::new(key, registry, bindings);
+    let cfg_ctx = crate::parser::cfg::CfgContext { backend: "cpp" };
+    let ctx = render::RenderCtx::new(key, registry, bindings, cfg_ctx);
     let module_deps = deps::collect_module_deps(key, module, registry, bindings);
     let cpp_backends = module.backends.get("cpp");
     let prologue: String = cpp_backends
@@ -111,7 +112,10 @@ fn write_module(
     // by-value reference (`Aabb { Vector3 min; }`) lands after its target
     // is fully defined. Templates and independent items break ties by
     // template-first-then-alphabetical.
-    let raw_items: Vec<_> = module.definitions(registry).collect();
+    let raw_items: Vec<_> = module
+        .definitions(registry)
+        .filter(|item| ctx.cfg_passes(&item.cfg))
+        .collect();
     let sorted_items = deps::topo_sort_module_items(key, raw_items, registry, bindings)?;
     for item in sorted_items {
         let Some(rendered) = render::render_item(item, ctx)? else {
@@ -134,6 +138,7 @@ fn write_module(
         .functions()
         .iter()
         .filter(|f| f.visibility == crate::semantic::types::Visibility::Public)
+        .filter(|f| ctx.cfg_passes(&f.cfg))
         .collect();
     public_functions.sort_by(|a, b| a.name.cmp(&b.name));
     for func in &public_functions {
@@ -237,6 +242,9 @@ fn write_module(
             if item.is_predefined()
                 || matches!(item.category, crate::semantic::types::ItemCategory::Extern)
             {
+                continue;
+            }
+            if !ctx.cfg_passes(&item.cfg) {
                 continue;
             }
             let Some(resolved) = item.resolved() else {

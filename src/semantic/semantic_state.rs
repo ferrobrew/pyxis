@@ -61,6 +61,7 @@ impl SemanticState {
                     }),
                     category: ItemCategory::Predefined,
                     predefined: Some(*predefined_item),
+                    cfg: None,
                     location,
                 })
                 .expect("failed to add predefined type");
@@ -151,6 +152,14 @@ impl SemanticState {
                 .map(|tp| tp.name.clone())
                 .collect();
 
+            // Extract any `#[cfg(...)]` from the definition's attributes.
+            let cfg = match &definition.inner {
+                grammar::ItemDefinitionInner::Type(td) => td.attributes.cfg(),
+                grammar::ItemDefinitionInner::Enum(e) => e.attributes.cfg(),
+                grammar::ItemDefinitionInner::Bitflags(b) => b.attributes.cfg(),
+                grammar::ItemDefinitionInner::TypeAlias(ta) => ta.attributes.cfg(),
+            };
+
             self.add_item(ItemDefinition {
                 visibility: definition.visibility.into(),
                 path: new_path,
@@ -158,6 +167,7 @@ impl SemanticState {
                 state: ItemState::Unresolved(definition.clone()),
                 category: ItemCategory::Defined,
                 predefined: None,
+                cfg,
                 location: definition.location,
             })?;
         }
@@ -213,6 +223,7 @@ impl SemanticState {
                 }),
                 category: ItemCategory::Extern,
                 predefined: None,
+                cfg: attributes.cfg(),
                 location: *extern_location,
             })?;
         }
@@ -467,6 +478,9 @@ impl SemanticState {
         struct ImplFunc {
             func: grammar::Function,
             impl_type_parameters: Vec<String>,
+            /// Cfg from the impl block (if any). Methods conjoin this with
+            /// their own per-method cfg.
+            impl_cfg: Option<crate::parser::cfg::CfgPredicate>,
         }
         let impl_funcs: Vec<ImplFunc> = module
             .impls
@@ -479,11 +493,14 @@ impl SemanticState {
                             .iter()
                             .map(|tp| tp.name.clone())
                             .collect();
+                        let block_cfg = fb.attributes.cfg();
                         fb.functions().cloned().map({
                             let params = params.clone();
+                            let block_cfg = block_cfg.clone();
                             move |f| ImplFunc {
                                 func: f,
                                 impl_type_parameters: params.clone(),
+                                impl_cfg: block_cfg.clone(),
                             }
                         })
                     })
@@ -560,6 +577,7 @@ impl SemanticState {
         for ImplFunc {
             func: grammar_fn,
             impl_type_parameters,
+            impl_cfg,
         } in &impl_funcs
         {
             if used_names.contains(&grammar_fn.name.0) {
@@ -594,6 +612,17 @@ impl SemanticState {
                 }
             };
             function.method_type_parameters = method_extras;
+            // Conjoin any block-level cfg with the per-method cfg. Either
+            // both, just one, or neither may be present.
+            function.cfg = match (impl_cfg.clone(), function.cfg.take()) {
+                (None, None) => None,
+                (Some(b), None) => Some(b),
+                (None, Some(f)) => Some(f),
+                (Some(b), Some(f)) => Some(crate::parser::cfg::CfgPredicate::All {
+                    predicates: vec![b, f],
+                    location,
+                }),
+            };
             used_names.insert(function.name.clone());
             associated_functions.push(function);
         }

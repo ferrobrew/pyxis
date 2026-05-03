@@ -355,6 +355,50 @@ impl PrettyPrinter {
                     }
                 }
             }
+            Attribute::Cfg { predicate, .. } => {
+                write!(&mut self.output, "cfg(").unwrap();
+                self.print_cfg_predicate(predicate);
+                write!(&mut self.output, ")").unwrap();
+            }
+        }
+    }
+
+    fn print_cfg_predicate(&mut self, p: &crate::parser::cfg::CfgPredicate) {
+        use crate::parser::cfg::{CfgAtom, CfgPredicate};
+        match p {
+            CfgPredicate::Atom { atom, .. } => match atom {
+                CfgAtom::Ident { name, .. } => {
+                    write!(&mut self.output, "{name}").unwrap();
+                }
+                CfgAtom::KeyValue { key, value, .. } => {
+                    write!(&mut self.output, "{key} = \"{value}\"").unwrap();
+                }
+            },
+            CfgPredicate::Any { predicates, .. } => {
+                write!(&mut self.output, "any(").unwrap();
+                for (i, child) in predicates.iter().enumerate() {
+                    if i > 0 {
+                        write!(&mut self.output, ", ").unwrap();
+                    }
+                    self.print_cfg_predicate(child);
+                }
+                write!(&mut self.output, ")").unwrap();
+            }
+            CfgPredicate::All { predicates, .. } => {
+                write!(&mut self.output, "all(").unwrap();
+                for (i, child) in predicates.iter().enumerate() {
+                    if i > 0 {
+                        write!(&mut self.output, ", ").unwrap();
+                    }
+                    self.print_cfg_predicate(child);
+                }
+                write!(&mut self.output, ")").unwrap();
+            }
+            CfgPredicate::Not { predicate, .. } => {
+                write!(&mut self.output, "not(").unwrap();
+                self.print_cfg_predicate(predicate);
+                write!(&mut self.output, ")").unwrap();
+            }
         }
     }
 

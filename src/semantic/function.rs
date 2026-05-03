@@ -264,6 +264,12 @@ pub struct Function {
     /// method-level template parameters in C++. Empty for non-impl-block
     /// functions or impls whose params exactly match the struct's.
     pub method_type_parameters: Vec<String>,
+    /// `#[cfg(...)]` predicate. For impl-block methods, this is the
+    /// `all(...)` conjunction of the block's cfg and the per-method cfg
+    /// (computed during associated-function resolution). `None` means
+    /// "always emit"; otherwise each backend evaluates against its own
+    /// `CfgContext` and skips emission when the predicate is false.
+    pub cfg: Option<crate::parser::cfg::CfgPredicate>,
     pub location: ItemLocation,
 }
 impl fmt::Display for Function {
@@ -339,6 +345,7 @@ impl Function {
             return_type: None,
             calling_convention,
             method_type_parameters: Vec::new(),
+            cfg: None,
             location: ItemLocation::test(),
         }
     }
@@ -526,6 +533,7 @@ pub fn build(
         }
     });
 
+    let cfg = function.attributes.cfg();
     Ok(FunctionBuildOutcome::Built(Box::new(Function {
         visibility: function.visibility.into(),
         name: function.name.0.clone(),
@@ -535,6 +543,7 @@ pub fn build(
         return_type,
         calling_convention,
         method_type_parameters: Vec::new(),
+        cfg,
         location: function.location,
     })))
 }

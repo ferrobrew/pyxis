@@ -23,12 +23,15 @@ use crate::{
 
 /// Bundle of state every render call needs: the module being rendered (for
 /// "same-module → bare name vs cross-module → fully qualified" decisions),
-/// the resolved type registry, and the project's extern-binding table.
+/// the resolved type registry, the project's extern-binding table, and the
+/// active backend's cfg context (for filtering items that have `#[cfg(...)]`
+/// predicates).
 #[derive(Copy, Clone)]
 pub struct RenderCtx<'a> {
     pub module_path: &'a ItemPath,
     pub registry: &'a TypeRegistry,
     pub bindings: &'a BTreeMap<ItemPath, CppExternBinding>,
+    pub cfg_ctx: crate::parser::cfg::CfgContext<'a>,
 }
 
 impl<'a> RenderCtx<'a> {
@@ -36,11 +39,22 @@ impl<'a> RenderCtx<'a> {
         module_path: &'a ItemPath,
         registry: &'a TypeRegistry,
         bindings: &'a BTreeMap<ItemPath, CppExternBinding>,
+        cfg_ctx: crate::parser::cfg::CfgContext<'a>,
     ) -> Self {
         Self {
             module_path,
             registry,
             bindings,
+            cfg_ctx,
+        }
+    }
+
+    /// Returns true if the function should be emitted under the current
+    /// cfg context (or has no cfg).
+    pub fn cfg_passes(&self, cfg: &Option<crate::parser::cfg::CfgPredicate>) -> bool {
+        match cfg {
+            Some(p) => p.evaluate(&self.cfg_ctx),
+            None => true,
         }
     }
 }
@@ -180,6 +194,9 @@ fn render_struct(
             if func.visibility != Visibility::Public {
                 continue;
             }
+            if !ctx.cfg_passes(&func.cfg) {
+                continue;
+            }
             render_method_signature(&mut out, func, ctx)?;
         }
     }
@@ -187,6 +204,9 @@ fn render_struct(
     // Associated functions (impl block, e.g. `#[address(0x...)] pub fn foo()`).
     for func in &td.associated_functions {
         if func.visibility != Visibility::Public {
+            continue;
+        }
+        if !ctx.cfg_passes(&func.cfg) {
             continue;
         }
         render_method_signature(&mut out, func, ctx)?;
@@ -229,11 +249,17 @@ fn render_struct(
                 if func.visibility != Visibility::Public {
                     continue;
                 }
+                if !ctx.cfg_passes(&func.cfg) {
+                    continue;
+                }
                 render_method_definition(&mut post, name, func, ctx)?;
             }
         }
         for func in &td.associated_functions {
             if func.visibility != Visibility::Public {
+                continue;
+            }
+            if !ctx.cfg_passes(&func.cfg) {
                 continue;
             }
             render_method_definition(&mut post, name, func, ctx)?;

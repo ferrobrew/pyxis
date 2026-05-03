@@ -1,6 +1,7 @@
 pub mod atomics;
 pub mod bitflags;
 pub mod braced_imports;
+pub mod cfg;
 pub mod diamond_inheritance;
 pub mod doc_comments;
 pub mod enums;

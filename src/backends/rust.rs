@@ -68,15 +68,21 @@ pub fn write_module(
 
     writeln!(raw_output, "{prologues}")?;
 
+    let cfg_ctx = crate::parser::cfg::CfgContext { backend: "rust" };
+    let cfg_pass = |cfg: &Option<crate::parser::cfg::CfgPredicate>| match cfg {
+        Some(p) => p.evaluate(&cfg_ctx),
+        None => true,
+    };
     let mut definitions = module
         .definitions(semantic_state.type_registry())
+        .filter(|d| cfg_pass(&d.cfg))
         .collect::<Vec<_>>();
     definitions.sort_by_key(|d| &d.path);
     for definition in definitions {
         writeln!(
             raw_output,
             "{}",
-            build_item(semantic_state.type_registry(), definition)?
+            build_item(semantic_state.type_registry(), definition, &cfg_ctx)?
         )?;
     }
 
@@ -91,6 +97,7 @@ pub fn write_module(
         .functions()
         .iter()
         .filter(|f| !f.is_internal())
+        .filter(|f| cfg_pass(&f.cfg))
         .map(build_function)
         .collect::<Result<Vec<_>>>()?;
     for func in freestanding_functions {
@@ -146,6 +153,7 @@ pub fn write_module(
 fn build_item(
     type_registry: &TypeRegistry,
     definition: &ItemDefinition,
+    cfg_ctx: &crate::parser::cfg::CfgContext<'_>,
 ) -> Result<proc_macro2::TokenStream> {
     let resolved = definition
         .resolved()
@@ -177,8 +185,9 @@ fn build_item(
                 td,
                 location,
                 type_parameters,
+                cfg_ctx,
             ),
-            IDI::Enum(ed) => build_enum(path, *size, visibility, ed, location),
+            IDI::Enum(ed) => build_enum(path, *size, visibility, ed, location, cfg_ctx),
             IDI::Bitflags(bd) => build_bitflags(path, *size, visibility, bd, location),
             IDI::TypeAlias(ta) => build_type_alias(
                 type_registry,
@@ -204,6 +213,7 @@ fn build_type(
     type_definition: &TypeDefinition,
     location: &ItemLocation,
     type_parameters: &[String],
+    cfg_ctx: &crate::parser::cfg::CfgContext<'_>,
 ) -> Result<proc_macro2::TokenStream> {
     let name = get_type_name(path, location)?;
 
@@ -285,11 +295,16 @@ fn build_type(
         })
         .transpose()?;
 
+    let cfg_pass = |cfg: &Option<crate::parser::cfg::CfgPredicate>| match cfg {
+        Some(p) => p.evaluate(cfg_ctx),
+        None => true,
+    };
     // Not sure about filtering out internal functions at this level,
     // might be better to do it in semantic?
     let associated_functions_impl = associated_functions
         .iter()
         .filter(|f| !f.is_internal())
+        .filter(|f| cfg_pass(&f.cfg))
         .map(build_function)
         .collect::<Result<Vec<_>>>()?;
 
@@ -299,6 +314,7 @@ fn build_type(
             v.functions
                 .iter()
                 .filter(|f| !f.is_internal())
+                .filter(|f| cfg_pass(&f.cfg))
                 .map(build_function)
                 .collect::<Result<Vec<_>>>()
         })
@@ -461,6 +477,7 @@ fn build_enum(
     visibility: Visibility,
     enum_definition: &EnumDefinition,
     location: &ItemLocation,
+    cfg_ctx: &crate::parser::cfg::CfgContext<'_>,
 ) -> Result<proc_macro2::TokenStream> {
     let name = get_type_name(path, location)?;
 
@@ -515,10 +532,15 @@ fn build_enum(
         }
     });
 
+    let cfg_pass = |cfg: &Option<crate::parser::cfg::CfgPredicate>| match cfg {
+        Some(p) => p.evaluate(cfg_ctx),
+        None => true,
+    };
     // Build associated functions
     let associated_functions_impl = associated_functions
         .iter()
         .filter(|f| !f.is_internal())
+        .filter(|f| cfg_pass(&f.cfg))
         .map(build_function)
         .collect::<Result<Vec<_>>>()?;
 
