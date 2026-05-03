@@ -42,6 +42,207 @@ pub struct ModuleDeps {
     pub include_headers: BTreeSet<String>,
 }
 
+/// Topologically sort a module's items so that any FullDef intra-module
+/// reference (by-value field, base, array element of a same-module type)
+/// produces an item ordered after its dependency. Falls back to alphabetical
+/// order for items with no intra-module deps. Items detected to be in a
+/// cycle are emitted in input order at the end (a real layout cycle would
+/// trip the backend's static_asserts later).
+pub fn topo_sort_module_items<'a>(
+    module_path: &'a ItemPath,
+    items: Vec<&'a crate::semantic::types::ItemDefinition>,
+    registry: &TypeRegistry,
+    bindings: &BTreeMap<ItemPath, CppExternBinding>,
+) -> Vec<&'a crate::semantic::types::ItemDefinition> {
+    use std::collections::{BTreeMap as Map, BTreeSet as Set};
+
+    let item_paths: Set<ItemPath> = items.iter().map(|i| i.path.clone()).collect();
+    let mut deps: Map<ItemPath, Set<ItemPath>> = Map::new();
+    for item in &items {
+        let mut item_full_deps = Set::new();
+        if let Some(resolved) = item.resolved() {
+            collect_intra_module_full_deps(
+                &resolved.inner,
+                module_path,
+                &item_paths,
+                registry,
+                bindings,
+                &mut item_full_deps,
+            );
+        }
+        // No self-edges.
+        item_full_deps.remove(&item.path);
+        deps.insert(item.path.clone(), item_full_deps);
+    }
+
+    // Templates strictly before non-templates (templates must be fully
+    // visible before by-value instantiation in peer non-template structs;
+    // we already enforce this in the FullDef graph but tie-break ensures
+    // alphabetical-stable order between independent items.)
+    let mut by_path: Map<ItemPath, &crate::semantic::types::ItemDefinition> = Map::new();
+    for item in &items {
+        by_path.insert(item.path.clone(), *item);
+    }
+
+    let mut output: Vec<&crate::semantic::types::ItemDefinition> = Vec::with_capacity(items.len());
+    let mut visited: Set<ItemPath> = Set::new();
+    let mut on_stack: Set<ItemPath> = Set::new();
+
+    fn visit<'a>(
+        path: &ItemPath,
+        deps: &std::collections::BTreeMap<ItemPath, std::collections::BTreeSet<ItemPath>>,
+        by_path: &std::collections::BTreeMap<ItemPath, &'a crate::semantic::types::ItemDefinition>,
+        visited: &mut std::collections::BTreeSet<ItemPath>,
+        on_stack: &mut std::collections::BTreeSet<ItemPath>,
+        output: &mut Vec<&'a crate::semantic::types::ItemDefinition>,
+    ) {
+        if visited.contains(path) || on_stack.contains(path) {
+            return;
+        }
+        on_stack.insert(path.clone());
+        if let Some(children) = deps.get(path) {
+            // Visit deps in (templates-first, then alphabetical) order so
+            // tied independent siblings stay deterministic.
+            let mut children: Vec<&ItemPath> = children.iter().collect();
+            children.sort_by(|a, b| {
+                let ag = by_path.get(*a).is_some_and(|i| i.is_generic());
+                let bg = by_path.get(*b).is_some_and(|i| i.is_generic());
+                bg.cmp(&ag).then_with(|| a.cmp(b))
+            });
+            for child in children {
+                visit(child, deps, by_path, visited, on_stack, output);
+            }
+        }
+        on_stack.remove(path);
+        visited.insert(path.clone());
+        if let Some(item) = by_path.get(path) {
+            output.push(item);
+        }
+    }
+
+    let mut roots: Vec<ItemPath> = items.iter().map(|i| i.path.clone()).collect();
+    roots.sort_by(|a, b| {
+        let ag = by_path.get(a).is_some_and(|i| i.is_generic());
+        let bg = by_path.get(b).is_some_and(|i| i.is_generic());
+        bg.cmp(&ag).then_with(|| a.cmp(b))
+    });
+    for path in &roots {
+        visit(
+            path,
+            &deps,
+            &by_path,
+            &mut visited,
+            &mut on_stack,
+            &mut output,
+        );
+    }
+    output
+}
+
+fn collect_intra_module_full_deps(
+    inner: &ItemDefinitionInner,
+    module_path: &ItemPath,
+    item_paths: &std::collections::BTreeSet<ItemPath>,
+    registry: &TypeRegistry,
+    bindings: &BTreeMap<ItemPath, CppExternBinding>,
+    out: &mut std::collections::BTreeSet<ItemPath>,
+) {
+    match inner {
+        ItemDefinitionInner::Type(td) => {
+            for region in &td.regions {
+                walk_intra(
+                    &region.type_ref,
+                    EdgeKind::FullDef,
+                    module_path,
+                    item_paths,
+                    registry,
+                    bindings,
+                    out,
+                );
+            }
+        }
+        ItemDefinitionInner::Enum(ed) => {
+            walk_intra(
+                &ed.type_,
+                EdgeKind::FullDef,
+                module_path,
+                item_paths,
+                registry,
+                bindings,
+                out,
+            );
+        }
+        ItemDefinitionInner::Bitflags(bd) => {
+            walk_intra(
+                &bd.type_,
+                EdgeKind::FullDef,
+                module_path,
+                item_paths,
+                registry,
+                bindings,
+                out,
+            );
+        }
+        ItemDefinitionInner::TypeAlias(ta) => {
+            walk_intra(
+                &ta.target,
+                EdgeKind::FullDef,
+                module_path,
+                item_paths,
+                registry,
+                bindings,
+                out,
+            );
+        }
+    }
+}
+
+fn walk_intra(
+    ty: &Type,
+    kind: EdgeKind,
+    module_path: &ItemPath,
+    item_paths: &std::collections::BTreeSet<ItemPath>,
+    registry: &TypeRegistry,
+    bindings: &BTreeMap<ItemPath, CppExternBinding>,
+    out: &mut std::collections::BTreeSet<ItemPath>,
+) {
+    match ty {
+        Type::Unresolved(_) | Type::TypeParameter(_) => {}
+        Type::Raw(path) => {
+            if matches!(kind, EdgeKind::FullDef) && item_paths.contains(path) {
+                out.insert(path.clone());
+            }
+        }
+        Type::Generic(base, args) => {
+            if item_paths.contains(base) {
+                out.insert(base.clone());
+            }
+            let arg_kind = if generic_is_pointer_only(base, registry) {
+                EdgeKind::FwdOnly
+            } else {
+                EdgeKind::FullDef
+            };
+            for arg in args {
+                walk_intra(arg, arg_kind, module_path, item_paths, registry, bindings, out);
+            }
+        }
+        Type::ConstPointer(inner) | Type::MutPointer(inner) => {
+            walk_intra(inner, EdgeKind::FwdOnly, module_path, item_paths, registry, bindings, out);
+        }
+        Type::Array(inner, _) => {
+            walk_intra(inner, kind, module_path, item_paths, registry, bindings, out);
+        }
+        Type::Function(_, args, ret) => {
+            for (_, t) in args {
+                walk_intra(t, EdgeKind::FwdOnly, module_path, item_paths, registry, bindings, out);
+            }
+            if let Some(t) = ret {
+                walk_intra(t, EdgeKind::FwdOnly, module_path, item_paths, registry, bindings, out);
+            }
+        }
+    }
+}
+
 /// Collect `ModuleDeps` for the given module by walking every item it owns.
 pub fn collect_module_deps(
     module_path: &ItemPath,

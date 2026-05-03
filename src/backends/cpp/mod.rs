@@ -80,14 +80,13 @@ fn write_module(
     let mut body = String::new();
     let mut post = String::new();
     let mut wrote_anything = false;
-    let mut sorted_items: Vec<_> = module.definitions(registry).collect();
-    // Templates first so peers that instantiate them by-value see the full
-    // body; secondary key is the path for stable, alphabetical output.
-    sorted_items.sort_by(|a, b| {
-        b.is_generic()
-            .cmp(&a.is_generic())
-            .then_with(|| a.path.cmp(&b.path))
-    });
+    // Topologically sort items by intra-module FullDef edges so that any
+    // by-value reference (`Aabb { Vector3 min; }`) lands after its target
+    // is fully defined. Templates and independent items break ties by
+    // template-first-then-alphabetical.
+    let raw_items: Vec<_> = module.definitions(registry).collect();
+    let sorted_items =
+        deps::topo_sort_module_items(key, raw_items, registry, bindings);
     for item in sorted_items {
         let Some(rendered) = render::render_item(item, key, registry, bindings)? else {
             continue;
@@ -416,9 +415,8 @@ pub fn write_runtime_header(out_dir: &Path) -> Result<()> {
 }
 
 /// Emit `<out_dir>/CMakeLists.txt` and `<out_dir>/cmake-toolchains/xwin-x86.cmake`.
-pub fn write_cmake(_out_dir: &Path, _project: &Project) -> Result<()> {
-    // Phase 4 fills this in.
-    Ok(())
+pub fn write_cmake(out_dir: &Path, project: &Project) -> Result<()> {
+    cmake::write_cmake(out_dir, project)
 }
 
 fn module_to_header_path(out_dir: &Path, module_path: &ItemPath) -> PathBuf {
