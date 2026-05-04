@@ -3,7 +3,9 @@
 #include "doc_comments.hpp"
 
 namespace doc_comments {
-    const TestTypeVftable* TestType::_vftable_ptr() const { return this->vftable; }
+    const TestTypeVftable* TestType::_vftable_ptr() const {
+        return this->vftable;
+    }
     void TestType::test_vfunc() const {
         _vftable_ptr()->test_vfunc(this);
     }

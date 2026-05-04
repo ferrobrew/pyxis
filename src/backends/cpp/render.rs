@@ -335,17 +335,16 @@ fn render_vftable_accessor_definition(
     ctx: RenderCtx,
 ) -> Result<()> {
     let vftable_type = render_type(&vftable.type_, ctx)?;
+    writeln!(out, "{vftable_type} {parent_name}::_vftable_ptr() const {{")?;
     if let Some(base_field) = &vftable.base_field {
         writeln!(
             out,
-            "{vftable_type} {parent_name}::_vftable_ptr() const {{ return reinterpret_cast<{vftable_type}>(this->{base_field}._vftable_ptr()); }}"
+            "    return reinterpret_cast<{vftable_type}>(this->{base_field}._vftable_ptr());"
         )?;
     } else {
-        writeln!(
-            out,
-            "{vftable_type} {parent_name}::_vftable_ptr() const {{ return this->vftable; }}"
-        )?;
+        writeln!(out, "    return this->vftable;")?;
     }
+    writeln!(out, "}}")?;
     Ok(())
 }
 

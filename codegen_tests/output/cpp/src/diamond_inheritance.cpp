@@ -3,11 +3,15 @@
 #include "diamond_inheritance.hpp"
 
 namespace diamond_inheritance {
-    const BaseVftable* Base::_vftable_ptr() const { return this->vftable; }
+    const BaseVftable* Base::_vftable_ptr() const {
+        return this->vftable;
+    }
     void Base::destructor() {
         _vftable_ptr()->destructor(this);
     }
-    const BaseAVftable* BaseA::_vftable_ptr() const { return reinterpret_cast<const BaseAVftable*>(this->base._vftable_ptr()); }
+    const BaseAVftable* BaseA::_vftable_ptr() const {
+        return reinterpret_cast<const BaseAVftable*>(this->base._vftable_ptr());
+    }
     void BaseA::destructor() {
         _vftable_ptr()->destructor(this);
     }
@@ -15,7 +19,9 @@ namespace diamond_inheritance {
         using fn_t = void (*)(void*);
         reinterpret_cast<fn_t>(0x123)(this);
     }
-    const BaseBVftable* BaseB::_vftable_ptr() const { return reinterpret_cast<const BaseBVftable*>(this->base._vftable_ptr()); }
+    const BaseBVftable* BaseB::_vftable_ptr() const {
+        return reinterpret_cast<const BaseBVftable*>(this->base._vftable_ptr());
+    }
     void BaseB::destructor() {
         _vftable_ptr()->destructor(this);
     }
@@ -23,7 +29,9 @@ namespace diamond_inheritance {
         using fn_t = void (*)(void*);
         reinterpret_cast<fn_t>(0x123)(this);
     }
-    const DerivedVftable* Derived::_vftable_ptr() const { return reinterpret_cast<const DerivedVftable*>(this->base_a._vftable_ptr()); }
+    const DerivedVftable* Derived::_vftable_ptr() const {
+        return reinterpret_cast<const DerivedVftable*>(this->base_a._vftable_ptr());
+    }
     void Derived::destructor() {
         _vftable_ptr()->destructor(this);
     }

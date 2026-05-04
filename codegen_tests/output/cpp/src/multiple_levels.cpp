@@ -3,7 +3,9 @@
 #include "multiple_levels.hpp"
 
 namespace multiple_levels {
-    const BaseVftable* Base::_vftable_ptr() const { return this->vftable; }
+    const BaseVftable* Base::_vftable_ptr() const {
+        return this->vftable;
+    }
     ::std::int32_t Base::base_vfunc(::std::int32_t a) const {
         return _vftable_ptr()->base_vfunc(this, a);
     }
@@ -11,7 +13,9 @@ namespace multiple_levels {
         using fn_t = ::std::int32_t (*)(const void*, ::std::int32_t);
         return reinterpret_cast<fn_t>(0x123)(this, a);
     }
-    const DerivedVftable* Derived::_vftable_ptr() const { return reinterpret_cast<const DerivedVftable*>(this->base._vftable_ptr()); }
+    const DerivedVftable* Derived::_vftable_ptr() const {
+        return reinterpret_cast<const DerivedVftable*>(this->base._vftable_ptr());
+    }
     ::std::int32_t Derived::base_vfunc(::std::int32_t a) const {
         return _vftable_ptr()->base_vfunc(this, a);
     }
@@ -25,7 +29,9 @@ namespace multiple_levels {
         using fn_t = ::std::int32_t (*)(const void*, ::std::int32_t);
         return reinterpret_cast<fn_t>(0x456)(this, a);
     }
-    const DerivedDerivedVftable* DerivedDerived::_vftable_ptr() const { return reinterpret_cast<const DerivedDerivedVftable*>(this->derived._vftable_ptr()); }
+    const DerivedDerivedVftable* DerivedDerived::_vftable_ptr() const {
+        return reinterpret_cast<const DerivedDerivedVftable*>(this->derived._vftable_ptr());
+    }
     ::std::int32_t DerivedDerived::base_vfunc(::std::int32_t a) const {
         return _vftable_ptr()->base_vfunc(this, a);
     }
@@ -45,7 +51,9 @@ namespace multiple_levels {
         using fn_t = ::std::int32_t (*)(const void*, ::std::int32_t);
         return reinterpret_cast<fn_t>(0x789)(this, a);
     }
-    const DerivedDerivedDerivedVftable* DerivedDerivedDerived::_vftable_ptr() const { return reinterpret_cast<const DerivedDerivedDerivedVftable*>(this->derived_derived._vftable_ptr()); }
+    const DerivedDerivedDerivedVftable* DerivedDerivedDerived::_vftable_ptr() const {
+        return reinterpret_cast<const DerivedDerivedDerivedVftable*>(this->derived_derived._vftable_ptr());
+    }
     ::std::int32_t DerivedDerivedDerived::base_vfunc(::std::int32_t a) const {
         return _vftable_ptr()->base_vfunc(this, a);
     }
