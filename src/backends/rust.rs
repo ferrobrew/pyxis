@@ -896,6 +896,7 @@ fn fully_qualified_type_ref_impl(
                     PredefinedItem::I128 => "i128",
                     PredefinedItem::F32 => "f32",
                     PredefinedItem::F64 => "f64",
+                    PredefinedItem::CChar => "::std::ffi::c_char",
                     // Atomic types
                     PredefinedItem::AtomicBool => "::std::sync::atomic::AtomicBool",
                     PredefinedItem::AtomicU8 => "::std::sync::atomic::AtomicU8",

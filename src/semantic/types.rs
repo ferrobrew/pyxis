@@ -423,6 +423,11 @@ predefined_items! {
     (I128, "i128", 16),
     (F32, "f32", 4),
     (F64, "f64", 8),
+    // C-ABI char. Backend-mapped: rust → `::std::ffi::c_char`, cpp → `char`.
+    // Distinct from rust's `char` (4-byte unicode scalar) and pyxis's `i8`/`u8`
+    // (signedness varies by platform on the C side, so we keep this an opaque
+    // 1-byte type and let the backend pick the appropriate ABI alias).
+    (CChar, "c_char", 1),
     // Atomic types
     (AtomicBool, "AtomicBool", 1),
     (AtomicU8, "AtomicU8", 1),

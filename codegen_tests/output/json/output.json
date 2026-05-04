@@ -572,6 +572,26 @@
         "line": 4
       }
     },
+    "c_char": {
+      "path": "c_char",
+      "visibility": "public",
+      "size": 1,
+      "alignment": 1,
+      "category": "predefined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": true,
+        "cloneable": true,
+        "defaultable": true,
+        "packed": false
+      },
+      "source": null
+    },
     "cfg::Probe": {
       "path": "cfg::Probe",
       "visibility": "public",
@@ -6327,6 +6347,7 @@
         "AtomicU64",
         "AtomicU8",
         "bool",
+        "c_char",
         "f32",
         "f64",
         "i128",

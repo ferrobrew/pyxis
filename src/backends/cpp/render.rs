@@ -936,6 +936,7 @@ fn predefined_to_cpp(p: PredefinedItem) -> &'static str {
         PredefinedItem::I128 => "::std::int64_t /* i128 */",
         PredefinedItem::F32 => "float",
         PredefinedItem::F64 => "double",
+        PredefinedItem::CChar => "char",
         // Atomics get real bindings in Phase 3 via #[cpp_header]/<atomic>;
         // for now use opaque size-correct placeholders.
         PredefinedItem::AtomicBool => "::pyxis::AtomicBool",
