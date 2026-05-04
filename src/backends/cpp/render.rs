@@ -870,7 +870,12 @@ fn render_doc(out: &mut String, doc: &[String], indent_levels: usize) -> Result<
     let pad = "    ".repeat(indent_levels);
     for line in doc {
         let trimmed = line.trim();
-        writeln!(out, "{pad}/// {trimmed}")?;
+        if trimmed.is_empty() {
+            // Blank doc line - emit just `///` with no trailing space.
+            writeln!(out, "{pad}///")?;
+        } else {
+            writeln!(out, "{pad}/// {trimmed}")?;
+        }
     }
     Ok(())
 }

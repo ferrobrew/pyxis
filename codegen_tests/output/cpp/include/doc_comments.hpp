@@ -19,7 +19,7 @@ namespace doc_comments {
         /// My test vfunc!
         void test_vfunc() const;
         /// My test func!
-        /// 
+        ///
         /// And its second line! :)
         void test_func() const;
     };
