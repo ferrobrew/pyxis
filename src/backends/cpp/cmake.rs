@@ -67,13 +67,31 @@ endif()
 }
 
 fn sanitize_target_name(s: &str) -> String {
-    s.chars()
-        .map(|c| {
-            if c.is_ascii_alphanumeric() || c == '_' {
-                c
-            } else {
-                '_'
+    // Replace every non-identifier character with `_`, then collapse
+    // runs and trim leading/trailing `_` so a project name like
+    // "Just Cause 2 (1.0.0.2 / Steam 251893)" becomes
+    // `Just_Cause_2_1_0_0_2_Steam_251893` rather than
+    // `Just_Cause_2__1_0_0_2___Steam_251893_`.
+    let mut out = String::with_capacity(s.len());
+    let mut prev_underscore = true; // suppress leading underscores
+    for c in s.chars() {
+        let mapped = if c.is_ascii_alphanumeric() || c == '_' {
+            c
+        } else {
+            '_'
+        };
+        if mapped == '_' {
+            if !prev_underscore {
+                out.push('_');
+                prev_underscore = true;
             }
-        })
-        .collect()
+        } else {
+            out.push(mapped);
+            prev_underscore = false;
+        }
+    }
+    while out.ends_with('_') {
+        out.pop();
+    }
+    out
 }
