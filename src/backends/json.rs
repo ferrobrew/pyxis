@@ -736,9 +736,13 @@ fn convert_extern_value(ev: &ExternValue) -> JsonExternValue {
 }
 
 fn convert_backend(backend: &Backend) -> JsonBackend {
+    // JSON output flattens to the header slot only - the `definition`
+    // slot is cpp-only and rejected at semantic validation for any
+    // backend that reaches the json emit (json's own backend block
+    // can't have one).
     JsonBackend {
-        prologue: backend.prologue.clone(),
-        epilogue: backend.epilogue.clone(),
+        prologue: backend.prologue.header.clone(),
+        epilogue: backend.epilogue.header.clone(),
     }
 }
 

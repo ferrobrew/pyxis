@@ -540,11 +540,27 @@ impl ItemDefinition {
     }
 }
 
+/// A `prologue` or `epilogue` slot on a backend. Either part can be set
+/// independently. `header` is the default; `definition` is only valid
+/// for the cpp backend (rejected at semantic-validation time elsewhere)
+/// and lands in the `.cpp` source file rather than the `.hpp` header.
+#[derive(PartialEq, Eq, Debug, Clone, Default)]
+#[cfg_attr(test, derive(StripLocations))]
+pub struct BackendSplice {
+    pub header: Option<String>,
+    pub definition: Option<String>,
+}
+impl BackendSplice {
+    pub fn is_empty(&self) -> bool {
+        self.header.is_none() && self.definition.is_none()
+    }
+}
+
 #[derive(PartialEq, Eq, Debug, Clone, HasLocation)]
 #[cfg_attr(test, derive(StripLocations))]
 pub struct Backend {
-    pub prologue: Option<String>,
-    pub epilogue: Option<String>,
+    pub prologue: BackendSplice,
+    pub epilogue: BackendSplice,
     /// Resolved working set: every `use` path declared on this backend
     /// block, flattened to absolute item paths. The cpp backend
     /// promotes these to `#include`s; other backends are free to use
@@ -556,11 +572,25 @@ pub struct Backend {
 impl Backend {
     pub fn new(prologue: impl Into<Option<String>>, epilogue: impl Into<Option<String>>) -> Self {
         Backend {
-            prologue: prologue.into(),
-            epilogue: epilogue.into(),
+            prologue: BackendSplice {
+                header: prologue.into(),
+                definition: None,
+            },
+            epilogue: BackendSplice {
+                header: epilogue.into(),
+                definition: None,
+            },
             uses: Vec::new(),
             location: ItemLocation::test(),
         }
+    }
+    pub fn with_prologue_definition(mut self, def: impl Into<String>) -> Self {
+        self.prologue.definition = Some(def.into());
+        self
+    }
+    pub fn with_epilogue_definition(mut self, def: impl Into<String>) -> Self {
+        self.epilogue.definition = Some(def.into());
+        self
     }
     pub fn with_uses(mut self, uses: impl IntoIterator<Item = crate::grammar::ItemPath>) -> Self {
         self.uses = uses.into_iter().collect();

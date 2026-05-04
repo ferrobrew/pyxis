@@ -531,29 +531,48 @@ impl PrettyPrinter {
     fn print_backend(&mut self, backend: &Backend) {
         self.write_indent();
 
-        // Shorthand syntax requires no `use`s and only one of
-        // prologue/epilogue. Anything else lands in the block form.
-        let has_only_prologue =
-            backend.uses.is_empty() && backend.prologue.is_some() && backend.epilogue.is_none();
-        let has_only_epilogue =
-            backend.uses.is_empty() && backend.epilogue.is_some() && backend.prologue.is_none();
+        // Count the number of populated splice slots; the shorthand form
+        // is only available when there's exactly one (and no `use`s).
+        let prologue_count = backend.prologue.header.is_some() as usize
+            + backend.prologue.definition.is_some() as usize;
+        let epilogue_count = backend.epilogue.header.is_some() as usize
+            + backend.epilogue.definition.is_some() as usize;
+        let total = prologue_count + epilogue_count;
+        let shorthand_eligible = backend.uses.is_empty() && total == 1;
 
-        if has_only_prologue {
-            let prologue = backend.prologue.as_ref().unwrap();
-            let prologue_str = self.format_string_with_format(prologue, backend.prologue_format);
+        let only_prologue_header = shorthand_eligible
+            && backend.prologue.header.is_some()
+            && backend.prologue.definition.is_none();
+        let only_prologue_def = shorthand_eligible && backend.prologue.definition.is_some();
+        let only_epilogue_header = shorthand_eligible
+            && backend.epilogue.header.is_some()
+            && backend.epilogue.definition.is_none();
+        let only_epilogue_def = shorthand_eligible && backend.epilogue.definition.is_some();
+
+        if only_prologue_header {
+            let prologue = backend.prologue.header.as_ref().unwrap();
+            let s = self.format_string_with_format(prologue, backend.prologue.header_format);
+            writeln!(&mut self.output, "backend {} prologue {s};", backend.name).unwrap();
+        } else if only_prologue_def {
+            let prologue = backend.prologue.definition.as_ref().unwrap();
+            let s = self.format_string_with_format(prologue, backend.prologue.definition_format);
             writeln!(
                 &mut self.output,
-                "backend {} prologue {};",
-                backend.name, prologue_str
+                "backend {} prologue definition {s};",
+                backend.name
             )
             .unwrap();
-        } else if has_only_epilogue {
-            let epilogue = backend.epilogue.as_ref().unwrap();
-            let epilogue_str = self.format_string_with_format(epilogue, backend.epilogue_format);
+        } else if only_epilogue_header {
+            let epilogue = backend.epilogue.header.as_ref().unwrap();
+            let s = self.format_string_with_format(epilogue, backend.epilogue.header_format);
+            writeln!(&mut self.output, "backend {} epilogue {s};", backend.name).unwrap();
+        } else if only_epilogue_def {
+            let epilogue = backend.epilogue.definition.as_ref().unwrap();
+            let s = self.format_string_with_format(epilogue, backend.epilogue.definition_format);
             writeln!(
                 &mut self.output,
-                "backend {} epilogue {};",
-                backend.name, epilogue_str
+                "backend {} epilogue definition {s};",
+                backend.name
             )
             .unwrap();
         } else {
@@ -567,18 +586,25 @@ impl PrettyPrinter {
                 writeln!(&mut self.output, "use {tree_str};").unwrap();
             }
 
-            if let Some(prologue) = &backend.prologue {
+            if let Some(text) = &backend.prologue.header {
                 self.write_indent();
-                let prologue_str =
-                    self.format_string_with_format(prologue, backend.prologue_format);
-                writeln!(&mut self.output, "prologue {prologue_str};").unwrap();
+                let s = self.format_string_with_format(text, backend.prologue.header_format);
+                writeln!(&mut self.output, "prologue {s};").unwrap();
             }
-
-            if let Some(epilogue) = &backend.epilogue {
+            if let Some(text) = &backend.prologue.definition {
                 self.write_indent();
-                let epilogue_str =
-                    self.format_string_with_format(epilogue, backend.epilogue_format);
-                writeln!(&mut self.output, "epilogue {epilogue_str};").unwrap();
+                let s = self.format_string_with_format(text, backend.prologue.definition_format);
+                writeln!(&mut self.output, "prologue definition {s};").unwrap();
+            }
+            if let Some(text) = &backend.epilogue.header {
+                self.write_indent();
+                let s = self.format_string_with_format(text, backend.epilogue.header_format);
+                writeln!(&mut self.output, "epilogue {s};").unwrap();
+            }
+            if let Some(text) = &backend.epilogue.definition {
+                self.write_indent();
+                let s = self.format_string_with_format(text, backend.epilogue.definition_format);
+                writeln!(&mut self.output, "epilogue definition {s};").unwrap();
             }
 
             self.dedent();

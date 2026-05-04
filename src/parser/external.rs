@@ -19,14 +19,41 @@ use super::{
 #[cfg(test)]
 use super::attributes::Attribute;
 
+/// A `prologue`/`epilogue` slot on a backend block. The plain form
+/// (`prologue r#"..."#;`) targets the header (or whatever the backend
+/// considers its primary output); the `definition` modifier
+/// (`prologue definition r#"..."#;`) targets the source file - currently
+/// only meaningful for `backend cpp` where header / source are distinct.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(test, derive(StripLocations))]
+pub struct BackendSplice {
+    pub header: Option<String>,
+    pub header_format: StringFormat,
+    pub definition: Option<String>,
+    pub definition_format: StringFormat,
+}
+impl Default for BackendSplice {
+    fn default() -> Self {
+        Self {
+            header: None,
+            header_format: StringFormat::Regular,
+            definition: None,
+            definition_format: StringFormat::Regular,
+        }
+    }
+}
+impl BackendSplice {
+    pub fn is_empty(&self) -> bool {
+        self.header.is_none() && self.definition.is_none()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, HasLocation)]
 #[cfg_attr(test, derive(StripLocations))]
 pub struct Backend {
     pub name: Ident,
-    pub prologue: Option<String>,
-    pub prologue_format: StringFormat,
-    pub epilogue: Option<String>,
-    pub epilogue_format: StringFormat,
+    pub prologue: BackendSplice,
+    pub epilogue: BackendSplice,
     /// Per-backend explicit working set: which other-module items this
     /// backend block references. Drives cpp `#include` selection and
     /// (in principle) any other backend that wants to know what its
@@ -40,16 +67,14 @@ impl Backend {
     pub fn new(name: &str) -> Self {
         Self {
             name: name.into(),
-            prologue: None,
-            prologue_format: StringFormat::Regular,
-            epilogue: None,
-            epilogue_format: StringFormat::Regular,
+            prologue: BackendSplice::default(),
+            epilogue: BackendSplice::default(),
             uses: Vec::new(),
             location: ItemLocation::test(),
         }
     }
     pub fn with_prologue(mut self, prologue: impl Into<String>) -> Self {
-        self.prologue = Some(prologue.into());
+        self.prologue.header = Some(prologue.into());
         self
     }
     pub fn with_prologue_format(
@@ -57,12 +82,25 @@ impl Backend {
         prologue: impl Into<String>,
         format: StringFormat,
     ) -> Self {
-        self.prologue = Some(prologue.into());
-        self.prologue_format = format;
+        self.prologue.header = Some(prologue.into());
+        self.prologue.header_format = format;
+        self
+    }
+    pub fn with_prologue_definition(mut self, prologue: impl Into<String>) -> Self {
+        self.prologue.definition = Some(prologue.into());
+        self
+    }
+    pub fn with_prologue_definition_format(
+        mut self,
+        prologue: impl Into<String>,
+        format: StringFormat,
+    ) -> Self {
+        self.prologue.definition = Some(prologue.into());
+        self.prologue.definition_format = format;
         self
     }
     pub fn with_epilogue(mut self, epilogue: impl Into<String>) -> Self {
-        self.epilogue = Some(epilogue.into());
+        self.epilogue.header = Some(epilogue.into());
         self
     }
     pub fn with_epilogue_format(
@@ -70,8 +108,21 @@ impl Backend {
         epilogue: impl Into<String>,
         format: StringFormat,
     ) -> Self {
-        self.epilogue = Some(epilogue.into());
-        self.epilogue_format = format;
+        self.epilogue.header = Some(epilogue.into());
+        self.epilogue.header_format = format;
+        self
+    }
+    pub fn with_epilogue_definition(mut self, epilogue: impl Into<String>) -> Self {
+        self.epilogue.definition = Some(epilogue.into());
+        self
+    }
+    pub fn with_epilogue_definition_format(
+        mut self,
+        epilogue: impl Into<String>,
+        format: StringFormat,
+    ) -> Self {
+        self.epilogue.definition = Some(epilogue.into());
+        self.epilogue.definition_format = format;
         self
     }
     pub fn with_uses(mut self, uses: impl IntoIterator<Item = UseTree>) -> Self {
@@ -389,14 +440,51 @@ impl Parser {
         })
     }
 
+    /// Parse the body of a single `prologue`/`epilogue` slot, after the
+    /// keyword has been consumed. Optionally accepts a `definition`
+    /// modifier (only meaningful for `backend cpp`; rejected at the
+    /// semantic layer for other backends). Then expects a string literal
+    /// and a trailing semicolon.
+    fn parse_backend_splice_slot(&mut self, slot: &mut BackendSplice) -> Result<(), ParseError> {
+        // Optional `definition` modifier.
+        let is_definition = matches!(
+            self.peek(),
+            TokenKind::Ident(s) if s == "definition"
+        );
+        if is_definition {
+            self.advance();
+        }
+        let expr = self.parse_expr()?;
+        let Expr::StringLiteral { value, format, .. } = expr else {
+            return Err(ParseError::ExpectedStringLiteral {
+                found: self.peek().clone(),
+                location: *expr.location(),
+            });
+        };
+        if is_definition {
+            slot.definition = Some(value);
+            slot.definition_format = format;
+        } else {
+            slot.header = Some(value);
+            slot.header_format = format;
+        }
+        self.expect(TokenKind::Semi)?;
+        Ok(())
+    }
+
+    /// Returns the most recently consumed token (typically a closing
+    /// `;` or `}`), used to compute span ranges.
+    fn last_token(&self) -> &crate::tokenizer::Token {
+        let idx = self.pos.saturating_sub(1);
+        &self.tokens[idx.min(self.tokens.len() - 1)]
+    }
+
     pub(crate) fn parse_backend(&mut self) -> Result<Backend, ParseError> {
         let first_token = self.expect(TokenKind::Backend)?;
         let (name, _) = self.expect_ident()?;
 
-        let mut prologue = None;
-        let mut prologue_format = StringFormat::Regular;
-        let mut epilogue = None;
-        let mut epilogue_format = StringFormat::Regular;
+        let mut prologue = BackendSplice::default();
+        let mut epilogue = BackendSplice::default();
         let mut uses: Vec<UseTree> = Vec::new();
 
         // Check if we have braces or direct prologue/epilogue
@@ -416,31 +504,11 @@ impl Parser {
                     }
                     TokenKind::Prologue => {
                         self.advance();
-                        let expr = self.parse_expr()?;
-                        if let Expr::StringLiteral { value, format, .. } = expr {
-                            prologue = Some(value);
-                            prologue_format = format;
-                        } else {
-                            return Err(ParseError::ExpectedStringLiteral {
-                                found: self.peek().clone(),
-                                location: *expr.location(),
-                            });
-                        }
-                        self.expect(TokenKind::Semi)?;
+                        self.parse_backend_splice_slot(&mut prologue)?;
                     }
                     TokenKind::Epilogue => {
                         self.advance();
-                        let expr = self.parse_expr()?;
-                        if let Expr::StringLiteral { value, format, .. } = expr {
-                            epilogue = Some(value);
-                            epilogue_format = format;
-                        } else {
-                            return Err(ParseError::ExpectedStringLiteral {
-                                found: self.peek().clone(),
-                                location: *expr.location(),
-                            });
-                        }
-                        self.expect(TokenKind::Semi)?;
+                        self.parse_backend_splice_slot(&mut epilogue)?;
                     }
                     _ => {
                         return Err(ParseError::ExpectedPrologueOrEpilogue {
@@ -453,35 +521,18 @@ impl Parser {
 
             self.expect(TokenKind::RBrace)?
         } else {
-            // Form: backend name prologue ... or backend name epilogue ...
+            // Form: `backend name prologue ...` or `backend name epilogue ...`
+            // (with optional `definition` modifier).
             match self.peek() {
                 TokenKind::Prologue => {
                     self.advance();
-                    let expr = self.parse_expr()?;
-                    if let Expr::StringLiteral { value, format, .. } = expr {
-                        prologue = Some(value);
-                        prologue_format = format;
-                    } else {
-                        return Err(ParseError::ExpectedStringLiteral {
-                            found: self.peek().clone(),
-                            location: *expr.location(),
-                        });
-                    }
-                    self.expect(TokenKind::Semi)?
+                    self.parse_backend_splice_slot(&mut prologue)?;
+                    self.last_token().clone()
                 }
                 TokenKind::Epilogue => {
                     self.advance();
-                    let expr = self.parse_expr()?;
-                    if let Expr::StringLiteral { value, format, .. } = expr {
-                        epilogue = Some(value);
-                        epilogue_format = format;
-                    } else {
-                        return Err(ParseError::ExpectedStringLiteral {
-                            found: self.peek().clone(),
-                            location: *expr.location(),
-                        });
-                    }
-                    self.expect(TokenKind::Semi)?
+                    self.parse_backend_splice_slot(&mut epilogue)?;
+                    self.last_token().clone()
                 }
                 _ => {
                     return Err(ParseError::ExpectedBackendContent {
@@ -496,9 +547,7 @@ impl Parser {
         Ok(Backend {
             name,
             prologue,
-            prologue_format,
             epilogue,
-            epilogue_format,
             uses,
             location,
         })
@@ -865,6 +914,60 @@ backend cpp {
     "#,
                 StringFormat::Raw,
             )]);
+
+        assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
+    }
+
+    #[test]
+    fn can_parse_backend_with_definition_modifier() {
+        // The `definition` modifier on an epilogue/prologue lands in the
+        // .cpp source file rather than the .hpp header. Both shorthand
+        // and block forms should accept it.
+        let text = r##"
+backend cpp epilogue definition r#"
+    bool Probe::read() const { return value; }
+"#;
+
+backend cpp {
+    prologue definition r#"
+        #include <windows.h>
+    "#;
+    epilogue r#"
+        bool header_only_helper();
+    "#;
+    epilogue definition r#"
+        bool source_only_helper() { return true; }
+    "#;
+}
+"##;
+
+        let ast = M::new().with_backends([
+            B::new("cpp").with_epilogue_definition_format(
+                r#"
+    bool Probe::read() const { return value; }
+"#,
+                StringFormat::Raw,
+            ),
+            B::new("cpp")
+                .with_prologue_definition_format(
+                    r#"
+        #include <windows.h>
+    "#,
+                    StringFormat::Raw,
+                )
+                .with_epilogue_format(
+                    r#"
+        bool header_only_helper();
+    "#,
+                    StringFormat::Raw,
+                )
+                .with_epilogue_definition_format(
+                    r#"
+        bool source_only_helper() { return true; }
+    "#,
+                    StringFormat::Raw,
+                ),
+        ]);
 
         assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
     }

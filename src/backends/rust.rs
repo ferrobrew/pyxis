@@ -55,14 +55,12 @@ pub fn write_module(
     let backends = module.backends.get("rust");
     let prologues = backends
         .iter()
-        .flat_map(|bs| bs.iter().flat_map(|b| &b.prologue))
-        .map(|s| s.as_str())
+        .flat_map(|bs| bs.iter().flat_map(|b| b.prologue.header.as_deref()))
         .collect::<Vec<_>>()
         .join("\n");
     let epilogues = backends
         .iter()
-        .flat_map(|bs| bs.iter().flat_map(|b| &b.epilogue))
-        .map(|s| s.as_str())
+        .flat_map(|bs| bs.iter().flat_map(|b| b.epilogue.header.as_deref()))
         .collect::<Vec<_>>()
         .join("\n");
 

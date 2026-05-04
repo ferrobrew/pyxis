@@ -255,6 +255,11 @@ impl SemanticState {
     pub fn build(mut self) -> Result<ResolvedSemanticState> {
         // Validate all use statements before resolving types
         self.validate_uses()?;
+        // Reject `prologue definition` / `epilogue definition` on backends
+        // other than cpp - the cpp split is the only backend with a
+        // distinct .cpp source file, so the modifier is meaningless
+        // (and probably a user typo) elsewhere.
+        self.validate_backend_definitions()?;
 
         // Track unresolved type references across iterations
         let mut unresolved_references: Vec<UnresolvedTypeReference> = vec![];
@@ -539,6 +544,23 @@ impl SemanticState {
                                  associated_functions: &mut Vec<Function>,
                                  used_names: &mut HashSet<String>| {
                 for function in functions.iter().filter(|f| f.is_public()) {
+                    // Static methods (no `&self`/`&mut self`) aren't
+                    // meaningfully inherited - they're class-bound. Forwarding
+                    // `Derived::foo()` to `this->base.foo()` doesn't
+                    // typecheck (no `this` in a static context), and even if
+                    // we emitted `Base::foo()` instead, callers can already
+                    // reach it via `Base::foo()` directly. Skip them so we
+                    // don't generate broken wrappers.
+                    let has_self = function.arguments.iter().any(|a| {
+                        matches!(
+                            a,
+                            crate::semantic::function::Argument::ConstSelf { .. }
+                                | crate::semantic::function::Argument::MutSelf { .. }
+                        )
+                    });
+                    if !has_self {
+                        continue;
+                    }
                     let mut function = function.clone();
                     let original_name = function.name.clone();
                     if used_names.contains(&original_name) {
@@ -723,6 +745,30 @@ impl SemanticState {
 
                     // Parent exists but the item doesn't
                     return Err(SemanticError::UseItemNotFound { path, location });
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Reject `prologue definition` / `epilogue definition` on backends
+    /// other than cpp. The `definition` modifier means "splice into the
+    /// .cpp source file"; only cpp has a distinct source file (rust and
+    /// json emit single-output-per-module), so the modifier on those is
+    /// almost certainly a typo or copy-paste error.
+    fn validate_backend_definitions(&self) -> Result<()> {
+        for module in self.modules.values() {
+            for backend in module.ast.backends() {
+                if backend.name.0 == "cpp" {
+                    continue;
+                }
+                let has_definition =
+                    backend.prologue.definition.is_some() || backend.epilogue.definition.is_some();
+                if has_definition {
+                    return Err(SemanticError::BackendDefinitionNotSupported {
+                        backend: backend.name.0.clone(),
+                        location: backend.location,
+                    });
                 }
             }
         }

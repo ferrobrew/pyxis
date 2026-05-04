@@ -70,8 +70,14 @@ impl Module {
                 .entry(backend.name.0.clone())
                 .or_default()
                 .push(Backend {
-                    prologue: backend.prologue.clone(),
-                    epilogue: backend.epilogue.clone(),
+                    prologue: crate::semantic::types::BackendSplice {
+                        header: backend.prologue.header.clone(),
+                        definition: backend.prologue.definition.clone(),
+                    },
+                    epilogue: crate::semantic::types::BackendSplice {
+                        header: backend.epilogue.header.clone(),
+                        definition: backend.epilogue.definition.clone(),
+                    },
                     uses,
                     location: backend.location,
                 });

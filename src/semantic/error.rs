@@ -363,6 +363,13 @@ pub enum SemanticError {
         path: ItemPath,
         location: ItemLocation,
     },
+    /// `prologue definition` / `epilogue definition` was used on a non-cpp
+    /// backend. Only cpp distinguishes a header from a source file, so the
+    /// modifier is meaningless elsewhere.
+    BackendDefinitionNotSupported {
+        backend: String,
+        location: ItemLocation,
+    },
     /// Missing required attribute for extern type
     MissingExternAttribute {
         attribute_name: AttributeName,
@@ -611,6 +618,11 @@ impl SemanticError {
             }
             SemanticError::UseItemNotFound { path, .. } => {
                 format!("Item in use statement not found: `{path}`")
+            }
+            SemanticError::BackendDefinitionNotSupported { backend, .. } => {
+                format!(
+                    "`prologue definition` / `epilogue definition` is only valid for `backend cpp`; got `backend {backend}`"
+                )
             }
             SemanticError::MissingExternAttribute {
                 attribute_name,
@@ -924,6 +936,7 @@ impl SemanticError {
             SemanticError::ModuleNotFound { location, .. } => Some(location),
             SemanticError::TypeNotFound { location, .. } => Some(location),
             SemanticError::UseItemNotFound { location, .. } => Some(location),
+            SemanticError::BackendDefinitionNotSupported { location, .. } => Some(location),
             SemanticError::MissingExternAttribute { location, .. } => Some(location),
             SemanticError::MissingAttribute { location, .. } => Some(location),
             SemanticError::InvalidAttributeFunctionArgumentCount { location, .. } => Some(location),

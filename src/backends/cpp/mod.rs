@@ -91,23 +91,27 @@ fn write_module(
     // Raw-string prologue/epilogue text usually starts and ends with a
     // newline because users write `r#"<newline>...<newline>"#`. Trim
     // those edges so we don't emit double blank lines around the splice.
+    fn join_slot<'a>(
+        bs: &'a [crate::semantic::types::Backend],
+        pick: impl Fn(&'a crate::semantic::types::Backend) -> Option<&'a String>,
+    ) -> String {
+        bs.iter()
+            .filter_map(pick)
+            .map(|s| s.trim_matches('\n'))
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
     let prologue: String = cpp_backends
-        .map(|bs| {
-            bs.iter()
-                .filter_map(|b| b.prologue.as_deref())
-                .map(|s| s.trim_matches('\n'))
-                .collect::<Vec<_>>()
-                .join("\n")
-        })
+        .map(|bs| join_slot(bs, |b| b.prologue.header.as_ref()))
+        .unwrap_or_default();
+    let prologue_def: String = cpp_backends
+        .map(|bs| join_slot(bs, |b| b.prologue.definition.as_ref()))
         .unwrap_or_default();
     let epilogue: String = cpp_backends
-        .map(|bs| {
-            bs.iter()
-                .filter_map(|b| b.epilogue.as_deref())
-                .map(|s| s.trim_matches('\n'))
-                .collect::<Vec<_>>()
-                .join("\n")
-        })
+        .map(|bs| join_slot(bs, |b| b.epilogue.header.as_ref()))
+        .unwrap_or_default();
+    let epilogue_def: String = cpp_backends
+        .map(|bs| join_slot(bs, |b| b.epilogue.definition.as_ref()))
         .unwrap_or_default();
 
     let mut body = String::new();
@@ -177,6 +181,8 @@ fn write_module(
         && module_deps.include_headers.is_empty()
         && prologue.is_empty()
         && epilogue.is_empty()
+        && prologue_def.is_empty()
+        && epilogue_def.is_empty()
     {
         return Ok(());
     }
@@ -322,10 +328,14 @@ fn write_module(
     })?;
 
     // Emit a matching .cpp if there are out-of-line definitions to produce:
-    // free functions with #[address], extern values, or non-template member
-    // definitions hoisted out of the header.
-    let needs_cpp =
-        !public_functions.is_empty() || !sorted_externs.is_empty() || !post_cpp.is_empty();
+    // free functions with #[address], extern values, non-template member
+    // definitions hoisted out of the header, or a user-supplied
+    // `prologue definition` / `epilogue definition` block.
+    let needs_cpp = !public_functions.is_empty()
+        || !sorted_externs.is_empty()
+        || !post_cpp.is_empty()
+        || !prologue_def.is_empty()
+        || !epilogue_def.is_empty();
     if needs_cpp {
         let cpp_path = module_to_source_path(out_dir, key);
         if let Some(parent) = cpp_path.parent() {
@@ -339,6 +349,23 @@ fn write_module(
         writeln!(cpp)?;
         let header_include = module_to_relative_include(key);
         writeln!(cpp, "#include \"{header_include}\"")?;
+
+        // `prologue definition` text lands here, *before* the namespace -
+        // analogous to how `prologue` lands before the namespace in the
+        // header. Lets the user pull in source-private `#include`s
+        // (e.g. `<windows.h>`, `<d3d10.h>`) without leaking them into
+        // every .hpp consumer.
+        if !prologue_def.is_empty() {
+            writeln!(cpp)?;
+            for line in prologue_def.lines() {
+                if line.is_empty() {
+                    writeln!(cpp)?;
+                } else {
+                    writeln!(cpp, "{line}")?;
+                }
+            }
+        }
+
         writeln!(cpp)?;
         open_namespace(&mut cpp, key)?;
         let mut wrote_def = false;
@@ -371,6 +398,19 @@ fn write_module(
                 writeln!(cpp)?;
             }
             for line in post_cpp.lines() {
+                if line.is_empty() {
+                    writeln!(cpp)?;
+                } else {
+                    writeln!(cpp, "    {line}")?;
+                }
+            }
+            wrote_def = true;
+        }
+        if !epilogue_def.is_empty() {
+            if wrote_def {
+                writeln!(cpp)?;
+            }
+            for line in epilogue_def.lines() {
                 if line.is_empty() {
                     writeln!(cpp)?;
                 } else {
