@@ -413,9 +413,31 @@ pub fn collect_module_deps(
         walk_function(func, &mut deps, module_path, registry, bindings);
     }
 
+    // Promote `backend cpp { use ...; }` paths to `#include` edges. The
+    // user-declared working set is the explicit signal of which other
+    // modules the cpp prologue/epilogue depends on - the text itself is
+    // opaque to the dep walker, so we trust the declaration.
+    if let Some(backend_blocks) = module.backends.get("cpp") {
+        for block in backend_blocks {
+            for use_path in &block.uses {
+                if let Ok(item) = registry.get(use_path, &crate::span::ItemLocation::internal())
+                    && let Some(parent) = item.path.parent()
+                    && parent != *module_path
+                {
+                    deps.include_modules.insert(parent);
+                }
+            }
+        }
+    }
+
     // Drop self-references so we don't try to include our own header.
     deps.include_modules.remove(module_path);
     deps.forward_decls.remove(module_path);
+
+    // Anything we decided to fully include shouldn't double up as a
+    // forward decl in the dep walk - prune the forward_decls set.
+    deps.forward_decls
+        .retain(|m, _| !deps.include_modules.contains(m));
 
     deps
 }

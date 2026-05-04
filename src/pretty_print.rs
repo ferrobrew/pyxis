@@ -531,9 +531,12 @@ impl PrettyPrinter {
     fn print_backend(&mut self, backend: &Backend) {
         self.write_indent();
 
-        // Use shorthand syntax if only one statement (prologue XOR epilogue)
-        let has_only_prologue = backend.prologue.is_some() && backend.epilogue.is_none();
-        let has_only_epilogue = backend.epilogue.is_some() && backend.prologue.is_none();
+        // Shorthand syntax requires no `use`s and only one of
+        // prologue/epilogue. Anything else lands in the block form.
+        let has_only_prologue =
+            backend.uses.is_empty() && backend.prologue.is_some() && backend.epilogue.is_none();
+        let has_only_epilogue =
+            backend.uses.is_empty() && backend.epilogue.is_some() && backend.prologue.is_none();
 
         if has_only_prologue {
             let prologue = backend.prologue.as_ref().unwrap();
@@ -554,9 +557,15 @@ impl PrettyPrinter {
             )
             .unwrap();
         } else {
-            // Use block syntax when both or neither are present
+            // Block form: emits `use`s first, then prologue, then epilogue.
             writeln!(&mut self.output, "backend {} {{", backend.name).unwrap();
             self.indent();
+
+            for tree in &backend.uses {
+                self.write_indent();
+                let tree_str = self.format_use_tree(tree);
+                writeln!(&mut self.output, "use {tree_str};").unwrap();
+            }
 
             if let Some(prologue) = &backend.prologue {
                 self.write_indent();

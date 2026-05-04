@@ -27,6 +27,12 @@ pub struct Backend {
     pub prologue_format: StringFormat,
     pub epilogue: Option<String>,
     pub epilogue_format: StringFormat,
+    /// Per-backend explicit working set: which other-module items this
+    /// backend block references. Drives cpp `#include` selection and
+    /// (in principle) any other backend that wants to know what its
+    /// epilogue/prologue depends on. `use`-style with the same syntax as
+    /// module-level imports - braced groups, nested groups, etc.
+    pub uses: Vec<UseTree>,
     pub location: ItemLocation,
 }
 #[cfg(test)]
@@ -38,6 +44,7 @@ impl Backend {
             prologue_format: StringFormat::Regular,
             epilogue: None,
             epilogue_format: StringFormat::Regular,
+            uses: Vec::new(),
             location: ItemLocation::test(),
         }
     }
@@ -65,6 +72,10 @@ impl Backend {
     ) -> Self {
         self.epilogue = Some(epilogue.into());
         self.epilogue_format = format;
+        self
+    }
+    pub fn with_uses(mut self, uses: impl IntoIterator<Item = UseTree>) -> Self {
+        self.uses = uses.into_iter().collect();
         self
     }
 }
@@ -386,14 +397,23 @@ impl Parser {
         let mut prologue_format = StringFormat::Regular;
         let mut epilogue = None;
         let mut epilogue_format = StringFormat::Regular;
+        let mut uses: Vec<UseTree> = Vec::new();
 
         // Check if we have braces or direct prologue/epilogue
         let last_token = if matches!(self.peek(), TokenKind::LBrace) {
-            // Form: backend name { prologue ...; epilogue ...; }
+            // Form: backend name { use ...; prologue ...; epilogue ...; }
             self.advance(); // consume {
 
             while !matches!(self.peek(), TokenKind::RBrace) {
                 match self.peek() {
+                    TokenKind::Use => {
+                        // `use foo::bar;` or `use foo::{a, b};` - same
+                        // grammar as module-level use statements.
+                        self.advance();
+                        let tree = self.parse_use_tree()?;
+                        self.expect(TokenKind::Semi)?;
+                        uses.push(tree);
+                    }
                     TokenKind::Prologue => {
                         self.advance();
                         let expr = self.parse_expr()?;
@@ -479,6 +499,7 @@ impl Parser {
             prologue_format,
             epilogue,
             epilogue_format,
+            uses,
             location,
         })
     }
@@ -813,6 +834,37 @@ backend rust epilogue r#"
                 StringFormat::Raw,
             ),
         ]);
+
+        assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
+    }
+
+    #[test]
+    fn can_parse_backend_with_uses() {
+        let text = r##"
+backend cpp {
+    use types::math::Matrix4;
+    use types::shared_ptr::{SharedPtr, WeakPtr};
+
+    epilogue r#"
+        inline auto test() { return 1; }
+    "#;
+}
+"##;
+
+        let ast = M::new().with_backends([B::new("cpp")
+            .with_uses([
+                UT::path("types::math::Matrix4"),
+                UT::group(
+                    "types::shared_ptr",
+                    [UT::path("SharedPtr"), UT::path("WeakPtr")],
+                ),
+            ])
+            .with_epilogue_format(
+                r#"
+        inline auto test() { return 1; }
+    "#,
+                StringFormat::Raw,
+            )]);
 
         assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
     }

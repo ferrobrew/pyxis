@@ -57,12 +57,22 @@ impl Module {
 
         let mut backends: BTreeMap<String, Vec<Backend>> = BTreeMap::new();
         for backend in grammar_backends {
+            // Flatten each `use` tree on the backend block into absolute
+            // item paths for the semantic representation. Validation
+            // (existence + visibility) happens later during semantic
+            // checking, alongside module-level use validation.
+            let uses: Vec<ItemPath> = backend
+                .uses
+                .iter()
+                .flat_map(|tree| tree.flatten())
+                .collect();
             backends
                 .entry(backend.name.0.clone())
                 .or_default()
                 .push(Backend {
                     prologue: backend.prologue.clone(),
                     epilogue: backend.epilogue.clone(),
+                    uses,
                     location: backend.location,
                 });
         }

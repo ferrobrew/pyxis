@@ -540,6 +540,11 @@ impl ItemDefinition {
 pub struct Backend {
     pub prologue: Option<String>,
     pub epilogue: Option<String>,
+    /// Resolved working set: every `use` path declared on this backend
+    /// block, flattened to absolute item paths. The cpp backend
+    /// promotes these to `#include`s; other backends are free to use
+    /// (or ignore) them as they see fit.
+    pub uses: Vec<crate::grammar::ItemPath>,
     pub location: ItemLocation,
 }
 #[cfg(test)]
@@ -548,8 +553,13 @@ impl Backend {
         Backend {
             prologue: prologue.into(),
             epilogue: epilogue.into(),
+            uses: Vec::new(),
             location: ItemLocation::test(),
         }
+    }
+    pub fn with_uses(mut self, uses: impl IntoIterator<Item = crate::grammar::ItemPath>) -> Self {
+        self.uses = uses.into_iter().collect();
+        self
     }
 }
 

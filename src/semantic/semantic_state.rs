@@ -659,13 +659,27 @@ impl SemanticState {
     /// - A module that exists
     ///
     /// Additionally, checks that the item is visible from the importing module.
+    ///
+    /// Validates module-level uses *and* backend-block uses (the new
+    /// `backend foo { use bar::Baz; }` syntax that lets a backend block
+    /// declare its own working set). Both kinds resolve through the same
+    /// type registry / visibility rules.
     fn validate_uses(&self) -> Result<()> {
         for module in self.modules.values() {
+            // Collect use trees from both module-level and backend-block scopes.
+            let mut trees: Vec<&grammar::UseTree> = Vec::new();
             for use_item in module.uses() {
-                let grammar::ModuleItem::Use { tree, .. } = use_item else {
-                    continue;
-                };
+                if let grammar::ModuleItem::Use { tree, .. } = use_item {
+                    trees.push(tree);
+                }
+            }
+            for backend in module.ast.backends() {
+                for tree in &backend.uses {
+                    trees.push(tree);
+                }
+            }
 
+            for tree in trees {
                 for (path, location) in tree.flatten_with_locations() {
                     // Check if the path is a type in the type registry
                     let is_type = self.type_registry.contains(&path);
