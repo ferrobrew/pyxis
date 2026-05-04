@@ -196,15 +196,20 @@ fn write_module(
         }
     }
 
-    // Module-level extern values (`extern foo: Bar`).
+    // Module-level extern values (`extern foo: Bar`). Pack the
+    // declarations tight as a block (no blank line between each), with
+    // a single blank line separating the block from the surrounding
+    // items.
     let mut sorted_externs: Vec<_> = module.extern_values.iter().collect();
     sorted_externs.sort_by(|a, b| a.name.cmp(&b.name));
-    for ev in &sorted_externs {
-        let text = render::render_extern_value_decl(ev, ctx)?;
+    if !sorted_externs.is_empty() {
         if wrote_anything {
             writeln!(body)?;
         }
-        body.push_str(&text);
+        for ev in &sorted_externs {
+            let text = render::render_extern_value_decl(ev, ctx)?;
+            body.push_str(&text);
+        }
         wrote_anything = true;
     }
 
