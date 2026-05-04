@@ -25,7 +25,7 @@ namespace two_base_classes {
     static_assert(alignof(BaseA) == 8);
 
     struct alignas(8) BaseAVftable {
-        ::std::int32_t (*base_a_vfunc)(const BaseA*, ::std::int32_t);
+        ::std::int32_t (*base_a_vfunc)(const void*, ::std::int32_t);
     };
     static_assert(sizeof(BaseAVftable) == 0x8);
     static_assert(alignof(BaseAVftable) == 8);
@@ -42,7 +42,7 @@ namespace two_base_classes {
     static_assert(alignof(BaseB) == 8);
 
     struct alignas(8) BaseBVftable {
-        ::std::int32_t (*base_b_vfunc)(const BaseB*, ::std::int32_t);
+        ::std::int32_t (*base_b_vfunc)(const void*, ::std::int32_t);
     };
     static_assert(sizeof(BaseBVftable) == 0x8);
     static_assert(alignof(BaseBVftable) == 8);
@@ -69,8 +69,8 @@ namespace two_base_classes {
     static_assert(alignof(Derived) == 8);
 
     struct alignas(8) DerivedVftable {
-        ::std::int32_t (*base_a_vfunc)(const Derived*, ::std::int32_t);
-        ::std::int32_t (*derived_vfunc)(const Derived*, ::std::int32_t);
+        ::std::int32_t (*base_a_vfunc)(const void*, ::std::int32_t);
+        ::std::int32_t (*derived_vfunc)(const void*, ::std::int32_t);
     };
     static_assert(sizeof(DerivedVftable) == 0x10);
     static_assert(alignof(DerivedVftable) == 8);

@@ -27,7 +27,7 @@ namespace multiple_levels {
     static_assert(alignof(Base) == 8);
 
     struct alignas(8) BaseVftable {
-        ::std::int32_t (*base_vfunc)(const Base*, ::std::int32_t);
+        ::std::int32_t (*base_vfunc)(const void*, ::std::int32_t);
     };
     static_assert(sizeof(BaseVftable) == 0x8);
     static_assert(alignof(BaseVftable) == 8);
@@ -87,25 +87,25 @@ namespace multiple_levels {
     static_assert(alignof(DerivedDerivedDerived) == 8);
 
     struct alignas(8) DerivedDerivedDerivedVftable {
-        ::std::int32_t (*base_vfunc)(const DerivedDerivedDerived*, ::std::int32_t);
-        ::std::int32_t (*derived_vfunc)(const DerivedDerivedDerived*, ::std::int32_t);
-        ::std::int32_t (*derived_derived_vfunc)(const DerivedDerivedDerived*, ::std::int32_t);
-        ::std::int32_t (*derived_derived_derived_vfunc)(const DerivedDerivedDerived*, ::std::int32_t);
+        ::std::int32_t (*base_vfunc)(const void*, ::std::int32_t);
+        ::std::int32_t (*derived_vfunc)(const void*, ::std::int32_t);
+        ::std::int32_t (*derived_derived_vfunc)(const void*, ::std::int32_t);
+        ::std::int32_t (*derived_derived_derived_vfunc)(const void*, ::std::int32_t);
     };
     static_assert(sizeof(DerivedDerivedDerivedVftable) == 0x20);
     static_assert(alignof(DerivedDerivedDerivedVftable) == 8);
 
     struct alignas(8) DerivedDerivedVftable {
-        ::std::int32_t (*base_vfunc)(const DerivedDerived*, ::std::int32_t);
-        ::std::int32_t (*derived_vfunc)(const DerivedDerived*, ::std::int32_t);
-        ::std::int32_t (*derived_derived_vfunc)(const DerivedDerived*, ::std::int32_t);
+        ::std::int32_t (*base_vfunc)(const void*, ::std::int32_t);
+        ::std::int32_t (*derived_vfunc)(const void*, ::std::int32_t);
+        ::std::int32_t (*derived_derived_vfunc)(const void*, ::std::int32_t);
     };
     static_assert(sizeof(DerivedDerivedVftable) == 0x18);
     static_assert(alignof(DerivedDerivedVftable) == 8);
 
     struct alignas(8) DerivedVftable {
-        ::std::int32_t (*base_vfunc)(const Derived*, ::std::int32_t);
-        ::std::int32_t (*derived_vfunc)(const Derived*, ::std::int32_t);
+        ::std::int32_t (*base_vfunc)(const void*, ::std::int32_t);
+        ::std::int32_t (*derived_vfunc)(const void*, ::std::int32_t);
     };
     static_assert(sizeof(DerivedVftable) == 0x10);
     static_assert(alignof(DerivedVftable) == 8);

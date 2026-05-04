@@ -156,9 +156,16 @@ fn render_struct(
         writeln!(out, "struct alignas({alignment}) {name} {{")?;
     }
 
-    // Fields
+    // Fields. Vftable structs (named `<ParentType>Vftable`) get their
+    // function-pointer slots' first param replaced with `void*` so the
+    // wrappers on derived types can pass `this` without an explicit cast
+    // through the base chain. The slot's intent is "any pointer to the
+    // declaring type or one of its bases" - encoding that in C++'s type
+    // system without inheritance is awkward, so we use `void*` as the
+    // ABI-compatible escape hatch.
+    let is_vftable_struct = name.ends_with("Vftable");
     for region in &td.regions {
-        render_field(&mut out, region, ctx)?;
+        render_field(&mut out, region, ctx, is_vftable_struct)?;
     }
 
     // Conversion operators for #[base] regions (composition-based upcast).
@@ -429,6 +436,10 @@ fn method_body_lines(func: &Function, ctx: RenderCtx) -> Result<Vec<String>> {
             ]
         }
         FunctionBody::Vftable { function_name } => {
+            // Vftable slots take `void*` for the receiver (see the matching
+            // change in vftable-struct emission). Any derived type's `this`
+            // implicitly converts to `void*`, so the wrapper compiles
+            // regardless of where in the base chain the slot was declared.
             let mut call_payload = String::new();
             call_payload.push_str("this");
             if !call_args.is_empty() {
@@ -473,7 +484,12 @@ fn calling_conv_macro(cc: CallingConvention) -> &'static str {
     }
 }
 
-fn render_field(out: &mut String, region: &Region, ctx: RenderCtx) -> Result<()> {
+fn render_field(
+    out: &mut String,
+    region: &Region,
+    ctx: RenderCtx,
+    rewrite_self_arg_to_void_ptr: bool,
+) -> Result<()> {
     render_doc(out, &region.doc, 1)?;
     let Some(field_name) = region.name.as_deref() else {
         // Should not happen post-resolution, but be defensive.
@@ -489,7 +505,14 @@ fn render_field(out: &mut String, region: &Region, ctx: RenderCtx) -> Result<()>
             writeln!(out, "    {inner_text} {field_name}[{n}];")?;
         }
         Type::Function(cc, args, ret) => {
-            let decl = render_function_pointer_decl(&field_name, *cc, args, ret.as_deref(), ctx)?;
+            let decl = render_function_pointer_decl(
+                &field_name,
+                *cc,
+                args,
+                ret.as_deref(),
+                ctx,
+                rewrite_self_arg_to_void_ptr,
+            )?;
             writeln!(out, "    {decl};")?;
         }
         _ => {
@@ -501,13 +524,17 @@ fn render_field(out: &mut String, region: &Region, ctx: RenderCtx) -> Result<()>
 }
 
 /// Render `R (cc *name)(args)` for a function-pointer-typed declaration
-/// (struct field, parameter, ...).
+/// (struct field, parameter, ...). When `rewrite_self_arg_to_void_ptr`,
+/// the first arg's pointer type is replaced with `void*` (or `const void*`
+/// preserving const-ness) - used for vftable struct slots so derived
+/// types can pass their `this` without explicit base-chain casts.
 fn render_function_pointer_decl(
     name: &str,
     cc: CallingConvention,
     args: &[(String, Box<Type>)],
     ret: Option<&Type>,
     ctx: RenderCtx,
+    rewrite_self_arg_to_void_ptr: bool,
 ) -> Result<String> {
     let cc_macro = calling_conv_macro(cc);
     let ret_text = ret
@@ -516,7 +543,18 @@ fn render_function_pointer_decl(
         .unwrap_or_else(|| "void".to_string());
     let arg_types = args
         .iter()
-        .map(|(_, t)| render_type(t, ctx))
+        .enumerate()
+        .map(|(i, (_, t))| {
+            if rewrite_self_arg_to_void_ptr && i == 0 {
+                Ok(match t.as_ref() {
+                    Type::ConstPointer(_) => "const void*".to_string(),
+                    Type::MutPointer(_) => "void*".to_string(),
+                    _ => render_type(t, ctx)?,
+                })
+            } else {
+                render_type(t, ctx)
+            }
+        })
         .collect::<Result<Vec<_>>>()?
         .join(", ");
     Ok(format!("{ret_text} ({cc_macro}*{name})({arg_types})"))

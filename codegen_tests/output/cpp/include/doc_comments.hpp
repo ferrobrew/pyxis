@@ -28,7 +28,7 @@ namespace doc_comments {
 
     struct alignas(8) TestTypeVftable {
         /// My test vfunc!
-        void (*test_vfunc)(const TestType*);
+        void (*test_vfunc)(const void*);
     };
     static_assert(sizeof(TestTypeVftable) == 0x8);
     static_assert(alignof(TestTypeVftable) == 8);

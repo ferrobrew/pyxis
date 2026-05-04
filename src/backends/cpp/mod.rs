@@ -211,9 +211,8 @@ fn write_module(
         for (dep_module, items) in &module_deps.forward_decls {
             open_namespace(&mut out, dep_module)?;
             for item_path in items {
-                let leaf = item_path.last().map(|s| s.as_str()).unwrap_or("");
-                let kind = forward_decl_kind(item_path, semantic_state);
-                writeln!(out, "    {kind} {leaf};")?;
+                let line = forward_decl_line(item_path, semantic_state, ctx);
+                writeln!(out, "    {line}")?;
             }
             close_namespace(&mut out, dep_module)?;
         }
@@ -513,22 +512,34 @@ fn close_namespace(out: &mut String, module_path: &ItemPath) -> Result<()> {
     Ok(())
 }
 
-fn forward_decl_kind(item_path: &ItemPath, semantic_state: &ResolvedSemanticState) -> &'static str {
+/// Emit a forward-decl line (without trailing newline) for `item_path`.
+/// Enums/bitflags need their underlying type spelled out, otherwise the
+/// re-declaration at the point of definition fails with "redeclared with
+/// different underlying type" since `enum class Foo;` defaults to `int`.
+fn forward_decl_line(
+    item_path: &ItemPath,
+    semantic_state: &ResolvedSemanticState,
+    ctx: render::RenderCtx,
+) -> String {
+    let leaf = item_path.last().map(|s| s.as_str()).unwrap_or("");
     let registry = semantic_state.type_registry();
     if let Ok(item) = registry.get(item_path, &crate::span::ItemLocation::internal())
         && let Some(resolved) = item.resolved()
     {
-        return match &resolved.inner {
-            ItemDefinitionInner::Type(_) => "struct",
-            ItemDefinitionInner::Enum(_) | ItemDefinitionInner::Bitflags(_) => {
-                // Forward-declaring an enum requires its underlying type;
-                // skip the safer-but-broken option and fall back to `struct`
-                // — Phase 3 will refine this once we emit the underlying
-                // type alongside.
-                "enum class"
+        match &resolved.inner {
+            ItemDefinitionInner::Type(_) => return format!("struct {leaf};"),
+            ItemDefinitionInner::Enum(ed) => {
+                let underlying = render::render_type(&ed.type_, ctx)
+                    .unwrap_or_else(|_| "::std::int32_t".to_string());
+                return format!("enum class {leaf} : {underlying};");
             }
-            ItemDefinitionInner::TypeAlias(_) => "struct",
-        };
+            ItemDefinitionInner::Bitflags(bd) => {
+                let underlying = render::render_type(&bd.type_, ctx)
+                    .unwrap_or_else(|_| "::std::int32_t".to_string());
+                return format!("enum class {leaf} : {underlying};");
+            }
+            ItemDefinitionInner::TypeAlias(_) => return format!("struct {leaf};"),
+        }
     }
-    "struct"
+    format!("struct {leaf};")
 }

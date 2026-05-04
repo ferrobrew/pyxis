@@ -38,7 +38,7 @@ namespace diamond_inheritance {
     static_assert(alignof(BaseA) == 8);
 
     struct alignas(8) BaseAVftable {
-        void (*destructor)(BaseA*);
+        void (*destructor)(void*);
     };
     static_assert(sizeof(BaseAVftable) == 0x8);
     static_assert(alignof(BaseAVftable) == 8);
@@ -57,13 +57,13 @@ namespace diamond_inheritance {
     static_assert(alignof(BaseB) == 8);
 
     struct alignas(8) BaseBVftable {
-        void (*destructor)(BaseB*);
+        void (*destructor)(void*);
     };
     static_assert(sizeof(BaseBVftable) == 0x8);
     static_assert(alignof(BaseBVftable) == 8);
 
     struct alignas(8) BaseVftable {
-        void (*destructor)(Base*);
+        void (*destructor)(void*);
     };
     static_assert(sizeof(BaseVftable) == 0x8);
     static_assert(alignof(BaseVftable) == 8);
@@ -88,7 +88,7 @@ namespace diamond_inheritance {
     static_assert(alignof(Derived) == 8);
 
     struct alignas(8) DerivedVftable {
-        void (*destructor)(Derived*);
+        void (*destructor)(void*);
     };
     static_assert(sizeof(DerivedVftable) == 0x8);
     static_assert(alignof(DerivedVftable) == 8);
