@@ -6,75 +6,98 @@ namespace multiple_levels {
     const BaseVftable* Base::_vftable_ptr() const {
         return this->vftable;
     }
+
     ::std::int32_t Base::base_vfunc(::std::int32_t a) const {
         return _vftable_ptr()->base_vfunc(this, a);
     }
+
     ::std::int32_t Base::base_associated(::std::int32_t a) const {
         using fn_t = ::std::int32_t (*)(const void*, ::std::int32_t);
         return reinterpret_cast<fn_t>(0x123)(this, a);
     }
+
     const DerivedVftable* Derived::_vftable_ptr() const {
         return reinterpret_cast<const DerivedVftable*>(this->base._vftable_ptr());
     }
+
     ::std::int32_t Derived::base_vfunc(::std::int32_t a) const {
         return _vftable_ptr()->base_vfunc(this, a);
     }
+
     ::std::int32_t Derived::derived_vfunc(::std::int32_t a) const {
         return _vftable_ptr()->derived_vfunc(this, a);
     }
+
     ::std::int32_t Derived::base_associated(::std::int32_t a) const {
         return this->base.base_associated(a);
     }
+
     ::std::int32_t Derived::derived_associated(::std::int32_t a) const {
         using fn_t = ::std::int32_t (*)(const void*, ::std::int32_t);
         return reinterpret_cast<fn_t>(0x456)(this, a);
     }
+
     const DerivedDerivedVftable* DerivedDerived::_vftable_ptr() const {
         return reinterpret_cast<const DerivedDerivedVftable*>(this->derived._vftable_ptr());
     }
+
     ::std::int32_t DerivedDerived::base_vfunc(::std::int32_t a) const {
         return _vftable_ptr()->base_vfunc(this, a);
     }
+
     ::std::int32_t DerivedDerived::derived_vfunc(::std::int32_t a) const {
         return _vftable_ptr()->derived_vfunc(this, a);
     }
+
     ::std::int32_t DerivedDerived::derived_derived_vfunc(::std::int32_t a) const {
         return _vftable_ptr()->derived_derived_vfunc(this, a);
     }
+
     ::std::int32_t DerivedDerived::base_associated(::std::int32_t a) const {
         return this->derived.base_associated(a);
     }
+
     ::std::int32_t DerivedDerived::derived_associated(::std::int32_t a) const {
         return this->derived.derived_associated(a);
     }
+
     ::std::int32_t DerivedDerived::derived_derived_associated(::std::int32_t a) const {
         using fn_t = ::std::int32_t (*)(const void*, ::std::int32_t);
         return reinterpret_cast<fn_t>(0x789)(this, a);
     }
+
     const DerivedDerivedDerivedVftable* DerivedDerivedDerived::_vftable_ptr() const {
         return reinterpret_cast<const DerivedDerivedDerivedVftable*>(this->derived_derived._vftable_ptr());
     }
+
     ::std::int32_t DerivedDerivedDerived::base_vfunc(::std::int32_t a) const {
         return _vftable_ptr()->base_vfunc(this, a);
     }
+
     ::std::int32_t DerivedDerivedDerived::derived_vfunc(::std::int32_t a) const {
         return _vftable_ptr()->derived_vfunc(this, a);
     }
+
     ::std::int32_t DerivedDerivedDerived::derived_derived_vfunc(::std::int32_t a) const {
         return _vftable_ptr()->derived_derived_vfunc(this, a);
     }
+
     ::std::int32_t DerivedDerivedDerived::derived_derived_derived_vfunc(::std::int32_t a) const {
         return _vftable_ptr()->derived_derived_derived_vfunc(this, a);
     }
+
     ::std::int32_t DerivedDerivedDerived::base_associated(::std::int32_t a) const {
         return this->derived_derived.base_associated(a);
     }
+
     ::std::int32_t DerivedDerivedDerived::derived_associated(::std::int32_t a) const {
         return this->derived_derived.derived_associated(a);
     }
+
     ::std::int32_t DerivedDerivedDerived::derived_derived_associated(::std::int32_t a) const {
         return this->derived_derived.derived_derived_associated(a);
     }
+
     ::std::int32_t DerivedDerivedDerived::derived_derived_derived_associated(::std::int32_t a) const {
         using fn_t = ::std::int32_t (*)(const void*, ::std::int32_t);
         return reinterpret_cast<fn_t>(0xABC)(this, a);

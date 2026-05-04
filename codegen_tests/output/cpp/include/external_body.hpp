@@ -32,7 +32,9 @@ namespace external_body {
     inline Counter Counter::make() { return Counter{0}; }
     inline ::std::uint32_t Counter::bump() { value += 1; return value; }
     inline ::std::uint32_t Counter::read() const { return value; }
+
     inline ::std::uint32_t module_hello() { return 42; }
+
     template <class T>
     inline T* Pair<T>::first_ptr() const { return first; }
 

@@ -93,13 +93,43 @@ fn write_module(
     // Raw-string prologue/epilogue text usually starts and ends with a
     // newline because users write `r#"<newline>...<newline>"#`. Trim
     // those edges so we don't emit double blank lines around the splice.
+    // Also dedent each block by its common leading-whitespace prefix so
+    // text users wrote indented inside the raw string lands flush at
+    // the splice site (the orchestrator reapplies its own indent).
     fn join_slot<'a>(
         bs: &'a [crate::semantic::types::Backend],
         pick: impl Fn(&'a crate::semantic::types::Backend) -> Option<&'a String>,
     ) -> String {
+        // Two newlines = one blank line between adjacent splice blocks
+        // so multiple `epilogue definition` directives in a file render
+        // with the same visual rhythm as definitions within a single block.
         bs.iter()
             .filter_map(pick)
-            .map(|s| s.trim_matches('\n'))
+            .map(|s| dedent(s.trim_matches('\n')))
+            .collect::<Vec<_>>()
+            .join("\n\n")
+    }
+
+    /// Strip the common leading-whitespace prefix from every non-empty
+    /// line. Empty lines pass through unchanged.
+    fn dedent(s: &str) -> String {
+        let min_indent = s
+            .lines()
+            .filter(|l| !l.trim().is_empty())
+            .map(|l| l.len() - l.trim_start().len())
+            .min()
+            .unwrap_or(0);
+        if min_indent == 0 {
+            return s.to_string();
+        }
+        s.lines()
+            .map(|l| {
+                if l.trim().is_empty() {
+                    ""
+                } else {
+                    &l[min_indent..]
+                }
+            })
             .collect::<Vec<_>>()
             .join("\n")
     }
@@ -301,9 +331,10 @@ fn write_module(
                 writeln!(out, "    {line}")?;
             }
         }
-        if !post_header.is_empty() {
+        let post_header_trimmed = post_header.trim_end_matches('\n');
+        if !post_header_trimmed.is_empty() {
             writeln!(out)?;
-            for line in post_header.lines() {
+            for line in post_header_trimmed.lines() {
                 if line.is_empty() {
                     writeln!(out)?;
                 } else {
@@ -395,11 +426,15 @@ fn write_module(
             }
             wrote_def = true;
         }
-        if !post_cpp.is_empty() {
+        // Each emitted block ends with a trailing blank line (per-method
+        // separator). Trim those off before joining sections so we don't
+        // stack blanks into double-blanks at the section boundary.
+        let post_cpp_trimmed = post_cpp.trim_end_matches('\n');
+        if !post_cpp_trimmed.is_empty() {
             if wrote_def {
                 writeln!(cpp)?;
             }
-            for line in post_cpp.lines() {
+            for line in post_cpp_trimmed.lines() {
                 if line.is_empty() {
                     writeln!(cpp)?;
                 } else {
@@ -408,11 +443,12 @@ fn write_module(
             }
             wrote_def = true;
         }
-        if !epilogue_def.is_empty() {
+        let epilogue_def_trimmed = epilogue_def.trim_end_matches('\n');
+        if !epilogue_def_trimmed.is_empty() {
             if wrote_def {
                 writeln!(cpp)?;
             }
-            for line in epilogue_def.lines() {
+            for line in epilogue_def_trimmed.lines() {
                 if line.is_empty() {
                     writeln!(cpp)?;
                 } else {

@@ -289,10 +289,13 @@ fn render_struct(
         }
     } else {
         if let Some(addr) = td.singleton {
+            writeln!(post_cpp, "{name}* {name}::singleton() {{")?;
             writeln!(
                 post_cpp,
-                "{name}* {name}::singleton() {{ return *reinterpret_cast<{name}**>(0x{addr:X}); }}"
+                "    return *reinterpret_cast<{name}**>(0x{addr:X});"
             )?;
+            writeln!(post_cpp, "}}")?;
+            writeln!(post_cpp)?;
         }
         if let Some(vftable) = &td.vftable {
             render_vftable_accessor_definition(&mut post_cpp, name, vftable, ctx)?;
@@ -354,6 +357,8 @@ fn render_vftable_accessor_definition(
         writeln!(out, "    return this->vftable;")?;
     }
     writeln!(out, "}}")?;
+    // Trailing blank to keep adjacent definitions separated.
+    writeln!(out)?;
     Ok(())
 }
 
@@ -439,6 +444,8 @@ fn render_method_definition(
         writeln!(out, "    {line}")?;
     }
     writeln!(out, "}}")?;
+    // Trailing blank line so adjacent method definitions get separated.
+    writeln!(out)?;
     Ok(())
 }
 
@@ -658,10 +665,13 @@ fn render_enum(
     let mut post_cpp = String::new();
     if let Some(addr) = ed.singleton {
         writeln!(out, "{name} {name}_singleton();")?;
+        writeln!(post_cpp, "{name} {name}_singleton() {{")?;
         writeln!(
             post_cpp,
-            "{name} {name}_singleton() {{ return *reinterpret_cast<{name}*>(0x{addr:X}); }}"
+            "    return *reinterpret_cast<{name}*>(0x{addr:X});"
         )?;
+        writeln!(post_cpp, "}}")?;
+        writeln!(post_cpp)?;
     }
     if size > 0 {
         writeln!(out, "static_assert(sizeof({name}) == 0x{size:X});")?;
@@ -725,10 +735,13 @@ fn render_bitflags(
     let mut post_cpp = String::new();
     if let Some(addr) = bd.singleton {
         writeln!(out, "{name} {name}_singleton();")?;
+        writeln!(post_cpp, "{name} {name}_singleton() {{")?;
         writeln!(
             post_cpp,
-            "{name} {name}_singleton() {{ return *reinterpret_cast<{name}*>(0x{addr:X}); }}"
+            "    return *reinterpret_cast<{name}*>(0x{addr:X});"
         )?;
+        writeln!(post_cpp, "}}")?;
+        writeln!(post_cpp)?;
     }
     if size > 0 {
         writeln!(out, "static_assert(sizeof({name}) == 0x{size:X});")?;

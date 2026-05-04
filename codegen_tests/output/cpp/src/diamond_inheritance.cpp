@@ -6,41 +6,53 @@ namespace diamond_inheritance {
     const BaseVftable* Base::_vftable_ptr() const {
         return this->vftable;
     }
+
     void Base::destructor() {
         _vftable_ptr()->destructor(this);
     }
+
     const BaseAVftable* BaseA::_vftable_ptr() const {
         return reinterpret_cast<const BaseAVftable*>(this->base._vftable_ptr());
     }
+
     void BaseA::destructor() {
         _vftable_ptr()->destructor(this);
     }
+
     void BaseA::associated() {
         using fn_t = void (*)(void*);
         reinterpret_cast<fn_t>(0x123)(this);
     }
+
     const BaseBVftable* BaseB::_vftable_ptr() const {
         return reinterpret_cast<const BaseBVftable*>(this->base._vftable_ptr());
     }
+
     void BaseB::destructor() {
         _vftable_ptr()->destructor(this);
     }
+
     void BaseB::associated() {
         using fn_t = void (*)(void*);
         reinterpret_cast<fn_t>(0x123)(this);
     }
+
     const DerivedVftable* Derived::_vftable_ptr() const {
         return reinterpret_cast<const DerivedVftable*>(this->base_a._vftable_ptr());
     }
+
     void Derived::destructor() {
         _vftable_ptr()->destructor(this);
     }
+
     void Derived::associated() {
         this->base_a.associated();
     }
+
     void Derived::base_b_associated() {
         this->base_b.associated();
     }
+
     void Derived::base_b_destructor() {
         this->base_b.destructor();
     }

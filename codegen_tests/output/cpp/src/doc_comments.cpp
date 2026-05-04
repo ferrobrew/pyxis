@@ -6,9 +6,11 @@ namespace doc_comments {
     const TestTypeVftable* TestType::_vftable_ptr() const {
         return this->vftable;
     }
+
     void TestType::test_vfunc() const {
         _vftable_ptr()->test_vfunc(this);
     }
+
     void TestType::test_func() const {
         using fn_t = void (*)(const void*);
         reinterpret_cast<fn_t>(0x123)(this);

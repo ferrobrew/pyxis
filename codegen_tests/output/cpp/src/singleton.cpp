@@ -3,5 +3,7 @@
 #include "singleton.hpp"
 
 namespace singleton {
-    TestType* TestType::singleton() { return *reinterpret_cast<TestType**>(0x13377331); }
+    TestType* TestType::singleton() {
+        return *reinterpret_cast<TestType**>(0x13377331);
+    }
 } // namespace singleton
