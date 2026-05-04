@@ -5,5 +5,4 @@
 namespace freestanding_functions {
     using freestanding_t = void (*)();
     const freestanding_t freestanding = reinterpret_cast<freestanding_t>(0x456);
-
 } // namespace freestanding_functions

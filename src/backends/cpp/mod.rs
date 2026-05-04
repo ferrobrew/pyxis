@@ -402,22 +402,24 @@ fn write_module(
         writeln!(cpp)?;
         open_namespace(&mut cpp, key)?;
         let mut wrote_def = false;
+
+        // Collect free-function and extern-value definitions into a
+        // buffer so we can trim any trailing blank line before the
+        // explicit section separator.
+        let mut free_def_buf = String::new();
         for func in &public_functions {
             if let Some(text) = render::render_free_function_definition(func, ctx)? {
-                for line in text.lines() {
-                    if line.is_empty() {
-                        writeln!(cpp)?;
-                    } else {
-                        writeln!(cpp, "    {line}")?;
-                    }
-                }
-                writeln!(cpp)?;
-                wrote_def = true;
+                free_def_buf.push_str(&text);
+                free_def_buf.push('\n');
             }
         }
         for ev in &sorted_externs {
             let text = render::render_extern_value_definition(ev, ctx)?;
-            for line in text.lines() {
+            free_def_buf.push_str(&text);
+        }
+        let free_def_trimmed = free_def_buf.trim_end_matches('\n');
+        if !free_def_trimmed.is_empty() {
+            for line in free_def_trimmed.lines() {
                 if line.is_empty() {
                     writeln!(cpp)?;
                 } else {

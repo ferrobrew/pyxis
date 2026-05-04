@@ -854,12 +854,15 @@ pub fn render_extern_value_decl(ev: &ExternValue, ctx: RenderCtx) -> Result<Stri
     Ok(format!("{ty}& get_{0}();\n", ev.name))
 }
 
-/// `.cpp` definition for an `extern` value's getter.
+/// `.cpp` definition for an `extern` value's getter. Three lines plus
+/// a trailing blank, so adjacent getters render with the same single-
+/// blank rhythm as out-of-class member definitions.
 pub fn render_extern_value_definition(ev: &ExternValue, ctx: RenderCtx) -> Result<String> {
     let ty = render_type(&ev.type_, ctx)?;
     Ok(format!(
-        "{ty}& get_{0}() {{ return *reinterpret_cast<{ty}*>(0x{1:X}); }}\n",
-        ev.name, ev.address
+        "{ty}& get_{name}() {{\n    return *reinterpret_cast<{ty}*>(0x{addr:X});\n}}\n\n",
+        name = ev.name,
+        addr = ev.address,
     ))
 }
 
