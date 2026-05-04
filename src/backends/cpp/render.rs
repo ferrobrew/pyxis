@@ -164,14 +164,17 @@ fn render_struct(
         writeln!(out, "#pragma pack(push, 1)")?;
     }
     let template = template_clause(type_parameters);
-    if is_generic {
+    let header = if is_generic {
         // Templates: alignment depends on T, so let the compiler infer via the
         // by-value field; skip explicit `alignas(N)`.
-        write!(out, "{template}struct {name} {{")?;
-        writeln!(out)?;
+        format!("{template}struct {name}")
     } else {
-        writeln!(out, "struct alignas({alignment}) {name} {{")?;
-    }
+        format!("struct alignas({alignment}) {name}")
+    };
+
+    // Build the struct body separately so we can detect "empty body" and
+    // emit `Name {};` on one line instead of two.
+    let mut body = String::new();
 
     // Fields. Vftable structs (named `<ParentType>Vftable`) get their
     // function-pointer slots' first param replaced with `void*` so the
@@ -182,7 +185,7 @@ fn render_struct(
     // ABI-compatible escape hatch.
     let is_vftable_struct = name.ends_with("Vftable");
     for region in &td.regions {
-        render_field(&mut out, region, ctx, is_vftable_struct)?;
+        render_field(&mut body, region, ctx, is_vftable_struct)?;
     }
 
     // Conversion operators for #[base] regions (composition-based upcast).
@@ -194,21 +197,21 @@ fn render_struct(
             continue;
         };
         let base_type = render_type(&region.type_ref, ctx)?;
-        writeln!(out)?;
+        writeln!(body)?;
         writeln!(
-            out,
+            body,
             "    operator {base_type}&() {{ return this->{field_name}; }}"
         )?;
         writeln!(
-            out,
+            body,
             "    operator const {base_type}&() const {{ return this->{field_name}; }}"
         )?;
     }
 
     // Singleton accessor (static).
     if td.singleton.is_some() {
-        writeln!(out)?;
-        writeln!(out, "    static {name}* singleton();")?;
+        writeln!(body)?;
+        writeln!(body, "    static {name}* singleton();")?;
     }
 
     // Vftable accessor + virtual-method wrapper signatures. Pyxis's
@@ -216,12 +219,12 @@ fn render_struct(
     // (callers are free to ignore the rust-private ones, but `backend cpp
     // epilogue` blocks need to be able to call into them by name).
     if let Some(vftable) = &td.vftable {
-        render_vftable_accessor_decl(&mut out, vftable, ctx)?;
+        render_vftable_accessor_decl(&mut body, vftable, ctx)?;
         for func in &vftable.functions {
             if !ctx.cfg_passes(&func.cfg) {
                 continue;
             }
-            render_method_signature(&mut out, func, ctx)?;
+            render_method_signature(&mut body, func, ctx)?;
         }
     }
 
@@ -230,10 +233,16 @@ fn render_struct(
         if !ctx.cfg_passes(&func.cfg) {
             continue;
         }
-        render_method_signature(&mut out, func, ctx)?;
+        render_method_signature(&mut body, func, ctx)?;
     }
 
-    writeln!(out, "}};")?;
+    if body.trim().is_empty() {
+        writeln!(out, "{header} {{}};")?;
+    } else {
+        writeln!(out, "{header} {{")?;
+        out.push_str(&body);
+        writeln!(out, "}};")?;
+    }
     if td.packed {
         writeln!(out, "#pragma pack(pop)")?;
     }
