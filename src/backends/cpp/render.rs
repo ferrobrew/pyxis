@@ -64,8 +64,16 @@ impl<'a> RenderCtx<'a> {
 /// that have to come after every peer type is fully declared.
 #[derive(Default)]
 pub struct RenderedItem {
+    /// In-class declarations + the struct/enum/etc. body itself. Lands
+    /// in the `.hpp`.
     pub decl: String,
-    pub post: String,
+    /// Out-of-class definitions that must stay header-visible (template
+    /// methods, accessors on generic templates, etc.). Lands in the
+    /// `.hpp` after `decl`.
+    pub post_header: String,
+    /// Out-of-class definitions for non-template methods/accessors.
+    /// Lands in the `.cpp` so the header sticks to declarations.
+    pub post_cpp: String,
 }
 
 /// Render a single item as a C++ definition. Returns `None` if the item
@@ -103,17 +111,26 @@ pub fn render_item(item: &ItemDefinition, ctx: RenderCtx) -> Result<Option<Rende
             item.visibility,
             &item.type_parameters,
         )?,
-        ItemDefinitionInner::Enum(ed) => RenderedItem {
-            decl: render_enum(&name, ed, resolved.size, ctx)?,
-            post: String::new(),
-        },
-        ItemDefinitionInner::Bitflags(bd) => RenderedItem {
-            decl: render_bitflags(&name, bd, resolved.size, ctx)?,
-            post: String::new(),
-        },
+        ItemDefinitionInner::Enum(ed) => {
+            let (decl, post_cpp) = render_enum(&name, ed, resolved.size, ctx)?;
+            RenderedItem {
+                decl,
+                post_header: String::new(),
+                post_cpp,
+            }
+        }
+        ItemDefinitionInner::Bitflags(bd) => {
+            let (decl, post_cpp) = render_bitflags(&name, bd, resolved.size, ctx)?;
+            RenderedItem {
+                decl,
+                post_header: String::new(),
+                post_cpp,
+            }
+        }
         ItemDefinitionInner::TypeAlias(ta) => RenderedItem {
             decl: render_type_alias(&name, ta, ctx, &item.type_parameters)?,
-            post: String::new(),
+            post_header: String::new(),
+            post_cpp: String::new(),
         },
     };
     Ok(Some(rendered))
@@ -234,37 +251,70 @@ fn render_struct(
     // load-bearing checks.
     let _ = visibility;
 
-    // Out-of-class inline method definitions go in the `post` bucket so the
-    // orchestrator can place them after every peer struct in the namespace
-    // is fully defined (vftable structs reference parent types and vice
-    // versa). Generic templates currently have no out-of-class methods —
-    // method definitions on a template can stay inline.
-    let mut post = String::new();
-    if !is_generic {
-        if let Some(addr) = td.singleton {
-            writeln!(
-                post,
-                "inline {name}* {name}::singleton() {{ return *reinterpret_cast<{name}**>(0x{addr:X}); }}"
-            )?;
-        }
+    // Out-of-class definitions split between `post_header` and `post_cpp`:
+    // - templates' member definitions must stay header-visible (the cpp
+    //   compiler instantiates them at every use site).
+    // - non-template member definitions land in the `.cpp` so the header
+    //   sticks to declarations.
+    //
+    // Methods declared on a template type via a method-level template
+    // parameter (`template<class Y>` clause on the method) must also
+    // stay header-visible for the same reason.
+    let mut post_header = String::new();
+    let mut post_cpp = String::new();
+    if is_generic {
         if let Some(vftable) = &td.vftable {
-            render_vftable_accessor_definition(&mut post, name, vftable, ctx)?;
+            render_vftable_accessor_definition(&mut post_header, name, vftable, ctx)?;
             for func in &vftable.functions {
                 if !ctx.cfg_passes(&func.cfg) {
                     continue;
                 }
-                render_method_definition(&mut post, name, func, ctx)?;
+                render_method_definition(&mut post_header, name, func, ctx)?;
             }
         }
         for func in &td.associated_functions {
             if !ctx.cfg_passes(&func.cfg) {
                 continue;
             }
-            render_method_definition(&mut post, name, func, ctx)?;
+            render_method_definition(&mut post_header, name, func, ctx)?;
+        }
+    } else {
+        if let Some(addr) = td.singleton {
+            writeln!(
+                post_cpp,
+                "{name}* {name}::singleton() {{ return *reinterpret_cast<{name}**>(0x{addr:X}); }}"
+            )?;
+        }
+        if let Some(vftable) = &td.vftable {
+            render_vftable_accessor_definition(&mut post_cpp, name, vftable, ctx)?;
+            for func in &vftable.functions {
+                if !ctx.cfg_passes(&func.cfg) {
+                    continue;
+                }
+                if !func.method_type_parameters.is_empty() {
+                    render_method_definition(&mut post_header, name, func, ctx)?;
+                } else {
+                    render_method_definition(&mut post_cpp, name, func, ctx)?;
+                }
+            }
+        }
+        for func in &td.associated_functions {
+            if !ctx.cfg_passes(&func.cfg) {
+                continue;
+            }
+            if !func.method_type_parameters.is_empty() {
+                render_method_definition(&mut post_header, name, func, ctx)?;
+            } else {
+                render_method_definition(&mut post_cpp, name, func, ctx)?;
+            }
         }
     }
 
-    Ok(RenderedItem { decl: out, post })
+    Ok(RenderedItem {
+        decl: out,
+        post_header,
+        post_cpp,
+    })
 }
 
 fn render_vftable_accessor_decl(
@@ -288,12 +338,12 @@ fn render_vftable_accessor_definition(
     if let Some(base_field) = &vftable.base_field {
         writeln!(
             out,
-            "inline {vftable_type} {parent_name}::_vftable_ptr() const {{ return reinterpret_cast<{vftable_type}>(this->{base_field}._vftable_ptr()); }}"
+            "{vftable_type} {parent_name}::_vftable_ptr() const {{ return reinterpret_cast<{vftable_type}>(this->{base_field}._vftable_ptr()); }}"
         )?;
     } else {
         writeln!(
             out,
-            "inline {vftable_type} {parent_name}::_vftable_ptr() const {{ return this->vftable; }}"
+            "{vftable_type} {parent_name}::_vftable_ptr() const {{ return this->vftable; }}"
         )?;
     }
     Ok(())
@@ -334,7 +384,11 @@ fn func_has_self(func: &Function) -> bool {
         .any(|a| matches!(a, Argument::ConstSelf { .. } | Argument::MutSelf { .. }))
 }
 
-/// Out-of-class inline method definition.
+/// Out-of-class method definition. The caller decides whether the
+/// definition lands in the header (templates) or the .cpp (everything
+/// else); the `header_inline` flag controls the leading `inline` keyword
+/// and any required `template <...>` clauses for template / method-level
+/// template parameters.
 fn render_method_definition(
     out: &mut String,
     parent_name: &str,
@@ -352,11 +406,25 @@ fn render_method_definition(
     }
     let (return_text, sig_args_text, const_qual) = method_sig_parts(func, ctx)?;
     let body_lines = method_body_lines(func, ctx)?;
+    // Method-level template parameters require a `template <...>` clause
+    // on the out-of-class definition. Without method-level templates, the
+    // definition lands in the .cpp file where `inline` would be wrong;
+    // with them, it lands in the header and stays implicitly inline as a
+    // template.
+    if !func.method_type_parameters.is_empty() {
+        let params = func
+            .method_type_parameters
+            .iter()
+            .map(|p| format!("class {p}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        writeln!(out, "template <{params}>")?;
+    }
     // Out-of-class definitions never repeat `static` — that keyword belongs
     // only on the in-class declaration.
     writeln!(
         out,
-        "inline {return_text} {parent_name}::{fn_name}({sig_args_text}){const_qual} {{",
+        "{return_text} {parent_name}::{fn_name}({sig_args_text}){const_qual} {{",
         fn_name = func.name
     )?;
     for line in &body_lines {
@@ -560,7 +628,12 @@ fn render_function_pointer_decl(
     Ok(format!("{ret_text} ({cc_macro}*{name})({arg_types})"))
 }
 
-fn render_enum(name: &str, ed: &EnumDefinition, size: usize, ctx: RenderCtx) -> Result<String> {
+fn render_enum(
+    name: &str,
+    ed: &EnumDefinition,
+    size: usize,
+    ctx: RenderCtx,
+) -> Result<(String, String)> {
     let mut out = String::new();
     render_doc(&mut out, &ed.doc, 0)?;
     let underlying = render_type(&ed.type_, ctx)?;
@@ -574,16 +647,18 @@ fn render_enum(name: &str, ed: &EnumDefinition, size: usize, ctx: RenderCtx) -> 
         writeln!(out, "    {variant_name} = {value},")?;
     }
     writeln!(out, "}};")?;
+    let mut post_cpp = String::new();
     if let Some(addr) = ed.singleton {
+        writeln!(out, "{name} {name}_singleton();")?;
         writeln!(
-            out,
-            "inline {name} {name}_singleton() {{ return *reinterpret_cast<{name}*>(0x{addr:X}); }}"
+            post_cpp,
+            "{name} {name}_singleton() {{ return *reinterpret_cast<{name}*>(0x{addr:X}); }}"
         )?;
     }
     if size > 0 {
         writeln!(out, "static_assert(sizeof({name}) == 0x{size:X});")?;
     }
-    Ok(out)
+    Ok((out, post_cpp))
 }
 
 fn render_bitflags(
@@ -591,7 +666,7 @@ fn render_bitflags(
     bd: &BitflagsDefinition,
     size: usize,
     ctx: RenderCtx,
-) -> Result<String> {
+) -> Result<(String, String)> {
     let mut out = String::new();
     render_doc(&mut out, &bd.doc, 0)?;
     let underlying = render_type(&bd.type_, ctx)?;
@@ -639,16 +714,18 @@ fn render_bitflags(
         "    return static_cast<{name}>(~static_cast<{underlying}>(a));"
     )?;
     writeln!(out, "}}")?;
+    let mut post_cpp = String::new();
     if let Some(addr) = bd.singleton {
+        writeln!(out, "{name} {name}_singleton();")?;
         writeln!(
-            out,
-            "inline {name} {name}_singleton() {{ return *reinterpret_cast<{name}*>(0x{addr:X}); }}"
+            post_cpp,
+            "{name} {name}_singleton() {{ return *reinterpret_cast<{name}*>(0x{addr:X}); }}"
         )?;
     }
     if size > 0 {
         writeln!(out, "static_assert(sizeof({name}) == 0x{size:X});")?;
     }
-    Ok(out)
+    Ok((out, post_cpp))
 }
 
 fn render_type_alias(

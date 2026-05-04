@@ -92,38 +92,4 @@ namespace diamond_inheritance {
     };
     static_assert(sizeof(DerivedVftable) == 0x8);
     static_assert(alignof(DerivedVftable) == 8);
-
-    inline const BaseVftable* Base::_vftable_ptr() const { return this->vftable; }
-    inline void Base::destructor() {
-        _vftable_ptr()->destructor(this);
-    }
-    inline const BaseAVftable* BaseA::_vftable_ptr() const { return reinterpret_cast<const BaseAVftable*>(this->base._vftable_ptr()); }
-    inline void BaseA::destructor() {
-        _vftable_ptr()->destructor(this);
-    }
-    inline void BaseA::associated() {
-        using fn_t = void (*)(void*);
-        reinterpret_cast<fn_t>(0x123)(this);
-    }
-    inline const BaseBVftable* BaseB::_vftable_ptr() const { return reinterpret_cast<const BaseBVftable*>(this->base._vftable_ptr()); }
-    inline void BaseB::destructor() {
-        _vftable_ptr()->destructor(this);
-    }
-    inline void BaseB::associated() {
-        using fn_t = void (*)(void*);
-        reinterpret_cast<fn_t>(0x123)(this);
-    }
-    inline const DerivedVftable* Derived::_vftable_ptr() const { return reinterpret_cast<const DerivedVftable*>(this->base_a._vftable_ptr()); }
-    inline void Derived::destructor() {
-        _vftable_ptr()->destructor(this);
-    }
-    inline void Derived::associated() {
-        this->base_a.associated();
-    }
-    inline void Derived::base_b_associated() {
-        this->base_b.associated();
-    }
-    inline void Derived::base_b_destructor() {
-        this->base_b.destructor();
-    }
 } // namespace diamond_inheritance

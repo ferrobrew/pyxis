@@ -74,41 +74,4 @@ namespace two_base_classes {
     };
     static_assert(sizeof(DerivedVftable) == 0x10);
     static_assert(alignof(DerivedVftable) == 8);
-
-    inline const BaseAVftable* BaseA::_vftable_ptr() const { return this->vftable; }
-    inline ::std::int32_t BaseA::base_a_vfunc(::std::int32_t a) const {
-        return _vftable_ptr()->base_a_vfunc(this, a);
-    }
-    inline ::std::int32_t BaseA::base_a_associated(::std::int32_t a) const {
-        using fn_t = ::std::int32_t (*)(const void*, ::std::int32_t);
-        return reinterpret_cast<fn_t>(0x123)(this, a);
-    }
-    inline const BaseBVftable* BaseB::_vftable_ptr() const { return this->vftable; }
-    inline ::std::int32_t BaseB::base_b_vfunc(::std::int32_t a) const {
-        return _vftable_ptr()->base_b_vfunc(this, a);
-    }
-    inline ::std::int32_t BaseB::base_b_associated(::std::int32_t a) const {
-        using fn_t = ::std::int32_t (*)(const void*, ::std::int32_t);
-        return reinterpret_cast<fn_t>(0x456)(this, a);
-    }
-    inline const DerivedVftable* Derived::_vftable_ptr() const { return reinterpret_cast<const DerivedVftable*>(this->base_a._vftable_ptr()); }
-    inline ::std::int32_t Derived::base_a_vfunc(::std::int32_t a) const {
-        return _vftable_ptr()->base_a_vfunc(this, a);
-    }
-    inline ::std::int32_t Derived::derived_vfunc(::std::int32_t a) const {
-        return _vftable_ptr()->derived_vfunc(this, a);
-    }
-    inline ::std::int32_t Derived::base_a_associated(::std::int32_t a) const {
-        return this->base_a.base_a_associated(a);
-    }
-    inline ::std::int32_t Derived::base_b_associated(::std::int32_t a) const {
-        return this->base_b.base_b_associated(a);
-    }
-    inline ::std::int32_t Derived::base_b_vfunc(::std::int32_t a) const {
-        return this->base_b.base_b_vfunc(a);
-    }
-    inline ::std::int32_t Derived::derived_associated(::std::int32_t a) const {
-        using fn_t = ::std::int32_t (*)(const void*, ::std::int32_t);
-        return reinterpret_cast<fn_t>(0x789)(this, a);
-    }
 } // namespace two_base_classes

@@ -32,13 +32,4 @@ namespace doc_comments {
     };
     static_assert(sizeof(TestTypeVftable) == 0x8);
     static_assert(alignof(TestTypeVftable) == 8);
-
-    inline const TestTypeVftable* TestType::_vftable_ptr() const { return this->vftable; }
-    inline void TestType::test_vfunc() const {
-        _vftable_ptr()->test_vfunc(this);
-    }
-    inline void TestType::test_func() const {
-        using fn_t = void (*)(const void*);
-        reinterpret_cast<fn_t>(0x123)(this);
-    }
 } // namespace doc_comments

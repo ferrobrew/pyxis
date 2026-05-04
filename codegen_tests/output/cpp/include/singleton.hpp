@@ -15,6 +15,4 @@ namespace singleton {
     };
     static_assert(sizeof(TestType) == 0x4);
     static_assert(alignof(TestType) == 4);
-
-    inline TestType* TestType::singleton() { return *reinterpret_cast<TestType**>(0x13377331); }
 } // namespace singleton

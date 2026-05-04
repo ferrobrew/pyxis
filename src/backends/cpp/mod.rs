@@ -106,7 +106,8 @@ fn write_module(
         .unwrap_or_default();
 
     let mut body = String::new();
-    let mut post = String::new();
+    let mut post_header = String::new();
+    let mut post_cpp = String::new();
     let mut wrote_anything = false;
     // Topologically sort items by intra-module FullDef edges so that any
     // by-value reference (`Aabb { Vector3 min; }`) lands after its target
@@ -128,8 +129,11 @@ fn write_module(
             body.push_str(&rendered.decl);
             wrote_anything = true;
         }
-        if !rendered.post.is_empty() {
-            post.push_str(&rendered.post);
+        if !rendered.post_header.is_empty() {
+            post_header.push_str(&rendered.post_header);
+        }
+        if !rendered.post_cpp.is_empty() {
+            post_cpp.push_str(&rendered.post_cpp);
         }
     }
 
@@ -284,9 +288,9 @@ fn write_module(
                 writeln!(out, "    {line}")?;
             }
         }
-        if !post.is_empty() {
+        if !post_header.is_empty() {
             writeln!(out)?;
-            for line in post.lines() {
+            for line in post_header.lines() {
                 if line.is_empty() {
                     writeln!(out)?;
                 } else {
@@ -312,9 +316,11 @@ fn write_module(
         context: format!("Failed to write header to {}", header_path.display()),
     })?;
 
-    // Emit a matching .cpp if there are out-of-line definitions to produce
-    // (free functions with #[address], extern values).
-    let needs_cpp = !public_functions.is_empty() || !sorted_externs.is_empty();
+    // Emit a matching .cpp if there are out-of-line definitions to produce:
+    // free functions with #[address], extern values, or non-template member
+    // definitions hoisted out of the header.
+    let needs_cpp =
+        !public_functions.is_empty() || !sorted_externs.is_empty() || !post_cpp.is_empty();
     if needs_cpp {
         let cpp_path = module_to_source_path(out_dir, key);
         if let Some(parent) = cpp_path.parent() {
@@ -354,6 +360,18 @@ fn write_module(
                 }
             }
             wrote_def = true;
+        }
+        if !post_cpp.is_empty() {
+            if wrote_def {
+                writeln!(cpp)?;
+            }
+            for line in post_cpp.lines() {
+                if line.is_empty() {
+                    writeln!(cpp)?;
+                } else {
+                    writeln!(cpp, "    {line}")?;
+                }
+            }
         }
         let _ = wrote_def;
         close_namespace(&mut cpp, key)?;
