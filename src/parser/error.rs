@@ -67,6 +67,13 @@ pub enum ParseError {
         found: TokenKind,
         location: ItemLocation,
     },
+    /// `backend foo` where `foo` isn't a known backend name. Caught at
+    /// parse time so a typo can't slip through to a backend's runtime
+    /// "no module here" failure.
+    UnknownBackend {
+        found: String,
+        location: ItemLocation,
+    },
     Tokenizer(LexError),
 }
 impl ParseError {
@@ -234,6 +241,19 @@ impl ParseError {
                     "expected prologue or epilogue here",
                 )
             }
+            ParseError::UnknownBackend { found, location } => Self::format_ariadne_with_source(
+                location,
+                file_store,
+                &format!(
+                    "Unknown backend `{found}`; valid backends are: {}",
+                    crate::Backend::ALL
+                        .iter()
+                        .map(|b| b.name())
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                ),
+                "this backend name isn't recognized",
+            ),
             ParseError::Tokenizer(err) => err.format_with_ariadne(file_store),
         }
     }
@@ -284,6 +304,17 @@ impl std::fmt::Display for ParseError {
             }
             ParseError::ExpectedPrologueOrEpilogue { found, .. } => {
                 write!(f, "Expected prologue or epilogue, found {found:?}")
+            }
+            ParseError::UnknownBackend { found, .. } => {
+                write!(
+                    f,
+                    "Unknown backend `{found}`; valid backends are: {}",
+                    crate::Backend::ALL
+                        .iter()
+                        .map(|b| b.name())
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                )
             }
             ParseError::Tokenizer(err) => write!(f, "{err}"),
         }

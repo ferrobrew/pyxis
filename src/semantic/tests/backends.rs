@@ -27,12 +27,13 @@ fn rust_backend_rejects_epilogue_definition() {
     let err = s.build().expect_err("rust + definition should be rejected");
     match err {
         SemanticError::BackendDefinitionNotSupported { backend, .. } => {
-            assert_eq!(backend, "rust");
+            assert_eq!(backend, crate::Backend::Rust);
         }
         other => panic!("expected BackendDefinitionNotSupported, got {other:?}"),
     }
 }
 
+#[cfg(feature = "json")]
 #[test]
 fn json_backend_rejects_prologue_definition() {
     let module = M::new().with_backends([B::new("json").with_prologue_definition("// nope")]);
@@ -42,7 +43,7 @@ fn json_backend_rejects_prologue_definition() {
     let err = s.build().expect_err("json + definition should be rejected");
     match err {
         SemanticError::BackendDefinitionNotSupported { backend, .. } => {
-            assert_eq!(backend, "json");
+            assert_eq!(backend, crate::Backend::Json);
         }
         other => panic!("expected BackendDefinitionNotSupported, got {other:?}"),
     }

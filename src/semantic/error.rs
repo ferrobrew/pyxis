@@ -367,7 +367,7 @@ pub enum SemanticError {
     /// backend. Only cpp distinguishes a header from a source file, so the
     /// modifier is meaningless elsewhere.
     BackendDefinitionNotSupported {
-        backend: String,
+        backend: crate::Backend,
         location: ItemLocation,
     },
     /// Missing required attribute for extern type

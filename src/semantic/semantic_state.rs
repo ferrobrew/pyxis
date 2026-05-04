@@ -759,14 +759,14 @@ impl SemanticState {
     fn validate_backend_definitions(&self) -> Result<()> {
         for module in self.modules.values() {
             for backend in module.ast.backends() {
-                if backend.name.0 == "cpp" {
+                if backend.name == crate::Backend::Cpp {
                     continue;
                 }
                 let has_definition =
                     backend.prologue.definition.is_some() || backend.epilogue.definition.is_some();
                 if has_definition {
                     return Err(SemanticError::BackendDefinitionNotSupported {
-                        backend: backend.name.0.clone(),
+                        backend: backend.name,
                         location: backend.location,
                     });
                 }

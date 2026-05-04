@@ -31,7 +31,7 @@ pub struct RenderCtx<'a> {
     pub module_path: &'a ItemPath,
     pub registry: &'a TypeRegistry,
     pub bindings: &'a BTreeMap<ItemPath, CppExternBinding>,
-    pub cfg_ctx: crate::parser::cfg::CfgContext<'a>,
+    pub cfg_ctx: crate::parser::cfg::CfgContext,
 }
 
 impl<'a> RenderCtx<'a> {
@@ -39,7 +39,7 @@ impl<'a> RenderCtx<'a> {
         module_path: &'a ItemPath,
         registry: &'a TypeRegistry,
         bindings: &'a BTreeMap<ItemPath, CppExternBinding>,
-        cfg_ctx: crate::parser::cfg::CfgContext<'a>,
+        cfg_ctx: crate::parser::cfg::CfgContext,
     ) -> Self {
         Self {
             module_path,

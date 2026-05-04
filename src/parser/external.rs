@@ -51,7 +51,10 @@ impl BackendSplice {
 #[derive(Debug, Clone, PartialEq, Eq, HasLocation)]
 #[cfg_attr(test, derive(StripLocations))]
 pub struct Backend {
-    pub name: Ident,
+    /// Typed backend identity. Validated at parse time - an unknown
+    /// backend name raises `ParseError::UnknownBackend` rather than
+    /// surviving as a string in the IR.
+    pub name: crate::Backend,
     pub prologue: BackendSplice,
     pub epilogue: BackendSplice,
     /// Per-backend explicit working set: which other-module items this
@@ -64,9 +67,14 @@ pub struct Backend {
 }
 #[cfg(test)]
 impl Backend {
+    /// Test helper: panics if the name isn't a valid backend. Tests
+    /// that want to exercise the unknown-backend error path should
+    /// construct a `ParseError::UnknownBackend` directly instead.
     pub fn new(name: &str) -> Self {
+        let name = crate::Backend::from_name(name)
+            .unwrap_or_else(|| panic!("test used unknown backend `{name}`"));
         Self {
-            name: name.into(),
+            name,
             prologue: BackendSplice::default(),
             epilogue: BackendSplice::default(),
             uses: Vec::new(),
@@ -481,7 +489,19 @@ impl Parser {
 
     pub(crate) fn parse_backend(&mut self) -> Result<Backend, ParseError> {
         let first_token = self.expect(TokenKind::Backend)?;
-        let (name, _) = self.expect_ident()?;
+        let (name_ident, name_span) = self.expect_ident()?;
+        let name = match crate::Backend::from_name(name_ident.0.as_str()) {
+            Some(b) => b,
+            None => {
+                return Err(ParseError::UnknownBackend {
+                    found: name_ident.0,
+                    location: ItemLocation {
+                        file_id: first_token.location.file_id,
+                        span: name_span,
+                    },
+                });
+            }
+        };
 
         let mut prologue = BackendSplice::default();
         let mut epilogue = BackendSplice::default();
@@ -916,6 +936,42 @@ backend cpp {
             )]);
 
         assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
+    }
+
+    #[test]
+    fn unknown_backend_name_is_a_parse_error() {
+        // `backend foobar { ... }` should be rejected at parse time
+        // before any semantic analysis runs - typos shouldn't escape
+        // into the IR.
+        let text = r##"backend foobar prologue r#""#;"##;
+        let err = parse_str_for_tests(text).unwrap_err();
+        match err {
+            ParseError::UnknownBackend { found, .. } => {
+                assert_eq!(found, "foobar");
+            }
+            other => panic!("expected UnknownBackend, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn known_backend_names_parse() {
+        // The three current backend names (rust, cpp, json when feature
+        // enabled) should all round-trip cleanly through the parser.
+        for name in ["rust", "cpp"] {
+            let text = format!(r##"backend {name} prologue r#""#;"##);
+            let module = parse_str_for_tests(&text).unwrap();
+            let backends: Vec<_> = module.backends().collect();
+            assert_eq!(backends.len(), 1);
+            assert_eq!(backends[0].name.name(), name);
+        }
+        #[cfg(feature = "json")]
+        {
+            let text = r##"backend json prologue r#""#;"##;
+            let module = parse_str_for_tests(text).unwrap();
+            let backends: Vec<_> = module.backends().collect();
+            assert_eq!(backends.len(), 1);
+            assert_eq!(backends[0].name.name(), "json");
+        }
     }
 
     #[test]

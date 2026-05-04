@@ -44,6 +44,9 @@ enum Command {
     },
 }
 
+// The driver depends on `pyxis` with the `json` feature on, so all
+// three backends are always available here regardless of upstream
+// feature selection.
 #[derive(Copy, Clone, ValueEnum)]
 enum Backend {
     Rust,

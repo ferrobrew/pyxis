@@ -99,14 +99,14 @@ impl EqualsIgnoringLocations for CfgPredicate {
     }
 }
 
-/// Evaluation context. Currently only carries the active backend name; in
+/// Evaluation context. Currently only carries the active backend; in
 /// the future it'll grow keys for `pointer_size`, `feature`, etc.
 #[derive(Debug, Clone, Copy)]
-pub struct CfgContext<'a> {
-    pub backend: &'a str,
+pub struct CfgContext {
+    pub backend: crate::Backend,
 }
 
-impl CfgContext<'_> {
+impl CfgContext {
     /// Resolve a single atom to true / false.
     fn resolve_atom(&self, atom: &CfgAtom) -> bool {
         match atom {
@@ -115,7 +115,7 @@ impl CfgContext<'_> {
             // every bare ident is unknown → false (closed-world).
             CfgAtom::Ident { .. } => false,
             CfgAtom::KeyValue { key, value, .. } => match key.as_str() {
-                "backend" => value == self.backend,
+                "backend" => value == self.backend.name(),
                 _ => false,
             },
         }
@@ -123,7 +123,7 @@ impl CfgContext<'_> {
 }
 
 impl CfgPredicate {
-    pub fn evaluate(&self, ctx: &CfgContext<'_>) -> bool {
+    pub fn evaluate(&self, ctx: &CfgContext) -> bool {
         match self {
             CfgPredicate::Atom { atom, .. } => ctx.resolve_atom(atom),
             CfgPredicate::Any { predicates, .. } => predicates.iter().any(|p| p.evaluate(ctx)),
@@ -178,50 +178,64 @@ mod tests {
         }
     }
 
-    fn ctx(backend: &str) -> CfgContext<'_> {
+    fn ctx(backend: crate::Backend) -> CfgContext {
         CfgContext { backend }
+    }
+
+    fn cpp() -> CfgContext {
+        ctx(crate::Backend::Cpp)
+    }
+    fn rust() -> CfgContext {
+        ctx(crate::Backend::Rust)
+    }
+    #[cfg(feature = "json")]
+    fn json() -> CfgContext {
+        ctx(crate::Backend::Json)
     }
 
     #[test]
     fn atom_backend_match() {
         let p = kv("backend", "cpp");
-        assert!(p.evaluate(&ctx("cpp")));
-        assert!(!p.evaluate(&ctx("rust")));
+        assert!(p.evaluate(&cpp()));
+        assert!(!p.evaluate(&rust()));
     }
 
     #[test]
     fn unknown_atom_is_false() {
         // Closed-world: unknown atoms always false.
-        assert!(!ident("test").evaluate(&ctx("cpp")));
-        assert!(!kv("unknown_key", "x").evaluate(&ctx("cpp")));
+        assert!(!ident("test").evaluate(&cpp()));
+        assert!(!kv("unknown_key", "x").evaluate(&cpp()));
     }
 
+    #[cfg(feature = "json")]
     #[test]
     fn any_short_circuits_on_first_true() {
         let p = any(vec![kv("backend", "rust"), kv("backend", "cpp")]);
-        assert!(p.evaluate(&ctx("cpp")));
-        assert!(p.evaluate(&ctx("rust")));
-        assert!(!p.evaluate(&ctx("json")));
+        assert!(p.evaluate(&cpp()));
+        assert!(p.evaluate(&rust()));
+        assert!(!p.evaluate(&json()));
     }
 
     #[test]
     fn all_requires_every_clause() {
         let p = all(vec![kv("backend", "cpp"), ident("test")]);
         // Even when backend matches, the unknown `test` atom is false.
-        assert!(!p.evaluate(&ctx("cpp")));
+        assert!(!p.evaluate(&cpp()));
     }
 
+    #[cfg(feature = "json")]
     #[test]
     fn not_inverts() {
         // `not(backend = "rust")` should be true on every non-rust backend,
         // including hypothetical future ones (closed-world keeps `not`
         // sane: an unknown backend is just "not rust").
         let p = not(kv("backend", "rust"));
-        assert!(p.evaluate(&ctx("cpp")));
-        assert!(p.evaluate(&ctx("json")));
-        assert!(!p.evaluate(&ctx("rust")));
+        assert!(p.evaluate(&cpp()));
+        assert!(p.evaluate(&json()));
+        assert!(!p.evaluate(&rust()));
     }
 
+    #[cfg(feature = "json")]
     #[test]
     fn nested_combinations() {
         // any(all(backend = "cpp", not(test)), backend = "rust")
@@ -229,15 +243,15 @@ mod tests {
             all(vec![kv("backend", "cpp"), not(ident("test"))]),
             kv("backend", "rust"),
         ]);
-        assert!(p.evaluate(&ctx("cpp"))); // first arm: cpp + not(test=false)=true
-        assert!(p.evaluate(&ctx("rust"))); // second arm
-        assert!(!p.evaluate(&ctx("json"))); // neither arm
+        assert!(p.evaluate(&cpp())); // first arm: cpp + not(test=false)=true
+        assert!(p.evaluate(&rust())); // second arm
+        assert!(!p.evaluate(&json())); // neither arm
     }
 
     #[test]
     fn empty_any_and_all() {
         // Mathematical conventions: empty any = false, empty all = true.
-        assert!(!any(vec![]).evaluate(&ctx("cpp")));
-        assert!(all(vec![]).evaluate(&ctx("cpp")));
+        assert!(!any(vec![]).evaluate(&cpp()));
+        assert!(all(vec![]).evaluate(&cpp()));
     }
 }

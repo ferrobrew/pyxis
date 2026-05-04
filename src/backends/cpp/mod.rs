@@ -84,10 +84,12 @@ fn write_module(
     }
 
     let registry = semantic_state.type_registry();
-    let cfg_ctx = crate::parser::cfg::CfgContext { backend: "cpp" };
+    let cfg_ctx = crate::parser::cfg::CfgContext {
+        backend: crate::Backend::Cpp,
+    };
     let ctx = render::RenderCtx::new(key, registry, bindings, cfg_ctx);
     let module_deps = deps::collect_module_deps(key, module, registry, bindings);
-    let cpp_backends = module.backends.get("cpp");
+    let cpp_backends = module.backends.get(&crate::Backend::Cpp);
     // Raw-string prologue/epilogue text usually starts and ends with a
     // newline because users write `r#"<newline>...<newline>"#`. Trim
     // those edges so we don't emit double blank lines around the splice.

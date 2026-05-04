@@ -52,7 +52,7 @@ pub fn write_module(
     writeln!(raw_output, "#![cfg_attr(any(), rustfmt::skip)]")?;
     writeln!(raw_output, "{}", doc_to_tokens(true, module.doc()))?;
 
-    let backends = module.backends.get("rust");
+    let backends = module.backends.get(&crate::Backend::Rust);
     let prologues = backends
         .iter()
         .flat_map(|bs| bs.iter().flat_map(|b| b.prologue.header.as_deref()))
@@ -66,7 +66,9 @@ pub fn write_module(
 
     writeln!(raw_output, "{prologues}")?;
 
-    let cfg_ctx = crate::parser::cfg::CfgContext { backend: "rust" };
+    let cfg_ctx = crate::parser::cfg::CfgContext {
+        backend: crate::Backend::Rust,
+    };
     let cfg_pass = |cfg: &Option<crate::parser::cfg::CfgPredicate>| match cfg {
         Some(p) => p.evaluate(&cfg_ctx),
         None => true,
@@ -151,7 +153,7 @@ pub fn write_module(
 fn build_item(
     type_registry: &TypeRegistry,
     definition: &ItemDefinition,
-    cfg_ctx: &crate::parser::cfg::CfgContext<'_>,
+    cfg_ctx: &crate::parser::cfg::CfgContext,
 ) -> Result<proc_macro2::TokenStream> {
     let resolved = definition
         .resolved()
@@ -211,7 +213,7 @@ fn build_type(
     type_definition: &TypeDefinition,
     location: &ItemLocation,
     type_parameters: &[String],
-    cfg_ctx: &crate::parser::cfg::CfgContext<'_>,
+    cfg_ctx: &crate::parser::cfg::CfgContext,
 ) -> Result<proc_macro2::TokenStream> {
     let name = get_type_name(path, location)?;
 
@@ -475,7 +477,7 @@ fn build_enum(
     visibility: Visibility,
     enum_definition: &EnumDefinition,
     location: &ItemLocation,
-    cfg_ctx: &crate::parser::cfg::CfgContext<'_>,
+    cfg_ctx: &crate::parser::cfg::CfgContext,
 ) -> Result<proc_macro2::TokenStream> {
     let name = get_type_name(path, location)?;
 

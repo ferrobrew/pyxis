@@ -417,7 +417,7 @@ pub fn collect_module_deps(
     // user-declared working set is the explicit signal of which other
     // modules the cpp prologue/epilogue depends on - the text itself is
     // opaque to the dep walker, so we trust the declaration.
-    if let Some(backend_blocks) = module.backends.get("cpp") {
+    if let Some(backend_blocks) = module.backends.get(&crate::Backend::Cpp) {
         for block in backend_blocks {
             for use_path in &block.uses {
                 if let Ok(item) = registry.get(use_path, &crate::span::ItemLocation::internal())

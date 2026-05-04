@@ -430,7 +430,9 @@ pub fn build(
     // Build items map. Filter items whose `#[cfg(...)]` predicate evaluates
     // false for `backend = "json"`. Each backend treats cfg uniformly: if
     // it's not the named backend, the item disappears from output.
-    let cfg_ctx = crate::parser::cfg::CfgContext { backend: "json" };
+    let cfg_ctx = crate::parser::cfg::CfgContext {
+        backend: crate::Backend::Json,
+    };
     let cfg_pass = |cfg: &Option<crate::parser::cfg::CfgPredicate>| match cfg {
         Some(p) => p.evaluate(&cfg_ctx),
         None => true,
@@ -578,7 +580,7 @@ fn convert_region(region: &Region, type_registry: &TypeRegistry, offset: usize) 
 
 fn convert_vftable(
     vftable: &TypeVftable,
-    cfg_ctx: &crate::parser::cfg::CfgContext<'_>,
+    cfg_ctx: &crate::parser::cfg::CfgContext,
 ) -> JsonTypeVftable {
     JsonTypeVftable {
         functions: vftable
@@ -592,7 +594,7 @@ fn convert_vftable(
 
 fn cfg_passes(
     cfg: &Option<crate::parser::cfg::CfgPredicate>,
-    ctx: &crate::parser::cfg::CfgContext<'_>,
+    ctx: &crate::parser::cfg::CfgContext,
 ) -> bool {
     match cfg {
         Some(p) => p.evaluate(ctx),
@@ -603,7 +605,7 @@ fn cfg_passes(
 fn convert_type_definition(
     td: &TypeDefinition,
     type_registry: &TypeRegistry,
-    cfg_ctx: &crate::parser::cfg::CfgContext<'_>,
+    cfg_ctx: &crate::parser::cfg::CfgContext,
 ) -> JsonTypeDefinition {
     // Calculate field offsets
     let mut current_offset = 0;
@@ -645,7 +647,7 @@ fn convert_enum_variant(variant: &EnumVariant) -> JsonEnumVariant {
 
 fn convert_enum_definition(
     ed: &EnumDefinition,
-    cfg_ctx: &crate::parser::cfg::CfgContext<'_>,
+    cfg_ctx: &crate::parser::cfg::CfgContext,
 ) -> JsonEnumDefinition {
     JsonEnumDefinition {
         doc: doc_to_option(&ed.doc),
@@ -694,7 +696,7 @@ fn convert_type_alias_definition(ta: &TypeAliasDefinition) -> JsonTypeAliasDefin
 fn convert_item(
     item: &ItemDefinition,
     type_registry: &TypeRegistry,
-    cfg_ctx: &crate::parser::cfg::CfgContext<'_>,
+    cfg_ctx: &crate::parser::cfg::CfgContext,
 ) -> Option<JsonItem> {
     let resolved = item.resolved()?;
 
@@ -748,7 +750,9 @@ fn convert_backend(backend: &Backend) -> JsonBackend {
 
 /// Build the module hierarchy from a flat list of modules
 fn build_module_hierarchy(semantic_state: &ResolvedSemanticState) -> BTreeMap<String, JsonModule> {
-    let cfg_ctx = crate::parser::cfg::CfgContext { backend: "json" };
+    let cfg_ctx = crate::parser::cfg::CfgContext {
+        backend: crate::Backend::Json,
+    };
     let mut root_modules: BTreeMap<String, JsonModule> = BTreeMap::new();
 
     for (module_path, module) in semantic_state.modules() {
@@ -778,13 +782,14 @@ fn build_module_hierarchy(semantic_state: &ResolvedSemanticState) -> BTreeMap<St
             .map(convert_function)
             .collect();
 
-        // Convert backends
+        // Convert backends. Map the typed `crate::Backend` key back to its
+        // canonical lower-case string for JSON output.
         let backends: BTreeMap<String, Vec<JsonBackend>> = module
             .backends
             .iter()
             .map(|(name, backend_list)| {
                 (
-                    name.clone(),
+                    name.name().to_string(),
                     backend_list.iter().map(convert_backend).collect(),
                 )
             })

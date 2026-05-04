@@ -19,7 +19,7 @@ pub struct Module {
     pub(crate) extern_values: Vec<ExternValue>,
     pub(crate) functions: Vec<Function>,
     pub(crate) impls: BTreeMap<ItemPath, Vec<grammar::FunctionBlock>>,
-    pub(crate) backends: BTreeMap<String, Vec<Backend>>,
+    pub(crate) backends: BTreeMap<crate::Backend, Vec<Backend>>,
     pub(crate) doc: Vec<String>,
 }
 
@@ -55,7 +55,7 @@ impl Module {
         }
         let impls = impls_map;
 
-        let mut backends: BTreeMap<String, Vec<Backend>> = BTreeMap::new();
+        let mut backends: BTreeMap<crate::Backend, Vec<Backend>> = BTreeMap::new();
         for backend in grammar_backends {
             // Flatten each `use` tree on the backend block into absolute
             // item paths for the semantic representation. Validation
@@ -66,21 +66,18 @@ impl Module {
                 .iter()
                 .flat_map(|tree| tree.flatten())
                 .collect();
-            backends
-                .entry(backend.name.0.clone())
-                .or_default()
-                .push(Backend {
-                    prologue: crate::semantic::types::BackendSplice {
-                        header: backend.prologue.header.clone(),
-                        definition: backend.prologue.definition.clone(),
-                    },
-                    epilogue: crate::semantic::types::BackendSplice {
-                        header: backend.epilogue.header.clone(),
-                        definition: backend.epilogue.definition.clone(),
-                    },
-                    uses,
-                    location: backend.location,
-                });
+            backends.entry(backend.name).or_default().push(Backend {
+                prologue: crate::semantic::types::BackendSplice {
+                    header: backend.prologue.header.clone(),
+                    definition: backend.prologue.definition.clone(),
+                },
+                epilogue: crate::semantic::types::BackendSplice {
+                    header: backend.epilogue.header.clone(),
+                    definition: backend.epilogue.definition.clone(),
+                },
+                uses,
+                location: backend.location,
+            });
         }
 
         let doc = ast.doc_comments.clone();
