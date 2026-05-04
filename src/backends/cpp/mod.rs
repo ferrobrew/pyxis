@@ -88,10 +88,14 @@ fn write_module(
     let ctx = render::RenderCtx::new(key, registry, bindings, cfg_ctx);
     let module_deps = deps::collect_module_deps(key, module, registry, bindings);
     let cpp_backends = module.backends.get("cpp");
+    // Raw-string prologue/epilogue text usually starts and ends with a
+    // newline because users write `r#"<newline>...<newline>"#`. Trim
+    // those edges so we don't emit double blank lines around the splice.
     let prologue: String = cpp_backends
         .map(|bs| {
             bs.iter()
                 .filter_map(|b| b.prologue.as_deref())
+                .map(|s| s.trim_matches('\n'))
                 .collect::<Vec<_>>()
                 .join("\n")
         })
@@ -100,6 +104,7 @@ fn write_module(
         .map(|bs| {
             bs.iter()
                 .filter_map(|b| b.epilogue.as_deref())
+                .map(|s| s.trim_matches('\n'))
                 .collect::<Vec<_>>()
                 .join("\n")
         })

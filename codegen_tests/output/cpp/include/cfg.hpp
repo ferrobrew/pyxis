@@ -25,7 +25,6 @@ namespace cfg {
     static_assert(sizeof(Probe) == 0x4);
     static_assert(alignof(Probe) == 4);
 
-
     inline ::std::uint32_t Probe::read() const { return value; }
     inline ::std::uint32_t Probe::cpp_only() const { return value + 2; }
     inline ::std::uint32_t Probe::cpp_or_json() const { return value + 3; }
