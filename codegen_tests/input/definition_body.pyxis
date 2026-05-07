@@ -7,7 +7,7 @@
 //
 // `external_body.pyxis` covers the header-side `epilogue` shape; this
 // file is the cpp-source-side counterpart.
-
+//
 // `<cstdio>` is only needed by the .cpp method bodies below. Routing
 // it through `prologue definition` keeps the include out of the
 // public header.
