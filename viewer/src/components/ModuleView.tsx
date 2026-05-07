@@ -61,10 +61,38 @@ interface BackendSpliceSectionProps {
   slot: SpliceSlot;
 }
 
+// Trim leading/trailing blank lines and remove the largest common
+// leading-whitespace prefix shared by every non-blank line. Splices
+// are stored as raw-string literals in the source (often
+// `r#"<newline>    body<newline>"#`), so without this the rendered
+// block carries gratuitous outer padding.
+function normalizeSpliceText(text: string): string {
+  const lines = text.split('\n');
+  let start = 0;
+  let end = lines.length;
+  while (start < end && lines[start].trim() === '') start++;
+  while (end > start && lines[end - 1].trim() === '') end--;
+  const trimmed = lines.slice(start, end);
+  if (trimmed.length === 0) return '';
+
+  let minIndent = Infinity;
+  for (const line of trimmed) {
+    if (line.trim() === '') continue;
+    const match = line.match(/^[ \t]*/);
+    const indent = match ? match[0].length : 0;
+    if (indent < minIndent) minIndent = indent;
+  }
+  if (!isFinite(minIndent) || minIndent === 0) return trimmed.join('\n');
+
+  return trimmed.map((line) => line.slice(minIndent)).join('\n');
+}
+
 function joinSplicePart(splices: JsonBackendSplice[], part: 'header' | 'definition'): string {
   return splices
     .map((s) => s[part])
     .filter((v): v is string => v != null)
+    .map(normalizeSpliceText)
+    .filter((v) => v.length > 0)
     .join('\n\n');
 }
 
