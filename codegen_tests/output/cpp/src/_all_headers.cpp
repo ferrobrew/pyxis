@@ -3,6 +3,7 @@
 #include "bitflags.hpp"
 #include "braced_imports.hpp"
 #include "cfg.hpp"
+#include "definition_body.hpp"
 #include "diamond_inheritance.hpp"
 #include "doc_comments.hpp"
 #include "enums.hpp"

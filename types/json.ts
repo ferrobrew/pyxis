@@ -9,11 +9,26 @@ export type JsonBackend = {
 /**
  * Prologue code inserted at the beginning of generated output
  */
-prologue: string | null; 
+prologue: JsonBackendSplice | null; 
 /**
  * Epilogue code inserted at the end of generated output
  */
-epilogue: string | null };
+epilogue: JsonBackendSplice | null };
+
+/**
+ * A backend splice payload. `header` lands in the language's primary
+ * declaration surface (Rust module, C++ header). `definition` lands in
+ * the C++ source file and is always `None` for non-cpp backends.
+ */
+export type JsonBackendSplice = { 
+/**
+ * Code spliced into the header / declaration surface
+ */
+header: string | null; 
+/**
+ * Code spliced into the C++ source file (cpp backend only)
+ */
+definition: string | null };
 
 export type JsonBitflag = { 
 /**
@@ -182,13 +197,23 @@ return_type: JsonType | null;
  */
 calling_convention: JsonCallingConvention; 
 /**
+ * Method-level type parameters declared at the impl block beyond the
+ * parent struct's own type parameters (`Y` in `impl<T, Y> Foo<T> {...}`).
+ */
+method_type_parameters?: string[]; 
+/**
  * Source location (file and line)
  */
 source: JsonSourceLocation | null };
 
 export type JsonFunctionArgument = { name: string; type_ref: JsonType };
 
-export type JsonFunctionBody = { type: "address"; address: number } | { type: "field"; field: string; function_name: string } | { type: "vftable"; function_name: string };
+export type JsonFunctionBody = { type: "address"; address: number } | { type: "field"; field: string; function_name: string } | { type: "vftable"; function_name: string } | 
+/**
+ * Body supplied by the target backend's prologue/epilogue (the pyxis
+ * `#[external_body]` attribute).
+ */
+{ type: "external" };
 
 /**
  * An item (type, enum, or bitflags) in the documentation

@@ -700,6 +700,88 @@
         "line": 6
       }
     },
+    "definition_body::Logger": {
+      "path": "definition_body::Logger",
+      "visibility": "public",
+      "size": 4,
+      "alignment": 4,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "seen",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "u32"
+            },
+            "offset": 0,
+            "size": 4,
+            "alignment": 4,
+            "is_base": false,
+            "source": {
+              "file_index": 6,
+              "line": 20
+            }
+          }
+        ],
+        "associated_functions": [
+          {
+            "visibility": "public",
+            "name": "make",
+            "doc": null,
+            "body": {
+              "type": "external"
+            },
+            "arguments": [],
+            "return_type": {
+              "type": "raw",
+              "path": "definition_body::Logger"
+            },
+            "calling_convention": "system",
+            "source": {
+              "file_index": 6,
+              "line": 23
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "record",
+            "doc": null,
+            "body": {
+              "type": "external"
+            },
+            "arguments": [
+              {
+                "type": "mut_self"
+              }
+            ],
+            "return_type": {
+              "type": "raw",
+              "path": "u32"
+            },
+            "calling_convention": "system",
+            "source": {
+              "file_index": 6,
+              "line": 25
+            }
+          }
+        ],
+        "vftable": null,
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false
+      },
+      "source": {
+        "file_index": 6,
+        "line": 18
+      }
+    },
     "diamond_inheritance::Base": {
       "path": "diamond_inheritance::Base",
       "visibility": "private",
@@ -726,7 +808,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 6,
+              "file_index": 7,
               "line": 3
             }
           }
@@ -750,7 +832,7 @@
               "return_type": null,
               "calling_convention": "system",
               "source": {
-                "file_index": 6,
+                "file_index": 7,
                 "line": 3
               }
             }
@@ -763,7 +845,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 6,
+        "file_index": 7,
         "line": 1
       }
     },
@@ -790,7 +872,7 @@
             "alignment": 8,
             "is_base": true,
             "source": {
-              "file_index": 6,
+              "file_index": 7,
               "line": 12
             }
           }
@@ -812,7 +894,7 @@
             "return_type": null,
             "calling_convention": "system",
             "source": {
-              "file_index": 6,
+              "file_index": 7,
               "line": 16
             }
           }
@@ -835,7 +917,7 @@
               "return_type": null,
               "calling_convention": "system",
               "source": {
-                "file_index": 6,
+                "file_index": 7,
                 "line": 9
               }
             }
@@ -848,7 +930,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 6,
+        "file_index": 7,
         "line": 7
       }
     },
@@ -888,7 +970,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 6,
+              "file_index": 7,
               "line": 9
             }
           }
@@ -902,7 +984,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 6,
+        "file_index": 7,
         "line": 9
       }
     },
@@ -929,7 +1011,7 @@
             "alignment": 8,
             "is_base": true,
             "source": {
-              "file_index": 6,
+              "file_index": 7,
               "line": 25
             }
           }
@@ -951,7 +1033,7 @@
             "return_type": null,
             "calling_convention": "system",
             "source": {
-              "file_index": 6,
+              "file_index": 7,
               "line": 29
             }
           }
@@ -974,7 +1056,7 @@
               "return_type": null,
               "calling_convention": "system",
               "source": {
-                "file_index": 6,
+                "file_index": 7,
                 "line": 22
               }
             }
@@ -987,7 +1069,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 6,
+        "file_index": 7,
         "line": 20
       }
     },
@@ -1027,7 +1109,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 6,
+              "file_index": 7,
               "line": 22
             }
           }
@@ -1041,7 +1123,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 6,
+        "file_index": 7,
         "line": 22
       }
     },
@@ -1081,7 +1163,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 6,
+              "file_index": 7,
               "line": 3
             }
           }
@@ -1095,7 +1177,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 6,
+        "file_index": 7,
         "line": 3
       }
     },
@@ -1122,7 +1204,7 @@
             "alignment": 8,
             "is_base": true,
             "source": {
-              "file_index": 6,
+              "file_index": 7,
               "line": 38
             }
           },
@@ -1139,7 +1221,7 @@
             "alignment": 8,
             "is_base": true,
             "source": {
-              "file_index": 6,
+              "file_index": 7,
               "line": 40
             }
           }
@@ -1162,7 +1244,7 @@
             "return_type": null,
             "calling_convention": "system",
             "source": {
-              "file_index": 6,
+              "file_index": 7,
               "line": 16
             }
           },
@@ -1183,7 +1265,7 @@
             "return_type": null,
             "calling_convention": "system",
             "source": {
-              "file_index": 6,
+              "file_index": 7,
               "line": 29
             }
           },
@@ -1204,7 +1286,7 @@
             "return_type": null,
             "calling_convention": "system",
             "source": {
-              "file_index": 6,
+              "file_index": 7,
               "line": 22
             }
           }
@@ -1227,7 +1309,7 @@
               "return_type": null,
               "calling_convention": "system",
               "source": {
-                "file_index": 6,
+                "file_index": 7,
                 "line": 35
               }
             }
@@ -1240,7 +1322,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 6,
+        "file_index": 7,
         "line": 33
       }
     },
@@ -1280,7 +1362,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 6,
+              "file_index": 7,
               "line": 35
             }
           }
@@ -1294,7 +1376,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 6,
+        "file_index": 7,
         "line": 35
       }
     },
@@ -1324,7 +1406,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 7,
+              "file_index": 8,
               "line": 5
             }
           },
@@ -1341,7 +1423,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 7,
+              "file_index": 8,
               "line": 9
             }
           }
@@ -1363,7 +1445,7 @@
             "return_type": null,
             "calling_convention": "system",
             "source": {
-              "file_index": 7,
+              "file_index": 8,
               "line": 14
             }
           }
@@ -1386,7 +1468,7 @@
               "return_type": null,
               "calling_convention": "system",
               "source": {
-                "file_index": 7,
+                "file_index": 8,
                 "line": 5
               }
             }
@@ -1399,7 +1481,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 7,
+        "file_index": 8,
         "line": 1
       }
     },
@@ -1439,7 +1521,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 7,
+              "file_index": 8,
               "line": 5
             }
           }
@@ -1453,7 +1535,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 7,
+        "file_index": 8,
         "line": 5
       }
     },
@@ -1475,7 +1557,7 @@
             "name": "None",
             "value": 0,
             "source": {
-              "file_index": 8,
+              "file_index": 9,
               "line": 3
             }
           },
@@ -1483,7 +1565,7 @@
             "name": "Some",
             "value": 1,
             "source": {
-              "file_index": 8,
+              "file_index": 9,
               "line": 5
             }
           },
@@ -1491,7 +1573,7 @@
             "name": "Value",
             "value": 2,
             "source": {
-              "file_index": 8,
+              "file_index": 9,
               "line": 6
             }
           }
@@ -1509,7 +1591,7 @@
             "return_type": null,
             "calling_convention": "system",
             "source": {
-              "file_index": 8,
+              "file_index": 9,
               "line": 9
             }
           },
@@ -1532,7 +1614,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 8,
+              "file_index": 9,
               "line": 12
             }
           }
@@ -1543,7 +1625,7 @@
         "default": 0
       },
       "source": {
-        "file_index": 8,
+        "file_index": 9,
         "line": 1
       }
     },
@@ -1570,7 +1652,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 9,
+              "file_index": 10,
               "line": 6
             }
           }
@@ -1590,7 +1672,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 9,
+              "file_index": 10,
               "line": 9
             }
           },
@@ -1612,7 +1694,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 9,
+              "file_index": 10,
               "line": 11
             }
           },
@@ -1634,7 +1716,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 9,
+              "file_index": 10,
               "line": 13
             }
           }
@@ -1647,7 +1729,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 9,
+        "file_index": 10,
         "line": 4
       }
     },
@@ -1680,7 +1762,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 9,
+              "file_index": 10,
               "line": 44
             }
           },
@@ -1700,7 +1782,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 9,
+              "file_index": 10,
               "line": 45
             }
           }
@@ -1727,7 +1809,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 9,
+              "file_index": 10,
               "line": 48
             }
           },
@@ -1755,7 +1837,7 @@
               "Y"
             ],
             "source": {
-              "file_index": 9,
+              "file_index": 10,
               "line": 55
             }
           }
@@ -1768,7 +1850,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 9,
+        "file_index": 10,
         "line": 42
       }
     },
@@ -1830,7 +1912,7 @@
             "name": "None",
             "value": 0,
             "source": {
-              "file_index": 10,
+              "file_index": 11,
               "line": 2
             }
           }
@@ -1848,7 +1930,7 @@
             "return_type": null,
             "calling_convention": "system",
             "source": {
-              "file_index": 10,
+              "file_index": 11,
               "line": 5
             }
           }
@@ -1859,7 +1941,7 @@
         "default": null
       },
       "source": {
-        "file_index": 10,
+        "file_index": 11,
         "line": 1
       }
     },
@@ -1892,7 +1974,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 11,
+              "file_index": 12,
               "line": 27
             }
           },
@@ -1915,7 +1997,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 11,
+              "file_index": 12,
               "line": 28
             }
           },
@@ -1942,7 +2024,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 11,
+              "file_index": 12,
               "line": 29
             }
           }
@@ -1956,7 +2038,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 11,
+        "file_index": 12,
         "line": 24
       }
     },
@@ -1993,7 +2075,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 11,
+              "file_index": 12,
               "line": 35
             }
           }
@@ -2007,7 +2089,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 11,
+        "file_index": 12,
         "line": 32
       }
     },
@@ -2043,7 +2125,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 11,
+              "file_index": 12,
               "line": 41
             }
           }
@@ -2057,7 +2139,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 11,
+        "file_index": 12,
         "line": 38
       }
     },
@@ -2091,7 +2173,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 11,
+              "file_index": 12,
               "line": 20
             }
           },
@@ -2111,7 +2193,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 11,
+              "file_index": 12,
               "line": 21
             }
           }
@@ -2125,7 +2207,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 11,
+        "file_index": 12,
         "line": 17
       }
     },
@@ -2158,7 +2240,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 11,
+              "file_index": 12,
               "line": 7
             }
           }
@@ -2172,7 +2254,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 11,
+        "file_index": 12,
         "line": 3
       }
     },
@@ -2205,7 +2287,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 11,
+              "file_index": 12,
               "line": 14
             }
           }
@@ -2219,7 +2301,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 11,
+        "file_index": 12,
         "line": 10
       }
     },
@@ -2246,7 +2328,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 12,
+              "file_index": 13,
               "line": 8
             }
           },
@@ -2263,7 +2345,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 12,
+              "file_index": 13,
               "line": 9
             }
           }
@@ -2277,7 +2359,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 12,
+        "file_index": 13,
         "line": 5
       }
     },
@@ -2314,7 +2396,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 12,
+              "file_index": 13,
               "line": 27
             }
           }
@@ -2328,7 +2410,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 12,
+        "file_index": 13,
         "line": 24
       }
     },
@@ -2367,7 +2449,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 12,
+              "file_index": 13,
               "line": 33
             }
           }
@@ -2381,7 +2463,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 12,
+        "file_index": 13,
         "line": 30
       }
     },
@@ -2414,7 +2496,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 12,
+              "file_index": 13,
               "line": 15
             }
           }
@@ -2428,7 +2510,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 12,
+        "file_index": 13,
         "line": 12
       }
     },
@@ -2461,7 +2543,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 12,
+              "file_index": 13,
               "line": 21
             }
           }
@@ -2475,7 +2557,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 12,
+        "file_index": 13,
         "line": 18
       }
     },
@@ -2606,7 +2688,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 13,
+              "file_index": 14,
               "line": 4
             }
           }
@@ -2620,7 +2702,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 13,
+        "file_index": 14,
         "line": 1
       }
     },
@@ -2647,7 +2729,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 13,
+              "file_index": 14,
               "line": 10
             }
           },
@@ -2664,7 +2746,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 13,
+              "file_index": 14,
               "line": 11
             }
           },
@@ -2681,7 +2763,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 13,
+              "file_index": 14,
               "line": 12
             }
           }
@@ -2695,7 +2777,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 13,
+        "file_index": 14,
         "line": 7
       }
     },
@@ -2722,7 +2804,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 14,
+              "file_index": 15,
               "line": 11
             }
           },
@@ -2743,7 +2825,7 @@
             "alignment": 1,
             "is_base": false,
             "source": {
-              "file_index": 14,
+              "file_index": 15,
               "line": 8
             }
           }
@@ -2757,7 +2839,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 14,
+        "file_index": 15,
         "line": 8
       }
     },
@@ -2784,7 +2866,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 14,
+              "file_index": 15,
               "line": 4
             }
           },
@@ -2801,7 +2883,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 14,
+              "file_index": 15,
               "line": 5
             }
           },
@@ -2822,7 +2904,7 @@
             "alignment": 1,
             "is_base": false,
             "source": {
-              "file_index": 14,
+              "file_index": 15,
               "line": 1
             }
           }
@@ -2836,7 +2918,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 14,
+        "file_index": 15,
         "line": 1
       }
     },
@@ -2866,7 +2948,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 15,
+              "file_index": 16,
               "line": 4
             }
           },
@@ -2883,7 +2965,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 15,
+              "file_index": 16,
               "line": 7
             }
           }
@@ -2916,7 +2998,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 15,
+              "file_index": 16,
               "line": 11
             }
           }
@@ -2950,7 +3032,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 15,
+                "file_index": 16,
                 "line": 4
               }
             }
@@ -2963,7 +3045,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 15,
+        "file_index": 16,
         "line": 1
       }
     },
@@ -3013,7 +3095,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 15,
+              "file_index": 16,
               "line": 4
             }
           }
@@ -3027,7 +3109,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 15,
+        "file_index": 16,
         "line": 4
       }
     },
@@ -3054,7 +3136,7 @@
             "alignment": 8,
             "is_base": true,
             "source": {
-              "file_index": 15,
+              "file_index": 16,
               "line": 22
             }
           },
@@ -3071,7 +3153,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 15,
+              "file_index": 16,
               "line": 24
             }
           }
@@ -3105,7 +3187,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 15,
+              "file_index": 16,
               "line": 11
             }
           },
@@ -3136,7 +3218,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 15,
+              "file_index": 16,
               "line": 27
             }
           }
@@ -3170,7 +3252,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 15,
+                "file_index": 16,
                 "line": 18
               }
             },
@@ -3201,7 +3283,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 15,
+                "file_index": 16,
                 "line": 19
               }
             }
@@ -3214,7 +3296,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 15,
+        "file_index": 16,
         "line": 15
       }
     },
@@ -3241,7 +3323,7 @@
             "alignment": 8,
             "is_base": true,
             "source": {
-              "file_index": 15,
+              "file_index": 16,
               "line": 39
             }
           },
@@ -3258,7 +3340,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 15,
+              "file_index": 16,
               "line": 41
             }
           }
@@ -3292,7 +3374,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 15,
+              "file_index": 16,
               "line": 11
             }
           },
@@ -3324,7 +3406,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 15,
+              "file_index": 16,
               "line": 27
             }
           },
@@ -3355,7 +3437,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 15,
+              "file_index": 16,
               "line": 44
             }
           }
@@ -3389,7 +3471,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 15,
+                "file_index": 16,
                 "line": 34
               }
             },
@@ -3420,7 +3502,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 15,
+                "file_index": 16,
                 "line": 35
               }
             },
@@ -3451,7 +3533,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 15,
+                "file_index": 16,
                 "line": 36
               }
             }
@@ -3464,7 +3546,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 15,
+        "file_index": 16,
         "line": 31
       }
     },
@@ -3491,7 +3573,7 @@
             "alignment": 8,
             "is_base": true,
             "source": {
-              "file_index": 15,
+              "file_index": 16,
               "line": 57
             }
           },
@@ -3508,7 +3590,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 15,
+              "file_index": 16,
               "line": 59
             }
           }
@@ -3542,7 +3624,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 15,
+              "file_index": 16,
               "line": 11
             }
           },
@@ -3574,7 +3656,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 15,
+              "file_index": 16,
               "line": 27
             }
           },
@@ -3606,7 +3688,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 15,
+              "file_index": 16,
               "line": 44
             }
           },
@@ -3637,7 +3719,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 15,
+              "file_index": 16,
               "line": 62
             }
           }
@@ -3671,7 +3753,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 15,
+                "file_index": 16,
                 "line": 51
               }
             },
@@ -3702,7 +3784,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 15,
+                "file_index": 16,
                 "line": 52
               }
             },
@@ -3733,7 +3815,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 15,
+                "file_index": 16,
                 "line": 53
               }
             },
@@ -3764,7 +3846,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 15,
+                "file_index": 16,
                 "line": 54
               }
             }
@@ -3777,7 +3859,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 15,
+        "file_index": 16,
         "line": 48
       }
     },
@@ -3827,7 +3909,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 15,
+              "file_index": 16,
               "line": 51
             }
           },
@@ -3867,7 +3949,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 15,
+              "file_index": 16,
               "line": 52
             }
           },
@@ -3907,7 +3989,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 15,
+              "file_index": 16,
               "line": 53
             }
           },
@@ -3947,7 +4029,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 15,
+              "file_index": 16,
               "line": 54
             }
           }
@@ -3961,7 +4043,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 15,
+        "file_index": 16,
         "line": 51
       }
     },
@@ -4011,7 +4093,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 15,
+              "file_index": 16,
               "line": 34
             }
           },
@@ -4051,7 +4133,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 15,
+              "file_index": 16,
               "line": 35
             }
           },
@@ -4091,7 +4173,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 15,
+              "file_index": 16,
               "line": 36
             }
           }
@@ -4105,7 +4187,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 15,
+        "file_index": 16,
         "line": 34
       }
     },
@@ -4155,7 +4237,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 15,
+              "file_index": 16,
               "line": 18
             }
           },
@@ -4195,7 +4277,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 15,
+              "file_index": 16,
               "line": 19
             }
           }
@@ -4209,7 +4291,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 15,
+        "file_index": 16,
         "line": 18
       }
     },
@@ -4236,7 +4318,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 16,
+              "file_index": 17,
               "line": 20
             }
           },
@@ -4257,7 +4339,7 @@
             "alignment": 1,
             "is_base": false,
             "source": {
-              "file_index": 16,
+              "file_index": 17,
               "line": 22
             }
           },
@@ -4280,7 +4362,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 16,
+              "file_index": 17,
               "line": 22
             }
           },
@@ -4303,7 +4385,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 16,
+              "file_index": 17,
               "line": 24
             }
           },
@@ -4326,7 +4408,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 16,
+              "file_index": 17,
               "line": 25
             }
           },
@@ -4347,7 +4429,7 @@
             "alignment": 1,
             "is_base": false,
             "source": {
-              "file_index": 16,
+              "file_index": 17,
               "line": 13
             }
           }
@@ -4361,7 +4443,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 16,
+        "file_index": 17,
         "line": 13
       }
     },
@@ -4394,7 +4476,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 16,
+              "file_index": 17,
               "line": 4
             }
           }
@@ -4408,7 +4490,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 16,
+        "file_index": 17,
         "line": 1
       }
     },
@@ -4435,7 +4517,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 16,
+              "file_index": 17,
               "line": 31
             }
           },
@@ -4456,7 +4538,7 @@
             "alignment": 1,
             "is_base": false,
             "source": {
-              "file_index": 16,
+              "file_index": 17,
               "line": 33
             }
           },
@@ -4479,7 +4561,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 16,
+              "file_index": 17,
               "line": 33
             }
           },
@@ -4502,7 +4584,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 16,
+              "file_index": 17,
               "line": 35
             }
           }
@@ -4516,7 +4598,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 16,
+        "file_index": 17,
         "line": 28
       }
     },
@@ -4549,7 +4631,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 16,
+              "file_index": 17,
               "line": 10
             }
           }
@@ -4563,7 +4645,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 16,
+        "file_index": 17,
         "line": 7
       }
     },
@@ -4590,7 +4672,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 17,
+              "file_index": 18,
               "line": 3
             }
           }
@@ -4604,7 +4686,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 17,
+        "file_index": 18,
         "line": 1
       }
     },
@@ -4634,7 +4716,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 18,
+              "file_index": 19,
               "line": 4
             }
           },
@@ -4651,7 +4733,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 18,
+              "file_index": 19,
               "line": 7
             }
           }
@@ -4684,7 +4766,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 18,
+              "file_index": 19,
               "line": 11
             }
           }
@@ -4718,7 +4800,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 18,
+                "file_index": 19,
                 "line": 4
               }
             }
@@ -4731,7 +4813,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 18,
+        "file_index": 19,
         "line": 1
       }
     },
@@ -4781,7 +4863,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 18,
+              "file_index": 19,
               "line": 4
             }
           }
@@ -4795,7 +4877,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 18,
+        "file_index": 19,
         "line": 4
       }
     },
@@ -4825,7 +4907,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 18,
+              "file_index": 19,
               "line": 18
             }
           },
@@ -4842,7 +4924,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 18,
+              "file_index": 19,
               "line": 21
             }
           }
@@ -4875,7 +4957,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 18,
+              "file_index": 19,
               "line": 25
             }
           }
@@ -4909,7 +4991,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 18,
+                "file_index": 19,
                 "line": 18
               }
             }
@@ -4922,7 +5004,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 18,
+        "file_index": 19,
         "line": 15
       }
     },
@@ -4972,7 +5054,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 18,
+              "file_index": 19,
               "line": 18
             }
           }
@@ -4986,7 +5068,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 18,
+        "file_index": 19,
         "line": 18
       }
     },
@@ -5013,7 +5095,7 @@
             "alignment": 8,
             "is_base": true,
             "source": {
-              "file_index": 18,
+              "file_index": 19,
               "line": 36
             }
           },
@@ -5030,7 +5112,7 @@
             "alignment": 8,
             "is_base": true,
             "source": {
-              "file_index": 18,
+              "file_index": 19,
               "line": 38
             }
           }
@@ -5064,7 +5146,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 18,
+              "file_index": 19,
               "line": 11
             }
           },
@@ -5096,7 +5178,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 18,
+              "file_index": 19,
               "line": 25
             }
           },
@@ -5128,7 +5210,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 18,
+              "file_index": 19,
               "line": 18
             }
           },
@@ -5159,7 +5241,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 18,
+              "file_index": 19,
               "line": 42
             }
           }
@@ -5193,7 +5275,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 18,
+                "file_index": 19,
                 "line": 32
               }
             },
@@ -5224,7 +5306,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 18,
+                "file_index": 19,
                 "line": 33
               }
             }
@@ -5237,7 +5319,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 18,
+        "file_index": 19,
         "line": 29
       }
     },
@@ -5287,7 +5369,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 18,
+              "file_index": 19,
               "line": 32
             }
           },
@@ -5327,7 +5409,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 18,
+              "file_index": 19,
               "line": 33
             }
           }
@@ -5341,7 +5423,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 18,
+        "file_index": 19,
         "line": 32
       }
     },
@@ -5371,7 +5453,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 19,
+              "file_index": 20,
               "line": 9
             }
           }
@@ -5385,7 +5467,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 19,
+        "file_index": 20,
         "line": 6
       }
     },
@@ -5421,7 +5503,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 20,
+              "file_index": 21,
               "line": 59
             }
           },
@@ -5448,7 +5530,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 20,
+              "file_index": 21,
               "line": 60
             }
           }
@@ -5462,7 +5544,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 20,
+        "file_index": 21,
         "line": 56
       }
     },
@@ -5487,7 +5569,7 @@
         }
       },
       "source": {
-        "file_index": 20,
+        "file_index": 21,
         "line": 15
       }
     },
@@ -5517,7 +5599,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 20,
+              "file_index": 21,
               "line": 33
             }
           },
@@ -5537,7 +5619,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 20,
+              "file_index": 21,
               "line": 34
             }
           }
@@ -5551,7 +5633,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 20,
+        "file_index": 21,
         "line": 31
       }
     },
@@ -5584,7 +5666,7 @@
         }
       },
       "source": {
-        "file_index": 20,
+        "file_index": 21,
         "line": 24
       }
     },
@@ -5617,7 +5699,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 20,
+              "file_index": 21,
               "line": 42
             }
           },
@@ -5640,7 +5722,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 20,
+              "file_index": 21,
               "line": 43
             }
           },
@@ -5667,7 +5749,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 20,
+              "file_index": 21,
               "line": 44
             }
           },
@@ -5687,7 +5769,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 20,
+              "file_index": 21,
               "line": 45
             }
           },
@@ -5707,7 +5789,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 20,
+              "file_index": 21,
               "line": 46
             }
           }
@@ -5721,7 +5803,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 20,
+        "file_index": 21,
         "line": 39
       }
     },
@@ -5743,7 +5825,7 @@
         }
       },
       "source": {
-        "file_index": 20,
+        "file_index": 21,
         "line": 8
       }
     },
@@ -5768,7 +5850,7 @@
         }
       },
       "source": {
-        "file_index": 20,
+        "file_index": 21,
         "line": 12
       }
     },
@@ -5799,7 +5881,7 @@
         }
       },
       "source": {
-        "file_index": 20,
+        "file_index": 21,
         "line": 27
       }
     },
@@ -5827,7 +5909,7 @@
         }
       },
       "source": {
-        "file_index": 20,
+        "file_index": 21,
         "line": 18
       }
     },
@@ -5849,7 +5931,7 @@
         }
       },
       "source": {
-        "file_index": 20,
+        "file_index": 21,
         "line": 4
       }
     },
@@ -5878,7 +5960,7 @@
         }
       },
       "source": {
-        "file_index": 20,
+        "file_index": 21,
         "line": 53
       }
     },
@@ -5906,7 +5988,7 @@
         }
       },
       "source": {
-        "file_index": 20,
+        "file_index": 21,
         "line": 50
       }
     },
@@ -5934,7 +6016,7 @@
         }
       },
       "source": {
-        "file_index": 20,
+        "file_index": 21,
         "line": 21
       }
     },
@@ -6103,13 +6185,55 @@
         "cpp": [
           {
             "prologue": null,
-            "epilogue": "\ninline ::std::uint32_t Probe::read() const { return value; }\ninline ::std::uint32_t Probe::cpp_only() const { return value + 2; }\ninline ::std::uint32_t Probe::cpp_or_json() const { return value + 3; }\ninline ::std::uint32_t Probe::not_rust() const { return value + 4; }\n"
+            "epilogue": {
+              "header": "\ninline ::std::uint32_t Probe::read() const { return value; }\ninline ::std::uint32_t Probe::cpp_only() const { return value + 2; }\ninline ::std::uint32_t Probe::cpp_or_json() const { return value + 3; }\ninline ::std::uint32_t Probe::not_rust() const { return value + 4; }\n",
+              "definition": null
+            }
           }
         ],
         "rust": [
           {
             "prologue": null,
-            "epilogue": "\n    impl Probe {\n        pub fn read(&self) -> u32 { self.value }\n        pub fn rust_only(&self) -> u32 { self.value + 1 }\n        pub fn rust_block_method(&self) -> u32 { self.value + 100 }\n    }\n"
+            "epilogue": {
+              "header": "\n    impl Probe {\n        pub fn read(&self) -> u32 { self.value }\n        pub fn rust_only(&self) -> u32 { self.value + 1 }\n        pub fn rust_block_method(&self) -> u32 { self.value + 100 }\n    }\n",
+              "definition": null
+            }
+          }
+        ]
+      }
+    },
+    "definition_body": {
+      "doc": null,
+      "items": [
+        "definition_body::Logger"
+      ],
+      "submodules": {},
+      "extern_values": [],
+      "functions": [],
+      "backends": {
+        "cpp": [
+          {
+            "prologue": {
+              "header": null,
+              "definition": "\n    #include <cstdio>\n"
+            },
+            "epilogue": null
+          },
+          {
+            "prologue": null,
+            "epilogue": {
+              "header": null,
+              "definition": "\nLogger Logger::make() { return Logger{0}; }\n\n::std::uint32_t Logger::record() {\n    seen += 1;\n    std::printf(\"Logger seen=%u\\n\", seen);\n    return seen;\n}\n"
+            }
+          }
+        ],
+        "rust": [
+          {
+            "prologue": null,
+            "epilogue": {
+              "header": "\n    impl Logger {\n        pub fn make() -> Logger { Logger { seen: 0 } }\n        pub fn record(&mut self) -> u32 { self.seen += 1; self.seen }\n    }\n",
+              "definition": null
+            }
           }
         ]
       }
@@ -6175,7 +6299,7 @@
           },
           "calling_convention": "system",
           "source": {
-            "file_index": 9,
+            "file_index": 10,
             "line": 31
           }
         }
@@ -6184,29 +6308,47 @@
         "cpp": [
           {
             "prologue": null,
-            "epilogue": "\ninline Counter Counter::make() { return Counter{0}; }\ninline ::std::uint32_t Counter::bump() { value += 1; return value; }\ninline ::std::uint32_t Counter::read() const { return value; }\n"
+            "epilogue": {
+              "header": "\ninline Counter Counter::make() { return Counter{0}; }\ninline ::std::uint32_t Counter::bump() { value += 1; return value; }\ninline ::std::uint32_t Counter::read() const { return value; }\n",
+              "definition": null
+            }
           },
           {
             "prologue": null,
-            "epilogue": "\ninline ::std::uint32_t module_hello() { return 42; }\n"
+            "epilogue": {
+              "header": "\ninline ::std::uint32_t module_hello() { return 42; }\n",
+              "definition": null
+            }
           },
           {
             "prologue": null,
-            "epilogue": "\ntemplate <class T>\ninline T* Pair<T>::first_ptr() const { return first; }\n\ntemplate <class T> template <class Y>\ninline Y* Pair<T>::cast_first() const { return reinterpret_cast<Y*>(first); }\n"
+            "epilogue": {
+              "header": "\ntemplate <class T>\ninline T* Pair<T>::first_ptr() const { return first; }\n\ntemplate <class T> template <class Y>\ninline Y* Pair<T>::cast_first() const { return reinterpret_cast<Y*>(first); }\n",
+              "definition": null
+            }
           }
         ],
         "rust": [
           {
             "prologue": null,
-            "epilogue": "\n    impl Counter {\n        pub fn make() -> Counter { Counter { value: 0 } }\n        pub fn bump(&mut self) -> u32 { self.value += 1; self.value }\n        pub fn read(&self) -> u32 { self.value }\n    }\n"
+            "epilogue": {
+              "header": "\n    impl Counter {\n        pub fn make() -> Counter { Counter { value: 0 } }\n        pub fn bump(&mut self) -> u32 { self.value += 1; self.value }\n        pub fn read(&self) -> u32 { self.value }\n    }\n",
+              "definition": null
+            }
           },
           {
             "prologue": null,
-            "epilogue": "\n    pub fn module_hello() -> u32 { 42 }\n"
+            "epilogue": {
+              "header": "\n    pub fn module_hello() -> u32 { 42 }\n",
+              "definition": null
+            }
           },
           {
             "prologue": null,
-            "epilogue": "\n    impl<T> Pair<T> {\n        pub fn first_ptr(&self) -> *mut T { self.first }\n        // In Rust, method-level type parameters live on the function, not\n        // the impl. Pyxis's `impl<T, Y> Pair<T> { fn cast_first ... }` form\n        // maps to this Rust shape.\n        pub fn cast_first<Y>(&self) -> *mut Y { self.first as *mut Y }\n    }\n"
+            "epilogue": {
+              "header": "\n    impl<T> Pair<T> {\n        pub fn first_ptr(&self) -> *mut T { self.first }\n        // In Rust, method-level type parameters live on the function, not\n        // the impl. Pyxis's `impl<T, Y> Pair<T> { fn cast_first ... }` form\n        // maps to this Rust shape.\n        pub fn cast_first<Y>(&self) -> *mut Y { self.first as *mut Y }\n    }\n",
+              "definition": null
+            }
           }
         ]
       }
@@ -6231,7 +6373,7 @@
           "return_type": null,
           "calling_convention": "system",
           "source": {
-            "file_index": 10,
+            "file_index": 11,
             "line": 9
           }
         },
@@ -6259,7 +6401,7 @@
           },
           "calling_convention": "system",
           "source": {
-            "file_index": 10,
+            "file_index": 11,
             "line": 12
           }
         }
@@ -6445,6 +6587,7 @@
     "bitflags.pyxis",
     "braced_imports.pyxis",
     "cfg.pyxis",
+    "definition_body.pyxis",
     "diamond_inheritance.pyxis",
     "doc_comments.pyxis",
     "enums.pyxis",

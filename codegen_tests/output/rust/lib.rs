@@ -2,6 +2,7 @@ pub mod atomics;
 pub mod bitflags;
 pub mod braced_imports;
 pub mod cfg;
+pub mod definition_body;
 pub mod diamond_inheritance;
 pub mod doc_comments;
 pub mod enums;

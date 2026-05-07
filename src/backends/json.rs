@@ -57,9 +57,20 @@ pub struct JsonModule {
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 pub struct JsonBackend {
     /// Prologue code inserted at the beginning of generated output
-    pub prologue: Option<String>,
+    pub prologue: Option<JsonBackendSplice>,
     /// Epilogue code inserted at the end of generated output
-    pub epilogue: Option<String>,
+    pub epilogue: Option<JsonBackendSplice>,
+}
+
+/// A backend splice payload. `header` lands in the language's primary
+/// declaration surface (Rust module, C++ header). `definition` lands in
+/// the C++ source file and is always `None` for non-cpp backends.
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+pub struct JsonBackendSplice {
+    /// Code spliced into the header / declaration surface
+    pub header: Option<String>,
+    /// Code spliced into the C++ source file (cpp backend only)
+    pub definition: Option<String>,
 }
 
 /// Source location of an item (file index and line number)
@@ -738,13 +749,24 @@ fn convert_extern_value(ev: &ExternValue) -> JsonExternValue {
 }
 
 fn convert_backend(backend: &Backend) -> JsonBackend {
-    // JSON output flattens to the header slot only - the `definition`
-    // slot is cpp-only and rejected at semantic validation for any
-    // backend that reaches the json emit (json's own backend block
-    // can't have one).
+    // Mirror the IR's `BackendSplice { header, definition }` shape.
+    // `definition` is cpp-only (semantic validation rejects it for any
+    // other backend) and ends up `None` for rust/json. A splice with
+    // both fields empty round-trips as `None` so consumers can skip
+    // rendering it entirely.
+    let convert_splice = |splice: &crate::semantic::types::BackendSplice| {
+        if splice.is_empty() {
+            None
+        } else {
+            Some(JsonBackendSplice {
+                header: splice.header.clone(),
+                definition: splice.definition.clone(),
+            })
+        }
+    };
     JsonBackend {
-        prologue: backend.prologue.header.clone(),
-        epilogue: backend.epilogue.header.clone(),
+        prologue: convert_splice(&backend.prologue),
+        epilogue: convert_splice(&backend.epilogue),
     }
 }
 
