@@ -97,9 +97,7 @@ export function TypeRef({ type, currentModule = '' }: TypeRefProps) {
 
       case 'type_parameter':
         // Type parameter reference, e.g., T inside a generic type
-        return (
-          <span className="text-emerald-600 dark:text-emerald-400 italic">{t.name}</span>
-        );
+        return <span className="text-emerald-600 dark:text-emerald-400 italic">{t.name}</span>;
 
       case 'function': {
         const cc = getCallingConvention(t.calling_convention);
