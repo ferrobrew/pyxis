@@ -16,7 +16,10 @@ use crate::{
     backends::{BackendError, Result},
     config::Project,
     grammar::ItemPath,
-    semantic::{Module, ResolvedSemanticState, types::ItemDefinitionInner},
+    semantic::{
+        Module, ResolvedSemanticState, TypeRegistry,
+        types::{ExternValue, Function, ItemDefinitionInner},
+    },
 };
 
 mod cmake;
@@ -72,99 +75,115 @@ pub fn build(
     Ok(())
 }
 
-/// Emit `<out_dir>/include/<module>/...hpp` (and a matching `.cpp` if there
-/// are address-bound free functions or extern values to define) for a single
-/// module.
-fn write_module(
-    out_dir: &Path,
-    key: &ItemPath,
-    semantic_state: &ResolvedSemanticState,
-    module: &Module,
-    bindings: &std::collections::BTreeMap<ItemPath, CppExternBinding>,
-) -> Result<()> {
-    if key.is_empty() {
-        return Ok(());
-    }
+/// All four splice payloads pulled from a module's `backend cpp { ... }`
+/// blocks, dedented and joined so each field is splice-ready text. Each
+/// field is empty if no backend block populated that slot.
+#[derive(Default)]
+struct CppSplices {
+    /// `prologue ...` — lands above the namespace in the `.hpp`.
+    prologue: String,
+    /// `epilogue ...` — lands at the bottom of the namespace in the `.hpp`.
+    epilogue: String,
+    /// `prologue definition ...` — lands above the namespace in the `.cpp`.
+    prologue_def: String,
+    /// `epilogue definition ...` — lands at the bottom of the namespace in the `.cpp`.
+    epilogue_def: String,
+}
 
-    let registry = semantic_state.type_registry();
-    let cfg_ctx = crate::parser::cfg::CfgContext {
-        backend: crate::Backend::Cpp,
+/// Output of rendering every item in a module. `body` / `post_header` /
+/// `post_cpp` are unindented raw text; the namespace + indentation
+/// passes happen in [`assemble_header`] / [`assemble_source`].
+struct ModuleBody<'a> {
+    body: String,
+    post_header: String,
+    post_cpp: String,
+    /// True if any item produced any output. Used by the caller to
+    /// decide whether the module needs a header at all.
+    wrote_anything: bool,
+    /// Module-level free functions in deterministic order.
+    public_functions: Vec<&'a Function>,
+    /// Module-level extern values in deterministic order.
+    sorted_externs: Vec<&'a ExternValue>,
+}
+
+/// Strip the common leading-whitespace prefix from every non-empty
+/// line. Empty lines pass through unchanged.
+fn dedent(s: &str) -> String {
+    let min_indent = s
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| l.len() - l.trim_start().len())
+        .min()
+        .unwrap_or(0);
+    if min_indent == 0 {
+        return s.to_string();
+    }
+    s.lines()
+        .map(|l| {
+            if l.trim().is_empty() {
+                ""
+            } else {
+                &l[min_indent..]
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// Raw-string prologue/epilogue text usually starts and ends with a
+/// newline because users write `r#"<newline>...<newline>"#`. Trim
+/// those edges so we don't emit double blank lines around the splice;
+/// also dedent each block by its common leading-whitespace prefix so
+/// indented raw-string content lands flush at the splice site (the
+/// orchestrator reapplies its own indent).
+///
+/// Multiple splice blocks targeting the same slot are joined with one
+/// blank line between each so they render with the same visual rhythm
+/// as definitions within a single block.
+fn join_slot<'a>(
+    bs: &'a [crate::semantic::types::Backend],
+    pick: impl Fn(&'a crate::semantic::types::Backend) -> Option<&'a String>,
+) -> String {
+    bs.iter()
+        .filter_map(pick)
+        .map(|s| {
+            let dedented = dedent(s.trim_matches('\n'));
+            dedented.trim().to_string()
+        })
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n\n")
+}
+
+/// Pull all four splice slots out of a module's cpp backend blocks.
+fn extract_cpp_splices(cpp_backends: Option<&Vec<crate::semantic::types::Backend>>) -> CppSplices {
+    let Some(bs) = cpp_backends else {
+        return CppSplices::default();
     };
-    let ctx = render::RenderCtx::new(key, registry, bindings, cfg_ctx);
-    let module_deps = deps::collect_module_deps(key, module, registry, bindings);
-    let cpp_backends = module.backends.get(&crate::Backend::Cpp);
-    // Raw-string prologue/epilogue text usually starts and ends with a
-    // newline because users write `r#"<newline>...<newline>"#`. Trim
-    // those edges so we don't emit double blank lines around the splice.
-    // Also dedent each block by its common leading-whitespace prefix so
-    // text users wrote indented inside the raw string lands flush at
-    // the splice site (the orchestrator reapplies its own indent).
-    fn join_slot<'a>(
-        bs: &'a [crate::semantic::types::Backend],
-        pick: impl Fn(&'a crate::semantic::types::Backend) -> Option<&'a String>,
-    ) -> String {
-        // Two newlines = one blank line between adjacent splice blocks
-        // so multiple `epilogue definition` directives in a file render
-        // with the same visual rhythm as definitions within a single block.
-        // Each block is dedented, then trimmed of leading/trailing
-        // whitespace lines so the explicit `\n\n` separator does the
-        // entire job of inter-block spacing - no stacking from internal
-        // trailing whitespace.
-        bs.iter()
-            .filter_map(pick)
-            .map(|s| {
-                let dedented = dedent(s.trim_matches('\n'));
-                dedented.trim().to_string()
-            })
-            .filter(|s| !s.is_empty())
-            .collect::<Vec<_>>()
-            .join("\n\n")
+    CppSplices {
+        prologue: join_slot(bs, |b| b.prologue.header.as_ref()),
+        epilogue: join_slot(bs, |b| b.epilogue.header.as_ref()),
+        prologue_def: join_slot(bs, |b| b.prologue.definition.as_ref()),
+        epilogue_def: join_slot(bs, |b| b.epilogue.definition.as_ref()),
     }
+}
 
-    /// Strip the common leading-whitespace prefix from every non-empty
-    /// line. Empty lines pass through unchanged.
-    fn dedent(s: &str) -> String {
-        let min_indent = s
-            .lines()
-            .filter(|l| !l.trim().is_empty())
-            .map(|l| l.len() - l.trim_start().len())
-            .min()
-            .unwrap_or(0);
-        if min_indent == 0 {
-            return s.to_string();
-        }
-        s.lines()
-            .map(|l| {
-                if l.trim().is_empty() {
-                    ""
-                } else {
-                    &l[min_indent..]
-                }
-            })
-            .collect::<Vec<_>>()
-            .join("\n")
-    }
-    let prologue: String = cpp_backends
-        .map(|bs| join_slot(bs, |b| b.prologue.header.as_ref()))
-        .unwrap_or_default();
-    let prologue_def: String = cpp_backends
-        .map(|bs| join_slot(bs, |b| b.prologue.definition.as_ref()))
-        .unwrap_or_default();
-    let epilogue: String = cpp_backends
-        .map(|bs| join_slot(bs, |b| b.epilogue.header.as_ref()))
-        .unwrap_or_default();
-    let epilogue_def: String = cpp_backends
-        .map(|bs| join_slot(bs, |b| b.epilogue.definition.as_ref()))
-        .unwrap_or_default();
-
+/// Render every item, free function, and extern value in the module
+/// into intermediate buffers. The intra-module FullDef edges are
+/// topologically sorted here so by-value references appear after
+/// their target's full definition.
+fn render_module_body<'a>(
+    key: &ItemPath,
+    module: &'a Module,
+    registry: &TypeRegistry,
+    bindings: &std::collections::BTreeMap<ItemPath, CppExternBinding>,
+    ctx: render::RenderCtx,
+) -> Result<ModuleBody<'a>> {
     let mut body = String::new();
     let mut post_header = String::new();
     let mut post_cpp = String::new();
     let mut wrote_anything = false;
-    // Topologically sort items by intra-module FullDef edges so that any
-    // by-value reference (`Aabb { Vector3 min; }`) lands after its target
-    // is fully defined. Templates and independent items break ties by
-    // template-first-then-alphabetical.
+
     let raw_items: Vec<_> = module
         .definitions(registry)
         .filter(|item| ctx.cfg_passes(&item.cfg))
@@ -224,40 +243,102 @@ fn write_module(
         wrote_anything = true;
     }
 
-    if !wrote_anything
-        && module_deps.include_modules.is_empty()
-        && module_deps.include_headers.is_empty()
-        && prologue.is_empty()
-        && epilogue.is_empty()
-        && prologue_def.is_empty()
-        && epilogue_def.is_empty()
-    {
-        return Ok(());
-    }
+    Ok(ModuleBody {
+        body,
+        post_header,
+        post_cpp,
+        wrote_anything,
+        public_functions,
+        sorted_externs,
+    })
+}
 
-    let header_path = module_to_header_path(out_dir, key);
-    if let Some(parent) = header_path.parent() {
-        std::fs::create_dir_all(parent).map_err(|e| BackendError::Io {
-            error: e,
-            context: format!("Failed to create directory {}", parent.display()),
-        })?;
+/// Compute the intra-module forward-declaration lines: every non-alias,
+/// non-extern resolved item gets a forward decl at the top of the
+/// namespace so pointer-typed fields and generic instantiations of
+/// pointer-only templates can reference peers defined later in the file.
+/// Templates carry a full template-parameter clause on their forward
+/// decl. The returned vec is sorted + deduplicated.
+fn intra_module_forward_decls(
+    module: &Module,
+    registry: &TypeRegistry,
+    ctx: render::RenderCtx,
+) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for item in module.definitions(registry) {
+        if item.is_predefined()
+            || matches!(item.category, crate::semantic::types::ItemCategory::Extern)
+        {
+            continue;
+        }
+        if !ctx.cfg_passes(&item.cfg) {
+            continue;
+        }
+        let Some(resolved) = item.resolved() else {
+            continue;
+        };
+        let kind = match &resolved.inner {
+            ItemDefinitionInner::Type(_) => "struct",
+            ItemDefinitionInner::Enum(_) | ItemDefinitionInner::Bitflags(_) => continue,
+            ItemDefinitionInner::TypeAlias(_) => continue,
+        };
+        let Some(leaf) = item.path.last() else {
+            continue;
+        };
+        if item.is_generic() {
+            let params = item
+                .type_parameters
+                .iter()
+                .map(|p| format!("class {p}"))
+                .collect::<Vec<_>>()
+                .join(", ");
+            out.push(format!("template <{params}> {kind} {leaf};"));
+        } else {
+            out.push(format!("{kind} {leaf};"));
+        }
     }
+    out.sort();
+    out.dedup();
+    out
+}
 
+/// Append `#include <header>` (or `"header"`) to `out` if it hasn't
+/// already been emitted; track seen includes in `emitted`. The arg is
+/// stored verbatim so callers control angle-bracket vs quote form.
+fn emit_include(
+    out: &mut String,
+    include_arg: &str,
+    emitted: &mut std::collections::BTreeSet<String>,
+) -> std::fmt::Result {
+    if emitted.insert(include_arg.to_string()) {
+        writeln!(out, "#include {include_arg}")?;
+    }
+    Ok(())
+}
+
+/// Assemble the full `.hpp` text: pragma + automatic includes +
+/// cross-module includes/forward decls + module prologue + namespace
+/// block containing intra-module forward decls, every item body, any
+/// out-of-class definitions that must stay header-visible, and the
+/// user's epilogue.
+#[allow(clippy::too_many_arguments)]
+fn assemble_header(
+    key: &ItemPath,
+    semantic_state: &ResolvedSemanticState,
+    module: &Module,
+    registry: &TypeRegistry,
+    ctx: render::RenderCtx,
+    module_deps: &deps::ModuleDeps,
+    body: &str,
+    post_header: &str,
+    splices: &CppSplices,
+) -> Result<String> {
     let mut out = String::new();
     // Track every `#include` we emit so the user's prologue doesn't
     // double up when it spells out a header we've already pulled in
     // automatically.
     let mut emitted_includes: std::collections::BTreeSet<String> =
         std::collections::BTreeSet::new();
-    let emit_include = |out: &mut String,
-                        include_arg: &str,
-                        emitted: &mut std::collections::BTreeSet<String>|
-     -> std::fmt::Result {
-        if emitted.insert(include_arg.to_string()) {
-            writeln!(out, "#include {include_arg}")?;
-        }
-        Ok(())
-    };
     writeln!(out, "// @generated by pyxis — do not edit")?;
     writeln!(out, "#pragma once")?;
     writeln!(out)?;
@@ -310,9 +391,9 @@ fn write_module(
     // Module-level prologue (e.g. JC2's hand-written shared_ptr / atomic
     // template specializations) is spliced in *before* the namespace block,
     // so it can also pull in additional `#include`s if needed.
-    if !prologue.is_empty() {
+    if !splices.prologue.is_empty() {
         writeln!(out)?;
-        for line in prologue.lines() {
+        for line in splices.prologue.lines() {
             // Skip `#include` lines that match an already-emitted
             // include - lets users redundantly spell out a header in
             // their prologue without producing a duplicate `#include`
@@ -329,49 +410,12 @@ fn write_module(
         }
     }
 
-    if wrote_anything || !epilogue.is_empty() {
+    let has_namespace_body =
+        !body.is_empty() || !post_header.is_empty() || !splices.epilogue.is_empty();
+    if has_namespace_body {
         writeln!(out)?;
         open_namespace(&mut out, key)?;
-        // Intra-module forward declarations: every non-alias, non-extern
-        // resolved item gets a forward decl up top so pointer-typed fields
-        // (and generic instantiations of pointer-only templates) can
-        // reference peers defined later in the file. Templates need a full
-        // template-parameter signature on their forward decl.
-        let mut intra_fwd: Vec<String> = Vec::new();
-        for item in module.definitions(registry) {
-            if item.is_predefined()
-                || matches!(item.category, crate::semantic::types::ItemCategory::Extern)
-            {
-                continue;
-            }
-            if !ctx.cfg_passes(&item.cfg) {
-                continue;
-            }
-            let Some(resolved) = item.resolved() else {
-                continue;
-            };
-            let kind = match &resolved.inner {
-                ItemDefinitionInner::Type(_) => "struct",
-                ItemDefinitionInner::Enum(_) | ItemDefinitionInner::Bitflags(_) => continue,
-                ItemDefinitionInner::TypeAlias(_) => continue,
-            };
-            let Some(leaf) = item.path.last() else {
-                continue;
-            };
-            if item.is_generic() {
-                let params = item
-                    .type_parameters
-                    .iter()
-                    .map(|p| format!("class {p}"))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                intra_fwd.push(format!("template <{params}> {kind} {leaf};"));
-            } else {
-                intra_fwd.push(format!("{kind} {leaf};"));
-            }
-        }
-        intra_fwd.sort();
-        intra_fwd.dedup();
+        let intra_fwd = intra_module_forward_decls(module, registry, ctx);
         if !intra_fwd.is_empty() {
             for line in &intra_fwd {
                 writeln!(out, "    {line}")?;
@@ -396,9 +440,9 @@ fn write_module(
                 }
             }
         }
-        if !epilogue.is_empty() {
+        if !splices.epilogue.is_empty() {
             writeln!(out)?;
-            for line in epilogue.lines() {
+            for line in splices.epilogue.lines() {
                 if line.is_empty() {
                     writeln!(out)?;
                 } else {
@@ -408,21 +452,175 @@ fn write_module(
         }
         close_namespace(&mut out, key)?;
     }
+    Ok(out)
+}
 
-    std::fs::write(&header_path, &out).map_err(|e| BackendError::Io {
+/// Assemble the full `.cpp` text: header include + optional source-
+/// private prologue + namespace block containing free-function
+/// definitions, hoisted out-of-class member definitions, and the
+/// user's source-side epilogue.
+fn assemble_source(
+    key: &ItemPath,
+    ctx: render::RenderCtx,
+    body: &ModuleBody<'_>,
+    splices: &CppSplices,
+) -> Result<String> {
+    let mut cpp = String::new();
+    writeln!(cpp, "// @generated by pyxis — do not edit")?;
+    writeln!(cpp)?;
+    let header_include = module_to_relative_include(key);
+    writeln!(cpp, "#include \"{header_include}\"")?;
+
+    // `prologue definition` text lands here, *before* the namespace -
+    // analogous to how `prologue` lands before the namespace in the
+    // header. Lets the user pull in source-private `#include`s
+    // (e.g. `<windows.h>`, `<d3d10.h>`) without leaking them into
+    // every .hpp consumer.
+    if !splices.prologue_def.is_empty() {
+        writeln!(cpp)?;
+        for line in splices.prologue_def.lines() {
+            if line.is_empty() {
+                writeln!(cpp)?;
+            } else {
+                writeln!(cpp, "{line}")?;
+            }
+        }
+    }
+
+    writeln!(cpp)?;
+    open_namespace(&mut cpp, key)?;
+    let mut wrote_def = false;
+
+    // Collect free-function and extern-value definitions into a
+    // buffer so we can trim any trailing blank line before the
+    // explicit section separator.
+    let mut free_def_buf = String::new();
+    for func in &body.public_functions {
+        if let Some(text) = render::render_free_function_definition(func, ctx)? {
+            free_def_buf.push_str(&text);
+            free_def_buf.push('\n');
+        }
+    }
+    for ev in &body.sorted_externs {
+        let text = render::render_extern_value_definition(ev, ctx)?;
+        free_def_buf.push_str(&text);
+    }
+    let free_def_trimmed = free_def_buf.trim_end_matches('\n');
+    if !free_def_trimmed.is_empty() {
+        for line in free_def_trimmed.lines() {
+            if line.is_empty() {
+                writeln!(cpp)?;
+            } else {
+                writeln!(cpp, "    {line}")?;
+            }
+        }
+        wrote_def = true;
+    }
+    // Each emitted block ends with a trailing blank line (per-method
+    // separator). Trim those off before joining sections so we don't
+    // stack blanks into double-blanks at the section boundary.
+    let post_cpp_trimmed = body.post_cpp.trim_end_matches('\n');
+    if !post_cpp_trimmed.is_empty() {
+        if wrote_def {
+            writeln!(cpp)?;
+        }
+        for line in post_cpp_trimmed.lines() {
+            if line.is_empty() {
+                writeln!(cpp)?;
+            } else {
+                writeln!(cpp, "    {line}")?;
+            }
+        }
+        wrote_def = true;
+    }
+    let epilogue_def_trimmed = splices.epilogue_def.trim_end_matches('\n');
+    if !epilogue_def_trimmed.is_empty() {
+        if wrote_def {
+            writeln!(cpp)?;
+        }
+        for line in epilogue_def_trimmed.lines() {
+            if line.is_empty() {
+                writeln!(cpp)?;
+            } else {
+                writeln!(cpp, "    {line}")?;
+            }
+        }
+    }
+    let _ = wrote_def;
+    close_namespace(&mut cpp, key)?;
+    Ok(cpp)
+}
+
+/// Emit `<out_dir>/include/<module>/...hpp` (and a matching `.cpp` if there
+/// are address-bound free functions or extern values to define) for a single
+/// module. Orchestrator: pulls together splices, renders items, and writes
+/// the header and (optionally) the source file.
+fn write_module(
+    out_dir: &Path,
+    key: &ItemPath,
+    semantic_state: &ResolvedSemanticState,
+    module: &Module,
+    bindings: &std::collections::BTreeMap<ItemPath, CppExternBinding>,
+) -> Result<()> {
+    if key.is_empty() {
+        return Ok(());
+    }
+
+    let registry = semantic_state.type_registry();
+    let cfg_ctx = crate::parser::cfg::CfgContext {
+        backend: crate::Backend::Cpp,
+    };
+    let ctx = render::RenderCtx::new(key, registry, bindings, cfg_ctx);
+    let module_deps = deps::collect_module_deps(key, module, registry, bindings);
+    let splices = extract_cpp_splices(module.backends.get(&crate::Backend::Cpp));
+    let body = render_module_body(key, module, registry, bindings, ctx)?;
+
+    // Skip writing anything if the module contributes no declarations,
+    // no cross-module deps, and no user-supplied splices.
+    if !body.wrote_anything
+        && module_deps.include_modules.is_empty()
+        && module_deps.include_headers.is_empty()
+        && splices.prologue.is_empty()
+        && splices.epilogue.is_empty()
+        && splices.prologue_def.is_empty()
+        && splices.epilogue_def.is_empty()
+    {
+        return Ok(());
+    }
+
+    // Header.
+    let header_path = module_to_header_path(out_dir, key);
+    if let Some(parent) = header_path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| BackendError::Io {
+            error: e,
+            context: format!("Failed to create directory {}", parent.display()),
+        })?;
+    }
+    let header_text = assemble_header(
+        key,
+        semantic_state,
+        module,
+        registry,
+        ctx,
+        &module_deps,
+        &body.body,
+        &body.post_header,
+        &splices,
+    )?;
+    std::fs::write(&header_path, &header_text).map_err(|e| BackendError::Io {
         error: e,
         context: format!("Failed to write header to {}", header_path.display()),
     })?;
 
-    // Emit a matching .cpp if there are out-of-line definitions to produce:
-    // free functions with #[address], extern values, non-template member
-    // definitions hoisted out of the header, or a user-supplied
+    // Source file, if there are out-of-line definitions to produce:
+    // free functions with #[address], extern values, non-template
+    // member definitions hoisted out of the header, or a user-supplied
     // `prologue definition` / `epilogue definition` block.
-    let needs_cpp = !public_functions.is_empty()
-        || !sorted_externs.is_empty()
-        || !post_cpp.is_empty()
-        || !prologue_def.is_empty()
-        || !epilogue_def.is_empty();
+    let needs_cpp = !body.public_functions.is_empty()
+        || !body.sorted_externs.is_empty()
+        || !body.post_cpp.is_empty()
+        || !splices.prologue_def.is_empty()
+        || !splices.epilogue_def.is_empty();
     if needs_cpp {
         let cpp_path = module_to_emitted_path(out_dir, key, "src", "cpp");
         if let Some(parent) = cpp_path.parent() {
@@ -431,90 +629,8 @@ fn write_module(
                 context: format!("Failed to create directory {}", parent.display()),
             })?;
         }
-        let mut cpp = String::new();
-        writeln!(cpp, "// @generated by pyxis — do not edit")?;
-        writeln!(cpp)?;
-        let header_include = module_to_relative_include(key);
-        writeln!(cpp, "#include \"{header_include}\"")?;
-
-        // `prologue definition` text lands here, *before* the namespace -
-        // analogous to how `prologue` lands before the namespace in the
-        // header. Lets the user pull in source-private `#include`s
-        // (e.g. `<windows.h>`, `<d3d10.h>`) without leaking them into
-        // every .hpp consumer.
-        if !prologue_def.is_empty() {
-            writeln!(cpp)?;
-            for line in prologue_def.lines() {
-                if line.is_empty() {
-                    writeln!(cpp)?;
-                } else {
-                    writeln!(cpp, "{line}")?;
-                }
-            }
-        }
-
-        writeln!(cpp)?;
-        open_namespace(&mut cpp, key)?;
-        let mut wrote_def = false;
-
-        // Collect free-function and extern-value definitions into a
-        // buffer so we can trim any trailing blank line before the
-        // explicit section separator.
-        let mut free_def_buf = String::new();
-        for func in &public_functions {
-            if let Some(text) = render::render_free_function_definition(func, ctx)? {
-                free_def_buf.push_str(&text);
-                free_def_buf.push('\n');
-            }
-        }
-        for ev in &sorted_externs {
-            let text = render::render_extern_value_definition(ev, ctx)?;
-            free_def_buf.push_str(&text);
-        }
-        let free_def_trimmed = free_def_buf.trim_end_matches('\n');
-        if !free_def_trimmed.is_empty() {
-            for line in free_def_trimmed.lines() {
-                if line.is_empty() {
-                    writeln!(cpp)?;
-                } else {
-                    writeln!(cpp, "    {line}")?;
-                }
-            }
-            wrote_def = true;
-        }
-        // Each emitted block ends with a trailing blank line (per-method
-        // separator). Trim those off before joining sections so we don't
-        // stack blanks into double-blanks at the section boundary.
-        let post_cpp_trimmed = post_cpp.trim_end_matches('\n');
-        if !post_cpp_trimmed.is_empty() {
-            if wrote_def {
-                writeln!(cpp)?;
-            }
-            for line in post_cpp_trimmed.lines() {
-                if line.is_empty() {
-                    writeln!(cpp)?;
-                } else {
-                    writeln!(cpp, "    {line}")?;
-                }
-            }
-            wrote_def = true;
-        }
-        let epilogue_def_trimmed = epilogue_def.trim_end_matches('\n');
-        if !epilogue_def_trimmed.is_empty() {
-            if wrote_def {
-                writeln!(cpp)?;
-            }
-            for line in epilogue_def_trimmed.lines() {
-                if line.is_empty() {
-                    writeln!(cpp)?;
-                } else {
-                    writeln!(cpp, "    {line}")?;
-                }
-            }
-        }
-        let _ = wrote_def;
-        close_namespace(&mut cpp, key)?;
-        std::fs::write(&cpp_path, &cpp).map_err(|e| BackendError::Io {
+        let cpp_text = assemble_source(key, ctx, &body, &splices)?;
+        std::fs::write(&cpp_path, &cpp_text).map_err(|e| BackendError::Io {
             error: e,
             context: format!("Failed to write source to {}", cpp_path.display()),
         })?;
