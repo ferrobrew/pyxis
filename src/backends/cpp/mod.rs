@@ -424,7 +424,7 @@ fn write_module(
         || !prologue_def.is_empty()
         || !epilogue_def.is_empty();
     if needs_cpp {
-        let cpp_path = module_to_source_path(out_dir, key);
+        let cpp_path = module_to_emitted_path(out_dir, key, "src", "cpp");
         if let Some(parent) = cpp_path.parent() {
             std::fs::create_dir_all(parent).map_err(|e| BackendError::Io {
                 error: e,
@@ -523,12 +523,21 @@ fn write_module(
     Ok(())
 }
 
-fn module_to_source_path(out_dir: &Path, module_path: &ItemPath) -> PathBuf {
-    let mut p = out_dir.join("src");
+/// Map a module path to its emitted file location. `base_dir_name` picks
+/// the subtree (`"include"` for headers, `"src"` for sources) and `ext`
+/// is the extension (`"hpp"` or `"cpp"`); intermediate segments become
+/// directories, and the trailing segment becomes the filename.
+fn module_to_emitted_path(
+    out_dir: &Path,
+    module_path: &ItemPath,
+    base_dir_name: &str,
+    ext: &str,
+) -> PathBuf {
+    let mut p = out_dir.join(base_dir_name);
     let segs: Vec<_> = module_path.iter().collect();
     for (i, seg) in segs.iter().enumerate() {
         if i + 1 == segs.len() {
-            p.push(format!("{}.cpp", seg.as_str()));
+            p.push(format!("{}.{ext}", seg.as_str()));
         } else {
             p.push(seg.as_str());
         }
@@ -606,16 +615,7 @@ pub fn write_cmake(out_dir: &Path, project: &Project) -> Result<()> {
 }
 
 fn module_to_header_path(out_dir: &Path, module_path: &ItemPath) -> PathBuf {
-    let mut p = out_dir.join("include");
-    let segs: Vec<_> = module_path.iter().collect();
-    for (i, seg) in segs.iter().enumerate() {
-        if i + 1 == segs.len() {
-            p.push(format!("{}.hpp", seg.as_str()));
-        } else {
-            p.push(seg.as_str());
-        }
-    }
-    p
+    module_to_emitted_path(out_dir, module_path, "include", "hpp")
 }
 
 fn module_to_relative_include(module_path: &ItemPath) -> String {
