@@ -857,9 +857,7 @@ impl SemanticError {
                 expected,
                 ..
             } => {
-                format!(
-                    "Attribute `{attribute_name}` must be written as {expected}"
-                )
+                format!("Attribute `{attribute_name}` must be written as {expected}")
             }
             SemanticError::EnumUnsupportedValue {
                 item_path,

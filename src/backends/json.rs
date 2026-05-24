@@ -658,7 +658,10 @@ fn convert_vftable(vftable: &TypeVftable) -> JsonTypeVftable {
     }
 }
 
-fn convert_type_definition(td: &TypeDefinition, type_registry: &TypeRegistry) -> JsonTypeDefinition {
+fn convert_type_definition(
+    td: &TypeDefinition,
+    type_registry: &TypeRegistry,
+) -> JsonTypeDefinition {
     // Calculate field offsets
     let mut current_offset = 0;
     let fields = td
@@ -826,11 +829,8 @@ fn build_module_hierarchy(semantic_state: &ResolvedSemanticState) -> BTreeMap<St
             .iter()
             .map(convert_extern_value)
             .collect();
-        let functions: Vec<JsonFunction> = module
-            .functions()
-            .iter()
-            .map(convert_function)
-            .collect();
+        let functions: Vec<JsonFunction> =
+            module.functions().iter().map(convert_function).collect();
 
         // Convert backends. Map the typed `crate::Backend` key back to its
         // canonical lower-case string for JSON output.
