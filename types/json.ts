@@ -81,6 +81,12 @@ export type JsonCallingConvention = "c" | "cdecl" | "stdcall" | "fastcall" | "th
  */
 export type JsonDocumentation = { 
 /**
+ * Schema version. See [`CURRENT_SCHEMA_VERSION`]. Older documents
+ * (pre-v2) omit this field; consumers should treat a missing value
+ * as v1.
+ */
+schema_version?: number; 
+/**
  * Pointer size for the target platform
  */
 pointer_size: number; 

@@ -18,11 +18,26 @@ use crate::semantic::{
 };
 
 // If changing the structure, ensure you rerun `cargo run -- gen-types` to
-// update the TypeScript definitions.
+// update the TypeScript definitions. When making a breaking change to the
+// shape, bump `CURRENT_SCHEMA_VERSION` so downstream consumers can detect
+// the new format.
+
+/// Current JSON schema version. Bump on any breaking shape change.
+///
+/// History:
+/// - v1: original flat splice shape (`backend.prologue: string | null`).
+/// - v2: structured splice (`backend.prologue: { header, definition } | null`);
+///   added `schema_version` field so consumers can detect the format.
+pub const CURRENT_SCHEMA_VERSION: u32 = 2;
 
 /// Top-level JSON documentation structure
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 pub struct JsonDocumentation {
+    /// Schema version. See [`CURRENT_SCHEMA_VERSION`]. Older documents
+    /// (pre-v2) omit this field; consumers should treat a missing value
+    /// as v1.
+    #[serde(default = "default_schema_version_v1")]
+    pub schema_version: u32,
     /// Pointer size for the target platform
     pub pointer_size: usize,
     /// Project name
@@ -33,6 +48,10 @@ pub struct JsonDocumentation {
     pub modules: BTreeMap<String, JsonModule>,
     /// Source file paths indexed by file ID (index 0 and 1 are reserved for internal/test)
     pub source_paths: Vec<String>,
+}
+
+fn default_schema_version_v1() -> u32 {
+    1
 }
 
 /// A module containing items and potentially submodules
@@ -465,6 +484,7 @@ pub fn build(
 
     // Create the top-level documentation structure
     let documentation = JsonDocumentation {
+        schema_version: CURRENT_SCHEMA_VERSION,
         pointer_size: type_registry.pointer_size(),
         project_name: project_name.to_string(),
         items,

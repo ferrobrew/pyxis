@@ -1,4 +1,5 @@
 {
+  "schema_version": 2,
   "pointer_size": 8,
   "project_name": "test-project",
   "items": {
