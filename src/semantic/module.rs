@@ -18,8 +18,8 @@ pub struct Module {
     pub(crate) definition_paths: BTreeSet<ItemPath>,
     pub(crate) extern_values: Vec<ExternValue>,
     pub(crate) functions: Vec<Function>,
-    pub(crate) impls: BTreeMap<ItemPath, grammar::FunctionBlock>,
-    pub(crate) backends: BTreeMap<String, Vec<Backend>>,
+    pub(crate) impls: BTreeMap<ItemPath, Vec<grammar::FunctionBlock>>,
+    pub(crate) backends: BTreeMap<crate::Backend, Vec<Backend>>,
     pub(crate) doc: Vec<String>,
 }
 
@@ -46,21 +46,38 @@ impl Module {
         impls: &[grammar::FunctionBlock],
         grammar_backends: &[grammar::Backend],
     ) -> Result<Self> {
-        let impls = impls
-            .iter()
-            .map(|f| (path.join(f.name.as_str().into()), f.clone()))
-            .collect();
-
-        let mut backends: BTreeMap<String, Vec<Backend>> = BTreeMap::new();
-        for backend in grammar_backends {
-            backends
-                .entry(backend.name.0.clone())
+        let mut impls_map: BTreeMap<ItemPath, Vec<grammar::FunctionBlock>> = BTreeMap::new();
+        for fb in impls {
+            impls_map
+                .entry(path.join(fb.name.as_str().into()))
                 .or_default()
-                .push(Backend {
-                    prologue: backend.prologue.clone(),
-                    epilogue: backend.epilogue.clone(),
-                    location: backend.location,
-                });
+                .push(fb.clone());
+        }
+        let impls = impls_map;
+
+        let mut backends: BTreeMap<crate::Backend, Vec<Backend>> = BTreeMap::new();
+        for backend in grammar_backends {
+            // Flatten each `use` tree on the backend block into absolute
+            // item paths for the semantic representation. Validation
+            // (existence + visibility) happens later during semantic
+            // checking, alongside module-level use validation.
+            let uses: Vec<ItemPath> = backend
+                .uses
+                .iter()
+                .flat_map(|tree| tree.flatten())
+                .collect();
+            backends.entry(backend.name).or_default().push(Backend {
+                prologue: crate::semantic::types::BackendSplice {
+                    header: backend.prologue.header.clone(),
+                    definition: backend.prologue.definition.clone(),
+                },
+                epilogue: crate::semantic::types::BackendSplice {
+                    header: backend.epilogue.header.clone(),
+                    definition: backend.epilogue.definition.clone(),
+                },
+                uses,
+                location: backend.location,
+            });
         }
 
         let doc = ast.doc_comments.clone();
@@ -139,6 +156,7 @@ impl Module {
                 &scope,
                 false, // is_vfunc
                 function,
+                &[],
             )? {
                 function::FunctionBuildOutcome::Built(f) => *f,
                 function::FunctionBuildOutcome::Deferred => {

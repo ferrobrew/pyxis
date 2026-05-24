@@ -1,9 +1,12 @@
 pub mod atomics;
 pub mod bitflags;
 pub mod braced_imports;
+pub mod cfg;
+pub mod definition_body;
 pub mod diamond_inheritance;
 pub mod doc_comments;
 pub mod enums;
+pub mod external_body;
 pub mod freestanding_functions;
 pub mod generics;
 pub mod generics_cross_module;

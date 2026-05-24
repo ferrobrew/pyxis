@@ -1,0 +1,54 @@
+// Tests `#[cfg(...)]` predicates: function-level, impl-block-level, and
+// type-level. Predicates are evaluated by each backend at emission time
+// against its own context. The codegen-test corpus emits with all three
+// backends (rust, json, cpp), so a method gated to `backend = "cpp"`
+// shows up in the cpp output but not in rust or json.
+#[align(4)]
+pub type Probe {
+    pub value: u32,
+}
+impl Probe {
+    // No cfg - emitted everywhere.
+    #[external_body]
+    pub fn read(&self) -> u32;
+    // Only cpp.
+    #[external_body, cfg(backend = "cpp")]
+    pub fn cpp_only(&self) -> u32;
+    // Only rust.
+    #[external_body, cfg(backend = "rust")]
+    pub fn rust_only(&self) -> u32;
+    // any(): emit on cpp OR json.
+    #[external_body, cfg(any(backend = "cpp", backend = "json"))]
+    pub fn cpp_or_json(&self) -> u32;
+    // not(): emit on every backend except rust.
+    #[external_body, cfg(not(backend = "rust"))]
+    pub fn not_rust(&self) -> u32;
+}
+
+// Block-level cfg: every method in this impl is rust-only.
+#[cfg(backend = "rust")]
+impl Probe {
+    #[external_body]
+    pub fn rust_block_method(&self) -> u32;
+}
+
+// Type-level cfg: this whole struct only exists on cpp.
+#[cfg(backend = "cpp"), align(4)]
+pub type CppOnlyType {
+    pub flag: u32,
+}
+
+backend rust epilogue r#"
+    impl Probe {
+        pub fn read(&self) -> u32 { self.value }
+        pub fn rust_only(&self) -> u32 { self.value + 1 }
+        pub fn rust_block_method(&self) -> u32 { self.value + 100 }
+    }
+"#;
+
+backend cpp epilogue r#"
+inline ::std::uint32_t Probe::read() const { return value; }
+inline ::std::uint32_t Probe::cpp_only() const { return value + 2; }
+inline ::std::uint32_t Probe::cpp_or_json() const { return value + 3; }
+inline ::std::uint32_t Probe::not_rust() const { return value + 4; }
+"#;

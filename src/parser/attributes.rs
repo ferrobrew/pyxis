@@ -81,6 +81,13 @@ pub enum Attribute {
         items: AttributeItems,
         location: ItemLocation,
     },
+    /// `#[cfg(...)]` predicate. Parsed into a structured AST since the
+    /// nested `any(...)` / `all(...)` / `not(...)` forms can't be
+    /// represented by `AttributeItems`.
+    Cfg {
+        predicate: crate::parser::cfg::CfgPredicate,
+        location: ItemLocation,
+    },
 }
 #[cfg(test)]
 impl Attribute {
@@ -119,6 +126,37 @@ impl Attribute {
     pub fn packed() -> Self {
         Attribute::Ident {
             ident: "packed".into(),
+            location: ItemLocation::test(),
+        }
+    }
+    pub fn external_body() -> Self {
+        Attribute::Ident {
+            ident: "external_body".into(),
+            location: ItemLocation::test(),
+        }
+    }
+    /// The (intentionally wrong) `#[external_body(...)]` function form,
+    /// used by semantic tests that exercise `AttributeWrongForm`.
+    pub fn external_body_function_form() -> Self {
+        Attribute::Function {
+            name: "external_body".into(),
+            items: AttributeItems(vec![]),
+            location: ItemLocation::test(),
+        }
+    }
+    /// The (intentionally wrong) `#[external_body = ...]` assign form,
+    /// used by semantic tests that exercise `AttributeWrongForm`.
+    pub fn external_body_assign_form() -> Self {
+        Attribute::Assign {
+            name: "external_body".into(),
+            items: AttributeItems(vec![AttributeItem::Expr {
+                expr: Expr::IntLiteral {
+                    value: 0,
+                    format: IntFormat::Decimal,
+                    location: ItemLocation::test(),
+                },
+                location: ItemLocation::test(),
+            }]),
             location: ItemLocation::test(),
         }
     }
@@ -225,6 +263,34 @@ impl<'a> IntoIterator for &'a Attributes {
         self.0.iter()
     }
 }
+impl Attributes {
+    /// Find the first `#[cfg(...)]` attribute and return its predicate, or
+    /// `None` if no cfg attribute is present. If multiple cfgs are stacked
+    /// they're conjoined into a single `all(...)` predicate.
+    pub fn cfg(&self) -> Option<crate::parser::cfg::CfgPredicate> {
+        use crate::parser::cfg::CfgPredicate;
+        let mut found: Vec<CfgPredicate> = Vec::new();
+        let mut location = None;
+        for attr in &self.0 {
+            if let Attribute::Cfg {
+                predicate,
+                location: loc,
+            } = attr
+            {
+                found.push(predicate.clone());
+                location = Some(*loc);
+            }
+        }
+        match found.len() {
+            0 => None,
+            1 => Some(found.into_iter().next().unwrap()),
+            _ => Some(CfgPredicate::All {
+                predicates: found,
+                location: location.unwrap(),
+            }),
+        }
+    }
+}
 impl Deref for Attributes {
     type Target = Vec<Attribute>;
     fn deref(&self) -> &Self::Target {
@@ -282,9 +348,129 @@ impl Parser {
         Ok(Attributes(attrs))
     }
 
+    /// Accept a name in cfg-attribute context: either a regular identifier
+    /// or one of the keyword tokens that can plausibly appear as a cfg key
+    /// (currently just `backend`, since it's the only hard-keyword we
+    /// expect to use as a cfg key). Future keys like `pointer_size` /
+    /// `feature` aren't keywords, so they fall through to `Ident`.
+    fn parse_cfg_name(&mut self) -> Result<(String, crate::span::Span), ParseError> {
+        let token = self.current().clone();
+        match &token.kind {
+            TokenKind::Ident(s) => {
+                let s = s.clone();
+                self.advance();
+                Ok((s, token.location.span))
+            }
+            TokenKind::Backend => {
+                self.advance();
+                Ok(("backend".to_string(), token.location.span))
+            }
+            _ => Err(ParseError::ExpectedIdentifier {
+                found: token.kind,
+                location: token.location,
+            }),
+        }
+    }
+
+    /// Parse a single cfg predicate (atom or `any/all/not`). Caller is
+    /// responsible for the surrounding parentheses on the top-level
+    /// `cfg(...)` attribute; this function handles its own parens for
+    /// nested combinators.
+    pub(crate) fn parse_cfg_predicate(
+        &mut self,
+    ) -> Result<crate::parser::cfg::CfgPredicate, ParseError> {
+        use crate::parser::cfg::{CfgAtom, CfgPredicate};
+
+        let (name, name_span) = self.parse_cfg_name()?;
+        let start_pos = name_span.start;
+
+        // `any(...)`, `all(...)`, `not(...)` are combinators recognised by
+        // their bare names. A bare ident OR a `name = "value"` falls
+        // through to the atom branch.
+        if matches!(self.peek(), TokenKind::LParen)
+            && matches!(name.as_str(), "any" | "all" | "not")
+        {
+            self.advance(); // consume (
+            let mut children = Vec::new();
+            while !matches!(self.peek(), TokenKind::RParen) {
+                children.push(self.parse_cfg_predicate()?);
+                if matches!(self.peek(), TokenKind::Comma) {
+                    self.advance();
+                } else if !matches!(self.peek(), TokenKind::RParen) {
+                    return Err(ParseError::ExpectedToken {
+                        expected: vec![TokenKind::RParen, TokenKind::Comma],
+                        found: self.peek().clone(),
+                        location: self.current().location,
+                    });
+                }
+            }
+            let end_token = self.expect(TokenKind::RParen)?;
+            let location =
+                self.item_location_from_locations(start_pos, end_token.location.span.end);
+            return Ok(match name.as_str() {
+                "any" => CfgPredicate::Any {
+                    predicates: children,
+                    location,
+                },
+                "all" => CfgPredicate::All {
+                    predicates: children,
+                    location,
+                },
+                "not" => {
+                    if children.len() != 1 {
+                        return Err(ParseError::ExpectedToken {
+                            expected: vec![TokenKind::RParen],
+                            found: self.peek().clone(),
+                            location,
+                        });
+                    }
+                    CfgPredicate::Not {
+                        predicate: Box::new(children.into_iter().next().unwrap()),
+                        location,
+                    }
+                }
+                _ => unreachable!(),
+            });
+        }
+
+        // Atom: `name` or `name = "value"`.
+        let atom = if matches!(self.peek(), TokenKind::Eq) {
+            self.advance(); // consume =
+            let (value, value_loc) = self.parse_string_literal()?;
+            let atom_location = self.item_location_from_locations(start_pos, value_loc.span.end);
+            CfgAtom::KeyValue {
+                key: name,
+                value,
+                location: atom_location,
+            }
+        } else {
+            let atom_location = self.item_location_from_locations(start_pos, name_span.end);
+            CfgAtom::Ident {
+                name,
+                location: atom_location,
+            }
+        };
+        let location = *atom.location();
+        Ok(CfgPredicate::Atom { atom, location })
+    }
+
     pub(crate) fn parse_attribute(&mut self) -> Result<Attribute, ParseError> {
         let (name, name_span) = self.expect_ident()?;
         let start_pos = name_span.start;
+
+        // `#[cfg(...)]` is special-cased because its argument grammar is a
+        // nested predicate (any/all/not), not a flat list of expressions.
+        if name.as_str() == "cfg" && matches!(self.peek(), TokenKind::LParen) {
+            self.advance(); // consume (
+            let predicate = self.parse_cfg_predicate()?;
+            let end_token = self.expect(TokenKind::RParen)?;
+            let location =
+                self.item_location_from_locations(start_pos, end_token.location.span.end);
+            return Ok(Attribute::Cfg {
+                predicate,
+                location,
+            });
+        }
 
         if matches!(self.peek(), TokenKind::LParen) {
             // Function attribute
@@ -724,5 +910,128 @@ pub type AnarkGui {
             })
             .strip_locations()
         );
+    }
+
+    mod cfg_attribute {
+        use crate::parser::Parser;
+        use crate::parser::attributes::Attribute;
+        use crate::parser::cfg::{CfgAtom, CfgPredicate};
+        use crate::span::FileId;
+        use crate::span::StripLocations;
+        use crate::tokenizer::tokenize_with_file_id;
+
+        fn parse_cfg(text: &str) -> CfgPredicate {
+            let tokens = tokenize_with_file_id(text.to_string(), FileId::TEST).unwrap();
+            let mut parser = Parser::new(tokens, FileId::TEST, text.to_string());
+            let attrs = parser.parse_attributes().unwrap();
+            for attr in attrs.0 {
+                if let Attribute::Cfg { predicate, .. } = attr {
+                    return predicate.strip_locations();
+                }
+            }
+            panic!("expected a cfg attribute");
+        }
+
+        fn ident(name: &str) -> CfgAtom {
+            CfgAtom::Ident {
+                name: name.into(),
+                location: crate::span::ItemLocation::test(),
+            }
+        }
+        fn kv(k: &str, v: &str) -> CfgAtom {
+            CfgAtom::KeyValue {
+                key: k.into(),
+                value: v.into(),
+                location: crate::span::ItemLocation::test(),
+            }
+        }
+        fn atom(a: CfgAtom) -> CfgPredicate {
+            CfgPredicate::Atom {
+                atom: a,
+                location: crate::span::ItemLocation::test(),
+            }
+        }
+
+        #[test]
+        fn parses_bare_ident() {
+            assert_eq!(parse_cfg("#[cfg(test)]"), atom(ident("test")));
+        }
+
+        #[test]
+        fn parses_key_value() {
+            assert_eq!(
+                parse_cfg(r#"#[cfg(backend = "cpp")]"#),
+                atom(kv("backend", "cpp"))
+            );
+        }
+
+        #[test]
+        fn parses_any() {
+            let p = parse_cfg(r#"#[cfg(any(backend = "cpp", backend = "json"))]"#);
+            assert_eq!(
+                p,
+                CfgPredicate::Any {
+                    predicates: vec![atom(kv("backend", "cpp")), atom(kv("backend", "json"))],
+                    location: crate::span::ItemLocation::test(),
+                }
+            );
+        }
+
+        #[test]
+        fn parses_not() {
+            assert_eq!(
+                parse_cfg(r#"#[cfg(not(backend = "rust"))]"#),
+                CfgPredicate::Not {
+                    predicate: Box::new(atom(kv("backend", "rust"))),
+                    location: crate::span::ItemLocation::test(),
+                }
+            );
+        }
+
+        #[test]
+        fn parses_nested() {
+            // any(all(backend = "cpp", not(test)), backend = "rust")
+            let p = parse_cfg(r#"#[cfg(any(all(backend = "cpp", not(test)), backend = "rust"))]"#);
+            let inner_any = CfgPredicate::All {
+                predicates: vec![
+                    atom(kv("backend", "cpp")),
+                    CfgPredicate::Not {
+                        predicate: Box::new(atom(ident("test"))),
+                        location: crate::span::ItemLocation::test(),
+                    },
+                ],
+                location: crate::span::ItemLocation::test(),
+            };
+            assert_eq!(
+                p,
+                CfgPredicate::Any {
+                    predicates: vec![inner_any, atom(kv("backend", "rust"))],
+                    location: crate::span::ItemLocation::test(),
+                }
+            );
+        }
+
+        #[test]
+        fn stacked_cfgs_collapse_to_all() {
+            let text = r#"#[cfg(backend = "cpp")]
+            #[cfg(not(test))]"#;
+            let tokens = tokenize_with_file_id(text.to_string(), FileId::TEST).unwrap();
+            let mut parser = Parser::new(tokens, FileId::TEST, text.to_string());
+            let attrs = parser.parse_attributes().unwrap();
+            let cfg = attrs.cfg().unwrap().strip_locations();
+            assert_eq!(
+                cfg,
+                CfgPredicate::All {
+                    predicates: vec![
+                        atom(kv("backend", "cpp")),
+                        CfgPredicate::Not {
+                            predicate: Box::new(atom(ident("test"))),
+                            location: crate::span::ItemLocation::test(),
+                        },
+                    ],
+                    location: crate::span::ItemLocation::test(),
+                }
+            );
+        }
     }
 }

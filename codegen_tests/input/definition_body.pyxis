@@ -1,0 +1,44 @@
+// Tests `epilogue definition` and `prologue definition` - splice slots
+// that route to the C++ source file rather than the header. These
+// modifiers are rejected for non-cpp backends at semantic-validation
+// time (see semantic/tests/backends.rs), so this file's rust backend
+// uses plain `epilogue` while the cpp backend exercises the
+// `definition` flavour.
+//
+// `external_body.pyxis` covers the header-side `epilogue` shape; this
+// file is the cpp-source-side counterpart.
+//
+// `<cstdio>` is only needed by the .cpp method bodies below. Routing
+// it through `prologue definition` keeps the include out of the
+// public header.
+backend cpp prologue definition r#"
+    #include <cstdio>
+"#;
+
+#[align(4)]
+pub type Logger {
+    pub seen: u32,
+}
+impl Logger {
+    #[external_body]
+    pub fn make() -> Logger;
+    #[external_body]
+    pub fn record(&mut self) -> u32;
+}
+
+backend rust epilogue r#"
+    impl Logger {
+        pub fn make() -> Logger { Logger { seen: 0 } }
+        pub fn record(&mut self) -> u32 { self.seen += 1; self.seen }
+    }
+"#;
+
+backend cpp epilogue definition r#"
+Logger Logger::make() { return Logger{0}; }
+
+::std::uint32_t Logger::record() {
+    seen += 1;
+    std::printf("Logger seen=%u\n", seen);
+    return seen;
+}
+"#;

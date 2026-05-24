@@ -113,7 +113,7 @@ fn can_carry_backend_across() {
     let module = state.modules().get(&test_path).unwrap();
 
     assert_eq!(
-        module.backends.get("rust").unwrap(),
+        module.backends.get(&crate::Backend::Rust).unwrap(),
         &[
             SB::new(prologue.to_string(), epilogue.to_string()),
             SB::new(None, epilogue.to_string()),

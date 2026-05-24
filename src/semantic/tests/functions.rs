@@ -104,3 +104,40 @@ fn freestanding_function_with_args_but_no_address_fails() {
         },
     );
 }
+
+#[test]
+fn external_body_function_form_is_rejected() {
+    // `#[external_body(...)]` is a typo for the bare ident
+    // `#[external_body]`; the function-style form should hard-error
+    // rather than silently fall through as an unknown attribute.
+    let ast = M::new().with_functions([F::new((V::Public, "make"), [])
+        .with_return_type(T::ident("i32"))
+        .with_attributes([A::external_body_function_form()])]);
+
+    assert_ast_produces_exact_error(
+        ast,
+        SemanticError::AttributeWrongForm {
+            attribute_name: crate::semantic::error::AttributeName::ExternalBody,
+            expected: "the bare ident `#[external_body]` (no arguments)".into(),
+            location: ItemLocation::test(),
+        },
+    );
+}
+
+#[test]
+fn external_body_assign_form_is_rejected() {
+    // `#[external_body = ...]` is also wrong — only the bare ident
+    // form is accepted.
+    let ast = M::new().with_functions([F::new((V::Public, "make"), [])
+        .with_return_type(T::ident("i32"))
+        .with_attributes([A::external_body_assign_form()])]);
+
+    assert_ast_produces_exact_error(
+        ast,
+        SemanticError::AttributeWrongForm {
+            attribute_name: crate::semantic::error::AttributeName::ExternalBody,
+            expected: "the bare ident `#[external_body]` (no value)".into(),
+            location: ItemLocation::test(),
+        },
+    );
+}

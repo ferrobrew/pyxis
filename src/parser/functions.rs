@@ -106,6 +106,14 @@ pub enum ImplItem {
 #[derive(Debug, Clone, PartialEq, Eq, HasLocation)]
 pub struct FunctionBlock {
     pub name: Ident,
+    /// Type parameters declared on the `impl` block (e.g. `T, Y` in
+    /// `impl<T, Y> Foo<T> { ... }`). Empty for non-generic impls.
+    pub type_parameters: Vec<crate::parser::types::TypeParameter>,
+    /// Type arguments applied to the type name (the `<T>` in `Foo<T>`).
+    /// Tracked separately from `type_parameters` because not every impl
+    /// param appears after the type name (e.g. method-level extras like
+    /// `Y` in `impl<T, Y> Foo<T>`).
+    pub type_arguments: Vec<crate::parser::types::TypeParameter>,
     pub items: Vec<ImplItem>,
     pub attributes: Attributes,
     pub location: ItemLocation,
@@ -115,6 +123,8 @@ impl StripLocations for FunctionBlock {
     fn strip_locations(&self) -> Self {
         FunctionBlock {
             name: self.name.strip_locations(),
+            type_parameters: self.type_parameters.strip_locations(),
+            type_arguments: self.type_arguments.strip_locations(),
             items: self
                 .items
                 .iter()
@@ -133,6 +143,8 @@ impl FunctionBlock {
     pub fn new(name: impl Into<Ident>, functions: impl IntoIterator<Item = Function>) -> Self {
         Self {
             name: name.into(),
+            type_parameters: vec![],
+            type_arguments: vec![],
             items: functions.into_iter().map(ImplItem::Function).collect(),
             attributes: Default::default(),
             location: ItemLocation::test(),
@@ -140,6 +152,13 @@ impl FunctionBlock {
     }
     pub fn with_attributes(mut self, attributes: impl Into<Attributes>) -> Self {
         self.attributes = attributes.into();
+        self
+    }
+    pub fn with_type_parameters(
+        mut self,
+        type_parameters: impl IntoIterator<Item = crate::parser::types::TypeParameter>,
+    ) -> Self {
+        self.type_parameters = type_parameters.into_iter().collect();
         self
     }
 }
@@ -162,7 +181,17 @@ impl Parser {
         };
 
         self.expect(TokenKind::Impl)?;
+        // `impl<T1, T2> Foo<T1, T2> { ... }` — the parameter list goes on
+        // the `impl` keyword. The optional `<...>` after the type name is
+        // accepted but its contents are ignored (they should always match
+        // the `impl<...>` parameters).
+        let type_parameters = self.parse_type_parameters()?;
         let (name, _) = self.expect_ident()?;
+        let type_arguments = if matches!(self.peek(), TokenKind::Lt) {
+            self.parse_type_parameters()?
+        } else {
+            vec![]
+        };
         self.expect(TokenKind::LBrace)?;
 
         let mut items = Vec::new();
@@ -190,6 +219,8 @@ impl Parser {
         let location = self.item_location_from_locations(start_pos, last_token.end_location());
         Ok(FunctionBlock {
             name,
+            type_parameters,
+            type_arguments,
             items,
             attributes,
             location,

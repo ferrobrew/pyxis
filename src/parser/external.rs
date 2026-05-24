@@ -19,30 +19,70 @@ use super::{
 #[cfg(test)]
 use super::attributes::Attribute;
 
+/// A `prologue`/`epilogue` slot on a backend block. The plain form
+/// (`prologue r#"..."#;`) targets the header (or whatever the backend
+/// considers its primary output); the `definition` modifier
+/// (`prologue definition r#"..."#;`) targets the source file - currently
+/// only meaningful for `backend cpp` where header / source are distinct.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(test, derive(StripLocations))]
+pub struct BackendSplice {
+    pub header: Option<String>,
+    pub header_format: StringFormat,
+    pub definition: Option<String>,
+    pub definition_format: StringFormat,
+}
+impl Default for BackendSplice {
+    fn default() -> Self {
+        Self {
+            header: None,
+            header_format: StringFormat::Regular,
+            definition: None,
+            definition_format: StringFormat::Regular,
+        }
+    }
+}
+impl BackendSplice {
+    pub fn is_empty(&self) -> bool {
+        self.header.is_none() && self.definition.is_none()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, HasLocation)]
 #[cfg_attr(test, derive(StripLocations))]
 pub struct Backend {
-    pub name: Ident,
-    pub prologue: Option<String>,
-    pub prologue_format: StringFormat,
-    pub epilogue: Option<String>,
-    pub epilogue_format: StringFormat,
+    /// Typed backend identity. Validated at parse time - an unknown
+    /// backend name raises `ParseError::UnknownBackend` rather than
+    /// surviving as a string in the IR.
+    pub name: crate::Backend,
+    pub prologue: BackendSplice,
+    pub epilogue: BackendSplice,
+    /// Per-backend explicit working set: which other-module items this
+    /// backend block references. Drives cpp `#include` selection and
+    /// (in principle) any other backend that wants to know what its
+    /// epilogue/prologue depends on. `use`-style with the same syntax as
+    /// module-level imports - braced groups, nested groups, etc.
+    pub uses: Vec<UseTree>,
     pub location: ItemLocation,
 }
 #[cfg(test)]
 impl Backend {
+    /// Test helper: panics if the name isn't a valid backend. Tests
+    /// that want to exercise the unknown-backend error path should
+    /// construct a `ParseError::UnknownBackend` directly instead.
     pub fn new(name: &str) -> Self {
+        let name = crate::Backend::from_name(name)
+            .unwrap_or_else(|| panic!("test used unknown backend `{name}`"));
         Self {
-            name: name.into(),
-            prologue: None,
-            prologue_format: StringFormat::Regular,
-            epilogue: None,
-            epilogue_format: StringFormat::Regular,
+            name,
+            prologue: BackendSplice::default(),
+            epilogue: BackendSplice::default(),
+            uses: Vec::new(),
             location: ItemLocation::test(),
         }
     }
     pub fn with_prologue(mut self, prologue: impl Into<String>) -> Self {
-        self.prologue = Some(prologue.into());
+        self.prologue.header = Some(prologue.into());
         self
     }
     pub fn with_prologue_format(
@@ -50,12 +90,25 @@ impl Backend {
         prologue: impl Into<String>,
         format: StringFormat,
     ) -> Self {
-        self.prologue = Some(prologue.into());
-        self.prologue_format = format;
+        self.prologue.header = Some(prologue.into());
+        self.prologue.header_format = format;
+        self
+    }
+    pub fn with_prologue_definition(mut self, prologue: impl Into<String>) -> Self {
+        self.prologue.definition = Some(prologue.into());
+        self
+    }
+    pub fn with_prologue_definition_format(
+        mut self,
+        prologue: impl Into<String>,
+        format: StringFormat,
+    ) -> Self {
+        self.prologue.definition = Some(prologue.into());
+        self.prologue.definition_format = format;
         self
     }
     pub fn with_epilogue(mut self, epilogue: impl Into<String>) -> Self {
-        self.epilogue = Some(epilogue.into());
+        self.epilogue.header = Some(epilogue.into());
         self
     }
     pub fn with_epilogue_format(
@@ -63,8 +116,25 @@ impl Backend {
         epilogue: impl Into<String>,
         format: StringFormat,
     ) -> Self {
-        self.epilogue = Some(epilogue.into());
-        self.epilogue_format = format;
+        self.epilogue.header = Some(epilogue.into());
+        self.epilogue.header_format = format;
+        self
+    }
+    pub fn with_epilogue_definition(mut self, epilogue: impl Into<String>) -> Self {
+        self.epilogue.definition = Some(epilogue.into());
+        self
+    }
+    pub fn with_epilogue_definition_format(
+        mut self,
+        epilogue: impl Into<String>,
+        format: StringFormat,
+    ) -> Self {
+        self.epilogue.definition = Some(epilogue.into());
+        self.epilogue.definition_format = format;
+        self
+    }
+    pub fn with_uses(mut self, uses: impl IntoIterator<Item = UseTree>) -> Self {
+        self.uses = uses.into_iter().collect();
         self
     }
 }
@@ -378,49 +448,87 @@ impl Parser {
         })
     }
 
+    /// Parse the body of a single `prologue`/`epilogue` slot, after the
+    /// keyword has been consumed. Optionally accepts a `definition`
+    /// modifier (only meaningful for `backend cpp`; rejected at the
+    /// semantic layer for other backends). Then expects a string literal
+    /// and a trailing semicolon.
+    fn parse_backend_splice_slot(&mut self, slot: &mut BackendSplice) -> Result<(), ParseError> {
+        // Optional `definition` modifier.
+        let is_definition = matches!(
+            self.peek(),
+            TokenKind::Ident(s) if s == "definition"
+        );
+        if is_definition {
+            self.advance();
+        }
+        let expr = self.parse_expr()?;
+        let Expr::StringLiteral { value, format, .. } = expr else {
+            return Err(ParseError::ExpectedStringLiteral {
+                found: self.peek().clone(),
+                location: *expr.location(),
+            });
+        };
+        if is_definition {
+            slot.definition = Some(value);
+            slot.definition_format = format;
+        } else {
+            slot.header = Some(value);
+            slot.header_format = format;
+        }
+        self.expect(TokenKind::Semi)?;
+        Ok(())
+    }
+
+    /// Returns the most recently consumed token (typically a closing
+    /// `;` or `}`), used to compute span ranges.
+    fn last_token(&self) -> &crate::tokenizer::Token {
+        let idx = self.pos.saturating_sub(1);
+        &self.tokens[idx.min(self.tokens.len() - 1)]
+    }
+
     pub(crate) fn parse_backend(&mut self) -> Result<Backend, ParseError> {
         let first_token = self.expect(TokenKind::Backend)?;
-        let (name, _) = self.expect_ident()?;
+        let (name_ident, name_span) = self.expect_ident()?;
+        let name = match crate::Backend::from_name(name_ident.0.as_str()) {
+            Some(b) => b,
+            None => {
+                return Err(ParseError::UnknownBackend {
+                    found: name_ident.0,
+                    location: ItemLocation {
+                        file_id: first_token.location.file_id,
+                        span: name_span,
+                    },
+                });
+            }
+        };
 
-        let mut prologue = None;
-        let mut prologue_format = StringFormat::Regular;
-        let mut epilogue = None;
-        let mut epilogue_format = StringFormat::Regular;
+        let mut prologue = BackendSplice::default();
+        let mut epilogue = BackendSplice::default();
+        let mut uses: Vec<UseTree> = Vec::new();
 
         // Check if we have braces or direct prologue/epilogue
         let last_token = if matches!(self.peek(), TokenKind::LBrace) {
-            // Form: backend name { prologue ...; epilogue ...; }
+            // Form: backend name { use ...; prologue ...; epilogue ...; }
             self.advance(); // consume {
 
             while !matches!(self.peek(), TokenKind::RBrace) {
                 match self.peek() {
+                    TokenKind::Use => {
+                        // `use foo::bar;` or `use foo::{a, b};` - same
+                        // grammar as module-level use statements.
+                        self.advance();
+                        let tree = self.parse_use_tree()?;
+                        self.expect(TokenKind::Semi)?;
+                        uses.push(tree);
+                    }
                     TokenKind::Prologue => {
                         self.advance();
-                        let expr = self.parse_expr()?;
-                        if let Expr::StringLiteral { value, format, .. } = expr {
-                            prologue = Some(value);
-                            prologue_format = format;
-                        } else {
-                            return Err(ParseError::ExpectedStringLiteral {
-                                found: self.peek().clone(),
-                                location: *expr.location(),
-                            });
-                        }
-                        self.expect(TokenKind::Semi)?;
+                        self.parse_backend_splice_slot(&mut prologue)?;
                     }
                     TokenKind::Epilogue => {
                         self.advance();
-                        let expr = self.parse_expr()?;
-                        if let Expr::StringLiteral { value, format, .. } = expr {
-                            epilogue = Some(value);
-                            epilogue_format = format;
-                        } else {
-                            return Err(ParseError::ExpectedStringLiteral {
-                                found: self.peek().clone(),
-                                location: *expr.location(),
-                            });
-                        }
-                        self.expect(TokenKind::Semi)?;
+                        self.parse_backend_splice_slot(&mut epilogue)?;
                     }
                     _ => {
                         return Err(ParseError::ExpectedPrologueOrEpilogue {
@@ -433,35 +541,18 @@ impl Parser {
 
             self.expect(TokenKind::RBrace)?
         } else {
-            // Form: backend name prologue ... or backend name epilogue ...
+            // Form: `backend name prologue ...` or `backend name epilogue ...`
+            // (with optional `definition` modifier).
             match self.peek() {
                 TokenKind::Prologue => {
                     self.advance();
-                    let expr = self.parse_expr()?;
-                    if let Expr::StringLiteral { value, format, .. } = expr {
-                        prologue = Some(value);
-                        prologue_format = format;
-                    } else {
-                        return Err(ParseError::ExpectedStringLiteral {
-                            found: self.peek().clone(),
-                            location: *expr.location(),
-                        });
-                    }
-                    self.expect(TokenKind::Semi)?
+                    self.parse_backend_splice_slot(&mut prologue)?;
+                    self.last_token().clone()
                 }
                 TokenKind::Epilogue => {
                     self.advance();
-                    let expr = self.parse_expr()?;
-                    if let Expr::StringLiteral { value, format, .. } = expr {
-                        epilogue = Some(value);
-                        epilogue_format = format;
-                    } else {
-                        return Err(ParseError::ExpectedStringLiteral {
-                            found: self.peek().clone(),
-                            location: *expr.location(),
-                        });
-                    }
-                    self.expect(TokenKind::Semi)?
+                    self.parse_backend_splice_slot(&mut epilogue)?;
+                    self.last_token().clone()
                 }
                 _ => {
                     return Err(ParseError::ExpectedBackendContent {
@@ -476,9 +567,8 @@ impl Parser {
         Ok(Backend {
             name,
             prologue,
-            prologue_format,
             epilogue,
-            epilogue_format,
+            uses,
             location,
         })
     }
@@ -812,6 +902,127 @@ backend rust epilogue r#"
 "#,
                 StringFormat::Raw,
             ),
+        ]);
+
+        assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
+    }
+
+    #[cfg(feature = "cpp")]
+    #[test]
+    fn can_parse_backend_with_uses() {
+        let text = r##"
+backend cpp {
+    use types::math::Matrix4;
+    use types::shared_ptr::{SharedPtr, WeakPtr};
+
+    epilogue r#"
+        inline auto test() { return 1; }
+    "#;
+}
+"##;
+
+        let ast = M::new().with_backends([B::new("cpp")
+            .with_uses([
+                UT::path("types::math::Matrix4"),
+                UT::group(
+                    "types::shared_ptr",
+                    [UT::path("SharedPtr"), UT::path("WeakPtr")],
+                ),
+            ])
+            .with_epilogue_format(
+                r#"
+        inline auto test() { return 1; }
+    "#,
+                StringFormat::Raw,
+            )]);
+
+        assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
+    }
+
+    #[test]
+    fn unknown_backend_name_is_a_parse_error() {
+        // `backend foobar { ... }` should be rejected at parse time
+        // before any semantic analysis runs - typos shouldn't escape
+        // into the IR.
+        let text = r##"backend foobar prologue r#""#;"##;
+        let err = parse_str_for_tests(text).unwrap_err();
+        match err {
+            ParseError::UnknownBackend { found, .. } => {
+                assert_eq!(found, "foobar");
+            }
+            other => panic!("expected UnknownBackend, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn known_backend_names_parse() {
+        // Every enabled backend name should round-trip cleanly through
+        // the parser. `cpp` and `json` are feature-gated, so only assert
+        // on them when their feature is on.
+        let mut names: Vec<&'static str> = vec!["rust"];
+        #[cfg(feature = "cpp")]
+        names.push("cpp");
+        #[cfg(feature = "json")]
+        names.push("json");
+        for name in names {
+            let text = format!(r##"backend {name} prologue r#""#;"##);
+            let module = parse_str_for_tests(&text).unwrap();
+            let backends: Vec<_> = module.backends().collect();
+            assert_eq!(backends.len(), 1);
+            assert_eq!(backends[0].name.name(), name);
+        }
+    }
+
+    #[cfg(feature = "cpp")]
+    #[test]
+    fn can_parse_backend_with_definition_modifier() {
+        // The `definition` modifier on an epilogue/prologue lands in the
+        // .cpp source file rather than the .hpp header. Both shorthand
+        // and block forms should accept it.
+        let text = r##"
+backend cpp epilogue definition r#"
+    bool Probe::read() const { return value; }
+"#;
+
+backend cpp {
+    prologue definition r#"
+        #include <windows.h>
+    "#;
+    epilogue r#"
+        bool header_only_helper();
+    "#;
+    epilogue definition r#"
+        bool source_only_helper() { return true; }
+    "#;
+}
+"##;
+
+        let ast = M::new().with_backends([
+            B::new("cpp").with_epilogue_definition_format(
+                r#"
+    bool Probe::read() const { return value; }
+"#,
+                StringFormat::Raw,
+            ),
+            B::new("cpp")
+                .with_prologue_definition_format(
+                    r#"
+        #include <windows.h>
+    "#,
+                    StringFormat::Raw,
+                )
+                .with_epilogue_format(
+                    r#"
+        bool header_only_helper();
+    "#,
+                    StringFormat::Raw,
+                )
+                .with_epilogue_definition_format(
+                    r#"
+        bool source_only_helper() { return true; }
+    "#,
+                    StringFormat::Raw,
+                ),
         ]);
 
         assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);

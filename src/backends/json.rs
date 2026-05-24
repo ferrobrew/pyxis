@@ -18,11 +18,26 @@ use crate::semantic::{
 };
 
 // If changing the structure, ensure you rerun `cargo run -- gen-types` to
-// update the TypeScript definitions.
+// update the TypeScript definitions. When making a breaking change to the
+// shape, bump `CURRENT_SCHEMA_VERSION` so downstream consumers can detect
+// the new format.
+
+/// Current JSON schema version. Bump on any breaking shape change.
+///
+/// History:
+/// - v1: original flat splice shape (`backend.prologue: string | null`).
+/// - v2: structured splice (`backend.prologue: { header, definition } | null`);
+///   added `schema_version` field so consumers can detect the format.
+pub const CURRENT_SCHEMA_VERSION: u32 = 2;
 
 /// Top-level JSON documentation structure
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 pub struct JsonDocumentation {
+    /// Schema version. See [`CURRENT_SCHEMA_VERSION`]. Older documents
+    /// (pre-v2) omit this field; consumers should treat a missing value
+    /// as v1.
+    #[serde(default = "default_schema_version_v1")]
+    pub schema_version: u32,
     /// Pointer size for the target platform
     pub pointer_size: usize,
     /// Project name
@@ -33,6 +48,10 @@ pub struct JsonDocumentation {
     pub modules: BTreeMap<String, JsonModule>,
     /// Source file paths indexed by file ID (index 0 and 1 are reserved for internal/test)
     pub source_paths: Vec<String>,
+}
+
+fn default_schema_version_v1() -> u32 {
+    1
 }
 
 /// A module containing items and potentially submodules
@@ -57,9 +76,20 @@ pub struct JsonModule {
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 pub struct JsonBackend {
     /// Prologue code inserted at the beginning of generated output
-    pub prologue: Option<String>,
+    pub prologue: Option<JsonBackendSplice>,
     /// Epilogue code inserted at the end of generated output
-    pub epilogue: Option<String>,
+    pub epilogue: Option<JsonBackendSplice>,
+}
+
+/// A backend splice payload. `header` lands in the language's primary
+/// declaration surface (Rust module, C++ header). `definition` lands in
+/// the C++ source file and is always `None` for non-cpp backends.
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+pub struct JsonBackendSplice {
+    /// Code spliced into the header / declaration surface
+    pub header: Option<String>,
+    /// Code spliced into the C++ source file (cpp backend only)
+    pub definition: Option<String>,
 }
 
 /// Source location of an item (file index and line number)
@@ -89,6 +119,11 @@ pub struct JsonItem {
     pub category: JsonItemCategory,
     /// Item kind and details
     pub kind: JsonItemKind,
+    /// `#[cfg(...)]` predicate the item is gated by, if any. Always
+    /// emitted (the JSON output is documentation, not a build target);
+    /// downstream tooling decides how to render and/or filter.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cfg: Option<JsonCfg>,
     /// Source location (file and line) - None for predefined/internal items
     pub source: Option<JsonSourceLocation>,
 }
@@ -234,8 +269,35 @@ pub struct JsonFunction {
     pub return_type: Option<JsonType>,
     /// Calling convention
     pub calling_convention: JsonCallingConvention,
+    /// Method-level type parameters declared at the impl block beyond the
+    /// parent struct's own type parameters (`Y` in `impl<T, Y> Foo<T> {...}`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub method_type_parameters: Vec<String>,
+    /// `#[cfg(...)]` predicate the function is gated by, if any. Methods
+    /// inherit the conjunction of their impl block's cfg and their own.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cfg: Option<JsonCfg>,
     /// Source location (file and line)
     pub source: Option<JsonSourceLocation>,
+}
+
+/// `#[cfg(...)]` predicate AST, mirroring the parser's
+/// [`crate::parser::cfg::CfgPredicate`] shape with locations stripped.
+/// Emitted on items/functions so documentation consumers can decide
+/// per-backend rendering without re-parsing.
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum JsonCfg {
+    /// A bare ident atom: `#[cfg(test)]`.
+    Ident { name: String },
+    /// A key/value atom: `#[cfg(backend = "cpp")]`.
+    KeyValue { key: String, value: String },
+    /// `any(...)` combinator.
+    Any { predicates: Vec<JsonCfg> },
+    /// `all(...)` combinator.
+    All { predicates: Vec<JsonCfg> },
+    /// `not(...)` combinator.
+    Not { predicate: Box<JsonCfg> },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
@@ -251,6 +313,9 @@ pub enum JsonFunctionBody {
     Vftable {
         function_name: String,
     },
+    /// Body supplied by the target backend's prologue/epilogue (the pyxis
+    /// `#[external_body]` attribute).
+    External,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
@@ -420,7 +485,11 @@ pub fn build(
         .map(|i| file_store.filename(FileId::new(i as u32)).to_string())
         .collect();
 
-    // Build items map
+    // Build items map. The JSON output is documentation, not a build
+    // target, so we deliberately do NOT filter by `cfg(backend = ...)` -
+    // every item (and every method/function) is emitted with its `cfg`
+    // predicate attached as structured data so downstream tooling can
+    // render or filter per their own rules.
     let mut items = BTreeMap::new();
     for module in semantic_state.modules().values() {
         for definition in module.definitions(type_registry) {
@@ -435,6 +504,7 @@ pub fn build(
 
     // Create the top-level documentation structure
     let documentation = JsonDocumentation {
+        schema_version: CURRENT_SCHEMA_VERSION,
         pointer_size: type_registry.pointer_size(),
         project_name: project_name.to_string(),
         items,
@@ -524,6 +594,7 @@ fn convert_function_body(body: &FunctionBody) -> JsonFunctionBody {
         FunctionBody::Vftable { function_name } => JsonFunctionBody::Vftable {
             function_name: function_name.clone(),
         },
+        FunctionBody::External => JsonFunctionBody::External,
     }
 }
 
@@ -536,7 +607,31 @@ fn convert_function(func: &Function) -> JsonFunction {
         arguments: func.arguments.iter().map(convert_argument).collect(),
         return_type: func.return_type.as_ref().map(convert_type),
         calling_convention: func.calling_convention.into(),
+        method_type_parameters: func.method_type_parameters.clone(),
+        cfg: func.cfg.as_ref().map(convert_cfg),
         source: convert_location(&func.location),
+    }
+}
+
+fn convert_cfg(pred: &crate::parser::cfg::CfgPredicate) -> JsonCfg {
+    use crate::parser::cfg::{CfgAtom, CfgPredicate};
+    match pred {
+        CfgPredicate::Atom { atom, .. } => match atom {
+            CfgAtom::Ident { name, .. } => JsonCfg::Ident { name: name.clone() },
+            CfgAtom::KeyValue { key, value, .. } => JsonCfg::KeyValue {
+                key: key.clone(),
+                value: value.clone(),
+            },
+        },
+        CfgPredicate::Any { predicates, .. } => JsonCfg::Any {
+            predicates: predicates.iter().map(convert_cfg).collect(),
+        },
+        CfgPredicate::All { predicates, .. } => JsonCfg::All {
+            predicates: predicates.iter().map(convert_cfg).collect(),
+        },
+        CfgPredicate::Not { predicate, .. } => JsonCfg::Not {
+            predicate: Box::new(convert_cfg(predicate)),
+        },
     }
 }
 
@@ -675,6 +770,7 @@ fn convert_item(item: &ItemDefinition, type_registry: &TypeRegistry) -> Option<J
         alignment: resolved.alignment,
         category: item.category.into(),
         kind,
+        cfg: item.cfg.as_ref().map(convert_cfg),
         source,
     })
 }
@@ -689,9 +785,24 @@ fn convert_extern_value(ev: &ExternValue) -> JsonExternValue {
 }
 
 fn convert_backend(backend: &Backend) -> JsonBackend {
+    // Mirror the IR's `BackendSplice { header, definition }` shape.
+    // `definition` is cpp-only (semantic validation rejects it for any
+    // other backend) and ends up `None` for rust/json. A splice with
+    // both fields empty round-trips as `None` so consumers can skip
+    // rendering it entirely.
+    let convert_splice = |splice: &crate::semantic::types::BackendSplice| {
+        if splice.is_empty() {
+            None
+        } else {
+            Some(JsonBackendSplice {
+                header: splice.header.clone(),
+                definition: splice.definition.clone(),
+            })
+        }
+    };
     JsonBackend {
-        prologue: backend.prologue.clone(),
-        epilogue: backend.epilogue.clone(),
+        prologue: convert_splice(&backend.prologue),
+        epilogue: convert_splice(&backend.epilogue),
     }
 }
 
@@ -706,13 +817,13 @@ fn build_module_hierarchy(semantic_state: &ResolvedSemanticState) -> BTreeMap<St
             .map(|s| s.to_string())
             .collect();
 
-        // Get items for this module
+        // Items, externs, and functions are all emitted regardless of
+        // any `#[cfg(...)]` predicate: consumers read the predicate off
+        // each item/function and decide for themselves how to render.
         let items: Vec<String> = module
             .definitions(semantic_state.type_registry())
             .map(|item| item.path.to_string())
             .collect();
-
-        // Convert extern values and functions
         let extern_values: Vec<JsonExternValue> = module
             .extern_values
             .iter()
@@ -721,13 +832,14 @@ fn build_module_hierarchy(semantic_state: &ResolvedSemanticState) -> BTreeMap<St
         let functions: Vec<JsonFunction> =
             module.functions().iter().map(convert_function).collect();
 
-        // Convert backends
+        // Convert backends. Map the typed `crate::Backend` key back to its
+        // canonical lower-case string for JSON output.
         let backends: BTreeMap<String, Vec<JsonBackend>> = module
             .backends
             .iter()
             .map(|(name, backend_list)| {
                 (
-                    name.clone(),
+                    name.name().to_string(),
                     backend_list.iter().map(convert_backend).collect(),
                 )
             })

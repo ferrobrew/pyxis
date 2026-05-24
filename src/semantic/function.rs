@@ -183,6 +183,12 @@ pub enum FunctionBody {
         /// for inheritance reasons
         function_name: String,
     },
+    /// The function's signature is part of the type's API but its body is
+    /// supplied by the target backend's prologue/epilogue (e.g. a C++
+    /// `inline R Foo::bar() { ... }` block). Lets pyxis declare pure-
+    /// target-language methods on a struct without binding them to a
+    /// binary address.
+    External,
 }
 impl EqualsIgnoringLocations for FunctionBody {
     fn equals_ignoring_locations(&self, other: &Self) -> bool {
@@ -209,6 +215,7 @@ impl EqualsIgnoringLocations for FunctionBody {
                     function_name: function_name2,
                 },
             ) => function_name.equals_ignoring_locations(function_name2),
+            (FunctionBody::External, FunctionBody::External) => true,
             _ => false,
         }
     }
@@ -229,10 +236,16 @@ impl FunctionBody {
             function_name: function_name.into(),
         }
     }
+    pub fn external() -> Self {
+        FunctionBody::External
+    }
 }
 impl FunctionBody {
     pub fn is_field(&self) -> bool {
         matches!(self, FunctionBody::Field { .. })
+    }
+    pub fn is_external(&self) -> bool {
+        matches!(self, FunctionBody::External)
     }
 }
 #[derive(Debug, Clone, PartialEq, Eq, Hash, HasLocation)]
@@ -245,6 +258,18 @@ pub struct Function {
     pub arguments: Vec<Argument>,
     pub return_type: Option<Type>,
     pub calling_convention: CallingConvention,
+    /// Method-level type parameters: those declared on the impl block but
+    /// *not* corresponding to the parent struct's own type parameters
+    /// (e.g. `Y` in `impl<T, Y> Foo<T> { fn cast() -> Foo<Y>; }`). Become
+    /// method-level template parameters in C++. Empty for non-impl-block
+    /// functions or impls whose params exactly match the struct's.
+    pub method_type_parameters: Vec<String>,
+    /// `#[cfg(...)]` predicate. For impl-block methods, this is the
+    /// `all(...)` conjunction of the block's cfg and the per-method cfg
+    /// (computed during associated-function resolution). `None` means
+    /// "always emit"; otherwise each backend evaluates against its own
+    /// `CfgContext` and skips emission when the predicate is false.
+    pub cfg: Option<crate::parser::cfg::CfgPredicate>,
     pub location: ItemLocation,
 }
 impl fmt::Display for Function {
@@ -277,6 +302,7 @@ impl fmt::Display for Function {
                 function_name,
             } => write!(f, "self.{field}.{function_name}")?,
             FunctionBody::Vftable { function_name } => write!(f, "self.vftable.{function_name}")?,
+            FunctionBody::External => write!(f, "<external>")?,
         }
         Ok(())
     }
@@ -318,6 +344,8 @@ impl Function {
             arguments: Vec::new(),
             return_type: None,
             calling_convention,
+            method_type_parameters: Vec::new(),
+            cfg: None,
             location: ItemLocation::test(),
         }
     }
@@ -348,6 +376,7 @@ pub fn build(
     scope: &[ItemPath],
     is_vfunc: bool,
     function: &grammar::Function,
+    type_parameters: &[String],
 ) -> Result<FunctionBuildOutcome> {
     let mut body = is_vfunc.then(|| FunctionBody::Vftable {
         function_name: function.name.0.clone(),
@@ -355,6 +384,42 @@ pub fn build(
     let doc = function.doc_comments.clone();
     let mut calling_convention = None;
     for attribute in &function.attributes {
+        // `#[external_body]` is an ident attribute (no arguments). Parse it
+        // here before the function-style attribute handling below. The
+        // function-form (`#[external_body(...)]`) and assign-form
+        // (`#[external_body = ...]`) are both wrong — reject them
+        // explicitly so typos like `#[external_body()]` don't silently
+        // fall through as unknown function-style attributes.
+        match attribute {
+            grammar::Attribute::Ident { ident, .. } if ident.as_str() == "external_body" => {
+                if is_vfunc {
+                    return Err(SemanticError::AttributeNotSupported {
+                        attribute_name: AttributeName::ExternalBody,
+                        attribute_context: AttributeNotSupportedContext::VirtualFunction {
+                            function_name: function.name.0.clone(),
+                        },
+                        location: function.location,
+                    });
+                }
+                body = Some(FunctionBody::External);
+                continue;
+            }
+            grammar::Attribute::Function { name, .. } if name.as_str() == "external_body" => {
+                return Err(SemanticError::AttributeWrongForm {
+                    attribute_name: AttributeName::ExternalBody,
+                    expected: "the bare ident `#[external_body]` (no arguments)".into(),
+                    location: *attribute.location(),
+                });
+            }
+            grammar::Attribute::Assign { name, .. } if name.as_str() == "external_body" => {
+                return Err(SemanticError::AttributeWrongForm {
+                    attribute_name: AttributeName::ExternalBody,
+                    expected: "the bare ident `#[external_body]` (no value)".into(),
+                    location: *attribute.location(),
+                });
+            }
+            _ => {}
+        }
         let Some((ident, items)) = attribute.function() else {
             continue;
         };
@@ -434,23 +499,25 @@ pub fn build(
             grammar::Argument::ConstSelf { .. } => Argument::ConstSelf { location },
             grammar::Argument::MutSelf { .. } => Argument::MutSelf { location },
             grammar::Argument::Named { ident, type_, .. } => {
-                let resolved_type = match type_registry.resolve_grammar_type(scope, type_, &[]) {
-                    TypeLookupResult::Found(t) => t,
-                    TypeLookupResult::NotYetResolved => {
-                        // Type exists but isn't resolved yet - defer function building
-                        return Ok(FunctionBuildOutcome::Deferred);
-                    }
-                    TypeLookupResult::NotFound { .. } | TypeLookupResult::PrivateAccess { .. } => {
-                        return Err(SemanticError::TypeResolutionFailed {
-                            type_: type_.clone(),
-                            resolution_context: TypeResolutionContext::FunctionArgument {
-                                argument_name: ident.0.clone(),
-                                function_name: function.name.0.clone(),
-                            },
-                            location,
-                        });
-                    }
-                };
+                let resolved_type =
+                    match type_registry.resolve_grammar_type(scope, type_, type_parameters) {
+                        TypeLookupResult::Found(t) => t,
+                        TypeLookupResult::NotYetResolved => {
+                            // Type exists but isn't resolved yet - defer function building
+                            return Ok(FunctionBuildOutcome::Deferred);
+                        }
+                        TypeLookupResult::NotFound { .. }
+                        | TypeLookupResult::PrivateAccess { .. } => {
+                            return Err(SemanticError::TypeResolutionFailed {
+                                type_: type_.clone(),
+                                resolution_context: TypeResolutionContext::FunctionArgument {
+                                    argument_name: ident.0.clone(),
+                                    function_name: function.name.0.clone(),
+                                },
+                                location,
+                            });
+                        }
+                    };
                 Argument::Field {
                     name: ident.0.clone(),
                     type_: resolved_type,
@@ -462,7 +529,7 @@ pub fn build(
     }
 
     let return_type = match function.return_type.as_ref() {
-        Some(t) => match type_registry.resolve_grammar_type(scope, t, &[]) {
+        Some(t) => match type_registry.resolve_grammar_type(scope, t, type_parameters) {
             TypeLookupResult::Found(resolved) => Some(resolved),
             TypeLookupResult::NotYetResolved => {
                 // Return type exists but isn't resolved yet - defer function building
@@ -485,6 +552,7 @@ pub fn build(
         }
     });
 
+    let cfg = function.attributes.cfg();
     Ok(FunctionBuildOutcome::Built(Box::new(Function {
         visibility: function.visibility.into(),
         name: function.name.0.clone(),
@@ -493,6 +561,8 @@ pub fn build(
         arguments,
         return_type,
         calling_convention,
+        method_type_parameters: Vec::new(),
+        cfg,
         location: function.location,
     })))
 }

@@ -355,6 +355,50 @@ impl PrettyPrinter {
                     }
                 }
             }
+            Attribute::Cfg { predicate, .. } => {
+                write!(&mut self.output, "cfg(").unwrap();
+                self.print_cfg_predicate(predicate);
+                write!(&mut self.output, ")").unwrap();
+            }
+        }
+    }
+
+    fn print_cfg_predicate(&mut self, p: &crate::parser::cfg::CfgPredicate) {
+        use crate::parser::cfg::{CfgAtom, CfgPredicate};
+        match p {
+            CfgPredicate::Atom { atom, .. } => match atom {
+                CfgAtom::Ident { name, .. } => {
+                    write!(&mut self.output, "{name}").unwrap();
+                }
+                CfgAtom::KeyValue { key, value, .. } => {
+                    write!(&mut self.output, "{key} = \"{value}\"").unwrap();
+                }
+            },
+            CfgPredicate::Any { predicates, .. } => {
+                write!(&mut self.output, "any(").unwrap();
+                for (i, child) in predicates.iter().enumerate() {
+                    if i > 0 {
+                        write!(&mut self.output, ", ").unwrap();
+                    }
+                    self.print_cfg_predicate(child);
+                }
+                write!(&mut self.output, ")").unwrap();
+            }
+            CfgPredicate::All { predicates, .. } => {
+                write!(&mut self.output, "all(").unwrap();
+                for (i, child) in predicates.iter().enumerate() {
+                    if i > 0 {
+                        write!(&mut self.output, ", ").unwrap();
+                    }
+                    self.print_cfg_predicate(child);
+                }
+                write!(&mut self.output, ")").unwrap();
+            }
+            CfgPredicate::Not { predicate, .. } => {
+                write!(&mut self.output, "not(").unwrap();
+                self.print_cfg_predicate(predicate);
+                write!(&mut self.output, ")").unwrap();
+            }
         }
     }
 
@@ -487,45 +531,80 @@ impl PrettyPrinter {
     fn print_backend(&mut self, backend: &Backend) {
         self.write_indent();
 
-        // Use shorthand syntax if only one statement (prologue XOR epilogue)
-        let has_only_prologue = backend.prologue.is_some() && backend.epilogue.is_none();
-        let has_only_epilogue = backend.epilogue.is_some() && backend.prologue.is_none();
+        // Count the number of populated splice slots; the shorthand form
+        // is only available when there's exactly one (and no `use`s).
+        let prologue_count = backend.prologue.header.is_some() as usize
+            + backend.prologue.definition.is_some() as usize;
+        let epilogue_count = backend.epilogue.header.is_some() as usize
+            + backend.epilogue.definition.is_some() as usize;
+        let total = prologue_count + epilogue_count;
+        let shorthand_eligible = backend.uses.is_empty() && total == 1;
 
-        if has_only_prologue {
-            let prologue = backend.prologue.as_ref().unwrap();
-            let prologue_str = self.format_string_with_format(prologue, backend.prologue_format);
+        let only_prologue_header = shorthand_eligible
+            && backend.prologue.header.is_some()
+            && backend.prologue.definition.is_none();
+        let only_prologue_def = shorthand_eligible && backend.prologue.definition.is_some();
+        let only_epilogue_header = shorthand_eligible
+            && backend.epilogue.header.is_some()
+            && backend.epilogue.definition.is_none();
+        let only_epilogue_def = shorthand_eligible && backend.epilogue.definition.is_some();
+
+        if only_prologue_header {
+            let prologue = backend.prologue.header.as_ref().unwrap();
+            let s = self.format_string_with_format(prologue, backend.prologue.header_format);
+            writeln!(&mut self.output, "backend {} prologue {s};", backend.name).unwrap();
+        } else if only_prologue_def {
+            let prologue = backend.prologue.definition.as_ref().unwrap();
+            let s = self.format_string_with_format(prologue, backend.prologue.definition_format);
             writeln!(
                 &mut self.output,
-                "backend {} prologue {};",
-                backend.name, prologue_str
+                "backend {} prologue definition {s};",
+                backend.name
             )
             .unwrap();
-        } else if has_only_epilogue {
-            let epilogue = backend.epilogue.as_ref().unwrap();
-            let epilogue_str = self.format_string_with_format(epilogue, backend.epilogue_format);
+        } else if only_epilogue_header {
+            let epilogue = backend.epilogue.header.as_ref().unwrap();
+            let s = self.format_string_with_format(epilogue, backend.epilogue.header_format);
+            writeln!(&mut self.output, "backend {} epilogue {s};", backend.name).unwrap();
+        } else if only_epilogue_def {
+            let epilogue = backend.epilogue.definition.as_ref().unwrap();
+            let s = self.format_string_with_format(epilogue, backend.epilogue.definition_format);
             writeln!(
                 &mut self.output,
-                "backend {} epilogue {};",
-                backend.name, epilogue_str
+                "backend {} epilogue definition {s};",
+                backend.name
             )
             .unwrap();
         } else {
-            // Use block syntax when both or neither are present
+            // Block form: emits `use`s first, then prologue, then epilogue.
             writeln!(&mut self.output, "backend {} {{", backend.name).unwrap();
             self.indent();
 
-            if let Some(prologue) = &backend.prologue {
+            for tree in &backend.uses {
                 self.write_indent();
-                let prologue_str =
-                    self.format_string_with_format(prologue, backend.prologue_format);
-                writeln!(&mut self.output, "prologue {prologue_str};").unwrap();
+                let tree_str = self.format_use_tree(tree);
+                writeln!(&mut self.output, "use {tree_str};").unwrap();
             }
 
-            if let Some(epilogue) = &backend.epilogue {
+            if let Some(text) = &backend.prologue.header {
                 self.write_indent();
-                let epilogue_str =
-                    self.format_string_with_format(epilogue, backend.epilogue_format);
-                writeln!(&mut self.output, "epilogue {epilogue_str};").unwrap();
+                let s = self.format_string_with_format(text, backend.prologue.header_format);
+                writeln!(&mut self.output, "prologue {s};").unwrap();
+            }
+            if let Some(text) = &backend.prologue.definition {
+                self.write_indent();
+                let s = self.format_string_with_format(text, backend.prologue.definition_format);
+                writeln!(&mut self.output, "prologue definition {s};").unwrap();
+            }
+            if let Some(text) = &backend.epilogue.header {
+                self.write_indent();
+                let s = self.format_string_with_format(text, backend.epilogue.header_format);
+                writeln!(&mut self.output, "epilogue {s};").unwrap();
+            }
+            if let Some(text) = &backend.epilogue.definition {
+                self.write_indent();
+                let s = self.format_string_with_format(text, backend.epilogue.definition_format);
+                writeln!(&mut self.output, "epilogue definition {s};").unwrap();
             }
 
             self.dedent();
@@ -859,7 +938,32 @@ impl PrettyPrinter {
     fn print_impl_block(&mut self, impl_block: &FunctionBlock) {
         self.print_attributes(&impl_block.attributes);
         self.write_indent();
-        writeln!(&mut self.output, "impl {} {{", impl_block.name).unwrap();
+        if impl_block.type_parameters.is_empty() {
+            writeln!(&mut self.output, "impl {} {{", impl_block.name).unwrap();
+        } else {
+            let params = impl_block
+                .type_parameters
+                .iter()
+                .map(|tp| tp.name.as_str())
+                .collect::<Vec<_>>()
+                .join(", ");
+            let args = impl_block
+                .type_arguments
+                .iter()
+                .map(|tp| tp.name.as_str())
+                .collect::<Vec<_>>()
+                .join(", ");
+            if args.is_empty() {
+                writeln!(&mut self.output, "impl<{}> {} {{", params, impl_block.name).unwrap();
+            } else {
+                writeln!(
+                    &mut self.output,
+                    "impl<{}> {}<{}> {{",
+                    params, impl_block.name, args
+                )
+                .unwrap();
+            }
+        }
         self.indent();
 
         for (i, item) in impl_block.items.iter().enumerate() {

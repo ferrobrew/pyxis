@@ -8,7 +8,13 @@ import { TypeRef } from './TypeRef';
 import { FunctionDisplay } from './FunctionDisplay';
 import { CodeBlock } from './CodeBlock';
 import { Breadcrumbs } from './Breadcrumbs';
-import type { JsonExternValue, JsonBackend, JsonItem, JsonFunction } from '@pyxis/types';
+import type {
+  JsonExternValue,
+  JsonBackend,
+  JsonBackendSplice,
+  JsonItem,
+  JsonFunction,
+} from '@pyxis/types';
 
 interface ModuleData {
   doc?: string | null;
@@ -44,80 +50,108 @@ function ExternValueItem({ extern: ext }: { extern: JsonExternValue }) {
   );
 }
 
-// Backend prologue section
-interface BackendSectionProps {
+// Backend prologue/epilogue section. The cpp backend can populate two
+// payloads per slot — `header` (lands in the `.hpp`) and `definition`
+// (lands in the `.cpp`). Other backends only ever populate `header`,
+// so they render as a single block; cpp renders both with labels.
+type SpliceSlot = 'prologue' | 'epilogue';
+
+interface BackendSpliceSectionProps {
   backends: { [key: string]: unknown };
+  slot: SpliceSlot;
 }
 
-function PrologueSection({ backends }: BackendSectionProps) {
+// Trim leading/trailing blank lines and remove the largest common
+// leading-whitespace prefix shared by every non-blank line. Splices
+// are stored as raw-string literals in the source (often
+// `r#"<newline>    body<newline>"#`), so without this the rendered
+// block carries gratuitous outer padding.
+function normalizeSpliceText(text: string): string {
+  const lines = text.split('\n');
+  let start = 0;
+  let end = lines.length;
+  while (start < end && lines[start].trim() === '') start++;
+  while (end > start && lines[end - 1].trim() === '') end--;
+  const trimmed = lines.slice(start, end);
+  if (trimmed.length === 0) return '';
+
+  let minIndent = Infinity;
+  for (const line of trimmed) {
+    if (line.trim() === '') continue;
+    const match = line.match(/^[ \t]*/);
+    const indent = match ? match[0].length : 0;
+    if (indent < minIndent) minIndent = indent;
+  }
+  if (!isFinite(minIndent) || minIndent === 0) return trimmed.join('\n');
+
+  return trimmed.map((line) => line.slice(minIndent)).join('\n');
+}
+
+function joinSplicePart(splices: JsonBackendSplice[], part: 'header' | 'definition'): string {
+  return splices
+    .map((s) => s[part])
+    .filter((v): v is string => v != null)
+    .map(normalizeSpliceText)
+    .filter((v) => v.length > 0)
+    .join('\n\n');
+}
+
+function BackendSpliceSection({ backends, slot }: BackendSpliceSectionProps) {
   if (!backends || Object.keys(backends).length === 0) return null;
 
-  const hasPrologues = Object.values(backends).some((configs) =>
-    (configs as JsonBackend[]).some((config: JsonBackend) => config.prologue)
-  );
+  const title = slot === 'prologue' ? 'Backend Prologue' : 'Backend Epilogue';
+  const slotLabel = slot === 'prologue' ? 'Prologue' : 'Epilogue';
+  const sectionMargin = slot === 'prologue' ? 'mb-6' : 'my-6';
 
-  if (!hasPrologues) return null;
+  const hasAny = Object.values(backends).some((configs) =>
+    (configs as JsonBackend[]).some((config) => {
+      const splice = config[slot];
+      return splice && (splice.header || splice.definition);
+    })
+  );
+  if (!hasAny) return null;
 
   return (
-    <div className="mb-6">
-      <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-slate-200">
-        Backend Prologue
-      </h2>
+    <div className={sectionMargin}>
+      <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-slate-200">{title}</h2>
       {Object.entries(backends).map(([backendName, configs]) => {
-        // Join all prologues for this backend
-        const joinedPrologue = (configs as JsonBackend[])
-          .map((config: JsonBackend) => config.prologue)
-          .filter((p) => p != null)
-          .join('\n\n');
+        const splices = (configs as JsonBackend[])
+          .map((config) => config[slot])
+          .filter((s): s is JsonBackendSplice => s != null);
 
-        if (!joinedPrologue) return null;
+        const joinedHeader = joinSplicePart(splices, 'header');
+        const joinedDefinition = joinSplicePart(splices, 'definition');
+        if (!joinedHeader && !joinedDefinition) return null;
+
+        // Label the parts whenever a `definition` payload exists - that's
+        // the only signal-bearing case (cpp routes definitions to the
+        // `.cpp` source, headers to the `.hpp`). Header-only blocks
+        // (rust, json, header-only cpp) don't need a label.
+        const showLabels = !!joinedDefinition;
+        const parts = [
+          joinedHeader ? { label: 'header', code: joinedHeader } : null,
+          joinedDefinition ? { label: 'definition', code: joinedDefinition } : null,
+        ].filter((p): p is { label: string; code: string } => p !== null);
 
         return (
           <div key={backendName} className="mb-4">
             <h3 className="text-lg font-medium mb-2 text-gray-800 dark:text-slate-300">
               {backendName}
             </h3>
-            <Collapsible title="Prologue">
-              <CodeBlock code={joinedPrologue} language={backendName} />
-            </Collapsible>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-// Backend epilogue section
-function EpilogueSection({ backends }: BackendSectionProps) {
-  if (!backends || Object.keys(backends).length === 0) return null;
-
-  const hasEpilogues = Object.values(backends).some((configs) =>
-    (configs as JsonBackend[]).some((config: JsonBackend) => config.epilogue)
-  );
-
-  if (!hasEpilogues) return null;
-
-  return (
-    <div className="my-6">
-      <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-slate-200">
-        Backend Epilogue
-      </h2>
-      {Object.entries(backends).map(([backendName, configs]) => {
-        // Join all epilogues for this backend
-        const joinedEpilogue = (configs as JsonBackend[])
-          .map((config: JsonBackend) => config.epilogue)
-          .filter((e) => e != null)
-          .join('\n\n');
-
-        if (!joinedEpilogue) return null;
-
-        return (
-          <div key={backendName} className="mb-4">
-            <h3 className="text-lg font-medium mb-2 text-gray-800 dark:text-slate-300">
-              {backendName}
-            </h3>
-            <Collapsible title="Epilogue">
-              <CodeBlock code={joinedEpilogue} language={backendName} />
+            <Collapsible title={slotLabel}>
+              {parts.map((part, idx) => (
+                <div
+                  key={part.label}
+                  className={idx > 0 ? 'border-t border-gray-300 dark:border-slate-800' : ''}
+                >
+                  {showLabels && (
+                    <div className="px-3 py-1 text-[10px] uppercase tracking-wider font-semibold text-gray-500 dark:text-slate-400 bg-gray-100 dark:bg-slate-800 border-b border-gray-300 dark:border-slate-800">
+                      {part.label}
+                    </div>
+                  )}
+                  <CodeBlock code={part.code} language={backendName} />
+                </div>
+              ))}
             </Collapsible>
           </div>
         );
@@ -285,7 +319,7 @@ export function ModuleView() {
       )}
 
       {/* Backend Prologues */}
-      <PrologueSection backends={module.backends || {}} />
+      <BackendSpliceSection backends={module.backends || {}} slot="prologue" />
 
       {/* Extern Values */}
       {module.extern_values && module.extern_values.length > 0 && (
@@ -327,7 +361,7 @@ export function ModuleView() {
       <SubmoduleList submodules={module.submodules || {}} parentPath={decodedPath} />
 
       {/* Backend Epilogues */}
-      <EpilogueSection backends={module.backends || {}} />
+      <BackendSpliceSection backends={module.backends || {}} slot="epilogue" />
     </div>
   );
 }

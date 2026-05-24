@@ -204,6 +204,9 @@ pub enum AttributeName {
     MinSize,
     /// The `singleton` attribute for singleton types
     Singleton,
+    /// The `external_body` attribute marks an `impl` method whose body
+    /// is provided by the target backend's prologue/epilogue.
+    ExternalBody,
 }
 
 impl fmt::Display for AttributeName {
@@ -217,6 +220,7 @@ impl fmt::Display for AttributeName {
             AttributeName::Packed => write!(f, "packed"),
             AttributeName::MinSize => write!(f, "min_size"),
             AttributeName::Singleton => write!(f, "singleton"),
+            AttributeName::ExternalBody => write!(f, "external_body"),
         }
     }
 }
@@ -357,6 +361,13 @@ pub enum SemanticError {
     /// Failed to find an item referenced in a use statement
     UseItemNotFound {
         path: ItemPath,
+        location: ItemLocation,
+    },
+    /// `prologue definition` / `epilogue definition` was used on a non-cpp
+    /// backend. Only cpp distinguishes a header from a source file, so the
+    /// modifier is meaningless elsewhere.
+    BackendDefinitionNotSupported {
+        backend: crate::Backend,
         location: ItemLocation,
     },
     /// Missing required attribute for extern type
@@ -510,6 +521,15 @@ pub enum SemanticError {
         attribute_context: AttributeNotSupportedContext,
         location: ItemLocation,
     },
+    /// An attribute was written with a syntactic form it doesn't accept
+    /// (e.g. `#[external_body(...)]` instead of the bare ident
+    /// `#[external_body]`). `expected` is a short description of the
+    /// supported form for the diagnostic.
+    AttributeWrongForm {
+        attribute_name: AttributeName,
+        expected: String,
+        location: ItemLocation,
+    },
     /// Unsupported enum value for a case
     EnumUnsupportedValue {
         item_path: ItemPath,
@@ -607,6 +627,11 @@ impl SemanticError {
             }
             SemanticError::UseItemNotFound { path, .. } => {
                 format!("Item in use statement not found: `{path}`")
+            }
+            SemanticError::BackendDefinitionNotSupported { backend, .. } => {
+                format!(
+                    "`prologue definition` / `epilogue definition` is only valid for `backend cpp`; got `backend {backend}`"
+                )
             }
             SemanticError::MissingExternAttribute {
                 attribute_name,
@@ -827,6 +852,13 @@ impl SemanticError {
             } => {
                 format!("Attribute `{attribute_name}` is not supported for {attribute_context}")
             }
+            SemanticError::AttributeWrongForm {
+                attribute_name,
+                expected,
+                ..
+            } => {
+                format!("Attribute `{attribute_name}` must be written as {expected}")
+            }
             SemanticError::EnumUnsupportedValue {
                 item_path,
                 case_name,
@@ -920,6 +952,7 @@ impl SemanticError {
             SemanticError::ModuleNotFound { location, .. } => Some(location),
             SemanticError::TypeNotFound { location, .. } => Some(location),
             SemanticError::UseItemNotFound { location, .. } => Some(location),
+            SemanticError::BackendDefinitionNotSupported { location, .. } => Some(location),
             SemanticError::MissingExternAttribute { location, .. } => Some(location),
             SemanticError::MissingAttribute { location, .. } => Some(location),
             SemanticError::InvalidAttributeFunctionArgumentCount { location, .. } => Some(location),
@@ -942,6 +975,7 @@ impl SemanticError {
             SemanticError::FunctionMissingImplementation { location, .. } => Some(location),
             SemanticError::InvalidCallingConvention { location, .. } => Some(location),
             SemanticError::AttributeNotSupported { location, .. } => Some(location),
+            SemanticError::AttributeWrongForm { location, .. } => Some(location),
             SemanticError::EnumUnsupportedValue { location, .. } => Some(location),
             SemanticError::EnumMultipleDefaults { location, .. } => Some(location),
             SemanticError::EnumDefaultWithoutDefaultable { location, .. } => Some(location),

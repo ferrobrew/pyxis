@@ -1,0 +1,75 @@
+// Tests #[external_body] - methods declared on a type whose bodies are
+// supplied by the target backend's prologue/epilogue rather than bound
+// to a binary address.
+#[align(4)]
+pub type Counter {
+    pub value: u32,
+}
+impl Counter {
+    #[external_body]
+    pub fn make() -> Counter;
+    #[external_body]
+    pub fn bump(&mut self) -> u32;
+    #[external_body]
+    pub fn read(&self) -> u32;
+}
+
+backend rust epilogue r#"
+    impl Counter {
+        pub fn make() -> Counter { Counter { value: 0 } }
+        pub fn bump(&mut self) -> u32 { self.value += 1; self.value }
+        pub fn read(&self) -> u32 { self.value }
+    }
+"#;
+
+backend cpp epilogue r#"
+inline Counter Counter::make() { return Counter{0}; }
+inline ::std::uint32_t Counter::bump() { value += 1; return value; }
+inline ::std::uint32_t Counter::read() const { return value; }
+"#;
+
+#[external_body]
+pub fn module_hello() -> u32;
+
+backend rust epilogue r#"
+    pub fn module_hello() -> u32 { 42 }
+"#;
+
+backend cpp epilogue r#"
+inline ::std::uint32_t module_hello() { return 42; }
+"#;
+
+#[size(0x10)]
+pub type Pair<T> {
+    pub first: *mut T,
+    pub second: *mut T,
+}
+impl<T> Pair<T> {
+    #[external_body]
+    pub fn first_ptr(&self) -> *mut T;
+}
+
+// Method-level extra type parameter: `Y` is on the impl block but not on
+// the struct itself, so it becomes a method-template parameter in C++.
+impl<T, Y> Pair<T> {
+    #[external_body]
+    pub fn cast_first(&self) -> *mut Y;
+}
+
+backend rust epilogue r#"
+    impl<T> Pair<T> {
+        pub fn first_ptr(&self) -> *mut T { self.first }
+        // In Rust, method-level type parameters live on the function, not
+        // the impl. Pyxis's `impl<T, Y> Pair<T> { fn cast_first ... }` form
+        // maps to this Rust shape.
+        pub fn cast_first<Y>(&self) -> *mut Y { self.first as *mut Y }
+    }
+"#;
+
+backend cpp epilogue r#"
+template <class T>
+inline T* Pair<T>::first_ptr() const { return first; }
+
+template <class T> template <class Y>
+inline Y* Pair<T>::cast_first() const { return reinterpret_cast<Y*>(first); }
+"#;

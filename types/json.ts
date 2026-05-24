@@ -9,11 +9,26 @@ export type JsonBackend = {
 /**
  * Prologue code inserted at the beginning of generated output
  */
-prologue: string | null; 
+prologue: JsonBackendSplice | null; 
 /**
  * Epilogue code inserted at the end of generated output
  */
-epilogue: string | null };
+epilogue: JsonBackendSplice | null };
+
+/**
+ * A backend splice payload. `header` lands in the language's primary
+ * declaration surface (Rust module, C++ header). `definition` lands in
+ * the C++ source file and is always `None` for non-cpp backends.
+ */
+export type JsonBackendSplice = { 
+/**
+ * Code spliced into the header / declaration surface
+ */
+header: string | null; 
+/**
+ * Code spliced into the C++ source file (cpp backend only)
+ */
+definition: string | null };
 
 export type JsonBitflag = { 
 /**
@@ -62,9 +77,43 @@ default: number | null };
 export type JsonCallingConvention = "c" | "cdecl" | "stdcall" | "fastcall" | "thiscall" | "vectorcall" | "system";
 
 /**
+ * `#[cfg(...)]` predicate AST, mirroring the parser's
+ * [`crate::parser::cfg::CfgPredicate`] shape with locations stripped.
+ * Emitted on items/functions so documentation consumers can decide
+ * per-backend rendering without re-parsing.
+ */
+export type JsonCfg = 
+/**
+ * A bare ident atom: `#[cfg(test)]`.
+ */
+{ type: "ident"; name: string } | 
+/**
+ * A key/value atom: `#[cfg(backend = "cpp")]`.
+ */
+{ type: "key_value"; key: string; value: string } | 
+/**
+ * `any(...)` combinator.
+ */
+{ type: "any"; predicates: JsonCfg[] } | 
+/**
+ * `all(...)` combinator.
+ */
+{ type: "all"; predicates: JsonCfg[] } | 
+/**
+ * `not(...)` combinator.
+ */
+{ type: "not"; predicate: JsonCfg };
+
+/**
  * Top-level JSON documentation structure
  */
 export type JsonDocumentation = { 
+/**
+ * Schema version. See [`CURRENT_SCHEMA_VERSION`]. Older documents
+ * (pre-v2) omit this field; consumers should treat a missing value
+ * as v1.
+ */
+schema_version?: number; 
 /**
  * Pointer size for the target platform
  */
@@ -182,13 +231,28 @@ return_type: JsonType | null;
  */
 calling_convention: JsonCallingConvention; 
 /**
+ * Method-level type parameters declared at the impl block beyond the
+ * parent struct's own type parameters (`Y` in `impl<T, Y> Foo<T> {...}`).
+ */
+method_type_parameters?: string[]; 
+/**
+ * `#[cfg(...)]` predicate the function is gated by, if any. Methods
+ * inherit the conjunction of their impl block's cfg and their own.
+ */
+cfg?: JsonCfg | null; 
+/**
  * Source location (file and line)
  */
 source: JsonSourceLocation | null };
 
 export type JsonFunctionArgument = { name: string; type_ref: JsonType };
 
-export type JsonFunctionBody = { type: "address"; address: number } | { type: "field"; field: string; function_name: string } | { type: "vftable"; function_name: string };
+export type JsonFunctionBody = { type: "address"; address: number } | { type: "field"; field: string; function_name: string } | { type: "vftable"; function_name: string } | 
+/**
+ * Body supplied by the target backend's prologue/epilogue (the pyxis
+ * `#[external_body]` attribute).
+ */
+{ type: "external" };
 
 /**
  * An item (type, enum, or bitflags) in the documentation
@@ -222,6 +286,12 @@ category: JsonItemCategory;
  * Item kind and details
  */
 kind: JsonItemKind; 
+/**
+ * `#[cfg(...)]` predicate the item is gated by, if any. Always
+ * emitted (the JSON output is documentation, not a build target);
+ * downstream tooling decides how to render and/or filter.
+ */
+cfg?: JsonCfg | null; 
 /**
  * Source location (file and line) - None for predefined/internal items
  */

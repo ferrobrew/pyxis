@@ -237,7 +237,7 @@ pub fn build(
                     singleton = Some(attr_singleton);
                 }
             }
-            grammar::Attribute::Assign { .. } => {}
+            grammar::Attribute::Assign { .. } | grammar::Attribute::Cfg { .. } => {}
         }
     }
 

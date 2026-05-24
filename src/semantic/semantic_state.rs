@@ -61,6 +61,7 @@ impl SemanticState {
                     }),
                     category: ItemCategory::Predefined,
                     predefined: Some(*predefined_item),
+                    cfg: None,
                     location,
                 })
                 .expect("failed to add predefined type");
@@ -151,6 +152,14 @@ impl SemanticState {
                 .map(|tp| tp.name.clone())
                 .collect();
 
+            // Extract any `#[cfg(...)]` from the definition's attributes.
+            let cfg = match &definition.inner {
+                grammar::ItemDefinitionInner::Type(td) => td.attributes.cfg(),
+                grammar::ItemDefinitionInner::Enum(e) => e.attributes.cfg(),
+                grammar::ItemDefinitionInner::Bitflags(b) => b.attributes.cfg(),
+                grammar::ItemDefinitionInner::TypeAlias(ta) => ta.attributes.cfg(),
+            };
+
             self.add_item(ItemDefinition {
                 visibility: definition.visibility.into(),
                 path: new_path,
@@ -158,6 +167,7 @@ impl SemanticState {
                 state: ItemState::Unresolved(definition.clone()),
                 category: ItemCategory::Defined,
                 predefined: None,
+                cfg,
                 location: definition.location,
             })?;
         }
@@ -213,6 +223,7 @@ impl SemanticState {
                 }),
                 category: ItemCategory::Extern,
                 predefined: None,
+                cfg: attributes.cfg(),
                 location: *extern_location,
             })?;
         }
@@ -244,6 +255,11 @@ impl SemanticState {
     pub fn build(mut self) -> Result<ResolvedSemanticState> {
         // Validate all use statements before resolving types
         self.validate_uses()?;
+        // Reject `prologue definition` / `epilogue definition` on backends
+        // other than cpp - the cpp split is the only backend with a
+        // distinct .cpp source file, so the modifier is meaningless
+        // (and probably a user typo) elsewhere.
+        self.validate_backend_definitions()?;
 
         // Track unresolved type references across iterations
         let mut unresolved_references: Vec<UnresolvedTypeReference> = vec![];
@@ -353,10 +369,295 @@ impl SemanticState {
             module.resolve_functions(&self.type_registry)?;
         }
 
+        // Resolve associated functions (impl blocks + base inheritance) now
+        // that every type is fully resolved. This deferral lets impl methods
+        // freely reference their own enclosing type as a return / argument
+        // type without trapping the resolver in a defer loop.
+        self.resolve_associated_functions()?;
+
         Ok(ResolvedSemanticState {
             modules: self.modules,
             type_registry: self.type_registry,
         })
+    }
+
+    fn resolve_associated_functions(&mut self) -> Result<()> {
+        use std::collections::{BTreeMap, BTreeSet};
+
+        // Build a map from each type-with-regions to its `#[base]` parents.
+        // We process types in topological order (bases before derived) so
+        // that when we copy `base.associated_functions` into a derived type,
+        // the base has its own impl methods (and *its* inherited methods)
+        // already populated.
+        let mut bases_of: BTreeMap<ItemPath, Vec<(String, ItemPath)>> = BTreeMap::new();
+        let mut all_type_paths: Vec<ItemPath> = Vec::new();
+        for path in self.type_registry.resolved() {
+            let item = self
+                .type_registry
+                .get(&path, &ItemLocation::internal())?
+                .clone();
+            let Some(resolved) = item.resolved() else {
+                continue;
+            };
+            let crate::semantic::types::ItemDefinitionInner::Type(td) = &resolved.inner else {
+                continue;
+            };
+            all_type_paths.push(path.clone());
+            let mut bases = Vec::new();
+            for region in &td.regions {
+                if !region.is_base {
+                    continue;
+                }
+                let Some(name) = region.name.clone() else {
+                    continue;
+                };
+                if let crate::semantic::types::Type::Raw(base_path) = &region.type_ref {
+                    bases.push((name, base_path.clone()));
+                }
+            }
+            bases_of.insert(path, bases);
+        }
+
+        // Topologically sort by inheritance: bases before derived.
+        let mut order: Vec<ItemPath> = Vec::new();
+        let mut visited: BTreeSet<ItemPath> = BTreeSet::new();
+        fn visit(
+            path: &ItemPath,
+            bases_of: &BTreeMap<ItemPath, Vec<(String, ItemPath)>>,
+            visited: &mut BTreeSet<ItemPath>,
+            order: &mut Vec<ItemPath>,
+        ) {
+            if !visited.insert(path.clone()) {
+                return;
+            }
+            if let Some(bases) = bases_of.get(path) {
+                for (_, base) in bases {
+                    visit(base, bases_of, visited, order);
+                }
+            }
+            order.push(path.clone());
+        }
+        for p in &all_type_paths {
+            visit(p, &bases_of, &mut visited, &mut order);
+        }
+
+        // Resolve own impl + inherit base methods, in topological order.
+        for path in order {
+            self.resolve_associated_functions_for(&path)?;
+        }
+
+        Ok(())
+    }
+
+    fn resolve_associated_functions_for(&mut self, path: &ItemPath) -> Result<()> {
+        use std::collections::HashSet;
+
+        use crate::semantic::{
+            error::DuplicateDefinitionKind,
+            function::{self, FunctionBuildOutcome},
+            types::{Function, FunctionBody, ItemDefinitionInner, Type},
+        };
+
+        let item = self.type_registry.get(path, &ItemLocation::internal())?;
+        let location = item.location;
+        let Some(resolved) = item.resolved() else {
+            return Ok(());
+        };
+        let ItemDefinitionInner::Type(td) = &resolved.inner else {
+            return Ok(());
+        };
+        let regions = td.regions.clone();
+        let vftable_function_names: HashSet<String> = td
+            .vftable
+            .as_ref()
+            .map(|v| v.functions.iter().map(|f| f.name.clone()).collect())
+            .unwrap_or_default();
+
+        let module = self.get_module_for_path(path, &location)?;
+        let scope = module.scope();
+        // A type can have multiple `impl` blocks — e.g. one per set of
+        // method-level type parameters. We iterate them in declaration
+        // order so the resolved `associated_functions` reflects the
+        // source order, and each function picks up its own impl block's
+        // type parameters.
+        struct ImplFunc {
+            func: grammar::Function,
+            impl_type_parameters: Vec<String>,
+            /// Cfg from the impl block (if any). Methods conjoin this with
+            /// their own per-method cfg.
+            impl_cfg: Option<crate::parser::cfg::CfgPredicate>,
+        }
+        let impl_funcs: Vec<ImplFunc> = module
+            .impls
+            .get(path)
+            .map(|fbs| {
+                fbs.iter()
+                    .flat_map(|fb| {
+                        let params: Vec<String> = fb
+                            .type_parameters
+                            .iter()
+                            .map(|tp| tp.name.clone())
+                            .collect();
+                        let block_cfg = fb.attributes.cfg();
+                        fb.functions().cloned().map({
+                            let params = params.clone();
+                            let block_cfg = block_cfg.clone();
+                            move |f| ImplFunc {
+                                func: f,
+                                impl_type_parameters: params.clone(),
+                                impl_cfg: block_cfg.clone(),
+                            }
+                        })
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        let struct_param_count = self
+            .type_registry
+            .get(path, &location)?
+            .type_parameters
+            .len();
+
+        let mut associated_functions: Vec<Function> = Vec::new();
+        let mut used_names: HashSet<String> = vftable_function_names.clone();
+
+        // Inherit from base regions: copy each base's already-resolved
+        // associated_functions and rewrite their bodies to delegate via the
+        // base field.
+        for (i, region) in regions.iter().filter(|r| r.is_base).enumerate() {
+            let Some(name) = region.name.clone() else {
+                continue;
+            };
+            let Type::Raw(base_path) = &region.type_ref else {
+                continue;
+            };
+            let base_item = self.type_registry.get(base_path, &location)?;
+            let Some(base_resolved) = base_item.resolved() else {
+                continue;
+            };
+            let ItemDefinitionInner::Type(base_td) = &base_resolved.inner else {
+                continue;
+            };
+
+            let add_functions = |functions: &[Function],
+                                 associated_functions: &mut Vec<Function>,
+                                 used_names: &mut HashSet<String>| {
+                for function in functions.iter().filter(|f| f.is_public()) {
+                    // Static methods (no `&self`/`&mut self`) aren't
+                    // meaningfully inherited - they're class-bound. Forwarding
+                    // `Derived::foo()` to `this->base.foo()` doesn't
+                    // typecheck (no `this` in a static context), and even if
+                    // we emitted `Base::foo()` instead, callers can already
+                    // reach it via `Base::foo()` directly. Skip them so we
+                    // don't generate broken wrappers.
+                    let has_self = function.arguments.iter().any(|a| {
+                        matches!(
+                            a,
+                            crate::semantic::function::Argument::ConstSelf { .. }
+                                | crate::semantic::function::Argument::MutSelf { .. }
+                        )
+                    });
+                    if !has_self {
+                        continue;
+                    }
+                    let mut function = function.clone();
+                    let original_name = function.name.clone();
+                    if used_names.contains(&original_name) {
+                        function.name = format!("{name}_{original_name}");
+                    }
+                    function.body = FunctionBody::Field {
+                        field: name.clone(),
+                        function_name: original_name,
+                    };
+                    used_names.insert(function.name.clone());
+                    associated_functions.push(function);
+                }
+            };
+
+            add_functions(
+                &base_td.associated_functions,
+                &mut associated_functions,
+                &mut used_names,
+            );
+
+            if i > 0 {
+                if let Some(vftable) = &base_td.vftable {
+                    add_functions(
+                        &vftable.functions,
+                        &mut associated_functions,
+                        &mut used_names,
+                    );
+                }
+            }
+        }
+
+        // Build own impl methods. Now that all types are resolved, function
+        // building never defers. Each function picks up its own impl
+        // block's type parameters (so different impl blocks can declare
+        // different method-level template parameters).
+        for ImplFunc {
+            func: grammar_fn,
+            impl_type_parameters,
+            impl_cfg,
+        } in &impl_funcs
+        {
+            if used_names.contains(&grammar_fn.name.0) {
+                return Err(SemanticError::DuplicateDefinition {
+                    name: grammar_fn.name.0.clone(),
+                    item_path: path.clone(),
+                    kind: DuplicateDefinitionKind::FunctionInTypeOrBase,
+                    location,
+                });
+            }
+            // Method-level extras for this specific function come from its
+            // own impl block, not the type's full set of impl blocks.
+            let method_extras: Vec<String> = if impl_type_parameters.len() > struct_param_count {
+                impl_type_parameters[struct_param_count..].to_vec()
+            } else {
+                Vec::new()
+            };
+            let mut function = match function::build(
+                &self.type_registry,
+                &scope,
+                false,
+                grammar_fn,
+                impl_type_parameters,
+            )? {
+                FunctionBuildOutcome::Built(f) => *f,
+                FunctionBuildOutcome::Deferred => {
+                    return Err(SemanticError::TypeResolutionStalled {
+                        unresolved_types: vec![grammar_fn.name.0.clone()],
+                        resolved_types: vec![],
+                        unresolved_references: vec![],
+                    });
+                }
+            };
+            function.method_type_parameters = method_extras;
+            // Conjoin any block-level cfg with the per-method cfg. Either
+            // both, just one, or neither may be present.
+            function.cfg = match (impl_cfg.clone(), function.cfg.take()) {
+                (None, None) => None,
+                (Some(b), None) => Some(b),
+                (None, Some(f)) => Some(f),
+                (Some(b), Some(f)) => Some(crate::parser::cfg::CfgPredicate::All {
+                    predicates: vec![b, f],
+                    location,
+                }),
+            };
+            used_names.insert(function.name.clone());
+            associated_functions.push(function);
+        }
+
+        // Patch the result back into the type definition.
+        let item = self.type_registry.get_mut(path, &location)?;
+        if let ItemState::Resolved(state) = &mut item.state {
+            if let ItemDefinitionInner::Type(td) = &mut state.inner {
+                td.associated_functions = associated_functions;
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -380,13 +681,27 @@ impl SemanticState {
     /// - A module that exists
     ///
     /// Additionally, checks that the item is visible from the importing module.
+    ///
+    /// Validates module-level uses *and* backend-block uses (the new
+    /// `backend foo { use bar::Baz; }` syntax that lets a backend block
+    /// declare its own working set). Both kinds resolve through the same
+    /// type registry / visibility rules.
     fn validate_uses(&self) -> Result<()> {
         for module in self.modules.values() {
+            // Collect use trees from both module-level and backend-block scopes.
+            let mut trees: Vec<&grammar::UseTree> = Vec::new();
             for use_item in module.uses() {
-                let grammar::ModuleItem::Use { tree, .. } = use_item else {
-                    continue;
-                };
+                if let grammar::ModuleItem::Use { tree, .. } = use_item {
+                    trees.push(tree);
+                }
+            }
+            for backend in module.ast.backends() {
+                for tree in &backend.uses {
+                    trees.push(tree);
+                }
+            }
 
+            for tree in trees {
                 for (path, location) in tree.flatten_with_locations() {
                     // Check if the path is a type in the type registry
                     let is_type = self.type_registry.contains(&path);
@@ -430,6 +745,43 @@ impl SemanticState {
 
                     // Parent exists but the item doesn't
                     return Err(SemanticError::UseItemNotFound { path, location });
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Reject `prologue definition` / `epilogue definition` on backends
+    /// other than cpp. The `definition` modifier means "splice into the
+    /// .cpp source file"; only cpp has a distinct source file (rust and
+    /// json emit single-output-per-module), so the modifier on those is
+    /// almost certainly a typo or copy-paste error.
+    fn validate_backend_definitions(&self) -> Result<()> {
+        // When the cpp feature is off, `Backend::Cpp` doesn't exist and
+        // no backend supports the modifier. Centralise the "which backend
+        // supports `definition`?" check so the cpp branch is the only
+        // cfg-gated piece.
+        fn supports_definition(backend: crate::Backend) -> bool {
+            match backend {
+                crate::Backend::Rust => false,
+                #[cfg(feature = "json")]
+                crate::Backend::Json => false,
+                #[cfg(feature = "cpp")]
+                crate::Backend::Cpp => true,
+            }
+        }
+        for module in self.modules.values() {
+            for backend in module.ast.backends() {
+                if supports_definition(backend.name) {
+                    continue;
+                }
+                let has_definition =
+                    backend.prologue.definition.is_some() || backend.epilogue.definition.is_some();
+                if has_definition {
+                    return Err(SemanticError::BackendDefinitionNotSupported {
+                        backend: backend.name,
+                        location: backend.location,
+                    });
                 }
             }
         }

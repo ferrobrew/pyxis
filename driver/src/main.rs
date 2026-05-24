@@ -44,10 +44,14 @@ enum Command {
     },
 }
 
+// The driver depends on `pyxis` with the `json` feature on, so all
+// three backends are always available here regardless of upstream
+// feature selection.
 #[derive(Copy, Clone, ValueEnum)]
 enum Backend {
     Rust,
     Json,
+    Cpp,
 }
 
 impl From<Backend> for pyxis::Backend {
@@ -55,6 +59,7 @@ impl From<Backend> for pyxis::Backend {
         match backend {
             Backend::Rust => pyxis::Backend::Rust,
             Backend::Json => pyxis::Backend::Json,
+            Backend::Cpp => pyxis::Backend::Cpp,
         }
     }
 }

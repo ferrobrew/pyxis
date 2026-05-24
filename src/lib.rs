@@ -19,11 +19,143 @@ pub(crate) mod util;
 // Re-export semantic error for convenience
 pub use semantic::SemanticError;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Backend {
     Rust,
     #[cfg(feature = "json")]
     Json,
+    #[cfg(feature = "cpp")]
+    Cpp,
+}
+
+impl Backend {
+    /// Lower-case keyword name, used in `backend foo { ... }` syntax,
+    /// `#[cfg(backend = "foo")]` predicates, and the driver's `--backend`
+    /// flag. The single source of truth - everything else parses or
+    /// formats through here, so we don't end up sprinkling string
+    /// literals around the codebase.
+    pub const fn name(self) -> &'static str {
+        match self {
+            Backend::Rust => "rust",
+            #[cfg(feature = "json")]
+            Backend::Json => "json",
+            #[cfg(feature = "cpp")]
+            Backend::Cpp => "cpp",
+        }
+    }
+
+    /// All variants in canonical order. Used by parser-error messages
+    /// to enumerate valid backend names. `Json` / `Cpp` are conditional
+    /// on their respective features - without them, parsing
+    /// `backend json { ... }` / `backend cpp { ... }` fails as an
+    /// unknown backend.
+    pub const ALL: &'static [Backend] = &[
+        Backend::Rust,
+        #[cfg(feature = "json")]
+        Backend::Json,
+        #[cfg(feature = "cpp")]
+        Backend::Cpp,
+    ];
+
+    /// Parse a backend keyword. `None` if the input doesn't match any
+    /// known backend - callers translate to a typed error appropriate
+    /// to their layer (parse error, semantic error, driver CLI error).
+    pub fn from_name(name: &str) -> Option<Backend> {
+        Self::ALL.iter().copied().find(|b| b.name() == name)
+    }
+}
+
+impl std::fmt::Display for Backend {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
+impl std::str::FromStr for Backend {
+    type Err = UnknownBackend;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Backend::from_name(s).ok_or_else(|| UnknownBackend(s.to_string()))
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnknownBackend(pub String);
+impl std::fmt::Display for UnknownBackend {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "unknown backend `{}`; valid backends are: {}",
+            self.0,
+            Backend::ALL
+                .iter()
+                .map(|b| b.name())
+                .collect::<Vec<_>>()
+                .join(", "),
+        )
+    }
+}
+impl std::error::Error for UnknownBackend {}
+
+#[cfg(test)]
+impl crate::span::StripLocations for Backend {
+    fn strip_locations(&self) -> Self {
+        *self
+    }
+}
+
+#[cfg(test)]
+mod backend_tests {
+    use super::Backend;
+    use std::str::FromStr;
+
+    #[test]
+    fn name_round_trips() {
+        for &b in Backend::ALL {
+            assert_eq!(Backend::from_name(b.name()), Some(b));
+            assert_eq!(b.to_string(), b.name());
+        }
+    }
+
+    #[test]
+    fn unknown_name_yields_none() {
+        assert_eq!(Backend::from_name("foobar"), None);
+        assert_eq!(Backend::from_name("RUST"), None); // case-sensitive
+        assert_eq!(Backend::from_name(""), None);
+    }
+
+    #[test]
+    fn from_str_yields_unknown_backend_error() {
+        let err = Backend::from_str("foobar").unwrap_err();
+        assert_eq!(err.0, "foobar");
+        // Display includes the list of valid names.
+        let msg = err.to_string();
+        assert!(msg.contains("foobar"));
+        assert!(msg.contains("rust"));
+    }
+
+    #[test]
+    fn known_variants_are_all_in_all() {
+        // ALL must be exhaustive over the enum so `from_name` matches
+        // every variant.
+        let all_names: Vec<_> = Backend::ALL.iter().map(|b| b.name()).collect();
+        assert!(all_names.contains(&"rust"));
+        #[cfg(feature = "cpp")]
+        assert!(all_names.contains(&"cpp"));
+        #[cfg(feature = "json")]
+        assert!(all_names.contains(&"json"));
+    }
+
+    #[cfg(not(feature = "json"))]
+    #[test]
+    fn json_excluded_when_feature_disabled() {
+        assert_eq!(Backend::from_name("json"), None);
+    }
+
+    #[cfg(not(feature = "cpp"))]
+    #[test]
+    fn cpp_excluded_when_feature_disabled() {
+        assert_eq!(Backend::from_name("cpp"), None);
+    }
 }
 
 /// Build error type that wraps different error sources
@@ -165,6 +297,11 @@ pub fn build_with_store(
                 &config.project.name,
                 file_store,
             )?;
+            Ok(())
+        }
+        #[cfg(feature = "cpp")]
+        Backend::Cpp => {
+            backends::cpp::build(out_dir, &resolved_semantic_state, &config.project)?;
             Ok(())
         }
     }
