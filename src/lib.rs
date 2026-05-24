@@ -24,6 +24,7 @@ pub enum Backend {
     Rust,
     #[cfg(feature = "json")]
     Json,
+    #[cfg(feature = "cpp")]
     Cpp,
 }
 
@@ -38,18 +39,21 @@ impl Backend {
             Backend::Rust => "rust",
             #[cfg(feature = "json")]
             Backend::Json => "json",
+            #[cfg(feature = "cpp")]
             Backend::Cpp => "cpp",
         }
     }
 
     /// All variants in canonical order. Used by parser-error messages
-    /// to enumerate valid backend names. `Json` is conditional on the
-    /// `json` feature - without it, parsing `backend json { ... }`
-    /// fails as an unknown backend.
+    /// to enumerate valid backend names. `Json` / `Cpp` are conditional
+    /// on their respective features - without them, parsing
+    /// `backend json { ... }` / `backend cpp { ... }` fails as an
+    /// unknown backend.
     pub const ALL: &'static [Backend] = &[
         Backend::Rust,
         #[cfg(feature = "json")]
         Backend::Json,
+        #[cfg(feature = "cpp")]
         Backend::Cpp,
     ];
 
@@ -127,7 +131,6 @@ mod backend_tests {
         let msg = err.to_string();
         assert!(msg.contains("foobar"));
         assert!(msg.contains("rust"));
-        assert!(msg.contains("cpp"));
     }
 
     #[test]
@@ -136,6 +139,7 @@ mod backend_tests {
         // every variant.
         let all_names: Vec<_> = Backend::ALL.iter().map(|b| b.name()).collect();
         assert!(all_names.contains(&"rust"));
+        #[cfg(feature = "cpp")]
         assert!(all_names.contains(&"cpp"));
         #[cfg(feature = "json")]
         assert!(all_names.contains(&"json"));
@@ -145,6 +149,12 @@ mod backend_tests {
     #[test]
     fn json_excluded_when_feature_disabled() {
         assert_eq!(Backend::from_name("json"), None);
+    }
+
+    #[cfg(not(feature = "cpp"))]
+    #[test]
+    fn cpp_excluded_when_feature_disabled() {
+        assert_eq!(Backend::from_name("cpp"), None);
     }
 }
 
@@ -289,6 +299,7 @@ pub fn build_with_store(
             )?;
             Ok(())
         }
+        #[cfg(feature = "cpp")]
         Backend::Cpp => {
             backends::cpp::build(out_dir, &resolved_semantic_state, &config.project)?;
             Ok(())

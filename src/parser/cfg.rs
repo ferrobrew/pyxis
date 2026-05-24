@@ -182,6 +182,7 @@ mod tests {
         CfgContext { backend }
     }
 
+    #[cfg(feature = "cpp")]
     fn cpp() -> CfgContext {
         ctx(crate::Backend::Cpp)
     }
@@ -193,6 +194,7 @@ mod tests {
         ctx(crate::Backend::Json)
     }
 
+    #[cfg(feature = "cpp")]
     #[test]
     fn atom_backend_match() {
         let p = kv("backend", "cpp");
@@ -203,11 +205,11 @@ mod tests {
     #[test]
     fn unknown_atom_is_false() {
         // Closed-world: unknown atoms always false.
-        assert!(!ident("test").evaluate(&cpp()));
-        assert!(!kv("unknown_key", "x").evaluate(&cpp()));
+        assert!(!ident("test").evaluate(&rust()));
+        assert!(!kv("unknown_key", "x").evaluate(&rust()));
     }
 
-    #[cfg(feature = "json")]
+    #[cfg(all(feature = "cpp", feature = "json"))]
     #[test]
     fn any_short_circuits_on_first_true() {
         let p = any(vec![kv("backend", "rust"), kv("backend", "cpp")]);
@@ -216,6 +218,7 @@ mod tests {
         assert!(!p.evaluate(&json()));
     }
 
+    #[cfg(feature = "cpp")]
     #[test]
     fn all_requires_every_clause() {
         let p = all(vec![kv("backend", "cpp"), ident("test")]);
@@ -223,7 +226,7 @@ mod tests {
         assert!(!p.evaluate(&cpp()));
     }
 
-    #[cfg(feature = "json")]
+    #[cfg(all(feature = "cpp", feature = "json"))]
     #[test]
     fn not_inverts() {
         // `not(backend = "rust")` should be true on every non-rust backend,
@@ -235,7 +238,7 @@ mod tests {
         assert!(!p.evaluate(&rust()));
     }
 
-    #[cfg(feature = "json")]
+    #[cfg(all(feature = "cpp", feature = "json"))]
     #[test]
     fn nested_combinations() {
         // any(all(backend = "cpp", not(test)), backend = "rust")
@@ -251,7 +254,7 @@ mod tests {
     #[test]
     fn empty_any_and_all() {
         // Mathematical conventions: empty any = false, empty all = true.
-        assert!(!any(vec![]).evaluate(&cpp()));
-        assert!(all(vec![]).evaluate(&cpp()));
+        assert!(!any(vec![]).evaluate(&rust()));
+        assert!(all(vec![]).evaluate(&rust()));
     }
 }

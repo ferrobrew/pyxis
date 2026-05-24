@@ -5,6 +5,7 @@ use crate::{
     semantic::{error::SemanticError, semantic_state::SemanticState},
 };
 
+#[cfg(feature = "cpp")]
 #[test]
 fn cpp_backend_accepts_definition_modifier() {
     let module = M::new().with_backends([B::new("cpp")

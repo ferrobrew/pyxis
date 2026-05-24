@@ -757,9 +757,22 @@ impl SemanticState {
     /// json emit single-output-per-module), so the modifier on those is
     /// almost certainly a typo or copy-paste error.
     fn validate_backend_definitions(&self) -> Result<()> {
+        // When the cpp feature is off, `Backend::Cpp` doesn't exist and
+        // no backend supports the modifier. Centralise the "which backend
+        // supports `definition`?" check so the cpp branch is the only
+        // cfg-gated piece.
+        fn supports_definition(backend: crate::Backend) -> bool {
+            match backend {
+                crate::Backend::Rust => false,
+                #[cfg(feature = "json")]
+                crate::Backend::Json => false,
+                #[cfg(feature = "cpp")]
+                crate::Backend::Cpp => true,
+            }
+        }
         for module in self.modules.values() {
             for backend in module.ast.backends() {
-                if backend.name == crate::Backend::Cpp {
+                if supports_definition(backend.name) {
                     continue;
                 }
                 let has_definition =

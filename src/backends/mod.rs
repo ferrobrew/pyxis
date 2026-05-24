@@ -1,3 +1,4 @@
+#[cfg(feature = "cpp")]
 pub mod cpp;
 pub mod error;
 #[cfg(feature = "json")]

@@ -907,6 +907,7 @@ backend rust epilogue r#"
         assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
     }
 
+    #[cfg(feature = "cpp")]
     #[test]
     fn can_parse_backend_with_uses() {
         let text = r##"
@@ -955,25 +956,24 @@ backend cpp {
 
     #[test]
     fn known_backend_names_parse() {
-        // The three current backend names (rust, cpp, json when feature
-        // enabled) should all round-trip cleanly through the parser.
-        for name in ["rust", "cpp"] {
+        // Every enabled backend name should round-trip cleanly through
+        // the parser. `cpp` and `json` are feature-gated, so only assert
+        // on them when their feature is on.
+        let mut names: Vec<&'static str> = vec!["rust"];
+        #[cfg(feature = "cpp")]
+        names.push("cpp");
+        #[cfg(feature = "json")]
+        names.push("json");
+        for name in names {
             let text = format!(r##"backend {name} prologue r#""#;"##);
             let module = parse_str_for_tests(&text).unwrap();
             let backends: Vec<_> = module.backends().collect();
             assert_eq!(backends.len(), 1);
             assert_eq!(backends[0].name.name(), name);
         }
-        #[cfg(feature = "json")]
-        {
-            let text = r##"backend json prologue r#""#;"##;
-            let module = parse_str_for_tests(text).unwrap();
-            let backends: Vec<_> = module.backends().collect();
-            assert_eq!(backends.len(), 1);
-            assert_eq!(backends[0].name.name(), "json");
-        }
     }
 
+    #[cfg(feature = "cpp")]
     #[test]
     fn can_parse_backend_with_definition_modifier() {
         // The `definition` modifier on an epilogue/prologue lands in the

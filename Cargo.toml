@@ -31,10 +31,11 @@ specta = { workspace = true, optional = true }
 
 [features]
 json = ["dep:serde_json", "dep:specta"]
+cpp = []
 
 [[example]]
 name = "codegen_tests"
-required-features = ["json"]
+required-features = ["json", "cpp"]
 
 [dev-dependencies]
 pretty_assertions = "1.4"
