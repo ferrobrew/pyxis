@@ -6,7 +6,8 @@
 
 // Calling-convention shim. We always target MSVC ABI (x86 32-bit Windows via
 // clang-cl + xwin); on non-MSVC dev hosts the macros expand to nothing so
-// generated headers still compile-check during iteration.
+// generated headers still compile-check during iteration. The macro list
+// is generated from `cpp::runtime::PYXIS_CC_MACROS`.
 #if defined(_MSC_VER)
 #  define PYXIS_CDECL __cdecl
 #  define PYXIS_STDCALL __stdcall
@@ -18,9 +19,7 @@
 #  define PYXIS_STDCALL __attribute__((stdcall))
 #  define PYXIS_FASTCALL __attribute__((fastcall))
 #  define PYXIS_THISCALL __attribute__((thiscall))
-// Clang/GCC don't have a real vectorcall on i386; expand to nothing so
-// the dev-loop compile-check still works. Any binary that actually
-// relies on vectorcall semantics must build against the MSVC arm above.
+// `PYXIS_VECTORCALL` expands to nothing on this branch — clang/GCC don't have a real equivalent on i386; binaries that need the convention's semantics must build against the MSVC arm.
 #  define PYXIS_VECTORCALL
 #else
 #  define PYXIS_CDECL

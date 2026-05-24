@@ -8,7 +8,7 @@ use std::collections::BTreeMap;
 use std::fmt::Write;
 
 use crate::{
-    backends::{Result, cpp::extern_bindings::CppExternBinding},
+    backends::{Result, cpp::extern_bindings::CppExternBinding, cpp::runtime},
     grammar::ItemPath,
     semantic::{
         TypeRegistry,
@@ -552,19 +552,12 @@ fn method_body_lines(func: &Function, ctx: RenderCtx) -> Result<Vec<String>> {
     })
 }
 
-/// Map a calling convention to the MSVC keyword. We always target MSVC ABI;
-/// `pyxis_runtime.hpp` provides a macro shim that no-ops these on non-MSVC
-/// hosts so the backend output still compile-checks against `clang++` for
-/// quick dev-loop iteration.
+/// Map a calling convention to its `PYXIS_*` shim macro (with a
+/// trailing space, suitable for concatenation into a function-pointer
+/// signature). Defined in [`runtime`] so both this lookup and the
+/// runtime header's `#define`s share the same table.
 fn calling_conv_macro(cc: CallingConvention) -> &'static str {
-    match cc {
-        CallingConvention::C | CallingConvention::Cdecl => "PYXIS_CDECL ",
-        CallingConvention::Stdcall => "PYXIS_STDCALL ",
-        CallingConvention::Fastcall => "PYXIS_FASTCALL ",
-        CallingConvention::Thiscall => "PYXIS_THISCALL ",
-        CallingConvention::Vectorcall => "PYXIS_VECTORCALL ",
-        CallingConvention::System => "",
-    }
+    runtime::macro_emit(cc)
 }
 
 fn render_field(
