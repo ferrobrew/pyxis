@@ -11,7 +11,9 @@ Pyxis emits one of three target languages:
   for C++ tooling that wants to link a static library. Targets the MSVC
   ABI directly (composition-only structs, `__thiscall`/`__stdcall`/etc.
   on `#[address]`-bound functions); generated code is portable to any
-  MSVC-ABI consumer (real Windows + MSVC, or `clang-cl`).
+  MSVC-ABI consumer (real Windows + MSVC, or `clang-cl`). See
+  [`docs/cpp_backend.md`](docs/cpp_backend.md) for the design
+  decisions and ABI tradeoffs.
 
 ```sh
 cargo run -p pyxis-driver -- build --backend cpp <input-dir> <output-dir>
