@@ -129,6 +129,37 @@ impl Attribute {
             location: ItemLocation::test(),
         }
     }
+    pub fn external_body() -> Self {
+        Attribute::Ident {
+            ident: "external_body".into(),
+            location: ItemLocation::test(),
+        }
+    }
+    /// The (intentionally wrong) `#[external_body(...)]` function form,
+    /// used by semantic tests that exercise `AttributeWrongForm`.
+    pub fn external_body_function_form() -> Self {
+        Attribute::Function {
+            name: "external_body".into(),
+            items: AttributeItems(vec![]),
+            location: ItemLocation::test(),
+        }
+    }
+    /// The (intentionally wrong) `#[external_body = ...]` assign form,
+    /// used by semantic tests that exercise `AttributeWrongForm`.
+    pub fn external_body_assign_form() -> Self {
+        Attribute::Assign {
+            name: "external_body".into(),
+            items: AttributeItems(vec![AttributeItem::Expr {
+                expr: Expr::IntLiteral {
+                    value: 0,
+                    format: IntFormat::Decimal,
+                    location: ItemLocation::test(),
+                },
+                location: ItemLocation::test(),
+            }]),
+            location: ItemLocation::test(),
+        }
+    }
 
     pub fn integer_fn(attr_name: &str, value: isize) -> Self {
         Attribute::Function {

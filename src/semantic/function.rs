@@ -385,21 +385,40 @@ pub fn build(
     let mut calling_convention = None;
     for attribute in &function.attributes {
         // `#[external_body]` is an ident attribute (no arguments). Parse it
-        // here before the function-style attribute handling below.
-        if let grammar::Attribute::Ident { ident, .. } = attribute
-            && ident.as_str() == "external_body"
-        {
-            if is_vfunc {
-                return Err(SemanticError::AttributeNotSupported {
+        // here before the function-style attribute handling below. The
+        // function-form (`#[external_body(...)]`) and assign-form
+        // (`#[external_body = ...]`) are both wrong — reject them
+        // explicitly so typos like `#[external_body()]` don't silently
+        // fall through as unknown function-style attributes.
+        match attribute {
+            grammar::Attribute::Ident { ident, .. } if ident.as_str() == "external_body" => {
+                if is_vfunc {
+                    return Err(SemanticError::AttributeNotSupported {
+                        attribute_name: AttributeName::ExternalBody,
+                        attribute_context: AttributeNotSupportedContext::VirtualFunction {
+                            function_name: function.name.0.clone(),
+                        },
+                        location: function.location,
+                    });
+                }
+                body = Some(FunctionBody::External);
+                continue;
+            }
+            grammar::Attribute::Function { name, .. } if name.as_str() == "external_body" => {
+                return Err(SemanticError::AttributeWrongForm {
                     attribute_name: AttributeName::ExternalBody,
-                    attribute_context: AttributeNotSupportedContext::VirtualFunction {
-                        function_name: function.name.0.clone(),
-                    },
-                    location: function.location,
+                    expected: "the bare ident `#[external_body]` (no arguments)".into(),
+                    location: *attribute.location(),
                 });
             }
-            body = Some(FunctionBody::External);
-            continue;
+            grammar::Attribute::Assign { name, .. } if name.as_str() == "external_body" => {
+                return Err(SemanticError::AttributeWrongForm {
+                    attribute_name: AttributeName::ExternalBody,
+                    expected: "the bare ident `#[external_body]` (no value)".into(),
+                    location: *attribute.location(),
+                });
+            }
+            _ => {}
         }
         let Some((ident, items)) = attribute.function() else {
             continue;

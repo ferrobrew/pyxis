@@ -521,6 +521,15 @@ pub enum SemanticError {
         attribute_context: AttributeNotSupportedContext,
         location: ItemLocation,
     },
+    /// An attribute was written with a syntactic form it doesn't accept
+    /// (e.g. `#[external_body(...)]` instead of the bare ident
+    /// `#[external_body]`). `expected` is a short description of the
+    /// supported form for the diagnostic.
+    AttributeWrongForm {
+        attribute_name: AttributeName,
+        expected: String,
+        location: ItemLocation,
+    },
     /// Unsupported enum value for a case
     EnumUnsupportedValue {
         item_path: ItemPath,
@@ -843,6 +852,15 @@ impl SemanticError {
             } => {
                 format!("Attribute `{attribute_name}` is not supported for {attribute_context}")
             }
+            SemanticError::AttributeWrongForm {
+                attribute_name,
+                expected,
+                ..
+            } => {
+                format!(
+                    "Attribute `{attribute_name}` must be written as {expected}"
+                )
+            }
             SemanticError::EnumUnsupportedValue {
                 item_path,
                 case_name,
@@ -959,6 +977,7 @@ impl SemanticError {
             SemanticError::FunctionMissingImplementation { location, .. } => Some(location),
             SemanticError::InvalidCallingConvention { location, .. } => Some(location),
             SemanticError::AttributeNotSupported { location, .. } => Some(location),
+            SemanticError::AttributeWrongForm { location, .. } => Some(location),
             SemanticError::EnumUnsupportedValue { location, .. } => Some(location),
             SemanticError::EnumMultipleDefaults { location, .. } => Some(location),
             SemanticError::EnumDefaultWithoutDefaultable { location, .. } => Some(location),
