@@ -593,6 +593,52 @@
       },
       "source": null
     },
+    "cfg::CppOnlyType": {
+      "path": "cfg::CppOnlyType",
+      "visibility": "public",
+      "size": 4,
+      "alignment": 4,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "flag",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "u32"
+            },
+            "offset": 0,
+            "size": 4,
+            "alignment": 4,
+            "is_base": false,
+            "source": {
+              "file_index": 5,
+              "line": 38
+            }
+          }
+        ],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false
+      },
+      "cfg": {
+        "type": "key_value",
+        "key": "backend",
+        "value": "cpp"
+      },
+      "source": {
+        "file_index": 5,
+        "line": 36
+      }
+    },
     "cfg::Probe": {
       "path": "cfg::Probe",
       "visibility": "public",
@@ -646,6 +692,60 @@
           },
           {
             "visibility": "public",
+            "name": "cpp_only",
+            "doc": null,
+            "body": {
+              "type": "external"
+            },
+            "arguments": [
+              {
+                "type": "const_self"
+              }
+            ],
+            "return_type": {
+              "type": "raw",
+              "path": "u32"
+            },
+            "calling_convention": "system",
+            "cfg": {
+              "type": "key_value",
+              "key": "backend",
+              "value": "cpp"
+            },
+            "source": {
+              "file_index": 5,
+              "line": 15
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "rust_only",
+            "doc": null,
+            "body": {
+              "type": "external"
+            },
+            "arguments": [
+              {
+                "type": "const_self"
+              }
+            ],
+            "return_type": {
+              "type": "raw",
+              "path": "u32"
+            },
+            "calling_convention": "system",
+            "cfg": {
+              "type": "key_value",
+              "key": "backend",
+              "value": "rust"
+            },
+            "source": {
+              "file_index": 5,
+              "line": 18
+            }
+          },
+          {
+            "visibility": "public",
             "name": "cpp_or_json",
             "doc": null,
             "body": {
@@ -661,6 +761,21 @@
               "path": "u32"
             },
             "calling_convention": "system",
+            "cfg": {
+              "type": "any",
+              "predicates": [
+                {
+                  "type": "key_value",
+                  "key": "backend",
+                  "value": "cpp"
+                },
+                {
+                  "type": "key_value",
+                  "key": "backend",
+                  "value": "json"
+                }
+              ]
+            },
             "source": {
               "file_index": 5,
               "line": 21
@@ -683,9 +798,44 @@
               "path": "u32"
             },
             "calling_convention": "system",
+            "cfg": {
+              "type": "not",
+              "predicate": {
+                "type": "key_value",
+                "key": "backend",
+                "value": "rust"
+              }
+            },
             "source": {
               "file_index": 5,
               "line": 24
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "rust_block_method",
+            "doc": null,
+            "body": {
+              "type": "external"
+            },
+            "arguments": [
+              {
+                "type": "const_self"
+              }
+            ],
+            "return_type": {
+              "type": "raw",
+              "path": "u32"
+            },
+            "calling_convention": "system",
+            "cfg": {
+              "type": "key_value",
+              "key": "backend",
+              "value": "rust"
+            },
+            "source": {
+              "file_index": 5,
+              "line": 31
             }
           }
         ],
@@ -6177,6 +6327,7 @@
     "cfg": {
       "doc": null,
       "items": [
+        "cfg::CppOnlyType",
         "cfg::Probe"
       ],
       "submodules": {},

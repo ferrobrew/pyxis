@@ -77,6 +77,34 @@ default: number | null };
 export type JsonCallingConvention = "c" | "cdecl" | "stdcall" | "fastcall" | "thiscall" | "vectorcall" | "system";
 
 /**
+ * `#[cfg(...)]` predicate AST, mirroring the parser's
+ * [`crate::parser::cfg::CfgPredicate`] shape with locations stripped.
+ * Emitted on items/functions so documentation consumers can decide
+ * per-backend rendering without re-parsing.
+ */
+export type JsonCfg = 
+/**
+ * A bare ident atom: `#[cfg(test)]`.
+ */
+{ type: "ident"; name: string } | 
+/**
+ * A key/value atom: `#[cfg(backend = "cpp")]`.
+ */
+{ type: "key_value"; key: string; value: string } | 
+/**
+ * `any(...)` combinator.
+ */
+{ type: "any"; predicates: JsonCfg[] } | 
+/**
+ * `all(...)` combinator.
+ */
+{ type: "all"; predicates: JsonCfg[] } | 
+/**
+ * `not(...)` combinator.
+ */
+{ type: "not"; predicate: JsonCfg };
+
+/**
  * Top-level JSON documentation structure
  */
 export type JsonDocumentation = { 
@@ -208,6 +236,11 @@ calling_convention: JsonCallingConvention;
  */
 method_type_parameters?: string[]; 
 /**
+ * `#[cfg(...)]` predicate the function is gated by, if any. Methods
+ * inherit the conjunction of their impl block's cfg and their own.
+ */
+cfg?: JsonCfg | null; 
+/**
  * Source location (file and line)
  */
 source: JsonSourceLocation | null };
@@ -253,6 +286,12 @@ category: JsonItemCategory;
  * Item kind and details
  */
 kind: JsonItemKind; 
+/**
+ * `#[cfg(...)]` predicate the item is gated by, if any. Always
+ * emitted (the JSON output is documentation, not a build target);
+ * downstream tooling decides how to render and/or filter.
+ */
+cfg?: JsonCfg | null; 
 /**
  * Source location (file and line) - None for predefined/internal items
  */

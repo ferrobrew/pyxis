@@ -119,6 +119,11 @@ pub struct JsonItem {
     pub category: JsonItemCategory,
     /// Item kind and details
     pub kind: JsonItemKind,
+    /// `#[cfg(...)]` predicate the item is gated by, if any. Always
+    /// emitted (the JSON output is documentation, not a build target);
+    /// downstream tooling decides how to render and/or filter.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cfg: Option<JsonCfg>,
     /// Source location (file and line) - None for predefined/internal items
     pub source: Option<JsonSourceLocation>,
 }
@@ -268,8 +273,31 @@ pub struct JsonFunction {
     /// parent struct's own type parameters (`Y` in `impl<T, Y> Foo<T> {...}`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub method_type_parameters: Vec<String>,
+    /// `#[cfg(...)]` predicate the function is gated by, if any. Methods
+    /// inherit the conjunction of their impl block's cfg and their own.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cfg: Option<JsonCfg>,
     /// Source location (file and line)
     pub source: Option<JsonSourceLocation>,
+}
+
+/// `#[cfg(...)]` predicate AST, mirroring the parser's
+/// [`crate::parser::cfg::CfgPredicate`] shape with locations stripped.
+/// Emitted on items/functions so documentation consumers can decide
+/// per-backend rendering without re-parsing.
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum JsonCfg {
+    /// A bare ident atom: `#[cfg(test)]`.
+    Ident { name: String },
+    /// A key/value atom: `#[cfg(backend = "cpp")]`.
+    KeyValue { key: String, value: String },
+    /// `any(...)` combinator.
+    Any { predicates: Vec<JsonCfg> },
+    /// `all(...)` combinator.
+    All { predicates: Vec<JsonCfg> },
+    /// `not(...)` combinator.
+    Not { predicate: Box<JsonCfg> },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
@@ -457,23 +485,15 @@ pub fn build(
         .map(|i| file_store.filename(FileId::new(i as u32)).to_string())
         .collect();
 
-    // Build items map. Filter items whose `#[cfg(...)]` predicate evaluates
-    // false for `backend = "json"`. Each backend treats cfg uniformly: if
-    // it's not the named backend, the item disappears from output.
-    let cfg_ctx = crate::parser::cfg::CfgContext {
-        backend: crate::Backend::Json,
-    };
-    let cfg_pass = |cfg: &Option<crate::parser::cfg::CfgPredicate>| match cfg {
-        Some(p) => p.evaluate(&cfg_ctx),
-        None => true,
-    };
+    // Build items map. The JSON output is documentation, not a build
+    // target, so we deliberately do NOT filter by `cfg(backend = ...)` -
+    // every item (and every method/function) is emitted with its `cfg`
+    // predicate attached as structured data so downstream tooling can
+    // render or filter per their own rules.
     let mut items = BTreeMap::new();
     for module in semantic_state.modules().values() {
         for definition in module.definitions(type_registry) {
-            if !cfg_pass(&definition.cfg) {
-                continue;
-            }
-            if let Some(json_item) = convert_item(definition, type_registry, &cfg_ctx) {
+            if let Some(json_item) = convert_item(definition, type_registry) {
                 items.insert(json_item.path.clone(), json_item);
             }
         }
@@ -588,7 +608,30 @@ fn convert_function(func: &Function) -> JsonFunction {
         return_type: func.return_type.as_ref().map(convert_type),
         calling_convention: func.calling_convention.into(),
         method_type_parameters: func.method_type_parameters.clone(),
+        cfg: func.cfg.as_ref().map(convert_cfg),
         source: convert_location(&func.location),
+    }
+}
+
+fn convert_cfg(pred: &crate::parser::cfg::CfgPredicate) -> JsonCfg {
+    use crate::parser::cfg::{CfgAtom, CfgPredicate};
+    match pred {
+        CfgPredicate::Atom { atom, .. } => match atom {
+            CfgAtom::Ident { name, .. } => JsonCfg::Ident { name: name.clone() },
+            CfgAtom::KeyValue { key, value, .. } => JsonCfg::KeyValue {
+                key: key.clone(),
+                value: value.clone(),
+            },
+        },
+        CfgPredicate::Any { predicates, .. } => JsonCfg::Any {
+            predicates: predicates.iter().map(convert_cfg).collect(),
+        },
+        CfgPredicate::All { predicates, .. } => JsonCfg::All {
+            predicates: predicates.iter().map(convert_cfg).collect(),
+        },
+        CfgPredicate::Not { predicate, .. } => JsonCfg::Not {
+            predicate: Box::new(convert_cfg(predicate)),
+        },
     }
 }
 
@@ -609,35 +652,13 @@ fn convert_region(region: &Region, type_registry: &TypeRegistry, offset: usize) 
     }
 }
 
-fn convert_vftable(
-    vftable: &TypeVftable,
-    cfg_ctx: &crate::parser::cfg::CfgContext,
-) -> JsonTypeVftable {
+fn convert_vftable(vftable: &TypeVftable) -> JsonTypeVftable {
     JsonTypeVftable {
-        functions: vftable
-            .functions
-            .iter()
-            .filter(|f| cfg_passes(&f.cfg, cfg_ctx))
-            .map(convert_function)
-            .collect(),
+        functions: vftable.functions.iter().map(convert_function).collect(),
     }
 }
 
-fn cfg_passes(
-    cfg: &Option<crate::parser::cfg::CfgPredicate>,
-    ctx: &crate::parser::cfg::CfgContext,
-) -> bool {
-    match cfg {
-        Some(p) => p.evaluate(ctx),
-        None => true,
-    }
-}
-
-fn convert_type_definition(
-    td: &TypeDefinition,
-    type_registry: &TypeRegistry,
-    cfg_ctx: &crate::parser::cfg::CfgContext,
-) -> JsonTypeDefinition {
+fn convert_type_definition(td: &TypeDefinition, type_registry: &TypeRegistry) -> JsonTypeDefinition {
     // Calculate field offsets
     let mut current_offset = 0;
     let fields = td
@@ -656,10 +677,9 @@ fn convert_type_definition(
         associated_functions: td
             .associated_functions
             .iter()
-            .filter(|f| cfg_passes(&f.cfg, cfg_ctx))
             .map(convert_function)
             .collect(),
-        vftable: td.vftable.as_ref().map(|v| convert_vftable(v, cfg_ctx)),
+        vftable: td.vftable.as_ref().map(convert_vftable),
         singleton: td.singleton,
         copyable: td.copyable,
         cloneable: td.cloneable,
@@ -676,10 +696,7 @@ fn convert_enum_variant(variant: &EnumVariant) -> JsonEnumVariant {
     }
 }
 
-fn convert_enum_definition(
-    ed: &EnumDefinition,
-    cfg_ctx: &crate::parser::cfg::CfgContext,
-) -> JsonEnumDefinition {
+fn convert_enum_definition(ed: &EnumDefinition) -> JsonEnumDefinition {
     JsonEnumDefinition {
         doc: doc_to_option(&ed.doc),
         underlying_type: convert_type(&ed.type_),
@@ -687,7 +704,6 @@ fn convert_enum_definition(
         associated_functions: ed
             .associated_functions
             .iter()
-            .filter(|f| cfg_passes(&f.cfg, cfg_ctx))
             .map(convert_function)
             .collect(),
         singleton: ed.singleton,
@@ -724,18 +740,14 @@ fn convert_type_alias_definition(ta: &TypeAliasDefinition) -> JsonTypeAliasDefin
     }
 }
 
-fn convert_item(
-    item: &ItemDefinition,
-    type_registry: &TypeRegistry,
-    cfg_ctx: &crate::parser::cfg::CfgContext,
-) -> Option<JsonItem> {
+fn convert_item(item: &ItemDefinition, type_registry: &TypeRegistry) -> Option<JsonItem> {
     let resolved = item.resolved()?;
 
     let kind = match &resolved.inner {
         ItemDefinitionInner::Type(td) => {
-            JsonItemKind::Type(convert_type_definition(td, type_registry, cfg_ctx))
+            JsonItemKind::Type(convert_type_definition(td, type_registry))
         }
-        ItemDefinitionInner::Enum(ed) => JsonItemKind::Enum(convert_enum_definition(ed, cfg_ctx)),
+        ItemDefinitionInner::Enum(ed) => JsonItemKind::Enum(convert_enum_definition(ed)),
         ItemDefinitionInner::Bitflags(bd) => {
             JsonItemKind::Bitflags(convert_bitflags_definition(bd))
         }
@@ -755,6 +767,7 @@ fn convert_item(
         alignment: resolved.alignment,
         category: item.category.into(),
         kind,
+        cfg: item.cfg.as_ref().map(convert_cfg),
         source,
     })
 }
@@ -792,9 +805,6 @@ fn convert_backend(backend: &Backend) -> JsonBackend {
 
 /// Build the module hierarchy from a flat list of modules
 fn build_module_hierarchy(semantic_state: &ResolvedSemanticState) -> BTreeMap<String, JsonModule> {
-    let cfg_ctx = crate::parser::cfg::CfgContext {
-        backend: crate::Backend::Json,
-    };
     let mut root_modules: BTreeMap<String, JsonModule> = BTreeMap::new();
 
     for (module_path, module) in semantic_state.modules() {
@@ -804,14 +814,13 @@ fn build_module_hierarchy(semantic_state: &ResolvedSemanticState) -> BTreeMap<St
             .map(|s| s.to_string())
             .collect();
 
-        // Get items for this module (cfg-filtered).
+        // Items, externs, and functions are all emitted regardless of
+        // any `#[cfg(...)]` predicate: consumers read the predicate off
+        // each item/function and decide for themselves how to render.
         let items: Vec<String> = module
             .definitions(semantic_state.type_registry())
-            .filter(|item| cfg_passes(&item.cfg, &cfg_ctx))
             .map(|item| item.path.to_string())
             .collect();
-
-        // Convert extern values and functions (cfg-filtered).
         let extern_values: Vec<JsonExternValue> = module
             .extern_values
             .iter()
@@ -820,7 +829,6 @@ fn build_module_hierarchy(semantic_state: &ResolvedSemanticState) -> BTreeMap<St
         let functions: Vec<JsonFunction> = module
             .functions()
             .iter()
-            .filter(|f| cfg_passes(&f.cfg, &cfg_ctx))
             .map(convert_function)
             .collect();
 
