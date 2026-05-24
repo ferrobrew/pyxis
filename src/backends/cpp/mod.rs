@@ -566,7 +566,10 @@ pub fn write_runtime_header(out_dir: &Path) -> Result<()> {
 #  define PYXIS_STDCALL __attribute__((stdcall))
 #  define PYXIS_FASTCALL __attribute__((fastcall))
 #  define PYXIS_THISCALL __attribute__((thiscall))
-#  define PYXIS_VECTORCALL __attribute__((sysv_abi))
+// Clang/GCC don't have a real vectorcall on i386; expand to nothing so
+// the dev-loop compile-check still works. Any binary that actually
+// relies on vectorcall semantics must build against the MSVC arm above.
+#  define PYXIS_VECTORCALL
 #else
 #  define PYXIS_CDECL
 #  define PYXIS_STDCALL
