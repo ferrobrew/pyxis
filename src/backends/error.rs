@@ -43,7 +43,10 @@ impl fmt::Display for FieldCodeGenFailedKind {
     }
 }
 
-/// Backend code generation errors
+/// Backend code generation errors. Per-backend failure modes live in
+/// their own enums (e.g. [`CppBackendError`]) and surface via the
+/// matching `BackendError` variant, gated on the backend's feature
+/// flag so disabled backends impose no compile-time cost.
 #[derive(Debug)]
 pub enum BackendError {
     /// IO error during code generation
@@ -70,18 +73,60 @@ pub enum BackendError {
         kind: FieldCodeGenFailedKind,
         location: ItemLocation,
     },
-    /// The C++ backend's dependency analysis found a strongly-connected
-    /// component on FullDef edges — a real layout cycle that no amount of
-    /// forward-decling can resolve. The cycle is reported as the list of
-    /// items (or modules) that form it, in traversal order.
-    CppLayoutCycle {
+    /// C++-backend-specific error. Closed-world (not type-erased) so
+    /// callers can pattern-match on the exact failure mode; only present
+    /// when the `cpp` feature is enabled.
+    #[cfg(feature = "cpp")]
+    Cpp(CppBackendError),
+}
+
+/// C++-backend-specific failure modes. Lives here (instead of inside
+/// `backends::cpp`) so [`BackendError`] can refer to it without a
+/// cyclic import, but the rest of the type system treats it as cpp's
+/// concern — adding a new variant doesn't touch any other backend.
+#[cfg(feature = "cpp")]
+#[derive(Debug)]
+pub enum CppBackendError {
+    /// The cpp backend's dependency analysis found a strongly-connected
+    /// component on FullDef edges — a real layout cycle that no amount
+    /// of forward-decling can resolve. The cycle is reported as the
+    /// list of items (or modules) that form it, in traversal order.
+    LayoutCycle {
         scope: CppLayoutCycleScope,
         cycle: Vec<ItemPath>,
         location: ItemLocation,
     },
 }
 
+#[cfg(feature = "cpp")]
+impl CppBackendError {
+    fn error_message(&self) -> String {
+        match self {
+            CppBackendError::LayoutCycle { scope, cycle, .. } => {
+                let chain = cycle
+                    .iter()
+                    .map(|p| format!("`{p}`"))
+                    .collect::<Vec<_>>()
+                    .join(" → ");
+                format!(
+                    "C++ backend: detected a {scope} layout cycle on FullDef edges: {chain}. \
+                     A real value-cycle can't be resolved by forward declarations; \
+                     break the cycle by introducing a pointer/reference indirection or \
+                     by extracting a shared type into a separate module."
+                )
+            }
+        }
+    }
+
+    fn location(&self) -> Option<&ItemLocation> {
+        match self {
+            CppBackendError::LayoutCycle { location, .. } => Some(location),
+        }
+    }
+}
+
 /// What kind of dependency graph the cycle was detected in.
+#[cfg(feature = "cpp")]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CppLayoutCycleScope {
     /// Cycle inside a single module's items.
@@ -90,6 +135,7 @@ pub enum CppLayoutCycleScope {
     CrossModule,
 }
 
+#[cfg(feature = "cpp")]
 impl fmt::Display for CppLayoutCycleScope {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -148,27 +194,17 @@ impl BackendError {
                     "Failed to generate code for field `{field_name}` of type `{type_path}`: {kind}"
                 )
             }
-            BackendError::CppLayoutCycle { scope, cycle, .. } => {
-                let chain = cycle
-                    .iter()
-                    .map(|p| format!("`{p}`"))
-                    .collect::<Vec<_>>()
-                    .join(" → ");
-                format!(
-                    "C++ backend: detected a {scope} layout cycle on FullDef edges: {chain}. \
-                     A real value-cycle can't be resolved by forward declarations; \
-                     break the cycle by introducing a pointer/reference indirection or \
-                     by extracting a shared type into a separate module."
-                )
-            }
+            #[cfg(feature = "cpp")]
+            BackendError::Cpp(err) => err.error_message(),
         }
     }
 
     fn location(&self) -> Option<&ItemLocation> {
         match self {
             BackendError::TypeCodeGenFailed { location, .. }
-            | BackendError::FieldCodeGenFailed { location, .. }
-            | BackendError::CppLayoutCycle { location, .. } => Some(location),
+            | BackendError::FieldCodeGenFailed { location, .. } => Some(location),
+            #[cfg(feature = "cpp")]
+            BackendError::Cpp(err) => err.location(),
             _ => None,
         }
     }

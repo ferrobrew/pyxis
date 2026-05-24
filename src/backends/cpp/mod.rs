@@ -54,11 +54,13 @@ pub fn build(
         module_full_deps.insert(key.clone(), module_deps.include_modules);
     }
     if let Some(cycle) = deps::first_scc_cycle(&module_full_deps) {
-        return Err(crate::backends::BackendError::CppLayoutCycle {
-            scope: crate::backends::error::CppLayoutCycleScope::CrossModule,
-            cycle,
-            location: crate::span::ItemLocation::internal(),
-        });
+        return Err(crate::backends::BackendError::Cpp(
+            crate::backends::error::CppBackendError::LayoutCycle {
+                scope: crate::backends::error::CppLayoutCycleScope::CrossModule,
+                cycle,
+                location: crate::span::ItemLocation::internal(),
+            },
+        ));
     }
 
     for (key, module) in semantic_state.modules() {

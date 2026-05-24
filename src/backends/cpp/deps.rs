@@ -13,7 +13,9 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
     backends::{
-        BackendError, Result, cpp::extern_bindings::CppExternBinding, error::CppLayoutCycleScope,
+        BackendError, Result,
+        cpp::extern_bindings::CppExternBinding,
+        error::{CppBackendError, CppLayoutCycleScope},
     },
     grammar::ItemPath,
     semantic::{
@@ -94,11 +96,11 @@ pub fn topo_sort_module_items<'a>(
             .and_then(|p| by_path.get(p))
             .map(|i| i.location)
             .unwrap_or_else(ItemLocation::internal);
-        return Err(BackendError::CppLayoutCycle {
+        return Err(BackendError::Cpp(CppBackendError::LayoutCycle {
             scope: CppLayoutCycleScope::IntraModule,
             cycle,
             location,
-        });
+        }));
     }
 
     // No cycles — produce a deterministic topological ordering.
