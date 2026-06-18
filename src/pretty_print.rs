@@ -77,19 +77,14 @@ impl PrettyPrinter {
             let next_item = module.items.get(i + 1);
             self.print_module_item(item, next_item);
 
-            // Add blank line between regular comment and definition with both doc comments and attributes
-            if let ModuleItem::Comment { .. } = item
-                && let Some(ModuleItem::Definition { definition: def }) = next_item
-            {
-                // Add blank line if definition has both doc comments and attributes
-                let has_attrs = match &def.inner {
-                    ItemDefinitionInner::Type(td) => !td.attributes.0.is_empty(),
-                    ItemDefinitionInner::Enum(ed) => !ed.attributes.0.is_empty(),
-                    ItemDefinitionInner::Bitflags(bf) => !bf.attributes.0.is_empty(),
-                    ItemDefinitionInner::TypeAlias(ta) => !ta.attributes.0.is_empty(),
-                };
-
-                if !def.doc_comments.is_empty() && has_attrs {
+            // Preserve a single blank line between a comment and the following
+            // item if the source had one. Comments otherwise group with the
+            // item directly beneath them, so we must not invent a blank line.
+            if let (ModuleItem::Comment { .. }, Some(next)) = (item, next_item) {
+                use crate::span::HasLocation;
+                let comment_end = item.location().span.end.line;
+                let next_start = next.location().span.start.line;
+                if next_start > comment_end + 1 {
                     self.writeln("");
                 }
             }
@@ -1385,6 +1380,42 @@ pub type SimpleType {
         let expected = r#"
 // Comment before definition
 pub type SimpleType {
+    field: i32,
+}
+        "#
+        .trim();
+
+        let module = parse_str_for_tests(text).unwrap();
+        let printed = pretty_print(&module);
+
+        assert_eq!(printed, expected);
+
+        // Parse again to verify round-trip
+        let module2 = parse_str_for_tests(&printed).unwrap();
+        let printed2 = pretty_print(&module2);
+
+        assert_eq!(printed, printed2);
+    }
+
+    #[test]
+    fn test_pretty_print_comment_before_definition_with_doc_and_attributes() {
+        // A plain comment immediately preceding a definition should stay
+        // attached to it; the formatter must not insert a blank line between
+        // them, even when the definition has both doc comments and attributes.
+        let text = r#"
+// Plain comment
+/// Doc comment
+#[size(0x4)]
+pub type Foo {
+    field: i32,
+}
+        "#;
+
+        let expected = r#"
+// Plain comment
+/// Doc comment
+#[size(0x4)]
+pub type Foo {
     field: i32,
 }
         "#
