@@ -21,6 +21,7 @@ pub fn write_module(
     key: &ItemPath,
     semantic_state: &ResolvedSemanticState,
     module: &Module,
+    options: &crate::BuildOptions,
 ) -> Result<()> {
     const FORMAT_OUTPUT: bool = true;
 
@@ -44,7 +45,7 @@ pub fn write_module(
 
     writeln!(
         raw_output,
-        "#![allow(dead_code, non_snake_case, clippy::missing_safety_doc, clippy::unnecessary_cast)]"
+        "#![allow(dead_code, non_snake_case, non_upper_case_globals, clippy::missing_safety_doc, clippy::unnecessary_cast)]"
     )?;
     // Disable rustfmt on generated files to prevent the prettyplease-formatted code being reformatted
     // by a stray project-wide `cargo fmt` invocation.
@@ -82,7 +83,12 @@ pub fn write_module(
         writeln!(
             raw_output,
             "{}",
-            build_item(semantic_state.type_registry(), definition, &cfg_ctx)?
+            build_item(
+                semantic_state.type_registry(),
+                definition,
+                &cfg_ctx,
+                options
+            )?
         )?;
     }
 
@@ -98,7 +104,7 @@ pub fn write_module(
         .iter()
         .filter(|f| !f.is_internal())
         .filter(|f| cfg_pass(&f.cfg))
-        .map(build_function)
+        .map(|f| build_function(f, options, false))
         .collect::<Result<Vec<_>>>()?;
     for func in freestanding_functions {
         writeln!(raw_output, "{func}")?;
@@ -154,6 +160,7 @@ fn build_item(
     type_registry: &TypeRegistry,
     definition: &ItemDefinition,
     cfg_ctx: &crate::parser::cfg::CfgContext,
+    options: &crate::BuildOptions,
 ) -> Result<proc_macro2::TokenStream> {
     let resolved = definition
         .resolved()
@@ -186,8 +193,9 @@ fn build_item(
                 location,
                 type_parameters,
                 cfg_ctx,
+                options,
             ),
-            IDI::Enum(ed) => build_enum(path, *size, visibility, ed, location, cfg_ctx),
+            IDI::Enum(ed) => build_enum(path, *size, visibility, ed, location, cfg_ctx, options),
             IDI::Bitflags(bd) => build_bitflags(path, *size, visibility, bd, location),
             IDI::TypeAlias(ta) => build_type_alias(
                 type_registry,
@@ -214,6 +222,7 @@ fn build_type(
     location: &ItemLocation,
     type_parameters: &[String],
     cfg_ctx: &crate::parser::cfg::CfgContext,
+    options: &crate::BuildOptions,
 ) -> Result<proc_macro2::TokenStream> {
     let name = get_type_name(path, location)?;
 
@@ -305,7 +314,7 @@ fn build_type(
         .iter()
         .filter(|f| !f.is_internal())
         .filter(|f| cfg_pass(&f.cfg))
-        .map(build_function)
+        .map(|f| build_function(f, options, true))
         .collect::<Result<Vec<_>>>()?;
 
     let vftable_function_impl = vftable
@@ -315,7 +324,7 @@ fn build_type(
                 .iter()
                 .filter(|f| !f.is_internal())
                 .filter(|f| cfg_pass(&f.cfg))
-                .map(build_function)
+                .map(|f| build_function(f, options, true))
                 .collect::<Result<Vec<_>>>()
         })
         .transpose()?
@@ -478,6 +487,7 @@ fn build_enum(
     enum_definition: &EnumDefinition,
     location: &ItemLocation,
     cfg_ctx: &crate::parser::cfg::CfgContext,
+    options: &crate::BuildOptions,
 ) -> Result<proc_macro2::TokenStream> {
     let name = get_type_name(path, location)?;
 
@@ -541,7 +551,7 @@ fn build_enum(
         .iter()
         .filter(|f| !f.is_internal())
         .filter(|f| cfg_pass(&f.cfg))
-        .map(build_function)
+        .map(|f| build_function(f, options, true))
         .collect::<Result<Vec<_>>>()?;
 
     let associated_impl = if !associated_functions_impl.is_empty() {
@@ -668,7 +678,11 @@ fn build_type_alias(
     })
 }
 
-fn build_function(function: &Function) -> Result<proc_macro2::TokenStream> {
+fn build_function(
+    function: &Function,
+    options: &crate::BuildOptions,
+    in_impl: bool,
+) -> Result<proc_macro2::TokenStream> {
     // External-body methods declare their existence in pyxis but get their
     // body from the user's `backend rust prologue/epilogue` block. Rust
     // permits multiple `impl Foo` blocks, so the user's epilogue can host
@@ -742,14 +756,32 @@ fn build_function(function: &Function) -> Result<proc_macro2::TokenStream> {
         .transpose()?;
 
     let calling_convention = function.calling_convention.as_str();
+    // When the `public_addresses` option is set, emit a `pub const <Fn>_ADDRESS: usize`
+    // alongside the function so consumers can reference the address (e.g. to hook it)
+    // without hardcoding it. The const is always `pub` so it's usable even when the
+    // function wrapper itself is private. The function body transmutes the const.
+    let mut address_const = proc_macro2::TokenStream::new();
     let function_body = match &function.body {
         FunctionBody::Address { address } => {
-            let address = hex_literal(*address);
+            let address_lit = hex_literal(*address);
+            let transmute_target = if options.public_addresses {
+                let const_ident = quote::format_ident!("{}_ADDRESS", function.name);
+                address_const = quote! {
+                    pub const #const_ident: usize = #address_lit;
+                };
+                if in_impl {
+                    quote! { Self::#const_ident }
+                } else {
+                    quote! { #const_ident }
+                }
+            } else {
+                quote! { #address_lit as usize }
+            };
             quote! {
                 let f:
                     unsafe extern #calling_convention
                     fn(#(#lambda_arguments),*) #return_type
-                = ::std::mem::transmute(#address as usize);
+                = ::std::mem::transmute(#transmute_target);
                 f(#(#call_arguments),*)
             }
         }
@@ -779,6 +811,7 @@ fn build_function(function: &Function) -> Result<proc_macro2::TokenStream> {
 
     let visibility = visibility_to_tokens(function.visibility);
     Ok(quote! {
+        #address_const
         #doc
         #visibility unsafe fn #name(#(#arguments),*) #return_type {
             unsafe {

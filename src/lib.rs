@@ -257,6 +257,16 @@ impl BuildError {
     }
 }
 
+/// Options that influence code generation. These live in the calling build system
+/// (the consumer), not the project definitions.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct BuildOptions {
+    /// When set (Rust backend), emit a `pub const <Fn>_ADDRESS: usize` next to each
+    /// function with a known address, so consumers can reference the address (e.g. to
+    /// install a hook) without hardcoding it.
+    pub public_addresses: bool,
+}
+
 pub fn build(in_dir: &Path, out_dir: &Path, backend: Backend) -> Result<(), BuildError> {
     let mut file_store = source_store::FileStore::new();
     build_with_store(in_dir, out_dir, backend, &mut file_store)
@@ -272,6 +282,23 @@ pub fn build_with_store(
     backend: Backend,
     file_store: &mut source_store::FileStore,
 ) -> Result<(), BuildError> {
+    build_with_store_and_options(
+        in_dir,
+        out_dir,
+        backend,
+        file_store,
+        BuildOptions::default(),
+    )
+}
+
+/// Build with an externally-managed FileStore and explicit [`BuildOptions`].
+pub fn build_with_store_and_options(
+    in_dir: &Path,
+    out_dir: &Path,
+    backend: Backend,
+    file_store: &mut source_store::FileStore,
+    options: BuildOptions,
+) -> Result<(), BuildError> {
     let config = config::Config::load(&in_dir.join("pyxis.toml"))?;
 
     let mut semantic_state = semantic::SemanticState::new(config.project.pointer_size);
@@ -285,7 +312,13 @@ pub fn build_with_store(
     match backend {
         Backend::Rust => {
             for (key, module) in resolved_semantic_state.modules() {
-                backends::rust::write_module(out_dir, key, &resolved_semantic_state, module)?;
+                backends::rust::write_module(
+                    out_dir,
+                    key,
+                    &resolved_semantic_state,
+                    module,
+                    &options,
+                )?;
             }
             Ok(())
         }
@@ -309,6 +342,16 @@ pub fn build_with_store(
 
 /// Helper for running Pyxis against `in_dir` to produce `out_dir`. If `out_dir` is not provided, it will default to `OUT_DIR`.
 pub fn build_script(in_dir: &Path, out_dir: Option<&Path>) -> Result<(), BuildError> {
+    build_script_with_options(in_dir, out_dir, BuildOptions::default())
+}
+
+/// Like [`build_script`], but with explicit [`BuildOptions`] (e.g. to emit public
+/// address constants). The option lives in the calling build system, not the project.
+pub fn build_script_with_options(
+    in_dir: &Path,
+    out_dir: Option<&Path>,
+    options: BuildOptions,
+) -> Result<(), BuildError> {
     println!("cargo:rerun-if-changed={}", in_dir.display());
 
     let out_dir = out_dir
@@ -323,7 +366,8 @@ pub fn build_script(in_dir: &Path, out_dir: Option<&Path>) -> Result<(), BuildEr
         })?;
 
     let mut file_store = source_store::FileStore::new();
-    let result = build_with_store(in_dir, &out_dir, Backend::Rust, &mut file_store);
+    let result =
+        build_with_store_and_options(in_dir, &out_dir, Backend::Rust, &mut file_store, options);
 
     if let Err(ref err) = result {
         let formatted = err.format_with_ariadne(&file_store);
