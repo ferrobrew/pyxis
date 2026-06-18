@@ -25,12 +25,16 @@ impl A {
         }
     }
 }
+/// A freestanding function with a doc comment.
+///
+/// And a second line, for good measure.
 pub unsafe fn freestanding() {
     unsafe {
         let f: unsafe extern "system" fn() = ::std::mem::transmute(0x456 as usize);
         f()
     }
 }
+/// Doc comments work on private freestanding functions too.
 unsafe fn another_freestanding(arg1: i32) -> i32 {
     unsafe {
         let f: unsafe extern "system" fn(arg1: i32) -> i32 = ::std::mem::transmute(

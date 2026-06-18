@@ -739,4 +739,19 @@ mod tests {
         "#;
         assert!(parse_str_for_tests(text).is_ok());
     }
+
+    #[test]
+    fn freestanding_function_supports_doc_comments() {
+        let text = r#"
+        /// This is a freestanding function
+        #[address(0x123)]
+        pub fn test();
+        "#;
+
+        let ast = M::new().with_functions([F::new((V::Public, "test"), [])
+            .with_attributes([A::address(0x123)])
+            .with_doc_comments(vec![" This is a freestanding function".to_string()])]);
+
+        assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
+    }
 }

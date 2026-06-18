@@ -395,6 +395,12 @@ impl Parser {
                     && matches!(self.peek_at(pos + 1), Some(TokenKind::Type))
                 {
                     self.parse_extern_type()
+                } else if matches!(self.peek_at(pos), Some(TokenKind::Fn))
+                    || (matches!(self.peek_at(pos), Some(TokenKind::Pub))
+                        && matches!(self.peek_at(pos + 1), Some(TokenKind::Fn)))
+                {
+                    self.parse_function()
+                        .map(|function| ModuleItem::Function { function })
                 } else {
                     self.parse_item_definition()
                         .map(|definition| ModuleItem::Definition { definition })

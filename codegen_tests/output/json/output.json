@@ -6516,7 +6516,7 @@
         {
           "visibility": "public",
           "name": "freestanding",
-          "doc": null,
+          "doc": " A freestanding function with a doc comment.\n\n And a second line, for good measure.",
           "body": {
             "type": "address",
             "address": 1110
@@ -6532,7 +6532,7 @@
         {
           "visibility": "private",
           "name": "another_freestanding",
-          "doc": null,
+          "doc": " Doc comments work on private freestanding functions too.",
           "body": {
             "type": "address",
             "address": 1929
@@ -6554,7 +6554,7 @@
           "calling_convention": "system",
           "source": {
             "file_index": 11,
-            "line": 12
+            "line": 15
           }
         }
       ],

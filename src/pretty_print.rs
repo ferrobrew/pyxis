@@ -1434,6 +1434,33 @@ pub type Foo {
     }
 
     #[test]
+    fn test_pretty_print_doc_comment_on_freestanding_function() {
+        let text = r#"
+/// Doc comment for a freestanding function
+#[address(0x123)]
+pub fn test();
+        "#;
+
+        let expected = r#"
+/// Doc comment for a freestanding function
+#[address(0x123)]
+pub fn test();
+        "#
+        .trim();
+
+        let module = parse_str_for_tests(text).unwrap();
+        let printed = pretty_print(&module);
+
+        assert_eq!(printed, expected);
+
+        // Parse again to verify round-trip
+        let module2 = parse_str_for_tests(&printed).unwrap();
+        let printed2 = pretty_print(&module2);
+
+        assert_eq!(printed, printed2);
+    }
+
+    #[test]
     fn test_pretty_print_comment_on_separate_line_after_attributes() {
         let text = r#"
 #[size(0x10)]

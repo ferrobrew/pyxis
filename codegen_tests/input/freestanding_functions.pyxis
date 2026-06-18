@@ -6,8 +6,12 @@ impl A {
     fn test();
 }
 
+/// A freestanding function with a doc comment.
+///
+/// And a second line, for good measure.
 #[address(0x456)]
 pub fn freestanding();
 
+/// Doc comments work on private freestanding functions too.
 #[address(0x789)]
 fn another_freestanding(arg1: i32) -> i32;

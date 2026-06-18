@@ -11,6 +11,9 @@ namespace freestanding_functions {
     };
     static_assert(sizeof(A) == 0x4);
 
+    /// A freestanding function with a doc comment.
+    ///
+    /// And a second line, for good measure.
     using freestanding_t = void (*)();
     extern const freestanding_t freestanding;
 } // namespace freestanding_functions
