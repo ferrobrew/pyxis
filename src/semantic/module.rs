@@ -113,7 +113,7 @@ impl Module {
     /// `rust_reexport_children` is enabled, so a module can be declared
     /// (`pub mod foo;`) without flattening its items into the parent.
     pub fn rust_no_reexport(&self) -> bool {
-        self.ast.attributes.iter().any(|attr| {
+        self.ast.inner_attributes().any(|attr| {
             let Some((name, items)) = attr.function() else {
                 return false;
             };

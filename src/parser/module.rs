@@ -25,6 +25,13 @@ pub enum ModuleItem {
     Comment {
         comment: Comment,
     },
+    /// Module-level inner attributes (`#![...]`), e.g. `#![rust(no_reexport)]`.
+    /// Kept as an item (rather than a side-field on [`Module`]) so their
+    /// position relative to comments is preserved on a format round-trip.
+    InnerAttributes {
+        attributes: Attributes,
+        location: ItemLocation,
+    },
     Use {
         tree: UseTree,
         location: ItemLocation,
@@ -55,7 +62,6 @@ pub enum ModuleItem {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Module {
     pub items: Vec<ModuleItem>,
-    pub attributes: Attributes,
     pub doc_comments: Vec<String>,
 }
 impl Module {
@@ -75,7 +81,6 @@ impl StripLocations for Module {
                     _ => Some(item.strip_locations()),
                 })
                 .collect(),
-            attributes: self.attributes.strip_locations(),
             doc_comments: self.doc_comments.strip_locations(),
         }
     }
@@ -154,7 +159,10 @@ impl Module {
         self
     }
     pub fn with_attributes(mut self, attributes: impl Into<Attributes>) -> Self {
-        self.attributes = attributes.into();
+        self.items.push(ModuleItem::InnerAttributes {
+            attributes: attributes.into(),
+            location: ItemLocation::test(),
+        });
         self
     }
     pub fn with_doc_comments(mut self, doc_comments: Vec<String>) -> Self {
@@ -195,6 +203,14 @@ impl Module {
         self.items.iter().filter_map(|item| match item {
             ModuleItem::Impl { impl_block } => Some(impl_block),
             _ => None,
+        })
+    }
+    /// All module-level inner attributes (`#![...]`), flattened across any
+    /// number of `#![...]` groups in the file.
+    pub fn inner_attributes(&self) -> impl Iterator<Item = &crate::grammar::Attribute> {
+        self.items.iter().flat_map(|item| match item {
+            ModuleItem::InnerAttributes { attributes, .. } => attributes.0.iter(),
+            _ => [].iter(),
         })
     }
     pub fn backends(&self) -> impl Iterator<Item = &Backend> {
@@ -259,10 +275,6 @@ impl Parser {
             }
         }
 
-        // Collect module-level inner attributes (#![...]), e.g.
-        // `#![rust(no_reexport)]`.
-        let module_attributes = self.parse_inner_attributes()?;
-
         while !matches!(self.peek(), TokenKind::Eof) {
             // Collect non-doc comments (doc comments will be collected by item parsers)
             while matches!(
@@ -299,12 +311,44 @@ impl Parser {
 
         Ok(Module {
             items,
-            attributes: module_attributes,
             doc_comments: module_doc_comments,
         })
     }
 
+    /// Parse a single `#![...]` group into a [`ModuleItem::InnerAttributes`].
+    fn parse_inner_attribute_item(&mut self) -> Result<ModuleItem, ParseError> {
+        let start = self.current().location.span.start;
+        self.advance(); // #
+        self.advance(); // !
+        self.expect(TokenKind::LBracket)?;
+        let mut attrs = Vec::new();
+        while !matches!(self.peek(), TokenKind::RBracket) {
+            attrs.push(self.parse_attribute()?);
+            if matches!(self.peek(), TokenKind::Comma) {
+                self.advance();
+            } else if !matches!(self.peek(), TokenKind::RBracket) {
+                return Err(ParseError::ExpectedToken {
+                    expected: vec![TokenKind::RBracket, TokenKind::Comma],
+                    found: self.peek().clone(),
+                    location: self.current().location,
+                });
+            }
+        }
+        let end = self.expect(TokenKind::RBracket)?.end_location();
+        let location = self.item_location_from_locations(start, end);
+        Ok(ModuleItem::InnerAttributes {
+            attributes: Attributes(attrs),
+            location,
+        })
+    }
+
     pub(crate) fn parse_module_item(&mut self) -> Result<ModuleItem, ParseError> {
+        // Module-level inner attributes (`#![...]`). Detected before the
+        // outer-attribute (`#[...]`) handling below via the leading `!`.
+        if matches!(self.peek(), TokenKind::Hash) && matches!(self.peek_nth(1), TokenKind::Bang) {
+            return self.parse_inner_attribute_item();
+        }
+
         // Attributes can appear before any item
         let has_attributes = matches!(self.peek(), TokenKind::Hash);
 
@@ -817,8 +861,9 @@ impl PfxInstance {
         "#;
 
         let module = parse_str_for_tests(text).unwrap();
-        assert_eq!(module.attributes.0.len(), 1);
-        let (name, items) = module.attributes.0[0]
+        let attrs: Vec<_> = module.inner_attributes().collect();
+        assert_eq!(attrs.len(), 1);
+        let (name, items) = attrs[0]
             .function()
             .expect("expected a function-form attribute");
         assert_eq!(name.as_str(), "rust");

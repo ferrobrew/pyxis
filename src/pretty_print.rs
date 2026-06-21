@@ -69,12 +69,6 @@ impl PrettyPrinter {
             self.writeln("");
         }
 
-        // Print module-level inner attributes (#![...])
-        self.print_inner_attributes(&module.attributes);
-        if !module.attributes.0.is_empty() {
-            self.writeln("");
-        }
-
         // Print items with lookahead for proper spacing
         for (i, item) in module.items.iter().enumerate() {
             let next_item = module.items.get(i + 1);
@@ -101,6 +95,14 @@ impl PrettyPrinter {
             ModuleItem::Comment { comment } => {
                 self.print_comment(comment);
                 // Don't add blank line after comments - they group with the following item
+            }
+            ModuleItem::InnerAttributes { attributes, .. } => {
+                self.print_inner_attributes(attributes);
+                // Separate from the following item with a blank line, unless
+                // it's another inner-attribute group.
+                if !matches!(next_item, Some(ModuleItem::InnerAttributes { .. })) {
+                    self.writeln("");
+                }
             }
             ModuleItem::Use { tree, .. } => {
                 self.write_indent();
@@ -1095,6 +1097,7 @@ pub type Test {
         // Module-level inner attributes (`#![...]`) must survive a round-trip
         // so `pyxis fmt` doesn't strip them.
         let text = r#"
+        // keep this module's items namespaced
         #![rust(no_reexport)]
 
         pub type Foo {
@@ -1103,6 +1106,7 @@ pub type Test {
         "#;
 
         let expected = r#"
+// keep this module's items namespaced
 #![rust(no_reexport)]
 
 pub type Foo {
