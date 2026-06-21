@@ -131,6 +131,22 @@ impl SemanticState {
         let impls: Vec<_> = module.impls().cloned().collect();
         let backends: Vec<_> = module.backends().cloned().collect();
 
+        // Reject two source files mapping to the same module path (e.g. a
+        // `world/mod.pyxis` folder module alongside a sibling `world.pyxis`).
+        // The empty root is pre-seeded with a placeholder module, so a
+        // root `mod.pyxis` is allowed to populate it.
+        if !path.is_empty() && self.modules.contains_key(path) {
+            let location = module
+                .items
+                .first()
+                .map(|item| *item.location())
+                .unwrap_or_else(ItemLocation::internal);
+            return Err(SemanticError::DuplicateModule {
+                path: path.clone(),
+                location,
+            });
+        }
+
         self.modules.insert(
             path.clone(),
             Module::new(
@@ -253,6 +269,12 @@ impl SemanticState {
     }
 
     pub fn build(mut self) -> Result<ResolvedSemanticState> {
+        // Ensure every folder that contains `.pyxis` files has a module,
+        // even if it lacks a `mod.pyxis`. This lets backends emit a complete
+        // module tree (e.g. parent `mod`/`use` wiring) without each one
+        // having to re-derive the implicit intermediate modules.
+        self.synthesize_ancestor_modules();
+
         // Validate all use statements before resolving types
         self.validate_uses()?;
         // Reject `prologue definition` / `epilogue definition` on backends
@@ -662,6 +684,23 @@ impl SemanticState {
 }
 
 impl SemanticState {
+    /// Insert empty placeholder modules for any ancestor folder that
+    /// doesn't already have one. The empty root is always present, so this
+    /// terminates. Synthesized modules carry no items (those live in their
+    /// child files); they exist purely so the module tree is complete.
+    fn synthesize_ancestor_modules(&mut self) {
+        let existing: Vec<ItemPath> = self.modules.keys().cloned().collect();
+        for path in existing {
+            let mut current = path;
+            while let Some(parent) = current.parent() {
+                if !self.modules.contains_key(&parent) {
+                    self.modules.insert(parent.clone(), Module::empty(parent.clone()));
+                }
+                current = parent;
+            }
+        }
+    }
+
     pub(super) fn get_module_for_path(
         &self,
         path: &ItemPath,

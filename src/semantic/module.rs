@@ -39,6 +39,17 @@ impl Default for Module {
 }
 
 impl Module {
+    /// A module with no items of its own, used for folders that contain
+    /// `.pyxis` files but have no `mod.pyxis` to attach glue/items to.
+    /// Backends still emit wiring (e.g. child `mod`/`use` declarations)
+    /// for these synthesized modules.
+    pub(crate) fn empty(path: ItemPath) -> Self {
+        Self {
+            path,
+            ..Default::default()
+        }
+    }
+
     pub(crate) fn new(
         path: ItemPath,
         ast: grammar::Module,

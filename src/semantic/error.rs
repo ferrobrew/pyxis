@@ -353,6 +353,14 @@ pub enum SemanticError {
         path: ItemPath,
         location: ItemLocation,
     },
+    /// Two source files mapped to the same module path. The usual cause is
+    /// a folder module (`world/mod.pyxis`) coexisting with a sibling file
+    /// of the same name (`world.pyxis`); `mod.pyxis` is the supported way
+    /// to attach items/glue to a folder.
+    DuplicateModule {
+        path: ItemPath,
+        location: ItemLocation,
+    },
     /// Failed to find a type in the registry
     TypeNotFound {
         path: ItemPath,
@@ -621,6 +629,11 @@ impl SemanticError {
         match self {
             SemanticError::ModuleNotFound { path, .. } => {
                 format!("Module not found: `{path}`")
+            }
+            SemanticError::DuplicateModule { path, .. } => {
+                format!(
+                    "Module `{path}` is defined more than once. A folder module (`mod.pyxis`) cannot coexist with a sibling file of the same name."
+                )
             }
             SemanticError::TypeNotFound { path, .. } => {
                 format!("Type not found: `{path}`")
@@ -950,6 +963,7 @@ impl SemanticError {
     fn location(&self) -> Option<&ItemLocation> {
         match self {
             SemanticError::ModuleNotFound { location, .. } => Some(location),
+            SemanticError::DuplicateModule { location, .. } => Some(location),
             SemanticError::TypeNotFound { location, .. } => Some(location),
             SemanticError::UseItemNotFound { location, .. } => Some(location),
             SemanticError::BackendDefinitionNotSupported { location, .. } => Some(location),

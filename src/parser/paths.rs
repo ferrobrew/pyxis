@@ -56,12 +56,21 @@ impl ItemPath {
         // consider making this a result
         assert!(path.is_relative());
 
-        ItemPath(
-            path.with_extension("")
-                .iter()
-                .map(|s| s.to_string_lossy().as_ref().into())
-                .collect(),
-        )
+        let mut segments: Vec<ItemPathSegment> = path
+            .with_extension("")
+            .iter()
+            .map(|s| s.to_string_lossy().as_ref().into())
+            .collect();
+
+        // A `mod.pyxis` file represents the module for its containing
+        // folder (mirroring Rust's `mod.rs`), so drop the trailing `mod`
+        // segment: `world/mod.pyxis` -> `world`, and a project-root
+        // `mod.pyxis` -> the empty root module.
+        if segments.last().map(|s| s.as_str()) == Some("mod") {
+            segments.pop();
+        }
+
+        ItemPath(segments)
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &ItemPathSegment> {
