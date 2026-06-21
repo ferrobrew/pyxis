@@ -135,44 +135,6 @@ impl From<&str> for ItemPath {
     }
 }
 
-#[cfg(test)]
-mod path_mapping_tests {
-    use super::ItemPath;
-    use std::path::Path;
-
-    #[test]
-    fn maps_nested_file_to_module_path() {
-        assert_eq!(
-            ItemPath::from_path(Path::new("world/atmosphere.pyxis")),
-            ItemPath::from("world::atmosphere")
-        );
-    }
-
-    #[test]
-    fn maps_mod_file_to_its_folder_module() {
-        assert_eq!(
-            ItemPath::from_path(Path::new("world/mod.pyxis")),
-            ItemPath::from("world")
-        );
-    }
-
-    #[test]
-    fn maps_root_mod_file_to_empty_root() {
-        assert_eq!(
-            ItemPath::from_path(Path::new("mod.pyxis")),
-            ItemPath::empty()
-        );
-    }
-
-    #[test]
-    fn keeps_non_mod_leaf_file() {
-        assert_eq!(
-            ItemPath::from_path(Path::new("clock.pyxis")),
-            ItemPath::from("clock")
-        );
-    }
-}
-
 impl Parser {
     pub(crate) fn parse_item_path(&mut self) -> Result<(ItemPath, ItemLocation), ParseError> {
         let first_token = self.current();
@@ -264,5 +226,43 @@ impl Parser {
             self.current().location.span.end
         };
         Ok((result, end_pos))
+    }
+}
+
+#[cfg(test)]
+mod path_mapping_tests {
+    use super::ItemPath;
+    use std::path::Path;
+
+    #[test]
+    fn maps_nested_file_to_module_path() {
+        assert_eq!(
+            ItemPath::from_path(Path::new("world/atmosphere.pyxis")),
+            ItemPath::from("world::atmosphere")
+        );
+    }
+
+    #[test]
+    fn maps_mod_file_to_its_folder_module() {
+        assert_eq!(
+            ItemPath::from_path(Path::new("world/mod.pyxis")),
+            ItemPath::from("world")
+        );
+    }
+
+    #[test]
+    fn maps_root_mod_file_to_empty_root() {
+        assert_eq!(
+            ItemPath::from_path(Path::new("mod.pyxis")),
+            ItemPath::empty()
+        );
+    }
+
+    #[test]
+    fn keeps_non_mod_leaf_file() {
+        assert_eq!(
+            ItemPath::from_path(Path::new("clock.pyxis")),
+            ItemPath::from("clock")
+        );
     }
 }

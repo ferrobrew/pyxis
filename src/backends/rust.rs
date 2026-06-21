@@ -45,7 +45,7 @@ pub fn write_module(
         path.push(segment.as_str());
     }
     if key.is_empty() {
-        path.push("lib.rs");
+        path.push(options.rust_root_file_name.as_deref().unwrap_or("lib.rs"));
     } else if has_children {
         path.push("mod.rs");
     } else {
@@ -123,7 +123,11 @@ pub fn write_module(
     let mut extern_values = module.extern_values.clone();
     extern_values.sort_by_key(|ev| ev.name.clone());
     for ev in &extern_values {
-        writeln!(raw_output, "{}", build_extern_value(ev)?)?;
+        writeln!(
+            raw_output,
+            "{}",
+            build_extern_value(ev, options.rust_module_prefix.as_ref())?
+        )?;
     }
 
     // Generate freestanding functions
@@ -224,7 +228,14 @@ fn build_item(
                 options,
             ),
             IDI::Enum(ed) => build_enum(path, *size, visibility, ed, location, cfg_ctx, options),
-            IDI::Bitflags(bd) => build_bitflags(path, *size, visibility, bd, location),
+            IDI::Bitflags(bd) => build_bitflags(
+                path,
+                *size,
+                visibility,
+                bd,
+                location,
+                options.rust_module_prefix.as_ref(),
+            ),
             IDI::TypeAlias(ta) => build_type_alias(
                 type_registry,
                 path,
@@ -232,6 +243,7 @@ fn build_item(
                 ta,
                 location,
                 type_parameters,
+                options.rust_module_prefix.as_ref(),
             ),
         },
         ItemCategory::Predefined => Ok(quote! {}),
@@ -253,6 +265,7 @@ fn build_type(
     options: &crate::BuildOptions,
 ) -> Result<proc_macro2::TokenStream> {
     let name = get_type_name(path, location)?;
+    let prefix = options.rust_module_prefix.as_ref();
 
     let TypeDefinition {
         singleton,
@@ -289,7 +302,7 @@ fn build_type(
                 })?;
             let field_ident = str_to_ident(field_name);
             let visibility = visibility_to_tokens(*visibility);
-            let syn_type = sa_type_to_syn_type(type_ref)?;
+            let syn_type = sa_type_to_syn_type(type_ref, prefix)?;
             let doc = doc_to_tokens(false, doc);
             Ok(quote! {
                 #doc
@@ -323,7 +336,7 @@ fn build_type(
             } else {
                 quote! { vftable }
             };
-            let vftable_type = sa_type_to_syn_type(&v.type_)?;
+            let vftable_type = sa_type_to_syn_type(&v.type_, prefix)?;
             Ok(quote! {
                 pub fn vftable(&self) -> #vftable_type {
                     self. #accessor as #vftable_type
@@ -383,7 +396,7 @@ fn build_type(
                     .into_iter()
                     .map(|s| str_to_ident(&s))
                     .collect::<Vec<_>>();
-                let type_ = sa_type_to_syn_type(&type_)?;
+                let type_ = sa_type_to_syn_type(&type_, prefix)?;
 
                 Ok((type_, field_path))
             })
@@ -518,6 +531,7 @@ fn build_enum(
     options: &crate::BuildOptions,
 ) -> Result<proc_macro2::TokenStream> {
     let name = get_type_name(path, location)?;
+    let prefix = options.rust_module_prefix.as_ref();
 
     let EnumDefinition {
         singleton,
@@ -530,7 +544,7 @@ fn build_enum(
         associated_functions,
     } = enum_definition;
 
-    let syn_type = sa_type_to_syn_type(type_)?;
+    let syn_type = sa_type_to_syn_type(type_, prefix)?;
     let name_ident = str_to_ident(name.as_str());
 
     let visibility = visibility_to_tokens(visibility);
@@ -611,6 +625,7 @@ fn build_bitflags(
     visibility: Visibility,
     bitflags_definition: &BitflagsDefinition,
     location: &ItemLocation,
+    prefix: Option<&ItemPath>,
 ) -> Result<proc_macro2::TokenStream> {
     let name = get_type_name(path, location)?;
 
@@ -624,7 +639,7 @@ fn build_bitflags(
         default,
     } = bitflags_definition;
 
-    let syn_type = sa_type_to_syn_type(type_)?;
+    let syn_type = sa_type_to_syn_type(type_, prefix)?;
     let name_ident = str_to_ident(name.as_str());
 
     let visibility = visibility_to_tokens(visibility);
@@ -688,6 +703,7 @@ fn build_type_alias(
     type_alias_definition: &TypeAliasDefinition,
     location: &ItemLocation,
     type_parameters: &[String],
+    prefix: Option<&ItemPath>,
 ) -> Result<proc_macro2::TokenStream> {
     let name = get_type_name(path, location)?;
 
@@ -696,7 +712,7 @@ fn build_type_alias(
     let name_ident = str_to_ident(name.as_str());
     let visibility = visibility_to_tokens(visibility);
     let doc = doc_to_tokens(false, doc);
-    let target_type = sa_type_to_syn_type(target)?;
+    let target_type = sa_type_to_syn_type(target, prefix)?;
 
     let generic_params = build_generic_params(type_parameters);
 
@@ -711,6 +727,7 @@ fn build_function(
     options: &crate::BuildOptions,
     in_impl: bool,
 ) -> Result<proc_macro2::TokenStream> {
+    let prefix = options.rust_module_prefix.as_ref();
     // External-body methods declare their existence in pyxis but get their
     // body from the user's `backend rust prologue/epilogue` block. Rust
     // permits multiple `impl Foo` blocks, so the user's epilogue can host
@@ -731,7 +748,7 @@ fn build_function(
                 Argument::MutSelf { .. } => quote! { &mut self },
                 Argument::Field { name, type_, .. } => {
                     let name = str_to_ident(name);
-                    let syn_type = sa_type_to_syn_type(type_)?;
+                    let syn_type = sa_type_to_syn_type(type_, prefix)?;
                     quote! {
                         #name: #syn_type
                     }
@@ -749,7 +766,7 @@ fn build_function(
                 Argument::MutSelf { .. } => quote! { this: *mut Self },
                 Argument::Field { name, type_, .. } => {
                     let name = str_to_ident(name);
-                    let syn_type = sa_type_to_syn_type(type_)?;
+                    let syn_type = sa_type_to_syn_type(type_, prefix)?;
                     quote! {
                         #name: #syn_type
                     }
@@ -778,7 +795,7 @@ fn build_function(
         .return_type
         .as_ref()
         .map(|type_ref| -> Result<proc_macro2::TokenStream> {
-            let syn_type = sa_type_to_syn_type(type_ref)?;
+            let syn_type = sa_type_to_syn_type(type_ref, prefix)?;
             Ok(quote! { -> #syn_type })
         })
         .transpose()?;
@@ -849,10 +866,13 @@ fn build_function(
     })
 }
 
-fn build_extern_value(ev: &ExternValue) -> Result<proc_macro2::TokenStream> {
+fn build_extern_value(
+    ev: &ExternValue,
+    prefix: Option<&ItemPath>,
+) -> Result<proc_macro2::TokenStream> {
     let visibility = visibility_to_tokens(ev.visibility);
     let function_ident = quote::format_ident!("get_{}", ev.name);
-    let type_ = sa_type_to_syn_type(&ev.type_)?;
+    let type_ = sa_type_to_syn_type(&ev.type_, prefix)?;
     let address = hex_literal(ev.address);
 
     Ok(quote! {
@@ -928,8 +948,22 @@ fn build_generic_params(type_parameters: &[String]) -> proc_macro2::TokenStream 
 fn fully_qualified_type_ref_impl(
     out: &mut String,
     type_ref: &Type,
+    prefix: Option<&ItemPath>,
 ) -> std::result::Result<(), std::fmt::Error> {
     use std::fmt::Write;
+
+    // `crate::` qualifier, including any module prefix that mounts the
+    // generated tree as a submodule (e.g. `crate::jc2::`).
+    fn write_crate_qualifier(
+        out: &mut String,
+        prefix: Option<&ItemPath>,
+    ) -> std::result::Result<(), std::fmt::Error> {
+        write!(out, "crate::")?;
+        if let Some(prefix) = prefix {
+            write!(out, "{prefix}::")?;
+        }
+        Ok(())
+    }
 
     /// Maps predefined type paths to their Rust type names.
     ///
@@ -983,21 +1017,21 @@ fn fully_qualified_type_ref_impl(
             }
             // Not a predefined type - qualify with crate:: if needed
             if path.len() > 1 {
-                write!(out, "crate::")?;
+                write_crate_qualifier(out, prefix)?;
             }
             write!(out, "{path}")
         }
         Type::Generic(base_path, args) => {
             // Generate Rust generic syntax: `Base<Arg1, Arg2>`
             if base_path.len() > 1 {
-                write!(out, "crate::")?;
+                write_crate_qualifier(out, prefix)?;
             }
             write!(out, "{base_path}<")?;
             for (i, arg) in args.iter().enumerate() {
                 if i > 0 {
                     write!(out, ", ")?;
                 }
-                fully_qualified_type_ref_impl(out, arg)?;
+                fully_qualified_type_ref_impl(out, arg, prefix)?;
             }
             write!(out, ">")
         }
@@ -1007,42 +1041,47 @@ fn fully_qualified_type_ref_impl(
         }
         Type::ConstPointer(tr) => {
             write!(out, "*const ")?;
-            fully_qualified_type_ref_impl(out, tr.as_ref())
+            fully_qualified_type_ref_impl(out, tr.as_ref(), prefix)
         }
         Type::MutPointer(tr) => {
             write!(out, "*mut ")?;
-            fully_qualified_type_ref_impl(out, tr.as_ref())
+            fully_qualified_type_ref_impl(out, tr.as_ref(), prefix)
         }
         Type::Array(tr, size) => {
             write!(out, "[")?;
-            fully_qualified_type_ref_impl(out, tr.as_ref())?;
+            fully_qualified_type_ref_impl(out, tr.as_ref(), prefix)?;
             write!(out, "; {size}]")
         }
         Type::Function(calling_convention, args, return_type) => {
             write!(out, r#"unsafe extern "{calling_convention}" fn ("#)?;
             for (field, type_ref) in args.iter() {
                 write!(out, "{field}: ")?;
-                fully_qualified_type_ref_impl(out, type_ref)?;
+                fully_qualified_type_ref_impl(out, type_ref, prefix)?;
                 write!(out, ", ")?;
             }
             write!(out, ")")?;
             if let Some(type_ref) = return_type {
                 write!(out, " -> ")?;
-                fully_qualified_type_ref_impl(out, type_ref)?;
+                fully_qualified_type_ref_impl(out, type_ref, prefix)?;
             }
             Ok(())
         }
     }
 }
 
-fn fully_qualified_type_ref(type_ref: &Type) -> std::result::Result<String, std::fmt::Error> {
+fn fully_qualified_type_ref(
+    type_ref: &Type,
+    prefix: Option<&ItemPath>,
+) -> std::result::Result<String, std::fmt::Error> {
     let mut out = String::new();
-    fully_qualified_type_ref_impl(&mut out, type_ref)?;
+    fully_qualified_type_ref_impl(&mut out, type_ref, prefix)?;
     Ok(out)
 }
 
-fn sa_type_to_syn_type(type_ref: &Type) -> Result<syn::Type> {
-    Ok(syn::parse_str(&fully_qualified_type_ref(type_ref)?)?)
+fn sa_type_to_syn_type(type_ref: &Type, prefix: Option<&ItemPath>) -> Result<syn::Type> {
+    Ok(syn::parse_str(&fully_qualified_type_ref(
+        type_ref, prefix,
+    )?)?)
 }
 
 fn visibility_to_tokens(visibility: Visibility) -> proc_macro2::TokenStream {

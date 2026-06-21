@@ -1,0 +1,92 @@
+//! Integration test for mounting a generated Rust tree as a submodule:
+//! `rust_module_prefix` (so refs become `crate::<prefix>::...`), a custom
+//! root file name (`mod.rs` instead of `lib.rs`), and child re-exports.
+
+use std::path::{Path, PathBuf};
+
+use pyxis::{Backend, BuildOptions, grammar::ItemPath, source_store::FileStore};
+
+/// Create a fresh scratch directory for this test, removing any leftovers
+/// from a previous run.
+fn scratch_dir(name: &str) -> PathBuf {
+    let dir = std::env::temp_dir().join(format!("pyxis_test_{name}"));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    dir
+}
+
+fn write(path: &Path, contents: &str) {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).unwrap();
+    }
+    std::fs::write(path, contents).unwrap();
+}
+
+#[test]
+fn mounts_generated_tree_as_a_prefixed_submodule() {
+    let root = scratch_dir("module_mounting");
+    let in_dir = root.join("in");
+    let out_dir = root.join("out");
+
+    write(
+        &in_dir.join("pyxis.toml"),
+        r#"
+[project]
+name = "mount-test"
+pointer_size = 8
+"#,
+    );
+    write(
+        &in_dir.join("foo.pyxis"),
+        r#"
+pub type Foo {
+    pub value: u32,
+}
+"#,
+    );
+    // References `foo::Foo`, producing a `crate::`-relative path that the
+    // prefix should rewrite to `crate::prefixed::foo::Foo`.
+    write(
+        &in_dir.join("bar.pyxis"),
+        r#"
+use foo::Foo;
+
+pub type Bar {
+    pub foo: *mut Foo,
+}
+"#,
+    );
+
+    let options = BuildOptions {
+        rust_module_prefix: Some(ItemPath::from("prefixed")),
+        rust_root_file_name: Some("mod.rs".to_string()),
+        rust_reexport_children: true,
+        ..Default::default()
+    };
+
+    let mut file_store = FileStore::new();
+    pyxis::build_with_store_and_options(&in_dir, &out_dir, Backend::Rust, &mut file_store, options)
+        .expect("build failed");
+
+    // Root module is emitted as `mod.rs` (not `lib.rs`).
+    assert!(out_dir.join("mod.rs").exists(), "expected mod.rs root file");
+    assert!(
+        !out_dir.join("lib.rs").exists(),
+        "lib.rs should not be emitted when the root file name is mod.rs"
+    );
+
+    // Root wires up children, and re-exports them because the option is on.
+    let root_rs = std::fs::read_to_string(out_dir.join("mod.rs")).unwrap();
+    assert!(root_rs.contains("pub mod foo;"), "{root_rs}");
+    assert!(root_rs.contains("pub mod bar;"), "{root_rs}");
+    assert!(root_rs.contains("pub use bar::*;"), "{root_rs}");
+
+    // Cross-module references are rewritten through the prefix.
+    let bar_rs = std::fs::read_to_string(out_dir.join("bar.rs")).unwrap();
+    assert!(
+        bar_rs.contains("crate::prefixed::foo::Foo"),
+        "expected prefixed reference, got:\n{bar_rs}"
+    );
+
+    let _ = std::fs::remove_dir_all(&root);
+}

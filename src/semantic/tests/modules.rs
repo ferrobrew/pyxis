@@ -4,7 +4,7 @@
 
 use crate::{
     grammar::test_aliases::*,
-    semantic::{error::SemanticError, semantic_state::SemanticState, types::test_aliases::*},
+    semantic::{error::SemanticError, semantic_state::SemanticState},
 };
 
 /// A folder that contains `.pyxis` files but has no `mod.pyxis` should still

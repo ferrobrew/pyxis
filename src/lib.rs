@@ -259,7 +259,7 @@ impl BuildError {
 
 /// Options that influence code generation. These live in the calling build system
 /// (the consumer), not the project definitions.
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Default, Clone)]
 pub struct BuildOptions {
     /// When set (Rust backend), emit a `pub const <Fn>_ADDRESS: usize` next to each
     /// function with a known address, so consumers can reference the address (e.g. to
@@ -273,6 +273,17 @@ pub struct BuildOptions {
     /// consumer ergonomics and risk ambiguous-glob collisions between
     /// sibling modules that define same-named items.
     pub rust_reexport_children: bool,
+    /// (Rust backend) Module path prepended to every emitted
+    /// `crate::`-relative reference (e.g. `jc2` turns
+    /// `crate::world::Weather` into `crate::jc2::world::Weather`). Lets the
+    /// generated tree be mounted as a submodule of the consuming crate
+    /// rather than at the crate root. Does not affect output file locations
+    /// (those follow `out_dir`).
+    pub rust_module_prefix: Option<grammar::ItemPath>,
+    /// (Rust backend) File name for the root module's output. Defaults to
+    /// `lib.rs` (a crate root); set to `mod.rs` when the generated tree is
+    /// mounted as a submodule via [`BuildOptions::rust_module_prefix`].
+    pub rust_root_file_name: Option<String>,
 }
 
 pub fn build(in_dir: &Path, out_dir: &Path, backend: Backend) -> Result<(), BuildError> {
