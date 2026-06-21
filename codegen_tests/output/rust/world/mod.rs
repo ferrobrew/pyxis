@@ -3,7 +3,8 @@
     non_snake_case,
     non_upper_case_globals,
     clippy::missing_safety_doc,
-    clippy::unnecessary_cast
+    clippy::unnecessary_cast,
+    clippy::module_inception
 )]
 #![cfg_attr(any(), rustfmt::skip)]
 //! The world subsystem.

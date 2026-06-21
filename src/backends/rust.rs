@@ -62,7 +62,7 @@ pub fn write_module(
 
     writeln!(
         raw_output,
-        "#![allow(dead_code, non_snake_case, non_upper_case_globals, clippy::missing_safety_doc, clippy::unnecessary_cast)]"
+        "#![allow(dead_code, non_snake_case, non_upper_case_globals, clippy::missing_safety_doc, clippy::unnecessary_cast, clippy::module_inception)]"
     )?;
     // Disable rustfmt on generated files to prevent the prettyplease-formatted code being reformatted
     // by a stray project-wide `cargo fmt` invocation.
