@@ -27,13 +27,13 @@ pub fn write_module(
 
     // Direct child modules (sorted by name), used both to wire up `pub mod`
     // / `pub use` declarations and to decide this module's file layout.
-    let mut children: Vec<(&str, &Module)> = semantic_state
+    let mut children: Vec<(&str, &ItemPath, &Module)> = semantic_state
         .modules()
         .iter()
         .filter(|(p, _)| p.parent().as_ref() == Some(key))
-        .filter_map(|(p, m)| p.last().map(|s| (s.as_str(), m)))
+        .filter_map(|(p, m)| p.last().map(|s| (s.as_str(), p, m)))
         .collect();
-    children.sort_by_key(|(name, _)| *name);
+    children.sort_by_key(|(name, _, _)| *name);
     let has_children = !children.is_empty();
 
     // Output path:
@@ -62,7 +62,7 @@ pub fn write_module(
 
     writeln!(
         raw_output,
-        "#![allow(dead_code, non_snake_case, non_upper_case_globals, clippy::missing_safety_doc, clippy::unnecessary_cast, clippy::module_inception)]"
+        "#![allow(dead_code, non_snake_case, non_camel_case_types, non_upper_case_globals, clippy::missing_safety_doc, clippy::unnecessary_cast, clippy::module_inception)]"
     )?;
     // Disable rustfmt on generated files to prevent the prettyplease-formatted code being reformatted
     // by a stray project-wide `cargo fmt` invocation.
@@ -89,9 +89,15 @@ pub fn write_module(
     // module tree without any hand-written `mod.rs`/`lib.rs`. The optional
     // `pub use <child>::*;` re-export is controlled by `rust_reexport_children`,
     // and a child can opt out of it with `#![rust(no_reexport)]`.
-    for (child, child_module) in &children {
+    for (child, child_path, child_module) in &children {
         writeln!(raw_output, "pub mod {child};")?;
-        if options.rust_reexport_children && !child_module.rust_no_reexport() {
+        // Skip the glob re-export when the module opts out, or when it has
+        // nothing public to re-export (a vacuous `pub use` would just trip
+        // `unused_imports`).
+        if options.rust_reexport_children
+            && !child_module.rust_no_reexport()
+            && module_has_public_exports(child_path, child_module, semantic_state)
+        {
             writeln!(raw_output, "pub use {child}::*;")?;
         }
     }
@@ -187,6 +193,30 @@ pub fn write_module(
     }
 
     Ok(())
+}
+
+/// Whether `pub use <module>::*;` would re-export anything: a public
+/// definition, public free function, public extern value, or a child module
+/// (whose name the glob re-exports). Extern types emit no Rust item, so they
+/// don't count. A module with only private items produces a vacuous glob.
+fn module_has_public_exports(
+    path: &ItemPath,
+    module: &Module,
+    semantic_state: &ResolvedSemanticState,
+) -> bool {
+    let type_registry = semantic_state.type_registry();
+    module
+        .definitions(type_registry)
+        .any(|d| d.visibility == Visibility::Public)
+        || module.functions().iter().any(|f| f.is_public())
+        || module
+            .extern_values
+            .iter()
+            .any(|ev| ev.visibility == Visibility::Public)
+        || semantic_state
+            .modules()
+            .keys()
+            .any(|p| p.parent().as_ref() == Some(path))
 }
 
 fn build_item(
