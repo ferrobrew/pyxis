@@ -1,0 +1,7 @@
+// `world/deep/` has no `mod.pyxis`, so the `world::deep` module is
+// synthesized. The Rust backend still emits `world/deep/mod.rs` wiring up
+// this child, and `world/mod.rs` wires up `deep`.
+#[size(0x4)]
+pub type DeepMarker {
+    pub value: u32,
+}

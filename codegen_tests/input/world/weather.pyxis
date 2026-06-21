@@ -1,0 +1,6 @@
+/// Weather state for the world.
+#[size(0x8)]
+pub type Weather {
+    pub temperature: f32,
+    pub humidity: f32,
+}

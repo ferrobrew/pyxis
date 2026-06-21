@@ -1,0 +1,11 @@
+// Cross-module reference *within* a folder: `world::atmosphere` reaches
+// into its sibling `world::weather` via a `use`. The generated code refers
+// to it by its fully qualified `crate::world::weather::Weather` path.
+use world::weather::Weather;
+
+#[size(0x10)]
+pub type Atmosphere {
+    pub weather: *mut Weather,
+    pub temperature: f32,
+    pub humidity: f32,
+}

@@ -34,6 +34,7 @@ mod generics;
 mod imports;
 mod inheritance;
 mod min_size;
+mod modules;
 mod type_aliases;
 mod util;
 mod vftable;

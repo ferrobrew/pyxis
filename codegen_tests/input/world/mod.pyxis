@@ -1,0 +1,17 @@
+//! The world subsystem.
+//! This module is backed by a `mod.pyxis`, so it exercises folder-level
+//! modules: a module doc comment, an item defined directly in the folder
+//! module, and `backend` glue - all spliced into the generated `mod.rs`
+//! alongside the auto-generated child `mod` declarations.
+
+/// A handle to the world, defined directly in the folder module.
+#[size(0x8)]
+pub type World {
+    pub id: u64,
+}
+
+backend rust epilogue r#"
+    impl World {
+        pub fn from_id(id: u64) -> World { World { id } }
+    }
+"#;

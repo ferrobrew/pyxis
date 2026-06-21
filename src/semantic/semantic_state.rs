@@ -694,7 +694,8 @@ impl SemanticState {
             let mut current = path;
             while let Some(parent) = current.parent() {
                 if !self.modules.contains_key(&parent) {
-                    self.modules.insert(parent.clone(), Module::empty(parent.clone()));
+                    self.modules
+                        .insert(parent.clone(), Module::empty(parent.clone()));
                 }
                 current = parent;
             }

@@ -265,6 +265,14 @@ pub struct BuildOptions {
     /// function with a known address, so consumers can reference the address (e.g. to
     /// install a hook) without hardcoding it.
     pub public_addresses: bool,
+    /// When set (Rust backend), each auto-generated child `pub mod <child>;`
+    /// declaration is followed by `pub use <child>::*;`, flattening the
+    /// module's public items into its parent (and ultimately the crate
+    /// root). Off by default: generated code references types by their fully
+    /// qualified `crate::`-relative path, so the re-exports are purely for
+    /// consumer ergonomics and risk ambiguous-glob collisions between
+    /// sibling modules that define same-named items.
+    pub rust_reexport_children: bool,
 }
 
 pub fn build(in_dir: &Path, out_dir: &Path, backend: Backend) -> Result<(), BuildError> {

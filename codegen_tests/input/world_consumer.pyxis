@@ -1,0 +1,12 @@
+// A top-level module referencing types from a folder module, to exercise
+// `crate::world::...` path resolution from outside the folder: both a leaf
+// module type (`world::weather::Weather`) and a type defined directly in
+// the folder module (`world::World`).
+use world::weather::Weather;
+use world::World;
+
+#[size(0x10)]
+pub type WorldConsumer {
+    pub weather: *mut Weather,
+    pub world: *mut World,
+}

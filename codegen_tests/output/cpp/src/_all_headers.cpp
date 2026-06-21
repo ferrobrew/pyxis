@@ -20,3 +20,8 @@
 #include "two_base_classes.hpp"
 #include "type_alias_reexport.hpp"
 #include "type_aliases.hpp"
+#include "world/atmosphere.hpp"
+#include "world/deep/marker.hpp"
+#include "world/weather.hpp"
+#include "world.hpp"
+#include "world_consumer.hpp"

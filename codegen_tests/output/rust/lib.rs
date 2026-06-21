@@ -1,3 +1,11 @@
+#![allow(
+    dead_code,
+    non_snake_case,
+    non_upper_case_globals,
+    clippy::missing_safety_doc,
+    clippy::unnecessary_cast
+)]
+#![cfg_attr(any(), rustfmt::skip)]
 pub mod atomics;
 pub mod bitflags;
 pub mod braced_imports;
@@ -18,3 +26,5 @@ pub mod singleton;
 pub mod two_base_classes;
 pub mod type_alias_reexport;
 pub mod type_aliases;
+pub mod world;
+pub mod world_consumer;

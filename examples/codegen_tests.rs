@@ -20,15 +20,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         eprintln!("{}", err.format_with_ariadne(&file_store));
         std::process::exit(1);
     }
-    let mut module_decls = std::fs::read_dir(&rust_output)?
-        .filter_map(|entry| Some(entry.ok()?.path()))
-        .filter(|path| path.extension().and_then(|p| p.to_str()) == Some("rs"))
-        .filter_map(|path| path.file_stem().map(|s| s.to_string_lossy().to_string()))
-        .filter(|name| name != "lib")
-        .map(|name| format!("pub mod {name};"))
-        .collect::<Vec<_>>();
-    module_decls.sort();
-    std::fs::write(rust_output.join("lib.rs"), module_decls.join("\n") + "\n")?;
     let status = std::process::Command::new("cargo")
         .arg("clippy")
         .current_dir(&rust_output)

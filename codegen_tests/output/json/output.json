@@ -6290,6 +6290,288 @@
         "packed": false
       },
       "source": null
+    },
+    "world::World": {
+      "path": "world::World",
+      "visibility": "public",
+      "size": 8,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": " A handle to the world, defined directly in the folder module.",
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "id",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "u64"
+            },
+            "offset": 0,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 24,
+              "line": 10
+            }
+          }
+        ],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false
+      },
+      "source": {
+        "file_index": 24,
+        "line": 7
+      }
+    },
+    "world::atmosphere::Atmosphere": {
+      "path": "world::atmosphere::Atmosphere",
+      "visibility": "public",
+      "size": 16,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "weather",
+            "doc": null,
+            "type_ref": {
+              "type": "mut_pointer",
+              "inner": {
+                "type": "raw",
+                "path": "world::weather::Weather"
+              }
+            },
+            "offset": 0,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 22,
+              "line": 8
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "temperature",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "f32"
+            },
+            "offset": 8,
+            "size": 4,
+            "alignment": 4,
+            "is_base": false,
+            "source": {
+              "file_index": 22,
+              "line": 9
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "humidity",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "f32"
+            },
+            "offset": 12,
+            "size": 4,
+            "alignment": 4,
+            "is_base": false,
+            "source": {
+              "file_index": 22,
+              "line": 10
+            }
+          }
+        ],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false
+      },
+      "source": {
+        "file_index": 22,
+        "line": 6
+      }
+    },
+    "world::deep::marker::DeepMarker": {
+      "path": "world::deep::marker::DeepMarker",
+      "visibility": "public",
+      "size": 4,
+      "alignment": 4,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "value",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "u32"
+            },
+            "offset": 0,
+            "size": 4,
+            "alignment": 4,
+            "is_base": false,
+            "source": {
+              "file_index": 23,
+              "line": 6
+            }
+          }
+        ],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false
+      },
+      "source": {
+        "file_index": 23,
+        "line": 4
+      }
+    },
+    "world::weather::Weather": {
+      "path": "world::weather::Weather",
+      "visibility": "public",
+      "size": 8,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": " Weather state for the world.",
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "temperature",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "f32"
+            },
+            "offset": 0,
+            "size": 4,
+            "alignment": 4,
+            "is_base": false,
+            "source": {
+              "file_index": 25,
+              "line": 4
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "humidity",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "f32"
+            },
+            "offset": 4,
+            "size": 4,
+            "alignment": 4,
+            "is_base": false,
+            "source": {
+              "file_index": 25,
+              "line": 5
+            }
+          }
+        ],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false
+      },
+      "source": {
+        "file_index": 25,
+        "line": 1
+      }
+    },
+    "world_consumer::WorldConsumer": {
+      "path": "world_consumer::WorldConsumer",
+      "visibility": "public",
+      "size": 16,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "weather",
+            "doc": null,
+            "type_ref": {
+              "type": "mut_pointer",
+              "inner": {
+                "type": "raw",
+                "path": "world::weather::Weather"
+              }
+            },
+            "offset": 0,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 26,
+              "line": 10
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "world",
+            "doc": null,
+            "type_ref": {
+              "type": "mut_pointer",
+              "inner": {
+                "type": "raw",
+                "path": "world::World"
+              }
+            },
+            "offset": 8,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 26,
+              "line": 11
+            }
+          }
+        ],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false
+      },
+      "source": {
+        "file_index": 26,
+        "line": 8
+      }
     }
   },
   "modules": {
@@ -6730,6 +7012,76 @@
       "extern_values": [],
       "functions": [],
       "backends": {}
+    },
+    "world": {
+      "doc": " The world subsystem.\n This module is backed by a `mod.pyxis`, so it exercises folder-level\n modules: a module doc comment, an item defined directly in the folder\n module, and `backend` glue - all spliced into the generated `mod.rs`\n alongside the auto-generated child `mod` declarations.",
+      "items": [
+        "world::World"
+      ],
+      "submodules": {
+        "atmosphere": {
+          "doc": null,
+          "items": [
+            "world::atmosphere::Atmosphere"
+          ],
+          "submodules": {},
+          "extern_values": [],
+          "functions": [],
+          "backends": {}
+        },
+        "deep": {
+          "doc": null,
+          "items": [],
+          "submodules": {
+            "marker": {
+              "doc": null,
+              "items": [
+                "world::deep::marker::DeepMarker"
+              ],
+              "submodules": {},
+              "extern_values": [],
+              "functions": [],
+              "backends": {}
+            }
+          },
+          "extern_values": [],
+          "functions": [],
+          "backends": {}
+        },
+        "weather": {
+          "doc": null,
+          "items": [
+            "world::weather::Weather"
+          ],
+          "submodules": {},
+          "extern_values": [],
+          "functions": [],
+          "backends": {}
+        }
+      },
+      "extern_values": [],
+      "functions": [],
+      "backends": {
+        "rust": [
+          {
+            "prologue": null,
+            "epilogue": {
+              "header": "\n    impl World {\n        pub fn from_id(id: u64) -> World { World { id } }\n    }\n",
+              "definition": null
+            }
+          }
+        ]
+      }
+    },
+    "world_consumer": {
+      "doc": null,
+      "items": [
+        "world_consumer::WorldConsumer"
+      ],
+      "submodules": {},
+      "extern_values": [],
+      "functions": [],
+      "backends": {}
     }
   },
   "source_paths": [
@@ -6754,6 +7106,11 @@
     "singleton.pyxis",
     "two_base_classes.pyxis",
     "type_alias_reexport.pyxis",
-    "type_aliases.pyxis"
+    "type_aliases.pyxis",
+    "world/atmosphere.pyxis",
+    "world/deep/marker.pyxis",
+    "world/mod.pyxis",
+    "world/weather.pyxis",
+    "world_consumer.pyxis"
   ]
 }

@@ -25,15 +25,32 @@ pub fn write_module(
 ) -> Result<()> {
     const FORMAT_OUTPUT: bool = true;
 
-    if key.is_empty() {
-        return Ok(());
-    }
+    // Direct child modules (sorted), used both to wire up `pub mod` /
+    // `pub use` declarations and to decide this module's file layout.
+    let mut child_names: Vec<&str> = semantic_state
+        .modules()
+        .keys()
+        .filter(|p| p.parent().as_ref() == Some(key))
+        .filter_map(|p| p.last().map(|s| s.as_str()))
+        .collect();
+    child_names.sort_unstable();
+    let has_children = !child_names.is_empty();
 
+    // Output path:
+    // - root module (empty key)  -> <out_dir>/lib.rs
+    // - module with children     -> <out_dir>/<segments>/mod.rs
+    // - leaf module              -> <out_dir>/<segments>.rs
     let mut path = out_dir.to_path_buf();
     for segment in key.iter() {
         path.push(segment.as_str());
     }
-    path.set_extension("rs");
+    if key.is_empty() {
+        path.push("lib.rs");
+    } else if has_children {
+        path.push("mod.rs");
+    } else {
+        path.set_extension("rs");
+    }
 
     let directory_path = path.parent().map(|p| p.to_path_buf()).unwrap_or_default();
     std::fs::create_dir_all(&directory_path).map_err(|e| BackendError::Io {
@@ -66,6 +83,17 @@ pub fn write_module(
         .join("\n");
 
     writeln!(raw_output, "{prologues}")?;
+
+    // Wire up child modules. Every folder that contains `.pyxis` files has a
+    // module (see `synthesize_ancestor_modules`), so this produces a complete
+    // module tree without any hand-written `mod.rs`/`lib.rs`. The optional
+    // `pub use <child>::*;` re-export is controlled by `rust_reexport_children`.
+    for child in &child_names {
+        writeln!(raw_output, "pub mod {child};")?;
+        if options.rust_reexport_children {
+            writeln!(raw_output, "pub use {child}::*;")?;
+        }
+    }
 
     let cfg_ctx = crate::parser::cfg::CfgContext {
         backend: crate::Backend::Rust,
