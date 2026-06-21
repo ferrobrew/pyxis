@@ -25,16 +25,16 @@ pub fn write_module(
 ) -> Result<()> {
     const FORMAT_OUTPUT: bool = true;
 
-    // Direct child modules (sorted), used both to wire up `pub mod` /
-    // `pub use` declarations and to decide this module's file layout.
-    let mut child_names: Vec<&str> = semantic_state
+    // Direct child modules (sorted by name), used both to wire up `pub mod`
+    // / `pub use` declarations and to decide this module's file layout.
+    let mut children: Vec<(&str, &Module)> = semantic_state
         .modules()
-        .keys()
-        .filter(|p| p.parent().as_ref() == Some(key))
-        .filter_map(|p| p.last().map(|s| s.as_str()))
+        .iter()
+        .filter(|(p, _)| p.parent().as_ref() == Some(key))
+        .filter_map(|(p, m)| p.last().map(|s| (s.as_str(), m)))
         .collect();
-    child_names.sort_unstable();
-    let has_children = !child_names.is_empty();
+    children.sort_by_key(|(name, _)| *name);
+    let has_children = !children.is_empty();
 
     // Output path:
     // - root module (empty key)  -> <out_dir>/lib.rs
@@ -87,10 +87,11 @@ pub fn write_module(
     // Wire up child modules. Every folder that contains `.pyxis` files has a
     // module (see `synthesize_ancestor_modules`), so this produces a complete
     // module tree without any hand-written `mod.rs`/`lib.rs`. The optional
-    // `pub use <child>::*;` re-export is controlled by `rust_reexport_children`.
-    for child in &child_names {
+    // `pub use <child>::*;` re-export is controlled by `rust_reexport_children`,
+    // and a child can opt out of it with `#![rust(no_reexport)]`.
+    for (child, child_module) in &children {
         writeln!(raw_output, "pub mod {child};")?;
-        if options.rust_reexport_children {
+        if options.rust_reexport_children && !child_module.rust_no_reexport() {
             writeln!(raw_output, "pub use {child}::*;")?;
         }
     }

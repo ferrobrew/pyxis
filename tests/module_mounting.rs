@@ -56,6 +56,18 @@ pub type Bar {
 }
 "#,
     );
+    // Opts out of being glob-re-exported by its parent, even with
+    // `rust_reexport_children` on.
+    write(
+        &in_dir.join("baz.pyxis"),
+        r#"
+#![rust(no_reexport)]
+
+pub type Baz {
+    pub value: u32,
+}
+"#,
+    );
 
     let options = BuildOptions {
         rust_module_prefix: Some(ItemPath::from("prefixed")),
@@ -80,6 +92,13 @@ pub type Bar {
     assert!(root_rs.contains("pub mod foo;"), "{root_rs}");
     assert!(root_rs.contains("pub mod bar;"), "{root_rs}");
     assert!(root_rs.contains("pub use bar::*;"), "{root_rs}");
+
+    // `baz` is declared but not re-exported (it opted out).
+    assert!(root_rs.contains("pub mod baz;"), "{root_rs}");
+    assert!(
+        !root_rs.contains("pub use baz::*;"),
+        "baz opted out of re-export, but was re-exported:\n{root_rs}"
+    );
 
     // Cross-module references are rewritten through the prefix.
     let bar_rs = std::fs::read_to_string(out_dir.join("bar.rs")).unwrap();

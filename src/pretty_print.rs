@@ -69,8 +69,11 @@ impl PrettyPrinter {
             self.writeln("");
         }
 
-        // Print module-level attributes
-        self.print_attributes(&module.attributes);
+        // Print module-level inner attributes (#![...])
+        self.print_inner_attributes(&module.attributes);
+        if !module.attributes.0.is_empty() {
+            self.writeln("");
+        }
 
         // Print items with lookahead for proper spacing
         for (i, item) in module.items.iter().enumerate() {
@@ -206,12 +209,21 @@ impl PrettyPrinter {
     }
 
     fn print_attributes(&mut self, attrs: &Attributes) {
+        self.print_attributes_inner(attrs, false);
+    }
+
+    /// Print inner attributes (`#![...]`), used at the top of a module.
+    fn print_inner_attributes(&mut self, attrs: &Attributes) {
+        self.print_attributes_inner(attrs, true);
+    }
+
+    fn print_attributes_inner(&mut self, attrs: &Attributes, inner: bool) {
         if attrs.0.is_empty() {
             return;
         }
 
         self.write_indent();
-        write!(&mut self.output, "#[").unwrap();
+        write!(&mut self.output, "{}[", if inner { "#!" } else { "#" }).unwrap();
         for (i, attr) in attrs.0.iter().enumerate() {
             if i > 0 {
                 write!(&mut self.output, ", ").unwrap();
@@ -1067,6 +1079,33 @@ mod tests {
 
         let expected = r#"
 pub type Test {
+    field: i32,
+}
+        "#
+        .trim();
+
+        let module = parse_str_for_tests(text).unwrap();
+        let printed = pretty_print(&module);
+
+        assert_eq!(printed, expected);
+    }
+
+    #[test]
+    fn test_pretty_print_module_inner_attributes() {
+        // Module-level inner attributes (`#![...]`) must survive a round-trip
+        // so `pyxis fmt` doesn't strip them.
+        let text = r#"
+        #![rust(no_reexport)]
+
+        pub type Foo {
+            field: i32,
+        }
+        "#;
+
+        let expected = r#"
+#![rust(no_reexport)]
+
+pub type Foo {
     field: i32,
 }
         "#

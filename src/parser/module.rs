@@ -259,6 +259,10 @@ impl Parser {
             }
         }
 
+        // Collect module-level inner attributes (#![...]), e.g.
+        // `#![rust(no_reexport)]`.
+        let module_attributes = self.parse_inner_attributes()?;
+
         while !matches!(self.peek(), TokenKind::Eof) {
             // Collect non-doc comments (doc comments will be collected by item parsers)
             while matches!(
@@ -295,7 +299,7 @@ impl Parser {
 
         Ok(Module {
             items,
-            attributes: Default::default(),
+            attributes: module_attributes,
             doc_comments: module_doc_comments,
         })
     }
@@ -800,6 +804,28 @@ impl PfxInstance {
         } else {
             panic!("Expected Definition for PfxInstance");
         }
+    }
+
+    #[test]
+    fn can_parse_module_inner_attributes() {
+        let text = r#"
+        #![rust(no_reexport)]
+
+        pub type Foo {
+            field: i32,
+        }
+        "#;
+
+        let module = parse_str_for_tests(text).unwrap();
+        assert_eq!(module.attributes.0.len(), 1);
+        let (name, items) = module.attributes.0[0]
+            .function()
+            .expect("expected a function-form attribute");
+        assert_eq!(name.as_str(), "rust");
+        assert!(items.exprs().any(|e| matches!(
+            e,
+            crate::grammar::Expr::Ident { ident, .. } if ident.as_str() == "no_reexport"
+        )));
     }
 
     // ========================================================================

@@ -108,6 +108,22 @@ impl Module {
         self.ast.uses()
     }
 
+    /// Whether this module opted out of being glob-re-exported by its parent
+    /// via `#![rust(no_reexport)]`. Honoured by the Rust backend when
+    /// `rust_reexport_children` is enabled, so a module can be declared
+    /// (`pub mod foo;`) without flattening its items into the parent.
+    pub fn rust_no_reexport(&self) -> bool {
+        self.ast.attributes.iter().any(|attr| {
+            let Some((name, items)) = attr.function() else {
+                return false;
+            };
+            name.as_str() == "rust"
+                && items.exprs().any(|expr| {
+                    matches!(expr, grammar::Expr::Ident { ident, .. } if ident.as_str() == "no_reexport")
+                })
+        })
+    }
+
     pub fn definition_paths(&self) -> &BTreeSet<ItemPath> {
         &self.definition_paths
     }

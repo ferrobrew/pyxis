@@ -348,6 +348,37 @@ impl Parser {
         Ok(Attributes(attrs))
     }
 
+    /// Parse inner attributes (`#![...]`), as used at the top of a module.
+    /// Identical to [`Parser::parse_attributes`] except for the leading `!`.
+    pub(crate) fn parse_inner_attributes(&mut self) -> Result<Attributes, ParseError> {
+        let mut attrs = Vec::new();
+
+        while matches!(self.peek(), TokenKind::Hash) && matches!(self.peek_nth(1), TokenKind::Bang)
+        {
+            self.advance(); // #
+            self.advance(); // !
+            self.expect(TokenKind::LBracket)?;
+
+            while !matches!(self.peek(), TokenKind::RBracket) {
+                attrs.push(self.parse_attribute()?);
+                if matches!(self.peek(), TokenKind::Comma) {
+                    self.advance();
+                } else if !matches!(self.peek(), TokenKind::RBracket) {
+                    // Not a comma and not a closing bracket - error
+                    return Err(ParseError::ExpectedToken {
+                        expected: vec![TokenKind::RBracket, TokenKind::Comma],
+                        found: self.peek().clone(),
+                        location: self.current().location,
+                    });
+                }
+            }
+
+            self.expect(TokenKind::RBracket)?;
+        }
+
+        Ok(Attributes(attrs))
+    }
+
     /// Accept a name in cfg-attribute context: either a regular identifier
     /// or one of the keyword tokens that can plausibly appear as a cfg key
     /// (currently just `backend`, since it's the only hard-keyword we
