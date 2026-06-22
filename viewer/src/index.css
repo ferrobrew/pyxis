@@ -15,6 +15,7 @@
   --canvas: #f5eddb;
   --surface: #efe5cf;
   --surface-2: #e6d9bd;
+  --sidebar: #e9ddc4;
   --inset: #ece0c6;
   --border: #ddcca8;
   --border-strong: #cab88f;
@@ -52,6 +53,7 @@
   --canvas: #26221f;
   --surface: #2e2926;
   --surface-2: #38322d;
+  --sidebar: #211d1a;
   --inset: #1f1b18;
   --border: #423a33;
   --border-strong: #564b41;
@@ -89,6 +91,7 @@
   --color-canvas: var(--canvas);
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
+  --color-sidebar: var(--sidebar);
   --color-inset: var(--inset);
   --color-edge: var(--border);
   --color-edge-strong: var(--border-strong);

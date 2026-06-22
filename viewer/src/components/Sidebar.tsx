@@ -469,7 +469,7 @@ export function Sidebar({ onClose }: SidebarProps) {
   if (!documentation) {
     return (
       <div className="hidden lg:flex relative" style={{ width: `${sidebarWidth}px` }}>
-        <aside className="flex-1 border-r border-edge bg-surface p-4">
+        <aside className="flex-1 bg-sidebar p-4">
           <div className="text-sm text-fg-subtle">No documentation loaded</div>
         </aside>
         <div
@@ -488,7 +488,7 @@ export function Sidebar({ onClose }: SidebarProps) {
         width: isDesktop ? `${sidebarWidth}px` : '100%',
       }}
     >
-      <aside className="flex-1 border-r border-edge bg-surface overflow-y-auto">
+      <aside className="flex-1 bg-sidebar overflow-y-auto">
         <div
           className="p-2"
           onClick={(e) => {
