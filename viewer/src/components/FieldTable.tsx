@@ -47,12 +47,12 @@ export function FieldTable({ fields, modulePath }: FieldTableProps) {
                     field.name || '<anonymous>'
                   )}
                 </td>
-                <td className={`px-4 py-2 font-mono text-sm ${typeClasses}`}>
+                <td className={`whitespace-nowrap px-4 py-2 font-mono text-sm ${typeClasses}`}>
                   <TypeRef type={field.type_ref} currentModule={modulePath} />
                 </td>
                 <td className="px-4 py-2 text-sm text-fg-muted">{field.size}</td>
                 <td className="px-4 py-2 text-sm text-fg-muted">{field.alignment}</td>
-                <td className="px-4 py-2 text-sm">
+                <td className="whitespace-nowrap px-4 py-2 text-sm">
                   {field.is_base && <SmallBadge variant="violet">base</SmallBadge>}
                   {field.doc && (
                     <div className="text-fg-muted mt-1">
