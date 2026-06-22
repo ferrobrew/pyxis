@@ -2,8 +2,58 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import { HEADER_INPUT_HEIGHT } from '../utils/styles';
 import { useNavigate } from 'react-router-dom';
 import { useDocumentation } from '../contexts/DocumentationContext';
-import { searchDocumentation, type SearchResult } from '../utils/searchUtils';
+import { searchDocumentation, type SearchResult, type SearchKind } from '../utils/searchUtils';
 import { buildModuleUrl, buildItemUrl } from '../utils/navigation';
+import { getItemTypeColor } from '../utils/colors';
+import { KindIcon } from './KindIcon';
+
+const KIND_LABEL: Record<SearchKind, string> = {
+  module: 'module',
+  type: 'type',
+  enum: 'enum',
+  'enum-variant': 'variant',
+  bitflags: 'bitflags',
+  type_alias: 'alias',
+  function: 'fn',
+  extern: 'extern',
+  field: 'field',
+};
+
+// Bold the matched substring within a result name.
+function highlightMatch(name: string, query: string) {
+  const i = name.toLowerCase().indexOf(query.toLowerCase());
+  if (!query || i === -1) return name;
+  return (
+    <>
+      {name.slice(0, i)}
+      <span className="font-semibold text-accent">{name.slice(i, i + query.length)}</span>
+      {name.slice(i + query.length)}
+    </>
+  );
+}
+
+// The inner content of a result row, shared by the desktop and mobile lists.
+function ResultContent({ result, query }: { result: SearchResult; query: string }) {
+  return (
+    <div className="flex items-center gap-2">
+      <KindIcon
+        kind={result.kind}
+        className={`h-4 w-4 flex-shrink-0 ${getItemTypeColor(result.kind)}`}
+      />
+      <span className={`font-mono text-sm ${getItemTypeColor(result.kind)}`}>
+        {highlightMatch(result.name, query)}
+      </span>
+      {result.detail && (
+        <span className="min-w-0 flex-1 truncate font-mono text-xs text-fg-subtle">
+          {result.detail}
+        </span>
+      )}
+      <span className="ml-auto flex-shrink-0 text-xs text-fg-subtle">
+        {KIND_LABEL[result.kind]}
+      </span>
+    </div>
+  );
+}
 
 export function SearchBar() {
   const { documentation, selectedSource } = useDocumentation();
@@ -49,14 +99,11 @@ export function SearchBar() {
   }, [isMobileSearchOpen]);
 
   const handleSelect = (result: SearchResult) => {
-    if (result.type === 'module') {
-      navigate(buildModuleUrl(result.path, selectedSource));
-    } else if (result.type === 'function') {
-      const modulePath = result.path.split('::').slice(0, -1).join('::');
-      navigate(`${buildModuleUrl(modulePath, selectedSource)}#${result.path.split('::').pop()}`);
-    } else {
-      navigate(buildItemUrl(result.path, selectedSource));
-    }
+    const base =
+      result.target.kind === 'module'
+        ? buildModuleUrl(result.target.path, selectedSource)
+        : buildItemUrl(result.target.path, selectedSource);
+    navigate(result.target.anchor ? `${base}##${result.target.anchor}` : base);
     setQuery('');
     setIsOpen(false);
     setIsMobileSearchOpen(false);
@@ -135,18 +182,13 @@ export function SearchBar() {
           <div className="absolute top-full mt-1 w-full bg-surface border border-edge rounded-md shadow-lg max-h-96 overflow-y-auto z-50">
             {results.map((result, index) => (
               <button
-                key={result.path}
+                key={`${result.kind}:${result.target.path}:${result.target.anchor ?? ''}:${result.name}`}
                 onClick={() => handleSelect(result)}
                 className={`w-full px-4 py-2 text-left hover:bg-surface-2 ${
                   index === selectedIndex ? 'bg-surface-2' : ''
                 }`}
               >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="font-mono text-sm text-fg">{result.path}</div>
-                    <div className="text-xs text-fg-subtle capitalize">{result.type}</div>
-                  </div>
-                </div>
+                <ResultContent result={result} query={query} />
               </button>
             ))}
           </div>
@@ -205,14 +247,13 @@ export function SearchBar() {
             {results.length > 0 ? (
               results.map((result, index) => (
                 <button
-                  key={result.path}
+                  key={`${result.kind}:${result.target.path}:${result.target.anchor ?? ''}:${result.name}`}
                   onClick={() => handleSelect(result)}
-                  className={`w-full px-4 py-3 text-left border-b border-edge hover:bg-surface-2 ${
+                  className={`w-full border-b border-edge px-4 py-3 text-left hover:bg-surface-2 ${
                     index === selectedIndex ? 'bg-surface-2' : ''
                   }`}
                 >
-                  <div className="font-mono text-sm text-fg break-all">{result.path}</div>
-                  <div className="text-xs text-fg-subtle capitalize mt-1">{result.type}</div>
+                  <ResultContent result={result} query={query} />
                 </button>
               ))
             ) : query.trim() ? (

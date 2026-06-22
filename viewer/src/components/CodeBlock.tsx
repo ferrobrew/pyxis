@@ -2,23 +2,16 @@ import { useEffect, useRef } from 'react';
 import hljs from 'highlight.js/lib/core';
 import 'highlight.js/styles/github.css';
 
-// Import common languages
+// Pyxis only emits three backends (rust, cpp, json), so register just those
+// languages rather than pulling in the full highlight.js bundle.
 import cpp from 'highlight.js/lib/languages/cpp';
 import rust from 'highlight.js/lib/languages/rust';
-import python from 'highlight.js/lib/languages/python';
-import javascript from 'highlight.js/lib/languages/javascript';
-import typescript from 'highlight.js/lib/languages/typescript';
-import csharp from 'highlight.js/lib/languages/csharp';
+import json from 'highlight.js/lib/languages/json';
 
-// Register languages
 hljs.registerLanguage('cpp', cpp);
 hljs.registerLanguage('c++', cpp);
 hljs.registerLanguage('rust', rust);
-hljs.registerLanguage('python', python);
-hljs.registerLanguage('javascript', javascript);
-hljs.registerLanguage('typescript', typescript);
-hljs.registerLanguage('csharp', csharp);
-hljs.registerLanguage('cs', csharp);
+hljs.registerLanguage('json', json);
 
 interface CodeBlockProps {
   code: string;
