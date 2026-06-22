@@ -91,13 +91,65 @@ function FieldIcon() {
   );
 }
 
+// Shared row layout; indentation comes from nested <TreeChildren> wrappers, not
+// from per-row padding, so every level steps by the same amount.
+const ROW = 'flex items-center gap-1.5 rounded px-1.5 py-1';
+
+// A fixed-width disclosure control so rows with and without children align.
+function ChevronSlot({ open = false, onToggle }: { open?: boolean; onToggle?: () => void }) {
+  if (!onToggle) return <span className="w-4 flex-shrink-0" aria-hidden="true" />;
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        onToggle();
+      }}
+      className="flex h-4 w-4 flex-shrink-0 items-center justify-center rounded text-fg-subtle hover:text-fg"
+      aria-label={open ? 'Collapse' : 'Expand'}
+    >
+      <svg
+        className={`h-3 w-3 transition-transform ${open ? 'rotate-90' : ''}`}
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+      >
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+      </svg>
+    </button>
+  );
+}
+
+// Indents one level of children and draws a guide line under the parent.
+function TreeChildren({ children }: { children: React.ReactNode }) {
+  return <div className="ml-[0.85rem] border-l border-edge pl-1">{children}</div>;
+}
+
+function FolderIcon() {
+  return (
+    <svg
+      className="h-3.5 w-3.5 flex-shrink-0"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M3 7a2 2 0 012-2h3.6a2 2 0 011.4.6L11.4 7H19a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"
+      />
+    </svg>
+  );
+}
+
 // Item tree component for types/enums/bitflags with their members
 interface ItemTreeProps {
   itemPath: string;
-  level: number;
 }
 
-function ItemTree({ itemPath, level }: ItemTreeProps) {
+function ItemTree({ itemPath }: ItemTreeProps) {
   const { documentation, selectedSource } = useDocumentation();
   const location = useLocation();
   const [isItemOpen, setIsItemOpen] = useState(false);
@@ -158,36 +210,15 @@ function ItemTree({ itemPath, level }: ItemTreeProps) {
 
   return (
     <div>
-      <div
-        ref={rowRef}
-        className={`flex items-center gap-1 py-1 px-2 rounded ${
-          isItemActive ? 'bg-accent-soft text-fg' : ''
-        }`}
-        style={{ paddingLeft: `${(level + 1) * 0.5 + 1.25}rem` }}
-      >
-        {hasMembers && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setIsItemOpen(!isItemOpen);
-            }}
-            className="p-0.5 hover:bg-surface-2 rounded flex-shrink-0"
-          >
-            <svg
-              className={`w-3 h-3 transition-transform ${isItemOpen ? 'rotate-90' : ''}`}
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
-        )}
-        {!hasMembers && <div className="w-3.5" />}
+      <div ref={rowRef} className={`${ROW} ${isItemActive ? 'bg-accent-soft text-fg' : ''}`}>
+        <ChevronSlot
+          open={isItemOpen}
+          onToggle={hasMembers ? () => setIsItemOpen(!isItemOpen) : undefined}
+        />
         <Link
           to={buildItemUrl(itemPath, selectedSource)}
           onClick={handleItemClick}
-          className={`flex items-center gap-2 flex-1 text-sm min-w-0 ${getItemTypeColor(itemType)} ${getItemTypeHoverColor(itemType)}`}
+          className={`flex min-w-0 flex-1 items-center gap-2 text-sm ${getItemTypeColor(itemType)} ${getItemTypeHoverColor(itemType)}`}
         >
           <Icon />
           <span className="truncate">
@@ -199,74 +230,68 @@ function ItemTree({ itemPath, level }: ItemTreeProps) {
         </Link>
       </div>
 
-      {/* Item members */}
       {isItemOpen && hasMembers && (
-        <div className="ml-4">
-          {/* Fields */}
+        <TreeChildren>
           {publicFields.map((field) => (
             <Link
               key={`${itemPath}-field-${field.name}`}
               to={`${buildItemUrl(itemPath, selectedSource)}##field-${field.name}`}
-              className="flex items-center gap-2 py-1 px-2 text-xs text-fg-muted hover:text-accent rounded"
-              style={{ paddingLeft: `${(level + 2) * 0.5 + 1.25}rem` }}
+              className={`${ROW} text-xs text-fg-muted hover:text-accent`}
             >
+              <ChevronSlot />
               <FieldIcon />
               <span className="truncate">{field.name}</span>
             </Link>
           ))}
 
-          {/* Virtual Functions */}
           {publicVirtualFunctions.map((func) => (
             <Link
               key={`${itemPath}-vfunc-${func.name}`}
               to={`${buildItemUrl(itemPath, selectedSource)}##vfunc-${func.name}`}
-              className={`flex items-center gap-2 py-1 px-2 text-xs rounded ${getItemTypeColor('function')} ${getItemTypeHoverColor('function')}`}
-              style={{ paddingLeft: `${(level + 2) * 0.5 + 1.25}rem` }}
+              className={`${ROW} text-xs ${getItemTypeColor('function')} ${getItemTypeHoverColor('function')}`}
             >
+              <ChevronSlot />
               <FunctionIcon />
               <span className="truncate">{func.name}</span>
             </Link>
           ))}
 
-          {/* Associated Functions */}
           {publicAssociatedFunctions.map((func) => (
             <Link
               key={`${itemPath}-func-${func.name}`}
               to={`${buildItemUrl(itemPath, selectedSource)}##func-${func.name}`}
-              className={`flex items-center gap-2 py-1 px-2 text-xs rounded ${getItemTypeColor('function')} ${getItemTypeHoverColor('function')}`}
-              style={{ paddingLeft: `${(level + 2) * 0.5 + 1.25}rem` }}
+              className={`${ROW} text-xs ${getItemTypeColor('function')} ${getItemTypeHoverColor('function')}`}
             >
+              <ChevronSlot />
               <FunctionIcon />
               <span className="truncate">{func.name}</span>
             </Link>
           ))}
 
-          {/* Enum Variants */}
           {variants.map((variant) => (
             <Link
               key={`${itemPath}-variant-${variant.name}`}
               to={`${buildItemUrl(itemPath, selectedSource)}##variant-${variant.name}`}
-              className={`flex items-center gap-2 py-1 px-2 text-xs rounded ${getItemTypeColor('enum-variant')} ${getItemTypeHoverColor('enum-variant')}`}
-              style={{ paddingLeft: `${(level + 2) * 0.5 + 1.25}rem` }}
+              className={`${ROW} text-xs ${getItemTypeColor('enum-variant')} ${getItemTypeHoverColor('enum-variant')}`}
             >
+              <ChevronSlot />
               <EnumIcon />
               <span className="truncate">{variant.name}</span>
             </Link>
           ))}
 
-          {/* Bitflags */}
           {flags.map((flag) => (
             <Link
               key={`${itemPath}-flag-${flag.name}`}
               to={`${buildItemUrl(itemPath, selectedSource)}##flag-${flag.name}`}
-              className={`flex items-center gap-2 py-1 px-2 text-xs rounded ${getItemTypeColor('bitflags')} ${getItemTypeHoverColor('bitflags')}`}
-              style={{ paddingLeft: `${(level + 2) * 0.5 + 1.25}rem` }}
+              className={`${ROW} text-xs ${getItemTypeColor('bitflags')} ${getItemTypeHoverColor('bitflags')}`}
             >
+              <ChevronSlot />
               <BitflagsIcon />
               <span className="truncate">{flag.name}</span>
             </Link>
           ))}
-        </div>
+        </TreeChildren>
       )}
     </div>
   );
@@ -305,84 +330,50 @@ function ModuleTree({ name, module, path, level }: ModuleTreeProps) {
 
   return (
     <div>
-      <div
-        ref={rowRef}
-        className={`flex items-center gap-1 py-1 px-2 rounded ${isActive ? 'bg-accent-soft text-fg' : ''}`}
-      >
-        {hasContent && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setIsOpen(!isOpen);
-            }}
-            className="p-0.5 hover:bg-surface-2 rounded"
-          >
-            <svg
-              className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-90' : ''}`}
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
-        )}
-        {!hasContent && <div className="w-5" />}
+      <div ref={rowRef} className={`${ROW} ${isActive ? 'bg-accent-soft text-fg' : ''}`}>
+        <ChevronSlot open={isOpen} onToggle={hasContent ? () => setIsOpen(!isOpen) : undefined} />
         <Link
           to={buildModuleUrl(path, selectedSource)}
           onClick={handleModuleClick}
-          className={`flex-1 text-sm ${getItemTypeColor('module')} ${getItemTypeHoverColor('module')}`}
-          style={{ paddingLeft: `${level * 0.5}rem` }}
+          className={`flex min-w-0 flex-1 items-center gap-2 text-sm ${getItemTypeColor('module')} ${getItemTypeHoverColor('module')}`}
         >
-          {name}
+          <FolderIcon />
+          <span className="truncate">{name}</span>
         </Link>
       </div>
 
       {isOpen && (
-        <div className="ml-2">
-          {/* Items (types, enums, bitflags) */}
+        <TreeChildren>
           {module.items.length > 0 &&
             documentation &&
-            module.items.map((itemPath) => (
-              <ItemTree key={itemPath} itemPath={itemPath} level={level} />
-            ))}
+            module.items.map((itemPath) => <ItemTree key={itemPath} itemPath={itemPath} />)}
 
-          {/* Functions */}
           {module.functions.length > 0 &&
             module.functions.map((func, idx) => (
               <Link
                 key={`func-${idx}`}
                 to={`${buildModuleUrl(path, selectedSource)}##func-${func.name}`}
-                className={`flex items-center gap-2 py-1 px-2 text-sm rounded ${getItemTypeColor('function')} ${getItemTypeHoverColor('function')}`}
-                style={{ paddingLeft: `${(level + 1) * 0.5 + 1.25}rem` }}
+                className={`${ROW} text-sm ${getItemTypeColor('function')} ${getItemTypeHoverColor('function')}`}
               >
+                <ChevronSlot />
                 <FunctionIcon />
                 <span className="truncate">{func.name}</span>
               </Link>
             ))}
 
-          {/* Extern values */}
           {module.extern_values.length > 0 &&
-            module.extern_values.map((extVal, idx) => {
-              const extKey = `${path}::${extVal.name}`;
-              const isExtActive = currentPath === extKey;
+            module.extern_values.map((extVal, idx) => (
+              <Link
+                key={`ext-${idx}`}
+                to={`${buildModuleUrl(path, selectedSource)}##extval-${extVal.name}`}
+                className={`${ROW} text-sm ${getItemTypeColor('extern')} ${getItemTypeHoverColor('extern')}`}
+              >
+                <ChevronSlot />
+                <GlobalIcon />
+                <span className="truncate">{extVal.name}</span>
+              </Link>
+            ))}
 
-              return (
-                <Link
-                  key={`ext-${idx}`}
-                  to={`${buildModuleUrl(path, selectedSource)}##extval-${extVal.name}`}
-                  className={`flex items-center gap-2 py-1 px-2 text-sm rounded ${getItemTypeColor('extern')} ${getItemTypeHoverColor('extern')} ${
-                    isExtActive ? 'bg-accent-soft text-fg' : ''
-                  }`}
-                  style={{ paddingLeft: `${(level + 1) * 0.5 + 1.25}rem` }}
-                >
-                  <GlobalIcon />
-                  <span className="truncate">{extVal.name}</span>
-                </Link>
-              );
-            })}
-
-          {/* Submodules */}
           {hasSubmodules &&
             Object.entries(module.submodules).map(([subName, subModule]) => (
               <ModuleTree
@@ -393,7 +384,7 @@ function ModuleTree({ name, module, path, level }: ModuleTreeProps) {
                 level={level + 1}
               />
             ))}
-        </div>
+        </TreeChildren>
       )}
     </div>
   );
