@@ -63,8 +63,12 @@ function ExternValueItem({ extern: ext }: { extern: JsonExternValue }) {
       className="group relative border-b border-edge p-3 last:border-0"
     >
       <div className="absolute right-2 top-2 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-        <CopyButton value={`0x${ext.address.toString(16)}`} title="Copy address" />
-        <AnchorLink targetId={`extval-${ext.name}`} className="px-1" />
+        <CopyButton
+          value={`0x${ext.address.toString(16)}`}
+          title="Copy address"
+          label="copy addr"
+        />
+        <AnchorLink targetId={`extval-${ext.name}`} label="link" />
       </div>
       <div className="font-mono text-sm leading-relaxed">
         <Attributes groups={externAttributeGroups(ext)} />

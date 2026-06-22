@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 // Briefly-latching clipboard helper used by the copy affordances.
@@ -16,6 +16,41 @@ function useCopy(timeout = 1200) {
     );
   }, []);
   return { copied, copy };
+}
+
+// Shared chrome for inline row actions (copy, permalink). Centralising this
+// keeps every affordance visually identical and stops the row click from
+// firing when an action is used. An action renders an icon/glyph plus an
+// optional small text label.
+function ActionButton({
+  icon,
+  label,
+  title,
+  onActivate,
+  className = '',
+}: {
+  icon: ReactNode;
+  label?: string;
+  title: string;
+  onActivate: () => void;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        onActivate();
+      }}
+      title={title}
+      aria-label={title}
+      className={`inline-flex items-center gap-1 rounded p-1 text-fg-subtle transition-colors hover:bg-surface-2 hover:text-fg ${className}`}
+    >
+      {icon}
+      {label && <span className="text-xs">{label}</span>}
+    </button>
+  );
 }
 
 function CopyIcon({ checked }: { checked: boolean }) {
@@ -38,49 +73,49 @@ function CopyIcon({ checked }: { checked: boolean }) {
 export function CopyButton({
   value,
   title = 'Copy',
+  label,
   className = '',
 }: {
   value: string;
   title?: string;
+  label?: string;
   className?: string;
 }) {
   const { copied, copy } = useCopy();
   return (
-    <button
-      type="button"
-      onClick={(e) => {
-        e.stopPropagation();
-        e.preventDefault();
-        copy(value);
-      }}
+    <ActionButton
+      icon={<CopyIcon checked={copied} />}
+      label={label && (copied ? 'copied' : label)}
       title={copied ? 'Copied!' : title}
-      aria-label={title}
-      className={`rounded p-1 text-fg-subtle transition-colors hover:bg-surface-2 hover:text-fg ${className}`}
-    >
-      <CopyIcon checked={copied} />
-    </button>
+      onActivate={() => copy(value)}
+      className={className}
+    />
   );
 }
 
 // A `#` permalink that points at an on-page anchor. Uses the double-hash
 // convention (`#/route##anchor`) the HashRouter app relies on.
-export function AnchorLink({ targetId, className = '' }: { targetId: string; className?: string }) {
+export function AnchorLink({
+  targetId,
+  label,
+  className = '',
+}: {
+  targetId: string;
+  label?: string;
+  className?: string;
+}) {
   const location = useLocation();
   const navigate = useNavigate();
   return (
-    <button
-      type="button"
-      onClick={(e) => {
-        e.stopPropagation();
-        e.preventDefault();
+    <ActionButton
+      icon={<span className="font-mono text-sm leading-none">#</span>}
+      label={label}
+      title="Link to this"
+      onActivate={() => {
         navigate(`${location.pathname}##${targetId}`);
         document.getElementById(targetId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }}
-      title="Link to this"
-      aria-label="Link to this"
-      className={`font-mono text-fg-subtle transition-colors hover:text-accent ${className}`}
-    >
-      #
-    </button>
+      className={className}
+    />
   );
 }
