@@ -77,7 +77,7 @@ export function SourceName({ source, children, className = '' }: SourceNameProps
         href={githubUrl}
         target="_blank"
         rel="noopener noreferrer"
-        className={`hover:underline text-blue-600 dark:text-blue-400 ${className}`}
+        className={`hover:underline text-accent ${className}`}
         title={tooltip}
       >
         {children}
@@ -87,10 +87,7 @@ export function SourceName({ source, children, className = '' }: SourceNameProps
 
   // For local sources, show with dotted underline to indicate source info available
   return (
-    <span
-      className={`border-b border-dotted border-gray-400 dark:border-slate-500 ${className}`}
-      title={tooltip}
-    >
+    <span className={`border-b border-dotted border-edge-strong ${className}`} title={tooltip}>
       {children}
     </span>
   );
@@ -114,7 +111,7 @@ export function SourceLink({ source }: SourceLinkProps) {
         href={githubUrl}
         target="_blank"
         rel="noopener noreferrer"
-        className="text-blue-600 dark:text-blue-400 hover:underline"
+        className="text-accent hover:underline"
         title={tooltip}
       >
         [source]
@@ -124,7 +121,7 @@ export function SourceLink({ source }: SourceLinkProps) {
 
   // For local sources, just display without a link
   return (
-    <span className="text-gray-500 dark:text-slate-500" title={tooltip}>
+    <span className="text-fg-subtle" title={tooltip}>
       [source]
     </span>
   );

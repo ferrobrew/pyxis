@@ -3,6 +3,17 @@ import { useNavigate } from 'react-router-dom';
 import { useEffect } from 'react';
 import { buildModuleUrl } from '../utils/navigation';
 
+function Step({ n, children }: { n: number; children: React.ReactNode }) {
+  return (
+    <li className="flex gap-3">
+      <span className="flex-shrink-0 mt-0.5 flex h-5 w-5 items-center justify-center rounded-full border border-edge-strong font-mono text-[11px] text-fg-muted">
+        {n}
+      </span>
+      <span className="text-fg-muted">{children}</span>
+    </li>
+  );
+}
+
 export function WelcomePage() {
   const { documentation, selectedSource } = useDocumentation();
   const navigate = useNavigate();
@@ -18,28 +29,32 @@ export function WelcomePage() {
   }, [documentation, navigate, selectedSource]);
 
   return (
-    <div className="flex items-center justify-center h-full p-4 md:p-8">
-      <div className="max-w-2xl text-center">
-        <h1 className="text-4xl font-bold mb-4 text-gray-900 dark:text-slate-200">pyxisdoc</h1>
-        <p className="text-lg text-gray-600 dark:text-slate-400 mb-8">
-          A rustdoc-style viewer for Pyxis JSON documentation files.
+    <div className="flex min-h-full items-center justify-center p-6 md:p-10">
+      <div className="w-full max-w-xl">
+        <p className="font-mono text-xs uppercase tracking-[0.2em] text-fg-subtle">
+          Pyxis documentation
         </p>
-        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-6 text-left">
-          <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-slate-200">
-            Getting Started
+        <h1 className="mt-2 font-mono text-5xl font-bold tracking-tight text-fg">
+          pyxis<span className="text-accent">doc</span>
+        </h1>
+        <p className="mt-4 text-lg text-fg-muted">
+          A rustdoc-style viewer for Pyxis JSON output — browse types, enums, bitflags, functions,
+          and modules.
+        </p>
+
+        <div className="mt-10">
+          <h2 className="font-mono text-xs font-semibold uppercase tracking-[0.15em] text-fg-subtle">
+            Getting started
           </h2>
-          <ol className="list-decimal list-inside space-y-2 text-gray-700 dark:text-slate-400">
-            <li>Select "Local" from the dropdown and click "Browse" to load a local JSON file</li>
-            <li>Or select a project from the dropdown to load from GitHub</li>
-            <li>Browse modules and types using the sidebar</li>
-            <li>Use the search bar to quickly find items</li>
+          <ol className="mt-4 space-y-3 text-sm">
+            <Step n={1}>
+              Select <span className="text-fg">Local</span> from the dropdown and click{' '}
+              <span className="text-fg">Browse</span> to load a JSON file
+            </Step>
+            <Step n={2}>Or pick a project from the dropdown to load it from GitHub</Step>
+            <Step n={3}>Navigate modules and types using the sidebar</Step>
+            <Step n={4}>Use the search bar to jump straight to an item</Step>
           </ol>
-        </div>
-        <div className="mt-8 text-sm text-gray-500 dark:text-slate-400">
-          <p>
-            This viewer displays types, enums, bitflags, functions, and modules from Pyxis-generated
-            documentation.
-          </p>
         </div>
       </div>
     </div>

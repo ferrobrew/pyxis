@@ -3,6 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useDocumentation } from '../contexts/DocumentationContext';
 import { findModule, findLongestValidAncestor } from '../utils/pathUtils';
 import { buildModuleUrl, buildItemUrl, buildRootUrl } from '../utils/navigation';
+import { getItemTypeColor, type ItemType } from '../utils/colors';
 import { Collapsible } from './Collapsible';
 import { TypeRef } from './TypeRef';
 import { FunctionDisplay } from './FunctionDisplay';
@@ -26,27 +27,38 @@ interface ModuleData {
   backends?: { [key: string]: unknown };
 }
 
+function SectionHeader({ children }: { children: React.ReactNode }) {
+  return (
+    <h2 className="mb-4 border-b border-edge pb-1.5 text-lg font-semibold text-fg">{children}</h2>
+  );
+}
+
+// A panel that wraps a list of rows.
+function Panel({ children }: { children: React.ReactNode }) {
+  return <div className="overflow-hidden rounded-md border border-edge bg-surface">{children}</div>;
+}
+
+const ROW = 'block p-3 border-b border-edge last:border-0 hover:bg-surface-2 transition-colors';
+
+function kindToItemType(kind: string): ItemType {
+  if (kind === 'enum' || kind === 'bitflags' || kind === 'type_alias') return kind;
+  return 'type';
+}
+
 // Extern value display component
 function ExternValueItem({ extern: ext }: { extern: JsonExternValue }) {
   const isPrivate = ext.visibility === 'private';
-  const containerClasses = isPrivate
-    ? 'p-2 opacity-60 border-b border-gray-200 dark:border-slate-700 last:border-b-0'
-    : 'p-2 border-b border-gray-200 dark:border-slate-700 last:border-b-0';
-  const nameClasses = isPrivate
-    ? 'font-semibold text-gray-500 dark:text-slate-600'
-    : 'font-semibold text-gray-900 dark:text-slate-200';
+  const nameClasses = isPrivate ? 'font-semibold text-fg-subtle' : 'font-semibold text-fg';
 
   return (
-    <div id={`extval-${ext.name}`} className={containerClasses}>
+    <div id={`extval-${ext.name}`} className="p-3 border-b border-edge last:border-0">
       <div className="font-mono text-sm">
-        <span className="text-violet-600 dark:text-slate-500">extern </span>
+        <span className="text-kind-function">extern </span>
         <span className={nameClasses}>{ext.name}</span>
-        <span className="text-gray-600 dark:text-slate-400">: </span>
+        <span className="text-fg-muted">: </span>
         <TypeRef type={ext.type_ref} />
       </div>
-      <div className="mt-2 text-xs text-gray-500 dark:text-slate-500">
-        Address: 0x{ext.address.toString(16)}
-      </div>
+      <div className="mt-1.5 text-xs text-fg-subtle">Address: 0x{ext.address.toString(16)}</div>
     </div>
   );
 }
@@ -102,7 +114,7 @@ function BackendSpliceSection({ backends, slot }: BackendSpliceSectionProps) {
 
   const title = slot === 'prologue' ? 'Backend Prologue' : 'Backend Epilogue';
   const slotLabel = slot === 'prologue' ? 'Prologue' : 'Epilogue';
-  const sectionMargin = slot === 'prologue' ? 'mb-6' : 'my-6';
+  const sectionMargin = slot === 'prologue' ? 'mb-8' : 'my-8';
 
   const hasAny = Object.values(backends).some((configs) =>
     (configs as JsonBackend[]).some((config) => {
@@ -114,7 +126,7 @@ function BackendSpliceSection({ backends, slot }: BackendSpliceSectionProps) {
 
   return (
     <div className={sectionMargin}>
-      <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-slate-200">{title}</h2>
+      <SectionHeader>{title}</SectionHeader>
       {Object.entries(backends).map(([backendName, configs]) => {
         const splices = (configs as JsonBackend[])
           .map((config) => config[slot])
@@ -136,17 +148,12 @@ function BackendSpliceSection({ backends, slot }: BackendSpliceSectionProps) {
 
         return (
           <div key={backendName} className="mb-4">
-            <h3 className="text-lg font-medium mb-2 text-gray-800 dark:text-slate-300">
-              {backendName}
-            </h3>
+            <h3 className="mb-2 font-mono text-sm font-semibold text-fg-muted">{backendName}</h3>
             <Collapsible title={slotLabel}>
               {parts.map((part, idx) => (
-                <div
-                  key={part.label}
-                  className={idx > 0 ? 'border-t border-gray-300 dark:border-slate-800' : ''}
-                >
+                <div key={part.label} className={idx > 0 ? 'border-t border-edge' : ''}>
                   {showLabels && (
-                    <div className="px-3 py-1 text-[10px] uppercase tracking-wider font-semibold text-gray-500 dark:text-slate-400 bg-gray-100 dark:bg-slate-800 border-b border-gray-300 dark:border-slate-800">
+                    <div className="border-b border-edge bg-surface px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-fg-subtle">
                       {part.label}
                     </div>
                   )}
@@ -171,29 +178,29 @@ function ItemList({ items }: ItemListProps) {
   if (items.length === 0) return null;
 
   return (
-    <div>
-      <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-slate-200">Types</h2>
-      <div className="bg-gray-50 dark:bg-slate-800 rounded-md overflow-hidden">
+    <div className="mb-8">
+      <SectionHeader>Types</SectionHeader>
+      <Panel>
         {items.map(({ path, item }: { path: string; item: JsonItem }) => {
           if (!item) return null;
           const name = path.split('::').pop();
           return (
-            <Link
-              key={path}
-              to={buildItemUrl(path, selectedSource)}
-              className="block p-2 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors border-b border-gray-200 dark:border-slate-700 last:border-b-0"
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="font-mono text-sm font-semibold text-blue-600 dark:text-blue-400">
+            <Link key={path} to={buildItemUrl(path, selectedSource)} className={ROW}>
+              <div className="flex items-center justify-between gap-4">
+                <div className="min-w-0">
+                  <div
+                    className={`font-mono text-sm font-semibold ${getItemTypeColor(
+                      kindToItemType(item.kind.type)
+                    )}`}
+                  >
                     {name}
                   </div>
-                  <div className="text-xs text-gray-500 dark:text-slate-500 mt-1">
+                  <div className="mt-1 text-xs text-fg-subtle">
                     {item.kind.type} • {item.size} bytes • align {item.alignment}
                   </div>
                 </div>
                 {item.kind.doc && (
-                  <div className="text-sm text-gray-600 dark:text-slate-400 ml-4 max-w-md truncate">
+                  <div className="ml-4 max-w-md truncate text-sm text-fg-muted">
                     {item.kind.doc}
                   </div>
                 )}
@@ -201,7 +208,7 @@ function ItemList({ items }: ItemListProps) {
             </Link>
           );
         })}
-      </div>
+      </Panel>
     </div>
   );
 }
@@ -221,28 +228,20 @@ function SubmoduleList({ submodules, parentPath }: SubmoduleListProps) {
   if (!submodules || Object.keys(submodules).length === 0) return null;
 
   return (
-    <div className="mt-6">
-      <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-slate-200">Submodules</h2>
-      <div className="bg-gray-50 dark:bg-slate-800 rounded-md overflow-hidden">
+    <div className="mb-8">
+      <SectionHeader>Submodules</SectionHeader>
+      <Panel>
         {Object.entries(submodules).map(([name, submodule]) => {
           const subPath = parentPath ? `${parentPath}::${name}` : name;
           const data = submodule as SubmoduleData;
           return (
-            <Link
-              key={name}
-              to={buildModuleUrl(subPath, selectedSource)}
-              className="block p-2 border-b border-gray-200 dark:border-slate-700 last:border-b-0 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
-            >
-              <div className="font-mono text-sm font-semibold text-blue-600 dark:text-blue-400">
-                {name}
-              </div>
-              {data.doc && (
-                <div className="text-sm text-gray-600 dark:text-slate-400 mt-1">{data.doc}</div>
-              )}
+            <Link key={name} to={buildModuleUrl(subPath, selectedSource)} className={ROW}>
+              <div className="font-mono text-sm font-semibold text-kind-module">{name}</div>
+              {data.doc && <div className="mt-1 text-sm text-fg-muted">{data.doc}</div>}
             </Link>
           );
         })}
-      </div>
+      </Panel>
     </div>
   );
 }
@@ -280,9 +279,7 @@ export function ModuleView() {
   if (!documentation) {
     return (
       <div className="p-8">
-        <div className="text-gray-500 dark:text-slate-400">
-          Please load a documentation file to begin.
-        </div>
+        <div className="text-fg-subtle">Please load a documentation file to begin.</div>
       </div>
     );
   }
@@ -300,6 +297,7 @@ export function ModuleView() {
   }
 
   const module = moduleRaw as ModuleData;
+  const name = decodedPath.split('::').pop() || decodedPath;
 
   const items =
     module.items?.map((itemPath: string) => ({
@@ -308,13 +306,17 @@ export function ModuleView() {
     })) || [];
 
   return (
-    <div className="p-4 md:p-6 lg:p-8 max-w-6xl">
+    <div className="mx-auto max-w-5xl px-4 py-6 md:px-8 lg:px-10">
       <div className="mb-4">
         <Breadcrumbs path={decodedPath} />
       </div>
 
+      <h1 className="mb-6 font-mono text-2xl font-semibold tracking-tight">
+        <span className="text-kind-module">mod</span> <span className="text-fg">{name}</span>
+      </h1>
+
       {module.doc && (
-        <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 rounded text-gray-700 dark:text-slate-400">
+        <div className="mb-8 border-l-2 border-edge-strong pl-4 text-fg-muted">
           <Markdown>{module.doc}</Markdown>
         </div>
       )}
@@ -324,25 +326,21 @@ export function ModuleView() {
 
       {/* Extern Values */}
       {module.extern_values && module.extern_values.length > 0 && (
-        <div className="mb-6">
-          <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-slate-200">
-            Extern Values
-          </h2>
-          <div className="bg-gray-50 dark:bg-slate-800 rounded-md overflow-hidden">
+        <div className="mb-8">
+          <SectionHeader>Extern Values</SectionHeader>
+          <Panel>
             {module.extern_values.map((ext: JsonExternValue, idx: number) => (
               <ExternValueItem key={idx} extern={ext} />
             ))}
-          </div>
+          </Panel>
         </div>
       )}
 
       {/* Functions */}
       {module.functions && module.functions.length > 0 && (
-        <div className="mb-6">
-          <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-slate-200">
-            Functions
-          </h2>
-          <div className="bg-gray-50 dark:bg-slate-800 rounded-md overflow-hidden">
+        <div className="mb-8">
+          <SectionHeader>Functions</SectionHeader>
+          <Panel>
             {module.functions.map((func: JsonFunction, idx: number) => (
               <FunctionDisplay
                 key={idx}
@@ -351,7 +349,7 @@ export function ModuleView() {
                 modulePath={decodedPath}
               />
             ))}
-          </div>
+          </Panel>
         </div>
       )}
 

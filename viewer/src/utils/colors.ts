@@ -1,4 +1,6 @@
-// Color schemes for different item types
+// Color schemes for different item types.
+// These map onto the warm semantic `kind-*` tokens defined in index.css, so
+// they flip between the parchment and sepia themes automatically.
 export type ItemType =
   | 'module'
   | 'type'
@@ -13,74 +15,49 @@ export type ItemType =
 export function getItemTypeColor(type: ItemType): string {
   switch (type) {
     case 'module':
-      return 'text-blue-600 dark:text-blue-400';
+      return 'text-kind-module';
     case 'type':
-      return 'text-purple-600 dark:text-purple-400';
+      return 'text-kind-type';
     case 'enum':
-      return 'text-green-600 dark:text-green-400';
+      return 'text-kind-enum';
     case 'enum-variant':
-      return 'text-green-700 dark:text-green-500';
+      return 'text-kind-enum-variant';
     case 'bitflags':
-      return 'text-orange-600 dark:text-orange-400';
+      return 'text-kind-bitflags';
     case 'type_alias':
-      return 'text-cyan-600 dark:text-cyan-400';
+      return 'text-kind-alias';
     case 'function':
-      return 'text-indigo-600 dark:text-indigo-400';
+      return 'text-kind-function';
     case 'extern':
-      return 'text-amber-600 dark:text-amber-400';
+      return 'text-kind-extern';
     case 'field':
-      return 'text-gray-600 dark:text-gray-400';
+      return 'text-fg-muted';
     default:
-      return 'text-gray-600 dark:text-gray-400';
+      return 'text-fg-muted';
   }
 }
 
 export function getItemTypeHoverColor(type: ItemType): string {
   switch (type) {
     case 'module':
-      return 'hover:text-blue-500 dark:hover:text-blue-300';
+      return 'hover:text-kind-module-hover';
     case 'type':
-      return 'hover:text-purple-500 dark:hover:text-purple-300';
+      return 'hover:text-kind-type-hover';
     case 'enum':
-      return 'hover:text-green-500 dark:hover:text-green-300';
+      return 'hover:text-kind-enum-hover';
     case 'enum-variant':
-      return 'hover:text-green-600 dark:hover:text-green-400';
+      return 'hover:text-kind-enum-variant-hover';
     case 'bitflags':
-      return 'hover:text-orange-500 dark:hover:text-orange-300';
+      return 'hover:text-kind-bitflags-hover';
     case 'type_alias':
-      return 'hover:text-cyan-500 dark:hover:text-cyan-300';
+      return 'hover:text-kind-alias-hover';
     case 'function':
-      return 'hover:text-indigo-500 dark:hover:text-indigo-300';
+      return 'hover:text-kind-function-hover';
     case 'extern':
-      return 'hover:text-amber-500 dark:hover:text-amber-300';
+      return 'hover:text-kind-extern-hover';
     case 'field':
-      return 'hover:text-blue-600 dark:hover:text-blue-400';
+      return 'hover:text-accent';
     default:
-      return 'hover:text-gray-500 dark:hover:text-gray-300';
-  }
-}
-
-export function getItemTypeBgColor(type: ItemType): string {
-  switch (type) {
-    case 'module':
-      return 'bg-blue-100 dark:bg-blue-900/30';
-    case 'type':
-      return 'bg-purple-100 dark:bg-purple-900/30';
-    case 'enum':
-      return 'bg-green-100 dark:bg-green-900/30';
-    case 'enum-variant':
-      return 'bg-green-100 dark:bg-green-900/30';
-    case 'bitflags':
-      return 'bg-orange-100 dark:bg-orange-900/30';
-    case 'type_alias':
-      return 'bg-cyan-100 dark:bg-cyan-900/30';
-    case 'function':
-      return 'bg-indigo-100 dark:bg-indigo-900/30';
-    case 'extern':
-      return 'bg-amber-100 dark:bg-amber-900/30';
-    case 'field':
-      return 'bg-gray-100 dark:bg-gray-900/30';
-    default:
-      return 'bg-gray-100 dark:bg-gray-900/30';
+      return 'hover:text-fg';
   }
 }

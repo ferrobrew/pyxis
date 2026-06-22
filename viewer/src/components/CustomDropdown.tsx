@@ -102,16 +102,14 @@ export function CustomDropdown({ value, onChange, options, disabled }: CustomDro
         onClick={() => !disabled && setIsOpen(!isOpen)}
         onKeyDown={handleKeyDown}
         disabled={disabled}
-        className={`w-full ${HEADER_INPUT_HEIGHT} px-3 text-sm text-left border border-gray-300 dark:border-slate-700 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 flex items-center justify-between`}
+        className={`w-full ${HEADER_INPUT_HEIGHT} px-3 text-sm text-left border border-edge rounded-md bg-surface text-fg focus:outline-none focus:ring-2 focus:ring-accent disabled:opacity-50 flex items-center justify-between`}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
       >
         <div className="flex flex-col items-start flex-1 min-w-0">
           <span className="truncate w-full">{selectedOption.label}</span>
           {selectedOption.datetime && (
-            <span className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
-              {selectedOption.datetime}
-            </span>
+            <span className="text-xs text-fg-subtle mt-0.5">{selectedOption.datetime}</span>
           )}
         </div>
         <svg
@@ -127,7 +125,7 @@ export function CustomDropdown({ value, onChange, options, disabled }: CustomDro
       </button>
 
       {isOpen && (
-        <div className="absolute top-full mt-1 w-full bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-700 rounded-md shadow-lg z-50 max-h-96 overflow-y-auto">
+        <div className="absolute top-full mt-1 w-full bg-surface border border-edge rounded-md shadow-lg z-50 max-h-96 overflow-y-auto">
           {options.map((option, index) => (
             <button
               key={option.value}
@@ -135,18 +133,14 @@ export function CustomDropdown({ value, onChange, options, disabled }: CustomDro
               data-index={index}
               onClick={() => handleOptionClick(option.value)}
               onMouseEnter={() => setFocusedIndex(index)}
-              className={`w-full px-3 py-2 text-left hover:bg-gray-100 dark:hover:bg-slate-700 focus:bg-gray-100 dark:focus:bg-slate-700 focus:outline-none ${
-                index === focusedIndex ? 'bg-gray-100 dark:bg-slate-700' : ''
-              } ${option.value === value ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
+              className={`w-full px-3 py-2 text-left hover:bg-surface-2 focus:bg-surface-2 focus:outline-none ${
+                index === focusedIndex ? 'bg-surface-2' : ''
+              } ${option.value === value ? 'bg-accent-soft' : ''}`}
             >
               <div className="flex flex-col min-w-0">
-                <span className="text-sm text-gray-900 dark:text-slate-100 truncate">
-                  {option.label}
-                </span>
+                <span className="text-sm text-fg truncate">{option.label}</span>
                 {option.datetime && (
-                  <span className="text-xs text-gray-500 dark:text-slate-400 mt-0.5 truncate">
-                    {option.datetime}
-                  </span>
+                  <span className="text-xs text-fg-subtle mt-0.5 truncate">{option.datetime}</span>
                 )}
               </div>
             </button>

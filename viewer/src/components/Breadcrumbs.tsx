@@ -15,8 +15,8 @@ export function Breadcrumbs({ path, isItem = false }: BreadcrumbsProps) {
   if (!path) {
     // Root module
     return (
-      <nav className="flex items-center text-sm text-gray-600 dark:text-slate-400">
-        <span className="font-semibold text-blue-600 dark:text-blue-400">Root</span>
+      <nav className="flex items-center text-sm text-fg-muted">
+        <span className="font-semibold text-kind-module">Root</span>
       </nav>
     );
   }
@@ -41,7 +41,7 @@ export function Breadcrumbs({ path, isItem = false }: BreadcrumbsProps) {
   const hoverColor = getItemTypeHoverColor(finalItemType);
 
   return (
-    <nav className="flex items-center text-sm text-gray-600 dark:text-slate-400">
+    <nav className="flex items-center text-sm text-fg-muted">
       {/* All breadcrumbs including current */}
       {pathSegments.map((segment, idx) => {
         const partialPath = pathSegments.slice(0, idx + 1).join('::');
@@ -70,7 +70,7 @@ export function Breadcrumbs({ path, isItem = false }: BreadcrumbsProps) {
                   </Link>
                   {documentation?.items[path]?.type_parameters &&
                     documentation.items[path].type_parameters!.length > 0 && (
-                      <span className="text-emerald-600 dark:text-emerald-400 font-mono">
+                      <span className="text-kind-enum font-mono">
                         &lt;
                         {documentation.items[path].type_parameters!.join(', ')}
                         &gt;
@@ -81,10 +81,7 @@ export function Breadcrumbs({ path, isItem = false }: BreadcrumbsProps) {
                 <span className={`font-semibold ${typeColor}`}>{segment}</span>
               )
             ) : (
-              <Link
-                to={buildModuleUrl(partialPath, selectedSource)}
-                className="hover:text-blue-600 dark:hover:text-blue-400"
-              >
+              <Link to={buildModuleUrl(partialPath, selectedSource)} className="hover:text-accent">
                 {segment}
               </Link>
             )}

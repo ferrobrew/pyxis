@@ -306,7 +306,7 @@ export function FileUpload() {
           />
           <button
             onClick={handleButtonClick}
-            className="px-3 py-2 text-sm font-medium border border-gray-300 dark:border-slate-700 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex-shrink-0 whitespace-nowrap"
+            className="px-3 py-2 text-sm font-medium border border-edge rounded-md bg-surface text-fg hover:bg-surface-2 transition-colors flex-shrink-0 whitespace-nowrap"
           >
             Browse
           </button>
@@ -314,9 +314,7 @@ export function FileUpload() {
       )}
 
       {isLoading && (
-        <span className="text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap self-center">
-          Loading...
-        </span>
+        <span className="text-sm text-fg-muted whitespace-nowrap self-center">Loading...</span>
       )}
     </div>
   );

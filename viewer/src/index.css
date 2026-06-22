@@ -2,44 +2,165 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* Syntax highlighting overrides for dark mode */
-.dark .hljs {
-  color: #e2e8f0;
+/*
+ * Warm "ferrobrew"-inspired palette.
+ * Light is a parchment variant; dark is the sepia hero.
+ * Everything is expressed as CSS variables so the two themes share one source
+ * of truth, and `@theme inline` exposes them as Tailwind utilities that flip
+ * automatically with the `.dark` class — no `dark:` pairs needed.
+ */
+
+:root {
+  /* Surfaces */
+  --canvas: #f5eddb;
+  --surface: #efe5cf;
+  --surface-2: #e6d9bd;
+  --inset: #ece0c6;
+  --border: #ddcca8;
+  --border-strong: #cab88f;
+
+  /* Text */
+  --fg: #2f2820;
+  --fg-muted: #6a5c48;
+  --fg-subtle: #97876d;
+
+  /* Accent (brick red) */
+  --accent: #b3372d;
+  --accent-hover: #8f2a22;
+  --accent-soft: rgba(179, 55, 45, 0.1);
+
+  /* Semantic item kinds — muted, warm-tuned, but still distinguishable */
+  --kind-module: #3f6d8c;
+  --kind-module-hover: #2f5670;
+  --kind-type: #7a4f86;
+  --kind-type-hover: #633e6f;
+  --kind-enum: #5b7320;
+  --kind-enum-hover: #485c14;
+  --kind-enum-variant: #6b7d3a;
+  --kind-enum-variant-hover: #586a2c;
+  --kind-bitflags: #9a6412;
+  --kind-bitflags-hover: #7e4f0c;
+  --kind-alias: #2f6f66;
+  --kind-alias-hover: #235851;
+  --kind-function: #5a57a6;
+  --kind-function-hover: #46438a;
+  --kind-extern: #8a6a1f;
+  --kind-extern-hover: #6f5414;
+}
+
+.dark {
+  --canvas: #26221f;
+  --surface: #2e2926;
+  --surface-2: #38322d;
+  --inset: #1f1b18;
+  --border: #423a33;
+  --border-strong: #564b41;
+
+  --fg: #f9dcac;
+  --fg-muted: #d4bd96;
+  --fg-subtle: #9c8b72;
+
+  --accent: #cf4338;
+  --accent-hover: #e0584c;
+  --accent-soft: rgba(207, 67, 56, 0.14);
+
+  --kind-module: #82a9c4;
+  --kind-module-hover: #9dbed6;
+  --kind-type: #c39ace;
+  --kind-type-hover: #d2b1da;
+  --kind-enum: #a6bd6e;
+  --kind-enum-hover: #b9cd86;
+  --kind-enum-variant: #b8c98a;
+  --kind-enum-variant-hover: #c8d79e;
+  --kind-bitflags: #d6a153;
+  --kind-bitflags-hover: #e3b46e;
+  --kind-alias: #6fb3a7;
+  --kind-alias-hover: #88c5ba;
+  --kind-function: #a6a4e0;
+  --kind-function-hover: #bcbae8;
+  --kind-extern: #d9b566;
+  --kind-extern-hover: #e6c984;
+}
+
+@theme inline {
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', monospace;
+
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-inset: var(--inset);
+  --color-edge: var(--border);
+  --color-edge-strong: var(--border-strong);
+
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-subtle: var(--fg-subtle);
+
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-soft: var(--accent-soft);
+
+  --color-kind-module: var(--kind-module);
+  --color-kind-module-hover: var(--kind-module-hover);
+  --color-kind-type: var(--kind-type);
+  --color-kind-type-hover: var(--kind-type-hover);
+  --color-kind-enum: var(--kind-enum);
+  --color-kind-enum-hover: var(--kind-enum-hover);
+  --color-kind-enum-variant: var(--kind-enum-variant);
+  --color-kind-enum-variant-hover: var(--kind-enum-variant-hover);
+  --color-kind-bitflags: var(--kind-bitflags);
+  --color-kind-bitflags-hover: var(--kind-bitflags-hover);
+  --color-kind-alias: var(--kind-alias);
+  --color-kind-alias-hover: var(--kind-alias-hover);
+  --color-kind-function: var(--kind-function);
+  --color-kind-function-hover: var(--kind-function-hover);
+  --color-kind-extern: var(--kind-extern);
+  --color-kind-extern-hover: var(--kind-extern-hover);
+}
+
+body {
+  font-family: var(--font-sans);
+}
+
+/* Thin, warm scrollbars that fit the palette instead of OS defaults */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+/* Syntax highlighting — light (parchment) */
+.hljs {
+  color: var(--fg);
   background: transparent;
 }
-
-.dark .hljs-comment,
-.dark .hljs-quote {
-  color: #64748b;
+.hljs-comment,
+.hljs-quote {
+  color: var(--fg-subtle);
+  font-style: italic;
 }
-
-.dark .hljs-keyword,
-.dark .hljs-selector-tag,
-.dark .hljs-literal,
-.dark .hljs-type {
-  color: #c084fc;
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-type {
+  color: var(--kind-type);
 }
-
-.dark .hljs-string,
-.dark .hljs-title {
-  color: #6ee7b7;
+.hljs-string,
+.hljs-title {
+  color: var(--kind-enum);
 }
-
-.dark .hljs-number {
-  color: #fb923c;
+.hljs-number {
+  color: var(--kind-bitflags);
 }
-
-.dark .hljs-function,
-.dark .hljs-title.function_ {
-  color: #38bdf8;
+.hljs-function,
+.hljs-title.function_ {
+  color: var(--kind-module);
 }
-
-.dark .hljs-variable,
-.dark .hljs-attr {
-  color: #f472b6;
+.hljs-variable,
+.hljs-attr {
+  color: var(--accent);
 }
-
-.dark .hljs-built_in,
-.dark .hljs-class .hljs-title {
-  color: #fbbf24;
+.hljs-built_in,
+.hljs-class .hljs-title {
+  color: var(--kind-extern);
 }

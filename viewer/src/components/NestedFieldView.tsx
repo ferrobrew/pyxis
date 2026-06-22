@@ -92,29 +92,24 @@ function NestedFieldRow({
   const isExpandable = nestedItem?.kind.type === 'type' && nestedItem.kind.fields.length > 0;
   const isExpanded = expandedPaths.has(fieldPath);
 
-  const nameClasses = isPrivate
-    ? 'font-mono text-sm text-gray-500 dark:text-slate-600'
-    : 'font-mono text-sm text-gray-900 dark:text-slate-200';
-  const typeClasses = isPrivate ? 'opacity-60' : '';
+  const nameClasses = isPrivate ? 'font-mono text-sm text-fg-subtle' : 'font-mono text-sm text-fg';
+  const typeClasses = isPrivate ? 'text-fg-subtle' : '';
 
   // Indentation based on depth
   const indentStyle = { paddingLeft: `${depth * 1.5}rem` };
 
   return (
     <>
-      <tr
-        id={field.name ? `field-${field.name}` : undefined}
-        className="border-b border-gray-200 dark:border-slate-800"
-      >
+      <tr id={field.name ? `field-${field.name}` : undefined} className="border-b border-edge">
         <td
-          className="px-4 py-2 text-sm text-gray-600 dark:text-slate-400 font-mono whitespace-nowrap"
+          className="px-4 py-2 text-sm text-fg-muted font-mono whitespace-nowrap"
           style={indentStyle}
         >
           <span className="inline-flex items-center gap-2">
             {isExpandable && (
               <button
                 onClick={() => onToggleExpand(fieldPath)}
-                className="w-4 h-4 flex items-center justify-center text-gray-500 hover:text-gray-700 dark:text-slate-500 dark:hover:text-slate-300 focus:outline-none"
+                className="w-4 h-4 flex items-center justify-center text-fg-subtle hover:text-fg focus:outline-none"
                 aria-label={isExpanded ? 'Collapse' : 'Expand'}
               >
                 <svg
@@ -144,12 +139,12 @@ function NestedFieldRow({
         <td className={`px-4 py-2 font-mono text-sm ${typeClasses}`}>
           <TypeRef type={field.type_ref} currentModule={modulePath} />
         </td>
-        <td className="px-4 py-2 text-sm text-gray-600 dark:text-slate-400">{field.size}</td>
-        <td className="px-4 py-2 text-sm text-gray-600 dark:text-slate-400">{field.alignment}</td>
+        <td className="px-4 py-2 text-sm text-fg-muted">{field.size}</td>
+        <td className="px-4 py-2 text-sm text-fg-muted">{field.alignment}</td>
         <td className="px-4 py-2 text-sm">
           {field.is_base && <SmallBadge variant="violet">base</SmallBadge>}
           {field.doc && (
-            <div className="text-gray-600 dark:text-slate-400 mt-1">
+            <div className="text-fg-muted mt-1">
               <Markdown>{field.doc}</Markdown>
             </div>
           )}
@@ -214,27 +209,15 @@ export function NestedFieldView({ fields, modulePath }: NestedFieldViewProps) {
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full border border-gray-200 dark:border-slate-800 rounded-md">
-        <thead className="bg-gray-100 dark:bg-slate-800">
+      <table className="w-full border border-edge rounded-md">
+        <thead className="bg-surface">
           <tr>
-            <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-slate-200">
-              Offset
-            </th>
-            <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-slate-200">
-              Name
-            </th>
-            <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-slate-200">
-              Type
-            </th>
-            <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-slate-200">
-              Size
-            </th>
-            <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-slate-200">
-              Align
-            </th>
-            <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-slate-200">
-              Notes
-            </th>
+            <th className="px-4 py-2 text-left text-sm font-semibold text-fg">Offset</th>
+            <th className="px-4 py-2 text-left text-sm font-semibold text-fg">Name</th>
+            <th className="px-4 py-2 text-left text-sm font-semibold text-fg">Type</th>
+            <th className="px-4 py-2 text-left text-sm font-semibold text-fg">Size</th>
+            <th className="px-4 py-2 text-left text-sm font-semibold text-fg">Align</th>
+            <th className="px-4 py-2 text-left text-sm font-semibold text-fg">Notes</th>
           </tr>
         </thead>
         <tbody>

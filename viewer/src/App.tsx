@@ -46,7 +46,7 @@ function AppLayout() {
   }, []);
 
   return (
-    <div className="fixed inset-0 flex flex-col text-gray-900 dark:text-slate-200">
+    <div className="fixed inset-0 flex flex-col bg-canvas text-fg">
       <Header
         isSidebarOpen={isSidebarOpen}
         onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}

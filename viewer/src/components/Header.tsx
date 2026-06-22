@@ -8,18 +8,21 @@ interface HeaderProps {
   onToggleSidebar: () => void;
 }
 
+const iconButton =
+  'p-2 rounded-md border border-edge bg-surface text-fg-muted hover:text-fg hover:bg-surface-2 transition-colors flex-shrink-0';
+
 export function Header({ isSidebarOpen, onToggleSidebar }: HeaderProps) {
   const { theme, toggleTheme } = useTheme();
   const { documentation } = useDocumentation();
 
   return (
-    <header className="flex-shrink-0 border-b border-gray-200 dark:border-slate-800">
+    <header className="flex-shrink-0 border-b border-edge bg-surface">
       <div className="flex items-stretch p-3 gap-2">
         {/* Sidebar toggle button (mobile only) */}
         {documentation && (
           <button
             onClick={onToggleSidebar}
-            className="lg:hidden p-2 rounded-md border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex-shrink-0"
+            className={`lg:hidden ${iconButton}`}
             aria-label="Toggle sidebar"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -33,6 +36,15 @@ export function Header({ isSidebarOpen, onToggleSidebar }: HeaderProps) {
           </button>
         )}
 
+        {/* Wordmark */}
+        <a
+          href="#/"
+          className="hidden lg:flex items-center px-1 select-none font-mono text-lg font-bold tracking-tight text-fg hover:text-fg flex-shrink-0"
+          aria-label="pyxisdoc home"
+        >
+          pyxis<span className="text-accent">doc</span>
+        </a>
+
         {/* FileUpload with constrained width on mobile */}
         <div className="flex-1 min-w-0 lg:flex-initial lg:flex-shrink-0">
           <FileUpload />
@@ -41,11 +53,7 @@ export function Header({ isSidebarOpen, onToggleSidebar }: HeaderProps) {
         {/* Right side: Search + Theme toggle */}
         <div className="flex items-stretch gap-2 min-w-0 lg:flex-1">
           {documentation && <SearchBar />}
-          <button
-            onClick={toggleTheme}
-            className="p-2 rounded-md border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex-shrink-0"
-            aria-label="Toggle theme"
-          >
+          <button onClick={toggleTheme} className={iconButton} aria-label="Toggle theme">
             {theme === 'light' ? (
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path

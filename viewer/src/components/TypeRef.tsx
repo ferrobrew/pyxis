@@ -29,9 +29,7 @@ export function TypeRef({ type, currentModule = '' }: TypeRefProps) {
           <Link
             to={buildItemUrl(t.path, selectedSource)}
             className={
-              isPredefined
-                ? 'text-violet-600 dark:text-violet-500 hover:underline'
-                : 'text-blue-600 dark:text-blue-400 hover:underline'
+              isPredefined ? 'text-kind-type hover:underline' : 'text-kind-module hover:underline'
             }
           >
             {displayPath}
@@ -42,7 +40,7 @@ export function TypeRef({ type, currentModule = '' }: TypeRefProps) {
       case 'const_pointer':
         return (
           <>
-            <span className="text-gray-600 dark:text-slate-400">*const </span>
+            <span className="text-fg-muted">*const </span>
             {renderType(t.inner)}
           </>
         );
@@ -50,7 +48,7 @@ export function TypeRef({ type, currentModule = '' }: TypeRefProps) {
       case 'mut_pointer':
         return (
           <>
-            <span className="text-gray-600 dark:text-slate-400">*mut </span>
+            <span className="text-fg-muted">*mut </span>
             {renderType(t.inner)}
           </>
         );
@@ -58,9 +56,9 @@ export function TypeRef({ type, currentModule = '' }: TypeRefProps) {
       case 'array':
         return (
           <>
-            <span className="text-gray-600 dark:text-slate-400">[</span>
+            <span className="text-fg-muted">[</span>
             {renderType(t.inner)}
-            <span className="text-gray-600 dark:text-slate-400">; {t.size}]</span>
+            <span className="text-fg-muted">; {t.size}]</span>
           </>
         );
 
@@ -76,47 +74,45 @@ export function TypeRef({ type, currentModule = '' }: TypeRefProps) {
             <Link
               to={buildItemUrl(t.base, selectedSource)}
               className={
-                isPredefined
-                  ? 'text-violet-600 dark:text-violet-500 hover:underline'
-                  : 'text-blue-600 dark:text-blue-400 hover:underline'
+                isPredefined ? 'text-kind-type hover:underline' : 'text-kind-module hover:underline'
               }
             >
               {displayBase}
             </Link>
-            <span className="text-gray-600 dark:text-slate-400">&lt;</span>
+            <span className="text-fg-muted">&lt;</span>
             {t.args.map((arg, i) => (
               <span key={i}>
-                {i > 0 && <span className="text-gray-600 dark:text-slate-400">, </span>}
+                {i > 0 && <span className="text-fg-muted">, </span>}
                 {renderType(arg)}
               </span>
             ))}
-            <span className="text-gray-600 dark:text-slate-400">&gt;</span>
+            <span className="text-fg-muted">&gt;</span>
           </>
         );
       }
 
       case 'type_parameter':
         // Type parameter reference, e.g., T inside a generic type
-        return <span className="text-emerald-600 dark:text-emerald-400 italic">{t.name}</span>;
+        return <span className="text-kind-enum italic">{t.name}</span>;
 
       case 'function': {
         const cc = getCallingConvention(t.calling_convention);
         return (
           <span className="font-mono text-sm">
-            {cc && <span className="text-orange-600 dark:text-orange-400">{cc}</span>}
-            <span className="text-gray-600 dark:text-slate-400">fn(</span>
+            {cc && <span className="text-kind-extern">{cc}</span>}
+            <span className="text-fg-muted">fn(</span>
             {t.arguments.map((arg, i) => (
               <span key={i}>
-                {i > 0 && <span className="text-gray-600 dark:text-slate-400">, </span>}
-                <span className="text-gray-800 dark:text-slate-300">{arg.name}</span>
-                <span className="text-gray-600 dark:text-slate-400">: </span>
+                {i > 0 && <span className="text-fg-muted">, </span>}
+                <span className="text-fg">{arg.name}</span>
+                <span className="text-fg-muted">: </span>
                 {renderType(arg.type_ref)}
               </span>
             ))}
-            <span className="text-gray-600 dark:text-slate-400">)</span>
+            <span className="text-fg-muted">)</span>
             {t.return_type && (
               <>
-                <span className="text-gray-600 dark:text-slate-400"> -&gt; </span>
+                <span className="text-fg-muted"> -&gt; </span>
                 {renderType(t.return_type)}
               </>
             )}
@@ -125,7 +121,7 @@ export function TypeRef({ type, currentModule = '' }: TypeRefProps) {
       }
 
       default:
-        return <span className="text-red-500">Unknown type</span>;
+        return <span className="text-accent">Unknown type</span>;
     }
   };
 

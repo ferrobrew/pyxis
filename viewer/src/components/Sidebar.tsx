@@ -154,7 +154,7 @@ function ItemTree({ itemPath, level }: ItemTreeProps) {
     <div>
       <div
         className={`flex items-center gap-1 py-1 px-2 rounded ${
-          isItemActive ? 'bg-blue-100 dark:bg-slate-700/30' : ''
+          isItemActive ? 'bg-accent-soft text-fg' : ''
         }`}
         style={{ paddingLeft: `${(level + 1) * 0.5 + 1.25}rem` }}
       >
@@ -164,7 +164,7 @@ function ItemTree({ itemPath, level }: ItemTreeProps) {
               e.stopPropagation();
               setIsItemOpen(!isItemOpen);
             }}
-            className="p-0.5 hover:bg-gray-200 dark:hover:bg-slate-800 rounded flex-shrink-0"
+            className="p-0.5 hover:bg-surface-2 rounded flex-shrink-0"
           >
             <svg
               className={`w-3 h-3 transition-transform ${isItemOpen ? 'rotate-90' : ''}`}
@@ -186,9 +186,7 @@ function ItemTree({ itemPath, level }: ItemTreeProps) {
           <span className="truncate">
             {itemName}
             {item.type_parameters && item.type_parameters.length > 0 && (
-              <span className="text-emerald-600 dark:text-emerald-400">
-                &lt;{item.type_parameters.join(', ')}&gt;
-              </span>
+              <span className="text-kind-enum">&lt;{item.type_parameters.join(', ')}&gt;</span>
             )}
           </span>
         </Link>
@@ -202,7 +200,7 @@ function ItemTree({ itemPath, level }: ItemTreeProps) {
             <Link
               key={`${itemPath}-field-${field.name}`}
               to={`${buildItemUrl(itemPath, selectedSource)}##field-${field.name}`}
-              className="flex items-center gap-2 py-1 px-2 text-xs text-gray-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 rounded"
+              className="flex items-center gap-2 py-1 px-2 text-xs text-fg-muted hover:text-accent rounded"
               style={{ paddingLeft: `${(level + 2) * 0.5 + 1.25}rem` }}
             >
               <FieldIcon />
@@ -290,7 +288,7 @@ function ModuleTree({ name, module, path, level }: ModuleTreeProps) {
   return (
     <div>
       <div
-        className={`flex items-center gap-1 py-1 px-2 rounded ${isActive ? 'bg-blue-100 dark:bg-slate-700/30' : ''}`}
+        className={`flex items-center gap-1 py-1 px-2 rounded ${isActive ? 'bg-accent-soft text-fg' : ''}`}
       >
         {hasContent && (
           <button
@@ -298,7 +296,7 @@ function ModuleTree({ name, module, path, level }: ModuleTreeProps) {
               e.stopPropagation();
               setIsOpen(!isOpen);
             }}
-            className="p-0.5 hover:bg-gray-200 dark:hover:bg-slate-800 rounded"
+            className="p-0.5 hover:bg-surface-2 rounded"
           >
             <svg
               className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-90' : ''}`}
@@ -340,7 +338,7 @@ function ModuleTree({ name, module, path, level }: ModuleTreeProps) {
                 <div
                   key={`func-${idx}`}
                   className={`flex items-center gap-2 py-1 px-2 text-sm rounded ${
-                    isFuncActive ? 'bg-blue-100 dark:bg-slate-700/30' : ''
+                    isFuncActive ? 'bg-accent-soft text-fg' : ''
                   }`}
                   style={{ paddingLeft: `${(level + 1) * 0.5 + 1.25}rem` }}
                 >
@@ -361,7 +359,7 @@ function ModuleTree({ name, module, path, level }: ModuleTreeProps) {
                   key={`ext-${idx}`}
                   to={`${buildModuleUrl(path, selectedSource)}##extval-${extVal.name}`}
                   className={`flex items-center gap-2 py-1 px-2 text-sm rounded ${getItemTypeColor('extern')} ${getItemTypeHoverColor('extern')} ${
-                    isExtActive ? 'bg-blue-100 dark:bg-slate-700/30' : ''
+                    isExtActive ? 'bg-accent-soft text-fg' : ''
                   }`}
                   style={{ paddingLeft: `${(level + 1) * 0.5 + 1.25}rem` }}
                 >
@@ -452,12 +450,12 @@ export function Sidebar({ onClose }: SidebarProps) {
   if (!documentation) {
     return (
       <div className="hidden lg:flex relative" style={{ width: `${sidebarWidth}px` }}>
-        <aside className="flex-1 border-r bg-gray-50 dark:bg-slate-950 border-gray-200 dark:border-slate-800 p-4">
-          <div className="text-sm text-gray-500 dark:text-slate-400">No documentation loaded</div>
+        <aside className="flex-1 border-r border-edge bg-surface p-4">
+          <div className="text-sm text-fg-subtle">No documentation loaded</div>
         </aside>
         <div
           onMouseDown={handleMouseDown}
-          className="hidden lg:block w-1 bg-gray-200 dark:bg-slate-700 hover:bg-blue-500 dark:hover:bg-blue-600 cursor-col-resize transition-colors"
+          className="hidden lg:block w-1 bg-edge hover:bg-accent cursor-col-resize transition-colors"
         />
       </div>
     );
@@ -471,7 +469,7 @@ export function Sidebar({ onClose }: SidebarProps) {
         width: isDesktop ? `${sidebarWidth}px` : '100%',
       }}
     >
-      <aside className="flex-1 border-r bg-gray-50 dark:bg-slate-950 border-gray-200 dark:border-slate-800 overflow-y-auto">
+      <aside className="flex-1 border-r border-edge bg-surface overflow-y-auto">
         <div
           className="p-2"
           onClick={(e) => {
@@ -499,7 +497,7 @@ export function Sidebar({ onClose }: SidebarProps) {
       {isDesktop && (
         <div
           onMouseDown={handleMouseDown}
-          className="w-1 bg-gray-200 dark:bg-slate-700 hover:bg-blue-500 dark:hover:bg-blue-600 cursor-col-resize transition-colors"
+          className="w-1 bg-edge hover:bg-accent cursor-col-resize transition-colors"
         />
       )}
     </div>

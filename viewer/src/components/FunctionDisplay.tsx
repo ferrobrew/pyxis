@@ -15,12 +15,7 @@ export function FunctionDisplay({ func, modulePath, id }: FunctionDisplayProps) 
   const location = useLocation();
   const navigate = useNavigate();
   const isPrivate = func.visibility === 'private';
-  const containerClasses = isPrivate
-    ? 'p-2 opacity-60 border-b border-gray-200 dark:border-slate-700 last:border-b-0'
-    : 'p-2 border-b border-gray-200 dark:border-slate-700 last:border-b-0';
-  const nameClasses = isPrivate
-    ? 'font-semibold text-gray-500 dark:text-slate-600'
-    : 'font-semibold text-gray-900 dark:text-slate-200';
+  const nameClasses = isPrivate ? 'font-semibold text-fg-subtle' : 'font-semibold text-fg';
 
   // Metadata shown under the signature, dot-separated. Each applicable piece
   // is pushed in order; the separators are spliced in at render time.
@@ -66,49 +61,45 @@ export function FunctionDisplay({ func, modulePath, id }: FunctionDisplayProps) 
     <div
       id={id}
       onClick={handleClick}
-      className={`${containerClasses} cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors`}
+      className="cursor-pointer border-b border-edge p-2 transition-colors last:border-b-0 hover:bg-surface-2"
     >
       <div className="flex items-start gap-2">
-        <span className="text-violet-600 dark:text-slate-500 font-mono text-sm">fn</span>
+        <span className="text-kind-function font-mono text-sm">fn</span>
         <div className="flex-1">
           <div className="font-mono text-sm">
             <span className={nameClasses}>
               {func.source ? <SourceName source={func.source}>{func.name}</SourceName> : func.name}
             </span>
-            <span className="text-gray-600 dark:text-slate-400">(</span>
+            <span className="text-fg-muted">(</span>
             {func.arguments.map((arg, i) => (
               <span key={i}>
-                {i > 0 && <span className="text-gray-600 dark:text-slate-400">, </span>}
-                {arg.type === 'const_self' && (
-                  <span className="text-orange-600 dark:text-orange-400">&amp;self</span>
-                )}
-                {arg.type === 'mut_self' && (
-                  <span className="text-orange-600 dark:text-orange-400">&amp;mut self</span>
-                )}
+                {i > 0 && <span className="text-fg-muted">, </span>}
+                {arg.type === 'const_self' && <span className="text-kind-extern">&amp;self</span>}
+                {arg.type === 'mut_self' && <span className="text-kind-extern">&amp;mut self</span>}
                 {arg.type === 'field' && (
                   <>
-                    <span className="text-gray-800 dark:text-slate-300">{arg.name}</span>
-                    <span className="text-gray-600 dark:text-slate-400">: </span>
+                    <span className="text-fg">{arg.name}</span>
+                    <span className="text-fg-muted">: </span>
                     <TypeRef type={arg.type_ref} currentModule={modulePath} />
                   </>
                 )}
               </span>
             ))}
-            <span className="text-gray-600 dark:text-slate-400">)</span>
+            <span className="text-fg-muted">)</span>
             {func.return_type && (
               <>
-                <span className="text-gray-600 dark:text-slate-400"> -&gt; </span>
+                <span className="text-fg-muted"> -&gt; </span>
                 <TypeRef type={func.return_type} currentModule={modulePath} />
               </>
             )}
           </div>
           {func.doc && (
-            <div className="mt-2 text-sm text-gray-600 dark:text-slate-400">
+            <div className="mt-2 text-sm text-fg-muted">
               <Markdown>{func.doc}</Markdown>
             </div>
           )}
           {metaParts.length > 0 && (
-            <div className="mt-2 text-xs text-gray-500 dark:text-slate-500">
+            <div className="mt-2 text-xs text-fg-subtle">
               {metaParts.map((part, i) => (
                 <span key={i}>
                   {i > 0 && ' • '}

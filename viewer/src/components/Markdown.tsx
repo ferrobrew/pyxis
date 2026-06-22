@@ -11,7 +11,7 @@ const components: Components = {
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="text-blue-600 hover:underline dark:text-blue-400"
+      className="text-accent hover:underline"
     >
       {children}
     </a>
@@ -25,14 +25,10 @@ const components: Components = {
     className ? (
       <code className={`${className} font-mono`}>{children}</code>
     ) : (
-      <code className="rounded bg-gray-100 px-1 py-0.5 font-mono text-[0.9em] dark:bg-slate-800">
-        {children}
-      </code>
+      <code className="rounded bg-inset px-1 py-0.5 font-mono text-[0.9em]">{children}</code>
     ),
   pre: ({ children }) => (
-    <pre className="mb-2 overflow-x-auto rounded bg-gray-100 p-3 text-sm last:mb-0 dark:bg-slate-800">
-      {children}
-    </pre>
+    <pre className="mb-2 overflow-x-auto rounded bg-inset p-3 text-sm last:mb-0">{children}</pre>
   ),
   h1: ({ children }) => <h4 className="mb-1 mt-2 font-semibold first:mt-0">{children}</h4>,
   h2: ({ children }) => <h4 className="mb-1 mt-2 font-semibold first:mt-0">{children}</h4>,

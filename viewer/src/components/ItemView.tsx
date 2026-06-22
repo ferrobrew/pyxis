@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useDocumentation } from '../contexts/DocumentationContext';
 import { getModulePath, findLongestValidAncestor } from '../utils/pathUtils';
 import { buildModuleUrl, buildItemUrl, buildRootUrl } from '../utils/navigation';
+import { getItemTypeColor, type ItemType } from '../utils/colors';
 import { TypeRef } from './TypeRef';
 import { Badge, SmallBadge } from './Badge';
 import { FunctionDisplay } from './FunctionDisplay';
@@ -19,18 +20,45 @@ import type {
   JsonTypeAliasDefinition,
 } from '@pyxis/types';
 
-// Documentation display component for code blocks
+// Rust-flavoured keyword shown in the signature header for each item kind.
+const KIND_KEYWORD: Record<string, string> = {
+  type: 'struct',
+  enum: 'enum',
+  bitflags: 'bitflags',
+  type_alias: 'type',
+};
+
+// Quiet, typographic doc block — a left rule rather than a loud tinted box.
 function DocBlock({ doc }: { doc: string }) {
   return (
-    <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 rounded text-gray-700 dark:text-slate-400">
+    <div className="mb-6 border-l-2 border-edge-strong pl-4 text-fg-muted">
       <Markdown>{doc}</Markdown>
+    </div>
+  );
+}
+
+function SectionHeader({ id, children }: { id?: string; children: React.ReactNode }) {
+  return (
+    <h2 id={id} className="mb-4 border-b border-edge pb-1.5 text-lg font-semibold text-fg">
+      {children}
+    </h2>
+  );
+}
+
+// Shared table chrome
+const TH = 'px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-fg-muted';
+const TD = 'px-4 py-2 text-sm';
+
+function Table({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="overflow-x-auto rounded-md border border-edge">
+      <table className="w-full border-collapse">{children}</table>
     </div>
   );
 }
 
 type FieldViewMode = 'flat' | 'nested';
 
-// View mode toggle button component
 function ViewModeToggle({
   mode,
   onModeChange,
@@ -38,30 +66,34 @@ function ViewModeToggle({
   mode: FieldViewMode;
   onModeChange: (mode: FieldViewMode) => void;
 }) {
-  const baseClasses =
-    'px-3 py-1 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1';
-  const activeClasses = 'bg-blue-600 text-white';
-  const inactiveClasses =
-    'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600';
+  const base =
+    'px-3 py-1 text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-accent';
+  const active = 'bg-accent text-white';
+  const inactive = 'bg-surface text-fg-muted hover:bg-surface-2 hover:text-fg';
 
   return (
-    <div className="inline-flex rounded-md overflow-hidden border border-gray-300 dark:border-slate-600">
+    <div className="inline-flex overflow-hidden rounded-md border border-edge">
       <button
         onClick={() => onModeChange('flat')}
-        className={`${baseClasses} ${mode === 'flat' ? activeClasses : inactiveClasses}`}
+        className={`${base} ${mode === 'flat' ? active : inactive}`}
         aria-pressed={mode === 'flat'}
       >
         Flat
       </button>
       <button
         onClick={() => onModeChange('nested')}
-        className={`${baseClasses} ${mode === 'nested' ? activeClasses : inactiveClasses}`}
+        className={`${base} ${mode === 'nested' ? active : inactive}`}
         aria-pressed={mode === 'nested'}
       >
         Nested
       </button>
     </div>
   );
+}
+
+// A panel that wraps a list of function rows.
+function FunctionList({ children }: { children: React.ReactNode }) {
+  return <div className="overflow-hidden rounded-md border border-edge bg-surface">{children}</div>;
 }
 
 // Type view component
@@ -73,9 +105,9 @@ function TypeView({ def, modulePath }: { def: JsonTypeDefinition; modulePath: st
       {def.doc && <DocBlock doc={def.doc} />}
 
       {def.fields.length > 0 && (
-        <div id="fields" className="mb-6">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-200">Fields</h2>
+        <div id="fields" className="mb-8">
+          <div className="mb-4 flex items-center justify-between border-b border-edge pb-1.5">
+            <h2 className="text-lg font-semibold text-fg">Fields</h2>
             <ViewModeToggle mode={fieldViewMode} onModeChange={setFieldViewMode} />
           </div>
           {fieldViewMode === 'flat' ? (
@@ -87,11 +119,9 @@ function TypeView({ def, modulePath }: { def: JsonTypeDefinition; modulePath: st
       )}
 
       {def.vftable && def.vftable.functions.length > 0 && (
-        <div id="virtual-functions" className="mb-6">
-          <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-slate-200">
-            Virtual Functions
-          </h2>
-          <div className="bg-gray-50 dark:bg-slate-800 rounded-md overflow-hidden">
+        <div id="virtual-functions" className="mb-8">
+          <SectionHeader>Virtual Functions</SectionHeader>
+          <FunctionList>
             {def.vftable.functions.map((func, idx) => (
               <FunctionDisplay
                 key={idx}
@@ -100,16 +130,14 @@ function TypeView({ def, modulePath }: { def: JsonTypeDefinition; modulePath: st
                 modulePath={modulePath}
               />
             ))}
-          </div>
+          </FunctionList>
         </div>
       )}
 
       {def.associated_functions.length > 0 && (
-        <div id="associated-functions" className="mb-6">
-          <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-slate-200">
-            Associated Functions
-          </h2>
-          <div className="bg-gray-50 dark:bg-slate-800 rounded-md overflow-hidden">
+        <div id="associated-functions" className="mb-8">
+          <SectionHeader>Associated Functions</SectionHeader>
+          <FunctionList>
             {def.associated_functions.map((func, idx) => (
               <FunctionDisplay
                 key={idx}
@@ -118,7 +146,7 @@ function TypeView({ def, modulePath }: { def: JsonTypeDefinition; modulePath: st
                 modulePath={modulePath}
               />
             ))}
-          </div>
+          </FunctionList>
         </div>
       )}
     </div>
@@ -131,59 +159,49 @@ function EnumView({ def, modulePath }: { def: JsonEnumDefinition; modulePath: st
     <div>
       {def.doc && <DocBlock doc={def.doc} />}
 
-      <div className="mb-6 text-sm text-gray-600 dark:text-slate-400">
+      <div className="mb-6 text-sm text-fg-muted">
         Underlying type: <TypeRef type={def.underlying_type} currentModule={modulePath} />
       </div>
 
-      <div id="variants" className="mb-6">
-        <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-slate-200">Variants</h2>
-        <div className="overflow-x-auto">
-          <table className="w-full border border-gray-200 dark:border-slate-800 rounded-md">
-            <thead className="bg-gray-100 dark:bg-slate-800">
-              <tr>
-                <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-slate-200">
-                  Name
-                </th>
-                <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-slate-200">
-                  Value
-                </th>
+      <div id="variants" className="mb-8">
+        <SectionHeader>Variants</SectionHeader>
+        <Table>
+          <thead className="bg-surface">
+            <tr className="border-b border-edge">
+              <th className={TH}>Name</th>
+              <th className={TH}>Value</th>
+            </tr>
+          </thead>
+          <tbody>
+            {def.variants.map((variant, idx) => (
+              <tr
+                key={idx}
+                id={`variant-${variant.name}`}
+                className="border-b border-edge last:border-0"
+              >
+                <td className={`${TD} font-mono text-fg`}>
+                  {variant.source ? (
+                    <SourceName source={variant.source}>{variant.name}</SourceName>
+                  ) : (
+                    variant.name
+                  )}
+                  {def.default === idx && (
+                    <SmallBadge variant="purple" className="ml-2">
+                      default
+                    </SmallBadge>
+                  )}
+                </td>
+                <td className={`${TD} font-mono text-fg-muted`}>{variant.value}</td>
               </tr>
-            </thead>
-            <tbody>
-              {def.variants.map((variant, idx) => (
-                <tr
-                  key={idx}
-                  id={`variant-${variant.name}`}
-                  className="border-b border-gray-200 dark:border-slate-800"
-                >
-                  <td className="px-4 py-2 font-mono text-sm text-gray-900 dark:text-slate-200">
-                    {variant.source ? (
-                      <SourceName source={variant.source}>{variant.name}</SourceName>
-                    ) : (
-                      variant.name
-                    )}
-                    {def.default === idx && (
-                      <SmallBadge variant="purple" className="ml-2">
-                        default
-                      </SmallBadge>
-                    )}
-                  </td>
-                  <td className="px-4 py-2 text-sm text-gray-600 dark:text-slate-400 font-mono">
-                    {variant.value}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+            ))}
+          </tbody>
+        </Table>
       </div>
 
       {def.associated_functions.length > 0 && (
-        <div id="associated-functions" className="mb-6">
-          <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-slate-200">
-            Associated Functions
-          </h2>
-          <div className="bg-gray-50 dark:bg-slate-800 rounded-md overflow-hidden">
+        <div id="associated-functions" className="mb-8">
+          <SectionHeader>Associated Functions</SectionHeader>
+          <FunctionList>
             {def.associated_functions.map((func, idx) => (
               <FunctionDisplay
                 key={idx}
@@ -192,7 +210,7 @@ function EnumView({ def, modulePath }: { def: JsonEnumDefinition; modulePath: st
                 modulePath={modulePath}
               />
             ))}
-          </div>
+          </FunctionList>
         </div>
       )}
     </div>
@@ -205,63 +223,45 @@ function BitflagsView({ def, modulePath }: { def: JsonBitflagsDefinition; module
     <div>
       {def.doc && <DocBlock doc={def.doc} />}
 
-      <div className="mb-6 text-sm text-gray-600 dark:text-slate-400">
+      <div className="mb-6 text-sm text-fg-muted">
         Underlying type: <TypeRef type={def.underlying_type} currentModule={modulePath} />
       </div>
 
-      <div id="flags" className="mb-6">
-        <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-slate-200">Flags</h2>
-        <div className="overflow-x-auto">
-          <table className="w-full border border-gray-200 dark:border-slate-800 rounded-md">
-            <thead className="bg-gray-100 dark:bg-slate-800">
-              <tr>
-                <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-slate-200">
-                  Name
-                </th>
-                <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-slate-200">
-                  Value (Dec)
-                </th>
-                <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-slate-200">
-                  Value (Hex)
-                </th>
-                <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-slate-200">
-                  Value (Bin)
-                </th>
+      <div id="flags" className="mb-8">
+        <SectionHeader>Flags</SectionHeader>
+        <Table>
+          <thead className="bg-surface">
+            <tr className="border-b border-edge">
+              <th className={TH}>Name</th>
+              <th className={TH}>Value (Dec)</th>
+              <th className={TH}>Value (Hex)</th>
+              <th className={TH}>Value (Bin)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {def.flags.map((flag, idx) => (
+              <tr key={idx} id={`flag-${flag.name}`} className="border-b border-edge last:border-0">
+                <td className={`${TD} font-mono text-fg`}>
+                  {flag.source ? (
+                    <SourceName source={flag.source}>{flag.name}</SourceName>
+                  ) : (
+                    flag.name
+                  )}
+                  {def.default === idx && (
+                    <SmallBadge variant="purple" className="ml-2">
+                      default
+                    </SmallBadge>
+                  )}
+                </td>
+                <td className={`${TD} font-mono text-fg-muted`}>{flag.value}</td>
+                <td className={`${TD} font-mono text-fg-muted`}>0x{flag.value.toString(16)}</td>
+                <td className={`${TD} font-mono text-fg-muted`}>
+                  0b{flag.value.toString(2).padStart(8, '0')}
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {def.flags.map((flag, idx) => (
-                <tr
-                  key={idx}
-                  id={`flag-${flag.name}`}
-                  className="border-b border-gray-200 dark:border-slate-800"
-                >
-                  <td className="px-4 py-2 font-mono text-sm text-gray-900 dark:text-slate-200">
-                    {flag.source ? (
-                      <SourceName source={flag.source}>{flag.name}</SourceName>
-                    ) : (
-                      flag.name
-                    )}
-                    {def.default === idx && (
-                      <SmallBadge variant="purple" className="ml-2">
-                        default
-                      </SmallBadge>
-                    )}
-                  </td>
-                  <td className="px-4 py-2 text-sm text-gray-600 dark:text-slate-400 font-mono">
-                    {flag.value}
-                  </td>
-                  <td className="px-4 py-2 text-sm text-gray-600 dark:text-slate-400 font-mono">
-                    0x{flag.value.toString(16)}
-                  </td>
-                  <td className="px-4 py-2 text-sm text-gray-600 dark:text-slate-400 font-mono">
-                    0b{flag.value.toString(2).padStart(8, '0')}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+            ))}
+          </tbody>
+        </Table>
       </div>
     </div>
   );
@@ -273,12 +273,10 @@ function TypeAliasView({ def, modulePath }: { def: JsonTypeAliasDefinition; modu
     <div>
       {def.doc && <DocBlock doc={def.doc} />}
 
-      <div className="mb-6">
-        <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-slate-200">
-          Target Type
-        </h2>
-        <div className="p-4 bg-gray-50 dark:bg-slate-800 rounded-md">
-          <span className="font-mono text-lg">
+      <div className="mb-8">
+        <SectionHeader>Target Type</SectionHeader>
+        <div className="rounded-md border border-edge bg-surface p-4">
+          <span className="font-mono text-base">
             <TypeRef type={def.target} currentModule={modulePath} />
           </span>
         </div>
@@ -325,9 +323,7 @@ export function ItemView() {
   if (!documentation) {
     return (
       <div className="p-8">
-        <div className="text-gray-500 dark:text-slate-400">
-          Please load a documentation file to begin.
-        </div>
+        <div className="text-fg-subtle">Please load a documentation file to begin.</div>
       </div>
     );
   }
@@ -343,10 +339,13 @@ export function ItemView() {
   const modulePath = getModulePath(decodedPath);
 
   // Determine item type for color coding
-  let itemType: 'type' | 'enum' | 'bitflags' | 'type_alias' = 'type';
+  let itemType: ItemType = 'type';
   if (item.kind.type === 'enum') itemType = 'enum';
   else if (item.kind.type === 'bitflags') itemType = 'bitflags';
   else if (item.kind.type === 'type_alias') itemType = 'type_alias';
+
+  const name = decodedPath.split('::').pop() || decodedPath;
+  const keyword = KIND_KEYWORD[item.kind.type] ?? item.kind.type;
 
   // Extract trait badges from kind
   const kind = item.kind;
@@ -357,15 +356,25 @@ export function ItemView() {
   const singleton = kind.type !== 'type_alias' ? kind.singleton : null;
 
   return (
-    <div className="p-4 md:p-6 lg:p-8 max-w-6xl">
+    <div className="mx-auto max-w-5xl px-4 py-6 md:px-8 lg:px-10">
       <div className="mb-4 flex items-center gap-3">
         <Breadcrumbs path={decodedPath} isItem={true} itemType={itemType} />
         {item.source && <SourceLink source={item.source} />}
       </div>
-      <div className="mb-6 flex flex-wrap items-center gap-2">
-        <Badge variant="blue">{item.kind.type}</Badge>
-        <Badge variant="cyan">size: {item.size}</Badge>
-        <Badge variant="teal">align: {item.alignment}</Badge>
+
+      {/* rustdoc-style signature header */}
+      <h1 className="mb-3 font-mono text-2xl font-semibold tracking-tight">
+        <span className={getItemTypeColor(itemType)}>{keyword}</span>{' '}
+        <span className="text-fg">{name}</span>
+        {item.type_parameters && item.type_parameters.length > 0 && (
+          <span className="text-kind-enum">&lt;{item.type_parameters.join(', ')}&gt;</span>
+        )}
+      </h1>
+
+      {/* Quiet metadata row */}
+      <div className="mb-8 flex flex-wrap items-center gap-1.5">
+        <Badge variant="cyan">size {item.size}</Badge>
+        <Badge variant="teal">align {item.alignment}</Badge>
         <Badge variant="orange">{item.category}</Badge>
         <Badge variant="gray">{item.visibility}</Badge>
         {copyable && <Badge variant="green">copy</Badge>}
@@ -379,49 +388,33 @@ export function ItemView() {
       </div>
 
       {(item.rust_name || item.cpp_name) && (
-        <div className="mb-6">
-          <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-slate-200">
-            Backend bindings
-          </h2>
-          <div className="overflow-x-auto">
-            <table className="w-full border border-gray-200 dark:border-slate-800 rounded-md">
-              <thead className="bg-gray-100 dark:bg-slate-800">
-                <tr>
-                  <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-slate-200">
-                    Backend
-                  </th>
-                  <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-slate-200">
-                    Maps to
-                  </th>
-                  <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-slate-200">
-                    Header
-                  </th>
+        <div className="mb-8">
+          <SectionHeader>Backend bindings</SectionHeader>
+          <Table>
+            <thead className="bg-surface">
+              <tr className="border-b border-edge">
+                <th className={TH}>Backend</th>
+                <th className={TH}>Maps to</th>
+                <th className={TH}>Header</th>
+              </tr>
+            </thead>
+            <tbody>
+              {item.rust_name && (
+                <tr className="border-b border-edge last:border-0">
+                  <td className={`${TD} text-fg`}>Rust</td>
+                  <td className={`${TD} font-mono text-fg-muted`}>{item.rust_name}</td>
+                  <td className={`${TD} text-fg-subtle`}>—</td>
                 </tr>
-              </thead>
-              <tbody>
-                {item.rust_name && (
-                  <tr className="border-b border-gray-200 dark:border-slate-800">
-                    <td className="px-4 py-2 text-sm text-gray-900 dark:text-slate-200">Rust</td>
-                    <td className="px-4 py-2 font-mono text-sm text-gray-600 dark:text-slate-400">
-                      {item.rust_name}
-                    </td>
-                    <td className="px-4 py-2 text-sm text-gray-400 dark:text-slate-600">—</td>
-                  </tr>
-                )}
-                {item.cpp_name && (
-                  <tr className="border-b border-gray-200 dark:border-slate-800">
-                    <td className="px-4 py-2 text-sm text-gray-900 dark:text-slate-200">C++</td>
-                    <td className="px-4 py-2 font-mono text-sm text-gray-600 dark:text-slate-400">
-                      {item.cpp_name}
-                    </td>
-                    <td className="px-4 py-2 font-mono text-sm text-gray-600 dark:text-slate-400">
-                      {item.cpp_header ?? '—'}
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+              )}
+              {item.cpp_name && (
+                <tr className="border-b border-edge last:border-0">
+                  <td className={`${TD} text-fg`}>C++</td>
+                  <td className={`${TD} font-mono text-fg-muted`}>{item.cpp_name}</td>
+                  <td className={`${TD} font-mono text-fg-muted`}>{item.cpp_header ?? '—'}</td>
+                </tr>
+              )}
+            </tbody>
+          </Table>
         </div>
       )}
 
