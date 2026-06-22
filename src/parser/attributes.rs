@@ -224,6 +224,21 @@ impl Attribute {
             location: ItemLocation::test(),
         }
     }
+    /// A `name = "value"` assign attribute (e.g. `rust_name`, `cpp_name`).
+    pub fn string_assign(name: &str, value: &str) -> Self {
+        Attribute::Assign {
+            name: name.into(),
+            items: AttributeItems(vec![AttributeItem::Expr {
+                expr: Expr::StringLiteral {
+                    value: value.into(),
+                    format: StringFormat::Regular,
+                    location: ItemLocation::test(),
+                },
+                location: ItemLocation::test(),
+            }]),
+            location: ItemLocation::test(),
+        }
+    }
 }
 impl Attribute {
     pub fn function(&self) -> Option<(&Ident, &AttributeItems)> {

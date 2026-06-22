@@ -9,7 +9,7 @@ use crate::{
 use serde::{Deserialize, Serialize};
 
 use crate::semantic::{
-    ResolvedSemanticState, TypeRegistry,
+    ExternBindings, ResolvedSemanticState, TypeRegistry,
     types::{
         Argument, BitflagField, BitflagsDefinition, CallingConvention, EnumDefinition, EnumVariant,
         ExternValue, Function, FunctionBody, ItemCategory, ItemDefinition, ItemDefinitionInner,
@@ -28,7 +28,9 @@ use crate::semantic::{
 /// - v1: original flat splice shape (`backend.prologue: string | null`).
 /// - v2: structured splice (`backend.prologue: { header, definition } | null`);
 ///   added `schema_version` field so consumers can detect the format.
-pub const CURRENT_SCHEMA_VERSION: u32 = 2;
+/// - v3: added optional `cpp_name` / `cpp_header` / `rust_name` to items,
+///   surfacing the backend type bindings of `extern type`s.
+pub const CURRENT_SCHEMA_VERSION: u32 = 3;
 
 /// Top-level JSON documentation structure
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
@@ -117,6 +119,15 @@ pub struct JsonItem {
     pub alignment: usize,
     /// Item category (Defined, Predefined, Extern)
     pub category: JsonItemCategory,
+    /// For `extern type`s: the backend type bindings (`#[cpp_name]`,
+    /// `#[cpp_header]`, `#[rust_name]`) that say which concrete C++/Rust type
+    /// the opaque extern maps to. Empty/None for non-extern items.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cpp_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cpp_header: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rust_name: Option<String>,
     /// Item kind and details
     pub kind: JsonItemKind,
     /// `#[cfg(...)]` predicate the item is gated by, if any. Always
@@ -492,8 +503,14 @@ pub fn build(
     // render or filter per their own rules.
     let mut items = BTreeMap::new();
     for module in semantic_state.modules().values() {
+        let bindings: BTreeMap<&str, ExternBindings> = module.extern_bindings().collect();
         for definition in module.definitions(type_registry) {
-            if let Some(json_item) = convert_item(definition, type_registry) {
+            let binding = definition
+                .path
+                .last()
+                .and_then(|leaf| bindings.get(leaf.as_str()).copied())
+                .unwrap_or_default();
+            if let Some(json_item) = convert_item(definition, type_registry, binding) {
                 items.insert(json_item.path.clone(), json_item);
             }
         }
@@ -743,7 +760,11 @@ fn convert_type_alias_definition(ta: &TypeAliasDefinition) -> JsonTypeAliasDefin
     }
 }
 
-fn convert_item(item: &ItemDefinition, type_registry: &TypeRegistry) -> Option<JsonItem> {
+fn convert_item(
+    item: &ItemDefinition,
+    type_registry: &TypeRegistry,
+    binding: ExternBindings,
+) -> Option<JsonItem> {
     let resolved = item.resolved()?;
 
     let kind = match &resolved.inner {
@@ -769,6 +790,9 @@ fn convert_item(item: &ItemDefinition, type_registry: &TypeRegistry) -> Option<J
         size: resolved.size,
         alignment: resolved.alignment,
         category: item.category.into(),
+        cpp_name: binding.cpp_name.map(str::to_string),
+        cpp_header: binding.cpp_header.map(str::to_string),
+        rust_name: binding.rust_name.map(str::to_string),
         kind,
         cfg: item.cfg.as_ref().map(convert_cfg),
         source,

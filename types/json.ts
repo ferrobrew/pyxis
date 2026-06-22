@@ -283,6 +283,12 @@ alignment: number;
  */
 category: JsonItemCategory; 
 /**
+ * For `extern type`s: the backend type bindings (`#[cpp_name]`,
+ * `#[cpp_header]`, `#[rust_name]`) that say which concrete C++/Rust type
+ * the opaque extern maps to. Empty/None for non-extern items.
+ */
+cpp_name?: string | null; cpp_header?: string | null; rust_name?: string | null; 
+/**
  * Item kind and details
  */
 kind: JsonItemKind; 

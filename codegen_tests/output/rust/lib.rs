@@ -16,6 +16,7 @@ pub mod definition_body;
 pub mod diamond_inheritance;
 pub mod doc_comments;
 pub mod enums;
+pub mod extern_bindings;
 pub mod external_body;
 pub mod freestanding_functions;
 pub mod generics;

@@ -12,6 +12,25 @@ use crate::{
 use super::util::*;
 
 #[test]
+fn exposes_rust_name_binding() {
+    let module = M::new().with_extern_types([(
+        "AtomicHandle".into(),
+        As::from_iter([
+            A::size(4),
+            A::align(4),
+            A::string_assign("rust_name", "::core::sync::atomic::AtomicU32"),
+        ]),
+    )]);
+    let state = build_state(&module, &IP::from("test")).unwrap();
+    let module = state.modules().get(&IP::from("test")).unwrap();
+    let names: Vec<_> = module.extern_rust_names().collect();
+    assert_eq!(
+        names,
+        vec![("AtomicHandle", "::core::sync::atomic::AtomicU32")]
+    );
+}
+
+#[test]
 fn will_fail_on_an_extern_without_size() {
     assert_ast_produces_exact_error(
         M::new().with_extern_types([("TestType".into(), As::default())]),

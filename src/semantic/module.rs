@@ -11,6 +11,26 @@ use crate::{
     span::{HasLocation, ItemLocation},
 };
 
+/// Backend type bindings declared on an `extern type` — which concrete
+/// C++/Rust type the opaque extern actually maps to.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ExternBindings<'a> {
+    pub cpp_name: Option<&'a str>,
+    pub cpp_header: Option<&'a str>,
+    pub rust_name: Option<&'a str>,
+}
+
+/// Value of a `name = "..."` assign-form attribute, if present.
+fn extern_assign<'a>(attributes: &'a grammar::Attributes, key: &str) -> Option<&'a str> {
+    attributes.iter().find_map(|attr| {
+        let (k, items) = attr.assign()?;
+        if k.as_str() != key {
+            return None;
+        }
+        items.exprs().next()?.string_literal()
+    })
+}
+
 #[derive(Debug, Clone)]
 pub struct Module {
     pub(crate) path: ItemPath,
@@ -121,6 +141,38 @@ impl Module {
                 && items.exprs().any(|expr| {
                     matches!(expr, grammar::Expr::Ident { ident, .. } if ident.as_str() == "no_reexport")
                 })
+        })
+    }
+
+    /// Each `extern type`'s `#[rust_name = "..."]` binding (extern name ->
+    /// fully-qualified Rust path), the Rust counterpart to `#[cpp_name]`.
+    /// The Rust backend emits a `pub use <path> as <name>;` alias for these,
+    /// so an extern type backed by a real Rust type doesn't need a
+    /// hand-written `backend rust prologue "use ...;"`.
+    pub fn extern_rust_names(&self) -> impl Iterator<Item = (&str, &str)> {
+        self.extern_bindings()
+            .filter_map(|(name, b)| b.rust_name.map(|r| (name, r)))
+    }
+
+    /// Per-`extern type` backend bindings (`#[cpp_name]` / `#[cpp_header]` /
+    /// `#[rust_name]`) — which concrete C++/Rust type the opaque extern maps
+    /// to. Consumed by the Rust backend (rust_name) and surfaced in the JSON.
+    pub fn extern_bindings(&self) -> impl Iterator<Item = (&str, ExternBindings<'_>)> {
+        self.ast.extern_types().filter_map(|item| {
+            let grammar::ModuleItem::ExternType {
+                name, attributes, ..
+            } = item
+            else {
+                return None;
+            };
+            Some((
+                name.as_str(),
+                ExternBindings {
+                    cpp_name: extern_assign(attributes, "cpp_name"),
+                    cpp_header: extern_assign(attributes, "cpp_header"),
+                    rust_name: extern_assign(attributes, "rust_name"),
+                },
+            ))
         })
     }
 

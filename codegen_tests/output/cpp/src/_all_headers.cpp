@@ -7,6 +7,7 @@
 #include "diamond_inheritance.hpp"
 #include "doc_comments.hpp"
 #include "enums.hpp"
+#include "extern_bindings.hpp"
 #include "external_body.hpp"
 #include "freestanding_functions.hpp"
 #include "generics.hpp"

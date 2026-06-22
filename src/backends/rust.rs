@@ -109,6 +109,12 @@ pub fn write_module(
         Some(p) => p.evaluate(&cfg_ctx),
         None => true,
     };
+    // Extern types with a `#[rust_name = "..."]` binding get a `pub use`
+    // alias to the real Rust type (keyed by extern name).
+    let extern_rust_names: HashMap<String, String> = module
+        .extern_rust_names()
+        .map(|(name, path)| (name.to_string(), path.to_string()))
+        .collect();
     let mut definitions = module
         .definitions(semantic_state.type_registry())
         .filter(|d| cfg_pass(&d.cfg))
@@ -122,7 +128,8 @@ pub fn write_module(
                 semantic_state.type_registry(),
                 definition,
                 &cfg_ctx,
-                options
+                options,
+                &extern_rust_names,
             )?
         )?;
     }
@@ -224,6 +231,7 @@ fn build_item(
     definition: &ItemDefinition,
     cfg_ctx: &crate::parser::cfg::CfgContext,
     options: &crate::BuildOptions,
+    extern_rust_names: &HashMap<String, String>,
 ) -> Result<proc_macro2::TokenStream> {
     let resolved = definition
         .resolved()
@@ -278,7 +286,25 @@ fn build_item(
             ),
         },
         ItemCategory::Predefined => Ok(quote! {}),
-        ItemCategory::Extern => Ok(quote! {}),
+        ItemCategory::Extern => {
+            // Emit `pub use <rust_name> as <Name>;` for an extern backed by a
+            // real Rust type, so references to it resolve without a
+            // hand-written prologue `use`. Externs without a binding emit
+            // nothing (the consumer supplies the type some other way).
+            let leaf = path.last().map(|s| s.as_str()).unwrap_or_default();
+            match extern_rust_names.get(leaf) {
+                Some(rust_name) => {
+                    let target: syn::Path = syn::parse_str(rust_name).map_err(|e| {
+                        BackendError::Formatting(format!(
+                            "invalid rust_name `{rust_name}` for extern `{leaf}`: {e}"
+                        ))
+                    })?;
+                    let alias = str_to_ident(leaf);
+                    Ok(quote! { pub use #target as #alias; })
+                }
+                None => Ok(quote! {}),
+            }
+        }
     }
 }
 

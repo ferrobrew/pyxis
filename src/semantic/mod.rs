@@ -15,6 +15,6 @@ mod type_registry;
 mod tests;
 
 pub use error::{Result, SemanticError};
-pub use module::Module;
+pub use module::{ExternBindings, Module};
 pub use semantic_state::{ResolvedSemanticState, SemanticState};
 pub use type_registry::TypeRegistry;
