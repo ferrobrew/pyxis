@@ -4,6 +4,7 @@ import { useDocumentation } from '../contexts/DocumentationContext';
 import { TypeRef } from './TypeRef';
 import { SmallBadge } from './Badge';
 import { SourceName } from './SourceLink';
+import { Markdown } from './Markdown';
 
 interface NestedFieldViewProps {
   fields: JsonRegion[];
@@ -147,7 +148,11 @@ function NestedFieldRow({
         <td className="px-4 py-2 text-sm text-gray-600 dark:text-slate-400">{field.alignment}</td>
         <td className="px-4 py-2 text-sm">
           {field.is_base && <SmallBadge variant="violet">base</SmallBadge>}
-          {field.doc && <div className="text-gray-600 dark:text-slate-400 mt-1">{field.doc}</div>}
+          {field.doc && (
+            <div className="text-gray-600 dark:text-slate-400 mt-1">
+              <Markdown>{field.doc}</Markdown>
+            </div>
+          )}
         </td>
       </tr>
 

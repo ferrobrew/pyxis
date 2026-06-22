@@ -3,6 +3,7 @@ import type { JsonFunction } from '@pyxis/types';
 import { TypeRef } from './TypeRef';
 import { SourceName } from './SourceLink';
 import { formatCfg } from '../utils/cfg';
+import { Markdown } from './Markdown';
 
 interface FunctionDisplayProps {
   func: JsonFunction;
@@ -102,7 +103,9 @@ export function FunctionDisplay({ func, modulePath, id }: FunctionDisplayProps) 
             )}
           </div>
           {func.doc && (
-            <div className="mt-2 text-sm text-gray-600 dark:text-slate-400">{func.doc}</div>
+            <div className="mt-2 text-sm text-gray-600 dark:text-slate-400">
+              <Markdown>{func.doc}</Markdown>
+            </div>
           )}
           {metaParts.length > 0 && (
             <div className="mt-2 text-xs text-gray-500 dark:text-slate-500">

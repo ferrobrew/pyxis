@@ -8,6 +8,7 @@ import { TypeRef } from './TypeRef';
 import { FunctionDisplay } from './FunctionDisplay';
 import { CodeBlock } from './CodeBlock';
 import { Breadcrumbs } from './Breadcrumbs';
+import { Markdown } from './Markdown';
 import type {
   JsonExternValue,
   JsonBackend,
@@ -313,8 +314,8 @@ export function ModuleView() {
       </div>
 
       {module.doc && (
-        <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 rounded">
-          <p className="text-gray-700 dark:text-slate-400">{module.doc}</p>
+        <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 rounded text-gray-700 dark:text-slate-400">
+          <Markdown>{module.doc}</Markdown>
         </div>
       )}
 
