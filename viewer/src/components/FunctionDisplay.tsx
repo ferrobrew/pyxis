@@ -3,6 +3,7 @@ import type { JsonFunction } from '@pyxis/types';
 import { TypeRef } from './TypeRef';
 import { SourceName } from './SourceLink';
 import { Attributes } from './Attributes';
+import { AnchorLink, CopyButton } from './Actions';
 import { functionAttributeGroups } from '../utils/attributes';
 import { Markdown } from './Markdown';
 
@@ -18,6 +19,7 @@ export function FunctionDisplay({ func, modulePath, id }: FunctionDisplayProps) 
   const isPrivate = func.visibility === 'private';
   const nameClasses = isPrivate ? 'font-semibold text-fg-subtle' : 'font-semibold text-fg';
   const typeParams = func.method_type_parameters ?? [];
+  const address = func.body.type === 'address' ? `0x${func.body.address.toString(16)}` : null;
 
   // Construct the link URL with anchor
   // Use double hash: first # is for HashRouter route, second # is for anchor
@@ -34,8 +36,14 @@ export function FunctionDisplay({ func, modulePath, id }: FunctionDisplayProps) 
     <div
       id={id}
       onClick={handleClick}
-      className="cursor-pointer border-b border-edge p-3 transition-colors last:border-b-0 hover:bg-surface-2"
+      className="group relative cursor-pointer border-b border-edge p-3 transition-colors last:border-b-0 hover:bg-surface-2"
     >
+      {(address || id) && (
+        <div className="absolute right-2 top-2 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+          {address && <CopyButton value={address} title="Copy address" />}
+          {id && <AnchorLink targetId={id} className="px-1" />}
+        </div>
+      )}
       <div className="font-mono text-sm leading-relaxed">
         <Attributes groups={functionAttributeGroups(func)} />
         <div>

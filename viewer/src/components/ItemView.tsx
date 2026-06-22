@@ -11,9 +11,12 @@ import { itemAttributeGroups } from '../utils/attributes';
 import { FunctionDisplay } from './FunctionDisplay';
 import { FieldTable } from './FieldTable';
 import { NestedFieldView } from './NestedFieldView';
+import { FieldSourceView } from './FieldSourceView';
 import { Breadcrumbs } from './Breadcrumbs';
 import { SourceLink, SourceName } from './SourceLink';
 import { Markdown } from './Markdown';
+import { AnchorLink, CopyButton } from './Actions';
+import { OnThisPage, type TocEntry } from './OnThisPage';
 import type {
   JsonTypeDefinition,
   JsonEnumDefinition,
@@ -39,10 +42,11 @@ function DocBlock({ doc }: { doc: string }) {
   );
 }
 
-function SectionHeader({ id, children }: { id?: string; children: React.ReactNode }) {
+function SectionHeader({ anchor, children }: { anchor?: string; children: React.ReactNode }) {
   return (
-    <h2 id={id} className="mb-4 border-b border-edge pb-1.5 text-lg font-semibold text-fg">
+    <h2 className="group mb-4 flex items-center gap-2 border-b border-edge pb-1.5 text-lg font-semibold text-fg">
       {children}
+      {anchor && <AnchorLink targetId={anchor} className="opacity-0 group-hover:opacity-100" />}
     </h2>
   );
 }
@@ -59,7 +63,13 @@ function Table({ children }: { children: React.ReactNode }) {
   );
 }
 
-type FieldViewMode = 'flat' | 'nested';
+type FieldViewMode = 'flat' | 'nested' | 'source';
+
+const FIELD_VIEW_MODES: { mode: FieldViewMode; label: string }[] = [
+  { mode: 'flat', label: 'Flat' },
+  { mode: 'nested', label: 'Nested' },
+  { mode: 'source', label: 'Source' },
+];
 
 function ViewModeToggle({
   mode,
@@ -75,20 +85,16 @@ function ViewModeToggle({
 
   return (
     <div className="inline-flex overflow-hidden rounded-md border border-edge">
-      <button
-        onClick={() => onModeChange('flat')}
-        className={`${base} ${mode === 'flat' ? active : inactive}`}
-        aria-pressed={mode === 'flat'}
-      >
-        Flat
-      </button>
-      <button
-        onClick={() => onModeChange('nested')}
-        className={`${base} ${mode === 'nested' ? active : inactive}`}
-        aria-pressed={mode === 'nested'}
-      >
-        Nested
-      </button>
+      {FIELD_VIEW_MODES.map(({ mode: m, label }) => (
+        <button
+          key={m}
+          onClick={() => onModeChange(m)}
+          className={`${base} ${mode === m ? active : inactive}`}
+          aria-pressed={mode === m}
+        >
+          {label}
+        </button>
+      ))}
     </div>
   );
 }
@@ -108,21 +114,26 @@ function TypeView({ def, modulePath }: { def: JsonTypeDefinition; modulePath: st
 
       {def.fields.length > 0 && (
         <div id="fields" className="mb-8">
-          <div className="mb-4 flex items-center justify-between border-b border-edge pb-1.5">
-            <h2 className="text-lg font-semibold text-fg">Fields</h2>
+          <div className="group mb-4 flex items-center justify-between border-b border-edge pb-1.5">
+            <h2 className="flex items-center gap-2 text-lg font-semibold text-fg">
+              Fields
+              <AnchorLink targetId="fields" className="opacity-0 group-hover:opacity-100" />
+            </h2>
             <ViewModeToggle mode={fieldViewMode} onModeChange={setFieldViewMode} />
           </div>
-          {fieldViewMode === 'flat' ? (
-            <FieldTable fields={def.fields} modulePath={modulePath} />
-          ) : (
+          {fieldViewMode === 'flat' && <FieldTable fields={def.fields} modulePath={modulePath} />}
+          {fieldViewMode === 'nested' && (
             <NestedFieldView fields={def.fields} modulePath={modulePath} />
+          )}
+          {fieldViewMode === 'source' && (
+            <FieldSourceView fields={def.fields} modulePath={modulePath} />
           )}
         </div>
       )}
 
       {def.vftable && def.vftable.functions.length > 0 && (
         <div id="virtual-functions" className="mb-8">
-          <SectionHeader>Virtual Functions</SectionHeader>
+          <SectionHeader anchor="virtual-functions">Virtual Functions</SectionHeader>
           <FunctionList>
             {def.vftable.functions.map((func, idx) => (
               <FunctionDisplay
@@ -138,7 +149,7 @@ function TypeView({ def, modulePath }: { def: JsonTypeDefinition; modulePath: st
 
       {def.associated_functions.length > 0 && (
         <div id="associated-functions" className="mb-8">
-          <SectionHeader>Associated Functions</SectionHeader>
+          <SectionHeader anchor="associated-functions">Associated Functions</SectionHeader>
           <FunctionList>
             {def.associated_functions.map((func, idx) => (
               <FunctionDisplay
@@ -162,7 +173,7 @@ function EnumView({ def, modulePath }: { def: JsonEnumDefinition; modulePath: st
       {def.doc && <DocBlock doc={def.doc} />}
 
       <div id="variants" className="mb-8">
-        <SectionHeader>Variants</SectionHeader>
+        <SectionHeader anchor="variants">Variants</SectionHeader>
         <Table>
           <thead className="bg-surface">
             <tr className="border-b border-edge">
@@ -198,7 +209,7 @@ function EnumView({ def, modulePath }: { def: JsonEnumDefinition; modulePath: st
 
       {def.associated_functions.length > 0 && (
         <div id="associated-functions" className="mb-8">
-          <SectionHeader>Associated Functions</SectionHeader>
+          <SectionHeader anchor="associated-functions">Associated Functions</SectionHeader>
           <FunctionList>
             {def.associated_functions.map((func, idx) => (
               <FunctionDisplay
@@ -222,7 +233,7 @@ function BitflagsView({ def }: { def: JsonBitflagsDefinition }) {
       {def.doc && <DocBlock doc={def.doc} />}
 
       <div id="flags" className="mb-8">
-        <SectionHeader>Flags</SectionHeader>
+        <SectionHeader anchor="flags">Flags</SectionHeader>
         <Table>
           <thead className="bg-surface">
             <tr className="border-b border-edge">
@@ -335,42 +346,72 @@ export function ItemView() {
   const underlying =
     item.kind.type === 'enum' || item.kind.type === 'bitflags' ? item.kind.underlying_type : null;
   const aliasTarget = item.kind.type === 'type_alias' ? item.kind.target : null;
+  const singleton = item.kind.type !== 'type_alias' ? item.kind.singleton : null;
+
+  const toc: TocEntry[] = [];
+  const k = item.kind;
+  if (k.type === 'type') {
+    if (k.fields.length > 0) toc.push({ id: 'fields', label: 'Fields' });
+    if (k.vftable && k.vftable.functions.length > 0)
+      toc.push({ id: 'virtual-functions', label: 'Virtual Functions' });
+    if (k.associated_functions.length > 0)
+      toc.push({ id: 'associated-functions', label: 'Associated Functions' });
+  } else if (k.type === 'enum') {
+    toc.push({ id: 'variants', label: 'Variants' });
+    if (k.associated_functions.length > 0)
+      toc.push({ id: 'associated-functions', label: 'Associated Functions' });
+  } else if (k.type === 'bitflags') {
+    toc.push({ id: 'flags', label: 'Flags' });
+  }
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-6 md:px-8 lg:px-10">
-      <div className="mb-4 flex items-center gap-3">
-        <Breadcrumbs path={decodedPath} isItem={true} itemType={itemType} />
-        {item.source && <SourceLink source={item.source} />}
-      </div>
+    <div className="mx-auto flex max-w-6xl gap-8 px-4 py-6 md:px-8 lg:px-10">
+      <article className="min-w-0 flex-1">
+        <div className="mb-4 flex items-center gap-3">
+          <Breadcrumbs path={decodedPath} isItem={true} itemType={itemType} />
+          {item.source && <SourceLink source={item.source} />}
+        </div>
 
-      {/* Source-faithful declaration header: attributes above, signature below. */}
-      <Attributes groups={itemAttributeGroups(item)} className="mb-1.5" />
-      <h1 className="mb-8 font-mono text-2xl font-semibold tracking-tight">
-        {isPublic && <span className="text-fg-muted">pub </span>}
-        <span className={getItemTypeColor(itemType)}>{keyword}</span>{' '}
-        <span className="text-fg">{name}</span>
-        {typeParams.length > 0 && (
-          <span className="text-kind-enum">&lt;{typeParams.join(', ')}&gt;</span>
-        )}
-        {underlying && (
-          <>
-            <span className="text-fg-muted">: </span>
-            <TypeRef type={underlying} currentModule={modulePath} />
-          </>
-        )}
-        {aliasTarget && (
-          <>
-            <span className="text-fg-muted"> = </span>
-            <TypeRef type={aliasTarget} currentModule={modulePath} />
-            <span className="text-fg-muted">;</span>
-          </>
-        )}
-      </h1>
+        {/* Source-faithful declaration header: attributes above, signature below. */}
+        <Attributes groups={itemAttributeGroups(item)} className="mb-1.5" />
+        <div className="group mb-8 flex items-start gap-2">
+          <h1 className="font-mono text-2xl font-semibold tracking-tight">
+            {isPublic && <span className="text-fg-muted">pub </span>}
+            <span className={getItemTypeColor(itemType)}>{keyword}</span>{' '}
+            <span className="text-fg">{name}</span>
+            {typeParams.length > 0 && (
+              <span className="text-kind-enum">&lt;{typeParams.join(', ')}&gt;</span>
+            )}
+            {underlying && (
+              <>
+                <span className="text-fg-muted">: </span>
+                <TypeRef type={underlying} currentModule={modulePath} />
+              </>
+            )}
+            {aliasTarget && (
+              <>
+                <span className="text-fg-muted"> = </span>
+                <TypeRef type={aliasTarget} currentModule={modulePath} />
+                <span className="text-fg-muted">;</span>
+              </>
+            )}
+          </h1>
+          {singleton != null && (
+            <CopyButton
+              value={`0x${singleton.toString(16)}`}
+              title="Copy singleton address"
+              className="mt-1 opacity-0 group-hover:opacity-100"
+            />
+          )}
+        </div>
 
-      {item.kind.type === 'type' && <TypeView def={item.kind} modulePath={modulePath} />}
-      {item.kind.type === 'enum' && <EnumView def={item.kind} modulePath={modulePath} />}
-      {item.kind.type === 'bitflags' && <BitflagsView def={item.kind} />}
-      {item.kind.type === 'type_alias' && <TypeAliasView def={item.kind} />}
+        {item.kind.type === 'type' && <TypeView def={item.kind} modulePath={modulePath} />}
+        {item.kind.type === 'enum' && <EnumView def={item.kind} modulePath={modulePath} />}
+        {item.kind.type === 'bitflags' && <BitflagsView def={item.kind} />}
+        {item.kind.type === 'type_alias' && <TypeAliasView def={item.kind} />}
+      </article>
+
+      <OnThisPage entries={toc} />
     </div>
   );
 }

@@ -12,6 +12,8 @@ import { FunctionDisplay } from './FunctionDisplay';
 import { CodeBlock } from './CodeBlock';
 import { Breadcrumbs } from './Breadcrumbs';
 import { Markdown } from './Markdown';
+import { AnchorLink, CopyButton } from './Actions';
+import { OnThisPage, type TocEntry } from './OnThisPage';
 import type {
   JsonExternValue,
   JsonBackend,
@@ -29,9 +31,12 @@ interface ModuleData {
   backends?: { [key: string]: unknown };
 }
 
-function SectionHeader({ children }: { children: React.ReactNode }) {
+function SectionHeader({ anchor, children }: { anchor?: string; children: React.ReactNode }) {
   return (
-    <h2 className="mb-4 border-b border-edge pb-1.5 text-lg font-semibold text-fg">{children}</h2>
+    <h2 className="group mb-4 flex items-center gap-2 border-b border-edge pb-1.5 text-lg font-semibold text-fg">
+      {children}
+      {anchor && <AnchorLink targetId={anchor} className="opacity-0 group-hover:opacity-100" />}
+    </h2>
   );
 }
 
@@ -53,7 +58,14 @@ function ExternValueItem({ extern: ext }: { extern: JsonExternValue }) {
   const nameClasses = isPrivate ? 'font-semibold text-fg-subtle' : 'font-semibold text-fg';
 
   return (
-    <div id={`extval-${ext.name}`} className="border-b border-edge p-3 last:border-0">
+    <div
+      id={`extval-${ext.name}`}
+      className="group relative border-b border-edge p-3 last:border-0"
+    >
+      <div className="absolute right-2 top-2 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+        <CopyButton value={`0x${ext.address.toString(16)}`} title="Copy address" />
+        <AnchorLink targetId={`extval-${ext.name}`} className="px-1" />
+      </div>
       <div className="font-mono text-sm leading-relaxed">
         <Attributes groups={externAttributeGroups(ext)} />
         <div>
@@ -121,6 +133,7 @@ function BackendSpliceSection({ backends, slot }: BackendSpliceSectionProps) {
   const title = slot === 'prologue' ? 'Backend Prologue' : 'Backend Epilogue';
   const slotLabel = slot === 'prologue' ? 'Prologue' : 'Epilogue';
   const sectionMargin = slot === 'prologue' ? 'mb-8' : 'my-8';
+  const sectionId = slot === 'prologue' ? 'backend-prologue' : 'backend-epilogue';
 
   const hasAny = Object.values(backends).some((configs) =>
     (configs as JsonBackend[]).some((config) => {
@@ -131,8 +144,8 @@ function BackendSpliceSection({ backends, slot }: BackendSpliceSectionProps) {
   if (!hasAny) return null;
 
   return (
-    <div className={sectionMargin}>
-      <SectionHeader>{title}</SectionHeader>
+    <div id={sectionId} className={sectionMargin}>
+      <SectionHeader anchor={sectionId}>{title}</SectionHeader>
       {Object.entries(backends).map(([backendName, configs]) => {
         const splices = (configs as JsonBackend[])
           .map((config) => config[slot])
@@ -184,8 +197,8 @@ function ItemList({ items }: ItemListProps) {
   if (items.length === 0) return null;
 
   return (
-    <div className="mb-8">
-      <SectionHeader>Types</SectionHeader>
+    <div id="types" className="mb-8">
+      <SectionHeader anchor="types">Types</SectionHeader>
       <Panel>
         {items.map(({ path, item }: { path: string; item: JsonItem }) => {
           if (!item) return null;
@@ -234,8 +247,8 @@ function SubmoduleList({ submodules, parentPath }: SubmoduleListProps) {
   if (!submodules || Object.keys(submodules).length === 0) return null;
 
   return (
-    <div className="mb-8">
-      <SectionHeader>Submodules</SectionHeader>
+    <div id="submodules" className="mb-8">
+      <SectionHeader anchor="submodules">Submodules</SectionHeader>
       <Panel>
         {Object.entries(submodules).map(([name, submodule]) => {
           const subPath = parentPath ? `${parentPath}::${name}` : name;
@@ -311,62 +324,86 @@ export function ModuleView() {
       item: documentation.items[itemPath],
     })) || [];
 
+  const backends = module.backends || {};
+  const hasBackendSlot = (slot: 'prologue' | 'epilogue') =>
+    Object.values(backends).some((configs) =>
+      (configs as JsonBackend[]).some((c) => {
+        const s = c[slot];
+        return s && (s.header || s.definition);
+      })
+    );
+
+  const toc: TocEntry[] = [];
+  if (hasBackendSlot('prologue')) toc.push({ id: 'backend-prologue', label: 'Backend Prologue' });
+  if (module.extern_values && module.extern_values.length > 0)
+    toc.push({ id: 'extern-values', label: 'Extern Values' });
+  if (module.functions && module.functions.length > 0)
+    toc.push({ id: 'functions', label: 'Functions' });
+  if (items.length > 0) toc.push({ id: 'types', label: 'Types' });
+  if (module.submodules && Object.keys(module.submodules).length > 0)
+    toc.push({ id: 'submodules', label: 'Submodules' });
+  if (hasBackendSlot('epilogue')) toc.push({ id: 'backend-epilogue', label: 'Backend Epilogue' });
+
   return (
-    <div className="mx-auto max-w-5xl px-4 py-6 md:px-8 lg:px-10">
-      <div className="mb-4">
-        <Breadcrumbs path={decodedPath} />
-      </div>
-
-      <h1 className="mb-6 font-mono text-2xl font-semibold tracking-tight">
-        <span className="text-kind-module">mod</span> <span className="text-fg">{name}</span>
-      </h1>
-
-      {module.doc && (
-        <div className="mb-8 border-l-2 border-edge-strong pl-4 text-fg-muted">
-          <Markdown>{module.doc}</Markdown>
+    <div className="mx-auto flex max-w-6xl gap-8 px-4 py-6 md:px-8 lg:px-10">
+      <article className="min-w-0 flex-1">
+        <div className="mb-4">
+          <Breadcrumbs path={decodedPath} />
         </div>
-      )}
 
-      {/* Backend Prologues */}
-      <BackendSpliceSection backends={module.backends || {}} slot="prologue" />
+        <h1 className="mb-6 font-mono text-2xl font-semibold tracking-tight">
+          <span className="text-kind-module">mod</span> <span className="text-fg">{name}</span>
+        </h1>
 
-      {/* Extern Values */}
-      {module.extern_values && module.extern_values.length > 0 && (
-        <div className="mb-8">
-          <SectionHeader>Extern Values</SectionHeader>
-          <Panel>
-            {module.extern_values.map((ext: JsonExternValue, idx: number) => (
-              <ExternValueItem key={idx} extern={ext} />
-            ))}
-          </Panel>
-        </div>
-      )}
+        {module.doc && (
+          <div className="mb-8 border-l-2 border-edge-strong pl-4 text-fg-muted">
+            <Markdown>{module.doc}</Markdown>
+          </div>
+        )}
 
-      {/* Functions */}
-      {module.functions && module.functions.length > 0 && (
-        <div className="mb-8">
-          <SectionHeader>Functions</SectionHeader>
-          <Panel>
-            {module.functions.map((func: JsonFunction, idx: number) => (
-              <FunctionDisplay
-                key={idx}
-                id={`func-${func.name}`}
-                func={func}
-                modulePath={decodedPath}
-              />
-            ))}
-          </Panel>
-        </div>
-      )}
+        {/* Backend Prologues */}
+        <BackendSpliceSection backends={backends} slot="prologue" />
 
-      {/* Items (Types/Enums/Bitflags) */}
-      <ItemList items={items} />
+        {/* Extern Values */}
+        {module.extern_values && module.extern_values.length > 0 && (
+          <div id="extern-values" className="mb-8">
+            <SectionHeader anchor="extern-values">Extern Values</SectionHeader>
+            <Panel>
+              {module.extern_values.map((ext: JsonExternValue, idx: number) => (
+                <ExternValueItem key={idx} extern={ext} />
+              ))}
+            </Panel>
+          </div>
+        )}
 
-      {/* Submodules */}
-      <SubmoduleList submodules={module.submodules || {}} parentPath={decodedPath} />
+        {/* Functions */}
+        {module.functions && module.functions.length > 0 && (
+          <div id="functions" className="mb-8">
+            <SectionHeader anchor="functions">Functions</SectionHeader>
+            <Panel>
+              {module.functions.map((func: JsonFunction, idx: number) => (
+                <FunctionDisplay
+                  key={idx}
+                  id={`func-${func.name}`}
+                  func={func}
+                  modulePath={decodedPath}
+                />
+              ))}
+            </Panel>
+          </div>
+        )}
 
-      {/* Backend Epilogues */}
-      <BackendSpliceSection backends={module.backends || {}} slot="epilogue" />
+        {/* Items (Types/Enums/Bitflags) */}
+        <ItemList items={items} />
+
+        {/* Submodules */}
+        <SubmoduleList submodules={module.submodules || {}} parentPath={decodedPath} />
+
+        {/* Backend Epilogues */}
+        <BackendSpliceSection backends={backends} slot="epilogue" />
+      </article>
+
+      <OnThisPage entries={toc} />
     </div>
   );
 }

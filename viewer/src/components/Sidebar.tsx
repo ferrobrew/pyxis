@@ -101,6 +101,14 @@ function ItemTree({ itemPath, level }: ItemTreeProps) {
   const { documentation, selectedSource } = useDocumentation();
   const location = useLocation();
   const [isItemOpen, setIsItemOpen] = useState(false);
+  const rowRef = useRef<HTMLDivElement>(null);
+  const currentPath = decodeURIComponent(location.pathname.split('/').pop() || '');
+  const isItemActive = currentPath === itemPath;
+
+  // Keep the active item scrolled into view within the sidebar.
+  useEffect(() => {
+    if (isItemActive) rowRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [isItemActive]);
 
   if (!documentation) return null;
 
@@ -108,8 +116,6 @@ function ItemTree({ itemPath, level }: ItemTreeProps) {
   if (!item) return null;
 
   const itemName = itemPath.split('::').pop() || itemPath;
-  const currentPath = decodeURIComponent(location.pathname.split('/').pop() || '');
-  const isItemActive = currentPath === itemPath;
 
   let Icon = TypeIcon;
   let itemType: ItemType = 'type';
@@ -153,6 +159,7 @@ function ItemTree({ itemPath, level }: ItemTreeProps) {
   return (
     <div>
       <div
+        ref={rowRef}
         className={`flex items-center gap-1 py-1 px-2 rounded ${
           isItemActive ? 'bg-accent-soft text-fg' : ''
         }`}
@@ -269,8 +276,19 @@ function ModuleTree({ name, module, path, level }: ModuleTreeProps) {
   const [isOpen, setIsOpen] = useState(level < 2); // Auto-expand first two levels
   const location = useLocation();
   const { documentation, selectedSource } = useDocumentation();
+  const rowRef = useRef<HTMLDivElement>(null);
   const currentPath = decodeURIComponent(location.pathname.split('/').pop() || '');
   const isActive = currentPath === path;
+  // True when the active item/module lives somewhere inside this subtree.
+  const isAncestor = isActive || currentPath.startsWith(`${path}::`);
+
+  // Expand the path down to the active node, and keep it scrolled into view.
+  useEffect(() => {
+    if (isAncestor) setIsOpen(true);
+  }, [isAncestor]);
+  useEffect(() => {
+    if (isActive) rowRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [isActive]);
 
   const hasSubmodules = module.submodules && Object.keys(module.submodules).length > 0;
   const hasContent =
@@ -288,6 +306,7 @@ function ModuleTree({ name, module, path, level }: ModuleTreeProps) {
   return (
     <div>
       <div
+        ref={rowRef}
         className={`flex items-center gap-1 py-1 px-2 rounded ${isActive ? 'bg-accent-soft text-fg' : ''}`}
       >
         {hasContent && (
