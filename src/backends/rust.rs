@@ -60,12 +60,19 @@ pub fn write_module(
 
     let mut raw_output = String::new();
 
-    writeln!(
-        raw_output,
-        "#![allow(dead_code, non_snake_case, non_camel_case_types, non_upper_case_globals, clippy::missing_safety_doc, clippy::unnecessary_cast, clippy::module_inception)]"
-    )?;
+    // Lint `allow`s cascade to descendant modules, so they only need to live
+    // on the root file (lib.rs / the mounted-subtree root); emitting them on
+    // the root also overrides a stricter host crate (the innermost level
+    // wins), keeping the whole generated subtree quiet.
+    if key.is_empty() {
+        writeln!(
+            raw_output,
+            "#![allow(dead_code, non_snake_case, non_camel_case_types, non_upper_case_globals, clippy::missing_safety_doc, clippy::unnecessary_cast, clippy::module_inception)]"
+        )?;
+    }
     // Disable rustfmt on generated files to prevent the prettyplease-formatted code being reformatted
-    // by a stray project-wide `cargo fmt` invocation.
+    // by a stray project-wide `cargo fmt` invocation. (Per-file: rustfmt runs
+    // per-file, so unlike lint levels this can't live only on the root.)
     // <https://stackoverflow.com/questions/59247458/is-there-a-stable-way-to-tell-rustfmt-to-skip-an-entire-file#comment138279076_75910283>
     writeln!(raw_output, "#![cfg_attr(any(), rustfmt::skip)]")?;
     writeln!(raw_output, "{}", doc_to_tokens(true, module.doc()))?;

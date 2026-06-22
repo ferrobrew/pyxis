@@ -1,12 +1,3 @@
-#![allow(
-    dead_code,
-    non_snake_case,
-    non_camel_case_types,
-    non_upper_case_globals,
-    clippy::missing_safety_doc,
-    clippy::unnecessary_cast,
-    clippy::module_inception
-)]
 #![cfg_attr(any(), rustfmt::skip)]
 //! The world subsystem.
 //! This module is backed by a `mod.pyxis`, so it exercises folder-level
