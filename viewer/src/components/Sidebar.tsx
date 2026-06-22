@@ -349,23 +349,17 @@ function ModuleTree({ name, module, path, level }: ModuleTreeProps) {
 
           {/* Functions */}
           {module.functions.length > 0 &&
-            module.functions.map((func, idx) => {
-              const funcKey = `${path}::${func.name}`;
-              const isFuncActive = currentPath === funcKey;
-
-              return (
-                <div
-                  key={`func-${idx}`}
-                  className={`flex items-center gap-2 py-1 px-2 text-sm rounded ${
-                    isFuncActive ? 'bg-accent-soft text-fg' : ''
-                  }`}
-                  style={{ paddingLeft: `${(level + 1) * 0.5 + 1.25}rem` }}
-                >
-                  <FunctionIcon />
-                  <span className={`truncate ${getItemTypeColor('function')}`}>{func.name}</span>
-                </div>
-              );
-            })}
+            module.functions.map((func, idx) => (
+              <Link
+                key={`func-${idx}`}
+                to={`${buildModuleUrl(path, selectedSource)}##func-${func.name}`}
+                className={`flex items-center gap-2 py-1 px-2 text-sm rounded ${getItemTypeColor('function')} ${getItemTypeHoverColor('function')}`}
+                style={{ paddingLeft: `${(level + 1) * 0.5 + 1.25}rem` }}
+              >
+                <FunctionIcon />
+                <span className="truncate">{func.name}</span>
+              </Link>
+            ))}
 
           {/* Extern values */}
           {module.extern_values.length > 0 &&
