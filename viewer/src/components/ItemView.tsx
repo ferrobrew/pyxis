@@ -17,12 +17,7 @@ import { SourceLink, SourceName } from './SourceLink';
 import { Markdown } from './Markdown';
 import { AnchorLink, CopyButton } from './Actions';
 import { OnThisPage, type TocEntry } from './OnThisPage';
-import type {
-  JsonTypeDefinition,
-  JsonEnumDefinition,
-  JsonBitflagsDefinition,
-  JsonTypeAliasDefinition,
-} from '@pyxis/types';
+import type { JsonTypeDefinition, JsonEnumDefinition, JsonBitflagsDefinition } from '@pyxis/types';
 
 // Keyword shown in the signature header for each item kind, mirroring how the
 // declaration is written in pyxis-defs (`pub type Foo`, `pub enum Bar: u32`).
@@ -33,10 +28,11 @@ const KIND_KEYWORD: Record<string, string> = {
   type_alias: 'type',
 };
 
-// Quiet, typographic doc block — a left rule rather than a loud tinted box.
+// Quiet, typographic doc block. Spacing is owned by the header group, so this
+// carries no margin of its own.
 function DocBlock({ doc }: { doc: string }) {
   return (
-    <div className="mb-6 border-l-2 border-edge-strong pl-4 text-fg-muted">
+    <div className="text-fg-muted">
       <Markdown>{doc}</Markdown>
     </div>
   );
@@ -110,8 +106,6 @@ function TypeView({ def, modulePath }: { def: JsonTypeDefinition; modulePath: st
 
   return (
     <div>
-      {def.doc && <DocBlock doc={def.doc} />}
-
       {def.fields.length > 0 && (
         <div id="fields" className="mb-8">
           <div className="group mb-4 flex items-center justify-between border-b border-edge pb-1.5">
@@ -170,8 +164,6 @@ function TypeView({ def, modulePath }: { def: JsonTypeDefinition; modulePath: st
 function EnumView({ def, modulePath }: { def: JsonEnumDefinition; modulePath: string }) {
   return (
     <div>
-      {def.doc && <DocBlock doc={def.doc} />}
-
       <div id="variants" className="mb-8">
         <SectionHeader anchor="variants">Variants</SectionHeader>
         <Table>
@@ -230,8 +222,6 @@ function EnumView({ def, modulePath }: { def: JsonEnumDefinition; modulePath: st
 function BitflagsView({ def }: { def: JsonBitflagsDefinition }) {
   return (
     <div>
-      {def.doc && <DocBlock doc={def.doc} />}
-
       <div id="flags" className="mb-8">
         <SectionHeader anchor="flags">Flags</SectionHeader>
         <Table>
@@ -270,13 +260,6 @@ function BitflagsView({ def }: { def: JsonBitflagsDefinition }) {
       </div>
     </div>
   );
-}
-
-// Type alias view component — the target type is shown in the signature header,
-// so this only carries documentation.
-function TypeAliasView({ def }: { def: JsonTypeAliasDefinition }) {
-  if (!def.doc) return null;
-  return <DocBlock doc={def.doc} />;
 }
 
 // Main ItemView component
@@ -372,43 +355,47 @@ export function ItemView() {
           {item.source && <SourceLink source={item.source} />}
         </div>
 
-        {/* Source-faithful declaration header: attributes above, signature below. */}
-        <Attributes groups={itemAttributeGroups(item)} className="mb-1.5" />
-        <div className="group mb-8 flex items-start gap-2">
-          <h1 className="font-mono text-2xl font-semibold tracking-tight">
-            {isPublic && <span className="text-fg-muted">pub </span>}
-            <span className={getItemTypeColor(itemType)}>{keyword}</span>{' '}
-            <span className="text-fg">{name}</span>
-            {typeParams.length > 0 && (
-              <span className="text-kind-enum">&lt;{typeParams.join(', ')}&gt;</span>
+        {/* Source-faithful declaration header: attributes, signature, then the
+            doc comment, kept together with a single trailing margin. */}
+        <div className="group mb-4">
+          <Attributes groups={itemAttributeGroups(item)} />
+          <div className="mb-2 flex items-start gap-2">
+            <h1 className="font-mono text-2xl font-semibold tracking-tight">
+              {isPublic && <span className="text-fg-muted">pub </span>}
+              <span className={getItemTypeColor(itemType)}>{keyword}</span>{' '}
+              <span className="text-fg">{name}</span>
+              {typeParams.length > 0 && (
+                <span className="text-kind-enum">&lt;{typeParams.join(', ')}&gt;</span>
+              )}
+              {underlying && (
+                <>
+                  <span className="text-fg-muted">: </span>
+                  <TypeRef type={underlying} currentModule={modulePath} />
+                </>
+              )}
+              {aliasTarget && (
+                <>
+                  <span className="text-fg-muted"> = </span>
+                  <TypeRef type={aliasTarget} currentModule={modulePath} />
+                  <span className="text-fg-muted">;</span>
+                </>
+              )}
+            </h1>
+            {singleton != null && (
+              <CopyButton
+                value={`0x${singleton.toString(16)}`}
+                title="Copy singleton address"
+                label="copy addr"
+                className="mt-1 opacity-0 group-hover:opacity-100"
+              />
             )}
-            {underlying && (
-              <>
-                <span className="text-fg-muted">: </span>
-                <TypeRef type={underlying} currentModule={modulePath} />
-              </>
-            )}
-            {aliasTarget && (
-              <>
-                <span className="text-fg-muted"> = </span>
-                <TypeRef type={aliasTarget} currentModule={modulePath} />
-                <span className="text-fg-muted">;</span>
-              </>
-            )}
-          </h1>
-          {singleton != null && (
-            <CopyButton
-              value={`0x${singleton.toString(16)}`}
-              title="Copy singleton address"
-              className="mt-1 opacity-0 group-hover:opacity-100"
-            />
-          )}
+          </div>
+          {item.kind.doc && <DocBlock doc={item.kind.doc} />}
         </div>
 
         {item.kind.type === 'type' && <TypeView def={item.kind} modulePath={modulePath} />}
         {item.kind.type === 'enum' && <EnumView def={item.kind} modulePath={modulePath} />}
         {item.kind.type === 'bitflags' && <BitflagsView def={item.kind} />}
-        {item.kind.type === 'type_alias' && <TypeAliasView def={item.kind} />}
       </article>
 
       <OnThisPage entries={toc} />
