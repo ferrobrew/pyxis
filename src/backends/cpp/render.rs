@@ -4,6 +4,7 @@
 //! aliases, vftables, generics, extern bindings) into the textual output for
 //! `.hpp` and `.cpp` files.
 
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::fmt::Write;
 
@@ -157,6 +158,7 @@ fn render_struct(
     visibility: Visibility,
     type_parameters: &[String],
 ) -> Result<RenderedItem> {
+    let name = &*cpp_ident(name);
     let is_generic = !type_parameters.is_empty();
     let mut out = String::new();
     render_doc(&mut out, &td.doc, 0)?;
@@ -642,6 +644,7 @@ fn render_enum(
     size: usize,
     ctx: RenderCtx,
 ) -> Result<(String, String)> {
+    let name = &*cpp_ident(name);
     let mut out = String::new();
     render_doc(&mut out, &ed.doc, 0)?;
     let underlying = render_type(&ed.type_, ctx)?;
@@ -678,6 +681,7 @@ fn render_bitflags(
     size: usize,
     ctx: RenderCtx,
 ) -> Result<(String, String)> {
+    let name = &*cpp_ident(name);
     let mut out = String::new();
     render_doc(&mut out, &bd.doc, 0)?;
     let underlying = render_type(&bd.type_, ctx)?;
@@ -748,6 +752,7 @@ fn render_type_alias(
     ctx: RenderCtx,
     type_parameters: &[String],
 ) -> Result<String> {
+    let name = &*cpp_ident(name);
     let mut out = String::new();
     render_doc(&mut out, &ta.doc, 0)?;
     let target = render_type(&ta.target, ctx)?;
@@ -939,123 +944,165 @@ fn render_path(path: &ItemPath, ctx: RenderCtx) -> String {
     let target_module = path.parent().unwrap_or_else(ItemPath::empty);
     let leaf = path.last().map(|s| s.as_str()).unwrap_or("");
     if &target_module == ctx.module_path {
-        return leaf.to_string();
+        return cpp_ident(leaf).into_owned();
     }
-    // Cross-module: fully qualified.
+    // Cross-module: fully qualified. Module segments are namespaces (escaped
+    // against C-runtime globals too); the leaf is the type name.
     let mut out = String::new();
     out.push_str("::");
+    let last = path.len().saturating_sub(1);
     for (i, seg) in path.iter().enumerate() {
         if i > 0 {
             out.push_str("::");
         }
-        out.push_str(seg.as_str());
+        let escaped = if i == last {
+            cpp_ident(seg.as_str())
+        } else {
+            cpp_namespace_ident(seg.as_str())
+        };
+        out.push_str(&escaped);
     }
     out
 }
 
+/// C-runtime identifiers that live in the *global* namespace of every
+/// generated translation unit, because the runtime header's mandatory
+/// includes pull them in (notably `<atomic>` transitively includes
+/// `<time.h>`, which declares `::clock`). A pyxis module emitted as a
+/// global `namespace` with one of these names is a "redefinition as a
+/// different kind of symbol", so they're escaped in *namespace position*
+/// only — they're harmless as field/member/type names (those are scoped).
+const CPP_RESERVED_GLOBALS: &[&str] = &[
+    "clock",
+    "time",
+    "difftime",
+    "mktime",
+    "asctime",
+    "ctime",
+    "gmtime",
+    "localtime",
+    "strftime",
+    "clock_t",
+    "time_t",
+    "tm",
+    "timespec",
+];
+
 /// Escape pyxis identifiers that collide with C++ reserved words by
 /// suffixing an underscore. Idempotent for non-conflicting names.
-pub fn cpp_ident(name: &str) -> std::borrow::Cow<'_, str> {
-    const KEYWORDS: &[&str] = &[
-        "alignas",
-        "alignof",
-        "and",
-        "and_eq",
-        "asm",
-        "auto",
-        "bitand",
-        "bitor",
-        "bool",
-        "break",
-        "case",
-        "catch",
-        "char",
-        "char8_t",
-        "char16_t",
-        "char32_t",
-        "class",
-        "compl",
-        "concept",
-        "const",
-        "consteval",
-        "constexpr",
-        "constinit",
-        "const_cast",
-        "continue",
-        "co_await",
-        "co_return",
-        "co_yield",
-        "decltype",
-        "default",
-        "delete",
-        "do",
-        "double",
-        "dynamic_cast",
-        "else",
-        "enum",
-        "explicit",
-        "export",
-        "extern",
-        "false",
-        "float",
-        "for",
-        "friend",
-        "goto",
-        "if",
-        "inline",
-        "int",
-        "long",
-        "mutable",
-        "namespace",
-        "new",
-        "noexcept",
-        "not",
-        "not_eq",
-        "nullptr",
-        "operator",
-        "or",
-        "or_eq",
-        "private",
-        "protected",
-        "public",
-        "register",
-        "reinterpret_cast",
-        "requires",
-        "return",
-        "short",
-        "signed",
-        "sizeof",
-        "static",
-        "static_assert",
-        "static_cast",
-        "struct",
-        "switch",
-        "template",
-        "this",
-        "thread_local",
-        "throw",
-        "true",
-        "try",
-        "typedef",
-        "typeid",
-        "typename",
-        "union",
-        "unsigned",
-        "using",
-        "virtual",
-        "void",
-        "volatile",
-        "wchar_t",
-        "while",
-        "xor",
-        "xor_eq",
-    ];
-    if KEYWORDS.contains(&name) {
-        std::borrow::Cow::Owned(format!("{name}_"))
+pub fn cpp_ident(name: &str) -> Cow<'_, str> {
+    if CPP_KEYWORDS.contains(&name) {
+        Cow::Owned(format!("{name}_"))
     } else {
-        std::borrow::Cow::Borrowed(name)
+        Cow::Borrowed(name)
     }
 }
+
+/// Like [`cpp_ident`], but for module/namespace segments: also escapes
+/// C-runtime globals (see [`CPP_RESERVED_GLOBALS`]) that collide with a
+/// global `namespace` of the same name.
+pub fn cpp_namespace_ident(name: &str) -> Cow<'_, str> {
+    if CPP_KEYWORDS.contains(&name) || CPP_RESERVED_GLOBALS.contains(&name) {
+        Cow::Owned(format!("{name}_"))
+    } else {
+        Cow::Borrowed(name)
+    }
+}
+
+const CPP_KEYWORDS: &[&str] = &[
+    "alignas",
+    "alignof",
+    "and",
+    "and_eq",
+    "asm",
+    "auto",
+    "bitand",
+    "bitor",
+    "bool",
+    "break",
+    "case",
+    "catch",
+    "char",
+    "char8_t",
+    "char16_t",
+    "char32_t",
+    "class",
+    "compl",
+    "concept",
+    "const",
+    "consteval",
+    "constexpr",
+    "constinit",
+    "const_cast",
+    "continue",
+    "co_await",
+    "co_return",
+    "co_yield",
+    "decltype",
+    "default",
+    "delete",
+    "do",
+    "double",
+    "dynamic_cast",
+    "else",
+    "enum",
+    "explicit",
+    "export",
+    "extern",
+    "false",
+    "float",
+    "for",
+    "friend",
+    "goto",
+    "if",
+    "inline",
+    "int",
+    "long",
+    "mutable",
+    "namespace",
+    "new",
+    "noexcept",
+    "not",
+    "not_eq",
+    "nullptr",
+    "operator",
+    "or",
+    "or_eq",
+    "private",
+    "protected",
+    "public",
+    "register",
+    "reinterpret_cast",
+    "requires",
+    "return",
+    "short",
+    "signed",
+    "sizeof",
+    "static",
+    "static_assert",
+    "static_cast",
+    "struct",
+    "switch",
+    "template",
+    "this",
+    "thread_local",
+    "throw",
+    "true",
+    "try",
+    "typedef",
+    "typeid",
+    "typename",
+    "union",
+    "unsigned",
+    "using",
+    "virtual",
+    "void",
+    "volatile",
+    "wchar_t",
+    "while",
+    "xor",
+    "xor_eq",
+];
 
 fn predefined_to_cpp(p: PredefinedItem) -> &'static str {
     match p {
@@ -1085,5 +1132,30 @@ fn predefined_to_cpp(p: PredefinedItem) -> &'static str {
         PredefinedItem::AtomicI16 => "::pyxis::AtomicI16",
         PredefinedItem::AtomicI32 => "::pyxis::AtomicI32",
         PredefinedItem::AtomicI64 => "::pyxis::AtomicI64",
+    }
+}
+
+#[cfg(test)]
+mod ident_tests {
+    use super::{cpp_ident, cpp_namespace_ident};
+
+    #[test]
+    fn keywords_are_escaped_everywhere() {
+        assert_eq!(cpp_ident("class"), "class_");
+        assert_eq!(cpp_namespace_ident("class"), "class_");
+    }
+
+    #[test]
+    fn plain_identifiers_are_untouched() {
+        assert_eq!(cpp_ident("Clock"), "Clock");
+        assert_eq!(cpp_namespace_ident("world"), "world");
+    }
+
+    #[test]
+    fn runtime_globals_are_escaped_only_in_namespace_position() {
+        // `clock` collides with the C-runtime `::clock` only as a global
+        // namespace; it's fine as a field/type name.
+        assert_eq!(cpp_namespace_ident("clock"), "clock_");
+        assert_eq!(cpp_ident("clock"), "clock");
     }
 }

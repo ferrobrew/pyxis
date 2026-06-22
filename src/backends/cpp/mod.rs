@@ -753,7 +753,7 @@ fn open_namespace(out: &mut String, module_path: &ItemPath) -> Result<()> {
         if i > 0 {
             write!(out, "::")?;
         }
-        write!(out, "{}", seg.as_str())?;
+        write!(out, "{}", render::cpp_namespace_ident(seg.as_str()))?;
     }
     writeln!(out, " {{")?;
     Ok(())
@@ -765,7 +765,7 @@ fn close_namespace(out: &mut String, module_path: &ItemPath) -> Result<()> {
         if i > 0 {
             write!(out, "::")?;
         }
-        write!(out, "{}", seg.as_str())?;
+        write!(out, "{}", render::cpp_namespace_ident(seg.as_str()))?;
     }
     writeln!(out)?;
     Ok(())
