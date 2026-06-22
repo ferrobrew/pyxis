@@ -4,6 +4,8 @@ import { useDocumentation } from '../contexts/DocumentationContext';
 import { findModule, findLongestValidAncestor } from '../utils/pathUtils';
 import { buildModuleUrl, buildItemUrl, buildRootUrl } from '../utils/navigation';
 import { getItemTypeColor, type ItemType } from '../utils/colors';
+import { Attributes } from './Attributes';
+import { externAttributeGroups } from '../utils/attributes';
 import { Collapsible } from './Collapsible';
 import { TypeRef } from './TypeRef';
 import { FunctionDisplay } from './FunctionDisplay';
@@ -51,14 +53,18 @@ function ExternValueItem({ extern: ext }: { extern: JsonExternValue }) {
   const nameClasses = isPrivate ? 'font-semibold text-fg-subtle' : 'font-semibold text-fg';
 
   return (
-    <div id={`extval-${ext.name}`} className="p-3 border-b border-edge last:border-0">
-      <div className="font-mono text-sm">
-        <span className="text-kind-function">extern </span>
-        <span className={nameClasses}>{ext.name}</span>
-        <span className="text-fg-muted">: </span>
-        <TypeRef type={ext.type_ref} />
+    <div id={`extval-${ext.name}`} className="border-b border-edge p-3 last:border-0">
+      <div className="font-mono text-sm leading-relaxed">
+        <Attributes groups={externAttributeGroups(ext)} />
+        <div>
+          {!isPrivate && <span className="text-fg-muted">pub </span>}
+          <span className="text-kind-extern">extern </span>
+          <span className={nameClasses}>{ext.name}</span>
+          <span className="text-fg-muted">: </span>
+          <TypeRef type={ext.type_ref} />
+          <span className="text-fg-muted">;</span>
+        </div>
       </div>
-      <div className="mt-1.5 text-xs text-fg-subtle">Address: 0x{ext.address.toString(16)}</div>
     </div>
   );
 }

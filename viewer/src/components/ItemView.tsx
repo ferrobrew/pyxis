@@ -5,13 +5,14 @@ import { getModulePath, findLongestValidAncestor } from '../utils/pathUtils';
 import { buildModuleUrl, buildItemUrl, buildRootUrl } from '../utils/navigation';
 import { getItemTypeColor, type ItemType } from '../utils/colors';
 import { TypeRef } from './TypeRef';
-import { Badge, SmallBadge } from './Badge';
+import { SmallBadge } from './Badge';
+import { Attributes } from './Attributes';
+import { itemAttributeGroups } from '../utils/attributes';
 import { FunctionDisplay } from './FunctionDisplay';
 import { FieldTable } from './FieldTable';
 import { NestedFieldView } from './NestedFieldView';
 import { Breadcrumbs } from './Breadcrumbs';
 import { SourceLink, SourceName } from './SourceLink';
-import { formatCfg } from '../utils/cfg';
 import { Markdown } from './Markdown';
 import type {
   JsonTypeDefinition,
@@ -20,9 +21,10 @@ import type {
   JsonTypeAliasDefinition,
 } from '@pyxis/types';
 
-// Rust-flavoured keyword shown in the signature header for each item kind.
+// Keyword shown in the signature header for each item kind, mirroring how the
+// declaration is written in pyxis-defs (`pub type Foo`, `pub enum Bar: u32`).
 const KIND_KEYWORD: Record<string, string> = {
-  type: 'struct',
+  type: 'type',
   enum: 'enum',
   bitflags: 'bitflags',
   type_alias: 'type',
@@ -159,10 +161,6 @@ function EnumView({ def, modulePath }: { def: JsonEnumDefinition; modulePath: st
     <div>
       {def.doc && <DocBlock doc={def.doc} />}
 
-      <div className="mb-6 text-sm text-fg-muted">
-        Underlying type: <TypeRef type={def.underlying_type} currentModule={modulePath} />
-      </div>
-
       <div id="variants" className="mb-8">
         <SectionHeader>Variants</SectionHeader>
         <Table>
@@ -218,14 +216,10 @@ function EnumView({ def, modulePath }: { def: JsonEnumDefinition; modulePath: st
 }
 
 // Bitflags view component
-function BitflagsView({ def, modulePath }: { def: JsonBitflagsDefinition; modulePath: string }) {
+function BitflagsView({ def }: { def: JsonBitflagsDefinition }) {
   return (
     <div>
       {def.doc && <DocBlock doc={def.doc} />}
-
-      <div className="mb-6 text-sm text-fg-muted">
-        Underlying type: <TypeRef type={def.underlying_type} currentModule={modulePath} />
-      </div>
 
       <div id="flags" className="mb-8">
         <SectionHeader>Flags</SectionHeader>
@@ -267,22 +261,11 @@ function BitflagsView({ def, modulePath }: { def: JsonBitflagsDefinition; module
   );
 }
 
-// Type alias view component
-function TypeAliasView({ def, modulePath }: { def: JsonTypeAliasDefinition; modulePath: string }) {
-  return (
-    <div>
-      {def.doc && <DocBlock doc={def.doc} />}
-
-      <div className="mb-8">
-        <SectionHeader>Target Type</SectionHeader>
-        <div className="rounded-md border border-edge bg-surface p-4">
-          <span className="font-mono text-base">
-            <TypeRef type={def.target} currentModule={modulePath} />
-          </span>
-        </div>
-      </div>
-    </div>
-  );
+// Type alias view component — the target type is shown in the signature header,
+// so this only carries documentation.
+function TypeAliasView({ def }: { def: JsonTypeAliasDefinition }) {
+  if (!def.doc) return null;
+  return <DocBlock doc={def.doc} />;
 }
 
 // Main ItemView component
@@ -345,15 +328,13 @@ export function ItemView() {
   else if (item.kind.type === 'type_alias') itemType = 'type_alias';
 
   const name = decodedPath.split('::').pop() || decodedPath;
-  const keyword = KIND_KEYWORD[item.kind.type] ?? item.kind.type;
-
-  // Extract trait badges from kind
-  const kind = item.kind;
-  const copyable = kind.type !== 'type_alias' && kind.copyable;
-  const cloneable = kind.type !== 'type_alias' && kind.cloneable;
-  const defaultable = kind.type === 'type' && kind.defaultable;
-  const packed = kind.type === 'type' && kind.packed;
-  const singleton = kind.type !== 'type_alias' ? kind.singleton : null;
+  const isExtern = item.category === 'extern';
+  const keyword = isExtern ? 'extern type' : (KIND_KEYWORD[item.kind.type] ?? item.kind.type);
+  const isPublic = item.visibility === 'public';
+  const typeParams = item.type_parameters ?? [];
+  const underlying =
+    item.kind.type === 'enum' || item.kind.type === 'bitflags' ? item.kind.underlying_type : null;
+  const aliasTarget = item.kind.type === 'type_alias' ? item.kind.target : null;
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-6 md:px-8 lg:px-10">
@@ -362,66 +343,34 @@ export function ItemView() {
         {item.source && <SourceLink source={item.source} />}
       </div>
 
-      {/* rustdoc-style signature header */}
-      <h1 className="mb-3 font-mono text-2xl font-semibold tracking-tight">
+      {/* Source-faithful declaration header: attributes above, signature below. */}
+      <Attributes groups={itemAttributeGroups(item)} className="mb-1.5" />
+      <h1 className="mb-8 font-mono text-2xl font-semibold tracking-tight">
+        {isPublic && <span className="text-fg-muted">pub </span>}
         <span className={getItemTypeColor(itemType)}>{keyword}</span>{' '}
         <span className="text-fg">{name}</span>
-        {item.type_parameters && item.type_parameters.length > 0 && (
-          <span className="text-kind-enum">&lt;{item.type_parameters.join(', ')}&gt;</span>
+        {typeParams.length > 0 && (
+          <span className="text-kind-enum">&lt;{typeParams.join(', ')}&gt;</span>
+        )}
+        {underlying && (
+          <>
+            <span className="text-fg-muted">: </span>
+            <TypeRef type={underlying} currentModule={modulePath} />
+          </>
+        )}
+        {aliasTarget && (
+          <>
+            <span className="text-fg-muted"> = </span>
+            <TypeRef type={aliasTarget} currentModule={modulePath} />
+            <span className="text-fg-muted">;</span>
+          </>
         )}
       </h1>
 
-      {/* Quiet metadata row */}
-      <div className="mb-8 flex flex-wrap items-center gap-1.5">
-        <Badge variant="cyan">size {item.size}</Badge>
-        <Badge variant="teal">align {item.alignment}</Badge>
-        <Badge variant="orange">{item.category}</Badge>
-        <Badge variant="gray">{item.visibility}</Badge>
-        {copyable && <Badge variant="green">copy</Badge>}
-        {cloneable && <Badge variant="indigo">clone</Badge>}
-        {defaultable && <Badge variant="purple">default</Badge>}
-        {packed && <Badge variant="yellow">packed</Badge>}
-        {singleton !== null && singleton !== undefined && (
-          <Badge variant="red">singleton: 0x{singleton.toString(16)}</Badge>
-        )}
-        {item.cfg && <Badge variant="pink">cfg({formatCfg(item.cfg)})</Badge>}
-      </div>
-
-      {(item.rust_name || item.cpp_name) && (
-        <div className="mb-8">
-          <SectionHeader>Backend bindings</SectionHeader>
-          <Table>
-            <thead className="bg-surface">
-              <tr className="border-b border-edge">
-                <th className={TH}>Backend</th>
-                <th className={TH}>Maps to</th>
-                <th className={TH}>Header</th>
-              </tr>
-            </thead>
-            <tbody>
-              {item.rust_name && (
-                <tr className="border-b border-edge last:border-0">
-                  <td className={`${TD} text-fg`}>Rust</td>
-                  <td className={`${TD} font-mono text-fg-muted`}>{item.rust_name}</td>
-                  <td className={`${TD} text-fg-subtle`}>—</td>
-                </tr>
-              )}
-              {item.cpp_name && (
-                <tr className="border-b border-edge last:border-0">
-                  <td className={`${TD} text-fg`}>C++</td>
-                  <td className={`${TD} font-mono text-fg-muted`}>{item.cpp_name}</td>
-                  <td className={`${TD} font-mono text-fg-muted`}>{item.cpp_header ?? '—'}</td>
-                </tr>
-              )}
-            </tbody>
-          </Table>
-        </div>
-      )}
-
       {item.kind.type === 'type' && <TypeView def={item.kind} modulePath={modulePath} />}
       {item.kind.type === 'enum' && <EnumView def={item.kind} modulePath={modulePath} />}
-      {item.kind.type === 'bitflags' && <BitflagsView def={item.kind} modulePath={modulePath} />}
-      {item.kind.type === 'type_alias' && <TypeAliasView def={item.kind} modulePath={modulePath} />}
+      {item.kind.type === 'bitflags' && <BitflagsView def={item.kind} />}
+      {item.kind.type === 'type_alias' && <TypeAliasView def={item.kind} />}
     </div>
   );
 }
