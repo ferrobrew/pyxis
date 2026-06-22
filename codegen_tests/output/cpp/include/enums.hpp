@@ -6,6 +6,8 @@
 #include "pyxis_runtime.hpp"
 
 namespace enums {
+    enum class TestEnum : ::std::uint32_t;
+
     enum class TestEnum : ::std::uint32_t {
         None = 0,
         Some = 1,

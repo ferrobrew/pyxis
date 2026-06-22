@@ -6,6 +6,8 @@
 #include "pyxis_runtime.hpp"
 
 namespace freestanding_functions {
+    enum class A : ::std::int32_t;
+
     enum class A : ::std::int32_t {
         None = 0,
     };

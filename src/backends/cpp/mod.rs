@@ -277,25 +277,38 @@ fn intra_module_forward_decls(
         let Some(resolved) = item.resolved() else {
             continue;
         };
-        let kind = match &resolved.inner {
-            ItemDefinitionInner::Type(_) => "struct",
-            ItemDefinitionInner::Enum(_) | ItemDefinitionInner::Bitflags(_) => continue,
-            ItemDefinitionInner::TypeAlias(_) => continue,
-        };
         let Some(leaf) = item.path.last() else {
             continue;
         };
-        if item.is_generic() {
-            let params = item
-                .type_parameters
-                .iter()
-                .map(|p| format!("class {p}"))
-                .collect::<Vec<_>>()
-                .join(", ");
-            out.push(format!("template <{params}> {kind} {leaf};"));
-        } else {
-            out.push(format!("{kind} {leaf};"));
-        }
+        let leaf = render::cpp_ident(leaf.as_str());
+        // Enums/bitflags are forward-declared with their underlying type
+        // (a scoped enum so declared is a complete type, usable by value),
+        // so a struct method signature can name an enum defined later in
+        // the file. Type aliases can't be forward-declared.
+        let line = match &resolved.inner {
+            ItemDefinitionInner::Type(_) if item.is_generic() => {
+                let params = item
+                    .type_parameters
+                    .iter()
+                    .map(|p| format!("class {p}"))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!("template <{params}> struct {leaf};")
+            }
+            ItemDefinitionInner::Type(_) => format!("struct {leaf};"),
+            ItemDefinitionInner::Enum(ed) => {
+                let underlying = render::render_type(&ed.type_, ctx)
+                    .unwrap_or_else(|_| "::std::int32_t".to_string());
+                format!("enum class {leaf} : {underlying};")
+            }
+            ItemDefinitionInner::Bitflags(bd) => {
+                let underlying = render::render_type(&bd.type_, ctx)
+                    .unwrap_or_else(|_| "::std::int32_t".to_string());
+                format!("enum class {leaf} : {underlying};")
+            }
+            ItemDefinitionInner::TypeAlias(_) => continue,
+        };
+        out.push(line);
     }
     out.sort();
     out.dedup();
@@ -799,7 +812,7 @@ fn forward_decl_line(
     semantic_state: &ResolvedSemanticState,
     ctx: render::RenderCtx,
 ) -> String {
-    let leaf = item_path.last().map(|s| s.as_str()).unwrap_or("");
+    let leaf = render::cpp_ident(item_path.last().map(|s| s.as_str()).unwrap_or(""));
     let registry = semantic_state.type_registry();
     if let Ok(item) = registry.get(item_path, &crate::span::ItemLocation::internal())
         && let Some(resolved) = item.resolved()

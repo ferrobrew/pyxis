@@ -6,6 +6,9 @@
 #include "pyxis_runtime.hpp"
 
 namespace bitflags {
+    enum class TestBitflags : ::std::uint32_t;
+    enum class TestBitflags2 : ::std::uint32_t;
+
     enum class TestBitflags : ::std::uint32_t {
         NONE = 0x0,
         FLAG_1 = 0x1,
