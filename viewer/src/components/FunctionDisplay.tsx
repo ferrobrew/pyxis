@@ -2,6 +2,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import type { JsonFunction } from '@pyxis/types';
 import { TypeRef } from './TypeRef';
 import { SourceName } from './SourceLink';
+import { formatCfg } from '../utils/cfg';
 
 interface FunctionDisplayProps {
   func: JsonFunction;
@@ -19,6 +20,35 @@ export function FunctionDisplay({ func, modulePath, id }: FunctionDisplayProps) 
   const nameClasses = isPrivate
     ? 'font-semibold text-gray-500 dark:text-slate-600'
     : 'font-semibold text-gray-900 dark:text-slate-200';
+
+  // Metadata shown under the signature, dot-separated. Each applicable piece
+  // is pushed in order; the separators are spliced in at render time.
+  const metaParts: React.ReactNode[] = [];
+  if (func.body.type === 'address') {
+    metaParts.push(
+      <>
+        Address: <span className="font-mono">0x{func.body.address.toString(16)}</span>
+      </>
+    );
+  } else if (func.body.type === 'field') {
+    metaParts.push(
+      <>
+        Field: <span className="font-mono">{func.body.field}</span>
+      </>
+    );
+  } else if (func.body.type === 'vftable') {
+    metaParts.push(
+      <>
+        VFTable: <span className="font-mono">{func.body.function_name}</span>
+      </>
+    );
+  }
+  if (func.calling_convention !== 'c') {
+    metaParts.push(<span className="font-mono">{func.calling_convention}</span>);
+  }
+  if (func.cfg) {
+    metaParts.push(<span className="font-mono">cfg({formatCfg(func.cfg)})</span>);
+  }
 
   // Construct the link URL with anchor
   // Use double hash: first # is for HashRouter route, second # is for anchor
@@ -74,12 +104,16 @@ export function FunctionDisplay({ func, modulePath, id }: FunctionDisplayProps) 
           {func.doc && (
             <div className="mt-2 text-sm text-gray-600 dark:text-slate-400">{func.doc}</div>
           )}
-          <div className="mt-2 text-xs text-gray-500 dark:text-slate-500">
-            {func.body.type === 'address' && `Address: 0x${func.body.address.toString(16)}`}
-            {func.body.type === 'field' && `Field: ${func.body.field}`}
-            {func.body.type === 'vftable' && `VFTable: ${func.body.function_name}`}
-            {func.calling_convention !== 'c' && ` • ${func.calling_convention}`}
-          </div>
+          {metaParts.length > 0 && (
+            <div className="mt-2 text-xs text-gray-500 dark:text-slate-500">
+              {metaParts.map((part, i) => (
+                <span key={i}>
+                  {i > 0 && ' • '}
+                  {part}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

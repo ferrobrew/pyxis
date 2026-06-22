@@ -10,6 +10,7 @@ import { FieldTable } from './FieldTable';
 import { NestedFieldView } from './NestedFieldView';
 import { Breadcrumbs } from './Breadcrumbs';
 import { SourceLink, SourceName } from './SourceLink';
+import { formatCfg } from '../utils/cfg';
 import type {
   JsonTypeDefinition,
   JsonEnumDefinition,
@@ -373,7 +374,55 @@ export function ItemView() {
         {singleton !== null && singleton !== undefined && (
           <Badge variant="red">singleton: 0x{singleton.toString(16)}</Badge>
         )}
+        {item.cfg && <Badge variant="pink">cfg({formatCfg(item.cfg)})</Badge>}
       </div>
+
+      {(item.rust_name || item.cpp_name) && (
+        <div className="mb-6">
+          <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-slate-200">
+            Backend bindings
+          </h2>
+          <div className="overflow-x-auto">
+            <table className="w-full border border-gray-200 dark:border-slate-800 rounded-md">
+              <thead className="bg-gray-100 dark:bg-slate-800">
+                <tr>
+                  <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-slate-200">
+                    Backend
+                  </th>
+                  <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-slate-200">
+                    Maps to
+                  </th>
+                  <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-slate-200">
+                    Header
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {item.rust_name && (
+                  <tr className="border-b border-gray-200 dark:border-slate-800">
+                    <td className="px-4 py-2 text-sm text-gray-900 dark:text-slate-200">Rust</td>
+                    <td className="px-4 py-2 font-mono text-sm text-gray-600 dark:text-slate-400">
+                      {item.rust_name}
+                    </td>
+                    <td className="px-4 py-2 text-sm text-gray-400 dark:text-slate-600">—</td>
+                  </tr>
+                )}
+                {item.cpp_name && (
+                  <tr className="border-b border-gray-200 dark:border-slate-800">
+                    <td className="px-4 py-2 text-sm text-gray-900 dark:text-slate-200">C++</td>
+                    <td className="px-4 py-2 font-mono text-sm text-gray-600 dark:text-slate-400">
+                      {item.cpp_name}
+                    </td>
+                    <td className="px-4 py-2 font-mono text-sm text-gray-600 dark:text-slate-400">
+                      {item.cpp_header ?? '—'}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {item.kind.type === 'type' && <TypeView def={item.kind} modulePath={modulePath} />}
       {item.kind.type === 'enum' && <EnumView def={item.kind} modulePath={modulePath} />}
