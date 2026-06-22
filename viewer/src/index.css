@@ -15,7 +15,7 @@
   --canvas: #f5eddb;
   --surface: #efe5cf;
   --surface-2: #e6d9bd;
-  --sidebar: #e9ddc4;
+  --sidebar: #fbf5e9;
   --inset: #ece0c6;
   --border: #ddcca8;
   --border-strong: #cab88f;
@@ -30,23 +30,25 @@
   --accent-hover: #8f2a22;
   --accent-soft: rgba(179, 55, 45, 0.1);
 
-  /* Semantic item kinds — muted, warm-tuned, but still distinguishable */
-  --kind-module: #3f6d8c;
-  --kind-module-hover: #2f5670;
-  --kind-type: #7a4f86;
-  --kind-type-hover: #633e6f;
-  --kind-enum: #5b7320;
-  --kind-enum-hover: #485c14;
-  --kind-enum-variant: #6b7d3a;
-  --kind-enum-variant-hover: #586a2c;
-  --kind-bitflags: #9a6412;
-  --kind-bitflags-hover: #7e4f0c;
-  --kind-alias: #2f6f66;
-  --kind-alias-hover: #235851;
-  --kind-function: #5a57a6;
-  --kind-function-hover: #46438a;
-  --kind-extern: #8a6a1f;
-  --kind-extern-hover: #6f5414;
+  /* Semantic item kinds — a warm, Gruvbox-derived set tuned for the parchment
+     ground; red is reserved for the accent. Deeper than the dark theme's
+     variants so they keep contrast against the light background. */
+  --kind-module: #076678;
+  --kind-module-hover: #054e5c;
+  --kind-type: #8f3f71;
+  --kind-type-hover: #76305c;
+  --kind-enum: #5f6e0e;
+  --kind-enum-hover: #4c5709;
+  --kind-enum-variant: #79740e;
+  --kind-enum-variant-hover: #635f0c;
+  --kind-bitflags: #af3a03;
+  --kind-bitflags-hover: #8f2f02;
+  --kind-alias: #3d7a55;
+  --kind-alias-hover: #2f6343;
+  --kind-function: #9a6209;
+  --kind-function-hover: #7e4f06;
+  --kind-extern: #6b5a44;
+  --kind-extern-hover: #534632;
 }
 
 .dark {
@@ -66,22 +68,22 @@
   --accent-hover: #e0584c;
   --accent-soft: rgba(207, 67, 56, 0.14);
 
-  --kind-module: #82a9c4;
-  --kind-module-hover: #9dbed6;
-  --kind-type: #c39ace;
-  --kind-type-hover: #d2b1da;
-  --kind-enum: #a6bd6e;
-  --kind-enum-hover: #b9cd86;
-  --kind-enum-variant: #b8c98a;
-  --kind-enum-variant-hover: #c8d79e;
-  --kind-bitflags: #d6a153;
-  --kind-bitflags-hover: #e3b46e;
-  --kind-alias: #6fb3a7;
-  --kind-alias-hover: #88c5ba;
-  --kind-function: #a6a4e0;
-  --kind-function-hover: #bcbae8;
-  --kind-extern: #d9b566;
-  --kind-extern-hover: #e6c984;
+  --kind-module: #83a598;
+  --kind-module-hover: #93b3a6;
+  --kind-type: #d3869b;
+  --kind-type-hover: #e09bac;
+  --kind-enum: #b8bb26;
+  --kind-enum-hover: #cace3e;
+  --kind-enum-variant: #cdc452;
+  --kind-enum-variant-hover: #ddd56a;
+  --kind-bitflags: #fe8019;
+  --kind-bitflags-hover: #ff9540;
+  --kind-alias: #79b8ae;
+  --kind-alias-hover: #92c8bf;
+  --kind-function: #fabd2f;
+  --kind-function-hover: #ffcf57;
+  --kind-extern: #bdae93;
+  --kind-extern-hover: #d0c2a8;
 }
 
 @theme inline {
