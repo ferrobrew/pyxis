@@ -388,7 +388,7 @@ fn render_method_signature(out: &mut String, func: &Function, ctx: RenderCtx) ->
     writeln!(
         out,
         "    {static_kw}{return_text} {fn_name}({sig_args_text}){const_qual};",
-        fn_name = func.name
+        fn_name = cpp_ident(&func.name)
     )?;
     Ok(())
 }
@@ -440,7 +440,7 @@ fn render_method_definition(
     writeln!(
         out,
         "{return_text} {parent_name}::{fn_name}({sig_args_text}){const_qual} {{",
-        fn_name = func.name
+        fn_name = cpp_ident(&func.name)
     )?;
     for line in &body_lines {
         writeln!(out, "    {line}")?;
@@ -531,6 +531,7 @@ fn method_body_lines(func: &Function, ctx: RenderCtx) -> Result<Vec<String>> {
                 call_payload.push_str(", ");
             }
             call_payload.push_str(&call_args.join(", "));
+            let function_name = cpp_ident(function_name);
             vec![format!(
                 "{ret_kw}_vftable_ptr()->{function_name}({call_payload});"
             )]
@@ -540,6 +541,8 @@ fn method_body_lines(func: &Function, ctx: RenderCtx) -> Result<Vec<String>> {
             function_name,
         } => {
             let call_payload = call_args.join(", ");
+            let field = cpp_ident(field);
+            let function_name = cpp_ident(function_name);
             vec![format!(
                 "{ret_kw}this->{field}.{function_name}({call_payload});"
             )]
@@ -768,16 +771,17 @@ fn render_type_alias(
 pub fn render_free_function_decl(func: &Function, ctx: RenderCtx) -> Result<Option<String>> {
     let mut out = String::new();
     render_doc(&mut out, &func.doc, 0)?;
+    let name = cpp_ident(&func.name);
     match &func.body {
         FunctionBody::Address { .. } => {
             let alias = function_pointer_alias(func, ctx)?;
             writeln!(out, "{alias}")?;
-            writeln!(out, "extern const {0}_t {0};", func.name)?;
+            writeln!(out, "extern const {name}_t {name};")?;
             Ok(Some(out))
         }
         FunctionBody::External => {
             let (return_text, sig_args_text) = free_function_sig_parts(func, ctx)?;
-            writeln!(out, "{return_text} {0}({sig_args_text});", func.name)?;
+            writeln!(out, "{return_text} {name}({sig_args_text});")?;
             Ok(Some(out))
         }
         _ => Ok(None),
@@ -792,12 +796,12 @@ pub fn render_free_function_definition(func: &Function, ctx: RenderCtx) -> Resul
         return Ok(None);
     };
     let alias = function_pointer_alias(func, ctx)?;
+    let name = cpp_ident(&func.name);
     let mut out = String::new();
     writeln!(out, "{alias}")?;
     writeln!(
         out,
-        "const {0}_t {0} = reinterpret_cast<{0}_t>(0x{1:X});",
-        func.name, address
+        "const {name}_t {name} = reinterpret_cast<{name}_t>(0x{address:X});",
     )?;
     Ok(Some(out))
 }
@@ -839,9 +843,9 @@ fn function_pointer_alias(func: &Function, ctx: RenderCtx) -> Result<String> {
         arg_types.push(ty);
     }
     let args_text = arg_types.join(", ");
+    let name = cpp_ident(&func.name);
     Ok(format!(
-        "using {0}_t = {return_text} ({cc}*)({args_text});",
-        func.name
+        "using {name}_t = {return_text} ({cc}*)({args_text});"
     ))
 }
 
