@@ -41,7 +41,7 @@ export function CodeBlock({ code, language }: CodeBlockProps) {
   }, [code, language]);
 
   return (
-    <pre className="text-xs md:text-sm font-mono bg-inset overflow-x-auto">
+    <pre className="text-xs md:text-sm font-mono bg-inset overflow-x-auto p-3">
       <code ref={codeRef} className={language ? `language-${language.toLowerCase()}` : ''}>
         {code}
       </code>
