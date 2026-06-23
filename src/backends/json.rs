@@ -2,6 +2,7 @@ use std::{collections::BTreeMap, path::Path};
 
 use crate::{
     backends::{BackendError, Result},
+    grammar::ItemPath,
     semantic::types::{Backend, Type},
     source_store::FileStore,
     span::FileId,
@@ -33,7 +34,9 @@ use crate::semantic::{
 /// - v4: added `source` locations to modules and extern values; added `doc` to
 ///   extern values, enum variants, and bitflag flags; surfaced extern-type
 ///   doc comments.
-pub const CURRENT_SCHEMA_VERSION: u32 = 4;
+/// - v5: added resolved `doc_links` (rustdoc-style intra-doc links) alongside
+///   each `doc`.
+pub const CURRENT_SCHEMA_VERSION: u32 = 5;
 
 /// Top-level JSON documentation structure
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
@@ -64,6 +67,8 @@ fn default_schema_version_v1() -> u32 {
 pub struct JsonModule {
     /// Module documentation
     pub doc: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub doc_links: Vec<JsonDocLink>,
     /// Items defined directly in this module
     pub items: Vec<String>, // Paths to items
     /// Child modules
@@ -107,6 +112,94 @@ pub struct JsonSourceLocation {
     pub file_index: usize,
     /// Line number (1-indexed)
     pub line: usize,
+}
+
+/// A resolved rustdoc-style intra-doc link found in a doc comment. Consumers
+/// rewrite the matching `[`text`]` / `[label](text)` in the markdown into a
+/// link to `(target_kind, path, anchor)`.
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+pub struct JsonDocLink {
+    /// The link path as written in the doc (e.g. `Type::method`, `Action`).
+    pub text: String,
+    /// Whether `path` names an item or a module.
+    pub target_kind: JsonDocLinkTargetKind,
+    /// Absolute path to the item or module the link resolves to.
+    pub path: String,
+    /// Anchor within the target page (e.g. `field-m_Foo`, `variant-Bar`), if the
+    /// link points at a member rather than the page itself.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub anchor: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "snake_case")]
+pub enum JsonDocLinkTargetKind {
+    Item,
+    Module,
+}
+
+impl JsonDocLink {
+    fn from_target(text: String, target: crate::semantic::doc_links::DocLinkTarget) -> JsonDocLink {
+        use crate::semantic::doc_links::{DocLinkMemberKind as K, DocLinkTarget as T};
+        match target {
+            T::Item(path) => JsonDocLink {
+                text,
+                target_kind: JsonDocLinkTargetKind::Item,
+                path: path.to_string(),
+                anchor: None,
+            },
+            T::Member { item, name, kind } => {
+                let anchor = match kind {
+                    K::Method => format!("func-{name}"),
+                    K::VftableMethod => format!("vfunc-{name}"),
+                    K::Field => format!("field-{name}"),
+                    K::Variant => format!("variant-{name}"),
+                    K::Flag => format!("flag-{name}"),
+                };
+                JsonDocLink {
+                    text,
+                    target_kind: JsonDocLinkTargetKind::Item,
+                    path: item.to_string(),
+                    anchor: Some(anchor),
+                }
+            }
+            T::Function { module, name } => JsonDocLink {
+                text,
+                target_kind: JsonDocLinkTargetKind::Module,
+                path: module.to_string(),
+                anchor: Some(format!("func-{name}")),
+            },
+            T::ExternValue { module, name } => JsonDocLink {
+                text,
+                target_kind: JsonDocLinkTargetKind::Module,
+                path: module.to_string(),
+                anchor: Some(format!("extval-{name}")),
+            },
+        }
+    }
+}
+
+/// Context for resolving doc-comment links during conversion: the shared
+/// resolver plus the scope of the module currently being converted.
+struct DocCx<'a> {
+    resolver: &'a crate::semantic::doc_links::DocLinkResolver,
+    scope: Vec<ItemPath>,
+}
+
+impl DocCx<'_> {
+    /// Convert a doc comment into its markdown text and resolved links.
+    fn convert(&self, doc: &[String]) -> (Option<String>, Vec<JsonDocLink>) {
+        let mut links: Vec<JsonDocLink> = Vec::new();
+        for text in crate::semantic::doc_links::extract_links(doc) {
+            if links.iter().any(|l| l.text == text) {
+                continue;
+            }
+            if let Some(target) = self.resolver.resolve(&self.scope, &text) {
+                links.push(JsonDocLink::from_target(text, target));
+            }
+        }
+        (doc_to_option(doc), links)
+    }
 }
 
 /// An item (type, enum, or bitflags) in the documentation
@@ -158,6 +251,8 @@ pub enum JsonItemKind {
 pub struct JsonTypeAliasDefinition {
     /// Documentation
     pub doc: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub doc_links: Vec<JsonDocLink>,
     /// The resolved target type that this alias refers to
     pub target: JsonType,
 }
@@ -166,6 +261,8 @@ pub struct JsonTypeAliasDefinition {
 pub struct JsonTypeDefinition {
     /// Documentation
     pub doc: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub doc_links: Vec<JsonDocLink>,
     /// Fields/regions
     pub fields: Vec<JsonRegion>,
     /// Associated functions
@@ -192,6 +289,8 @@ pub struct JsonRegion {
     pub name: Option<String>,
     /// Documentation
     pub doc: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub doc_links: Vec<JsonDocLink>,
     /// Type reference
     pub type_ref: JsonType,
     /// Offset in bytes from start of structure
@@ -216,6 +315,8 @@ pub struct JsonTypeVftable {
 pub struct JsonEnumDefinition {
     /// Documentation
     pub doc: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub doc_links: Vec<JsonDocLink>,
     /// Underlying type
     pub underlying_type: JsonType,
     /// Enum variants
@@ -241,6 +342,8 @@ pub struct JsonEnumVariant {
     /// Documentation
     #[serde(default)]
     pub doc: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub doc_links: Vec<JsonDocLink>,
     /// Source location (file and line)
     pub source: Option<JsonSourceLocation>,
 }
@@ -249,6 +352,8 @@ pub struct JsonEnumVariant {
 pub struct JsonBitflagsDefinition {
     /// Documentation
     pub doc: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub doc_links: Vec<JsonDocLink>,
     /// Underlying type
     pub underlying_type: JsonType,
     /// Bitflag fields
@@ -272,6 +377,8 @@ pub struct JsonBitflag {
     /// Documentation
     #[serde(default)]
     pub doc: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub doc_links: Vec<JsonDocLink>,
     /// Source location (file and line)
     pub source: Option<JsonSourceLocation>,
 }
@@ -284,6 +391,8 @@ pub struct JsonFunction {
     pub name: String,
     /// Documentation
     pub doc: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub doc_links: Vec<JsonDocLink>,
     /// Function body (how it's implemented)
     pub body: JsonFunctionBody,
     /// Arguments
@@ -362,6 +471,8 @@ pub struct JsonExternValue {
     /// Documentation
     #[serde(default)]
     pub doc: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub doc_links: Vec<JsonDocLink>,
     /// Source location (file and line)
     #[serde(default)]
     pub source: Option<JsonSourceLocation>,
@@ -522,13 +633,17 @@ pub fn build(
     let mut items = BTreeMap::new();
     for module in semantic_state.modules().values() {
         let bindings: BTreeMap<&str, ExternBindings> = module.extern_bindings().collect();
+        let cx = DocCx {
+            resolver: semantic_state.doc_link_resolver(),
+            scope: module.scope(),
+        };
         for definition in module.definitions(type_registry) {
             let binding = definition
                 .path
                 .last()
                 .and_then(|leaf| bindings.get(leaf.as_str()).copied())
                 .unwrap_or_default();
-            if let Some(json_item) = convert_item(definition, type_registry, binding) {
+            if let Some(json_item) = convert_item(definition, type_registry, binding, &cx) {
                 items.insert(json_item.path.clone(), json_item);
             }
         }
@@ -633,11 +748,13 @@ fn convert_function_body(body: &FunctionBody) -> JsonFunctionBody {
     }
 }
 
-fn convert_function(func: &Function) -> JsonFunction {
+fn convert_function(func: &Function, cx: &DocCx) -> JsonFunction {
+    let (doc, doc_links) = cx.convert(&func.doc);
     JsonFunction {
         visibility: func.visibility.into(),
         name: func.name.clone(),
-        doc: doc_to_option(&func.doc),
+        doc,
+        doc_links,
         body: convert_function_body(&func.body),
         arguments: func.arguments.iter().map(convert_argument).collect(),
         return_type: func.return_type.as_ref().map(convert_type),
@@ -670,14 +787,21 @@ fn convert_cfg(pred: &crate::parser::cfg::CfgPredicate) -> JsonCfg {
     }
 }
 
-fn convert_region(region: &Region, type_registry: &TypeRegistry, offset: usize) -> JsonRegion {
+fn convert_region(
+    region: &Region,
+    type_registry: &TypeRegistry,
+    offset: usize,
+    cx: &DocCx,
+) -> JsonRegion {
     let size = region.type_ref.size(type_registry).unwrap_or(0);
     let alignment = region.type_ref.alignment(type_registry).unwrap_or(1);
+    let (doc, doc_links) = cx.convert(&region.doc);
 
     JsonRegion {
         visibility: region.visibility.into(),
         name: region.name.clone(),
-        doc: doc_to_option(&region.doc),
+        doc,
+        doc_links,
         type_ref: convert_type(&region.type_ref),
         offset,
         size,
@@ -687,15 +811,20 @@ fn convert_region(region: &Region, type_registry: &TypeRegistry, offset: usize) 
     }
 }
 
-fn convert_vftable(vftable: &TypeVftable) -> JsonTypeVftable {
+fn convert_vftable(vftable: &TypeVftable, cx: &DocCx) -> JsonTypeVftable {
     JsonTypeVftable {
-        functions: vftable.functions.iter().map(convert_function).collect(),
+        functions: vftable
+            .functions
+            .iter()
+            .map(|f| convert_function(f, cx))
+            .collect(),
     }
 }
 
 fn convert_type_definition(
     td: &TypeDefinition,
     type_registry: &TypeRegistry,
+    cx: &DocCx,
 ) -> JsonTypeDefinition {
     // Calculate field offsets
     let mut current_offset = 0;
@@ -703,21 +832,23 @@ fn convert_type_definition(
         .regions
         .iter()
         .map(|region| {
-            let json_region = convert_region(region, type_registry, current_offset);
+            let json_region = convert_region(region, type_registry, current_offset, cx);
             current_offset += json_region.size;
             json_region
         })
         .collect();
 
+    let (doc, doc_links) = cx.convert(&td.doc);
     JsonTypeDefinition {
-        doc: doc_to_option(&td.doc),
+        doc,
+        doc_links,
         fields,
         associated_functions: td
             .associated_functions
             .iter()
-            .map(convert_function)
+            .map(|f| convert_function(f, cx))
             .collect(),
-        vftable: td.vftable.as_ref().map(convert_vftable),
+        vftable: td.vftable.as_ref().map(|v| convert_vftable(v, cx)),
         singleton: td.singleton,
         copyable: td.copyable,
         cloneable: td.cloneable,
@@ -726,24 +857,32 @@ fn convert_type_definition(
     }
 }
 
-fn convert_enum_variant(variant: &EnumVariant) -> JsonEnumVariant {
+fn convert_enum_variant(variant: &EnumVariant, cx: &DocCx) -> JsonEnumVariant {
+    let (doc, doc_links) = cx.convert(&variant.doc);
     JsonEnumVariant {
         name: variant.name.clone(),
         value: variant.value,
-        doc: doc_to_option(&variant.doc),
+        doc,
+        doc_links,
         source: convert_location(&variant.location),
     }
 }
 
-fn convert_enum_definition(ed: &EnumDefinition) -> JsonEnumDefinition {
+fn convert_enum_definition(ed: &EnumDefinition, cx: &DocCx) -> JsonEnumDefinition {
+    let (doc, doc_links) = cx.convert(&ed.doc);
     JsonEnumDefinition {
-        doc: doc_to_option(&ed.doc),
+        doc,
+        doc_links,
         underlying_type: convert_type(&ed.type_),
-        variants: ed.variants.iter().map(convert_enum_variant).collect(),
+        variants: ed
+            .variants
+            .iter()
+            .map(|v| convert_enum_variant(v, cx))
+            .collect(),
         associated_functions: ed
             .associated_functions
             .iter()
-            .map(convert_function)
+            .map(|f| convert_function(f, cx))
             .collect(),
         singleton: ed.singleton,
         copyable: ed.copyable,
@@ -752,20 +891,28 @@ fn convert_enum_definition(ed: &EnumDefinition) -> JsonEnumDefinition {
     }
 }
 
-fn convert_bitflag_field(flag: &BitflagField) -> JsonBitflag {
+fn convert_bitflag_field(flag: &BitflagField, cx: &DocCx) -> JsonBitflag {
+    let (doc, doc_links) = cx.convert(&flag.doc);
     JsonBitflag {
         name: flag.name.clone(),
         value: flag.value,
-        doc: doc_to_option(&flag.doc),
+        doc,
+        doc_links,
         source: convert_location(&flag.location),
     }
 }
 
-fn convert_bitflags_definition(bd: &BitflagsDefinition) -> JsonBitflagsDefinition {
+fn convert_bitflags_definition(bd: &BitflagsDefinition, cx: &DocCx) -> JsonBitflagsDefinition {
+    let (doc, doc_links) = cx.convert(&bd.doc);
     JsonBitflagsDefinition {
-        doc: doc_to_option(&bd.doc),
+        doc,
+        doc_links,
         underlying_type: convert_type(&bd.type_),
-        flags: bd.flags.iter().map(convert_bitflag_field).collect(),
+        flags: bd
+            .flags
+            .iter()
+            .map(|f| convert_bitflag_field(f, cx))
+            .collect(),
         singleton: bd.singleton,
         copyable: bd.copyable,
         cloneable: bd.cloneable,
@@ -773,9 +920,11 @@ fn convert_bitflags_definition(bd: &BitflagsDefinition) -> JsonBitflagsDefinitio
     }
 }
 
-fn convert_type_alias_definition(ta: &TypeAliasDefinition) -> JsonTypeAliasDefinition {
+fn convert_type_alias_definition(ta: &TypeAliasDefinition, cx: &DocCx) -> JsonTypeAliasDefinition {
+    let (doc, doc_links) = cx.convert(&ta.doc);
     JsonTypeAliasDefinition {
-        doc: doc_to_option(&ta.doc),
+        doc,
+        doc_links,
         target: convert_type(&ta.target),
     }
 }
@@ -784,19 +933,20 @@ fn convert_item(
     item: &ItemDefinition,
     type_registry: &TypeRegistry,
     binding: ExternBindings,
+    cx: &DocCx,
 ) -> Option<JsonItem> {
     let resolved = item.resolved()?;
 
     let kind = match &resolved.inner {
         ItemDefinitionInner::Type(td) => {
-            JsonItemKind::Type(convert_type_definition(td, type_registry))
+            JsonItemKind::Type(convert_type_definition(td, type_registry, cx))
         }
-        ItemDefinitionInner::Enum(ed) => JsonItemKind::Enum(convert_enum_definition(ed)),
+        ItemDefinitionInner::Enum(ed) => JsonItemKind::Enum(convert_enum_definition(ed, cx)),
         ItemDefinitionInner::Bitflags(bd) => {
-            JsonItemKind::Bitflags(convert_bitflags_definition(bd))
+            JsonItemKind::Bitflags(convert_bitflags_definition(bd, cx))
         }
         ItemDefinitionInner::TypeAlias(ta) => {
-            JsonItemKind::TypeAlias(convert_type_alias_definition(ta))
+            JsonItemKind::TypeAlias(convert_type_alias_definition(ta, cx))
         }
     };
 
@@ -819,13 +969,15 @@ fn convert_item(
     })
 }
 
-fn convert_extern_value(ev: &ExternValue) -> JsonExternValue {
+fn convert_extern_value(ev: &ExternValue, cx: &DocCx) -> JsonExternValue {
+    let (doc, doc_links) = cx.convert(&ev.doc);
     JsonExternValue {
         visibility: ev.visibility.into(),
         name: ev.name.clone(),
         type_ref: convert_type(&ev.type_),
         address: ev.address,
-        doc: doc_to_option(&ev.doc),
+        doc,
+        doc_links,
         source: convert_location(&ev.location),
     }
 }
@@ -863,6 +1015,11 @@ fn build_module_hierarchy(semantic_state: &ResolvedSemanticState) -> BTreeMap<St
             .map(|s| s.to_string())
             .collect();
 
+        let cx = DocCx {
+            resolver: semantic_state.doc_link_resolver(),
+            scope: module.scope(),
+        };
+
         // Items, externs, and functions are all emitted regardless of
         // any `#[cfg(...)]` predicate: consumers read the predicate off
         // each item/function and decide for themselves how to render.
@@ -873,10 +1030,13 @@ fn build_module_hierarchy(semantic_state: &ResolvedSemanticState) -> BTreeMap<St
         let extern_values: Vec<JsonExternValue> = module
             .extern_values
             .iter()
-            .map(convert_extern_value)
+            .map(|e| convert_extern_value(e, &cx))
             .collect();
-        let functions: Vec<JsonFunction> =
-            module.functions().iter().map(convert_function).collect();
+        let functions: Vec<JsonFunction> = module
+            .functions()
+            .iter()
+            .map(|f| convert_function(f, &cx))
+            .collect();
 
         // Convert backends. Map the typed `crate::Backend` key back to its
         // canonical lower-case string for JSON output.
@@ -891,8 +1051,10 @@ fn build_module_hierarchy(semantic_state: &ResolvedSemanticState) -> BTreeMap<St
             })
             .collect();
 
+        let (doc, doc_links) = cx.convert(module.doc());
         let json_module = JsonModule {
-            doc: doc_to_option(module.doc()),
+            doc,
+            doc_links,
             items,
             submodules: BTreeMap::new(),
             extern_values,
@@ -915,6 +1077,7 @@ fn build_module_hierarchy(semantic_state: &ResolvedSemanticState) -> BTreeMap<St
                 .entry(root_name.clone())
                 .or_insert_with(|| JsonModule {
                     doc: None,
+                    doc_links: vec![],
                     items: vec![],
                     submodules: BTreeMap::new(),
                     extern_values: vec![],
@@ -937,6 +1100,7 @@ fn build_module_hierarchy(semantic_state: &ResolvedSemanticState) -> BTreeMap<St
                         .entry(segment.clone())
                         .or_insert_with(|| JsonModule {
                             doc: None,
+                            doc_links: vec![],
                             items: vec![],
                             submodules: BTreeMap::new(),
                             extern_values: vec![],

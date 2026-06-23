@@ -42,7 +42,7 @@ value: number;
 /**
  * Documentation
  */
-doc?: string | null; 
+doc?: string | null; doc_links?: JsonDocLink[]; 
 /**
  * Source location (file and line)
  */
@@ -52,7 +52,7 @@ export type JsonBitflagsDefinition = {
 /**
  * Documentation
  */
-doc: string | null; 
+doc: string | null; doc_links?: JsonDocLink[]; 
 /**
  * Underlying type
  */
@@ -109,6 +109,32 @@ export type JsonCfg =
 { type: "not"; predicate: JsonCfg };
 
 /**
+ * A resolved rustdoc-style intra-doc link found in a doc comment. Consumers
+ * rewrite the matching `[`text`]` / `[label](text)` in the markdown into a
+ * link to `(target_kind, path, anchor)`.
+ */
+export type JsonDocLink = { 
+/**
+ * The link path as written in the doc (e.g. `Type::method`, `Action`).
+ */
+text: string; 
+/**
+ * Whether `path` names an item or a module.
+ */
+target_kind: JsonDocLinkTargetKind; 
+/**
+ * Absolute path to the item or module the link resolves to.
+ */
+path: string; 
+/**
+ * Anchor within the target page (e.g. `field-m_Foo`, `variant-Bar`), if the
+ * link points at a member rather than the page itself.
+ */
+anchor?: string | null };
+
+export type JsonDocLinkTargetKind = "item" | "module";
+
+/**
  * Top-level JSON documentation structure
  */
 export type JsonDocumentation = { 
@@ -143,7 +169,7 @@ export type JsonEnumDefinition = {
 /**
  * Documentation
  */
-doc: string | null; 
+doc: string | null; doc_links?: JsonDocLink[]; 
 /**
  * Underlying type
  */
@@ -185,7 +211,7 @@ value: number;
 /**
  * Documentation
  */
-doc?: string | null; 
+doc?: string | null; doc_links?: JsonDocLink[]; 
 /**
  * Source location (file and line)
  */
@@ -211,7 +237,7 @@ address: number;
 /**
  * Documentation
  */
-doc?: string | null; 
+doc?: string | null; doc_links?: JsonDocLink[]; 
 /**
  * Source location (file and line)
  */
@@ -229,7 +255,7 @@ name: string;
 /**
  * Documentation
  */
-doc: string | null; 
+doc: string | null; doc_links?: JsonDocLink[]; 
 /**
  * Function body (how it's implemented)
  */
@@ -330,7 +356,7 @@ export type JsonModule = {
 /**
  * Module documentation
  */
-doc: string | null; 
+doc: string | null; doc_links?: JsonDocLink[]; 
 /**
  * Items defined directly in this module
  */
@@ -368,7 +394,7 @@ name: string | null;
 /**
  * Documentation
  */
-doc: string | null; 
+doc: string | null; doc_links?: JsonDocLink[]; 
 /**
  * Type reference
  */
@@ -421,7 +447,7 @@ export type JsonTypeAliasDefinition = {
 /**
  * Documentation
  */
-doc: string | null; 
+doc: string | null; doc_links?: JsonDocLink[]; 
 /**
  * The resolved target type that this alias refers to
  */
@@ -431,7 +457,7 @@ export type JsonTypeDefinition = {
 /**
  * Documentation
  */
-doc: string | null; 
+doc: string | null; doc_links?: JsonDocLink[]; 
 /**
  * Fields/regions
  */
