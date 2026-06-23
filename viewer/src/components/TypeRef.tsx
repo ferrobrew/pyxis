@@ -98,7 +98,7 @@ export function TypeRef({ type, currentModule = '' }: TypeRefProps) {
       case 'function': {
         const cc = getCallingConvention(t.calling_convention);
         return (
-          <span className="font-mono text-sm">
+          <span className="font-mono">
             {cc && <span className="text-kind-extern">{cc}</span>}
             <span className="text-fg-muted">fn(</span>
             {t.arguments.map((arg, i) => (
@@ -125,5 +125,5 @@ export function TypeRef({ type, currentModule = '' }: TypeRefProps) {
     }
   };
 
-  return <span className="font-mono text-sm">{renderType(type)}</span>;
+  return <span className="font-mono">{renderType(type)}</span>;
 }
