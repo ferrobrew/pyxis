@@ -22,10 +22,12 @@ import type {
   JsonItem,
   JsonFunction,
   JsonSourceLocation,
+  JsonDocLink,
 } from '@pyxis/types';
 
 interface ModuleData {
   doc?: string | null;
+  doc_links?: JsonDocLink[];
   items?: string[];
   submodules?: { [key: string]: unknown };
   extern_values?: JsonExternValue[];
