@@ -191,6 +191,11 @@ function EnumView({ def, modulePath }: { def: JsonEnumDefinition; modulePath: st
                       default
                     </SmallBadge>
                   )}
+                  {variant.doc && (
+                    <div className="mt-1 font-sans text-xs text-fg-muted">
+                      <Markdown>{variant.doc}</Markdown>
+                    </div>
+                  )}
                 </td>
                 <td className={`${TD} font-mono text-fg-muted`}>{variant.value}</td>
               </tr>
@@ -246,6 +251,11 @@ function BitflagsView({ def }: { def: JsonBitflagsDefinition }) {
                     <SmallBadge variant="purple" className="ml-2">
                       default
                     </SmallBadge>
+                  )}
+                  {flag.doc && (
+                    <div className="mt-1 font-sans text-xs text-fg-muted">
+                      <Markdown>{flag.doc}</Markdown>
+                    </div>
                   )}
                 </td>
                 <td className={`${TD} font-mono text-fg-muted`}>{flag.value}</td>
@@ -350,47 +360,53 @@ export function ItemView() {
   return (
     <div className="mx-auto flex max-w-6xl gap-8 px-4 py-6 md:px-8 lg:px-10">
       <article className="min-w-0 flex-1">
-        <div className="mb-4 flex items-center gap-3">
+        <div className="mb-4">
           <Breadcrumbs path={decodedPath} isItem={true} itemType={itemType} />
-          {item.source && <SourceLink source={item.source} />}
         </div>
 
-        {/* Source-faithful declaration header: attributes, signature, then the
-            doc comment, kept together with a single trailing margin. */}
+        {/* Source-faithful declaration header: attributes, signature, the source
+            link, then the doc comment, kept together with a single margin. */}
         <div className="group mb-4">
           <Attributes groups={itemAttributeGroups(item)} />
-          <div className="mb-2 flex items-start gap-2">
-            <h1 className="font-mono text-2xl font-semibold tracking-tight">
-              {isPublic && <span className="text-fg-muted">pub </span>}
-              <span className={getItemTypeColor(itemType)}>{keyword}</span>{' '}
-              <span className="text-fg">{name}</span>
-              {typeParams.length > 0 && (
-                <span className="text-kind-enum">&lt;{typeParams.join(', ')}&gt;</span>
+          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+            <div className="flex items-start gap-2">
+              <h1 className="font-mono text-2xl font-semibold tracking-tight">
+                {isPublic && <span className="text-fg-muted">pub </span>}
+                <span className={getItemTypeColor(itemType)}>{keyword}</span>{' '}
+                <span className="text-fg">{name}</span>
+                {typeParams.length > 0 && (
+                  <span className="text-kind-enum">&lt;{typeParams.join(', ')}&gt;</span>
+                )}
+                {underlying && (
+                  <>
+                    <span className="text-fg-muted">: </span>
+                    <TypeRef type={underlying} currentModule={modulePath} />
+                  </>
+                )}
+                {aliasTarget && (
+                  <>
+                    <span className="text-fg-muted"> = </span>
+                    <TypeRef type={aliasTarget} currentModule={modulePath} />
+                    <span className="text-fg-muted">;</span>
+                  </>
+                )}
+              </h1>
+              {singleton != null && (
+                <CopyButton
+                  value={`0x${singleton.toString(16)}`}
+                  title="Copy singleton address"
+                  label="copy addr"
+                  className="mt-1 opacity-0 group-hover:opacity-100"
+                />
               )}
-              {underlying && (
-                <>
-                  <span className="text-fg-muted">: </span>
-                  <TypeRef type={underlying} currentModule={modulePath} />
-                </>
-              )}
-              {aliasTarget && (
-                <>
-                  <span className="text-fg-muted"> = </span>
-                  <TypeRef type={aliasTarget} currentModule={modulePath} />
-                  <span className="text-fg-muted">;</span>
-                </>
-              )}
-            </h1>
-            {singleton != null && (
-              <CopyButton
-                value={`0x${singleton.toString(16)}`}
-                title="Copy singleton address"
-                label="copy addr"
-                className="mt-1 opacity-0 group-hover:opacity-100"
-              />
-            )}
+            </div>
+            {item.source && <SourceLink source={item.source} />}
           </div>
-          {item.kind.doc && <DocBlock doc={item.kind.doc} />}
+          {item.kind.doc && (
+            <div className="mt-2">
+              <DocBlock doc={item.kind.doc} />
+            </div>
+          )}
         </div>
 
         {item.kind.type === 'type' && <TypeView def={item.kind} modulePath={modulePath} />}

@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
-import { buildModuleUrl, buildItemUrl } from '../utils/navigation';
+import { buildModuleUrl, buildRootUrl } from '../utils/navigation';
 import { useDocumentation } from '../contexts/DocumentationContext';
-import { getItemTypeColor, getItemTypeHoverColor, type ItemType } from '../utils/colors';
+import type { ItemType } from '../utils/colors';
 
 interface BreadcrumbsProps {
   path: string;
@@ -9,82 +9,42 @@ interface BreadcrumbsProps {
   itemType?: ItemType;
 }
 
-export function Breadcrumbs({ path, isItem = false }: BreadcrumbsProps) {
-  const { selectedSource, documentation } = useDocumentation();
+function Separator() {
+  return (
+    <svg className="mx-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+    </svg>
+  );
+}
 
-  if (!path) {
-    // Root module
+export function Breadcrumbs({ path }: BreadcrumbsProps) {
+  const { selectedSource } = useDocumentation();
+
+  // The current item/module is the page heading, so the trail shows only its
+  // module ancestors — the last path segment is always dropped.
+  const segments = path ? path.split('::') : [];
+  const crumbs = segments.slice(0, -1);
+
+  if (crumbs.length === 0) {
     return (
       <nav className="flex items-center text-sm text-fg-muted">
-        <span className="font-semibold text-kind-module">Root</span>
+        <Link to={buildRootUrl(selectedSource)} className="hover:text-accent">
+          Root
+        </Link>
       </nav>
     );
   }
 
-  const pathSegments = path.split('::');
-
-  // Determine item type if not provided
-  let finalItemType: ItemType = 'module';
-  if (isItem && documentation) {
-    const item = documentation.items[path];
-    if (item) {
-      if (item.kind.type === 'type') finalItemType = 'type';
-      else if (item.kind.type === 'enum') finalItemType = 'enum';
-      else if (item.kind.type === 'bitflags') finalItemType = 'bitflags';
-      else if (item.kind.type === 'type_alias') finalItemType = 'type_alias';
-    }
-  } else {
-    finalItemType = 'module';
-  }
-
-  const typeColor = getItemTypeColor(finalItemType);
-  const hoverColor = getItemTypeHoverColor(finalItemType);
-
   return (
     <nav className="flex items-center text-sm text-fg-muted">
-      {/* All breadcrumbs including current */}
-      {pathSegments.map((segment, idx) => {
-        const partialPath = pathSegments.slice(0, idx + 1).join('::');
-        const isLast = idx === pathSegments.length - 1;
-
+      {crumbs.map((segment, idx) => {
+        const partialPath = crumbs.slice(0, idx + 1).join('::');
         return (
           <span key={partialPath} className="flex items-center">
-            {idx > 0 && (
-              <svg className="w-4 h-4 mx-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 5l7 7-7 7"
-                />
-              </svg>
-            )}
-            {isLast ? (
-              isItem ? (
-                <>
-                  <Link
-                    to={buildItemUrl(path, selectedSource)}
-                    className={`font-semibold ${typeColor} ${hoverColor}`}
-                  >
-                    {segment}
-                  </Link>
-                  {documentation?.items[path]?.type_parameters &&
-                    documentation.items[path].type_parameters!.length > 0 && (
-                      <span className="text-kind-enum font-mono">
-                        &lt;
-                        {documentation.items[path].type_parameters!.join(', ')}
-                        &gt;
-                      </span>
-                    )}
-                </>
-              ) : (
-                <span className={`font-semibold ${typeColor}`}>{segment}</span>
-              )
-            ) : (
-              <Link to={buildModuleUrl(partialPath, selectedSource)} className="hover:text-accent">
-                {segment}
-              </Link>
-            )}
+            {idx > 0 && <Separator />}
+            <Link to={buildModuleUrl(partialPath, selectedSource)} className="hover:text-accent">
+              {segment}
+            </Link>
           </span>
         );
       })}

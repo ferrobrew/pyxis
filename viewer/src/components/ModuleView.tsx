@@ -13,6 +13,7 @@ import { CodeBlock } from './CodeBlock';
 import { Breadcrumbs } from './Breadcrumbs';
 import { Markdown } from './Markdown';
 import { AnchorLink, CopyButton } from './Actions';
+import { SourceLink, SourceName } from './SourceLink';
 import { OnThisPage, type TocEntry } from './OnThisPage';
 import type {
   JsonExternValue,
@@ -20,6 +21,7 @@ import type {
   JsonBackendSplice,
   JsonItem,
   JsonFunction,
+  JsonSourceLocation,
 } from '@pyxis/types';
 
 interface ModuleData {
@@ -29,6 +31,7 @@ interface ModuleData {
   extern_values?: JsonExternValue[];
   functions?: JsonFunction[];
   backends?: { [key: string]: unknown };
+  source?: JsonSourceLocation | null;
 }
 
 function SectionHeader({ anchor, children }: { anchor?: string; children: React.ReactNode }) {
@@ -75,12 +78,19 @@ function ExternValueItem({ extern: ext }: { extern: JsonExternValue }) {
         <div>
           {!isPrivate && <span className="text-fg-muted">pub </span>}
           <span className="text-kind-extern">extern </span>
-          <span className={nameClasses}>{ext.name}</span>
+          <span className={nameClasses}>
+            {ext.source ? <SourceName source={ext.source}>{ext.name}</SourceName> : ext.name}
+          </span>
           <span className="text-fg-muted">: </span>
           <TypeRef type={ext.type_ref} />
           <span className="text-fg-muted">;</span>
         </div>
       </div>
+      {ext.doc && (
+        <div className="mt-2 text-sm text-fg-muted">
+          <Markdown>{ext.doc}</Markdown>
+        </div>
+      )}
     </div>
   );
 }
@@ -355,9 +365,12 @@ export function ModuleView() {
           <Breadcrumbs path={decodedPath} />
         </div>
 
-        <h1 className="mb-6 font-mono text-2xl font-semibold tracking-tight">
-          <span className="text-kind-module">mod</span> <span className="text-fg">{name}</span>
-        </h1>
+        <div className="mb-6 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+          <h1 className="font-mono text-2xl font-semibold tracking-tight">
+            <span className="text-kind-module">mod</span> <span className="text-fg">{name}</span>
+          </h1>
+          {module.source && <SourceLink source={module.source} />}
+        </div>
 
         {module.doc && (
           <div className="mb-8 border-l-2 border-edge-strong pl-4 text-fg-muted">

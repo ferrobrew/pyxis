@@ -111,7 +111,7 @@ export function SourceLink({ source }: SourceLinkProps) {
         href={githubUrl}
         target="_blank"
         rel="noopener noreferrer"
-        className="text-accent hover:underline"
+        className="font-mono text-xs text-fg-subtle hover:text-accent hover:underline"
         title={tooltip}
       >
         [source]
@@ -121,7 +121,7 @@ export function SourceLink({ source }: SourceLinkProps) {
 
   // For local sources, just display without a link
   return (
-    <span className="text-fg-subtle" title={tooltip}>
+    <span className="font-mono text-xs text-fg-subtle" title={tooltip}>
       [source]
     </span>
   );
