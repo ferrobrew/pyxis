@@ -1,8 +1,7 @@
 #![cfg_attr(any(), rustfmt::skip)]
-bitflags::bitflags! {
-    #[derive(PartialEq, Eq, PartialOrd, Ord, Debug,)] pub struct TestBitflags : u32 {
-    const NONE = 0usize as _; const FLAG_1 = 1usize as _; const FLAG_2 = 2usize as _;
-    const FLAG_3 = 4usize as _; }
+crate::__bitflags! {
+    pub struct TestBitflags : u32 { const NONE = 0usize as _; const FLAG_1 = 1usize as _;
+    const FLAG_2 = 2usize as _; const FLAG_3 = 4usize as _; }
 }
 fn _TestBitflags_size_check() {
     unsafe {
@@ -10,10 +9,9 @@ fn _TestBitflags_size_check() {
     }
     unreachable!()
 }
-bitflags::bitflags! {
-    #[derive(PartialEq, Eq, PartialOrd, Ord, Debug,)] pub struct TestBitflags2 : u32 {
-    const NONE = 0usize as _; const FLAG_1 = 1usize as _; const FLAG_2 = 2usize as _;
-    const FLAG_3 = 4usize as _; }
+crate::__bitflags! {
+    pub struct TestBitflags2 : u32 { const NONE = 0usize as _; const FLAG_1 = 1usize as
+    _; const FLAG_2 = 2usize as _; const FLAG_3 = 4usize as _; }
 }
 fn _TestBitflags2_size_check() {
     unsafe {

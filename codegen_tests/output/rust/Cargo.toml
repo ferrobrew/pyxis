@@ -6,6 +6,3 @@ edition = "2024"
 [lib]
 name = "codegen_tests"
 path = "lib.rs"
-
-[dependencies]
-bitflags = "2.6"
