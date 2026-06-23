@@ -88,7 +88,7 @@ function ExternValueItem({ extern: ext }: { extern: JsonExternValue }) {
       </div>
       {ext.doc && (
         <div className="mt-2 text-sm text-fg-muted">
-          <Markdown>{ext.doc}</Markdown>
+          <Markdown docLinks={ext.doc_links}>{ext.doc}</Markdown>
         </div>
       )}
     </div>
@@ -374,7 +374,7 @@ export function ModuleView() {
 
         {module.doc && (
           <div className="mb-8 border-l-2 border-edge-strong pl-4 text-fg-muted">
-            <Markdown>{module.doc}</Markdown>
+            <Markdown docLinks={module.doc_links}>{module.doc}</Markdown>
           </div>
         )}
 

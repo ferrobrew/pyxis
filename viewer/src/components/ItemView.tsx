@@ -17,7 +17,12 @@ import { SourceLink, SourceName } from './SourceLink';
 import { Markdown } from './Markdown';
 import { AnchorLink, CopyButton } from './Actions';
 import { OnThisPage, type TocEntry } from './OnThisPage';
-import type { JsonTypeDefinition, JsonEnumDefinition, JsonBitflagsDefinition } from '@pyxis/types';
+import type {
+  JsonTypeDefinition,
+  JsonEnumDefinition,
+  JsonBitflagsDefinition,
+  JsonDocLink,
+} from '@pyxis/types';
 
 // Keyword shown in the signature header for each item kind, mirroring how the
 // declaration is written in pyxis-defs (`pub type Foo`, `pub enum Bar: u32`).
@@ -30,10 +35,10 @@ const KIND_KEYWORD: Record<string, string> = {
 
 // Quiet, typographic doc block. Spacing is owned by the header group, so this
 // carries no margin of its own.
-function DocBlock({ doc }: { doc: string }) {
+function DocBlock({ doc, docLinks }: { doc: string; docLinks?: JsonDocLink[] }) {
   return (
     <div className="text-fg-muted">
-      <Markdown>{doc}</Markdown>
+      <Markdown docLinks={docLinks}>{doc}</Markdown>
     </div>
   );
 }
@@ -193,7 +198,7 @@ function EnumView({ def, modulePath }: { def: JsonEnumDefinition; modulePath: st
                   )}
                   {variant.doc && (
                     <div className="mt-1 font-sans text-xs text-fg-muted">
-                      <Markdown>{variant.doc}</Markdown>
+                      <Markdown docLinks={variant.doc_links}>{variant.doc}</Markdown>
                     </div>
                   )}
                 </td>
@@ -254,7 +259,7 @@ function BitflagsView({ def }: { def: JsonBitflagsDefinition }) {
                   )}
                   {flag.doc && (
                     <div className="mt-1 font-sans text-xs text-fg-muted">
-                      <Markdown>{flag.doc}</Markdown>
+                      <Markdown docLinks={flag.doc_links}>{flag.doc}</Markdown>
                     </div>
                   )}
                 </td>
@@ -404,7 +409,7 @@ export function ItemView() {
           </div>
           {item.kind.doc && (
             <div className="mt-2">
-              <DocBlock doc={item.kind.doc} />
+              <DocBlock doc={item.kind.doc} docLinks={item.kind.doc_links} />
             </div>
           )}
         </div>

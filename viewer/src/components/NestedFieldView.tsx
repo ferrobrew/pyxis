@@ -145,7 +145,7 @@ function NestedFieldRow({
           {field.is_base && <SmallBadge variant="violet">base</SmallBadge>}
           {field.doc && (
             <div className="text-fg-muted mt-1">
-              <Markdown>{field.doc}</Markdown>
+              <Markdown docLinks={field.doc_links}>{field.doc}</Markdown>
             </div>
           )}
         </td>

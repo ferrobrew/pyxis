@@ -121,7 +121,7 @@ export function FunctionDisplay({ func, modulePath, id }: FunctionDisplayProps) 
       </div>
       {func.doc && (
         <div className="mt-2 text-sm text-fg-muted">
-          <Markdown>{func.doc}</Markdown>
+          <Markdown docLinks={func.doc_links}>{func.doc}</Markdown>
         </div>
       )}
     </div>
