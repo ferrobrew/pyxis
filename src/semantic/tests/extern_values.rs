@@ -38,6 +38,7 @@ fn can_define_extern_value() {
             name: "test".into(),
             type_: ST::raw("u32").mut_pointer(),
             address: 0x1337,
+            doc: vec![],
             location: ItemLocation::test(),
         }
     );

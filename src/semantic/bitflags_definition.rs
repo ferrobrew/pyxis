@@ -21,6 +21,7 @@ use crate::span::StripLocations;
 pub struct BitflagField {
     pub name: String,
     pub value: usize,
+    pub doc: Vec<String>,
     pub location: ItemLocation,
 }
 
@@ -58,6 +59,7 @@ impl BitflagsDefinition {
             .map(|(n, v)| BitflagField {
                 name: n.to_string(),
                 value: v,
+                doc: vec![],
                 location: ItemLocation::test(),
             })
             .collect();
@@ -173,6 +175,7 @@ pub fn build(
             name,
             expr,
             attributes,
+            doc_comments,
             location: stmt_location,
             ..
         } = statement;
@@ -187,6 +190,7 @@ pub fn build(
             }
         };
         flags.push(BitflagField {
+            doc: doc_comments.clone(),
             name: name.0.clone(),
             value: value
                 .try_into()

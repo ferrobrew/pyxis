@@ -30,8 +30,9 @@ use crate::semantic::{
 ///   added `schema_version` field so consumers can detect the format.
 /// - v3: added optional `cpp_name` / `cpp_header` / `rust_name` to items,
 ///   surfacing the backend type bindings of `extern type`s.
-/// - v4: added `source` locations to modules; item/function/field source now
-///   points at the declaration line rather than its attributes.
+/// - v4: added `source` locations to modules and extern values; added `doc` to
+///   extern values, enum variants, and bitflag flags; surfaced extern-type
+///   doc comments.
 pub const CURRENT_SCHEMA_VERSION: u32 = 4;
 
 /// Top-level JSON documentation structure
@@ -237,6 +238,9 @@ pub struct JsonEnumVariant {
     pub name: String,
     /// Variant value
     pub value: isize,
+    /// Documentation
+    #[serde(default)]
+    pub doc: Option<String>,
     /// Source location (file and line)
     pub source: Option<JsonSourceLocation>,
 }
@@ -265,6 +269,9 @@ pub struct JsonBitflag {
     pub name: String,
     /// Flag value
     pub value: usize,
+    /// Documentation
+    #[serde(default)]
+    pub doc: Option<String>,
     /// Source location (file and line)
     pub source: Option<JsonSourceLocation>,
 }
@@ -352,6 +359,12 @@ pub struct JsonExternValue {
     pub type_ref: JsonType,
     /// Memory address
     pub address: usize,
+    /// Documentation
+    #[serde(default)]
+    pub doc: Option<String>,
+    /// Source location (file and line)
+    #[serde(default)]
+    pub source: Option<JsonSourceLocation>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
@@ -717,6 +730,7 @@ fn convert_enum_variant(variant: &EnumVariant) -> JsonEnumVariant {
     JsonEnumVariant {
         name: variant.name.clone(),
         value: variant.value,
+        doc: doc_to_option(&variant.doc),
         source: convert_location(&variant.location),
     }
 }
@@ -742,6 +756,7 @@ fn convert_bitflag_field(flag: &BitflagField) -> JsonBitflag {
     JsonBitflag {
         name: flag.name.clone(),
         value: flag.value,
+        doc: doc_to_option(&flag.doc),
         source: convert_location(&flag.location),
     }
 }
@@ -810,6 +825,8 @@ fn convert_extern_value(ev: &ExternValue) -> JsonExternValue {
         name: ev.name.clone(),
         type_ref: convert_type(&ev.type_),
         address: ev.address,
+        doc: doc_to_option(&ev.doc),
+        source: convert_location(&ev.location),
     }
 }
 

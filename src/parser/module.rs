@@ -439,10 +439,19 @@ impl Parser {
                 }
 
                 // Now check what comes after doc comments (and possibly attributes)
-                if matches!(self.peek_at(pos), Some(TokenKind::Extern))
-                    && matches!(self.peek_at(pos + 1), Some(TokenKind::Type))
+                if matches!(self.peek_at(pos), Some(TokenKind::Extern)) {
+                    // extern type vs extern value
+                    if matches!(self.peek_at(pos + 1), Some(TokenKind::Type)) {
+                        self.parse_extern_type()
+                    } else {
+                        self.parse_extern_value()
+                            .map(|extern_value| ModuleItem::ExternValue { extern_value })
+                    }
+                } else if matches!(self.peek_at(pos), Some(TokenKind::Pub))
+                    && matches!(self.peek_at(pos + 1), Some(TokenKind::Extern))
                 {
-                    self.parse_extern_type()
+                    self.parse_extern_value()
+                        .map(|extern_value| ModuleItem::ExternValue { extern_value })
                 } else if matches!(self.peek_at(pos), Some(TokenKind::Fn))
                     || (matches!(self.peek_at(pos), Some(TokenKind::Pub))
                         && matches!(self.peek_at(pos + 1), Some(TokenKind::Fn)))
@@ -788,6 +797,50 @@ mod tests {
             ]);
 
         assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
+    }
+
+    #[test]
+    fn function_location_starts_at_declaration_not_attributes() {
+        // The location used for documentation source links should point at the
+        // `fn` declaration, not its leading doc comment / attributes.
+        let text = "\n/// a doc comment\n#[address(0x10)]\nfn f();\n";
+        let module = parse_str_for_tests(text).unwrap();
+        let ModuleItem::Function { function } = &module.items[0] else {
+            panic!("expected Function, got {:?}", module.items[0]);
+        };
+        // Line 2 is the doc comment, 3 the attribute, 4 the `fn f();` itself.
+        assert_eq!(function.location.span.start.line, 4);
+    }
+
+    #[test]
+    fn can_parse_doc_comment_before_extern_value() {
+        // Regression: a doc comment before a `pub extern` value used to route
+        // the parser into `parse_item_definition`, which rejects `extern`.
+        let text = r#"
+/// This is a global value.
+#[address(0x1000)]
+pub extern g_thing: u32;
+
+/// A private one too.
+extern g_other: *mut u8;
+        "#;
+
+        // Don't strip locations - it empties doc_comments.
+        let module = parse_str_for_tests(text).unwrap();
+
+        let ModuleItem::ExternValue { extern_value } = &module.items[0] else {
+            panic!("expected ExternValue, got {:?}", module.items[0]);
+        };
+        assert_eq!(extern_value.name.0, "g_thing");
+        assert_eq!(extern_value.visibility, V::Public);
+        assert_eq!(extern_value.doc_comments, vec![" This is a global value."]);
+
+        let ModuleItem::ExternValue { extern_value } = &module.items[1] else {
+            panic!("expected ExternValue, got {:?}", module.items[1]);
+        };
+        assert_eq!(extern_value.name.0, "g_other");
+        assert_eq!(extern_value.visibility, V::Private);
+        assert_eq!(extern_value.doc_comments, vec![" A private one too."]);
     }
 
     #[test]

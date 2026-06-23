@@ -21,6 +21,7 @@ use crate::{
 pub struct EnumVariant {
     pub name: String,
     pub value: isize,
+    pub doc: Vec<String>,
     pub location: ItemLocation,
 }
 
@@ -63,6 +64,7 @@ impl EnumDefinition {
             .map(|(n, v)| EnumVariant {
                 name: n.to_string(),
                 value: v,
+                doc: vec![],
                 location: ItemLocation::test(),
             })
             .collect();
@@ -145,6 +147,7 @@ pub fn build(
             name,
             expr,
             attributes,
+            doc_comments,
             location: stmt_location,
             ..
         } = statement;
@@ -162,6 +165,7 @@ pub fn build(
         variants.push(EnumVariant {
             name: name.0.clone(),
             value,
+            doc: doc_comments.clone(),
             location: *stmt_location,
         });
 

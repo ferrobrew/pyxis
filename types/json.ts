@@ -40,6 +40,10 @@ name: string;
  */
 value: number; 
 /**
+ * Documentation
+ */
+doc?: string | null; 
+/**
  * Source location (file and line)
  */
 source: JsonSourceLocation | null };
@@ -179,6 +183,10 @@ name: string;
  */
 value: number; 
 /**
+ * Documentation
+ */
+doc?: string | null; 
+/**
  * Source location (file and line)
  */
 source: JsonSourceLocation | null };
@@ -199,7 +207,15 @@ type_ref: JsonType;
 /**
  * Memory address
  */
-address: number };
+address: number; 
+/**
+ * Documentation
+ */
+doc?: string | null; 
+/**
+ * Source location (file and line)
+ */
+source?: JsonSourceLocation | null };
 
 export type JsonFunction = { 
 /**

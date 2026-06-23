@@ -611,5 +611,6 @@ pub struct ExternValue {
     pub name: String,
     pub type_: Type,
     pub address: usize,
+    pub doc: Vec<String>,
     pub location: ItemLocation,
 }

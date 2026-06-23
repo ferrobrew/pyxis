@@ -124,6 +124,7 @@ impl SemanticState {
                     name: name.as_str().to_owned(),
                     type_: Type::Unresolved(ev.type_.clone()),
                     address,
+                    doc: ev.doc_comments.clone(),
                     location: ev.location,
                 })
             })
@@ -194,6 +195,7 @@ impl SemanticState {
             let grammar::ModuleItem::ExternType {
                 name: extern_name,
                 attributes,
+                doc_comments: extern_doc_comments,
                 location: extern_location,
                 ..
             } = extern_type
@@ -237,7 +239,11 @@ impl SemanticState {
                 state: ItemState::Resolved(ItemStateResolved {
                     size,
                     alignment,
-                    inner: TypeDefinition::default().into(),
+                    inner: TypeDefinition {
+                        doc: extern_doc_comments.clone(),
+                        ..Default::default()
+                    }
+                    .into(),
                 }),
                 category: ItemCategory::Extern,
                 predefined: None,
