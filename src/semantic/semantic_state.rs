@@ -197,7 +197,7 @@ impl SemanticState {
                 attributes,
                 doc_comments: extern_doc_comments,
                 location: extern_location,
-                ..
+                declaration_location: extern_declaration_location,
             } = extern_type
             else {
                 continue;
@@ -249,7 +249,7 @@ impl SemanticState {
                 predefined: None,
                 cfg: attributes.cfg(),
                 location: *extern_location,
-                declaration_location: *extern_location,
+                declaration_location: *extern_declaration_location,
             })?;
         }
 

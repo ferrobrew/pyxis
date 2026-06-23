@@ -342,6 +342,9 @@ impl Parser {
     }
 
     pub(crate) fn parse_extern_type(&mut self) -> Result<ModuleItem, ParseError> {
+        // Full span (incl. leading doc comments / attributes), used by the
+        // formatter to associate preceding comments and spacing.
+        let start_pos = self.current().location.span.start;
         let mut doc_comments = self.collect_doc_comments();
         let attributes = if matches!(self.peek(), TokenKind::Hash) {
             self.parse_attributes()?
@@ -353,8 +356,8 @@ impl Parser {
         let after_attr_doc_comments = self.collect_doc_comments();
         doc_comments.extend(after_attr_doc_comments);
 
-        // Span starts at the declaration, not its doc comment / attributes.
-        let start_pos = self.current().location.span.start;
+        // Declaration position, used for documentation source links.
+        let declaration_start = self.current().location.span.start;
         self.expect(TokenKind::Extern)?;
         self.expect(TokenKind::Type)?;
         let (mut name, _) = self.expect_ident()?;
@@ -405,11 +408,13 @@ impl Parser {
             self.current().location.span.end
         };
         let location = self.item_location_from_locations(start_pos, end_pos);
+        let declaration_location = self.item_location_from_locations(declaration_start, end_pos);
         Ok(ModuleItem::ExternType {
             name,
             attributes,
             doc_comments,
             location,
+            declaration_location,
         })
     }
 

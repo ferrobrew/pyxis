@@ -40,7 +40,10 @@ pub enum ModuleItem {
         name: Ident,
         attributes: Attributes,
         doc_comments: Vec<String>,
+        /// Full span (incl. doc comments / attributes), used by the formatter.
         location: ItemLocation,
+        /// Position of the declaration itself, for documentation source links.
+        declaration_location: ItemLocation,
     },
     Backend {
         backend: Backend,
@@ -118,6 +121,7 @@ impl Module {
                 attributes,
                 doc_comments: vec![],
                 location: ItemLocation::test(),
+                declaration_location: ItemLocation::test(),
             });
         }
         self
