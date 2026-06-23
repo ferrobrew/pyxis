@@ -144,6 +144,37 @@ function FolderIcon() {
   );
 }
 
+// A member row (field, function, variant, flag) inside an expanded item. The
+// active one (matched by the URL anchor) is highlighted and takes the ref so it
+// can be scrolled into view.
+function MemberRow({
+  to,
+  icon,
+  label,
+  colorClasses,
+  active,
+  activeRef,
+}: {
+  to: string;
+  icon: React.ReactNode;
+  label: string;
+  colorClasses: string;
+  active: boolean;
+  activeRef: React.Ref<HTMLAnchorElement>;
+}) {
+  return (
+    <Link
+      ref={active ? activeRef : undefined}
+      to={to}
+      className={`${ROW} text-xs ${active ? 'bg-accent-soft text-fg' : colorClasses}`}
+    >
+      <ChevronSlot />
+      {icon}
+      <span className="truncate">{label}</span>
+    </Link>
+  );
+}
+
 // Item tree component for types/enums/bitflags with their members
 interface ItemTreeProps {
   itemPath: string;
@@ -154,13 +185,27 @@ function ItemTree({ itemPath }: ItemTreeProps) {
   const location = useLocation();
   const [isItemOpen, setIsItemOpen] = useState(false);
   const rowRef = useRef<HTMLDivElement>(null);
+  const memberRef = useRef<HTMLAnchorElement>(null);
   const currentPath = decodeURIComponent(location.pathname.split('/').pop() || '');
   const isItemActive = currentPath === itemPath;
+  // The member anchor the URL points at (e.g. `field-m_Foo`), if we're on this
+  // item's page. Used to highlight + reveal that member in the tree.
+  const activeAnchor = isItemActive ? location.hash.replace(/^#+/, '') : '';
 
   // Keep the active item scrolled into view within the sidebar.
   useEffect(() => {
     if (isItemActive) rowRef.current?.scrollIntoView({ block: 'nearest' });
   }, [isItemActive]);
+
+  // When the URL targets a member, expand this item...
+  useEffect(() => {
+    if (activeAnchor) setIsItemOpen(true);
+  }, [activeAnchor]);
+
+  // ...then (once its rows are mounted) scroll the active member into view.
+  useEffect(() => {
+    if (activeAnchor && isItemOpen) memberRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [activeAnchor, isItemOpen]);
 
   if (!documentation) return null;
 
@@ -233,63 +278,63 @@ function ItemTree({ itemPath }: ItemTreeProps) {
       {isItemOpen && hasMembers && (
         <TreeChildren>
           {publicFields.map((field) => (
-            <Link
+            <MemberRow
               key={`${itemPath}-field-${field.name}`}
               to={`${buildItemUrl(itemPath, selectedSource)}##field-${field.name}`}
-              className={`${ROW} text-xs text-fg-muted hover:text-accent`}
-            >
-              <ChevronSlot />
-              <FieldIcon />
-              <span className="truncate">{field.name}</span>
-            </Link>
+              icon={<FieldIcon />}
+              label={field.name!}
+              colorClasses="text-fg-muted hover:text-accent"
+              active={activeAnchor === `field-${field.name}`}
+              activeRef={memberRef}
+            />
           ))}
 
           {publicVirtualFunctions.map((func) => (
-            <Link
+            <MemberRow
               key={`${itemPath}-vfunc-${func.name}`}
               to={`${buildItemUrl(itemPath, selectedSource)}##vfunc-${func.name}`}
-              className={`${ROW} text-xs ${getItemTypeColor('function')} ${getItemTypeHoverColor('function')}`}
-            >
-              <ChevronSlot />
-              <FunctionIcon />
-              <span className="truncate">{func.name}</span>
-            </Link>
+              icon={<FunctionIcon />}
+              label={func.name}
+              colorClasses={`${getItemTypeColor('function')} ${getItemTypeHoverColor('function')}`}
+              active={activeAnchor === `vfunc-${func.name}`}
+              activeRef={memberRef}
+            />
           ))}
 
           {publicAssociatedFunctions.map((func) => (
-            <Link
+            <MemberRow
               key={`${itemPath}-func-${func.name}`}
               to={`${buildItemUrl(itemPath, selectedSource)}##func-${func.name}`}
-              className={`${ROW} text-xs ${getItemTypeColor('function')} ${getItemTypeHoverColor('function')}`}
-            >
-              <ChevronSlot />
-              <FunctionIcon />
-              <span className="truncate">{func.name}</span>
-            </Link>
+              icon={<FunctionIcon />}
+              label={func.name}
+              colorClasses={`${getItemTypeColor('function')} ${getItemTypeHoverColor('function')}`}
+              active={activeAnchor === `func-${func.name}`}
+              activeRef={memberRef}
+            />
           ))}
 
           {variants.map((variant) => (
-            <Link
+            <MemberRow
               key={`${itemPath}-variant-${variant.name}`}
               to={`${buildItemUrl(itemPath, selectedSource)}##variant-${variant.name}`}
-              className={`${ROW} text-xs ${getItemTypeColor('enum-variant')} ${getItemTypeHoverColor('enum-variant')}`}
-            >
-              <ChevronSlot />
-              <EnumIcon />
-              <span className="truncate">{variant.name}</span>
-            </Link>
+              icon={<EnumIcon />}
+              label={variant.name}
+              colorClasses={`${getItemTypeColor('enum-variant')} ${getItemTypeHoverColor('enum-variant')}`}
+              active={activeAnchor === `variant-${variant.name}`}
+              activeRef={memberRef}
+            />
           ))}
 
           {flags.map((flag) => (
-            <Link
+            <MemberRow
               key={`${itemPath}-flag-${flag.name}`}
               to={`${buildItemUrl(itemPath, selectedSource)}##flag-${flag.name}`}
-              className={`${ROW} text-xs ${getItemTypeColor('bitflags')} ${getItemTypeHoverColor('bitflags')}`}
-            >
-              <ChevronSlot />
-              <BitflagsIcon />
-              <span className="truncate">{flag.name}</span>
-            </Link>
+              icon={<BitflagsIcon />}
+              label={flag.name}
+              colorClasses={`${getItemTypeColor('bitflags')} ${getItemTypeHoverColor('bitflags')}`}
+              active={activeAnchor === `flag-${flag.name}`}
+              activeRef={memberRef}
+            />
           ))}
         </TreeChildren>
       )}
@@ -302,10 +347,13 @@ function ModuleTree({ name, module, path, level }: ModuleTreeProps) {
   const location = useLocation();
   const { documentation, selectedSource } = useDocumentation();
   const rowRef = useRef<HTMLDivElement>(null);
+  const memberRef = useRef<HTMLAnchorElement>(null);
   const currentPath = decodeURIComponent(location.pathname.split('/').pop() || '');
   const isActive = currentPath === path;
   // True when the active item/module lives somewhere inside this subtree.
   const isAncestor = isActive || currentPath.startsWith(`${path}::`);
+  // The function/extern anchor the URL points at, if we're on this module page.
+  const activeAnchor = isActive ? location.hash.replace(/^#+/, '') : '';
 
   // Expand the path down to the active node, and keep it scrolled into view.
   useEffect(() => {
@@ -314,6 +362,9 @@ function ModuleTree({ name, module, path, level }: ModuleTreeProps) {
   useEffect(() => {
     if (isActive) rowRef.current?.scrollIntoView({ block: 'nearest' });
   }, [isActive]);
+  useEffect(() => {
+    if (activeAnchor && isOpen) memberRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [activeAnchor, isOpen]);
 
   const hasSubmodules = module.submodules && Object.keys(module.submodules).length > 0;
   const hasContent =
@@ -349,30 +400,38 @@ function ModuleTree({ name, module, path, level }: ModuleTreeProps) {
             module.items.map((itemPath) => <ItemTree key={itemPath} itemPath={itemPath} />)}
 
           {module.functions.length > 0 &&
-            module.functions.map((func, idx) => (
-              <Link
-                key={`func-${idx}`}
-                to={`${buildModuleUrl(path, selectedSource)}##func-${func.name}`}
-                className={`${ROW} text-sm ${getItemTypeColor('function')} ${getItemTypeHoverColor('function')}`}
-              >
-                <ChevronSlot />
-                <FunctionIcon />
-                <span className="truncate">{func.name}</span>
-              </Link>
-            ))}
+            module.functions.map((func, idx) => {
+              const active = activeAnchor === `func-${func.name}`;
+              return (
+                <Link
+                  key={`func-${idx}`}
+                  ref={active ? memberRef : undefined}
+                  to={`${buildModuleUrl(path, selectedSource)}##func-${func.name}`}
+                  className={`${ROW} text-sm ${active ? 'bg-accent-soft text-fg' : `${getItemTypeColor('function')} ${getItemTypeHoverColor('function')}`}`}
+                >
+                  <ChevronSlot />
+                  <FunctionIcon />
+                  <span className="truncate">{func.name}</span>
+                </Link>
+              );
+            })}
 
           {module.extern_values.length > 0 &&
-            module.extern_values.map((extVal, idx) => (
-              <Link
-                key={`ext-${idx}`}
-                to={`${buildModuleUrl(path, selectedSource)}##extval-${extVal.name}`}
-                className={`${ROW} text-sm ${getItemTypeColor('extern')} ${getItemTypeHoverColor('extern')}`}
-              >
-                <ChevronSlot />
-                <GlobalIcon />
-                <span className="truncate">{extVal.name}</span>
-              </Link>
-            ))}
+            module.extern_values.map((extVal, idx) => {
+              const active = activeAnchor === `extval-${extVal.name}`;
+              return (
+                <Link
+                  key={`ext-${idx}`}
+                  ref={active ? memberRef : undefined}
+                  to={`${buildModuleUrl(path, selectedSource)}##extval-${extVal.name}`}
+                  className={`${ROW} text-sm ${active ? 'bg-accent-soft text-fg' : `${getItemTypeColor('extern')} ${getItemTypeHoverColor('extern')}`}`}
+                >
+                  <ChevronSlot />
+                  <GlobalIcon />
+                  <span className="truncate">{extVal.name}</span>
+                </Link>
+              );
+            })}
 
           {hasSubmodules &&
             Object.entries(module.submodules).map(([subName, subModule]) => (
