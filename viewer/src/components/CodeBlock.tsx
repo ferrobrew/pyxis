@@ -1,6 +1,9 @@
 import { useEffect, useRef } from 'react';
 import hljs from 'highlight.js/lib/core';
-import 'highlight.js/styles/github.css';
+
+// Token colours come from the theme-aware `.hljs-*` rules in index.css (which
+// flip with dark mode), so we deliberately don't import a highlight.js stylesheet
+// — a bundled theme (e.g. github.css) would hard-code a light background.
 
 // Pyxis only emits three backends (rust, cpp, json), so register just those
 // languages rather than pulling in the full highlight.js bundle.
