@@ -16,6 +16,42 @@ use crate::{
 
 use quote::{ToTokens, quote};
 
+/// A freestanding reimplementation of the subset of `bitflags::bitflags!` that
+/// Pyxis needs, so generated crates don't have to depend on the `bitflags`
+/// crate. Emitted once into the crate root (see [`BITFLAGS_MACRO`]) whenever the
+/// crate contains any `bitflags` definition, and invoked as `__bitflags!` from
+/// every module that defines bitflags.
+///
+/// The generated type is a `#[repr(transparent)]` newtype over the underlying
+/// integer, always `Copy + Clone`, with the usual bitflags API (`contains`,
+/// `insert`, `|`, `&`, `^`, `!`, `from_bits`, ...). It mirrors the ergonomics of
+/// the `bitflags` crate closely enough for typical consumption without pulling
+/// in an external dependency.
+const BITFLAGS_MACRO: &str = include_str!("bitflags_impl.rs");
+
+/// Whether any (Rust-cfg-included) bitflags definition exists anywhere in the
+/// crate. Used to decide whether to emit [`BITFLAGS_MACRO`] into the root
+/// module.
+fn crate_uses_bitflags(
+    semantic_state: &ResolvedSemanticState,
+    cfg_ctx: &crate::parser::cfg::CfgContext,
+) -> bool {
+    let cfg_pass = |cfg: &Option<crate::parser::cfg::CfgPredicate>| match cfg {
+        Some(p) => p.evaluate(cfg_ctx),
+        None => true,
+    };
+    let type_registry = semantic_state.type_registry();
+    semantic_state.modules().values().any(|module| {
+        module
+            .definitions(type_registry)
+            .filter(|d| cfg_pass(&d.cfg))
+            .any(|d| {
+                d.resolved()
+                    .is_some_and(|r| matches!(r.inner, ItemDefinitionInner::Bitflags(_)))
+            })
+    })
+}
+
 pub fn write_module(
     out_dir: &Path,
     key: &ItemPath,
@@ -60,6 +96,10 @@ pub fn write_module(
 
     let mut raw_output = String::new();
 
+    let cfg_ctx = crate::parser::cfg::CfgContext {
+        backend: crate::Backend::Rust,
+    };
+
     // Lint `allow`s cascade to descendant modules, so they only need to live
     // on the root file (lib.rs / the mounted-subtree root); emitting them on
     // the root also overrides a stricter host crate (the innermost level
@@ -76,6 +116,17 @@ pub fn write_module(
     // <https://stackoverflow.com/questions/59247458/is-there-a-stable-way-to-tell-rustfmt-to-skip-an-entire-file#comment138279076_75910283>
     writeln!(raw_output, "#![cfg_attr(any(), rustfmt::skip)]")?;
     writeln!(raw_output, "{}", doc_to_tokens(true, module.doc()))?;
+
+    // Emit the freestanding `__bitflags!` macro definition exactly once, on the
+    // crate root, when the crate contains any bitflags. It is
+    // `#[macro_export]`-ed, so it lands at the crate root regardless of any
+    // module prefix and is callable from every module as `crate::__bitflags!`.
+    // This lets generated crates drop their `bitflags` dependency. It must
+    // follow the inner attributes (`#![...]`) above, since those can only
+    // precede items in a module body.
+    if key.is_empty() && crate_uses_bitflags(semantic_state, &cfg_ctx) {
+        raw_output.push_str(BITFLAGS_MACRO);
+    }
 
     let backends = module.backends.get(&crate::Backend::Rust);
     let prologues = backends
@@ -150,9 +201,6 @@ pub fn write_module(
         writeln!(raw_output, "use {root}::{{{inner}}};")?;
     }
 
-    let cfg_ctx = crate::parser::cfg::CfgContext {
-        backend: crate::Backend::Rust,
-    };
     let cfg_pass = |cfg: &Option<crate::parser::cfg::CfgPredicate>| match cfg {
         Some(p) => p.evaluate(&cfg_ctx),
         None => true,
@@ -739,9 +787,8 @@ fn build_bitflags(
         flags,
         doc,
         type_,
-        copyable,
-        cloneable,
         default,
+        ..
     } = bitflags_definition;
 
     let syn_type = sa_type_to_syn_type(type_, prefix)?;
@@ -776,9 +823,9 @@ fn build_bitflags(
         }
     });
 
-    // Bitflags handles Default differently (via a separate impl block)
-    let extra_derives = build_extra_derives(*copyable, *cloneable, false);
-
+    // The `__bitflags!` macro (emitted into the crate root) provides all the
+    // derives (`Debug`, `Copy`, `Clone`, comparison, `Hash`, ...) and the
+    // bitflags API itself, so we only forward the doc + visibility + flags.
     let syn_fields = flags.iter().map(|flag| {
         let name_ident = str_to_ident(&flag.name);
         let value = flag.value;
@@ -788,8 +835,7 @@ fn build_bitflags(
     });
 
     Ok(quote! {
-        bitflags::bitflags! {
-            #[derive(PartialEq, Eq, PartialOrd, Ord, Debug, #(#extra_derives),*)]
+        crate::__bitflags! {
             #doc
             #visibility struct #name_ident: #syn_type {
                 #(#syn_fields)*
