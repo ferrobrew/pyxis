@@ -255,7 +255,6 @@ impl Parser {
     }
 
     pub(crate) fn parse_function(&mut self) -> Result<Function, ParseError> {
-        let start_pos = self.current().location.span.start;
         let mut doc_comments = self.collect_doc_comments();
         let attributes = if matches!(self.peek(), TokenKind::Hash) {
             self.parse_attributes()?
@@ -267,6 +266,7 @@ impl Parser {
         let after_attr_doc_comments = self.collect_doc_comments();
         doc_comments.extend(after_attr_doc_comments);
 
+        let start_pos = self.current().location.span.start;
         let visibility = self.parse_visibility()?;
         self.expect(TokenKind::Fn)?;
         let (name, _) = self.expect_ident()?;

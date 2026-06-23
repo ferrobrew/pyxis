@@ -63,6 +63,7 @@ impl SemanticState {
                     predefined: Some(*predefined_item),
                     cfg: None,
                     location,
+                    declaration_location: location,
                 })
                 .expect("failed to add predefined type");
         }
@@ -185,6 +186,7 @@ impl SemanticState {
                 predefined: None,
                 cfg,
                 location: definition.location,
+                declaration_location: definition.declaration_location,
             })?;
         }
 
@@ -241,6 +243,7 @@ impl SemanticState {
                 predefined: None,
                 cfg: attributes.cfg(),
                 location: *extern_location,
+                declaration_location: *extern_location,
             })?;
         }
 

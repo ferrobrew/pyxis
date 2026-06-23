@@ -453,7 +453,10 @@ pub struct ItemDefinition {
     /// `#[cfg(...)]` predicate. `None` means "always emit"; otherwise each
     /// backend evaluates against its own context.
     pub cfg: Option<crate::parser::cfg::CfgPredicate>,
+    /// Full span (incl. doc comments / attributes), used for diagnostics.
     pub location: ItemLocation,
+    /// Position of the declaration itself, used for documentation source links.
+    pub declaration_location: ItemLocation,
 }
 impl ItemDefinition {
     /// Test-only constructor for category_resolved that uses a synthetic location
@@ -472,6 +475,7 @@ impl ItemDefinition {
             predefined: None,
             cfg: None,
             location: ItemLocation::test(),
+            declaration_location: ItemLocation::test(),
         }
     }
 
@@ -490,6 +494,7 @@ impl ItemDefinition {
             predefined: None,
             cfg: None,
             location: ItemLocation::test(),
+            declaration_location: ItemLocation::test(),
         }
     }
 
@@ -509,6 +514,7 @@ impl ItemDefinition {
             predefined: None,
             cfg: None,
             location: ItemLocation::test(),
+            declaration_location: ItemLocation::test(),
         }
     }
 

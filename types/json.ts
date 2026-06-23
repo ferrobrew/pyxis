@@ -334,7 +334,11 @@ functions: JsonFunction[];
 /**
  * Backend configurations (prologue/epilogue for code generation)
  */
-backends: { [key in string]: JsonBackend[] } };
+backends: { [key in string]: JsonBackend[] }; 
+/**
+ * Source location (file and line) - None for synthesized/folder modules
+ */
+source?: JsonSourceLocation | null };
 
 export type JsonRegion = { 
 /**

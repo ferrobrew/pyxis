@@ -342,7 +342,6 @@ impl Parser {
     }
 
     pub(crate) fn parse_extern_type(&mut self) -> Result<ModuleItem, ParseError> {
-        let start_pos = self.current().location.span.start;
         let mut doc_comments = self.collect_doc_comments();
         let attributes = if matches!(self.peek(), TokenKind::Hash) {
             self.parse_attributes()?
@@ -354,6 +353,8 @@ impl Parser {
         let after_attr_doc_comments = self.collect_doc_comments();
         doc_comments.extend(after_attr_doc_comments);
 
+        // Span starts at the declaration, not its doc comment / attributes.
+        let start_pos = self.current().location.span.start;
         self.expect(TokenKind::Extern)?;
         self.expect(TokenKind::Type)?;
         let (mut name, _) = self.expect_ident()?;
@@ -413,7 +414,6 @@ impl Parser {
     }
 
     pub(crate) fn parse_extern_value(&mut self) -> Result<ExternValue, ParseError> {
-        let start_pos = self.current().location.span.start;
         let mut doc_comments = self.collect_doc_comments();
         let attributes = if matches!(self.peek(), TokenKind::Hash) {
             self.parse_attributes()?
@@ -425,6 +425,8 @@ impl Parser {
         let after_attr_doc_comments = self.collect_doc_comments();
         doc_comments.extend(after_attr_doc_comments);
 
+        // Span starts at the declaration, not its doc comment / attributes.
+        let start_pos = self.current().location.span.start;
         let visibility = self.parse_visibility()?;
         self.expect(TokenKind::Extern)?;
         let (name, _) = self.expect_ident()?;

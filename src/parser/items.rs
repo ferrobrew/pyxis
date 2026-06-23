@@ -495,7 +495,14 @@ pub struct ItemDefinition {
     pub type_parameters: Vec<TypeParameter>,
     pub doc_comments: Vec<String>,
     pub inner: ItemDefinitionInner,
+    /// Span of the whole item, including leading doc comments and attributes.
+    /// Used by the formatter (to reconstruct blank-line spacing) and for
+    /// diagnostics.
     pub location: ItemLocation,
+    /// Position of the declaration itself (the `pub`/keyword), excluding leading
+    /// doc comments and attributes. Used for documentation source links so they
+    /// point at the definition line rather than its first attribute.
+    pub declaration_location: ItemLocation,
 }
 #[cfg(test)]
 impl ItemDefinition {
@@ -510,6 +517,7 @@ impl ItemDefinition {
             doc_comments: vec![],
             inner: inner.into(),
             location: ItemLocation::test(),
+            declaration_location: ItemLocation::test(),
         }
     }
     pub fn generic(
@@ -524,6 +532,7 @@ impl ItemDefinition {
             doc_comments: vec![],
             inner: inner.into(),
             location: ItemLocation::test(),
+            declaration_location: ItemLocation::test(),
         }
     }
     pub fn with_doc_comments(mut self, doc_comments: Vec<String>) -> Self {
@@ -584,6 +593,13 @@ impl Parser {
         let after_attr_doc_comments = self.collect_doc_comments();
         doc_comments.extend(after_attr_doc_comments);
 
+        // The declaration starts here, at the `pub`/keyword — after any doc
+        // comments and attributes. Source links use this so they point at the
+        // definition line, not its first attribute.
+        let declaration_start = self.current().location.span.start;
+        let declaration_location =
+            self.item_location_from_locations(declaration_start, declaration_start);
+
         let visibility = self.parse_visibility()?;
 
         match self.peek() {
@@ -621,6 +637,7 @@ impl Parser {
                             location,
                         }),
                         location,
+                        declaration_location,
                     })
                 } else {
                     // Type definition: type Name { ... } or type Name;
@@ -655,6 +672,7 @@ impl Parser {
                         doc_comments,
                         inner: ItemDefinitionInner::Type(def),
                         location,
+                        declaration_location,
                     })
                 }
             }
@@ -688,6 +706,7 @@ impl Parser {
                         following_comments: following_comments.clone(),
                     }),
                     location,
+                    declaration_location,
                 })
             }
             TokenKind::Bitflags => {
@@ -720,6 +739,7 @@ impl Parser {
                         following_comments,
                     }),
                     location,
+                    declaration_location,
                 })
             }
             _ => Err(ParseError::ExpectedItemDefinition {
@@ -813,8 +833,6 @@ impl Parser {
     }
 
     pub(crate) fn parse_type_statement(&mut self) -> Result<TypeStatement, ParseError> {
-        let start_pos = self.current().location.span.start;
-
         let doc_comments = self.collect_doc_comments();
         let attributes = if matches!(self.peek(), TokenKind::Hash) {
             self.parse_attributes()?
@@ -822,6 +840,9 @@ impl Parser {
             Attributes::default()
         };
 
+        // Span starts at the declaration (vftable / field), not its doc comment
+        // / attributes.
+        let start_pos = self.current().location.span.start;
         if matches!(self.peek(), TokenKind::Vftable) {
             self.advance();
             self.expect(TokenKind::LBrace)?;
@@ -917,8 +938,6 @@ impl Parser {
     }
 
     pub(crate) fn parse_enum_statement(&mut self) -> Result<EnumStatement, ParseError> {
-        let start_pos = self.current().location.span.start;
-
         let doc_comments = self.collect_doc_comments();
         let attributes = if matches!(self.peek(), TokenKind::Hash) {
             self.parse_attributes()?
@@ -926,6 +945,8 @@ impl Parser {
             Attributes::default()
         };
 
+        // Span starts at the declaration, not its doc comment / attributes.
+        let start_pos = self.current().location.span.start;
         let (name, _) = self.expect_ident()?;
         let expr = if matches!(self.peek(), TokenKind::Eq) {
             self.advance();
@@ -1002,8 +1023,6 @@ impl Parser {
     }
 
     pub(crate) fn parse_bitflags_statement(&mut self) -> Result<BitflagsStatement, ParseError> {
-        let start_pos = self.current().location.span.start;
-
         let doc_comments = self.collect_doc_comments();
         let attributes = if matches!(self.peek(), TokenKind::Hash) {
             self.parse_attributes()?
@@ -1011,6 +1030,8 @@ impl Parser {
             Attributes::default()
         };
 
+        // Span starts at the declaration, not its doc comment / attributes.
+        let start_pos = self.current().location.span.start;
         let (name, _) = self.expect_ident()?;
         self.expect(TokenKind::Eq)?;
         let expr = self.parse_expr()?;

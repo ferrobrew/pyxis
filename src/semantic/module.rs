@@ -41,6 +41,9 @@ pub struct Module {
     pub(crate) impls: BTreeMap<ItemPath, Vec<grammar::FunctionBlock>>,
     pub(crate) backends: BTreeMap<crate::Backend, Vec<Backend>>,
     pub(crate) doc: Vec<String>,
+    /// Where the module is declared, derived from its first item. Internal for
+    /// synthesized/folder modules that have no source of their own.
+    pub(crate) location: ItemLocation,
 }
 
 impl Default for Module {
@@ -54,6 +57,7 @@ impl Default for Module {
             impls: Default::default(),
             backends: Default::default(),
             doc: Default::default(),
+            location: ItemLocation::internal(),
         }
     }
 }
@@ -112,6 +116,13 @@ impl Module {
         }
 
         let doc = ast.doc_comments.clone();
+        // Use the first item's location as a proxy for the module's own source
+        // location (the top of its `.pyxis` file).
+        let location = ast
+            .items
+            .first()
+            .map(|item| *item.location())
+            .unwrap_or_else(ItemLocation::internal);
         Ok(Self {
             path,
             ast,
@@ -121,6 +132,7 @@ impl Module {
             impls,
             backends,
             doc,
+            location,
         })
     }
 
@@ -252,6 +264,10 @@ impl Module {
 
     pub fn doc(&self) -> &[String] {
         &self.doc
+    }
+
+    pub fn location(&self) -> &ItemLocation {
+        &self.location
     }
 
     pub fn functions(&self) -> &[Function] {

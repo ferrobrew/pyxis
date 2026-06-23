@@ -30,7 +30,9 @@ use crate::semantic::{
 ///   added `schema_version` field so consumers can detect the format.
 /// - v3: added optional `cpp_name` / `cpp_header` / `rust_name` to items,
 ///   surfacing the backend type bindings of `extern type`s.
-pub const CURRENT_SCHEMA_VERSION: u32 = 3;
+/// - v4: added `source` locations to modules; item/function/field source now
+///   points at the declaration line rather than its attributes.
+pub const CURRENT_SCHEMA_VERSION: u32 = 4;
 
 /// Top-level JSON documentation structure
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
@@ -72,6 +74,9 @@ pub struct JsonModule {
     pub functions: Vec<JsonFunction>,
     /// Backend configurations (prologue/epilogue for code generation)
     pub backends: BTreeMap<String, Vec<JsonBackend>>,
+    /// Source location (file and line) - None for synthesized/folder modules
+    #[serde(default)]
+    pub source: Option<JsonSourceLocation>,
 }
 
 /// Backend configuration with prologue and epilogue
@@ -781,7 +786,7 @@ fn convert_item(
     };
 
     // Build source location for defined items (not predefined/internal)
-    let source = convert_location(&item.location);
+    let source = convert_location(&item.declaration_location);
 
     Some(JsonItem {
         path: item.path.to_string(),
@@ -876,6 +881,7 @@ fn build_module_hierarchy(semantic_state: &ResolvedSemanticState) -> BTreeMap<St
             extern_values,
             functions,
             backends,
+            source: convert_location(module.location()),
         };
 
         // Insert into hierarchy
@@ -897,6 +903,7 @@ fn build_module_hierarchy(semantic_state: &ResolvedSemanticState) -> BTreeMap<St
                     extern_values: vec![],
                     functions: vec![],
                     backends: BTreeMap::new(),
+                    source: None,
                 });
 
             for (i, segment) in segments.iter().enumerate().skip(1) {
@@ -918,6 +925,7 @@ fn build_module_hierarchy(semantic_state: &ResolvedSemanticState) -> BTreeMap<St
                             extern_values: vec![],
                             functions: vec![],
                             backends: BTreeMap::new(),
+                            source: None,
                         });
                 }
             }

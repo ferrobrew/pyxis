@@ -291,6 +291,7 @@ fn build_type(
         predefined: None,
         cfg: None,
         location: vftable_type_location,
+        declaration_location: vftable_type_location,
     })
 }
 
