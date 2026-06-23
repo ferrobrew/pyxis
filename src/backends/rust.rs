@@ -109,6 +109,47 @@ pub fn write_module(
         }
     }
 
+    // Import every item referenced by an intra-doc link in this module's docs
+    // so rustdoc can resolve `[`Type`]` / `[`Type::method`]` style links. The
+    // imports exist purely for the links (the names may otherwise be unused),
+    // hence the `allow`. Items local to this module or already in scope are
+    // skipped, as are paths that aren't plain Rust identifiers.
+    let module_scope = module.scope();
+    let mut doc_imports = semantic_state.doc_link_resolver().module_imports(
+        semantic_state.type_registry(),
+        semantic_state.modules(),
+        key,
+    );
+    doc_imports.retain(|p| {
+        p.parent().as_ref() != Some(key)
+            && !module_scope.contains(p)
+            && p.iter().all(|s| is_plain_ident(s.as_str()))
+    });
+    // De-duplicate by leaf name: two different items sharing a leaf can't both
+    // be imported unqualified (and the link would be ambiguous anyway).
+    {
+        let mut seen_leaves = std::collections::HashSet::new();
+        doc_imports.retain(|p| {
+            p.last()
+                .map(|s| seen_leaves.insert(s.as_str().to_string()))
+                .unwrap_or(false)
+        });
+    }
+    if !doc_imports.is_empty() {
+        let prefix = options.rust_module_prefix.as_ref();
+        let root = match prefix {
+            Some(prefix) => format!("crate::{prefix}"),
+            None => "crate".to_string(),
+        };
+        let inner = doc_imports
+            .iter()
+            .map(|p| p.to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
+        writeln!(raw_output, "#[allow(unused_imports)]")?;
+        writeln!(raw_output, "use {root}::{{{inner}}};")?;
+    }
+
     let cfg_ctx = crate::parser::cfg::CfgContext {
         backend: crate::Backend::Rust,
     };
@@ -948,6 +989,16 @@ fn build_extern_value(
 
 fn str_to_ident(s: &str) -> syn::Ident {
     quote::format_ident!("{}", s)
+}
+
+/// Whether `s` is a plain Rust identifier (no generics, operators, etc.), so it
+/// can appear verbatim in a `use` path.
+fn is_plain_ident(s: &str) -> bool {
+    let mut chars = s.chars();
+    chars
+        .next()
+        .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+        && chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
 
 /// Extract the type name from an ItemPath, returning an error if the path is empty.
