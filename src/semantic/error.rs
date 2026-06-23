@@ -366,6 +366,12 @@ pub enum SemanticError {
         path: ItemPath,
         location: ItemLocation,
     },
+    /// An intra-doc link in a doc comment (e.g. `[`Type::method`]`) didn't
+    /// resolve to a known item or member.
+    DocLinkNotFound {
+        path: String,
+        location: ItemLocation,
+    },
     /// Failed to find an item referenced in a use statement
     UseItemNotFound {
         path: ItemPath,
@@ -637,6 +643,9 @@ impl SemanticError {
             }
             SemanticError::TypeNotFound { path, .. } => {
                 format!("Type not found: `{path}`")
+            }
+            SemanticError::DocLinkNotFound { path, .. } => {
+                format!("Doc-comment link could not be resolved: `{path}`")
             }
             SemanticError::UseItemNotFound { path, .. } => {
                 format!("Item in use statement not found: `{path}`")
@@ -965,6 +974,7 @@ impl SemanticError {
             SemanticError::ModuleNotFound { location, .. } => Some(location),
             SemanticError::DuplicateModule { location, .. } => Some(location),
             SemanticError::TypeNotFound { location, .. } => Some(location),
+            SemanticError::DocLinkNotFound { location, .. } => Some(location),
             SemanticError::UseItemNotFound { location, .. } => Some(location),
             SemanticError::BackendDefinitionNotSupported { location, .. } => Some(location),
             SemanticError::MissingExternAttribute { location, .. } => Some(location),

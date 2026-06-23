@@ -406,9 +406,20 @@ impl SemanticState {
         // type without trapping the resolver in a defer loop.
         self.resolve_associated_functions()?;
 
+        // Everything is resolved, so intra-doc links can now be resolved and
+        // validated. The resolver is kept for the backends to reuse.
+        let doc_link_resolver =
+            crate::semantic::doc_links::DocLinkResolver::build(&self.type_registry, &self.modules);
+        crate::semantic::doc_links::validate(
+            &doc_link_resolver,
+            &self.type_registry,
+            &self.modules,
+        )?;
+
         Ok(ResolvedSemanticState {
             modules: self.modules,
             type_registry: self.type_registry,
+            doc_link_resolver,
         })
     }
 
@@ -857,6 +868,7 @@ impl SemanticState {
 pub struct ResolvedSemanticState {
     type_registry: TypeRegistry,
     modules: BTreeMap<ItemPath, Module>,
+    doc_link_resolver: crate::semantic::doc_links::DocLinkResolver,
 }
 
 impl ResolvedSemanticState {
@@ -866,5 +878,9 @@ impl ResolvedSemanticState {
 
     pub fn modules(&self) -> &BTreeMap<ItemPath, Module> {
         &self.modules
+    }
+
+    pub fn doc_link_resolver(&self) -> &crate::semantic::doc_links::DocLinkResolver {
+        &self.doc_link_resolver
     }
 }

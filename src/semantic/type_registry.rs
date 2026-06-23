@@ -118,6 +118,10 @@ impl TypeRegistry {
             .collect()
     }
 
+    pub(crate) fn iter(&self) -> impl Iterator<Item = (&ItemPath, &ItemDefinition)> {
+        self.types.iter()
+    }
+
     pub(crate) fn unresolved(&self) -> Vec<ItemPath> {
         self.types
             .iter()

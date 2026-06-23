@@ -3,6 +3,7 @@ pub mod types;
 
 mod attribute;
 mod bitflags_definition;
+pub mod doc_links;
 mod enum_definition;
 mod function;
 mod module;

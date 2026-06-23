@@ -25,6 +25,7 @@ mod bitflags;
 mod copyable_cloneable;
 mod defaultable;
 mod doc_comments;
+mod doc_links;
 mod enums;
 mod error_messages;
 mod extern_types;
