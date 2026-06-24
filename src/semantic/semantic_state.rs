@@ -492,12 +492,15 @@ impl SemanticState {
     }
 
     fn resolve_associated_functions_for(&mut self, path: &ItemPath) -> Result<()> {
-        use std::collections::HashSet;
+        use std::collections::{HashMap, HashSet};
 
-        use crate::semantic::{
-            error::DuplicateDefinitionKind,
-            function::{self, FunctionBuildOutcome},
-            types::{Function, FunctionBody, ItemDefinitionInner, Type},
+        use crate::{
+            parser::cfg::CfgPredicate,
+            semantic::{
+                error::DuplicateDefinitionKind,
+                function::{self, FunctionBuildOutcome},
+                types::{Function, FunctionBody, ItemDefinitionInner, Type},
+            },
         };
 
         let item = self.type_registry.get(path, &ItemLocation::internal())?;
@@ -638,20 +641,21 @@ impl SemanticState {
         // building never defers. Each function picks up its own impl
         // block's type parameters (so different impl blocks can declare
         // different method-level template parameters).
+        //
+        // `reserved` holds names already occupied by vftable slots or
+        // inherited (base) methods — an own method can't shadow those.
+        // `own_method_cfgs` tracks own methods only, so two own methods may
+        // share a name when their cfgs are mutually exclusive (e.g. one for
+        // `backend = "cpp"`, one for `backend = "rust"`), letting each backend
+        // surface its own declarations without a spurious duplicate error.
+        let reserved = used_names.clone();
+        let mut own_method_cfgs: HashMap<String, Vec<Option<CfgPredicate>>> = HashMap::new();
         for ImplFunc {
             func: grammar_fn,
             impl_type_parameters,
             impl_cfg,
         } in &impl_funcs
         {
-            if used_names.contains(&grammar_fn.name.0) {
-                return Err(SemanticError::DuplicateDefinition {
-                    name: grammar_fn.name.0.clone(),
-                    item_path: path.clone(),
-                    kind: DuplicateDefinitionKind::FunctionInTypeOrBase,
-                    location,
-                });
-            }
             // Method-level extras for this specific function come from its
             // own impl block, not the type's full set of impl blocks.
             let method_extras: Vec<String> = if impl_type_parameters.len() > struct_param_count {
@@ -682,12 +686,43 @@ impl SemanticState {
                 (None, None) => None,
                 (Some(b), None) => Some(b),
                 (None, Some(f)) => Some(f),
-                (Some(b), Some(f)) => Some(crate::parser::cfg::CfgPredicate::All {
+                (Some(b), Some(f)) => Some(CfgPredicate::All {
                     predicates: vec![b, f],
                     location,
                 }),
             };
-            used_names.insert(function.name.clone());
+
+            // Duplicate-name check. An own method may not shadow a vftable
+            // slot or an inherited (base) method (`reserved`). Two own
+            // methods may share a name only when their cfgs are provably
+            // disjoint — otherwise they could both be active in one build.
+            let name = function.name.clone();
+            let dup_error = || SemanticError::DuplicateDefinition {
+                name: name.clone(),
+                item_path: path.clone(),
+                kind: DuplicateDefinitionKind::FunctionInTypeOrBase,
+                location,
+            };
+            if reserved.contains(&name) {
+                return Err(dup_error());
+            }
+            let disjoint_with_existing = own_method_cfgs
+                .get(&name)
+                .map(|cfgs| {
+                    cfgs.iter()
+                        .all(|e| CfgPredicate::provably_disjoint(e.as_ref(), function.cfg.as_ref()))
+                })
+                .unwrap_or(true);
+            if !disjoint_with_existing {
+                return Err(dup_error());
+            }
+            if !used_names.contains(&name) {
+                used_names.insert(name.clone());
+            }
+            own_method_cfgs
+                .entry(name)
+                .or_default()
+                .push(function.cfg.clone());
             associated_functions.push(function);
         }
 

@@ -141,3 +141,94 @@ fn external_body_assign_form_is_rejected() {
         },
     );
 }
+
+// --- cfg-aware duplicate-method dedup -------------------------------
+//
+// Two `impl` blocks may declare a method with the same name when their
+// cfg predicates are mutually exclusive (e.g. one per backend), so each
+// backend surfaces its own declaration. This is what lets `#[external_body]`
+// declarations for the same method coexist across backends.
+
+#[test]
+fn cfg_disjoint_same_name_methods_allowed() {
+    let text = r#"
+        type Foo { x: u32 }
+        #[cfg(backend = "cpp")]
+        impl Foo {
+            #[external_body]
+            pub fn bar(&self) -> u32;
+        }
+        #[cfg(backend = "rust")]
+        impl Foo {
+            #[external_body]
+            pub fn bar(&self) -> u32;
+        }
+    "#;
+    let ast = crate::parser::parse_str_for_tests(text).unwrap();
+    let state = build_state(&ast, &IP::from("test")).unwrap();
+    let item = state
+        .type_registry()
+        .get(&IP::from("test::Foo"), &ItemLocation::internal())
+        .unwrap();
+    let bar_count = item
+        .resolved()
+        .and_then(|r| r.inner.as_type())
+        .map(|td| {
+            td.associated_functions
+                .iter()
+                .filter(|f| f.name == "bar")
+                .count()
+        })
+        .unwrap_or(0);
+    assert_eq!(
+        bar_count, 2,
+        "both cfg-disjoint `bar` declarations should surface"
+    );
+}
+
+#[test]
+fn cfg_identical_same_name_methods_rejected() {
+    let text = r#"
+        type Foo { x: u32 }
+        #[cfg(backend = "cpp")]
+        impl Foo {
+            #[external_body]
+            pub fn bar(&self) -> u32;
+        }
+        #[cfg(backend = "cpp")]
+        impl Foo {
+            #[external_body]
+            pub fn bar(&self) -> u32;
+        }
+    "#;
+    let ast = crate::parser::parse_str_for_tests(text).unwrap();
+    let err = build_state(&ast, &IP::from("test")).unwrap_err();
+    assert!(
+        matches!(err, SemanticError::DuplicateDefinition { .. }),
+        "expected DuplicateDefinition, got {err:?}"
+    );
+}
+
+#[test]
+fn ungated_overlaps_gated_same_name_methods_rejected() {
+    // An ungated method is "always active", so it overlaps any cfg-gated
+    // method of the same name → duplicate.
+    let text = r#"
+        type Foo { x: u32 }
+        impl Foo {
+            #[external_body]
+            pub fn bar(&self) -> u32;
+        }
+        #[cfg(backend = "rust")]
+        impl Foo {
+            #[external_body]
+            pub fn bar(&self) -> u32;
+        }
+    "#;
+    let ast = crate::parser::parse_str_for_tests(text).unwrap();
+    let err = build_state(&ast, &IP::from("test")).unwrap_err();
+    assert!(
+        matches!(err, SemanticError::DuplicateDefinition { .. }),
+        "expected DuplicateDefinition, got {err:?}"
+    );
+}

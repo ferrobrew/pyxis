@@ -131,6 +131,36 @@ impl CfgPredicate {
             CfgPredicate::Not { predicate, .. } => !predicate.evaluate(ctx),
         }
     }
+
+    /// Whether two predicates are *provably* mutually exclusive: true iff no
+    /// single known backend could make both active at once.
+    ///
+    /// Used by semantic analysis to permit same-named methods declared under
+    /// disjoint cfgs — e.g. one `#[cfg(backend = "cpp")]` and another
+    /// `#[cfg(backend = "rust")]` — since at most one is ever emitted per
+    /// build. An ungated method (`None`) is "always active" and therefore
+    /// overlaps every predicate (including another `None`), so it is never
+    /// disjoint.
+    ///
+    /// Soundness: this is exact on the `backend` axis (the only axis
+    /// `CfgContext` models). Identical predicates short-circuit to "not
+    /// disjoint". Non-backend atoms (`test`, etc.) are closed-world false
+    /// under every backend, so two *different* non-backend predicates are
+    /// reported as disjoint — harmless in practice since neither ever emits,
+    /// and they remain surfaced (with their cfg) in the JSON for consumers
+    /// to render.
+    pub fn provably_disjoint(a: Option<&CfgPredicate>, b: Option<&CfgPredicate>) -> bool {
+        let (Some(a), Some(b)) = (a, b) else {
+            return false; // None = always active → overlaps everything.
+        };
+        if a.equals_ignoring_locations(b) {
+            return false; // identical predicate → same condition → overlaps.
+        }
+        !crate::Backend::ALL.iter().any(|&backend| {
+            let ctx = CfgContext { backend };
+            a.evaluate(&ctx) && b.evaluate(&ctx)
+        })
+    }
 }
 
 #[cfg(test)]
@@ -256,5 +286,55 @@ mod tests {
         // Mathematical conventions: empty any = false, empty all = true.
         assert!(!any(vec![]).evaluate(&rust()));
         assert!(all(vec![]).evaluate(&rust()));
+    }
+
+    #[cfg(all(feature = "cpp", feature = "json"))]
+    #[test]
+    fn provably_disjoint_backend_keyvalues() {
+        // Different backend values can never both be active → disjoint.
+        let cpp = kv("backend", "cpp");
+        let rust = kv("backend", "rust");
+        assert!(CfgPredicate::provably_disjoint(Some(&cpp), Some(&rust)));
+        assert!(CfgPredicate::provably_disjoint(Some(&rust), Some(&cpp)));
+        // Identical predicates overlap (same condition).
+        assert!(!CfgPredicate::provably_disjoint(Some(&cpp), Some(&cpp)));
+    }
+
+    #[test]
+    fn provably_disjoint_none_overlaps_everything() {
+        // An ungated method (None) is "always active" → overlaps all,
+        // including another None.
+        let rust = kv("backend", "rust");
+        assert!(!CfgPredicate::provably_disjoint(Some(&rust), None));
+        assert!(!CfgPredicate::provably_disjoint(None, Some(&rust)));
+        assert!(!CfgPredicate::provably_disjoint(None, None));
+    }
+
+    #[cfg(all(feature = "cpp", feature = "json"))]
+    #[test]
+    fn provably_disjoint_overlapping_predicates() {
+        // `any(cpp, rust)` overlaps `cpp` (both true under cpp).
+        let cpp = kv("backend", "cpp");
+        let any_cpp_rust = any(vec![kv("backend", "cpp"), kv("backend", "rust")]);
+        assert!(!CfgPredicate::provably_disjoint(
+            Some(&cpp),
+            Some(&any_cpp_rust)
+        ));
+        // `backend = "rust"` and `not(backend = "rust")` partition the
+        // backends — exactly one is ever true → disjoint.
+        let rust = kv("backend", "rust");
+        let not_rust = not(kv("backend", "rust"));
+        assert!(CfgPredicate::provably_disjoint(
+            Some(&rust),
+            Some(&not_rust)
+        ));
+    }
+
+    #[test]
+    fn provably_disjoint_identical_nonbackend_predicates() {
+        // Two identical non-backend predicates are the same condition →
+        // overlap (not disjoint), regardless of closed-world evaluation.
+        let test = ident("test");
+        assert!(!CfgPredicate::provably_disjoint(Some(&test), Some(&test)));
     }
 }
