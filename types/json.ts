@@ -145,6 +145,13 @@ export type JsonDocumentation = {
  */
 schema_version?: number; 
 /**
+ * Version of pyxis that generated this document (from
+ * `CARGO_PKG_VERSION`), so downstream consumers can tell which
+ * toolchain produced a given doc set. Surfaced by the pyxis-defs
+ * `build.py` index, for example.
+ */
+pyxis_version?: string; 
+/**
  * Pointer size for the target platform
  */
 pointer_size: number; 

@@ -36,7 +36,10 @@ use crate::semantic::{
 ///   doc comments.
 /// - v5: added resolved `doc_links` (rustdoc-style intra-doc links) alongside
 ///   each `doc`.
-pub const CURRENT_SCHEMA_VERSION: u32 = 5;
+/// - v6: added top-level `pyxis_version`, recording which pyxis produced the
+///   document (from `CARGO_PKG_VERSION`) so downstream consumers can tell
+///   which toolchain generated a given doc set.
+pub const CURRENT_SCHEMA_VERSION: u32 = 6;
 
 /// Top-level JSON documentation structure
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
@@ -46,6 +49,12 @@ pub struct JsonDocumentation {
     /// as v1.
     #[serde(default = "default_schema_version_v1")]
     pub schema_version: u32,
+    /// Version of pyxis that generated this document (from
+    /// `CARGO_PKG_VERSION`), so downstream consumers can tell which
+    /// toolchain produced a given doc set. Surfaced by the pyxis-defs
+    /// `build.py` index, for example.
+    #[serde(default = "default_pyxis_version_unknown")]
+    pub pyxis_version: String,
     /// Pointer size for the target platform
     pub pointer_size: usize,
     /// Project name
@@ -60,6 +69,10 @@ pub struct JsonDocumentation {
 
 fn default_schema_version_v1() -> u32 {
     1
+}
+
+fn default_pyxis_version_unknown() -> String {
+    "unknown".to_string()
 }
 
 /// A module containing items and potentially submodules
@@ -655,6 +668,7 @@ pub fn build(
     // Create the top-level documentation structure
     let documentation = JsonDocumentation {
         schema_version: CURRENT_SCHEMA_VERSION,
+        pyxis_version: env!("CARGO_PKG_VERSION").to_string(),
         pointer_size: type_registry.pointer_size(),
         project_name: project_name.to_string(),
         items,
