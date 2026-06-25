@@ -1,10 +1,11 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { HEADER_INPUT_HEIGHT } from '../utils/styles';
 
 interface DropdownOption {
   value: string;
   label: string;
   datetime?: string;
+  group?: string;
 }
 
 interface CustomDropdownProps {
@@ -14,6 +15,57 @@ interface CustomDropdownProps {
   disabled?: boolean;
 }
 
+interface RenderGroup {
+  name?: string;
+  options: { option: DropdownOption; index: number }[];
+}
+
+// Label + optional subtitle, used by option buttons, group headers, and
+// the main dropdown button.
+function TileContent({ label, subtitle }: { label: string; subtitle?: string }) {
+  return (
+    <div className="flex flex-col min-w-0">
+      <span className="text-sm text-fg truncate">{label}</span>
+      {subtitle && (
+        <span className="text-xs text-fg-subtle mt-0.5 truncate">{subtitle}</span>
+      )}
+    </div>
+  );
+}
+
+// A clickable option in the dropdown list. Used both for flat options and
+// inside group submenus.
+function OptionButton({
+  option,
+  index,
+  focused,
+  selected,
+  onClick,
+  onHover,
+}: {
+  option: DropdownOption;
+  index: number;
+  focused: boolean;
+  selected: boolean;
+  onClick: () => void;
+  onHover: () => void;
+}) {
+  return (
+    <button
+      key={option.value}
+      type="button"
+      data-index={index}
+      onClick={onClick}
+      onMouseEnter={onHover}
+      className={`w-full px-3 py-2 text-left hover:bg-surface-2 focus:bg-surface-2 focus:outline-none ${
+        focused ? 'bg-surface-2' : ''
+      } ${selected ? 'bg-accent-soft' : ''}`}
+    >
+      <TileContent label={option.label} subtitle={option.datetime} />
+    </button>
+  );
+}
+
 export function CustomDropdown({ value, onChange, options, disabled }: CustomDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [focusedIndex, setFocusedIndex] = useState(-1);
@@ -21,6 +73,22 @@ export function CustomDropdown({ value, onChange, options, disabled }: CustomDro
   const buttonRef = useRef<HTMLButtonElement>(null);
 
   const selectedOption = options.find((opt) => opt.value === value) || options[0];
+
+  // Pre-group options: consecutive options sharing a `group` string form
+  // one group. Ungrouped options are each their own singleton group.
+  const renderGroups: RenderGroup[] = useMemo(() => {
+    const groups: RenderGroup[] = [];
+    let current: RenderGroup | null = null;
+    options.forEach((option, index) => {
+      const name = option.group;
+      if (!current || current.name !== name) {
+        current = { name, options: [] };
+        groups.push(current);
+      }
+      current.options.push({ option, index });
+    });
+    return groups;
+  }, [options]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent | TouchEvent) => {
@@ -94,6 +162,18 @@ export function CustomDropdown({ value, onChange, options, disabled }: CustomDro
     setFocusedIndex(-1);
   };
 
+  const renderOptionButton = (option: DropdownOption, index: number) => (
+    <OptionButton
+      key={option.value}
+      option={option}
+      index={index}
+      focused={index === focusedIndex}
+      selected={option.value === value}
+      onClick={() => handleOptionClick(option.value)}
+      onHover={() => setFocusedIndex(index)}
+    />
+  );
+
   return (
     <div className="relative w-full lg:w-100" ref={dropdownRef}>
       <button
@@ -125,26 +205,49 @@ export function CustomDropdown({ value, onChange, options, disabled }: CustomDro
       </button>
 
       {isOpen && (
-        <div className="absolute top-full mt-1 w-full bg-surface border border-edge rounded-md shadow-lg z-50 max-h-96 overflow-y-auto">
-          {options.map((option, index) => (
-            <button
-              key={option.value}
-              type="button"
-              data-index={index}
-              onClick={() => handleOptionClick(option.value)}
-              onMouseEnter={() => setFocusedIndex(index)}
-              className={`w-full px-3 py-2 text-left hover:bg-surface-2 focus:bg-surface-2 focus:outline-none ${
-                index === focusedIndex ? 'bg-surface-2' : ''
-              } ${option.value === value ? 'bg-accent-soft' : ''}`}
-            >
-              <div className="flex flex-col min-w-0">
-                <span className="text-sm text-fg truncate">{option.label}</span>
-                {option.datetime && (
-                  <span className="text-xs text-fg-subtle mt-0.5 truncate">{option.datetime}</span>
-                )}
+        <div className="absolute top-full mt-1 w-full bg-surface border border-edge rounded-md shadow-lg z-50">
+          {renderGroups.map((group, gi) => {
+            // Single-option groups (or ungrouped) render flat.
+            if (!group.name || group.options.length === 1) {
+              return (
+                <div key={gi}>
+                  {group.options.map(({ option, index }) =>
+                    renderOptionButton(option, index)
+                  )}
+                </div>
+              );
+            }
+
+            // Multi-option group: header + submenu.
+            // Desktop: submenu expands to the right on hover.
+            // Mobile: options shown inline (header hidden).
+            const hasSelected = group.options.some(
+              ({ option }) => option.value === value,
+            );
+            const versions = group.options
+              .map(({ option }) => {
+                const m = option.label.match(/\(([^)]+)\)/);
+                return m ? m[1] : option.label;
+              })
+              .join(' · ');
+
+            return (
+              <div key={gi} className="group/sub relative">
+                <div
+                  className={`hidden lg:block w-full px-3 py-2 text-left hover:bg-surface-2 ${
+                    hasSelected ? 'bg-accent-soft' : ''
+                  }`}
+                >
+                  <TileContent label={group.name} subtitle={versions} />
+                </div>
+                <div className="block lg:absolute lg:left-full lg:top-0 lg:min-w-full lg:bg-surface lg:border lg:border-edge lg:rounded-md lg:shadow-lg lg:hidden lg:group-hover/sub:block">
+                  {group.options.map(({ option, index }) =>
+                    renderOptionButton(option, index)
+                  )}
+                </div>
               </div>
-            </button>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

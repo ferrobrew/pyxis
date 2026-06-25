@@ -315,6 +315,9 @@ export function FileUpload() {
       value: doc.path,
       label: doc.name,
       datetime: `Updated: ${formatLastModified(doc.last_modified_iso8601)}`,
+      // Group by the project name (everything before the first `(`),
+      // so multiple versions of the same project cluster together.
+      group: doc.name.split(' (')[0].trim() || undefined,
     })),
   ];
 
