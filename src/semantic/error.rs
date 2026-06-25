@@ -384,6 +384,24 @@ pub enum SemanticError {
         backend: crate::Backend,
         location: ItemLocation,
     },
+    /// `prologue for <Type>` / `epilogue for <Type>` referenced a type that
+    /// doesn't resolve to any known item. The target must name a type
+    /// visible from the backend block's module.
+    BackendForTargetNotFound {
+        target: ItemPath,
+        module: ItemPath,
+        location: ItemLocation,
+    },
+    /// `prologue for <Type>` / `epilogue for <Type>` resolved to a type, but
+    /// that type is defined in a different module. Attribution is
+    /// module-scoped: a splice can only target a type defined in the same
+    /// module as the `backend` block.
+    BackendForTargetCrossModule {
+        target: ItemPath,
+        module: ItemPath,
+        defined_in: ItemPath,
+        location: ItemLocation,
+    },
     /// Missing required attribute for extern type
     MissingExternAttribute {
         attribute_name: AttributeName,
@@ -653,6 +671,21 @@ impl SemanticError {
             SemanticError::BackendDefinitionNotSupported { backend, .. } => {
                 format!(
                     "`prologue definition` / `epilogue definition` is only valid for `backend cpp`; got `backend {backend}`"
+                )
+            }
+            SemanticError::BackendForTargetNotFound { target, module, .. } => {
+                format!(
+                    "`for {target}` on a `backend` block in module `{module}` does not resolve to a known type"
+                )
+            }
+            SemanticError::BackendForTargetCrossModule {
+                target,
+                module,
+                defined_in,
+                ..
+            } => {
+                format!(
+                    "`for {target}` on a `backend` block in module `{module}` resolves to a type defined in module `{defined_in}`; attribution must target a type defined in the same module"
                 )
             }
             SemanticError::MissingExternAttribute {
@@ -977,6 +1010,8 @@ impl SemanticError {
             SemanticError::DocLinkNotFound { location, .. } => Some(location),
             SemanticError::UseItemNotFound { location, .. } => Some(location),
             SemanticError::BackendDefinitionNotSupported { location, .. } => Some(location),
+            SemanticError::BackendForTargetNotFound { location, .. } => Some(location),
+            SemanticError::BackendForTargetCrossModule { location, .. } => Some(location),
             SemanticError::MissingExternAttribute { location, .. } => Some(location),
             SemanticError::MissingAttribute { location, .. } => Some(location),
             SemanticError::InvalidAttributeFunctionArgumentCount { location, .. } => Some(location),

@@ -561,26 +561,40 @@ impl PrettyPrinter {
         if only_prologue_header {
             let prologue = backend.prologue.header.as_ref().unwrap();
             let s = self.format_string_with_format(prologue, backend.prologue.header_format);
-            writeln!(&mut self.output, "backend {} prologue {s};", backend.name).unwrap();
+            let m = self.splice_modifiers(false, backend.prologue.for_type.as_ref());
+            writeln!(
+                &mut self.output,
+                "backend {} prologue{m} {s};",
+                backend.name
+            )
+            .unwrap();
         } else if only_prologue_def {
             let prologue = backend.prologue.definition.as_ref().unwrap();
             let s = self.format_string_with_format(prologue, backend.prologue.definition_format);
+            let m = self.splice_modifiers(true, backend.prologue.for_type.as_ref());
             writeln!(
                 &mut self.output,
-                "backend {} prologue definition {s};",
+                "backend {} prologue{m} {s};",
                 backend.name
             )
             .unwrap();
         } else if only_epilogue_header {
             let epilogue = backend.epilogue.header.as_ref().unwrap();
             let s = self.format_string_with_format(epilogue, backend.epilogue.header_format);
-            writeln!(&mut self.output, "backend {} epilogue {s};", backend.name).unwrap();
+            let m = self.splice_modifiers(false, backend.epilogue.for_type.as_ref());
+            writeln!(
+                &mut self.output,
+                "backend {} epilogue{m} {s};",
+                backend.name
+            )
+            .unwrap();
         } else if only_epilogue_def {
             let epilogue = backend.epilogue.definition.as_ref().unwrap();
             let s = self.format_string_with_format(epilogue, backend.epilogue.definition_format);
+            let m = self.splice_modifiers(true, backend.epilogue.for_type.as_ref());
             writeln!(
                 &mut self.output,
-                "backend {} epilogue definition {s};",
+                "backend {} epilogue{m} {s};",
                 backend.name
             )
             .unwrap();
@@ -598,28 +612,48 @@ impl PrettyPrinter {
             if let Some(text) = &backend.prologue.header {
                 self.write_indent();
                 let s = self.format_string_with_format(text, backend.prologue.header_format);
-                writeln!(&mut self.output, "prologue {s};").unwrap();
+                let m = self.splice_modifiers(false, backend.prologue.for_type.as_ref());
+                writeln!(&mut self.output, "prologue{m} {s};").unwrap();
             }
             if let Some(text) = &backend.prologue.definition {
                 self.write_indent();
                 let s = self.format_string_with_format(text, backend.prologue.definition_format);
-                writeln!(&mut self.output, "prologue definition {s};").unwrap();
+                let m = self.splice_modifiers(true, backend.prologue.for_type.as_ref());
+                writeln!(&mut self.output, "prologue{m} {s};").unwrap();
             }
             if let Some(text) = &backend.epilogue.header {
                 self.write_indent();
                 let s = self.format_string_with_format(text, backend.epilogue.header_format);
-                writeln!(&mut self.output, "epilogue {s};").unwrap();
+                let m = self.splice_modifiers(false, backend.epilogue.for_type.as_ref());
+                writeln!(&mut self.output, "epilogue{m} {s};").unwrap();
             }
             if let Some(text) = &backend.epilogue.definition {
                 self.write_indent();
                 let s = self.format_string_with_format(text, backend.epilogue.definition_format);
-                writeln!(&mut self.output, "epilogue definition {s};").unwrap();
+                let m = self.splice_modifiers(true, backend.epilogue.for_type.as_ref());
+                writeln!(&mut self.output, "epilogue{m} {s};").unwrap();
             }
 
             self.dedent();
             self.write_indent();
             writeln!(&mut self.output, "}}").unwrap();
         }
+    }
+
+    /// Format the modifier suffix for a splice slot: an optional `definition`
+    /// followed by an optional `for <ItemPath>`, each preceded by a space.
+    /// Returns an empty string when neither modifier is present so it can be
+    /// interpolated into `"... prologue{m} {s};"` without trimming.
+    fn splice_modifiers(&self, is_definition: bool, for_type: Option<&ItemPath>) -> String {
+        let mut out = String::new();
+        if is_definition {
+            out.push_str(" definition");
+        }
+        if let Some(path) = for_type {
+            out.push_str(" for ");
+            out.push_str(&self.format_item_path(path));
+        }
+        out
     }
 
     fn print_item_definition(&mut self, def: &ItemDefinition) {

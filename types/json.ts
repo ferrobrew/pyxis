@@ -19,6 +19,9 @@ epilogue: JsonBackendSplice | null };
  * A backend splice payload. `header` lands in the language's primary
  * declaration surface (Rust module, C++ header). `definition` lands in
  * the C++ source file and is always `None` for non-cpp backends.
+ * `for_type`, when set, is the resolved absolute item path this splice is
+ * attributed to (`prologue/epilogue for <Type>`); the viewer renders such
+ * splices on the owning type's page rather than the module page.
  */
 export type JsonBackendSplice = { 
 /**
@@ -28,7 +31,12 @@ header: string | null;
 /**
  * Code spliced into the C++ source file (cpp backend only)
  */
-definition: string | null };
+definition: string | null; 
+/**
+ * Resolved absolute item path this splice is attributed to, when tagged
+ * with `for <Type>`. `None`/absent means module-level rendering.
+ */
+for_type?: string | null };
 
 export type JsonBitflag = { 
 /**

@@ -291,6 +291,9 @@ impl SemanticState {
         // distinct .cpp source file, so the modifier is meaningless
         // (and probably a user typo) elsewhere.
         self.validate_backend_definitions()?;
+        // Resolve `prologue/epilogue for <Type>` attribution targets to
+        // absolute item paths and enforce same-module attribution.
+        self.validate_backend_for_targets()?;
 
         // Track unresolved type references across iterations
         let mut unresolved_references: Vec<UnresolvedTypeReference> = vec![];
@@ -883,6 +886,58 @@ impl SemanticState {
         Ok(())
     }
 
+    /// Resolve and validate `prologue for <Type>` / `epilogue for <Type>`
+    /// attribution targets. Each target must resolve to a type defined in
+    /// the same module as the `backend` block. On success the splice's
+    /// `for_type` is replaced with the resolved absolute item path, so
+    /// downstream backends / JSON emit a stable target. Cross-module
+    /// attribution is rejected: a splice can only decorate a type owned
+    /// by its own module.
+    fn validate_backend_for_targets(&mut self) -> Result<()> {
+        let Self {
+            modules,
+            type_registry,
+        } = self;
+        for module in modules.values_mut() {
+            let module_path = module.path.clone();
+            for backend_list in module.backends.values_mut() {
+                for backend in backend_list {
+                    for slot in [&mut backend.prologue, &mut backend.epilogue] {
+                        let Some(raw) = slot.for_type.take() else {
+                            continue;
+                        };
+                        // Try module-relative first (bare name like
+                        // `SharedPtr`), then the path as-written (absolute,
+                        // e.g. `a::b::Type`).
+                        let relative = join_item_path(&module_path, &raw);
+                        let resolved = if type_registry.contains(&relative) {
+                            relative
+                        } else if type_registry.contains(&raw) {
+                            raw.clone()
+                        } else {
+                            return Err(SemanticError::BackendForTargetNotFound {
+                                target: raw,
+                                module: module_path,
+                                location: backend.location,
+                            });
+                        };
+                        if !module.definition_paths.contains(&resolved) {
+                            let defined_in = resolved.parent().unwrap_or_else(ItemPath::empty);
+                            return Err(SemanticError::BackendForTargetCrossModule {
+                                target: raw,
+                                module: module_path,
+                                defined_in,
+                                location: backend.location,
+                            });
+                        }
+                        slot.for_type = Some(resolved);
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// Check if a module can access a private item in another module.
     /// In Rust-like visibility rules, private items are visible to:
     /// - The same module
@@ -897,6 +952,15 @@ impl SemanticState {
         // Check if from_module starts with item_module (is a descendant)
         from_module.starts_with(item_module)
     }
+}
+
+/// Concatenate two item paths: `prefix::suffix`.
+fn join_item_path(prefix: &ItemPath, suffix: &ItemPath) -> ItemPath {
+    let mut out = prefix.clone();
+    for seg in suffix.iter() {
+        out.push(seg.clone());
+    }
+    out
 }
 
 #[derive(Debug)]

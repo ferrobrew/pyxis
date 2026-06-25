@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useDocumentation } from '../contexts/DocumentationContext';
-import { getModulePath, findLongestValidAncestor } from '../utils/pathUtils';
+import { getModulePath, findLongestValidAncestor, findModule } from '../utils/pathUtils';
 import { buildModuleUrl, buildItemUrl, buildRootUrl } from '../utils/navigation';
 import { getItemTypeColor, type ItemType } from '../utils/colors';
 import { TypeRef } from './TypeRef';
@@ -17,11 +17,13 @@ import { SourceLink, SourceName } from './SourceLink';
 import { Markdown } from './Markdown';
 import { AnchorLink, CopyButton } from './Actions';
 import { OnThisPage, type TocEntry } from './OnThisPage';
+import { TypeBackendCode } from './BackendSpliceSection';
 import type {
   JsonTypeDefinition,
   JsonEnumDefinition,
   JsonBitflagsDefinition,
   JsonDocLink,
+  JsonBackend,
 } from '@pyxis/types';
 
 // Keyword shown in the signature header for each item kind, mirroring how the
@@ -330,6 +332,20 @@ export function ItemView() {
 
   const modulePath = getModulePath(decodedPath);
 
+  // Backend splices tagged `for <Type>` are stored on the enclosing module;
+  // pull them here so the type page can render its own prologue/epilogue.
+  const moduleBackends =
+    (findModule(documentation.modules, modulePath) as { backends?: { [key: string]: unknown } } | null)
+      ?.backends ?? {};
+  const hasBackendProvided = Object.values(moduleBackends).some((configs) =>
+    (configs as JsonBackend[]).some((c) =>
+      (['prologue', 'epilogue'] as const).some((slot) => {
+        const s = c[slot];
+        return s && s.for_type === decodedPath && (s.header || s.definition);
+      })
+    )
+  );
+
   // Determine item type for color coding
   let itemType: ItemType = 'type';
   if (item.kind.type === 'enum') itemType = 'enum';
@@ -361,6 +377,7 @@ export function ItemView() {
   } else if (k.type === 'bitflags') {
     toc.push({ id: 'flags', label: 'Flags' });
   }
+  if (hasBackendProvided) toc.push({ id: 'backend-provided', label: 'Backend-provided' });
 
   return (
     <div className="mx-auto flex max-w-6xl gap-8 px-4 py-6 md:px-8 lg:px-10">
@@ -417,6 +434,9 @@ export function ItemView() {
         {item.kind.type === 'type' && <TypeView def={item.kind} modulePath={modulePath} />}
         {item.kind.type === 'enum' && <EnumView def={item.kind} modulePath={modulePath} />}
         {item.kind.type === 'bitflags' && <BitflagsView def={item.kind} />}
+        {hasBackendProvided && (
+          <TypeBackendCode backends={moduleBackends} itemPath={decodedPath} />
+        )}
       </article>
 
       <OnThisPage entries={toc} />

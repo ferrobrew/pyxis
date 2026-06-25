@@ -39,7 +39,10 @@ use crate::semantic::{
 /// - v6: added top-level `pyxis_version`, recording which pyxis produced the
 ///   document (from `CARGO_PKG_VERSION`) so downstream consumers can tell
 ///   which toolchain generated a given doc set.
-pub const CURRENT_SCHEMA_VERSION: u32 = 6;
+/// - v7: added `for_type` to `JsonBackendSplice` — the resolved absolute item
+///   path for `prologue/epilogue for <Type>` attribution, so the viewer can
+///   render the splice on the owning type's page instead of the module page.
+pub const CURRENT_SCHEMA_VERSION: u32 = 7;
 
 /// Top-level JSON documentation structure
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
@@ -110,12 +113,19 @@ pub struct JsonBackend {
 /// A backend splice payload. `header` lands in the language's primary
 /// declaration surface (Rust module, C++ header). `definition` lands in
 /// the C++ source file and is always `None` for non-cpp backends.
+/// `for_type`, when set, is the resolved absolute item path this splice is
+/// attributed to (`prologue/epilogue for <Type>`); the viewer renders such
+/// splices on the owning type's page rather than the module page.
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 pub struct JsonBackendSplice {
     /// Code spliced into the header / declaration surface
     pub header: Option<String>,
     /// Code spliced into the C++ source file (cpp backend only)
     pub definition: Option<String>,
+    /// Resolved absolute item path this splice is attributed to, when tagged
+    /// with `for <Type>`. `None`/absent means module-level rendering.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub for_type: Option<String>,
 }
 
 /// Source location of an item (file index and line number)
@@ -1009,6 +1019,7 @@ fn convert_backend(backend: &Backend) -> JsonBackend {
             Some(JsonBackendSplice {
                 header: splice.header.clone(),
                 definition: splice.definition.clone(),
+                for_type: splice.for_type.as_ref().map(|p| p.to_string()),
             })
         }
     };

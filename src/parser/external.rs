@@ -24,6 +24,12 @@ use super::attributes::Attribute;
 /// considers its primary output); the `definition` modifier
 /// (`prologue definition r#"..."#;`) targets the source file - currently
 /// only meaningful for `backend cpp` where header / source are distinct.
+///
+/// An optional `for <ItemPath>` clause (`epilogue for SharedPtr r#"..."#;`)
+/// attributes the splice to a type defined in the same module, so the
+/// viewer renders it on that type's page instead of the module page.
+/// The path is stored as-written here and resolved to an absolute item
+/// path during semantic analysis.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(test, derive(StripLocations))]
 pub struct BackendSplice {
@@ -31,6 +37,10 @@ pub struct BackendSplice {
     pub header_format: StringFormat,
     pub definition: Option<String>,
     pub definition_format: StringFormat,
+    /// `for <Type>` attribution target, as-written (module-relative or
+    /// absolute). Resolved to an absolute item path at semantic-analysis
+    /// time; `None` means "module-level" (today's rendering).
+    pub for_type: Option<ItemPath>,
 }
 impl Default for BackendSplice {
     fn default() -> Self {
@@ -39,6 +49,7 @@ impl Default for BackendSplice {
             header_format: StringFormat::Regular,
             definition: None,
             definition_format: StringFormat::Regular,
+            for_type: None,
         }
     }
 }
@@ -135,6 +146,26 @@ impl Backend {
     }
     pub fn with_uses(mut self, uses: impl IntoIterator<Item = UseTree>) -> Self {
         self.uses = uses.into_iter().collect();
+        self
+    }
+    pub fn with_prologue_for(
+        mut self,
+        prologue: impl Into<String>,
+        for_type: impl Into<ItemPath>,
+    ) -> Self {
+        self.prologue.header = Some(prologue.into());
+        self.prologue.header_format = StringFormat::Raw;
+        self.prologue.for_type = Some(for_type.into());
+        self
+    }
+    pub fn with_epilogue_for(
+        mut self,
+        epilogue: impl Into<String>,
+        for_type: impl Into<ItemPath>,
+    ) -> Self {
+        self.epilogue.header = Some(epilogue.into());
+        self.epilogue.header_format = StringFormat::Raw;
+        self.epilogue.for_type = Some(for_type.into());
         self
     }
 }
@@ -456,18 +487,41 @@ impl Parser {
     }
 
     /// Parse the body of a single `prologue`/`epilogue` slot, after the
-    /// keyword has been consumed. Optionally accepts a `definition`
-    /// modifier (only meaningful for `backend cpp`; rejected at the
-    /// semantic layer for other backends). Then expects a string literal
+    /// keyword has been consumed. Accepts, in any order, an optional
+    /// `definition` modifier (only meaningful for `backend cpp`; rejected
+    /// at the semantic layer for other backends) and an optional
+    /// `for <ItemPath>` attribution target. Then expects a string literal
     /// and a trailing semicolon.
     fn parse_backend_splice_slot(&mut self, slot: &mut BackendSplice) -> Result<(), ParseError> {
-        // Optional `definition` modifier.
-        let is_definition = matches!(
-            self.peek(),
-            TokenKind::Ident(s) if s == "definition"
-        );
-        if is_definition {
-            self.advance();
+        // Optional modifiers: `definition` and `for <ItemPath>`, in any order.
+        // Each may appear at most once per directive; duplicates fall through
+        // to the string literal parse and surface as a clear "expected string
+        // literal" error. The local flags reset per call, so a braced
+        // `backend cpp { epilogue for T r#"..."#; epilogue definition for T r#"..."#; }`
+        // correctly sets `for_type` on both directives (they share the same
+        // `BackendSplice`, but each directive is parsed independently).
+        let mut is_definition = false;
+        let mut has_for = false;
+        loop {
+            match self.peek() {
+                TokenKind::Ident(s) if s == "definition" && !is_definition => {
+                    is_definition = true;
+                    self.advance();
+                }
+                TokenKind::Ident(s) if s == "for" && !has_for => {
+                    has_for = true;
+                    self.advance(); // consume `for`
+                    if !matches!(self.peek(), TokenKind::Ident(_)) {
+                        return Err(ParseError::ExpectedIdentifier {
+                            found: self.peek().clone(),
+                            location: self.current().location,
+                        });
+                    }
+                    let (path, _loc) = self.parse_item_path()?;
+                    slot.for_type = Some(path);
+                }
+                _ => break,
+            }
         }
         let expr = self.parse_expr()?;
         let Expr::StringLiteral { value, format, .. } = expr else {
@@ -1031,6 +1085,122 @@ backend cpp {
                     StringFormat::Raw,
                 ),
         ]);
+
+        assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
+    }
+
+    #[test]
+    fn can_parse_backend_with_for_type() {
+        // `for <Type>` tags a splice as belonging to that type's page rather
+        // than the module page. Both shorthand and braced forms accept it,
+        // and it composes with `definition` in any order.
+        let text = r##"
+backend rust epilogue for Widget r#"
+    impl Widget { pub fn new() -> Widget { Widget { id: 0 } } }
+"#;
+
+backend rust {
+    prologue for Handle r#"
+type HandleRaw = *mut u8;
+"#;
+    epilogue for Handle r#"
+    impl Handle { pub fn null() -> Handle { Handle { raw: std::ptr::null_mut() } } }
+"#;
+}
+"##;
+
+        let ast = M::new().with_backends([
+            B::new("rust").with_epilogue_for(
+                "\n    impl Widget { pub fn new() -> Widget { Widget { id: 0 } } }\n",
+                "Widget",
+            ),
+            B::new("rust")
+                .with_prologue_for("\ntype HandleRaw = *mut u8;\n", "Handle")
+                .with_epilogue_for(
+                    "\n    impl Handle { pub fn null() -> Handle { Handle { raw: std::ptr::null_mut() } } }\n",
+                    "Handle",
+                ),
+        ]);
+
+        assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
+    }
+
+    #[cfg(feature = "cpp")]
+    #[test]
+    fn can_parse_backend_for_type_with_definition() {
+        // `definition` and `for` are independent modifiers — either order works,
+        // and `for` without `definition` lands in `header` as usual.
+        let text = r##"
+backend cpp epilogue definition for Probe r#"
+    bool Probe::read() const { return value; }
+"#;
+backend cpp epilogue for Probe definition r#"
+    bool Probe::init() { value = 0; }
+"#;
+backend cpp epilogue for Probe r#"
+    bool Probe::is_ready() const { return value != 0; }
+"#;
+"##;
+
+        let ast = M::new().with_backends([
+            {
+                let mut b = B::new("cpp");
+                b.epilogue.definition =
+                    Some("\n    bool Probe::read() const { return value; }\n".into());
+                b.epilogue.definition_format = StringFormat::Raw;
+                b.epilogue.for_type = Some("Probe".into());
+                b
+            },
+            {
+                let mut b = B::new("cpp");
+                b.epilogue.definition = Some("\n    bool Probe::init() { value = 0; }\n".into());
+                b.epilogue.definition_format = StringFormat::Raw;
+                b.epilogue.for_type = Some("Probe".into());
+                b
+            },
+            {
+                let mut b = B::new("cpp");
+                b.epilogue.header =
+                    Some("\n    bool Probe::is_ready() const { return value != 0; }\n".into());
+                b.epilogue.header_format = StringFormat::Raw;
+                b.epilogue.for_type = Some("Probe".into());
+                b
+            },
+        ]);
+
+        assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
+    }
+
+    #[cfg(feature = "cpp")]
+    #[test]
+    fn can_parse_braced_for_type_with_header_and_definition() {
+        // A braced `backend cpp { }` block that has both an `epilogue for T`
+        // (header) and `epilogue definition for T` (definition) for the same
+        // type. The braced form reuses one BackendSplice for all epilogue
+        // entries, so `for_type` must be settable on the second entry too
+        // (regression: previously blocked by `slot.for_type.is_none()` guard).
+        let text = r##"
+backend cpp {
+    epilogue for Probe r#"
+    bool Probe::is_ready() const;
+"#;
+    epilogue definition for Probe r#"
+    bool Probe::is_ready() const { return value != 0; }
+"#;
+}
+"##;
+
+        let ast = M::new().with_backends([{
+            let mut b = B::new("cpp");
+            b.epilogue.header =
+                Some("\n    bool Probe::is_ready() const;\n".into());
+            b.epilogue.header_format = StringFormat::Raw;
+            b.epilogue.definition =
+                Some("\n    bool Probe::is_ready() const { return value != 0; }\n".into());
+            b.epilogue.definition_format = StringFormat::Raw;
+            b.epilogue.for_type = Some("Probe".into());
+            b
+        }]);
 
         assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
     }

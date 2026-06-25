@@ -550,11 +550,17 @@ impl ItemDefinition {
 /// independently. `header` is the default; `definition` is only valid
 /// for the cpp backend (rejected at semantic-validation time elsewhere)
 /// and lands in the `.cpp` source file rather than the `.hpp` header.
+///
+/// `for_type`, when set, holds the **resolved absolute item path** of the
+/// type this splice is attributed to (from `epilogue for <Type> ...`). It
+/// is resolved and validated (same-module) during semantic analysis; the
+/// grammar carries the as-written path. `None` means "module-level".
 #[derive(PartialEq, Eq, Debug, Clone, Default)]
 #[cfg_attr(test, derive(StripLocations))]
 pub struct BackendSplice {
     pub header: Option<String>,
     pub definition: Option<String>,
+    pub for_type: Option<ItemPath>,
 }
 impl BackendSplice {
     pub fn is_empty(&self) -> bool {
@@ -581,10 +587,12 @@ impl Backend {
             prologue: BackendSplice {
                 header: prologue.into(),
                 definition: None,
+                for_type: None,
             },
             epilogue: BackendSplice {
                 header: epilogue.into(),
                 definition: None,
+                for_type: None,
             },
             uses: Vec::new(),
             location: ItemLocation::test(),
@@ -596,6 +604,14 @@ impl Backend {
     }
     pub fn with_epilogue_definition(mut self, def: impl Into<String>) -> Self {
         self.epilogue.definition = Some(def.into());
+        self
+    }
+    pub fn with_prologue_for(mut self, for_type: impl Into<ItemPath>) -> Self {
+        self.prologue.for_type = Some(for_type.into());
+        self
+    }
+    pub fn with_epilogue_for(mut self, for_type: impl Into<ItemPath>) -> Self {
+        self.epilogue.for_type = Some(for_type.into());
         self
     }
     pub fn with_uses(mut self, uses: impl IntoIterator<Item = crate::grammar::ItemPath>) -> Self {

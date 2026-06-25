@@ -6,10 +6,9 @@ import { buildModuleUrl, buildItemUrl, buildRootUrl } from '../utils/navigation'
 import { getItemTypeColor, type ItemType } from '../utils/colors';
 import { Attributes } from './Attributes';
 import { externAttributeGroups } from '../utils/attributes';
-import { Collapsible } from './Collapsible';
+import { BackendSpliceSection } from './BackendSpliceSection';
 import { TypeRef } from './TypeRef';
 import { FunctionDisplay } from './FunctionDisplay';
-import { CodeBlock } from './CodeBlock';
 import { Breadcrumbs } from './Breadcrumbs';
 import { Markdown } from './Markdown';
 import { AnchorLink, CopyButton } from './Actions';
@@ -18,7 +17,6 @@ import { OnThisPage, type TocEntry } from './OnThisPage';
 import type {
   JsonExternValue,
   JsonBackend,
-  JsonBackendSplice,
   JsonItem,
   JsonFunction,
   JsonSourceLocation,
@@ -93,112 +91,6 @@ function ExternValueItem({ extern: ext }: { extern: JsonExternValue }) {
           <Markdown docLinks={ext.doc_links}>{ext.doc}</Markdown>
         </div>
       )}
-    </div>
-  );
-}
-
-// Backend prologue/epilogue section. The cpp backend can populate two
-// payloads per slot — `header` (lands in the `.hpp`) and `definition`
-// (lands in the `.cpp`). Other backends only ever populate `header`,
-// so they render as a single block; cpp renders both with labels.
-type SpliceSlot = 'prologue' | 'epilogue';
-
-interface BackendSpliceSectionProps {
-  backends: { [key: string]: unknown };
-  slot: SpliceSlot;
-}
-
-// Trim leading/trailing blank lines and remove the largest common
-// leading-whitespace prefix shared by every non-blank line. Splices
-// are stored as raw-string literals in the source (often
-// `r#"<newline>    body<newline>"#`), so without this the rendered
-// block carries gratuitous outer padding.
-function normalizeSpliceText(text: string): string {
-  const lines = text.split('\n');
-  let start = 0;
-  let end = lines.length;
-  while (start < end && lines[start].trim() === '') start++;
-  while (end > start && lines[end - 1].trim() === '') end--;
-  const trimmed = lines.slice(start, end);
-  if (trimmed.length === 0) return '';
-
-  let minIndent = Infinity;
-  for (const line of trimmed) {
-    if (line.trim() === '') continue;
-    const match = line.match(/^[ \t]*/);
-    const indent = match ? match[0].length : 0;
-    if (indent < minIndent) minIndent = indent;
-  }
-  if (!isFinite(minIndent) || minIndent === 0) return trimmed.join('\n');
-
-  return trimmed.map((line) => line.slice(minIndent)).join('\n');
-}
-
-function joinSplicePart(splices: JsonBackendSplice[], part: 'header' | 'definition'): string {
-  return splices
-    .map((s) => s[part])
-    .filter((v): v is string => v != null)
-    .map(normalizeSpliceText)
-    .filter((v) => v.length > 0)
-    .join('\n\n');
-}
-
-function BackendSpliceSection({ backends, slot }: BackendSpliceSectionProps) {
-  if (!backends || Object.keys(backends).length === 0) return null;
-
-  const title = slot === 'prologue' ? 'Backend Prologue' : 'Backend Epilogue';
-  const slotLabel = slot === 'prologue' ? 'Prologue' : 'Epilogue';
-  const sectionMargin = slot === 'prologue' ? 'mb-8' : 'my-8';
-  const sectionId = slot === 'prologue' ? 'backend-prologue' : 'backend-epilogue';
-
-  const hasAny = Object.values(backends).some((configs) =>
-    (configs as JsonBackend[]).some((config) => {
-      const splice = config[slot];
-      return splice && (splice.header || splice.definition);
-    })
-  );
-  if (!hasAny) return null;
-
-  return (
-    <div id={sectionId} className={sectionMargin}>
-      <SectionHeader anchor={sectionId}>{title}</SectionHeader>
-      {Object.entries(backends).map(([backendName, configs]) => {
-        const splices = (configs as JsonBackend[])
-          .map((config) => config[slot])
-          .filter((s): s is JsonBackendSplice => s != null);
-
-        const joinedHeader = joinSplicePart(splices, 'header');
-        const joinedDefinition = joinSplicePart(splices, 'definition');
-        if (!joinedHeader && !joinedDefinition) return null;
-
-        // Label the parts whenever a `definition` payload exists - that's
-        // the only signal-bearing case (cpp routes definitions to the
-        // `.cpp` source, headers to the `.hpp`). Header-only blocks
-        // (rust, json, header-only cpp) don't need a label.
-        const showLabels = !!joinedDefinition;
-        const parts = [
-          joinedHeader ? { label: 'header', code: joinedHeader } : null,
-          joinedDefinition ? { label: 'definition', code: joinedDefinition } : null,
-        ].filter((p): p is { label: string; code: string } => p !== null);
-
-        return (
-          <div key={backendName} className="mb-4">
-            <h3 className="mb-2 font-mono text-sm font-semibold text-fg-muted">{backendName}</h3>
-            <Collapsible title={slotLabel}>
-              {parts.map((part, idx) => (
-                <div key={part.label} className={idx > 0 ? 'border-t border-edge' : ''}>
-                  {showLabels && (
-                    <div className="border-b border-edge bg-surface px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-fg-subtle">
-                      {part.label}
-                    </div>
-                  )}
-                  <CodeBlock code={part.code} language={backendName} />
-                </div>
-              ))}
-            </Collapsible>
-          </div>
-        );
-      })}
     </div>
   );
 }
@@ -345,7 +237,8 @@ export function ModuleView() {
     Object.values(backends).some((configs) =>
       (configs as JsonBackend[]).some((c) => {
         const s = c[slot];
-        return s && (s.header || s.definition);
+        // Tagged splices (`for <Type>`) render on the type's page, not here.
+        return s && !s.for_type && (s.header || s.definition);
       })
     );
 
