@@ -34,7 +34,7 @@ function TileContent({ label, subtitle }: { label: string; subtitle?: string }) 
 }
 
 // A clickable option in the dropdown list. Used both for flat options and
-// inside group submenus.
+// inside expanded group sublists.
 function OptionButton({
   option,
   index,
@@ -42,6 +42,7 @@ function OptionButton({
   selected,
   onClick,
   onHover,
+  indented = false,
 }: {
   option: DropdownOption;
   index: number;
@@ -49,6 +50,7 @@ function OptionButton({
   selected: boolean;
   onClick: () => void;
   onHover: () => void;
+  indented?: boolean;
 }) {
   return (
     <button
@@ -58,17 +60,32 @@ function OptionButton({
       onClick={onClick}
       onMouseEnter={onHover}
       className={`w-full px-3 py-2 text-left hover:bg-surface-2 focus:bg-surface-2 focus:outline-none ${
-        focused ? 'bg-surface-2' : ''
-      } ${selected ? 'bg-accent-soft' : ''}`}
+        indented ? 'pl-6' : ''
+      } ${focused ? 'bg-surface-2' : ''} ${selected ? 'bg-accent-soft' : ''}`}
     >
       <TileContent label={option.label} subtitle={option.datetime} />
     </button>
   );
 }
 
+// Chevron SVG used by group headers to signal expand/collapse.
+function Chevron({ open }: { open: boolean }) {
+  return (
+    <svg
+      className={`w-3 h-3 ml-2 flex-shrink-0 transition-transform ${open ? 'rotate-90' : ''}`}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+    >
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+    </svg>
+  );
+}
+
 export function CustomDropdown({ value, onChange, options, disabled }: CustomDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [focusedIndex, setFocusedIndex] = useState(-1);
+  const [expandedGroups, setExpandedGroups] = useState<Set<number>>(new Set());
   const dropdownRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
@@ -117,6 +134,11 @@ export function CustomDropdown({ value, onChange, options, disabled }: CustomDro
     }
   }, [focusedIndex, isOpen]);
 
+  // Reset expanded groups when dropdown closes so it starts fresh next time.
+  useEffect(() => {
+    if (!isOpen) setExpandedGroups(new Set());
+  }, [isOpen]);
+
   const handleKeyDown = (event: React.KeyboardEvent) => {
     if (disabled) return;
 
@@ -162,7 +184,16 @@ export function CustomDropdown({ value, onChange, options, disabled }: CustomDro
     setFocusedIndex(-1);
   };
 
-  const renderOptionButton = (option: DropdownOption, index: number) => (
+  const toggleGroup = (gi: number) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(gi)) next.delete(gi);
+      else next.add(gi);
+      return next;
+    });
+  };
+
+  const renderOptionButton = (option: DropdownOption, index: number, indented = false) => (
     <OptionButton
       key={option.value}
       option={option}
@@ -171,6 +202,7 @@ export function CustomDropdown({ value, onChange, options, disabled }: CustomDro
       selected={option.value === value}
       onClick={() => handleOptionClick(option.value)}
       onHover={() => setFocusedIndex(index)}
+      indented={indented}
     />
   );
 
@@ -218,12 +250,12 @@ export function CustomDropdown({ value, onChange, options, disabled }: CustomDro
               );
             }
 
-            // Multi-option group: header + submenu.
-            // Desktop: submenu expands to the right on hover.
-            // Mobile: options shown inline (header hidden).
+            // Multi-option group: clickable header with chevron, expands
+            // to show subitems inline underneath (indented).
             const hasSelected = group.options.some(
               ({ option }) => option.value === value,
             );
+            const isExpanded = expandedGroups.has(gi) || hasSelected;
             const versions = group.options
               .map(({ option }) => {
                 const m = option.label.match(/\(([^)]+)\)/);
@@ -232,19 +264,24 @@ export function CustomDropdown({ value, onChange, options, disabled }: CustomDro
               .join(' · ');
 
             return (
-              <div key={gi} className="group/sub relative">
-                <div
-                  className={`hidden lg:block w-full px-3 py-2 text-left hover:bg-surface-2 ${
+              <div key={gi}>
+                <button
+                  type="button"
+                  onClick={() => toggleGroup(gi)}
+                  className={`w-full px-3 py-2 text-left hover:bg-surface-2 flex items-center justify-between ${
                     hasSelected ? 'bg-accent-soft' : ''
                   }`}
                 >
                   <TileContent label={group.name} subtitle={versions} />
-                </div>
-                <div className="block lg:absolute lg:left-full lg:top-0 lg:min-w-full lg:bg-surface lg:border lg:border-edge lg:rounded-md lg:shadow-lg lg:hidden lg:group-hover/sub:block">
-                  {group.options.map(({ option, index }) =>
-                    renderOptionButton(option, index)
-                  )}
-                </div>
+                  <Chevron open={isExpanded} />
+                </button>
+                {isExpanded && (
+                  <div>
+                    {group.options.map(({ option, index }) =>
+                      renderOptionButton(option, index, true)
+                    )}
+                  </div>
+                )}
               </div>
             );
           })}
