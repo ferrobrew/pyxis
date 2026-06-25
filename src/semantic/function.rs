@@ -457,7 +457,7 @@ pub fn build(
                 attribute.location(),
             )?;
             let expr = exprs[0];
-            let Expr::StringLiteral { value, .. } = expr else {
+            let Expr::Ident { ident, .. } = expr else {
                 return Err(SemanticError::InvalidAttributeValue {
                     attribute_name: AttributeName::CallingConvention,
                     expected_type: std::any::type_name::<CallingConvention>().into(),
@@ -465,16 +465,13 @@ pub fn build(
                 });
             };
 
-            calling_convention =
-                Some(
-                    value
-                        .parse()
-                        .map_err(|_| SemanticError::InvalidCallingConvention {
-                            convention: value.clone(),
-                            function_name: function.name.0.clone(),
-                            location: *expr.location(),
-                        })?,
-                );
+            calling_convention = Some(ident.as_str().parse().map_err(|_| {
+                SemanticError::InvalidCallingConvention {
+                    convention: ident.as_str().to_string(),
+                    function_name: function.name.0.clone(),
+                    location: *expr.location(),
+                }
+            })?);
         }
     }
 

@@ -100,6 +100,7 @@ pub mod atomics;
 pub mod backend_for;
 pub mod bitflags;
 pub mod braced_imports;
+pub mod calling_conventions;
 pub mod cfg;
 pub mod definition_body;
 pub mod diamond_inheritance;

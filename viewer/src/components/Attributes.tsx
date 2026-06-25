@@ -17,6 +17,10 @@ function Num({ children }: { children: string }) {
   return <span className="text-kind-bitflags">{children}</span>;
 }
 
+function Ident({ children }: { children: string }) {
+  return <span className="text-kind-extern">{children}</span>;
+}
+
 // --- cfg rendering ---
 
 function renderCfg(cfg: JsonCfg): ReactNode {
@@ -162,7 +166,7 @@ export function FunctionAttributes({ func, className = '' }: { func: JsonFunctio
   if (func.calling_convention !== 'c') {
     primary.push(
       <>
-        <Name>calling_convention</Name>({<Str>{func.calling_convention}</Str>})
+        <Name>calling_convention</Name>(<Ident>{func.calling_convention}</Ident>)
       </>,
     );
   }

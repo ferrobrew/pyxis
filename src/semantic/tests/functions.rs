@@ -142,6 +142,49 @@ fn external_body_assign_form_is_rejected() {
     );
 }
 
+// --- calling_convention attribute -----------------------------------
+//
+// `#[calling_convention(...)]` takes a bare ident (not a string — see
+// ferrobrew/pyxis#91). The codegen corpus covers the happy path
+// (`#[calling_convention(C)]`); these tests pin down the two failure
+// modes so the exact error shape is visible.
+
+#[test]
+fn calling_convention_string_form_is_rejected() {
+    // The pre-#91 string form is no longer accepted: an `Expr::Ident` is
+    // expected, so a string literal yields `InvalidAttributeValue`.
+    let text = r#"#[calling_convention("cdecl"), address(0x1)] pub fn f();"#;
+    let ast = crate::parser::parse_str_for_tests(text).unwrap();
+    let err = build_state(&ast, &IP::from("test")).unwrap_err();
+    assert_eq!(
+        err.strip_locations(),
+        SemanticError::InvalidAttributeValue {
+            attribute_name: crate::semantic::error::AttributeName::CallingConvention,
+            expected_type: std::any::type_name::<SCC>().into(),
+            location: ItemLocation::test(),
+        }
+        .strip_locations()
+    );
+}
+
+#[test]
+fn calling_convention_unknown_ident_is_rejected() {
+    // A well-formed ident that isn't one of the seven accepted ABIs yields
+    // `InvalidCallingConvention`, naming both the bad value and the function.
+    let text = r#"#[calling_convention(bogus), address(0x1)] pub fn f();"#;
+    let ast = crate::parser::parse_str_for_tests(text).unwrap();
+    let err = build_state(&ast, &IP::from("test")).unwrap_err();
+    assert_eq!(
+        err.strip_locations(),
+        SemanticError::InvalidCallingConvention {
+            convention: "bogus".to_string(),
+            function_name: "f".to_string(),
+            location: ItemLocation::test(),
+        }
+        .strip_locations()
+    );
+}
+
 // --- cfg-aware duplicate-method dedup -------------------------------
 //
 // Two `impl` blocks may declare a method with the same name when their

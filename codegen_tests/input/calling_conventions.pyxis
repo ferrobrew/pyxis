@@ -1,0 +1,19 @@
+// Exercises the `#[calling_convention(...)]` attribute, which takes a bare
+// ident naming the ABI -- see ferrobrew/pyxis#91.
+//
+// `#[calling_convention(C)]` is the only non-default convention whose
+// generated Rust (`extern "C"`) compiles on every host the codegen corpus
+// builds against: the Windows-specific ABIs (`stdcall`, `fastcall`, ...) are
+// rejected by rustc on non-Windows targets. The full ident set is covered by
+// the semantic test `calling_convention_idents_resolve`.
+
+#[calling_convention(C), address(0x1_000)]
+pub fn c_freestanding(x: i32, y: i32) -> i32;
+
+pub type Cc {
+    pub field: u32,
+}
+impl Cc {
+    #[calling_convention(C), address(0x1_001)]
+    pub fn c_method(&mut self, x: i32) -> i32;
+}

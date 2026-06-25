@@ -214,9 +214,8 @@ impl Attribute {
         Attribute::Function {
             name: "calling_convention".into(),
             items: AttributeItems(vec![AttributeItem::Expr {
-                expr: Expr::StringLiteral {
-                    value: conv_name.into(),
-                    format: StringFormat::Regular,
+                expr: Expr::Ident {
+                    ident: Ident::from(conv_name),
                     location: ItemLocation::test(),
                 },
                 location: ItemLocation::test(),

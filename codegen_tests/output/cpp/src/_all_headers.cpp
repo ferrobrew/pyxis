@@ -3,6 +3,7 @@
 #include "backend_for.hpp"
 #include "bitflags.hpp"
 #include "braced_imports.hpp"
+#include "calling_conventions.hpp"
 #include "cfg.hpp"
 #include "definition_body.hpp"
 #include "diamond_inheritance.hpp"
