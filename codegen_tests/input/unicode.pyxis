@@ -1,0 +1,21 @@
+//! Module-level doc — café & naïve.
+
+/// A type — with an emdash — and café.
+#[align(8)]
+pub type Unicode {
+    vftable {
+        /// vfunc — 一期一会
+        pub fn test_vfunc(&self);
+    },
+
+    /// field — naïve
+    #[address(0x8)]
+    pub field_1: u64,
+}
+impl Unicode {
+    /// impl func — ☃ snowman
+    ///
+    /// second line — 愛
+    #[address(0x123)]
+    pub fn test_func(&self);
+}

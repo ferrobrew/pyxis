@@ -6568,6 +6568,165 @@
       },
       "source": null
     },
+    "unicode::Unicode": {
+      "path": "unicode::Unicode",
+      "visibility": "public",
+      "size": 16,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": " A type — with an emdash — and café.",
+        "fields": [
+          {
+            "visibility": "private",
+            "name": "vftable",
+            "doc": null,
+            "type_ref": {
+              "type": "const_pointer",
+              "inner": {
+                "type": "raw",
+                "path": "unicode::UnicodeVftable"
+              }
+            },
+            "offset": 0,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 25,
+              "line": 8
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "field_1",
+            "doc": " field — naïve",
+            "type_ref": {
+              "type": "raw",
+              "path": "u64"
+            },
+            "offset": 8,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 25,
+              "line": 13
+            }
+          }
+        ],
+        "associated_functions": [
+          {
+            "visibility": "public",
+            "name": "test_func",
+            "doc": " impl func — ☃ snowman\n\n second line — 愛",
+            "body": {
+              "type": "address",
+              "address": 291
+            },
+            "arguments": [
+              {
+                "type": "const_self"
+              }
+            ],
+            "return_type": null,
+            "calling_convention": "system",
+            "source": {
+              "file_index": 25,
+              "line": 20
+            }
+          }
+        ],
+        "vftable": {
+          "functions": [
+            {
+              "visibility": "public",
+              "name": "test_vfunc",
+              "doc": " vfunc — 一期一会",
+              "body": {
+                "type": "vftable",
+                "function_name": "test_vfunc"
+              },
+              "arguments": [
+                {
+                  "type": "const_self"
+                }
+              ],
+              "return_type": null,
+              "calling_convention": "system",
+              "source": {
+                "file_index": 25,
+                "line": 8
+              }
+            }
+          ]
+        },
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false
+      },
+      "source": {
+        "file_index": 25,
+        "line": 5
+      }
+    },
+    "unicode::UnicodeVftable": {
+      "path": "unicode::UnicodeVftable",
+      "visibility": "public",
+      "size": 8,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "test_vfunc",
+            "doc": " vfunc — 一期一会",
+            "type_ref": {
+              "type": "function",
+              "calling_convention": "system",
+              "arguments": [
+                {
+                  "name": "this",
+                  "type_ref": {
+                    "type": "const_pointer",
+                    "inner": {
+                      "type": "raw",
+                      "path": "unicode::Unicode"
+                    }
+                  }
+                }
+              ],
+              "return_type": null
+            },
+            "offset": 0,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 25,
+              "line": 8
+            }
+          }
+        ],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false
+      },
+      "source": {
+        "file_index": 25,
+        "line": 8
+      }
+    },
     "void": {
       "path": "void",
       "visibility": "public",
@@ -6611,7 +6770,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 27,
+              "file_index": 28,
               "line": 10
             }
           }
@@ -6625,7 +6784,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 27,
+        "file_index": 28,
         "line": 9
       }
     },
@@ -6655,7 +6814,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 25,
+              "file_index": 26,
               "line": 8
             }
           },
@@ -6672,7 +6831,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 25,
+              "file_index": 26,
               "line": 9
             }
           },
@@ -6689,7 +6848,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 25,
+              "file_index": 26,
               "line": 10
             }
           }
@@ -6703,7 +6862,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 25,
+        "file_index": 26,
         "line": 7
       }
     },
@@ -6730,7 +6889,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 26,
+              "file_index": 27,
               "line": 6
             }
           }
@@ -6744,7 +6903,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 26,
+        "file_index": 27,
         "line": 5
       }
     },
@@ -6771,7 +6930,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 28,
+              "file_index": 29,
               "line": 4
             }
           },
@@ -6788,7 +6947,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 28,
+              "file_index": 29,
               "line": 5
             }
           }
@@ -6802,7 +6961,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 28,
+        "file_index": 29,
         "line": 3
       }
     },
@@ -6832,7 +6991,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 29,
+              "file_index": 30,
               "line": 10
             }
           },
@@ -6852,7 +7011,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 29,
+              "file_index": 30,
               "line": 11
             }
           }
@@ -6866,7 +7025,7 @@
         "packed": false
       },
       "source": {
-        "file_index": 29,
+        "file_index": 30,
         "line": 9
       }
     }
@@ -7550,6 +7709,21 @@
         "line": 1
       }
     },
+    "unicode": {
+      "doc": " Module-level doc — café & naïve.",
+      "items": [
+        "unicode::Unicode",
+        "unicode::UnicodeVftable"
+      ],
+      "submodules": {},
+      "extern_values": [],
+      "functions": [],
+      "backends": {},
+      "source": {
+        "file_index": 25,
+        "line": 3
+      }
+    },
     "world": {
       "doc": " The world subsystem.\n This module is backed by a `mod.pyxis`, so it exercises folder-level\n modules: a module doc comment, an item defined directly in the folder\n module, and `backend` glue - all spliced into the generated `mod.rs`\n alongside the auto-generated child `mod` declarations.",
       "items": [
@@ -7566,7 +7740,7 @@
           "functions": [],
           "backends": {},
           "source": {
-            "file_index": 25,
+            "file_index": 26,
             "line": 1
           }
         },
@@ -7584,7 +7758,7 @@
               "functions": [],
               "backends": {},
               "source": {
-                "file_index": 26,
+                "file_index": 27,
                 "line": 1
               }
             }
@@ -7604,7 +7778,7 @@
           "functions": [],
           "backends": {},
           "source": {
-            "file_index": 28,
+            "file_index": 29,
             "line": 1
           }
         }
@@ -7623,7 +7797,7 @@
         ]
       },
       "source": {
-        "file_index": 27,
+        "file_index": 28,
         "line": 7
       }
     },
@@ -7637,7 +7811,7 @@
       "functions": [],
       "backends": {},
       "source": {
-        "file_index": 29,
+        "file_index": 30,
         "line": 1
       }
     }
@@ -7668,6 +7842,7 @@
     "two_base_classes.pyxis",
     "type_alias_reexport.pyxis",
     "type_aliases.pyxis",
+    "unicode.pyxis",
     "world/atmosphere.pyxis",
     "world/deep/marker.pyxis",
     "world/mod.pyxis",
