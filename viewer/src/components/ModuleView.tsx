@@ -4,8 +4,7 @@ import { useDocumentation } from '../contexts/DocumentationContext';
 import { findModule, findLongestValidAncestor } from '../utils/pathUtils';
 import { buildModuleUrl, buildItemUrl, buildRootUrl } from '../utils/navigation';
 import { getItemTypeColor, type ItemType } from '../utils/colors';
-import { Attributes } from './Attributes';
-import { externAttributeGroups } from '../utils/attributes';
+import { ExternAttributes } from './Attributes';
 import { BackendSpliceSection } from './BackendSpliceSection';
 import { TypeRef } from './TypeRef';
 import { FunctionDisplay } from './FunctionDisplay';
@@ -74,7 +73,7 @@ function ExternValueItem({ extern: ext }: { extern: JsonExternValue }) {
         <AnchorLink targetId={`extval-${ext.name}`} label="link" />
       </div>
       <div className="font-mono text-sm leading-relaxed">
-        <Attributes groups={externAttributeGroups(ext)} />
+        <ExternAttributes ext={ext} />
         <div>
           {!isPrivate && <span className="text-fg-muted">pub </span>}
           <span className="text-kind-extern">extern </span>

@@ -6,8 +6,7 @@ import { buildModuleUrl, buildItemUrl, buildRootUrl } from '../utils/navigation'
 import { getItemTypeColor, type ItemType } from '../utils/colors';
 import { TypeRef } from './TypeRef';
 import { SmallBadge } from './Badge';
-import { Attributes } from './Attributes';
-import { itemAttributeGroups } from '../utils/attributes';
+import { ItemAttributes } from './Attributes';
 import { FunctionDisplay } from './FunctionDisplay';
 import { FieldTable } from './FieldTable';
 import { NestedFieldView } from './NestedFieldView';
@@ -389,7 +388,7 @@ export function ItemView() {
         {/* Source-faithful declaration header: attributes, signature, the source
             link, then the doc comment, kept together with a single margin. */}
         <div className="group mb-4">
-          <Attributes groups={itemAttributeGroups(item)} />
+          <ItemAttributes item={item} />
           <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
             <div className="flex items-start gap-2">
               <h1 className="font-mono text-2xl font-semibold tracking-tight">

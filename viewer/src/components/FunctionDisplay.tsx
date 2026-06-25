@@ -2,9 +2,8 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import type { JsonFunction, JsonArgument } from '@pyxis/types';
 import { TypeRef } from './TypeRef';
 import { SourceName } from './SourceLink';
-import { Attributes } from './Attributes';
+import { FunctionAttributes } from './Attributes';
 import { AnchorLink, CopyButton } from './Actions';
-import { functionAttributeGroups } from '../utils/attributes';
 import { typeToString, WRAP_COLUMN } from '../utils/typeString';
 import { useDocumentation } from '../contexts/DocumentationContext';
 import { Markdown } from './Markdown';
@@ -78,7 +77,7 @@ export function FunctionDisplay({ func, modulePath, id }: FunctionDisplayProps) 
         </div>
       )}
       <div className="font-mono text-sm leading-relaxed">
-        <Attributes groups={functionAttributeGroups(func)} />
+        <FunctionAttributes func={func} />
         <div>
           {!isPrivate && <span className="text-fg-muted">pub </span>}
           <span className="text-kind-function">fn </span>
