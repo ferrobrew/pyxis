@@ -1,6 +1,5 @@
 import { Fragment, type ReactNode } from 'react';
 import type { JsonItem, JsonFunction, JsonExternValue, JsonCfg } from '@pyxis/types';
-import { formatCfg } from '../utils/cfg';
 import { formatHexAddress } from '../utils/format';
 import { WRAP_COLUMN } from '../utils/typeString';
 
