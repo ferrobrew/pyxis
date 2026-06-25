@@ -128,6 +128,15 @@ body {
   font-family: var(--font-sans);
 }
 
+/* Disable ligatures for code when the user opts out (toggled via the
+   header). JetBrains Mono ships contextual alternates (=>, !=, ->)
+   that obscure the individual tokens pyxis renders. */
+.no-ligatures code,
+.no-ligatures pre,
+.no-ligatures .font-mono {
+  font-variant-ligatures: none;
+}
+
 /* Thin, warm scrollbars that fit the palette instead of OS defaults */
 * {
   scrollbar-width: thin;

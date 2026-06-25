@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { LigatureProvider } from './contexts/LigatureContext';
 import { DocumentationProvider } from './contexts/DocumentationContext';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
@@ -75,11 +76,13 @@ function AppLayout() {
 export default function App() {
   return (
     <ThemeProvider>
-      <DocumentationProvider>
-        <HashRouter>
-          <AppLayout />
-        </HashRouter>
-      </DocumentationProvider>
+      <LigatureProvider>
+        <DocumentationProvider>
+          <HashRouter>
+            <AppLayout />
+          </HashRouter>
+        </DocumentationProvider>
+      </LigatureProvider>
     </ThemeProvider>
   );
 }

@@ -1,4 +1,5 @@
 import { useTheme } from '../contexts/ThemeContext';
+import { useLigatures } from '../contexts/LigatureContext';
 import { useDocumentation } from '../contexts/DocumentationContext';
 import { FileUpload } from './FileUpload';
 import { SearchBar } from './SearchBar';
@@ -13,6 +14,7 @@ const iconButton =
 
 export function Header({ isSidebarOpen, onToggleSidebar }: HeaderProps) {
   const { theme, toggleTheme } = useTheme();
+  const { ligatures, toggleLigatures } = useLigatures();
   const { documentation } = useDocumentation();
 
   return (
@@ -50,9 +52,23 @@ export function Header({ isSidebarOpen, onToggleSidebar }: HeaderProps) {
           <FileUpload />
         </div>
 
-        {/* Right side: Search + Theme toggle */}
+        {/* Right side: Search + Ligature toggle + Theme toggle */}
         <div className="flex items-stretch gap-2 min-w-0 lg:flex-1">
           {documentation && <SearchBar />}
+          <button
+            onClick={toggleLigatures}
+            className={iconButton}
+            aria-label={ligatures ? 'Disable code ligatures' : 'Enable code ligatures'}
+            aria-pressed={ligatures}
+            title={ligatures ? 'Disable code ligatures' : 'Enable code ligatures'}
+          >
+            <span
+              className="font-mono text-sm font-semibold leading-none"
+              style={{ fontVariantLigatures: ligatures ? 'none' : 'normal' }}
+            >
+              {'=>'}
+            </span>
+          </button>
           <button onClick={toggleTheme} className={iconButton} aria-label="Toggle theme">
             {theme === 'light' ? (
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
