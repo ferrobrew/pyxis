@@ -501,8 +501,17 @@ pub fn extract_links(doc: &[String]) -> Vec<String> {
     let bytes = text.as_bytes();
     let mut links = Vec::new();
     let mut i = 0;
+    let mut in_code = false;
     while i < bytes.len() {
-        if bytes[i] != b'[' {
+        // Track inline code spans so `[` inside `` `...` `` doesn't get
+        // treated as a link start — its `]` would consume the real link's
+        // closing bracket.
+        if bytes[i] == b'`' {
+            in_code = !in_code;
+            i += 1;
+            continue;
+        }
+        if in_code || bytes[i] != b'[' {
             i += 1;
             continue;
         }

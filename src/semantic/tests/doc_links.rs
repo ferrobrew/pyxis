@@ -26,6 +26,16 @@ fn extracts_shortcut_and_inline_links() {
 }
 
 #[test]
+fn ignores_brackets_inside_code_spans() {
+    // `[first, last)` is a code span — its `[` must not consume the `]`
+    // from the real link [`Target`].
+    let doc = vec![
+        " Half-open range `[first, last)`: walks the [`Target`] list.".to_string(),
+    ];
+    assert_eq!(extract_links(&doc), vec!["Target"]);
+}
+
+#[test]
 fn resolves_every_link_form() {
     // A module with one of each kind of link target: a type (with a method and
     // a field), an enum variant, a bitflags flag, a freestanding function, and
