@@ -221,12 +221,6 @@ export function FileUpload() {
   };
 
   const handleSourceChange = async (value: string) => {
-    if (value === 'another-local') {
-      // Trigger file input for another local project
-      fileInputRef.current?.click();
-      return;
-    }
-
     // Mark that we're making a manual change to prevent sync effect from interfering
     isManualChangeRef.current = true;
 
@@ -308,9 +302,6 @@ export function FileUpload() {
           ? `Local (${documentation.project_name})`
           : 'Local',
     },
-    ...(documentation && selectedSource === 'local'
-      ? [{ value: 'another-local', label: 'Another Local Project' }]
-      : []),
     ...availableDocs.map((doc) => ({
       value: doc.path,
       label: doc.name,
