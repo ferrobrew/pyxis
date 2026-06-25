@@ -29,9 +29,7 @@ fn extracts_shortcut_and_inline_links() {
 fn ignores_brackets_inside_code_spans() {
     // `[first, last)` is a code span — its `[` must not consume the `]`
     // from the real link [`Target`].
-    let doc = vec![
-        " Half-open range `[first, last)`: walks the [`Target`] list.".to_string(),
-    ];
+    let doc = vec![" Half-open range `[first, last)`: walks the [`Target`] list.".to_string()];
     assert_eq!(extract_links(&doc), vec!["Target"]);
 }
 

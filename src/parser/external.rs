@@ -1192,8 +1192,7 @@ backend cpp {
 
         let ast = M::new().with_backends([{
             let mut b = B::new("cpp");
-            b.epilogue.header =
-                Some("\n    bool Probe::is_ready() const;\n".into());
+            b.epilogue.header = Some("\n    bool Probe::is_ready() const;\n".into());
             b.epilogue.header_format = StringFormat::Raw;
             b.epilogue.definition =
                 Some("\n    bool Probe::is_ready() const { return value != 0; }\n".into());

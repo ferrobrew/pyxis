@@ -28,6 +28,7 @@ pyxis_macros = { path = "pyxis_macros" }
 # driver-only
 serde_json = { version = "1.0", optional = true }
 specta = { workspace = true, optional = true }
+pulldown-cmark = { version = "0.13.4", default-features = false }
 
 [features]
 json = ["dep:serde_json", "dep:specta"]

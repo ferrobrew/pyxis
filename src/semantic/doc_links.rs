@@ -496,48 +496,80 @@ pub fn validate(
 /// Extract the intra-doc link path strings from doc comment lines. Handles the
 /// shortcut form `` [`path`] `` and the inline form `[label](path)` (where the
 /// target is a `::`-path, not a URL).
+/// Extract rustdoc-style intra-doc link targets from a doc comment.
+///
+/// Two forms are recognised:
+/// - Inline: `[label](target)` — parsed by pulldown-cmark as a `Link` tag
+///   whose `dest_url` is the target.
+/// - Shortcut: `[`Path`]` — without a reference definition, pulldown-cmark
+///   emits `Text("[")` + `Code("Path")` + `Text("]")`. We detect this
+///   pattern by looking at the events surrounding each `Code` node.
+///
+/// Using a real Markdown parser means brackets inside code spans
+/// (`` `[first, last)` ``) or code blocks can't accidentally consume a
+/// real link's closing `]`.
 pub fn extract_links(doc: &[String]) -> Vec<String> {
     let text = doc.join("\n");
-    let bytes = text.as_bytes();
+    let events: Vec<pulldown_cmark::Event> = pulldown_cmark::Parser::new(&text).collect();
+
     let mut links = Vec::new();
     let mut i = 0;
-    let mut in_code = false;
-    while i < bytes.len() {
-        // Track inline code spans so `[` inside `` `...` `` doesn't get
-        // treated as a link start — its `]` would consume the real link's
-        // closing bracket.
-        if bytes[i] == b'`' {
-            in_code = !in_code;
-            i += 1;
-            continue;
-        }
-        if in_code || bytes[i] != b'[' {
-            i += 1;
-            continue;
-        }
-        let Some(rel_close) = text[i + 1..].find(']') else {
-            break;
-        };
-        let close = i + 1 + rel_close;
-        let label = &text[i + 1..close];
-        let after = &text[close + 1..];
-        if let Some(rest) = after.strip_prefix('(') {
-            // Inline link: `[label](target)`.
-            if let Some(rel_paren) = rest.find(')') {
-                let target = &rest[..rel_paren];
-                if is_path(target) {
-                    links.push(target.to_string());
+    while i < events.len() {
+        match &events[i] {
+            // Inline link: [label](target)
+            pulldown_cmark::Event::Start(pulldown_cmark::Tag::Link { dest_url, .. }) => {
+                let url = dest_url.as_ref();
+                if !url.is_empty() {
+                    if is_path(url) {
+                        links.push(url.to_string());
+                    }
+                    // Skip to the matching End so the Code/text inside
+                    // the link doesn't trigger the shortcut handler below.
+                    while i < events.len()
+                        && !matches!(
+                            events[i],
+                            pulldown_cmark::Event::End(pulldown_cmark::TagEnd::Link)
+                        )
+                    {
+                        i += 1;
+                    }
+                } else {
+                    // Reference link with empty URL: collect text content.
+                    let mut content = String::new();
+                    i += 1;
+                    while i < events.len()
+                        && !matches!(
+                            events[i],
+                            pulldown_cmark::Event::End(pulldown_cmark::TagEnd::Link)
+                        )
+                    {
+                        match &events[i] {
+                            pulldown_cmark::Event::Text(t) => content.push_str(t),
+                            pulldown_cmark::Event::Code(c) => content.push_str(c),
+                            _ => {}
+                        }
+                        i += 1;
+                    }
+                    if is_path(&content) {
+                        links.push(content);
+                    }
                 }
-                i = close + 2 + rel_paren + 1;
-                continue;
             }
-        } else if let Some(path) = label.strip_prefix('`').and_then(|s| s.strip_suffix('`')) {
-            // Shortcut link: ``[`path`]``.
-            if is_path(path) {
-                links.push(path.to_string());
+
+            // Shortcut link: [`code`] → Text("[") + Code + Text("]")
+            pulldown_cmark::Event::Code(content) => {
+                let prev_is_open = i > 0
+                    && matches!(&events[i - 1], pulldown_cmark::Event::Text(t) if t.ends_with('['));
+                let next_is_close = i + 1 < events.len()
+                    && matches!(&events[i + 1], pulldown_cmark::Event::Text(t) if t.starts_with(']'));
+                if prev_is_open && next_is_close && is_path(content) {
+                    links.push(content.to_string());
+                }
             }
+
+            _ => {}
         }
-        i = close + 1;
+        i += 1;
     }
     links
 }
