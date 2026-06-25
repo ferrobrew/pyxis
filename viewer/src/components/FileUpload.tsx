@@ -5,10 +5,12 @@ import type { JsonDocumentation } from '@pyxis/types';
 import { CustomDropdown } from './CustomDropdown';
 import {
   buildModuleUrl,
+  buildItemUrl,
   registerSource,
   decodeSourceIdentifier,
   extractSourceId,
 } from '../utils/navigation';
+import { findModule } from '../utils/pathUtils';
 
 const INDEX_URL =
   'https://raw.githubusercontent.com/ferrobrew/pyxis-defs/refs/heads/main/docs/index.json';
@@ -23,6 +25,32 @@ interface DocEntry {
 interface DocsIndex {
   generated_iso8601: string;
   docs: DocEntry[];
+}
+
+// Try to preserve the current module/item position when switching
+// projects. Returns true if the position exists in the new project and
+// navigation was performed, false if the caller should fall back.
+function tryPreservePosition(
+  pathname: string,
+  json: JsonDocumentation,
+  source: string,
+  navigate: (path: string) => void,
+): boolean {
+  const match = pathname.match(/^\/[^/]+\/(module|item)\/(.+)$/);
+  if (!match) return false;
+
+  const [, routeType, encodedPath] = match;
+  const currentPath = decodeURIComponent(encodedPath);
+
+  if (routeType === 'item' && json.items[currentPath]) {
+    navigate(buildItemUrl(currentPath, source));
+    return true;
+  }
+  if (routeType === 'module' && findModule(json.modules, currentPath)) {
+    navigate(buildModuleUrl(currentPath, source));
+    return true;
+  }
+  return false;
 }
 
 export function FileUpload() {
@@ -167,12 +195,15 @@ export function FileUpload() {
       setFileName(file.name);
       setSelectedSource('local'); // Ensure selectedSource is set to 'local' after upload
 
-      // Navigate to first module with source in URL
-      const firstModule = Object.keys(json.modules)[0];
-      if (firstModule) {
-        navigate(buildModuleUrl(firstModule, 'local'));
-      } else {
-        navigate('/');
+      // Try to stay at the same position if it exists in the uploaded project;
+      // otherwise fall back to the first module.
+      if (!tryPreservePosition(location.pathname, json, 'local', navigate)) {
+        const firstModule = Object.keys(json.modules)[0];
+        if (firstModule) {
+          navigate(buildModuleUrl(firstModule, 'local'));
+        } else {
+          navigate('/');
+        }
       }
     } catch (error) {
       console.error('Error parsing JSON:', error);
@@ -237,12 +268,15 @@ export function FileUpload() {
       // This ensures the dropdown matches the new project
       setSelectedSource(value);
 
-      // Navigate to first module with source in URL
-      const firstModule = Object.keys(json.modules)[0];
-      if (firstModule) {
-        navigate(buildModuleUrl(firstModule, value));
-      } else {
-        navigate('/');
+      // Try to stay at the same position if it exists in the new project;
+      // otherwise fall back to the first module.
+      if (!tryPreservePosition(location.pathname, json, value, navigate)) {
+        const firstModule = Object.keys(json.modules)[0];
+        if (firstModule) {
+          navigate(buildModuleUrl(firstModule, value));
+        } else {
+          navigate('/');
+        }
       }
     } catch (error) {
       console.error('Error loading documentation from GitHub:', error);

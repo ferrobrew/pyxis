@@ -193,9 +193,13 @@ function ItemTree({ itemPath }: ItemTreeProps) {
   const activeAnchor = isItemActive ? location.hash.replace(/^#+/, '') : '';
 
   // Keep the active item scrolled into view within the sidebar.
+  // `selectedSource` is a dependency so the scroll re-fires when switching
+  // projects (the component stays mounted but the tree rebuilds).
   useEffect(() => {
-    if (isItemActive) rowRef.current?.scrollIntoView({ block: 'nearest' });
-  }, [isItemActive]);
+    if (isItemActive) {
+      requestAnimationFrame(() => rowRef.current?.scrollIntoView({ block: 'nearest' }));
+    }
+  }, [isItemActive, selectedSource]);
 
   // When the URL targets a member, expand this item...
   useEffect(() => {
@@ -360,8 +364,10 @@ function ModuleTree({ name, module, path, level }: ModuleTreeProps) {
     if (isAncestor) setIsOpen(true);
   }, [isAncestor]);
   useEffect(() => {
-    if (isActive) rowRef.current?.scrollIntoView({ block: 'nearest' });
-  }, [isActive]);
+    if (isActive) {
+      requestAnimationFrame(() => rowRef.current?.scrollIntoView({ block: 'nearest' }));
+    }
+  }, [isActive, selectedSource]);
   useEffect(() => {
     if (activeAnchor && isOpen) memberRef.current?.scrollIntoView({ block: 'nearest' });
   }, [activeAnchor, isOpen]);
