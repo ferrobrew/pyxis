@@ -1,6 +1,7 @@
 pub mod error;
 pub mod types;
 
+pub mod declaration_registry;
 pub(crate) mod attribute;
 pub(crate) mod bitflags_definition;
 pub mod doc_links;
