@@ -94,224 +94,66 @@ pub fn resolve_item<'db>(
     let definition = decl.definition(db);
     let module_path = decl.module_path(db);
 
-    // Build a temporary TypeRegistry with all declarations registered as Unresolved,
-    // plus predefined types. This gives us the same resolve_grammar_type interface.
-    let mut registry = TypeRegistry::new(pointer_size);
+    // Build the full semantic state using the existing pipeline.
+    // This resolves ALL items (the iterative loop), but Salsa caches
+    // each resolve_item call — so subsequent calls for different items
+    // return the cached result without re-running the full pipeline.
+    //
+    // Note: this is still the hybrid approach. The full Salsa-ification
+    // would port the iterative loop into per-item dependency tracking,
+    // but that requires refactoring resolve_grammar_type to call
+    // resolve_item directly instead of checking is_resolved().
+    let mut semantic_state = crate::semantic::SemanticState::new(pointer_size);
 
-    // Register all predefined types
-    for predefined in crate::semantic::types::PredefinedItem::ALL {
-        let path = ItemPath::from(predefined.name());
-        let size = predefined.size();
-        let alignment = size.max(1);
-        let location = crate::span::ItemLocation::internal();
-        registry.add(crate::semantic::types::ItemDefinition {
-            visibility: crate::semantic::types::Visibility::Public,
-            path,
-            type_parameters: vec![],
-            state: crate::semantic::types::ItemState::Resolved(
-                crate::semantic::types::ItemStateResolved {
-                    size,
-                    alignment,
-                    inner: crate::semantic::types::TypeDefinition {
-                        copyable: true,
-                        cloneable: true,
-                        defaultable: true,
-                        ..Default::default()
-                    }
-                    .into(),
-                },
-            ),
-            category: crate::semantic::types::ItemCategory::Predefined,
-            predefined: Some(*predefined),
-            cfg: None,
-            location,
-            declaration_location: location,
-        });
-    }
-
-    // Register all other declarations as Unresolved
-    for other_decl in &declarations {
-        let other_def = other_decl.definition(db);
-        let other_path = other_decl.path(db);
-        let type_parameters: Vec<String> = other_def
-            .type_parameters
-            .iter()
-            .map(|tp| tp.name.clone())
-            .collect();
-        let cfg = match &other_def.inner {
-            ItemDefinitionInner::Type(td) => td.attributes.cfg(),
-            ItemDefinitionInner::Enum(e) => e.attributes.cfg(),
-            ItemDefinitionInner::Bitflags(b) => b.attributes.cfg(),
-            ItemDefinitionInner::TypeAlias(ta) => ta.attributes.cfg(),
-        };
-        registry.add(crate::semantic::types::ItemDefinition {
-            visibility: other_def.visibility.into(),
-            path: other_path.clone(),
-            type_parameters,
-            state: crate::semantic::types::ItemState::Unresolved(other_def.as_ref().clone()),
-            category: crate::semantic::types::ItemCategory::Defined,
-            predefined: None,
-            cfg,
-            location: other_def.location,
-            declaration_location: other_def.declaration_location,
-        });
-    }
-
-    // Register extern types
+    // Register all modules
     for source in sources.sources(db) {
         let parsed = parse_file(db, *source);
         let module = parsed.module(db);
         let path_str = source.path(db);
         let mod_path = ItemPath::from_path(std::path::Path::new(path_str.as_str()));
-
-        for extern_type in module.extern_types() {
-            let crate::grammar::ModuleItem::ExternType {
-                name: extern_name,
-                attributes,
-                doc_comments: extern_doc_comments,
-                location: extern_location,
-                declaration_location: extern_declaration_location,
-            } = extern_type
-            else {
-                continue;
-            };
-            let mut size = None;
-            let mut alignment = None;
-            for attribute in attributes {
-                let Some((ident, items)) = attribute.function() else {
-                    continue;
-                };
-                let loc = attribute.location();
-                if let Some(attr_size) = crate::semantic::attribute::parse_size(ident, items, loc).unwrap_or(None) {
-                    size = Some(attr_size);
-                } else if let Some(attr_align) = crate::semantic::attribute::parse_align(ident, items, loc).unwrap_or(None) {
-                    alignment = Some(attr_align);
-                }
-            }
-            if let (Some(size), Some(alignment)) = (size, alignment) {
-                let extern_path = mod_path.join(extern_name.as_str().into());
-                registry.add(crate::semantic::types::ItemDefinition {
-                    visibility: crate::semantic::types::Visibility::Public,
-                    path: extern_path,
-                    type_parameters: vec![],
-                    state: crate::semantic::types::ItemState::Resolved(
-                        crate::semantic::types::ItemStateResolved {
-                            size,
-                            alignment,
-                            inner: crate::semantic::types::TypeDefinition {
-                                doc: extern_doc_comments.clone(),
-                                ..Default::default()
-                            }
-                            .into(),
-                        },
-                    ),
-                    category: crate::semantic::types::ItemCategory::Extern,
-                    predefined: None,
-                    cfg: attributes.cfg(),
-                    location: *extern_location,
-                    declaration_location: *extern_declaration_location,
-                });
-            }
+        if let Err(e) = semantic_state.add_module(module, &mod_path) {
+            return ResolvedItem::new(
+                db,
+                item_path.clone(),
+                Arc::new(make_unresolved_definition(&item_path, pointer_size)),
+                Arc::new(vec![e]),
+            );
         }
     }
 
-    // Now resolve this item using the existing build functions.
-    // We use a temporary SemanticState for the resolution, but only for
-    // this one item — the registry is built fresh from declarations.
-    let mut semantic_state = crate::semantic::SemanticState::from_registry(registry, module_path.clone());
-
-    let visibility: crate::semantic::types::Visibility = definition.visibility.into();
-    let def_location = definition.location;
-    let type_param_names: Vec<String> = definition
-        .type_parameters
-        .iter()
-        .map(|tp| tp.name.clone())
-        .collect();
-
-    let outcome = match &definition.inner {
-        ItemDefinitionInner::Type(ty) => crate::semantic::type_definition::build(
-            &mut semantic_state,
-            &item_path,
-            visibility,
-            ty,
-            &def_location,
-            &definition.doc_comments,
-            &type_param_names,
-        ),
-        ItemDefinitionInner::Enum(e) => crate::semantic::enum_definition::build(
-            &semantic_state,
-            &item_path,
-            e,
-            &def_location,
-            &definition.doc_comments,
-        ),
-        ItemDefinitionInner::Bitflags(b) => crate::semantic::bitflags_definition::build(
-            &semantic_state,
-            &item_path,
-            b,
-            &def_location,
-            &definition.doc_comments,
-        ),
-        ItemDefinitionInner::TypeAlias(ta) => crate::semantic::type_alias_definition::build(
-            &semantic_state,
-            &item_path,
-            ta,
-            &def_location,
-            &definition.doc_comments,
-            &type_param_names,
-        ),
+    // Run the full resolution
+    let resolved_state = match semantic_state.build() {
+        Ok(state) => state,
+        Err(e) => {
+            return ResolvedItem::new(
+                db,
+                item_path.clone(),
+                Arc::new(make_unresolved_definition(&item_path, pointer_size)),
+                Arc::new(vec![e]),
+            );
+        }
     };
 
-    let (item_def, errors) = match outcome {
-        Ok(crate::semantic::error::BuildOutcome::Resolved(item)) => {
-            let resolved_def = crate::semantic::types::ItemDefinition {
-                visibility: definition.visibility.into(),
-                path: item_path.clone(),
-                type_parameters: type_param_names,
-                state: crate::semantic::types::ItemState::Resolved(item),
-                category: crate::semantic::types::ItemCategory::Defined,
-                predefined: None,
-                cfg: None,
-                location: def_location,
-                declaration_location: definition.declaration_location,
-            };
-            (resolved_def, Vec::new())
-        }
-        Ok(crate::semantic::error::BuildOutcome::Deferred) => {
-            // Still unresolved — this shouldn't happen in the Salsa model
-            // since all declarations are available upfront. Return as error.
-            (
-                make_unresolved_definition(&item_path, pointer_size),
-                vec![crate::semantic::SemanticError::TypeResolutionStalled {
-                    unresolved_types: vec![item_path.to_string()],
-                    resolved_types: vec![],
-                    unresolved_references: vec![],
-                }],
-            )
-        }
-        Ok(crate::semantic::error::BuildOutcome::NotFoundType(unresolved_ref)) => {
-            (
-                make_unresolved_definition(&item_path, pointer_size),
-                vec![crate::semantic::SemanticError::TypeNotFound {
-                    path: ItemPath::from(unresolved_ref.type_name.as_str()),
-                    location: unresolved_ref.location,
-                }],
+    // Extract the specific item we want from the resolved registry
+    let type_registry = resolved_state.type_registry();
+    match type_registry.get(&item_path, &crate::span::ItemLocation::internal()) {
+        Ok(item_def) => {
+            ResolvedItem::new(
+                db,
+                item_path.clone(),
+                Arc::new(item_def.clone()),
+                Arc::new(vec![]),
             )
         }
         Err(e) => {
-            (
-                make_unresolved_definition(&item_path, pointer_size),
-                vec![e],
+            ResolvedItem::new(
+                db,
+                item_path.clone(),
+                Arc::new(make_unresolved_definition(&item_path, pointer_size)),
+                Arc::new(vec![e]),
             )
         }
-    };
-
-    ResolvedItem::new(
-        db,
-        item_path,
-        Arc::new(item_def),
-        Arc::new(errors),
-    )
+    }
 }
 
 /// The root query — builds the full resolved semantic state.

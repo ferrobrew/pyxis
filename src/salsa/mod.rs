@@ -82,4 +82,56 @@ mod tests {
         let defs2: Vec<_> = module2.definitions().collect();
         assert_eq!(defs2.len(), 2, "should re-parse with new content");
     }
+
+    #[test]
+    fn resolve_item_returns_resolved_type() {
+        // AC.9: verify resolve_item produces a resolved item with size/alignment
+        let db = PyxisDatabaseImpl::default();
+        let source = SourceFile::new(
+            &db,
+            "test.pyxis".to_string(),
+            1,
+            "pub type Foo { pub x: u32, pub y: u32, }".to_string(),
+        );
+        let source_set = SourceSet::new(&db, vec![source]);
+
+        // The item path includes the module path derived from the filename.
+        // "test.pyxis" → module path "test" → item path "test::Foo"
+        let path = crate::grammar::ItemPath::from("test::Foo");
+        let resolved = resolve_item(&db, source_set, 4, path);
+        let item = resolved.item(&db);
+
+        assert!(
+            item.resolved().is_some(),
+            "item should be resolved, got: {:?}",
+            item.state
+        );
+        let resolved_state = item.resolved().unwrap();
+        assert_eq!(resolved_state.size, 8, "size should be 8 bytes");
+        assert_eq!(resolved_state.alignment, 4, "alignment should be 4");
+    }
+
+    #[test]
+    fn resolve_item_caches_unchanged_results() {
+        // AC.9: calling resolve_item twice with the same inputs should
+        // return the same cached result (Salsa memoization).
+        let db = PyxisDatabaseImpl::default();
+        let source = SourceFile::new(
+            &db,
+            "test.pyxis".to_string(),
+            1,
+            "pub type Foo { pub x: u32, }".to_string(),
+        );
+        let source_set = SourceSet::new(&db, vec![source]);
+        let path = crate::grammar::ItemPath::from("test::Foo");
+
+        let resolved1 = resolve_item(&db, source_set, 4, path.clone());
+        let item1 = resolved1.item(&db).clone();
+
+        // Call again — Salsa should return the cached result
+        let resolved2 = resolve_item(&db, source_set, 4, path);
+        let item2 = resolved2.item(&db).clone();
+
+        assert_eq!(item1, item2, "cached result should be equal");
+    }
 }
