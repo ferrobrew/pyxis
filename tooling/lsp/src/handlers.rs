@@ -17,6 +17,8 @@ use pyxis::span::{FileId, HasLocation};
 use crate::span::{lsp_position_to_pyxis_location, pyxis_span_to_lsp_range};
 use crate::state::ServerState;
 
+use pyxis::salsa::resolve_item;
+
 impl ServerState {
     /// textDocument/hover
     pub fn handle_hover(&self, req: Request) -> Response {
@@ -49,7 +51,18 @@ impl ServerState {
         // Find the item at the cursor position
         for definition in module.definitions() {
             if definition.location.span.contains(&loc) {
-                let hover = format_type_hover(&definition);
+                // Try to get resolved info (size/alignment) via resolve_item
+                let sources = self.sources();
+                let source_set = salsa::SourceSet::new(&self.db, sources);
+                let item_path = ItemPath::from(definition.name.as_str());
+                let resolved = resolve_item(&self.db, source_set, self.pointer_size, item_path);
+                let resolved_item = resolved.item(&self.db);
+
+                let hover = if let Some(resolved_state) = resolved_item.resolved() {
+                    format_type_hover_with_size(&definition, resolved_state.size, resolved_state.alignment)
+                } else {
+                    format_type_hover(&definition)
+                };
                 return Response {
                     id: req.id,
                     result: Some(serde_json::to_value(Hover {
@@ -534,6 +547,18 @@ impl ServerState {
             error: None,
         }
     }
+}
+
+/// Format a type definition for hover display with size and alignment
+fn format_type_hover_with_size(
+    definition: &pyxis::grammar::ItemDefinition,
+    size: usize,
+    alignment: usize,
+) -> String {
+    let mut md = format_type_hover(definition);
+    md.push_str(&format!("\n**Size:** `0x{:X}` ({}) bytes\n", size, size));
+    md.push_str(&format!("**Alignment:** `0x{:X}` ({}) bytes\n", alignment, alignment));
+    md
 }
 
 /// Format a type definition for hover display
