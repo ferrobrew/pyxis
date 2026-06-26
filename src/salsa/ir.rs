@@ -41,6 +41,11 @@ pub struct ResolvedItem<'db> {
     pub item: Arc<crate::semantic::types::ItemDefinition>,
     #[returns(ref)]
     pub errors: Arc<Vec<crate::semantic::SemanticError>>,
+    /// Items generated as side effects during resolution (e.g., vftable
+    /// struct types created by type_definition::build). These are collected
+    /// by analyze() and added to the final type registry.
+    #[returns(ref)]
+    pub generated_items: Arc<Vec<crate::semantic::types::ItemDefinition>>,
 }
 
 /// The full resolved semantic state — the root query result.

@@ -371,7 +371,23 @@ fn snapshot_diagnostics() {
     let formatted = serde_json::to_string_pretty(&notif.params).unwrap();
     expect![[r#"
         {
-          "diagnostics": [],
+          "diagnostics": [
+            {
+              "message": "1:30: Type not found: `NonexistentType`",
+              "range": {
+                "end": {
+                  "character": 44,
+                  "line": 0
+                },
+                "start": {
+                  "character": 29,
+                  "line": 0
+                }
+              },
+              "severity": 1,
+              "source": "pyxis"
+            }
+          ],
           "uri": "file:///test.pyxis"
         }"#]].assert_eq(&formatted);
 }

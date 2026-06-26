@@ -22,7 +22,7 @@ use crate::{
 };
 
 pub struct SemanticState {
-    modules: BTreeMap<ItemPath, Module>,
+    pub(crate) modules: BTreeMap<ItemPath, Module>,
     pub(crate) type_registry: TypeRegistry,
 }
 
@@ -69,6 +69,19 @@ impl SemanticState {
         }
 
         semantic_state
+    }
+
+    /// Create a SemanticState from a pre-built TypeRegistry and modules.
+    /// Used by the Salsa `analyze` query after resolve_item has populated
+    /// the registry. Only the associated functions pass uses this.
+    pub fn from_registry_and_modules(
+        type_registry: TypeRegistry,
+        modules: BTreeMap<ItemPath, Module>,
+    ) -> Self {
+        Self {
+            type_registry,
+            modules,
+        }
     }
 
     /// Create a SemanticState from a pre-built TypeRegistry and a module path.
@@ -462,7 +475,7 @@ impl SemanticState {
         })
     }
 
-    fn resolve_associated_functions(&mut self) -> Result<()> {
+    pub(crate) fn resolve_associated_functions(&mut self) -> Result<()> {
         use std::collections::{BTreeMap, BTreeSet};
 
         // Build a map from each type-with-regions to its `#[base]` parents.

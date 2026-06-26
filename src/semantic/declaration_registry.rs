@@ -45,6 +45,10 @@ pub struct ModuleInfo {
 pub struct ExternTypeInfo {
     pub size: usize,
     pub alignment: usize,
+    pub location: crate::span::ItemLocation,
+    pub declaration_location: crate::span::ItemLocation,
+    pub doc_comments: Vec<String>,
+    pub cfg: Option<crate::parser::cfg::CfgPredicate>,
 }
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
@@ -106,7 +110,9 @@ impl DeclarationRegistry {
             if let grammar::ModuleItem::ExternType {
                 name: extern_name,
                 attributes,
-                ..
+                doc_comments: extern_doc_comments,
+                location: extern_location,
+                declaration_location: extern_declaration_location,
             } = extern_type
             {
                 let mut size = None;
@@ -125,7 +131,14 @@ impl DeclarationRegistry {
                 if let (Some(size), Some(alignment)) = (size, alignment) {
                     let extern_path = module_path.join(extern_name.as_str().into());
                     self.extern_types
-                        .insert(extern_path, ExternTypeInfo { size, alignment });
+                        .insert(extern_path, ExternTypeInfo {
+                            size,
+                            alignment,
+                            location: *extern_location,
+                            declaration_location: *extern_declaration_location,
+                            doc_comments: extern_doc_comments.clone(),
+                            cfg: attributes.cfg(),
+                        });
                 }
             }
         }
@@ -203,6 +216,38 @@ impl DeclarationRegistry {
         }
     }
 
+    /// Extract all type paths referenced by a definition's fields.
+    /// This is used by resolve_item to only resolve actual dependencies,
+    /// not all declared items.
+    pub fn get_referenced_types(
+        &self,
+        definition: &grammar::ItemDefinition,
+        module_path: &ItemPath,
+    ) -> Vec<ItemPath> {
+        let mut refs = Vec::new();
+        let scope = self.modules.get(module_path).map(|m| m.scope.as_slice()).unwrap_or(&[]);
+
+        match &definition.inner {
+            grammar::ItemDefinitionInner::Type(td) => {
+                for statement in td.statements() {
+                    if let grammar::TypeField::Field(_, _, type_) = &statement.field {
+                        collect_type_refs(type_, scope, self, &mut refs);
+                    }
+                }
+            }
+            grammar::ItemDefinitionInner::Enum(e) => {
+                collect_type_refs(&e.type_, scope, self, &mut refs);
+            }
+            grammar::ItemDefinitionInner::Bitflags(b) => {
+                collect_type_refs(&b.type_, scope, self, &mut refs);
+            }
+            grammar::ItemDefinitionInner::TypeAlias(ta) => {
+                collect_type_refs(&ta.target, scope, self, &mut refs);
+            }
+        }
+        refs
+    }
+
     /// Get all extern types as an iterator.
     pub fn extern_types_iter(&self) -> impl Iterator<Item = (&ItemPath, &ExternTypeInfo)> {
         self.extern_types.iter()
@@ -237,5 +282,37 @@ impl DeclarationRegistry {
     /// Set the pointer size.
     pub fn set_pointer_size(&mut self, size: usize) {
         self.pointer_size = size;
+    }
+}
+
+/// Recursively collect all type paths referenced by a grammar type.
+fn collect_type_refs(
+    type_: &grammar::Type,
+    scope: &[ItemPath],
+    registry: &DeclarationRegistry,
+    refs: &mut Vec<ItemPath>,
+) {
+    match type_ {
+        grammar::Type::Ident { path, generic_args, .. } => {
+            // Resolve the path through the scope
+            let name = path.last().map(|s| s.as_str()).unwrap_or("");
+            match registry.resolve_name(scope, name) {
+                NameResolution::Found(p) | NameResolution::FoundExtern(p) => {
+                    refs.push(p);
+                }
+                NameResolution::FoundPredefined(_) | NameResolution::NotFound => {}
+            }
+            // Recurse into generic args
+            for arg in generic_args {
+                collect_type_refs(arg, scope, registry, refs);
+            }
+        }
+        grammar::Type::ConstPointer { pointee, .. } | grammar::Type::MutPointer { pointee, .. } => {
+            collect_type_refs(pointee, scope, registry, refs);
+        }
+        grammar::Type::Array { element, .. } => {
+            collect_type_refs(element, scope, registry, refs);
+        }
+        grammar::Type::Unknown { .. } => {}
     }
 }
