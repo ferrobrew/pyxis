@@ -1,14 +1,8 @@
-//! Pyxis Language Server
-//!
-//! An LSP server for the Pyxis DSL, built on the Salsa-backed compiler.
-//! Provides diagnostics, hover, go-to-definition, completion, document symbols,
-//! formatting, code lens, inlay hints, and rename.
+//! Pyxis Language Server entry point.
 
-mod main_loop;
-mod state;
-mod span;
-mod handlers;
-
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    main_loop::run()
+fn main() {
+    if let Err(e) = pyxis_lsp::main_loop::run() {
+        eprintln!("pyxis-lsp error: {e}");
+        std::process::exit(1);
+    }
 }

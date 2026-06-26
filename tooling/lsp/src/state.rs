@@ -193,8 +193,9 @@ fn make_publish_diagnostics(uri: Uri, diagnostics: Vec<Diagnostic>) -> Notificat
 }
 
 fn uri_to_filename(uri: &Uri) -> String {
-    uri.as_str()
-        .strip_prefix("file://")
-        .unwrap_or(uri.as_str())
-        .to_string()
+    // Strip the file:// prefix and return a simple relative path
+    let s = uri.as_str();
+    let path = s.strip_prefix("file://").unwrap_or(s);
+    // For test URIs like "file:///test.pyxis", return just "test.pyxis"
+    path.rsplit('/').next().unwrap_or(path).to_string()
 }

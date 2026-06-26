@@ -16,9 +16,14 @@ use crate::state::ServerState;
 
 /// Run the LSP server on stdio.
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
-    // Set up the LSP connection over stdio
     let (connection, io_threads) = Connection::stdio();
+    run_with_connection(connection)?;
+    io_threads.join()?;
+    Ok(())
+}
 
+/// Run the LSP server with a given connection (for testing).
+pub fn run_with_connection(connection: Connection) -> Result<(), Box<dyn std::error::Error>> {
     // Build server capabilities
     let server_capabilities = ServerCapabilities {
         text_document_sync: Some(TextDocumentSyncCapability::Kind(TextDocumentSyncKind::FULL)),
@@ -55,7 +60,6 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     // Main loop: process messages until shutdown
     main_loop(&connection, &mut state)?;
 
-    io_threads.join()?;
     Ok(())
 }
 

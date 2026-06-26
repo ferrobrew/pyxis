@@ -3,6 +3,14 @@ name = "pyxis-lsp"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+name = "pyxis_lsp"
+path = "src/lib.rs"
+
+[[bin]]
+name = "pyxis-lsp"
+path = "src/main.rs"
+
 [dependencies]
 pyxis = { path = "../.." }
 lsp-server = "0.8"
