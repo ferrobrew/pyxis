@@ -14,7 +14,7 @@ pub mod queries;
 
 pub use db::{Db, PyxisDatabaseImpl};
 pub use inputs::{ProjectConfig, SourceFile, SourceSet};
-pub use ir::{ItemDeclaration, ParsedFile, ResolvedItem, SemanticAnalysis};
+pub use ir::{DeclarationSet, ParsedFile, ResolvedItem, SemanticAnalysis};
 pub use queries::{analyze, collect_declarations, parse_file, resolve_item};
 
 // Re-export salsa's Setter trait for downstream crates (LSP)

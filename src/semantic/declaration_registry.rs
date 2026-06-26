@@ -21,7 +21,7 @@ use crate::{
 /// This is built once from all parsed files and used by `resolve_item`
 /// for name resolution. It does NOT track resolution state — that's
 /// the job of the Salsa `resolve_item` query.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Hash, PartialEq, Eq)]
 pub struct DeclarationRegistry {
     /// All declared items: path → grammar definition
     items: BTreeMap<ItemPath, grammar::ItemDefinition>,
@@ -35,19 +35,19 @@ pub struct DeclarationRegistry {
     pointer_size: usize,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct ModuleInfo {
     pub module: grammar::Module,
     pub scope: Vec<ItemPath>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct ExternTypeInfo {
     pub size: usize,
     pub alignment: usize,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub struct PredefinedInfo {
     pub size: usize,
     pub alignment: usize,
@@ -201,6 +201,11 @@ impl DeclarationRegistry {
             }
             None => NameResolution::NotFound,
         }
+    }
+
+    /// Get all extern types as an iterator.
+    pub fn extern_types_iter(&self) -> impl Iterator<Item = (&ItemPath, &ExternTypeInfo)> {
+        self.extern_types.iter()
     }
 
     /// Get all declared item paths.
