@@ -2,7 +2,7 @@
 
 use crate::{
     grammar::test_aliases::*,
-    semantic::{semantic_state::SemanticState, types::test_aliases::*},
+    semantic::{builder::SemanticBuilder, types::test_aliases::*},
     span::ItemLocation,
 };
 
@@ -117,27 +117,27 @@ fn can_use_type_alias_as_reexport() {
             TD::new([TS::field((V::Public, "ptr"), T::ident("TexturePtr"))]),
         )]);
 
-    let mut semantic_state = SemanticState::new(pointer_size());
-    semantic_state
+    let mut builder = SemanticBuilder::new(pointer_size());
+    builder
         .add_module(&module_a, &IP::from("module_a"))
         .unwrap();
-    semantic_state
+    builder
         .add_module(&module_b, &IP::from("module_b"))
         .unwrap();
-    semantic_state
+    builder
         .add_module(&module_c, &IP::from("module_c"))
         .unwrap();
-    let semantic_state = semantic_state.build().unwrap();
+    let resolved = builder.build().unwrap();
 
     // Verify Container was created correctly with the aliased type
     let container_path = IP::from("module_c::Container");
-    let container = semantic_state
+    let container = resolved
         .type_registry()
         .get(&container_path, &ItemLocation::test())
         .expect("Container should exist");
 
-    let resolved = container.resolved().expect("Container should be resolved");
-    let type_def = resolved
+    let container = container.resolved().expect("Container should be resolved");
+    let type_def = container
         .inner
         .as_type()
         .expect("Container should be a type");
@@ -151,7 +151,7 @@ fn can_use_type_alias_as_reexport() {
 
     // Also verify the type alias itself was resolved correctly
     let alias_path = IP::from("module_b::TexturePtr");
-    let alias = semantic_state
+    let alias = resolved
         .type_registry()
         .get(&alias_path, &ItemLocation::test())
         .expect("TexturePtr alias should exist");

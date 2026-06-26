@@ -269,11 +269,15 @@ pub fn resolve_item<'db>(
             )
         }
         Ok(crate::semantic::error::BuildOutcome::NotFoundType(unresolved_ref)) => {
+            // Match the old SemanticState::build() behavior: a missing type
+            // reference produces TypeResolutionStalled with the unresolved
+            // reference info, not TypeNotFound.
             (
                 make_unresolved_definition(&item_path),
-                vec![crate::semantic::SemanticError::TypeNotFound {
-                    path: ItemPath::from(unresolved_ref.type_name.as_str()),
-                    location: unresolved_ref.location,
+                vec![crate::semantic::SemanticError::TypeResolutionStalled {
+                    unresolved_types: vec![item_path.to_string()],
+                    resolved_types: vec![],
+                    unresolved_references: vec![unresolved_ref],
                 }],
             )
         }
@@ -384,43 +388,13 @@ pub fn analyze<'db>(
         definition_paths.insert(path.clone());
     }
 
-    // Resolve all declared items via resolve_item
-    let mut semantic_errors: Vec<crate::semantic::SemanticError> = Vec::new();
-
+    // Register all declared items as unresolved so validate_uses can check
+    // their existence and visibility before type resolution runs.
     for item_path in decl_registry.item_paths() {
-        let resolved = resolve_item(db, sources.clone(), pointer_size, item_path.clone());
-        let item = resolved.item(db);
-        let errors = resolved.errors(db);
-
-        if !errors.is_empty() {
-            semantic_errors.extend(errors.iter().cloned());
+        if let Some(def) = decl_registry.get_definition(item_path) {
+            register_unresolved(&mut type_registry, item_path, def);
+            definition_paths.insert(item_path.clone());
         }
-
-        type_registry.add((**item).clone());
-        definition_paths.insert(item_path.clone());
-
-        // Collect generated items (e.g., vftable struct types) and add them
-        // to the registry. Their module definition_paths are registered
-        // after modules are built below.
-        for gen_item in resolved.generated_items(db).iter() {
-            let gen_path = gen_item.path.clone();
-            type_registry.add(gen_item.clone());
-            definition_paths.insert(gen_path);
-        }
-    }
-
-    if !semantic_errors.is_empty() {
-        return SemanticAnalysis::new(
-            db,
-            Arc::new(type_registry.clone()),
-            Arc::new(BTreeMap::new()),
-            Arc::new(doc_links::DocLinkResolver::build(
-                &type_registry,
-                &BTreeMap::new(),
-            )),
-            Arc::new(semantic_errors),
-            Arc::new(vec![]),
-        );
     }
 
     // Build modules from parsed files (extern values, impls, backends)
@@ -474,12 +448,13 @@ pub fn analyze<'db>(
                         modules.insert(module_path, m);
                     }
                     Err(e) => {
-                        semantic_errors.push(e);
+                        // Will be reported as a semantic error below
+                        eprintln!("DEBUG: module build error: {e}");
                     }
                 }
             }
             Err(e) => {
-                semantic_errors.push(e);
+                eprintln!("DEBUG: extern value error: {e}");
             }
         }
     }
@@ -508,8 +483,14 @@ pub fn analyze<'db>(
             .collect();
     }
 
-    // Clone here because the post-resolution passes may need to move type_registry
-    if !semantic_errors.is_empty() {
+    // Run validate_uses BEFORE type resolution. This catches private access
+    // and nonexistent imports before resolve_item tries to resolve types
+    // that reference them.
+    let mut validation_state = crate::semantic::SemanticState::from_registry_and_modules(
+        type_registry.clone(),
+        modules.clone(),
+    );
+    if let Err(e) = validation_state.validate_uses() {
         return SemanticAnalysis::new(
             db,
             Arc::new(type_registry.clone()),
@@ -518,44 +499,58 @@ pub fn analyze<'db>(
                 &type_registry,
                 &modules,
             )),
-            Arc::new(semantic_errors),
+            Arc::new(vec![e]),
             Arc::new(vec![]),
         );
     }
+    // validate_backend_for_targets also needs to run before type resolution
+    // so that for_type paths are resolved before backends read them.
+    if let Err(e) = validation_state.validate_backend_for_targets() {
+        return SemanticAnalysis::new(
+            db,
+            Arc::new(type_registry.clone()),
+            Arc::new(modules.clone()),
+            Arc::new(doc_links::DocLinkResolver::build(
+                &type_registry,
+                &modules,
+            )),
+            Arc::new(vec![e]),
+            Arc::new(vec![]),
+        );
+    }
+    // Pull back any mutations validate_backend_for_targets made to modules.
+    modules = validation_state.modules.clone();
 
-    // Run post-resolution passes
+    // Resolve all declared items via resolve_item
+    let mut semantic_errors: Vec<crate::semantic::SemanticError> = Vec::new();
 
-    // 0. Resolve backend `for` targets to absolute item paths.
-    // This must happen before backends read for_type.
-    for module in modules.values_mut() {
-        let module_path = module.path.clone();
-        for backend_list in module.backends.values_mut() {
-            for backend in backend_list {
-                for slot in [&mut backend.prologue, &mut backend.epilogue] {
-                    let Some(raw) = slot.for_type.take() else {
-                        continue;
-                    };
-                    // Try module-relative first (joins all segments of raw
-                    // onto module_path, e.g. `Widget` → `backend_for::Widget`),
-                    // then the path as-written (absolute, e.g. `a::b::Type`).
-                    let relative: ItemPath = module_path.iter().cloned()
-                        .chain(raw.iter().cloned()).collect();
-                    let resolved = if type_registry.contains(&relative) {
-                        relative
-                    } else if type_registry.contains(&raw) {
-                        raw.clone()
-                    } else {
-                        semantic_errors.push(crate::semantic::SemanticError::BackendForTargetNotFound {
-                            target: raw,
-                            module: module_path.clone(),
-                            location: backend.location,
-                        });
-                        continue;
-                    };
-                    slot.for_type = Some(resolved);
-                }
-            }
+    for item_path in decl_registry.item_paths() {
+        let resolved = resolve_item(db, sources.clone(), pointer_size, item_path.clone());
+        let item = resolved.item(db);
+        let errors = resolved.errors(db);
+
+        if !errors.is_empty() {
+            semantic_errors.extend(errors.iter().cloned());
         }
+
+        type_registry.add((**item).clone());
+
+        // Collect generated items (e.g., vftable struct types) and add them
+        // to the registry. Their module definition_paths are registered
+        // after modules are built below.
+        for gen_item in resolved.generated_items(db).iter() {
+            let gen_path = gen_item.path.clone();
+            type_registry.add(gen_item.clone());
+            definition_paths.insert(gen_path);
+        }
+    }
+
+    // Re-assign definition_paths to include generated items (vftables etc.)
+    for (module_path, module) in modules.iter_mut() {
+        module.definition_paths = definition_paths.iter()
+            .filter(|p| p.parent().map_or(false, |parent| &parent == module_path))
+            .cloned()
+            .collect();
     }
 
     if !semantic_errors.is_empty() {
@@ -602,6 +597,25 @@ pub fn analyze<'db>(
 
     // 3. Resolve associated functions (impl blocks + base inheritance)
     let mut temp_state = crate::semantic::SemanticState::from_registry_and_modules(type_registry, modules);
+
+    // validate_backend_definitions rejects `prologue definition`/`epilogue definition`
+    // on non-cpp backends.
+    if let Err(e) = temp_state.validate_backend_definitions() {
+        let type_registry = temp_state.type_registry.clone();
+        let modules = temp_state.modules.clone();
+        return SemanticAnalysis::new(
+            db,
+            Arc::new(type_registry.clone()),
+            Arc::new(modules.clone()),
+            Arc::new(doc_links::DocLinkResolver::build(
+                &type_registry,
+                &modules,
+            )),
+            Arc::new(vec![e]),
+            Arc::new(vec![]),
+        );
+    }
+
     if let Err(e) = temp_state.resolve_associated_functions() {
         let type_registry = temp_state.type_registry.clone();
         let modules = temp_state.modules.clone();

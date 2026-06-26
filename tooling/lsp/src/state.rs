@@ -137,7 +137,20 @@ impl ServerState {
 
         // Collect semantic errors
         for sem_err in analysis.errors(&self.db).iter() {
-            if let Some(loc) = sem_err.location() {
+            // TypeResolutionStalled may contain multiple unresolved references;
+            // emit one diagnostic per reference for better UX.
+            if let pyxis::semantic::SemanticError::TypeResolutionStalled {
+                unresolved_references,
+                ..
+            } = sem_err
+            {
+                for r in unresolved_references {
+                    let msg = format!("{}: Type not found: `{}`", r.location, r.type_name);
+                    if let Some(notif) = self.error_to_notification(&r.location, &msg) {
+                        notifications.push(notif);
+                    }
+                }
+            } else if let Some(loc) = sem_err.location() {
                 if let Some(notif) = self.error_to_notification(loc, &sem_err.to_string()) {
                     notifications.push(notif);
                 }

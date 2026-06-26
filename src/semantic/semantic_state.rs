@@ -833,7 +833,7 @@ impl SemanticState {
     /// `backend foo { use bar::Baz; }` syntax that lets a backend block
     /// declare its own working set). Both kinds resolve through the same
     /// type registry / visibility rules.
-    fn validate_uses(&self) -> Result<()> {
+    pub(crate) fn validate_uses(&self) -> Result<()> {
         for module in self.modules.values() {
             // Collect use trees from both module-level and backend-block scopes.
             let mut trees: Vec<&grammar::UseTree> = Vec::new();
@@ -903,7 +903,7 @@ impl SemanticState {
     /// .cpp source file"; only cpp has a distinct source file (rust and
     /// json emit single-output-per-module), so the modifier on those is
     /// almost certainly a typo or copy-paste error.
-    fn validate_backend_definitions(&self) -> Result<()> {
+    pub(crate) fn validate_backend_definitions(&self) -> Result<()> {
         // When the cpp feature is off, `Backend::Cpp` doesn't exist and
         // no backend supports the modifier. Centralise the "which backend
         // supports `definition`?" check so the cpp branch is the only
@@ -942,7 +942,7 @@ impl SemanticState {
     /// downstream backends / JSON emit a stable target. Cross-module
     /// attribution is rejected: a splice can only decorate a type owned
     /// by its own module.
-    fn validate_backend_for_targets(&mut self) -> Result<()> {
+    pub(crate) fn validate_backend_for_targets(&mut self) -> Result<()> {
         let Self {
             modules,
             type_registry,

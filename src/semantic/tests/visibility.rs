@@ -6,7 +6,7 @@
 
 use crate::{
     grammar::test_aliases::*,
-    semantic::{error::SemanticError, semantic_state::SemanticState},
+    semantic::{error::SemanticError, builder::SemanticBuilder},
     span::{ItemLocation, StripLocations},
 };
 
@@ -27,16 +27,16 @@ fn can_use_public_type_from_another_module() {
         TD::new([TS::field((V::Public, "value"), T::ident("u32"))]),
     )]);
 
-    let mut semantic_state = SemanticState::new(pointer_size());
-    semantic_state
+    let mut builder = SemanticBuilder::new(pointer_size());
+    builder
         .add_module(&module_a, &IP::from("module_a"))
         .unwrap();
-    semantic_state
+    builder
         .add_module(&module_b, &IP::from("module_b"))
         .unwrap();
 
     // This should succeed - PublicType is public
-    let result = semantic_state.build();
+    let result = builder.build();
     assert!(
         result.is_ok(),
         "Should be able to use public type from another module, got error: {:?}",
@@ -59,16 +59,16 @@ fn cannot_use_private_type_from_another_module() {
         TD::new([TS::field((V::Public, "value"), T::ident("u32"))]),
     )]);
 
-    let mut semantic_state = SemanticState::new(pointer_size());
-    semantic_state
+    let mut builder = SemanticBuilder::new(pointer_size());
+    builder
         .add_module(&module_a, &IP::from("module_a"))
         .unwrap();
-    semantic_state
+    builder
         .add_module(&module_b, &IP::from("module_b"))
         .unwrap();
 
     // This should fail - PrivateType is private
-    let err = semantic_state.build().unwrap_err();
+    let err = builder.build().unwrap_err();
     assert_eq!(
         err.strip_locations(),
         SemanticError::PrivateItemAccess {
@@ -94,13 +94,13 @@ fn can_use_private_type_within_same_module() {
         ),
     ]);
 
-    let mut semantic_state = SemanticState::new(pointer_size());
-    semantic_state
+    let mut builder = SemanticBuilder::new(pointer_size());
+    builder
         .add_module(&module, &IP::from("test_module"))
         .unwrap();
 
     // This should succeed - private types can be used within the same module
-    let result = semantic_state.build();
+    let result = builder.build();
     assert!(
         result.is_ok(),
         "Should be able to use private type within same module, got error: {:?}",
@@ -132,16 +132,16 @@ fn cannot_use_braced_import_with_private_type() {
         ),
     ]);
 
-    let mut semantic_state = SemanticState::new(pointer_size());
-    semantic_state
+    let mut builder = SemanticBuilder::new(pointer_size());
+    builder
         .add_module(&module_a, &IP::from("module_a"))
         .unwrap();
-    semantic_state
+    builder
         .add_module(&module_b, &IP::from("module_b"))
         .unwrap();
 
     // This should fail - PrivateType is private
-    let err = semantic_state.build().unwrap_err();
+    let err = builder.build().unwrap_err();
     assert_eq!(
         err.strip_locations(),
         SemanticError::PrivateItemAccess {
@@ -170,16 +170,16 @@ fn child_module_can_access_parent_private_type() {
             TD::new([TS::field((V::Private, "inner"), T::ident("ParentPrivate"))]),
         )]);
 
-    let mut semantic_state = SemanticState::new(pointer_size());
-    semantic_state
+    let mut builder = SemanticBuilder::new(pointer_size());
+    builder
         .add_module(&parent_module, &IP::from("parent"))
         .unwrap();
-    semantic_state
+    builder
         .add_module(&child_module, &IP::from("parent::child"))
         .unwrap();
 
     // This should succeed - child modules can access parent's private items
-    let result = semantic_state.build();
+    let result = builder.build();
     assert!(
         result.is_ok(),
         "Child module should be able to access parent's private type, got error: {:?}",
@@ -203,16 +203,16 @@ fn sibling_module_cannot_access_private_type() {
             TD::new([TS::field((V::Private, "inner"), T::ident("PrivateA"))]),
         )]);
 
-    let mut semantic_state = SemanticState::new(pointer_size());
-    semantic_state
+    let mut builder = SemanticBuilder::new(pointer_size());
+    builder
         .add_module(&sibling_a, &IP::from("parent::sibling_a"))
         .unwrap();
-    semantic_state
+    builder
         .add_module(&sibling_b, &IP::from("parent::sibling_b"))
         .unwrap();
 
     // This should fail - sibling_b cannot access sibling_a's private type
-    let err = semantic_state.build().unwrap_err();
+    let err = builder.build().unwrap_err();
     assert_eq!(
         err.strip_locations(),
         SemanticError::PrivateItemAccess {
@@ -245,19 +245,19 @@ fn deeply_nested_child_can_access_ancestor_private_type() {
             )]),
         )]);
 
-    let mut semantic_state = SemanticState::new(pointer_size());
-    semantic_state
+    let mut builder = SemanticBuilder::new(pointer_size());
+    builder
         .add_module(&ancestor, &IP::from("ancestor"))
         .unwrap();
-    semantic_state
+    builder
         .add_module(&middle, &IP::from("ancestor::middle"))
         .unwrap();
-    semantic_state
+    builder
         .add_module(&deep_child, &IP::from("ancestor::middle::deep"))
         .unwrap();
 
     // This should succeed - deeply nested children can access ancestor's private items
-    let result = semantic_state.build();
+    let result = builder.build();
     assert!(
         result.is_ok(),
         "Deeply nested child should be able to access ancestor's private type, got error: {:?}",
@@ -286,16 +286,16 @@ fn cannot_use_multiple_private_types_from_another_module() {
         ),
     ]);
 
-    let mut semantic_state = SemanticState::new(pointer_size());
-    semantic_state
+    let mut builder = SemanticBuilder::new(pointer_size());
+    builder
         .add_module(&module_a, &IP::from("module_a"))
         .unwrap();
-    semantic_state
+    builder
         .add_module(&module_b, &IP::from("module_b"))
         .unwrap();
 
     // Should fail trying to use Private1
-    let err = semantic_state.build().unwrap_err();
+    let err = builder.build().unwrap_err();
     assert_eq!(
         err.strip_locations(),
         SemanticError::PrivateItemAccess {
@@ -328,16 +328,16 @@ fn can_use_only_public_types_from_mixed_module() {
         ),
     ]);
 
-    let mut semantic_state = SemanticState::new(pointer_size());
-    semantic_state
+    let mut builder = SemanticBuilder::new(pointer_size());
+    builder
         .add_module(&module_a, &IP::from("module_a"))
         .unwrap();
-    semantic_state
+    builder
         .add_module(&module_b, &IP::from("module_b"))
         .unwrap();
 
     // Should succeed - only using public type
-    let result = semantic_state.build();
+    let result = builder.build();
     assert!(
         result.is_ok(),
         "Should be able to use public type when module also has private types, got error: {:?}",

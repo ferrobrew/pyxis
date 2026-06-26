@@ -1,6 +1,7 @@
 pub mod error;
 pub mod types;
 
+pub mod builder;
 pub mod db;
 pub mod declaration_registry;
 pub(crate) mod attribute;
@@ -25,6 +26,8 @@ pub use error::{Result, SemanticError};
 pub use module::{ExternBindings, Module};
 pub use semantic_state::{ResolvedSemanticState, SemanticState};
 pub use type_registry::TypeRegistry;
+
+pub use builder::SemanticBuilder;
 
 // Salsa-backed incremental compilation query layer.
 //

@@ -2,8 +2,8 @@
 
 use crate::{
     grammar::test_aliases::*,
-    semantic::{semantic_state::SemanticState, types::test_aliases::*},
-    span::ItemLocation,
+    semantic::{builder::SemanticBuilder, types::test_aliases::*},
+    span::{ItemLocation, StripLocations},
 };
 
 use pretty_assertions::assert_eq;
@@ -17,13 +17,13 @@ fn can_define_extern_value() {
         [A::address(0x1337)],
     )]);
 
-    let mut semantic_state = SemanticState::new(4);
-    semantic_state
+    let mut builder = SemanticBuilder::new(4);
+    builder
         .add_module(&module1, &IP::from("module1"))
         .unwrap();
-    let semantic_state = semantic_state.build().unwrap();
+    let resolved = builder.build().unwrap();
 
-    let extern_value = semantic_state
+    let extern_value = resolved
         .modules()
         .get(&IP::from("module1"))
         .unwrap()
@@ -32,8 +32,8 @@ fn can_define_extern_value() {
         .unwrap();
 
     assert_eq!(
-        extern_value,
-        &SEV {
+        extern_value.clone().strip_locations(),
+        SEV {
             visibility: SV::Public,
             name: "test".into(),
             type_: ST::raw("u32").mut_pointer(),

@@ -4,7 +4,7 @@
 
 use crate::{
     grammar::test_aliases::*,
-    semantic::{error::SemanticError, semantic_state::SemanticState},
+    semantic::{error::SemanticError, builder::SemanticBuilder},
 };
 
 /// A folder that contains `.pyxis` files but has no `mod.pyxis` should still
@@ -16,17 +16,17 @@ fn synthesizes_ancestor_modules_without_a_mod_file() {
         TD::new([TS::field((V::Private, "temperature"), T::ident("u32"))]),
     )]);
 
-    let mut semantic_state = SemanticState::new(4);
-    semantic_state
+    let mut builder = SemanticBuilder::new(4);
+    builder
         .add_module(&weather, &IP::from("world::weather"))
         .unwrap();
     // No module was added for `world` itself.
-    let semantic_state = semantic_state.build().unwrap();
+    let resolved = builder.build().unwrap();
 
     // The intermediate `world` module is synthesized during build.
-    assert!(semantic_state.modules().contains_key(&IP::from("world")));
+    assert!(resolved.modules().contains_key(&IP::from("world")));
     assert!(
-        semantic_state
+        resolved
             .modules()
             .contains_key(&IP::from("world::weather"))
     );
@@ -45,11 +45,11 @@ fn rejects_two_files_mapping_to_the_same_module() {
         TD::new([TS::field((V::Private, "id"), T::ident("u32"))]),
     )]);
 
-    let mut semantic_state = SemanticState::new(4);
-    semantic_state
+    let mut builder = SemanticBuilder::new(4);
+    builder
         .add_module(&folder_module, &IP::from("world"))
         .unwrap();
-    let err = semantic_state
+    let err = builder
         .add_module(&sibling, &IP::from("world"))
         .unwrap_err();
 

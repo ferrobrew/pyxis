@@ -2,7 +2,7 @@
 
 use crate::{
     grammar::test_aliases::*,
-    semantic::{error::SemanticError, semantic_state::SemanticState},
+    semantic::{error::SemanticError, builder::SemanticBuilder},
 };
 
 use super::util::pointer_size;
@@ -14,7 +14,7 @@ fn cpp_backend_accepts_definition_modifier() {
         .with_epilogue("bool foo();")
         .with_epilogue_definition("bool foo() { return true; }")]);
 
-    let mut s = SemanticState::new(4);
+    let mut s = SemanticBuilder::new(4);
     s.add_module(&module, &IP::from("test")).unwrap();
     // Build should succeed; the cpp backend is allowed to declare a
     // separate `definition` slot.
@@ -25,7 +25,7 @@ fn cpp_backend_accepts_definition_modifier() {
 fn rust_backend_rejects_epilogue_definition() {
     let module = M::new().with_backends([B::new("rust").with_epilogue_definition("// nope")]);
 
-    let mut s = SemanticState::new(4);
+    let mut s = SemanticBuilder::new(4);
     s.add_module(&module, &IP::from("test")).unwrap();
     let err = s.build().expect_err("rust + definition should be rejected");
     match err {
@@ -41,7 +41,7 @@ fn rust_backend_rejects_epilogue_definition() {
 fn json_backend_rejects_prologue_definition() {
     let module = M::new().with_backends([B::new("json").with_prologue_definition("// nope")]);
 
-    let mut s = SemanticState::new(4);
+    let mut s = SemanticBuilder::new(4);
     s.add_module(&module, &IP::from("test")).unwrap();
     let err = s.build().expect_err("json + definition should be rejected");
     match err {
@@ -61,7 +61,7 @@ fn backend_for_type_resolves_in_same_module() {
         )])
         .with_backends([B::new("rust").with_epilogue_for("impl Widget {}", "Widget")]);
 
-    let mut s = SemanticState::new(pointer_size());
+    let mut s = SemanticBuilder::new(pointer_size());
     s.add_module(&module, &IP::from("test")).unwrap();
     let state = s.build().expect("for Widget should resolve");
 
@@ -83,7 +83,7 @@ fn backend_for_type_not_found_is_rejected() {
         )])
         .with_backends([B::new("rust").with_epilogue_for("// nope", "Ghost")]);
 
-    let mut s = SemanticState::new(pointer_size());
+    let mut s = SemanticBuilder::new(pointer_size());
     s.add_module(&module, &IP::from("test")).unwrap();
     let err = s.build().expect_err("for Ghost should be rejected");
     match err {
@@ -104,7 +104,7 @@ fn backend_for_type_cross_module_is_rejected() {
         TD::new([TS::field((V::Public, "v"), T::ident("u32"))]),
     )]);
 
-    let mut s = SemanticState::new(pointer_size());
+    let mut s = SemanticBuilder::new(pointer_size());
     s.add_module(&module_a, &IP::from("a")).unwrap();
     s.add_module(&module_b, &IP::from("b")).unwrap();
     let err = s.build().expect_err("cross-module for should be rejected");
