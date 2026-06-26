@@ -61,6 +61,9 @@ impl SemanticAnalysis<'_> {
             return None;
         }
 
+        // Associated functions are already merged into the type registry
+        // by analyze() (which calls compute_associated_functions and merges
+        // the results before building the doc link resolver).
         Some(SemanticOutput::from_parts(
             (**self.type_registry(db)).clone(),
             (**self.modules(db)).clone(),

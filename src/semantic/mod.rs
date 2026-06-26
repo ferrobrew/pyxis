@@ -37,7 +37,7 @@ pub use builder::SemanticBuilder;
 pub use db::{Db, PyxisDatabaseImpl};
 pub use inputs::{SourceFile, SourceSet};
 pub use ir::{DeclarationSet, ParsedFile, ResolvedItem, SemanticAnalysis};
-pub use queries::{analyze, collect_declarations, parse_file, resolve_item};
+pub use queries::{analyze, collect_declarations, compute_associated_functions, parse_file, resolve_item};
 
 // Re-export salsa's Setter trait for downstream crates (LSP)
 pub use salsa::Setter;

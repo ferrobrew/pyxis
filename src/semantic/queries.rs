@@ -590,14 +590,14 @@ pub fn analyze<'db>(
         );
     }
 
-    // 3. Resolve associated functions (impl blocks + base inheritance)
-    let mut temp_state = crate::semantic::SemanticState::from_registry_and_modules(type_registry, modules);
-
     // validate_backend_definitions rejects `prologue definition`/`epilogue definition`
-    // on non-cpp backends.
-    if let Err(e) = temp_state.validate_backend_definitions() {
-        let type_registry = temp_state.type_registry.clone();
-        let modules = temp_state.modules.clone();
+    // on non-cpp backends. We use a temporary SemanticState for this read-only check.
+    // TODO: extract as a free function when SemanticState is fully removed.
+    let validation_state = crate::semantic::SemanticState::from_registry_and_modules(
+        type_registry.clone(),
+        modules.clone(),
+    );
+    if let Err(e) = validation_state.validate_backend_definitions() {
         return SemanticAnalysis::new(
             db,
             Arc::new(type_registry.clone()),
@@ -611,25 +611,55 @@ pub fn analyze<'db>(
         );
     }
 
-    if let Err(e) = temp_state.resolve_associated_functions() {
-        let type_registry = temp_state.type_registry.clone();
-        let modules = temp_state.modules.clone();
+    // Associated functions are computed lazily by compute_associated_functions
+    // (a tracked query). We need them merged into the type registry before
+    // building the doc link resolver (which reads associated_functions for
+    // method links). So we construct the analysis, compute AF, merge, and
+    // rebuild the analysis with the merged registry.
+
+    // Construct the initial analysis (without AF merged)
+    let initial_analysis = SemanticAnalysis::new(
+        db,
+        Arc::new(type_registry.clone()),
+        Arc::new(modules.clone()),
+        // Placeholder doc link resolver — will be rebuilt after AF merge
+        Arc::new(doc_links::DocLinkResolver::build(
+            &TypeRegistry::new(pointer_size),
+            &BTreeMap::new(),
+        )),
+        Arc::new(vec![]),
+        Arc::new(vec![]),
+    );
+
+    // Compute associated functions and merge into the type registry
+    let af_result = compute_associated_functions(db, initial_analysis);
+
+    // If there are AF errors, include them
+    if !af_result.errors.is_empty() {
+        let doc_link_resolver = doc_links::DocLinkResolver::build(&type_registry, &modules);
         return SemanticAnalysis::new(
             db,
-            Arc::new(type_registry.clone()),
-            Arc::new(modules.clone()),
-            Arc::new(doc_links::DocLinkResolver::build(
-                &type_registry,
-                &modules,
-            )),
-            Arc::new(vec![e]),
+            Arc::new(type_registry),
+            Arc::new(modules),
+            Arc::new(doc_link_resolver),
+            Arc::new(af_result.errors.clone()),
             Arc::new(vec![]),
         );
     }
 
-    // 4. Doc link resolution
-    let type_registry = temp_state.type_registry.clone();
-    let modules = temp_state.modules.clone();
+    // Merge associated functions into type definitions
+    let mut type_registry = type_registry;
+    for (path, fns) in af_result.functions.iter() {
+        if let Ok(item) = type_registry.get_mut(path, &crate::span::ItemLocation::internal()) {
+            if let crate::semantic::types::ItemState::Resolved(state) = &mut item.state {
+                if let crate::semantic::types::ItemDefinitionInner::Type(td) = &mut state.inner {
+                    td.associated_functions = fns.clone();
+                }
+            }
+        }
+    }
+
+    // Doc link resolution (now with associated functions in the registry)
     let doc_link_resolver = doc_links::DocLinkResolver::build(&type_registry, &modules);
     if let Err(e) = doc_links::validate(&doc_link_resolver, &type_registry, &modules) {
         return SemanticAnalysis::new(
@@ -650,6 +680,284 @@ pub fn analyze<'db>(
         Arc::new(vec![]),
         Arc::new(vec![]),
     )
+}
+
+/// Compute associated functions (own impl methods + inherited from base types)
+/// for all resolved types. Returns a map from type path to associated functions,
+/// plus any errors (e.g., duplicate method names).
+///
+/// This is a derived query — it reads the resolved type registry and modules
+/// from `SemanticAnalysis` and produces a new result without mutating the
+/// registry. The map is merged into type definitions by `to_semantic_output`.
+#[salsa::tracked]
+pub fn compute_associated_functions<'db>(
+    db: &'db dyn Db,
+    analysis: SemanticAnalysis<'db>,
+) -> Arc<AssociatedFunctionsResult> {
+    use std::collections::{BTreeMap as BTree, BTreeSet, HashMap, HashSet};
+    use crate::semantic::{
+        error::DuplicateDefinitionKind,
+        function::{self, FunctionBuildOutcome},
+        types::{Function, FunctionBody, ItemDefinitionInner, Type},
+        SemanticError,
+    };
+    use crate::span::HasLocation;
+
+    let type_registry = analysis.type_registry(db);
+    let modules = analysis.modules(db);
+    let location = crate::span::ItemLocation::internal();
+
+    // Build a map from each type-with-regions to its base parents.
+    let mut bases_of: BTree<ItemPath, Vec<(String, ItemPath)>> = BTree::new();
+    let mut all_type_paths: Vec<ItemPath> = Vec::new();
+    for path in type_registry.resolved() {
+        let Ok(item) = type_registry.get(&path, &location) else { continue };
+        let Some(resolved) = item.resolved() else { continue };
+        let ItemDefinitionInner::Type(td) = &resolved.inner else { continue };
+        all_type_paths.push(path.clone());
+        let mut bases = Vec::new();
+        for region in &td.regions {
+            if !region.is_base { continue; }
+            let Some(name) = region.name.clone() else { continue };
+            if let Type::Raw(base_path) = &region.type_ref {
+                bases.push((name, base_path.clone()));
+            }
+        }
+        bases_of.insert(path, bases);
+    }
+
+    // Topologically sort by inheritance: bases before derived.
+    let mut order: Vec<ItemPath> = Vec::new();
+    let mut visited: BTreeSet<ItemPath> = BTreeSet::new();
+    fn visit(
+        path: &ItemPath,
+        bases_of: &BTree<ItemPath, Vec<(String, ItemPath)>>,
+        visited: &mut BTreeSet<ItemPath>,
+        order: &mut Vec<ItemPath>,
+    ) {
+        if !visited.insert(path.clone()) { return; }
+        if let Some(bases) = bases_of.get(path) {
+            for (_, base) in bases {
+                visit(base, bases_of, visited, order);
+            }
+        }
+        order.push(path.clone());
+    }
+    for p in &all_type_paths {
+        visit(p, &bases_of, &mut visited, &mut order);
+    }
+
+    // Process types in topological order, building up the associated functions map.
+    let mut result: BTree<ItemPath, Vec<Function>> = BTree::new();
+    let mut errors: Vec<SemanticError> = Vec::new();
+
+    for path in &order {
+        let Ok(item) = type_registry.get(path, &location) else { continue };
+        let item_location = item.location;
+        let Some(resolved) = item.resolved() else { continue };
+        let ItemDefinitionInner::Type(td) = &resolved.inner else { continue };
+        let regions = td.regions.clone();
+        let vftable_function_names: HashSet<String> = td
+            .vftable
+            .as_ref()
+            .map(|v| v.functions.iter().map(|f| f.name.clone()).collect())
+            .unwrap_or_default();
+
+        // Find the module for this type (for impl blocks + scope)
+        let module_path = path.parent().unwrap_or_else(ItemPath::empty);
+        let Some(module) = modules.get(&module_path) else { continue };
+        let scope = module.scope();
+
+        // Collect impl functions for this type
+        struct ImplFunc {
+            func: crate::grammar::Function,
+            impl_type_parameters: Vec<String>,
+            impl_cfg: Option<crate::parser::cfg::CfgPredicate>,
+        }
+        let impl_funcs: Vec<ImplFunc> = module
+            .impls
+            .get(path)
+            .map(|fbs| {
+                fbs.iter()
+                    .flat_map(|fb| {
+                        let params: Vec<String> = fb
+                            .type_parameters
+                            .iter()
+                            .map(|tp| tp.name.clone())
+                            .collect();
+                        let block_cfg = fb.attributes.cfg();
+                        fb.functions().cloned().map({
+                            let params = params.clone();
+                            let block_cfg = block_cfg.clone();
+                            move |f| ImplFunc {
+                                func: f,
+                                impl_type_parameters: params.clone(),
+                                impl_cfg: block_cfg.clone(),
+                            }
+                        })
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        let struct_param_count = item.type_parameters.len();
+
+        let mut associated_functions: Vec<Function> = Vec::new();
+        let mut used_names: HashSet<String> = vftable_function_names.clone();
+
+        // Inherit from base regions
+        for (i, region) in regions.iter().filter(|r| r.is_base).enumerate() {
+            let Some(name) = region.name.clone() else { continue };
+            let Type::Raw(base_path) = &region.type_ref else { continue };
+
+            // Get base's associated functions from our result map
+            let Some(base_fns) = result.get(base_path) else { continue };
+
+            let add_functions = |functions: &[Function],
+                                 associated_functions: &mut Vec<Function>,
+                                 used_names: &mut HashSet<String>| {
+                for function in functions.iter().filter(|f| f.is_public()) {
+                    let has_self = function.arguments.iter().any(|a| {
+                        matches!(
+                            a,
+                            crate::semantic::function::Argument::ConstSelf { .. }
+                                | crate::semantic::function::Argument::MutSelf { .. }
+                        )
+                    });
+                    if !has_self { continue; }
+                    let mut function = function.clone();
+                    let original_name = function.name.clone();
+                    if used_names.contains(&original_name) {
+                        function.name = format!("{name}_{original_name}");
+                    }
+                    function.body = FunctionBody::Field {
+                        field: name.clone(),
+                        function_name: original_name,
+                    };
+                    used_names.insert(function.name.clone());
+                    associated_functions.push(function);
+                }
+            };
+
+            add_functions(base_fns, &mut associated_functions, &mut used_names);
+
+            // For multiple inheritance, also inherit vftable functions from bases after the first
+            if i > 0 {
+                if let Ok(base_item) = type_registry.get(base_path, &location) {
+                    if let Some(base_resolved) = base_item.resolved() {
+                        if let ItemDefinitionInner::Type(base_td) = &base_resolved.inner {
+                            if let Some(vftable) = &base_td.vftable {
+                                add_functions(&vftable.functions, &mut associated_functions, &mut used_names);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Build own impl methods
+        let reserved = used_names.clone();
+        let mut own_method_cfgs: HashMap<String, Vec<Option<crate::parser::cfg::CfgPredicate>>> = HashMap::new();
+
+        for ImplFunc {
+            func: grammar_fn,
+            impl_type_parameters,
+            impl_cfg,
+        } in &impl_funcs
+        {
+            let method_extras: Vec<String> = if impl_type_parameters.len() > struct_param_count {
+                impl_type_parameters[struct_param_count..].to_vec()
+            } else {
+                Vec::new()
+            };
+
+            let function = match function::build(
+                type_registry,
+                &scope,
+                false,
+                grammar_fn,
+                impl_type_parameters,
+            ) {
+                Ok(FunctionBuildOutcome::Built(f)) => *f,
+                Ok(FunctionBuildOutcome::Deferred) => {
+                    errors.push(SemanticError::TypeResolutionStalled {
+                        unresolved_types: vec![grammar_fn.name.0.clone()],
+                        resolved_types: vec![],
+                        unresolved_references: vec![],
+                    });
+                    continue;
+                }
+                Err(e) => {
+                    errors.push(e);
+                    continue;
+                }
+            };
+            let mut function = function;
+            function.method_type_parameters = method_extras;
+
+            function.cfg = match (impl_cfg.clone(), function.cfg.take()) {
+                (None, None) => None,
+                (Some(b), None) => Some(b),
+                (None, Some(f)) => Some(f),
+                (Some(b), Some(f)) => Some(crate::parser::cfg::CfgPredicate::All {
+                    predicates: vec![b, f],
+                    location: item_location,
+                }),
+            };
+
+            let name = function.name.clone();
+            if reserved.contains(&name) {
+                errors.push(SemanticError::DuplicateDefinition {
+                    name: name.clone(),
+                    item_path: path.clone(),
+                    kind: DuplicateDefinitionKind::FunctionInTypeOrBase,
+                    location: item_location,
+                });
+                continue;
+            }
+            let disjoint_with_existing = own_method_cfgs
+                .get(&name)
+                .map(|cfgs| {
+                    cfgs.iter()
+                        .all(|e| crate::parser::cfg::CfgPredicate::provably_disjoint(e.as_ref(), function.cfg.as_ref()))
+                })
+                .unwrap_or(true);
+            if !disjoint_with_existing {
+                errors.push(SemanticError::DuplicateDefinition {
+                    name: name.clone(),
+                    item_path: path.clone(),
+                    kind: DuplicateDefinitionKind::FunctionInTypeOrBase,
+                    location: item_location,
+                });
+                continue;
+            }
+
+            if !used_names.contains(&name) {
+                used_names.insert(name.clone());
+            }
+            own_method_cfgs
+                .entry(name)
+                .or_default()
+                .push(function.cfg.clone());
+            associated_functions.push(function);
+        }
+
+        result.insert(path.clone(), associated_functions);
+    }
+
+    Arc::new(AssociatedFunctionsResult {
+        functions: result,
+        errors,
+    })
+}
+
+/// Result of compute_associated_functions: the functions map plus any errors.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AssociatedFunctionsResult {
+    /// Map from type path to associated functions (own + inherited).
+    pub functions: BTreeMap<ItemPath, Vec<crate::semantic::types::Function>>,
+    /// Errors encountered during computation (e.g., duplicate method names).
+    pub errors: Vec<crate::semantic::SemanticError>,
 }
 
 // --- Helpers ---
