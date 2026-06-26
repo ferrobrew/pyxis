@@ -11,13 +11,13 @@ use lsp_types::{
 };
 
 use pyxis::grammar::{ItemPath, ModuleItem};
-use pyxis::salsa;
+use pyxis::semantic;
 use pyxis::span::{FileId, HasLocation};
 
 use crate::span::{lsp_position_to_pyxis_location, pyxis_span_to_lsp_range};
 use crate::state::ServerState;
 
-use pyxis::salsa::resolve_item;
+use pyxis::semantic::resolve_item;
 
 impl ServerState {
     /// textDocument/hover
@@ -53,7 +53,7 @@ impl ServerState {
             if definition.location.span.contains(&loc) {
                 // Try to get resolved info (size/alignment) via resolve_item
                 let sources = self.sources();
-                let source_set = salsa::SourceSet::new(&self.db, sources);
+                let source_set = semantic::SourceSet::new(&self.db, sources);
                 let item_path = ItemPath::from(definition.name.as_str());
                 let resolved = resolve_item(&self.db, source_set, self.pointer_size, item_path);
                 let resolved_item = resolved.item(&self.db);
@@ -213,7 +213,7 @@ impl ServerState {
         let mut symbols: Vec<SymbolInformation> = Vec::new();
 
         for (uri, doc) in &self.documents {
-            let parsed = salsa::parse_file(&self.db, doc.source_file);
+            let parsed = semantic::parse_file(&self.db, doc.source_file);
             let module = parsed.module(&self.db);
             let content = &doc.content;
 
@@ -322,8 +322,8 @@ impl ServerState {
         };
 
         let sources = self.sources();
-        let source_set = salsa::SourceSet::new(&self.db, sources);
-        let analysis = salsa::analyze(&self.db, self.pointer_size, source_set);
+        let source_set = semantic::SourceSet::new(&self.db, sources);
+        let analysis = semantic::analyze(&self.db, self.pointer_size, source_set);
         let type_registry = analysis.type_registry(&self.db);
 
         let mut lenses = Vec::new();
@@ -380,8 +380,8 @@ impl ServerState {
         };
 
         let sources = self.sources();
-        let source_set = salsa::SourceSet::new(&self.db, sources);
-        let analysis = salsa::analyze(&self.db, self.pointer_size, source_set);
+        let source_set = semantic::SourceSet::new(&self.db, sources);
+        let analysis = semantic::analyze(&self.db, self.pointer_size, source_set);
         let type_registry = analysis.type_registry(&self.db);
 
         let mut hints = Vec::new();
@@ -491,7 +491,7 @@ impl ServerState {
         let mut edits: HashMap<Uri, Vec<TextEdit>> = HashMap::new();
 
         for (doc_uri, doc) in &self.documents {
-            let parsed = salsa::parse_file(&self.db, doc.source_file);
+            let parsed = semantic::parse_file(&self.db, doc.source_file);
             let module = parsed.module(&self.db);
             let content = &doc.content;
 

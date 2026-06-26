@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use lsp_server::Notification;
 use lsp_types::{Diagnostic, PublishDiagnosticsParams, Uri};
-use pyxis::salsa::{self, PyxisDatabaseImpl, SourceFile};
+use pyxis::semantic::{self, PyxisDatabaseImpl, SourceFile};
 use pyxis::source_store::FileStore;
 use pyxis::span::FileId;
 use pyxis::span::HasLocation;
@@ -77,7 +77,7 @@ impl ServerState {
             if let Some(change) = params.content_changes.into_iter().last() {
                 doc.content = change.text;
                 let new_content = doc.content.clone();
-                use pyxis::salsa::Setter;
+                use pyxis::semantic::Setter;
                 doc.source_file.set_contents(&mut self.db).to(new_content);
                 self.file_store.update_in_memory(doc.file_id, doc.content.clone());
             }
@@ -94,7 +94,7 @@ impl ServerState {
         if let Some(text) = params.text {
             if let Some(doc) = self.documents.get_mut(&uri) {
                 doc.content = text.clone();
-                use pyxis::salsa::Setter;
+                use pyxis::semantic::Setter;
                 doc.source_file.set_contents(&mut self.db).to(text);
                 self.file_store.update_in_memory(doc.file_id, doc.content.clone());
             }
@@ -122,8 +122,8 @@ impl ServerState {
             return vec![];
         }
 
-        let source_set = salsa::SourceSet::new(&self.db, sources);
-        let analysis = salsa::analyze(&self.db, self.pointer_size, source_set);
+        let source_set = semantic::SourceSet::new(&self.db, sources);
+        let analysis = semantic::analyze(&self.db, self.pointer_size, source_set);
 
         let mut notifications = Vec::new();
 
@@ -181,7 +181,7 @@ impl ServerState {
     /// Get the parsed module for a URI
     pub fn get_parsed_module(&self, uri: &Uri) -> Option<pyxis::grammar::Module> {
         let doc = self.documents.get(uri)?;
-        let parsed = salsa::parse_file(&self.db, doc.source_file);
+        let parsed = semantic::parse_file(&self.db, doc.source_file);
         Some(parsed.module(&self.db).as_ref().clone())
     }
 }

@@ -9,7 +9,6 @@ pub mod config;
 pub mod grammar;
 pub mod parser;
 pub mod pretty_print;
-pub mod salsa;
 pub mod semantic;
 pub mod source_store;
 pub mod span;
@@ -322,7 +321,7 @@ pub fn build_with_store_and_options(
     let config = config::Config::load(&in_dir.join("pyxis.toml"))?;
 
     // Build a Salsa database and register all .pyxis source files as inputs.
-    let mut db = salsa::PyxisDatabaseImpl::default();
+    let mut db = semantic::PyxisDatabaseImpl::default();
     let mut sources = Vec::new();
 
     for path in glob::glob(&format!("{}/**/*.pyxis", in_dir.display()))?.filter_map(Result::ok) {
@@ -335,15 +334,15 @@ pub fn build_with_store_and_options(
         let file_id = file_store.register_path(filename.clone(), path.to_path_buf());
         let file_id_u32 = file_id.index() as u32;
         let source_file =
-            salsa::SourceFile::new(&db, filename, file_id_u32, source);
+            semantic::SourceFile::new(&db, filename, file_id_u32, source);
         sources.push(source_file);
     }
 
     // Create an interned source set for the Salsa query
-    let source_set = salsa::SourceSet::new(&db, sources);
+    let source_set = semantic::SourceSet::new(&db, sources);
 
     // Run the Salsa-backed analysis query.
-    let analysis = salsa::analyze(&db, config.project.pointer_size, source_set);
+    let analysis = semantic::analyze(&db, config.project.pointer_size, source_set);
 
     // Dual-path error model: collect all errors, but return the first as Err
     // to preserve the existing Result<(), BuildError> contract.
