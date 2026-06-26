@@ -481,11 +481,7 @@ pub fn analyze<'db>(
     // Run validate_uses BEFORE type resolution. This catches private access
     // and nonexistent imports before resolve_item tries to resolve types
     // that reference them.
-    let mut validation_state = crate::semantic::SemanticState::from_registry_and_modules(
-        type_registry.clone(),
-        modules.clone(),
-    );
-    if let Err(e) = validation_state.validate_uses() {
+    if let Err(e) = crate::semantic::validation::validate_uses(&type_registry, &modules) {
         return SemanticAnalysis::new(
             db,
             Arc::new(type_registry.clone()),
@@ -500,7 +496,7 @@ pub fn analyze<'db>(
     }
     // validate_backend_for_targets also needs to run before type resolution
     // so that for_type paths are resolved before backends read them.
-    if let Err(e) = validation_state.validate_backend_for_targets() {
+    if let Err(e) = crate::semantic::validation::validate_backend_for_targets(&type_registry, &mut modules) {
         return SemanticAnalysis::new(
             db,
             Arc::new(type_registry.clone()),
@@ -513,8 +509,6 @@ pub fn analyze<'db>(
             Arc::new(vec![]),
         );
     }
-    // Pull back any mutations validate_backend_for_targets made to modules.
-    modules = validation_state.modules.clone();
 
     // Resolve all declared items via resolve_item
     let mut semantic_errors: Vec<crate::semantic::SemanticError> = Vec::new();
@@ -591,13 +585,8 @@ pub fn analyze<'db>(
     }
 
     // validate_backend_definitions rejects `prologue definition`/`epilogue definition`
-    // on non-cpp backends. We use a temporary SemanticState for this read-only check.
-    // TODO: extract as a free function when SemanticState is fully removed.
-    let validation_state = crate::semantic::SemanticState::from_registry_and_modules(
-        type_registry.clone(),
-        modules.clone(),
-    );
-    if let Err(e) = validation_state.validate_backend_definitions() {
+    // on non-cpp backends.
+    if let Err(e) = crate::semantic::validation::validate_backend_definitions(&modules) {
         return SemanticAnalysis::new(
             db,
             Arc::new(type_registry.clone()),

@@ -18,13 +18,14 @@ pub mod semantic_state;
 pub(crate) mod type_alias_definition;
 pub(crate) mod type_definition;
 pub mod type_registry;
+pub mod validation;
 
 #[cfg(test)]
 mod tests;
 
 pub use error::{Result, SemanticError};
 pub use module::{ExternBindings, Module};
-pub use semantic_state::{SemanticOutput, SemanticState};
+pub use semantic_state::SemanticOutput;
 pub use type_registry::TypeRegistry;
 
 pub use builder::SemanticBuilder;
