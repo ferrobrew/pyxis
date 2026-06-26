@@ -309,7 +309,8 @@ impl ServerState {
         };
 
         let sources = self.sources();
-        let analysis = salsa::analyze(&self.db, self.pointer_size, sources);
+        let source_set = salsa::SourceSet::new(&self.db, sources);
+        let analysis = salsa::analyze(&self.db, self.pointer_size, source_set);
         let type_registry = analysis.type_registry(&self.db);
 
         let mut lenses = Vec::new();
@@ -366,7 +367,8 @@ impl ServerState {
         };
 
         let sources = self.sources();
-        let analysis = salsa::analyze(&self.db, self.pointer_size, sources);
+        let source_set = salsa::SourceSet::new(&self.db, sources);
+        let analysis = salsa::analyze(&self.db, self.pointer_size, source_set);
         let type_registry = analysis.type_registry(&self.db);
 
         let mut hints = Vec::new();

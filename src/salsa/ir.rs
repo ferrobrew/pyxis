@@ -3,9 +3,6 @@
 use std::sync::Arc;
 
 /// A parsed file (grammar::Module + parse errors).
-///
-/// Created by [`parse_file`](super::queries::parse_file). This is a leaf
-/// query — it only depends on the `SourceFile` input's contents.
 #[salsa::tracked]
 pub struct ParsedFile<'db> {
     /// The source file this was parsed from
@@ -18,10 +15,35 @@ pub struct ParsedFile<'db> {
     pub errors: Arc<Vec<crate::parser::ParseError>>,
 }
 
+/// A single item declaration extracted from a parsed file, before resolution.
+#[salsa::tracked]
+pub struct ItemDeclaration<'db> {
+    /// The source file this declaration came from
+    pub source: super::SourceFile,
+    /// Fully-qualified item path
+    pub path: crate::grammar::ItemPath,
+    /// The grammar definition (wrapped in Arc for salsa::Update)
+    #[returns(ref)]
+    pub definition: Arc<crate::grammar::ItemDefinition>,
+    /// The module path this item belongs to (for scope resolution)
+    pub module_path: crate::grammar::ItemPath,
+}
+
+/// A resolved item (type/enum/bitflags/type-alias) — the result of
+/// per-type resolution.
+#[salsa::tracked]
+pub struct ResolvedItem<'db> {
+    /// Fully-qualified item path
+    pub path: crate::grammar::ItemPath,
+    /// The resolved item definition (wrapped in Arc for salsa::Update)
+    #[returns(ref)]
+    pub item: Arc<crate::semantic::types::ItemDefinition>,
+    /// Semantic errors found during resolution of this item
+    #[returns(ref)]
+    pub errors: Arc<Vec<crate::semantic::SemanticError>>,
+}
+
 /// The full resolved semantic state — the root query result.
-///
-/// Produced by [`analyze`](super::queries::analyze). Contains the complete
-/// resolved type registry, modules, doc links, and all collected errors.
 #[salsa::tracked]
 pub struct SemanticAnalysis<'db> {
     /// The resolved type registry

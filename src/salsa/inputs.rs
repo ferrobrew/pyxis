@@ -1,5 +1,7 @@
 //! Salsa input structs — the base inputs to the query graph.
 
+use std::sync::Arc;
+
 /// A source file. The LSP updates `contents` on didChange;
 /// Salsa invalidates downstream queries automatically.
 #[salsa::input]
@@ -21,4 +23,14 @@ pub struct ProjectConfig {
     /// Project name (used for crate name generation)
     #[returns(ref)]
     pub project_name: String,
+}
+
+/// An interned set of source files. This wraps `Vec<SourceFile>` so it can
+/// be passed as a parameter to tracked functions (salsa requires the second
+/// parameter to be a salsa struct, and `Vec<SourceFile>` doesn't implement
+/// `SalsaStructInDb`).
+#[salsa::interned]
+pub struct SourceSet {
+    #[returns(ref)]
+    pub sources: Vec<SourceFile>,
 }

@@ -122,7 +122,8 @@ impl ServerState {
             return vec![];
         }
 
-        let analysis = salsa::analyze(&self.db, self.pointer_size, sources);
+        let source_set = salsa::SourceSet::new(&self.db, sources);
+        let analysis = salsa::analyze(&self.db, self.pointer_size, source_set);
 
         let mut notifications = Vec::new();
 

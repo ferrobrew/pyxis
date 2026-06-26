@@ -1,16 +1,16 @@
 pub mod error;
 pub mod types;
 
-mod attribute;
-mod bitflags_definition;
+pub(crate) mod attribute;
+pub(crate) mod bitflags_definition;
 pub mod doc_links;
-mod enum_definition;
-mod function;
-mod module;
-mod semantic_state;
-mod type_alias_definition;
-mod type_definition;
-mod type_registry;
+pub(crate) mod enum_definition;
+pub(crate) mod function;
+pub mod module;
+pub mod semantic_state;
+pub(crate) mod type_alias_definition;
+pub(crate) mod type_definition;
+pub mod type_registry;
 
 #[cfg(test)]
 mod tests;

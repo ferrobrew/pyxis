@@ -13,9 +13,9 @@ pub mod ir;
 pub mod queries;
 
 pub use db::{Db, PyxisDatabaseImpl};
-pub use inputs::{ProjectConfig, SourceFile};
-pub use ir::{ParsedFile, SemanticAnalysis};
-pub use queries::{analyze, parse_file};
+pub use inputs::{ProjectConfig, SourceFile, SourceSet};
+pub use ir::{ItemDeclaration, ParsedFile, ResolvedItem, SemanticAnalysis};
+pub use queries::{analyze, collect_declarations, parse_file, resolve_item};
 
 // Re-export salsa's Setter trait for downstream crates (LSP)
 pub use salsa::Setter;
@@ -49,7 +49,8 @@ mod tests {
             1,
             "pub type Test { pub field: u32, }".to_string(),
         );
-        let analysis = analyze(&db, 4, vec![source]);
+        let source_set = SourceSet::new(&db, vec![source]);
+        let analysis = analyze(&db, 4, source_set);
         let errors = analysis.errors(&db);
         let parse_errors = analysis.parse_errors(&db);
         assert!(errors.is_empty(), "should have no semantic errors");

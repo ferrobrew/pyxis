@@ -339,8 +339,11 @@ pub fn build_with_store_and_options(
         sources.push(source_file);
     }
 
+    // Create an interned source set for the Salsa query
+    let source_set = salsa::SourceSet::new(&db, sources);
+
     // Run the Salsa-backed analysis query.
-    let analysis = salsa::analyze(&db, config.project.pointer_size, sources);
+    let analysis = salsa::analyze(&db, config.project.pointer_size, source_set);
 
     // Dual-path error model: collect all errors, but return the first as Err
     // to preserve the existing Result<(), BuildError> contract.

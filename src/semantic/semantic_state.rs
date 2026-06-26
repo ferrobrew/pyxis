@@ -71,6 +71,18 @@ impl SemanticState {
         semantic_state
     }
 
+    /// Create a SemanticState from a pre-built TypeRegistry and a module path.
+    /// Used by the Salsa `resolve_item` query for per-item resolution.
+    pub fn from_registry(type_registry: TypeRegistry, module_path: ItemPath) -> Self {
+        let mut modules = BTreeMap::new();
+        modules.insert(ItemPath::empty(), Module::default());
+        modules.insert(module_path, Module::default());
+        Self {
+            modules,
+            type_registry,
+        }
+    }
+
     pub fn add_file(
         &mut self,
         file_store: &mut FileStore,
