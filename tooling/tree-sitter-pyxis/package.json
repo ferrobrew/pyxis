@@ -1,0 +1,29 @@
+{
+  "name": "tree-sitter-pyxis",
+  "version": "0.1.0",
+  "description": "tree-sitter grammar for the Pyxis DSL",
+  "license": "MIT",
+  "main": "bindings/node",
+  "types": "bindings/node",
+  "keywords": [
+    "tree-sitter",
+    "parser",
+    "pyxis"
+  ],
+  "tree-sitter": [
+    {
+      "scope": "source.pyxis",
+      "file-types": ["pyxis"],
+      "injection-regex": "^pyxis$"
+    }
+  ],
+  "scripts": {
+    "generate": "tree-sitter generate",
+    "test": "tree-sitter test",
+    "parse": "tree-sitter parse",
+    "highlight": "tree-sitter highlight"
+  },
+  "devDependencies": {
+    "tree-sitter-cli": "^0.25.0"
+  }
+}

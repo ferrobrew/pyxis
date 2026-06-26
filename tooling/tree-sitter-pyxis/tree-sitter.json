@@ -1,0 +1,21 @@
+{
+  "grammars": [
+    {
+      "name": "pyxis",
+      "camelcase": "Pyxis",
+      "scope": "source.pyxis",
+      "path": "."
+    }
+  ],
+  "metadata": {
+    "version": "0.1.0",
+    "license": "MIT",
+    "description": "tree-sitter grammar for the Pyxis DSL",
+    "authors": [
+      { "name": "Pyxis Contributors" }
+    ],
+    "links": {
+      "repository": "https://github.com/ferrobrew/pyxis"
+    }
+  }
+}

@@ -1,0 +1,496 @@
+================================================================================
+Types: basic, visibility, fields, vftable
+================================================================================
+
+type Empty {}
+
+pub type Basic {
+    pub field: u32,
+}
+
+pub type WithVftable {
+    vftable {
+        pub fn destructor(&mut self);
+        fn impl_method(&self) -> u32;
+    },
+
+    pub data: u64,
+}
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (type_definition
+    name: (identifier)
+    body: (type_body))
+  (type_definition
+    visibility: (visibility)
+    name: (identifier)
+    body: (type_body
+      (field
+        visibility: (visibility)
+        name: (identifier)
+        type: (type_identifier
+          (path
+            (identifier))))))
+  (type_definition
+    visibility: (visibility)
+    name: (identifier)
+    body: (type_body
+      (vftable_block
+        (function_signature
+          visibility: (visibility)
+          name: (identifier)
+          (mut_self_argument))
+        (function_signature
+          name: (identifier)
+          (const_self_argument)
+          return_type: (type_identifier
+            (path
+              (identifier)))))
+      (field
+        visibility: (visibility)
+        name: (identifier)
+        type: (type_identifier
+          (path
+            (identifier)))))))
+
+================================================================================
+Enums and bitflags
+================================================================================
+
+pub enum Status: u32 {
+    None,
+    #[default]
+    Active = 1,
+}
+
+pub bitflags Flags: u8 {
+    NONE = 0,
+    FLAG_A = 1,
+    #[default]
+    FLAG_B = 2,
+}
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (enum_definition
+    visibility: (visibility)
+    name: (identifier)
+    base_type: (type_identifier
+      (path
+        (identifier)))
+    (enum_variant
+      name: (identifier))
+    (enum_variant
+      (attribute
+        (attribute_list
+          (attribute_item
+            (attribute_ident
+              name: (identifier)))))
+      name: (identifier)
+      (expression
+        (integer_literal))))
+  (bitflags_definition
+    visibility: (visibility)
+    name: (identifier)
+    base_type: (type_identifier
+      (path
+        (identifier)))
+    (bitflag
+      name: (identifier)
+      value: (expression
+        (integer_literal)))
+    (bitflag
+      name: (identifier)
+      value: (expression
+        (integer_literal)))
+    (bitflag
+      (attribute
+        (attribute_list
+          (attribute_item
+            (attribute_ident
+              name: (identifier)))))
+      name: (identifier)
+      value: (expression
+        (integer_literal)))))
+
+================================================================================
+Type aliases and generics
+================================================================================
+
+pub type Ptr<T> = *mut T;
+pub type Vec3Ptr = *const Vector3;
+pub type Entry<K, V> = MapEntry<K, V>;
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (type_alias
+    visibility: (visibility)
+    name: (identifier)
+    (type_parameters
+      (type_parameter
+        name: (identifier)))
+    value: (pointer_type
+      (type_identifier
+        (path
+          (identifier)))))
+  (type_alias
+    visibility: (visibility)
+    name: (identifier)
+    value: (pointer_type
+      (type_identifier
+        (path
+          (identifier)))))
+  (type_alias
+    visibility: (visibility)
+    name: (identifier)
+    (type_parameters
+      (type_parameter
+        name: (identifier))
+      (type_parameter
+        name: (identifier)))
+    value: (generic_type
+      name: (path
+        (identifier))
+      (type_identifier
+        (path
+          (identifier)))
+      (type_identifier
+        (path
+          (identifier))))))
+
+================================================================================
+Use declarations
+================================================================================
+
+use math::Vector3;
+use math::{Matrix4, Vector3};
+use world::weather::*;
+use path::to::Thing as Other;
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (use_declaration
+    (use_tree
+      (identifier)
+      (use_tree
+        (identifier))))
+  (use_declaration
+    (use_tree
+      (identifier)
+      (use_tree_item
+        (use_tree
+          (identifier)))
+      (use_tree_item
+        (use_tree
+          (identifier)))))
+  (use_declaration
+    (use_tree
+      (identifier)
+      (use_tree
+        (identifier))))
+  (use_declaration
+    (use_tree
+      (identifier)
+      (use_tree
+        (identifier)
+        (use_tree
+          (identifier)
+          (identifier))))))
+
+================================================================================
+Impl blocks and functions
+================================================================================
+
+impl Foo {
+    pub fn method(&self) -> u32;
+    fn private(&mut self, x: i32);
+}
+
+impl<T> Pair<T> {
+    pub fn first_ptr(&self) -> *mut T;
+}
+
+#[address(0x456)]
+pub fn freestanding();
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (impl_block
+    target: (type_identifier
+      (path
+        (identifier)))
+    (function_signature
+      visibility: (visibility)
+      name: (identifier)
+      (const_self_argument)
+      return_type: (type_identifier
+        (path
+          (identifier))))
+    (function_signature
+      name: (identifier)
+      (mut_self_argument)
+      (named_argument
+        name: (identifier)
+        type: (type_identifier
+          (path
+            (identifier))))))
+  (impl_block
+    (type_parameters
+      (type_parameter
+        name: (identifier)))
+    target: (generic_type
+      name: (path
+        (identifier))
+      (type_identifier
+        (path
+          (identifier))))
+    (function_signature
+      visibility: (visibility)
+      name: (identifier)
+      (const_self_argument)
+      return_type: (pointer_type
+        (type_identifier
+          (path
+            (identifier))))))
+  (function_declaration
+    (function_signature
+      (attribute
+        (attribute_list
+          (attribute_item
+            (attribute_function
+              name: (identifier)
+              (expression
+                (integer_literal))))))
+      visibility: (visibility)
+      name: (identifier))))
+
+================================================================================
+Extern types and values
+================================================================================
+
+extern type AtomicHandle;
+extern value: u32;
+#[rust_name = "Foo"]
+extern type Named;
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (extern_type
+    name: (identifier))
+  (extern_value
+    name: (identifier)
+    type: (type_identifier
+      (path
+        (identifier))))
+  (extern_type
+    (attribute
+      (attribute_list
+        (attribute_item
+          (attribute_assign
+            name: (identifier)
+            value: (expression
+              (string_literal))))))
+    name: (identifier)))
+
+================================================================================
+Backend blocks
+================================================================================
+
+backend rust epilogue r#"
+    fn body
+"#;
+
+backend cpp {
+    prologue r#"
+    type T;
+"#;
+    epilogue for Widget r#"
+    impl Widget {}
+"#;
+}
+
+backend rust epilogue definition r#"
+    code;
+"#;
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (backend_block
+    name: (backend_name
+      (identifier))
+    (backend_splice
+      slot: (backend_slot)
+      body: (raw_string_literal)))
+  (backend_block
+    name: (backend_name
+      (identifier))
+    (backend_splice
+      slot: (backend_slot)
+      body: (raw_string_literal))
+    (backend_splice
+      slot: (backend_slot)
+      for_type: (type_identifier
+        (path
+          (identifier)))
+      body: (raw_string_literal)))
+  (backend_block
+    name: (backend_name
+      (identifier))
+    (backend_splice
+      slot: (backend_slot)
+      body: (raw_string_literal))))
+
+================================================================================
+Attributes with cfg predicates
+================================================================================
+
+#[cfg(backend = "cpp")]
+pub type CppOnly {
+    pub flag: u32,
+}
+
+#[external_body, cfg(any(backend = "cpp", backend = "json"))]
+pub fn multi_cfg();
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (type_definition
+    (attribute
+      (attribute_list
+        (attribute_item
+          (attribute_function
+            name: (identifier)
+            (attribute_assign
+              name: (identifier)
+              value: (expression
+                (string_literal)))))))
+    visibility: (visibility)
+    name: (identifier)
+    body: (type_body
+      (field
+        visibility: (visibility)
+        name: (identifier)
+        type: (type_identifier
+          (path
+            (identifier))))))
+  (function_declaration
+    (function_signature
+      (attribute
+        (attribute_list
+          (attribute_item
+            (attribute_ident
+              name: (identifier)))
+          (attribute_item
+            (attribute_function
+              name: (identifier)
+              (attribute_function
+                name: (identifier)
+                (attribute_assign
+                  name: (identifier)
+                  value: (expression
+                    (string_literal)))
+                (attribute_assign
+                  name: (identifier)
+                  value: (expression
+                    (string_literal))))))))
+      visibility: (visibility)
+      name: (identifier))))
+
+================================================================================
+Doc comments and inner attributes
+================================================================================
+
+//! Module doc comment.
+//! Second line.
+
+/// Type doc comment.
+pub type Documented {
+    /// Field doc.
+    pub field: u32,
+}
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (type_definition
+    (doc_comment)
+    (doc_comment)
+    (doc_comment)
+    visibility: (visibility)
+    name: (identifier)
+    body: (type_body
+      (doc_comment)
+      (field
+        visibility: (visibility)
+        name: (identifier)
+        type: (type_identifier
+          (path
+            (identifier)))))))
+
+================================================================================
+Pointer and array types
+================================================================================
+
+pub type Ptrs {
+    pub const_ptr: *const u32,
+    pub mut_ptr: *mut u32,
+    pub deep: *const *mut u32,
+    pub arr: [u32; 16],
+    pub arr_ptr: [*mut u32; 4],
+}
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (type_definition
+    visibility: (visibility)
+    name: (identifier)
+    body: (type_body
+      (field
+        visibility: (visibility)
+        name: (identifier)
+        type: (pointer_type
+          (type_identifier
+            (path
+              (identifier)))))
+      (field
+        visibility: (visibility)
+        name: (identifier)
+        type: (pointer_type
+          (type_identifier
+            (path
+              (identifier)))))
+      (field
+        visibility: (visibility)
+        name: (identifier)
+        type: (pointer_type
+          (pointer_type
+            (type_identifier
+              (path
+                (identifier))))))
+      (field
+        visibility: (visibility)
+        name: (identifier)
+        type: (array_type
+          (type_identifier
+            (path
+              (identifier)))
+          (integer_literal)))
+      (field
+        visibility: (visibility)
+        name: (identifier)
+        type: (array_type
+          (pointer_type
+            (type_identifier
+              (path
+                (identifier))))
+          (integer_literal))))))

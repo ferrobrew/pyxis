@@ -1,0 +1,15 @@
+id = "pyxis"
+name = "Pyxis"
+description = "Language support for the Pyxis DSL: syntax highlighting and language server."
+version = "0.1.0"
+schema_version = 1
+author = "Pyxis Contributors"
+
+[language_servers.pyxis]
+name = "Pyxis Language Server"
+language = "Pyxis"
+
+[grammars.pyxis]
+repository = "https://github.com/ferrobrew/pyxis"
+commit = "main"
+path = "tooling/tree-sitter-pyxis"
