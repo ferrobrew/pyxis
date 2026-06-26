@@ -67,6 +67,17 @@ pub fn collect_declarations<'db>(
 /// When type A references type B, resolve_item(A) calls resolve_item(B).
 /// Salsa tracks this dependency. If B changes, only A (and its dependents)
 /// re-resolve.
+/// Resolve a single item (type/enum/bitflags/type-alias).
+///
+/// This is the per-type query — the core of incremental type resolution.
+/// It builds a TypeRegistry with the target item's dependencies resolved
+/// (via recursive resolve_item calls that Salsa memoizes), then resolves
+/// the target item.
+///
+/// Dependencies are resolved iteratively: when type_definition::build
+/// returns Deferred (because a referenced type isn't resolved), we find
+/// the unresolved dependency, call resolve_item on it, insert the result
+/// into the registry, and retry. Salsa memoizes each resolve_item call.
 #[salsa::tracked]
 pub fn resolve_item<'db>(
     db: &'db dyn Db,
@@ -97,7 +108,6 @@ pub fn resolve_item<'db>(
 
     // Find this item's declaration
     let Some(definition) = registry.get_definition(&item_path) else {
-        // Not found — return placeholder
         return ResolvedItem::new(
             db,
             item_path.clone(),
@@ -106,103 +116,26 @@ pub fn resolve_item<'db>(
         );
     };
 
-    // Build a TypeRegistry with ALL other items resolved via resolve_item.
-    // Salsa memoizes each resolve_item call, so this is O(n) on first run
-    // but O(changed) on subsequent runs.
+    // Build a TypeRegistry with predefined + extern types resolved,
+    // and ALL declared items registered as Unresolved.
     let mut type_registry = TypeRegistry::new(pointer_size);
+    register_predefined(&mut type_registry);
 
-    // Register predefined types
-    for predefined in crate::semantic::types::PredefinedItem::ALL {
-        let path = ItemPath::from(predefined.name());
-        let size = predefined.size();
-        let alignment = size.max(1);
-        let location = crate::span::ItemLocation::internal();
-        type_registry.add(crate::semantic::types::ItemDefinition {
-            visibility: crate::semantic::types::Visibility::Public,
-            path,
-            type_parameters: vec![],
-            state: crate::semantic::types::ItemState::Resolved(
-                crate::semantic::types::ItemStateResolved {
-                    size,
-                    alignment,
-                    inner: crate::semantic::types::TypeDefinition {
-                        copyable: true,
-                        cloneable: true,
-                        defaultable: true,
-                        ..Default::default()
-                    }
-                    .into(),
-                },
-            ),
-            category: crate::semantic::types::ItemCategory::Predefined,
-            predefined: Some(*predefined),
-            cfg: None,
-            location,
-            declaration_location: location,
-        });
-    }
-
-    // Register extern types
     for (path, info) in registry.extern_types_iter() {
-        type_registry.add(crate::semantic::types::ItemDefinition {
-            visibility: crate::semantic::types::Visibility::Public,
-            path: path.clone(),
-            type_parameters: vec![],
-            state: crate::semantic::types::ItemState::Resolved(
-                crate::semantic::types::ItemStateResolved {
-                    size: info.size,
-                    alignment: info.alignment,
-                    inner: crate::semantic::types::TypeDefinition::default().into(),
-                },
-            ),
-            category: crate::semantic::types::ItemCategory::Extern,
-            predefined: None,
-            cfg: None,
-            location: crate::span::ItemLocation::internal(),
-            declaration_location: crate::span::ItemLocation::internal(),
-        });
+        type_registry.add(make_extern_definition(path, info.size, info.alignment));
     }
 
-    // Register all other items. For each, call resolve_item to get the
-    // resolved state (Salsa tracks the dependency). If resolve_item returns
-    // an error, register the item as Unresolved.
     for other_path in registry.item_paths() {
-        if other_path == &item_path {
-            continue; // Don't resolve ourselves
-        }
-
-        let resolved = resolve_item(db, sources.clone(), pointer_size, other_path.clone());
-        let resolved_item = resolved.item(db);
-        let errors = resolved.errors(db);
-
-        if errors.is_empty() {
-            // Use the resolved item directly
-            type_registry.add((**resolved_item).clone());
-        } else {
-            // Item had errors — register as Unresolved so type_definition::build
-            // returns NotFoundType rather than panicking
-            let Some(other_def) = registry.get_definition(other_path) else {
-                continue;
-            };
+        if let Some(other_def) = registry.get_definition(other_path) {
             register_unresolved(&mut type_registry, other_path, other_def);
         }
     }
 
-    // Register the target item as Unresolved (it will be resolved by build())
-    register_unresolved(&mut type_registry, &item_path, definition);
-
-    // Now resolve the target item using the existing build functions.
-    // The registry has all dependencies resolved, so type_definition::build
-    // should succeed without returning Deferred.
+    // Build modules map (needed for ResolutionContext)
     let mut modules = BTreeMap::new();
     modules.insert(ItemPath::empty(), crate::semantic::Module::default());
     let module_path = item_path.parent().unwrap_or_else(|| ItemPath::empty());
     modules.insert(module_path, crate::semantic::Module::default());
-
-    let mut ctx = crate::semantic::resolution_context::ResolutionContext::new(
-        &mut type_registry,
-        &mut modules,
-    );
 
     let visibility: crate::semantic::types::Visibility = definition.visibility.into();
     let def_location = definition.location;
@@ -212,57 +145,126 @@ pub fn resolve_item<'db>(
         .map(|tp| tp.name.clone())
         .collect();
 
-    let outcome = match &definition.inner {
-        ItemDefinitionInner::Type(ty) => crate::semantic::type_definition::build(
-            &mut ctx,
-            &item_path,
-            visibility,
-            ty,
-            &def_location,
-            &definition.doc_comments,
-            &type_param_names,
-        ),
-        ItemDefinitionInner::Enum(e) => {
-            let ctx_ref = crate::semantic::resolution_context::ResolutionContextRef::new(
-                &type_registry,
-                &modules,
+    // Iteratively resolve dependencies: each time build() returns Deferred,
+    // find an unresolved dependency, call resolve_item on it, insert the
+    // result, and retry. Salsa memoizes each resolve_item call.
+    let mut max_iterations = registry.item_paths().count() + 1;
+    let outcome;
+
+    loop {
+        max_iterations -= 1;
+        if max_iterations == 0 {
+            return ResolvedItem::new(
+                db,
+                item_path.clone(),
+                Arc::new(make_unresolved_definition(&item_path)),
+                Arc::new(vec![crate::semantic::SemanticError::TypeResolutionStalled {
+                    unresolved_types: vec![item_path.to_string()],
+                    resolved_types: vec![],
+                    unresolved_references: vec![],
+                }]),
             );
-            crate::semantic::enum_definition::build(
-                &ctx_ref,
-                &item_path,
-                e,
-                &def_location,
-                &definition.doc_comments,
-            )
         }
-        ItemDefinitionInner::Bitflags(b) => {
-            let ctx_ref = crate::semantic::resolution_context::ResolutionContextRef::new(
-                &type_registry,
-                &modules,
-            );
-            crate::semantic::bitflags_definition::build(
-                &ctx_ref,
-                &item_path,
-                b,
-                &def_location,
-                &definition.doc_comments,
-            )
+
+        let result = match &definition.inner {
+            ItemDefinitionInner::Type(ty) => {
+                let mut ctx = crate::semantic::resolution_context::ResolutionContext::new(
+                    &mut type_registry,
+                    &mut modules,
+                );
+                crate::semantic::type_definition::build(
+                    &mut ctx,
+                    &item_path,
+                    visibility,
+                    ty,
+                    &def_location,
+                    &definition.doc_comments,
+                    &type_param_names,
+                )
+            }
+            ItemDefinitionInner::Enum(e) => {
+                let ctx_ref = crate::semantic::resolution_context::ResolutionContextRef::new(
+                    &type_registry,
+                    &modules,
+                );
+                crate::semantic::enum_definition::build(
+                    &ctx_ref,
+                    &item_path,
+                    e,
+                    &def_location,
+                    &definition.doc_comments,
+                )
+            }
+            ItemDefinitionInner::Bitflags(b) => {
+                let ctx_ref = crate::semantic::resolution_context::ResolutionContextRef::new(
+                    &type_registry,
+                    &modules,
+                );
+                crate::semantic::bitflags_definition::build(
+                    &ctx_ref,
+                    &item_path,
+                    b,
+                    &def_location,
+                    &definition.doc_comments,
+                )
+            }
+            ItemDefinitionInner::TypeAlias(ta) => {
+                let ctx_ref = crate::semantic::resolution_context::ResolutionContextRef::new(
+                    &type_registry,
+                    &modules,
+                );
+                crate::semantic::type_alias_definition::build(
+                    &ctx_ref,
+                    &item_path,
+                    ta,
+                    &def_location,
+                    &definition.doc_comments,
+                    &type_param_names,
+                )
+            }
+        };
+
+        match result {
+            Ok(crate::semantic::error::BuildOutcome::Resolved(item)) => {
+                outcome = Ok(crate::semantic::error::BuildOutcome::Resolved(item));
+                break;
+            }
+            Ok(crate::semantic::error::BuildOutcome::Deferred) => {
+                // Find an unresolved dependency and resolve it via resolve_item
+                let unresolved = type_registry.unresolved();
+                let mut resolved_one = false;
+
+                for dep_path in &unresolved {
+                    if dep_path == &item_path {
+                        continue;
+                    }
+                    if !registry.contains(dep_path) {
+                        continue;
+                    }
+
+                    // Call resolve_item on the dependency (Salsa tracks this)
+                    let dep_resolved = resolve_item(db, sources.clone(), pointer_size, dep_path.clone());
+                    let dep_item = dep_resolved.item(db);
+                    let dep_errors = dep_resolved.errors(db);
+
+                    if dep_errors.is_empty() && dep_item.is_resolved() {
+                        type_registry.update_item(dep_path.clone(), (**dep_item).clone());
+                        resolved_one = true;
+                        break;
+                    }
+                }
+
+                if !resolved_one {
+                    outcome = Ok(crate::semantic::error::BuildOutcome::Deferred);
+                    break;
+                }
+            }
+            other => {
+                outcome = other;
+                break;
+            }
         }
-        ItemDefinitionInner::TypeAlias(ta) => {
-            let ctx_ref = crate::semantic::resolution_context::ResolutionContextRef::new(
-                &type_registry,
-                &modules,
-            );
-            crate::semantic::type_alias_definition::build(
-                &ctx_ref,
-                &item_path,
-                ta,
-                &def_location,
-                &definition.doc_comments,
-                &type_param_names,
-            )
-        }
-    };
+    }
 
     let (item_def, errors) = match outcome {
         Ok(crate::semantic::error::BuildOutcome::Resolved(item)) => {
@@ -408,6 +410,38 @@ pub fn analyze<'db>(
 }
 
 // --- Helpers ---
+
+fn register_predefined(type_registry: &mut TypeRegistry) {
+    for predefined in crate::semantic::types::PredefinedItem::ALL {
+        let path = ItemPath::from(predefined.name());
+        let size = predefined.size();
+        let alignment = size.max(1);
+        let location = crate::span::ItemLocation::internal();
+        type_registry.add(crate::semantic::types::ItemDefinition {
+            visibility: crate::semantic::types::Visibility::Public,
+            path,
+            type_parameters: vec![],
+            state: crate::semantic::types::ItemState::Resolved(
+                crate::semantic::types::ItemStateResolved {
+                    size,
+                    alignment,
+                    inner: crate::semantic::types::TypeDefinition {
+                        copyable: true,
+                        cloneable: true,
+                        defaultable: true,
+                        ..Default::default()
+                    }
+                    .into(),
+                },
+            ),
+            category: crate::semantic::types::ItemCategory::Predefined,
+            predefined: Some(*predefined),
+            cfg: None,
+            location,
+            declaration_location: location,
+        });
+    }
+}
 
 fn register_unresolved(
     type_registry: &mut TypeRegistry,
