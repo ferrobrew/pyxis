@@ -30,7 +30,7 @@ pub enum TypeLookupResult {
     },
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TypeRegistry {
     types: BTreeMap<ItemPath, ItemDefinition>,
     pointer_size: usize,

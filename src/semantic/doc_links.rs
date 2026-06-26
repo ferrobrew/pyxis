@@ -20,7 +20,7 @@ use crate::{
 };
 
 /// A resolved intra-doc link target.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum DocLinkTarget {
     /// A type / enum / bitflags / type alias item.
     Item(ItemPath),
@@ -51,7 +51,7 @@ impl DocLinkTarget {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DocLinkMemberKind {
     Method,
     VftableMethod,
@@ -60,7 +60,7 @@ pub enum DocLinkMemberKind {
     Flag,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 enum ItemMembers {
     Type {
         methods: Vec<String>,
@@ -77,7 +77,7 @@ enum ItemMembers {
     Other,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct ItemInfo {
     visibility: Visibility,
     members: ItemMembers,
@@ -85,7 +85,7 @@ struct ItemInfo {
 
 /// A snapshot of resolvable items/members, decoupled from the registry so doc
 /// links can be resolved while the resolved state is consumed elsewhere.
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DocLinkResolver {
     items: BTreeMap<ItemPath, ItemInfo>,
     module_functions: BTreeMap<ItemPath, Vec<String>>,

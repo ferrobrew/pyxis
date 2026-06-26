@@ -555,7 +555,7 @@ impl ItemDefinition {
 /// type this splice is attributed to (from `epilogue for <Type> ...`). It
 /// is resolved and validated (same-module) during semantic analysis; the
 /// grammar carries the as-written path. `None` means "module-level".
-#[derive(PartialEq, Eq, Debug, Clone, Default)]
+#[derive(PartialEq, Eq, Debug, Clone, Hash, Default)]
 #[cfg_attr(test, derive(StripLocations))]
 pub struct BackendSplice {
     pub header: Option<String>,
@@ -568,7 +568,7 @@ impl BackendSplice {
     }
 }
 
-#[derive(PartialEq, Eq, Debug, Clone, HasLocation)]
+#[derive(PartialEq, Eq, Debug, Clone, Hash, HasLocation)]
 #[cfg_attr(test, derive(StripLocations))]
 pub struct Backend {
     pub prologue: BackendSplice,
@@ -620,7 +620,7 @@ impl Backend {
     }
 }
 
-#[derive(PartialEq, Eq, Debug, Clone, HasLocation)]
+#[derive(PartialEq, Eq, Debug, Clone, Hash, HasLocation)]
 #[cfg_attr(test, derive(StripLocations))]
 pub struct ExternValue {
     pub visibility: Visibility,

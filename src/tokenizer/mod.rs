@@ -5,7 +5,7 @@ use ariadne::{Color, Label, Report, ReportKind, Source};
 #[cfg(test)]
 use crate::span::StripLocations;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(test, derive(StripLocations))]
 pub enum TokenKind {
     // Keywords
@@ -87,7 +87,7 @@ impl Token {
 }
 
 /// Lexer errors
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(test, derive(StripLocations))]
 pub enum LexError {
     /// Unexpected character encountered during tokenization

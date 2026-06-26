@@ -8,7 +8,7 @@ use ariadne::{Color, Label, Report, ReportKind, Source};
 #[cfg(test)]
 use crate::span::StripLocations;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(test, derive(StripLocations))]
 pub enum ParseError {
     ExpectedToken {

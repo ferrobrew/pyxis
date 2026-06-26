@@ -982,4 +982,18 @@ impl ResolvedSemanticState {
     pub fn doc_link_resolver(&self) -> &crate::semantic::doc_links::DocLinkResolver {
         &self.doc_link_resolver
     }
+
+    /// Construct a `ResolvedSemanticState` from its parts.
+    /// Used by the Salsa query layer to project `SemanticAnalysis`.
+    pub(crate) fn from_parts(
+        type_registry: TypeRegistry,
+        modules: BTreeMap<ItemPath, Module>,
+        doc_link_resolver: crate::semantic::doc_links::DocLinkResolver,
+    ) -> Self {
+        Self {
+            type_registry,
+            modules,
+            doc_link_resolver,
+        }
+    }
 }

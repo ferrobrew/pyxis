@@ -31,7 +31,7 @@ fn extern_assign<'a>(attributes: &'a grammar::Attributes, key: &str) -> Option<&
     })
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Module {
     pub(crate) path: ItemPath,
     pub(crate) ast: grammar::Module,

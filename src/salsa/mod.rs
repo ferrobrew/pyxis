@@ -38,7 +38,7 @@ mod tests {
     }
 
     #[test]
-    fn spike_analyze_returns_empty_errors() {
+    fn spike_analyze_returns_no_errors() {
         let db = PyxisDatabaseImpl::default();
         let source = SourceFile::new(
             &db,
@@ -46,14 +46,15 @@ mod tests {
             1,
             "pub type Test { pub field: u32, }".to_string(),
         );
-        let analysis = analyze(&db, source);
+        let analysis = analyze(&db, 4, vec![source]);
         let errors = analysis.errors(&db);
-        assert!(errors.is_empty(), "should have no errors for valid input");
+        let parse_errors = analysis.parse_errors(&db);
+        assert!(errors.is_empty(), "should have no semantic errors");
+        assert!(parse_errors.is_empty(), "should have no parse errors");
     }
 
     #[test]
     fn spike_incremental_invalidation() {
-        // Verify that changing a file's content invalidates the parse
         let mut db = PyxisDatabaseImpl::default();
         let source = SourceFile::new(
             &db,
