@@ -7,6 +7,7 @@ pub mod doc_links;
 pub(crate) mod enum_definition;
 pub(crate) mod function;
 pub mod module;
+pub mod resolution_context;
 pub mod semantic_state;
 pub(crate) mod type_alias_definition;
 pub(crate) mod type_definition;

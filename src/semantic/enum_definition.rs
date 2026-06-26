@@ -3,7 +3,7 @@ use crate::span::StripLocations;
 use crate::{
     grammar::{self, ItemPath},
     semantic::{
-        SemanticState, attribute,
+        attribute,
         error::{
             BuildOutcome, Result, SemanticError, TypeResolutionContext, UnresolvedTypeContext,
             UnresolvedTypeReference,
@@ -99,7 +99,7 @@ impl EnumDefinition {
 }
 
 pub fn build(
-    semantic: &SemanticState,
+    semantic: &crate::semantic::resolution_context::ResolutionContextRef<'_>,
     resolvee_path: &ItemPath,
     definition: &grammar::EnumDefinition,
     location: &ItemLocation,

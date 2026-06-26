@@ -3,7 +3,7 @@
 use crate::{
     grammar::{self, ItemPath},
     semantic::{
-        SemanticState,
+
         error::{BuildOutcome, Result, UnresolvedTypeContext, UnresolvedTypeReference},
         type_registry::TypeLookupResult,
         types::{ItemStateResolved, Type},
@@ -39,7 +39,7 @@ impl TypeAliasDefinition {
 /// Type aliases resolve the target type at definition time. When the alias is used
 /// elsewhere, the pre-resolved type is returned directly, enabling re-export semantics.
 pub fn build(
-    semantic: &SemanticState,
+    semantic: &crate::semantic::resolution_context::ResolutionContextRef<'_>,
     resolvee_path: &ItemPath,
     definition: &grammar::TypeAliasDefinition,
     _location: &ItemLocation,

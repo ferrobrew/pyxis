@@ -1,7 +1,7 @@
 use crate::{
     grammar::{self, ItemPath},
     semantic::{
-        SemanticState, attribute,
+        attribute,
         error::{
             AttributeName, BuildOutcome, DefaultableErrorKind, ItemKind, Result, SemanticError,
             TypeRefKind, UnresolvedTypeContext, UnresolvedTypeReference,
@@ -165,7 +165,7 @@ impl TypeDefinition {
 }
 
 pub fn build(
-    semantic: &mut SemanticState,
+    semantic: &mut crate::semantic::resolution_context::ResolutionContext<'_>,
     resolvee_path: &ItemPath,
     visibility: Visibility,
     definition: &grammar::TypeDefinition,
@@ -624,7 +624,7 @@ pub fn build(
 
 #[allow(clippy::type_complexity, clippy::too_many_arguments)]
 fn resolve_regions(
-    semantic: &mut SemanticState,
+    semantic: &mut crate::semantic::resolution_context::ResolutionContext<'_>,
     resolvee_path: &ItemPath,
     visibility: Visibility,
     target_size: Option<usize>,

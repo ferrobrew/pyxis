@@ -339,37 +339,61 @@ impl SemanticState {
                     .collect();
 
                 let outcome = match &definition.inner {
-                    grammar::ItemDefinitionInner::Type(ty) => type_definition::build(
-                        &mut self,
-                        resolvee_path,
-                        visibility,
-                        ty,
-                        def_location,
-                        &definition.doc_comments,
-                        &type_param_names,
-                    )?,
-                    grammar::ItemDefinitionInner::Enum(e) => enum_definition::build(
-                        &self,
-                        resolvee_path,
-                        e,
-                        def_location,
-                        &definition.doc_comments,
-                    )?,
-                    grammar::ItemDefinitionInner::Bitflags(b) => bitflags_definition::build(
-                        &self,
-                        resolvee_path,
-                        b,
-                        def_location,
-                        &definition.doc_comments,
-                    )?,
-                    grammar::ItemDefinitionInner::TypeAlias(ta) => type_alias_definition::build(
-                        &self,
-                        resolvee_path,
-                        ta,
-                        def_location,
-                        &definition.doc_comments,
-                        &type_param_names,
-                    )?,
+                    grammar::ItemDefinitionInner::Type(ty) => {
+                        let mut ctx = crate::semantic::resolution_context::ResolutionContext::new(
+                            &mut self.type_registry,
+                            &mut self.modules,
+                        );
+                        type_definition::build(
+                            &mut ctx,
+                            resolvee_path,
+                            visibility,
+                            ty,
+                            def_location,
+                            &definition.doc_comments,
+                            &type_param_names,
+                        )?
+                    }
+                    grammar::ItemDefinitionInner::Enum(e) => {
+                        let ctx = crate::semantic::resolution_context::ResolutionContextRef::new(
+                            &self.type_registry,
+                            &self.modules,
+                        );
+                        enum_definition::build(
+                            &ctx,
+                            resolvee_path,
+                            e,
+                            def_location,
+                            &definition.doc_comments,
+                        )?
+                    }
+                    grammar::ItemDefinitionInner::Bitflags(b) => {
+                        let ctx = crate::semantic::resolution_context::ResolutionContextRef::new(
+                            &self.type_registry,
+                            &self.modules,
+                        );
+                        bitflags_definition::build(
+                            &ctx,
+                            resolvee_path,
+                            b,
+                            def_location,
+                            &definition.doc_comments,
+                        )?
+                    }
+                    grammar::ItemDefinitionInner::TypeAlias(ta) => {
+                        let ctx = crate::semantic::resolution_context::ResolutionContextRef::new(
+                            &self.type_registry,
+                            &self.modules,
+                        );
+                        type_alias_definition::build(
+                            &ctx,
+                            resolvee_path,
+                            ta,
+                            def_location,
+                            &definition.doc_comments,
+                            &type_param_names,
+                        )?
+                    }
                 };
 
                 match outcome {

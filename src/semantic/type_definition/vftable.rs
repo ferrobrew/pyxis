@@ -1,7 +1,7 @@
 use crate::{
     grammar::{self, ItemPath},
     semantic::{
-        SemanticState,
+
         attribute::parse_index,
         error::{Result, SemanticError},
         function,
@@ -120,7 +120,7 @@ pub fn convert_grammar_functions_to_semantic_functions(
 }
 
 pub fn build(
-    semantic: &mut SemanticState,
+    semantic: &mut crate::semantic::resolution_context::ResolutionContext<'_>,
     resolvee_path: &ItemPath,
     visibility: Visibility,
     first_base: Option<&Region>,

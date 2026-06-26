@@ -1,7 +1,7 @@
 use crate::{
     grammar::{self, ItemPath},
     semantic::{
-        SemanticState, attribute,
+        attribute,
         error::{
             BitflagsExpectedType, BuildOutcome, Result, SemanticError, TypeResolutionContext,
             UnresolvedTypeContext, UnresolvedTypeReference,
@@ -89,7 +89,7 @@ impl BitflagsDefinition {
 }
 
 pub fn build(
-    semantic: &SemanticState,
+    semantic: &crate::semantic::resolution_context::ResolutionContextRef<'_>,
     resolvee_path: &ItemPath,
     definition: &grammar::BitflagsDefinition,
     location: &ItemLocation,
