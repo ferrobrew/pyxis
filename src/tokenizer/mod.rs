@@ -217,6 +217,21 @@ impl std::fmt::Display for LexError {
 
 impl std::error::Error for LexError {}
 
+impl crate::span::HasLocation for LexError {
+    fn location(&self) -> &crate::span::ItemLocation {
+        match self {
+            Self::UnexpectedCharacter { location, .. }
+            | Self::UnterminatedMultilineComment { location }
+            | Self::InvalidEscapeSequence { location, .. }
+            | Self::UnexpectedEofInStringLiteral { location }
+            | Self::InvalidRawStringStart { location }
+            | Self::UnterminatedRawString { location }
+            | Self::UnexpectedEofInCharLiteral { location }
+            | Self::UnclosedCharLiteral { location } => location,
+        }
+    }
+}
+
 pub struct Lexer {
     chars: Vec<char>,
     pos: usize,

@@ -43,6 +43,11 @@ impl Span {
         Self { start, end }
     }
 
+    /// Returns true if the given location falls within this span (inclusive of start, exclusive of end).
+    pub fn contains(&self, loc: &Location) -> bool {
+        loc >= &self.start && loc < &self.end
+    }
+
     /// Create a synthetic span (for generated or missing content)
     pub fn synthetic() -> Self {
         Self {

@@ -1,6 +1,6 @@
 [workspace]
-members = [".", "driver", "codegen_tests/output/rust", "pyxis_macros"]
-default-members = [".", "driver"]
+members = [".", "driver", "codegen_tests/output/rust", "pyxis_macros", "tooling/lsp"]
+default-members = [".", "driver", "tooling/lsp"]
 
 [workspace.dependencies]
 specta = { git = "https://github.com/specta-rs/specta.git", rev = "effe988832312009388a11487ad0ceb09b934a80", features = [

@@ -17,6 +17,9 @@ pub use inputs::{ProjectConfig, SourceFile};
 pub use ir::{ParsedFile, SemanticAnalysis};
 pub use queries::{analyze, parse_file};
 
+// Re-export salsa's Setter trait for downstream crates (LSP)
+pub use salsa::Setter;
+
 #[cfg(test)]
 mod tests {
     use super::*;

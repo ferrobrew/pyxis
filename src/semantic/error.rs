@@ -1002,7 +1002,7 @@ impl SemanticError {
         }
     }
 
-    fn location(&self) -> Option<&ItemLocation> {
+    pub fn location(&self) -> Option<&ItemLocation> {
         match self {
             SemanticError::ModuleNotFound { location, .. } => Some(location),
             SemanticError::DuplicateModule { location, .. } => Some(location),

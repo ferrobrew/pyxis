@@ -321,6 +321,29 @@ impl std::fmt::Display for ParseError {
     }
 }
 impl std::error::Error for ParseError {}
+
+impl crate::span::HasLocation for ParseError {
+    fn location(&self) -> &crate::span::ItemLocation {
+        match self {
+            Self::ExpectedToken { location, .. }
+            | Self::ExpectedIdentifier { location, .. }
+            | Self::ExpectedType { location, .. }
+            | Self::ExpectedExpression { location, .. }
+            | Self::ExpectedIntLiteral { location, .. }
+            | Self::ExpectedStringLiteral { location, .. }
+            | Self::InvalidIntLiteral { location, .. }
+            | Self::MissingPointerQualifier { location }
+            | Self::SuperNotSupported { location }
+            | Self::UnexpectedModuleToken { location, .. }
+            | Self::UnexpectedTokenAfterAttributes { location, .. }
+            | Self::ExpectedItemDefinition { location, .. }
+            | Self::ExpectedBackendContent { location, .. }
+            | Self::ExpectedPrologueOrEpilogue { location, .. }
+            | Self::UnknownBackend { location, .. } => location,
+            Self::Tokenizer(err) => err.location(),
+        }
+    }
+}
 impl From<LexError> for ParseError {
     fn from(err: LexError) -> Self {
         ParseError::Tokenizer(err)
