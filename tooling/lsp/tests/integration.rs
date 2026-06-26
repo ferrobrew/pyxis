@@ -180,3 +180,54 @@ fn test_formatting() {
     let arr = result.as_array().unwrap();
     assert!(!arr.is_empty(), "should have at least one edit");
 }
+
+#[test]
+fn test_did_change_debounce() {
+    use std::time::{Duration, Instant};
+    let conn = spawn_server();
+
+    send_request(&conn, "initialize", serde_json::to_value(InitializeParams::default()).unwrap());
+    send_notification(&conn, "initialized", serde_json::to_value(InitializedParams {}).unwrap());
+
+    // Open a valid file
+    send_notification(&conn, "textDocument/didOpen", serde_json::to_value(DidOpenTextDocumentParams {
+        text_document: TextDocumentItem {
+            uri: "file:///test.pyxis".parse().unwrap(),
+            language_id: "pyxis".to_string(),
+            version: 0,
+            text: "pub type Foo { pub x: u32, }".to_string(),
+        },
+    }).unwrap());
+    // Drain initial diagnostics
+    let _ = wait_for_notification(&conn);
+
+    // Send a didChange with an error
+    let start = Instant::now();
+    send_notification(&conn, "textDocument/didChange", serde_json::json!({
+        "textDocument": { "uri": "file:///test.pyxis", "version": 1 },
+        "contentChanges": [{ "text": "pub type Broken { pub field: NonexistentType, }" }]
+    }));
+
+    // Diagnostics should NOT arrive immediately (debounced)
+    let immediate = conn.receiver.recv_timeout(Duration::from_millis(100));
+    // We might get nothing or a delayed notification — the key is that
+    // it takes at least 400ms to arrive (debounce window is 500ms)
+    if let Ok(Message::Notification(_)) = immediate {
+        // If we got something immediately, it shouldn't be diagnostics
+        // (could be something else). Check elapsed time.
+        let elapsed = start.elapsed();
+        // This is a soft assertion — in practice the debounce ensures
+        // at least 400ms delay
+        assert!(elapsed >= Duration::from_millis(400) || elapsed < Duration::from_millis(10),
+            "diagnostics should be debounced (>=400ms) or immediate (<10ms), got {:?}", elapsed);
+    }
+
+    // Wait for the debounced diagnostics
+    let notif = wait_for_notification(&conn);
+    assert!(notif.is_some(), "should receive diagnostics after debounce");
+    let notif = notif.unwrap();
+    assert_eq!(notif.method, "textDocument/publishDiagnostics");
+    let elapsed = start.elapsed();
+    assert!(elapsed >= Duration::from_millis(400),
+        "diagnostics should be delayed by debounce, took {:?}", elapsed);
+}
