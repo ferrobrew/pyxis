@@ -19,7 +19,7 @@ use crate::{
 use super::paths::ItemPath;
 
 /// Module-level items (preserves ordering and comments)
-#[derive(Debug, Clone, PartialEq, Eq, HasLocation)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, HasLocation)]
 #[cfg_attr(test, derive(StripLocations))]
 pub enum ModuleItem {
     Comment {
@@ -62,7 +62,7 @@ pub enum ModuleItem {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub struct Module {
     pub items: Vec<ModuleItem>,
     pub doc_comments: Vec<String>,

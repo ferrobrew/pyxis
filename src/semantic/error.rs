@@ -15,7 +15,7 @@ use pyxis_macros::StripLocations;
 use std::fmt;
 
 /// Expected type kind for bitflags type validation
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(test, derive(StripLocations))]
 #[cfg_attr(test, strip_locations(copy))]
 pub enum BitflagsExpectedType {
@@ -38,7 +38,7 @@ impl fmt::Display for BitflagsExpectedType {
 }
 
 /// Context for attribute not supported errors
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(test, derive(StripLocations))]
 pub enum AttributeNotSupportedContext {
     /// Attribute not supported for a virtual function
@@ -61,7 +61,7 @@ impl fmt::Display for AttributeNotSupportedContext {
 }
 
 /// Kind of duplicate definition error
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(test, derive(StripLocations))]
 #[cfg_attr(test, strip_locations(copy))]
 pub enum DuplicateDefinitionKind {
@@ -80,7 +80,7 @@ impl fmt::Display for DuplicateDefinitionKind {
 }
 
 /// Reason why a field is not defaultable
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(test, derive(StripLocations))]
 #[cfg_attr(test, strip_locations(copy))]
 pub enum DefaultableErrorKind {
@@ -104,7 +104,7 @@ impl fmt::Display for DefaultableErrorKind {
 }
 
 /// Kind of type reference (for error messages)
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(test, derive(StripLocations))]
 #[cfg_attr(test, strip_locations(copy))]
 pub enum TypeRefKind {
@@ -150,7 +150,7 @@ impl fmt::Display for TypeRefKind {
 }
 
 /// Kind of item definition (for error messages)
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(test, derive(StripLocations))]
 #[cfg_attr(test, strip_locations(copy))]
 pub enum ItemKind {
@@ -184,7 +184,7 @@ impl fmt::Display for ItemKind {
 }
 
 /// Known attribute names used in the semantic layer
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(test, derive(StripLocations))]
 #[cfg_attr(test, strip_locations(copy))]
 pub enum AttributeName {
@@ -226,7 +226,7 @@ impl fmt::Display for AttributeName {
 }
 
 /// Kind of extern item (for error messages)
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(test, derive(StripLocations))]
 #[cfg_attr(test, strip_locations(copy))]
 pub enum ExternKind {
@@ -246,7 +246,7 @@ impl fmt::Display for ExternKind {
 }
 
 /// Context describing where an unresolved type was used
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(test, derive(StripLocations))]
 pub enum UnresolvedTypeContext {
     /// Base type of an enum definition
@@ -285,7 +285,7 @@ impl fmt::Display for UnresolvedTypeContext {
 }
 
 /// Information about a type reference that couldn't be resolved
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(test, derive(StripLocations))]
 pub struct UnresolvedTypeReference {
     /// The type that couldn't be resolved (as written in source)
@@ -303,7 +303,7 @@ impl fmt::Display for UnresolvedTypeReference {
 }
 
 /// Context for type resolution failures
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(test, derive(StripLocations))]
 pub enum TypeResolutionContext {
     /// Resolving alignment for base type of an enum
@@ -345,7 +345,7 @@ impl fmt::Display for TypeResolutionContext {
 }
 
 /// Semantic analysis errors
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(test, derive(StripLocations))]
 pub enum SemanticError {
     /// Failed to find a module for a given path

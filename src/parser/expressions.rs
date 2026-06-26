@@ -61,7 +61,7 @@ impl Expr {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ExprField(pub Ident, pub Expr);
 impl ExprField {
     pub fn ident(&self) -> &Ident {

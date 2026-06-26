@@ -9,6 +9,7 @@ pub mod config;
 pub mod grammar;
 pub mod parser;
 pub mod pretty_print;
+pub mod salsa;
 pub mod semantic;
 pub mod source_store;
 pub mod span;
