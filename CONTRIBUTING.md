@@ -68,3 +68,31 @@ and `cargo run --example codegen_tests`, which emits the test corpus
 through every backend and rebuilds the emitted output. The cpp test
 corpus uses a regular host C++17 compiler (no MSVC ABI required) so
 CI doesn't need xwin.
+
+## Editor tooling
+
+Pyxis ships a tree-sitter grammar, Zed/VSCode extensions, and a language
+server. All live under `tooling/`.
+
+### Architecture
+
+The compiler uses a [Salsa](https://github.com/salsa-rs/salsa)-backed query
+graph (`src/salsa/`). Both the batch compilation pipeline (`build_with_store_and_options`)
+and the LSP server call the same Salsa queries — there is no separate
+"imperative pipeline" and "LSP pipeline."
+
+- `src/salsa/` — Salsa database, inputs, IR, and tracked functions
+- `tooling/tree-sitter-pyxis/` — tree-sitter grammar for syntax highlighting
+- `tooling/zed-pyxis/` — Zed extension
+- `tooling/vscode-pyxis/` — VSCode extension (TextMate + LSP client)
+- `tooling/lsp/` — LSP server binary (`pyxis-lsp`)
+
+### Running the LSP
+
+```sh
+cargo build -p pyxis-lsp --release
+```
+
+The `pyxis-lsp` binary communicates over stdio. The Zed and VSCode
+extensions spawn it automatically (see their respective READMEs for
+installation instructions).
