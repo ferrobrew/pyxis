@@ -19,7 +19,7 @@ use crate::{
     pretty_print::pretty_print,
     semantic::{
         self, Db, PyxisDatabaseImpl, SourceFile, SourceSet,
-        ResolvedSemanticState, SemanticError,
+        SemanticOutput, SemanticError,
     },
     span::HasLocation,
 };
@@ -33,7 +33,7 @@ struct PendingSource {
 /// A builder that constructs a Salsa-backed semantic analysis from
 /// programmatic AST modules. Each `add_module` call pretty-prints the
 /// grammar module to source text; `build` feeds all sources through the
-/// Salsa `analyze` query and projects the result to `ResolvedSemanticState`.
+/// Salsa `analyze` query and projects the result to `SemanticOutput`.
 pub struct SemanticBuilder {
     pointer_size: usize,
     pending: Vec<PendingSource>,
@@ -164,7 +164,7 @@ impl SemanticBuilder {
     ///
     /// Returns the first error (if any) to preserve the `Result` contract
     /// that callers expect.
-    pub fn build(self) -> crate::semantic::error::Result<ResolvedSemanticState> {
+    pub fn build(self) -> crate::semantic::error::Result<SemanticOutput> {
         let db = PyxisDatabaseImpl::default();
         let sources: Vec<SourceFile> = self
             .pending
@@ -192,7 +192,7 @@ impl SemanticBuilder {
         let errors = analysis.errors(&db);
         if errors.is_empty() {
             return analysis
-                .to_resolved_state(&db)
+                .to_semantic_output(&db)
                 .ok_or(SemanticError::TypeResolutionStalled {
                     unresolved_types: vec![],
                     resolved_types: vec![],

@@ -61,18 +61,13 @@ pub fn collect_declarations<'db>(
 /// Resolve a single item (type/enum/bitflags/type-alias).
 ///
 /// This is the per-type query — the core of incremental type resolution.
-/// It builds a TypeRegistry with all dependencies resolved (via recursive
-/// resolve_item calls that Salsa memoizes), then resolves the target item.
+/// It builds a TypeRegistry with the target item's dependencies resolved
+/// (via recursive resolve_item calls that Salsa memoizes), then resolves
+/// the target item.
 ///
 /// When type A references type B, resolve_item(A) calls resolve_item(B).
 /// Salsa tracks this dependency. If B changes, only A (and its dependents)
 /// re-resolve.
-/// Resolve a single item (type/enum/bitflags/type-alias).
-///
-/// This is the per-type query — the core of incremental type resolution.
-/// It builds a TypeRegistry with the target item's dependencies resolved
-/// (via recursive resolve_item calls that Salsa memoizes), then resolves
-/// the target item.
 ///
 /// Dependencies are resolved iteratively: when type_definition::build
 /// returns Deferred (because a referenced type isn't resolved), we find

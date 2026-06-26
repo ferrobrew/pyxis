@@ -10,7 +10,7 @@ use crate::{
 use serde::{Deserialize, Serialize};
 
 use crate::semantic::{
-    ExternBindings, ResolvedSemanticState, TypeRegistry,
+    ExternBindings, SemanticOutput, TypeRegistry,
     types::{
         Argument, BitflagField, BitflagsDefinition, CallingConvention, EnumDefinition, EnumVariant,
         ExternValue, Function, FunctionBody, ItemCategory, ItemDefinition, ItemDefinitionInner,
@@ -625,7 +625,7 @@ fn convert_location(location: &crate::span::ItemLocation) -> Option<JsonSourceLo
 /// Generate the JSON documentation for the entire project
 pub fn build(
     out_dir: &Path,
-    semantic_state: &ResolvedSemanticState,
+    semantic_state: &SemanticOutput,
     project_name: &str,
     file_store: &FileStore,
 ) -> Result<()> {
@@ -1030,7 +1030,7 @@ fn convert_backend(backend: &Backend) -> JsonBackend {
 }
 
 /// Build the module hierarchy from a flat list of modules
-fn build_module_hierarchy(semantic_state: &ResolvedSemanticState) -> BTreeMap<String, JsonModule> {
+fn build_module_hierarchy(semantic_state: &SemanticOutput) -> BTreeMap<String, JsonModule> {
     let mut root_modules: BTreeMap<String, JsonModule> = BTreeMap::new();
 
     for (module_path, module) in semantic_state.modules() {

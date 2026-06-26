@@ -14,16 +14,6 @@ pub struct ParsedFile<'db> {
     pub errors: Arc<Vec<crate::parser::ParseError>>,
 }
 
-/// A single item declaration extracted from a parsed file, before resolution.
-#[salsa::tracked]
-pub struct ItemDeclaration<'db> {
-    pub source: super::SourceFile,
-    pub path: crate::grammar::ItemPath,
-    #[returns(ref)]
-    pub definition: Arc<crate::grammar::ItemDefinition>,
-    pub module_path: crate::grammar::ItemPath,
-}
-
 /// The full declaration set — all items, modules, and scopes.
 /// Built once from all parsed files; used by resolve_item for name resolution.
 #[salsa::tracked]
@@ -64,14 +54,14 @@ pub struct SemanticAnalysis<'db> {
 }
 
 impl SemanticAnalysis<'_> {
-    pub fn to_resolved_state(&self, db: &dyn super::Db) -> Option<crate::semantic::ResolvedSemanticState> {
-        use crate::semantic::ResolvedSemanticState;
+    pub fn to_semantic_output(&self, db: &dyn super::Db) -> Option<crate::semantic::SemanticOutput> {
+        use crate::semantic::SemanticOutput;
 
         if !self.errors(db).is_empty() || !self.parse_errors(db).is_empty() {
             return None;
         }
 
-        Some(ResolvedSemanticState::from_parts(
+        Some(SemanticOutput::from_parts(
             (**self.type_registry(db)).clone(),
             (**self.modules(db)).clone(),
             (**self.doc_link_resolver(db)).clone(),

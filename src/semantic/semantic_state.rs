@@ -302,7 +302,7 @@ impl SemanticState {
         Ok(())
     }
 
-    pub fn build(mut self) -> Result<ResolvedSemanticState> {
+    pub fn build(mut self) -> Result<SemanticOutput> {
         // Ensure every folder that contains `.pyxis` files has a module,
         // even if it lacks a `mod.pyxis`. This lets backends emit a complete
         // module tree (e.g. parent `mod`/`use` wiring) without each one
@@ -468,7 +468,7 @@ impl SemanticState {
             &self.modules,
         )?;
 
-        Ok(ResolvedSemanticState {
+        Ok(SemanticOutput {
             modules: self.modules,
             type_registry: self.type_registry,
             doc_link_resolver,
@@ -1013,13 +1013,13 @@ fn join_item_path(prefix: &ItemPath, suffix: &ItemPath) -> ItemPath {
 }
 
 #[derive(Debug)]
-pub struct ResolvedSemanticState {
+pub struct SemanticOutput {
     type_registry: TypeRegistry,
     modules: BTreeMap<ItemPath, Module>,
     doc_link_resolver: crate::semantic::doc_links::DocLinkResolver,
 }
 
-impl ResolvedSemanticState {
+impl SemanticOutput {
     pub fn type_registry(&self) -> &TypeRegistry {
         &self.type_registry
     }
@@ -1032,7 +1032,7 @@ impl ResolvedSemanticState {
         &self.doc_link_resolver
     }
 
-    /// Construct a `ResolvedSemanticState` from its parts.
+    /// Construct a `SemanticOutput` from its parts.
     /// Used by the Salsa query layer to project `SemanticAnalysis`.
     pub(crate) fn from_parts(
         type_registry: TypeRegistry,

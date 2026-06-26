@@ -24,7 +24,7 @@ mod tests;
 
 pub use error::{Result, SemanticError};
 pub use module::{ExternBindings, Module};
-pub use semantic_state::{ResolvedSemanticState, SemanticState};
+pub use semantic_state::{SemanticOutput, SemanticState};
 pub use type_registry::TypeRegistry;
 
 pub use builder::SemanticBuilder;
@@ -35,7 +35,7 @@ pub use builder::SemanticBuilder;
 // graph. Both the CLI `driver` and the `lsp` binary call the same Salsa
 // queries — there is no separate "imperative pipeline" and "LSP pipeline."
 pub use db::{Db, PyxisDatabaseImpl};
-pub use inputs::{ProjectConfig, SourceFile, SourceSet};
+pub use inputs::{SourceFile, SourceSet};
 pub use ir::{DeclarationSet, ParsedFile, ResolvedItem, SemanticAnalysis};
 pub use queries::{analyze, collect_declarations, parse_file, resolve_item};
 

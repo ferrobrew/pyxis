@@ -4,7 +4,7 @@ use crate::{
         Module,
         error::SemanticError,
         builder::SemanticBuilder,
-        semantic_state::ResolvedSemanticState,
+        semantic_state::SemanticOutput,
         types::test_aliases::*,
     },
 };
@@ -27,7 +27,7 @@ pub fn pointer_size() -> usize {
 pub fn build_state(
     module: &M,
     module_path: &IP,
-) -> crate::semantic::error::Result<ResolvedSemanticState> {
+) -> crate::semantic::error::Result<SemanticOutput> {
     let mut builder = SemanticBuilder::new(pointer_size());
     builder.add_module(module, module_path)?;
     builder.build()

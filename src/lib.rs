@@ -354,7 +354,7 @@ pub fn build_with_store_and_options(
     }
 
     let resolved_semantic_state = analysis
-        .to_resolved_state(&db)
+        .to_semantic_output(&db)
         .ok_or_else(|| BuildError::Semantic(SemanticError::TypeResolutionStalled {
             unresolved_types: vec![],
             resolved_types: vec![],
