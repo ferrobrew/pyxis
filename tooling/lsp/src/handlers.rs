@@ -51,10 +51,15 @@ impl ServerState {
         // Find the item at the cursor position
         for definition in module.definitions() {
             if definition.location.span.contains(&loc) {
-                // Try to get resolved info (size/alignment) via resolve_item
+                // Try to get resolved info (size/alignment) via resolve_item.
+                // Build the full module-qualified item path (e.g.
+                // "world::weather::Weather") from the document's module path.
                 let sources = self.sources();
                 let source_set = semantic::SourceSet::new(&self.db, sources);
-                let item_path = ItemPath::from(definition.name.as_str());
+                let item_path = match self.module_path_for(uri) {
+                    Some(mp) => mp.join(definition.name.as_str().into()),
+                    None => ItemPath::from(definition.name.as_str()),
+                };
                 let resolved = resolve_item(&self.db, source_set, self.pointer_size_for(uri), item_path);
                 let resolved_item = resolved.item(&self.db);
 
@@ -329,7 +334,10 @@ impl ServerState {
         let mut lenses = Vec::new();
 
         for definition in module.definitions() {
-            let path = ItemPath::from(definition.name.as_str());
+            let path = match self.module_path_for(uri) {
+                Some(mp) => mp.join(definition.name.as_str().into()),
+                None => ItemPath::from(definition.name.as_str()),
+            };
             if let Ok(item) = type_registry.get(&path, &definition.location) {
                 if let Some(resolved) = item.resolved() {
                     let range = pyxis_span_to_lsp_range(content, &definition.location.span);
@@ -393,10 +401,12 @@ impl ServerState {
                     if let pyxis::grammar::TypeField::Field(_, name, type_) = &statement.field {
                         let path = type_.as_path();
                         if let Some(path) = path {
-                            if let Ok(item) = type_registry.get(path, &definition.location) {
+                            // Use the field type's own location for the
+                            // visibility check, not the enclosing definition.
+                            let type_loc = type_.location();
+                            if let Ok(item) = type_registry.get(path, &type_loc) {
                                 if let Some(resolved) = item.resolved() {
-                                    let loc = type_.location();
-                                    let range = pyxis_span_to_lsp_range(content, &loc.span);
+                                    let range = pyxis_span_to_lsp_range(content, &type_loc.span);
                                     let hint = InlayHint {
                                         position: range.end,
                                         label: InlayHintLabel::String(format!(

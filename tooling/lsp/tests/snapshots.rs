@@ -338,7 +338,25 @@ fn snapshot_code_lens() {
     }).unwrap());
 
     let formatted = serde_json::to_string_pretty(&result).unwrap();
-    expect!["[]"].assert_eq(&formatted);
+    expect![[r#"
+        [
+          {
+            "command": {
+              "command": "",
+              "title": "size: 0x4"
+            },
+            "range": {
+              "end": {
+                "character": 1,
+                "line": 9
+              },
+              "start": {
+                "character": 0,
+                "line": 5
+              }
+            }
+          }
+        ]"#]].assert_eq(&formatted);
 }
 
 #[test]

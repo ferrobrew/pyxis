@@ -29,6 +29,29 @@
 (attribute_list) @attribute
 
 ; ============================================================================
+; Keywords
+; ============================================================================
+; Anonymous tokens (string literals in the grammar) are matched directly.
+; These capture the keyword tokens themselves, not wrapper nodes.
+[
+  "type"
+  "enum"
+  "bitflags"
+  "impl"
+  "fn"
+  "extern"
+  "use"
+  "backend"
+  "vftable"
+  "const"
+  "mut"
+  "as"
+] @keyword
+
+; `prologue` / `epilogue` / `uses` are backend slots, captured via their node
+(backend_slot) @keyword
+
+; ============================================================================
 ; Visibility (pub keyword)
 ; ============================================================================
 (visibility) @keyword

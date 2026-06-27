@@ -244,16 +244,30 @@ impl ServerState {
             doc.content = text;
             self.file_store.update_in_memory(doc.file_id, doc.content.clone());
         } else {
-            let filename = uri_to_filename(&uri);
-            let file_id = self.file_store.register_in_memory(filename, text.clone());
+            let fs_path = uri_to_file_path(&uri);
 
             // Try to find the project root for this file
-            let project_root = uri_to_file_path(&uri)
-                .and_then(|path| self.find_project_root(&path));
+            let project_root = fs_path
+                .as_ref()
+                .and_then(|path| self.find_project_root(path));
+
+            // Compute the project-relative path (e.g. "world/weather.pyxis")
+            // so collect_declarations derives the correct module path.
+            // Falls back to the filename if no project root is known.
+            let relative_path = match (&fs_path, &project_root) {
+                (Some(path), Some(root)) => path
+                    .strip_prefix(root)
+                    .unwrap_or(path)
+                    .display()
+                    .to_string(),
+                _ => uri_to_filename(&uri),
+            };
+
+            let file_id = self.file_store.register_in_memory(relative_path.clone(), text.clone());
 
             let source_file = SourceFile::new(
                 &self.db,
-                uri_to_filename(&uri),
+                relative_path,
                 file_id.as_u32(),
                 text.clone(),
             );
@@ -318,6 +332,15 @@ impl ServerState {
     /// Collect all sources for the analyze() query
     pub(crate) fn sources(&self) -> Vec<SourceFile> {
         self.documents.values().map(|d| d.source_file).collect()
+    }
+
+    /// Compute the module path for a document from its SourceFile.path
+    /// (which is project-relative, e.g. "world/weather.pyxis").
+    /// This mirrors collect_declarations' ItemPath::from_path derivation.
+    pub(crate) fn module_path_for(&self, uri: &Uri) -> Option<pyxis::grammar::ItemPath> {
+        let doc = self.documents.get(uri)?;
+        let path_str = doc.source_file.path(&self.db);
+        Some(pyxis::grammar::ItemPath::from_path(std::path::Path::new(path_str.as_str())))
     }
 
     /// Run the Salsa analyze query and collect diagnostics.
