@@ -68,31 +68,34 @@ impl ServerState {
         let decl_set = semantic::collect_declarations(&self.db, source_set, self.pointer_size_for(uri));
         let decl_registry = decl_set.registry(&self.db);
 
+        let pointer_size = self.pointer_size_for(uri);
+
         // 1. Cursor on a type or import reference (e.g. a field's type, or a
         //    segment of a `use`/FQN path) → hover the *referenced* item, not the
         //    enclosing definition. For an intermediate FQN segment, show the
-        //    module it names.
-        if let Some(reference) = find_reference_at(&module, &loc, &scope, decl_registry, tokens) {
-            let hover = reference
-                .item
-                .as_ref()
-                .and_then(|item_path| self.type_hover_text(item_path, type_registry, decl_registry))
-                .or_else(|| {
-                    self.module_uri(&reference.module_path)
-                        .map(|_| format!("**module** `{}`", reference.module_path))
-                });
-            if let Some(value) = hover {
-                return Response {
-                    id: req.id,
-                    result: Some(serde_json::to_value(Hover {
-                        contents: HoverContents::Markup(MarkupContent {
-                            kind: MarkupKind::Markdown,
-                            value,
-                        }),
-                        range: Some(pyxis_span_to_lsp_range(content, &reference.span)),
-                    }).unwrap()),
-                    error: None,
-                };
+        //    module it names. A pointer/array/unknown *shell* (rather than the
+        //    pointee/element) describes the shape — at every type position.
+        if let Some(reference) = find_reference_at(
+            &module, &loc, &scope, decl_registry, tokens, type_registry, pointer_size,
+        ) {
+            match reference {
+                Ref::Item { item, module_path, span } => {
+                    let hover = item
+                        .as_ref()
+                        .and_then(|item_path| {
+                            self.type_hover_text(item_path, type_registry, decl_registry)
+                        })
+                        .or_else(|| {
+                            self.module_uri(&module_path)
+                                .map(|_| format!("**module** `{module_path}`"))
+                        });
+                    if let Some(value) = hover {
+                        return hover_response(req.id, value, content, &span);
+                    }
+                }
+                Ref::Shell { md, span } => {
+                    return hover_response(req.id, md, content, &span);
+                }
             }
         }
 
@@ -113,7 +116,6 @@ impl ServerState {
         //    - a definition's own name → the type (size/align/fields);
         //    - a field name → the field (type + attributes + size);
         //    - a vftable entry or an impl method → its signature.
-        let pointer_size = self.pointer_size_for(uri);
         for item in &module.items {
             match item {
                 ModuleItem::Definition { definition } => {
@@ -145,16 +147,9 @@ impl ServerState {
                             }
                             match &statement.field {
                                 TypeField::Field(vis, name, type_) => {
-                                    // Cursor on the pointer/array *shell* of the
-                                    // field type → describe the shape, not the
-                                    // field. (The pointee/element is handled as a
-                                    // type reference in branch 1.)
-                                    if let Some((value, span)) = type_shell_at(
-                                        type_, &loc, type_registry, &scope, decl_registry,
-                                        pointer_size,
-                                    ) {
-                                        return hover_response(req.id, value, content, &span);
-                                    }
+                                    // The pointer/array shell and the pointee/
+                                    // element are both handled as references in
+                                    // branch 1; here we only describe the field.
                                     let span = name_token_span(tokens,
                                         &statement.location.span.start,
                                         name.as_str(),
@@ -186,13 +181,8 @@ impl ServerState {
                                         if !f.location.span.contains(&loc) {
                                             continue;
                                         }
-                                        // A pointer/array shell of an arg/return type…
-                                        if let Some((value, span)) = fn_signature_shell(
-                                            f, &loc, type_registry, &scope,
-                                            decl_registry, pointer_size,
-                                        ) {
-                                            return hover_response(req.id, value, content, &span);
-                                        }
+                                        // Arg/return *types* (including pointer/
+                                        // array shells) are handled in branch 1.
                                         // An argument name…
                                         if let Some((value, span)) = named_arg_hover(
                                             f, &loc, tokens, type_registry, &scope,
@@ -299,12 +289,8 @@ impl ServerState {
                             if !f.location.span.contains(&loc) {
                                 continue;
                             }
-                            // A pointer/array shell of an arg/return type…
-                            if let Some((value, span)) = fn_signature_shell(
-                                f, &loc, type_registry, &scope, decl_registry, pointer_size,
-                            ) {
-                                return hover_response(req.id, value, content, &span);
-                            }
+                            // Arg/return *types* (including pointer/array shells)
+                            // are handled in branch 1.
                             // An argument name…
                             if let Some((value, span)) = named_arg_hover(
                                 f, &loc, tokens, type_registry, &scope, decl_registry, pointer_size,
@@ -337,11 +323,7 @@ impl ServerState {
                 // Free functions: argument names and the function itself.
                 ModuleItem::Function { function } => {
                     if function.location.span.contains(&loc) {
-                        if let Some((value, span)) = fn_signature_shell(
-                            function, &loc, type_registry, &scope, decl_registry, pointer_size,
-                        ) {
-                            return hover_response(req.id, value, content, &span);
-                        }
+                        // Arg/return types (including shells) → branch 1.
                         if let Some((value, span)) = named_arg_hover(
                             function, &loc, tokens, type_registry, &scope, decl_registry, pointer_size,
                         ) {
@@ -454,16 +436,21 @@ impl ServerState {
         let decl_set = semantic::collect_declarations(&self.db, source_set, self.pointer_size_for(uri));
         let decl_registry = decl_set.registry(&self.db);
 
+        let pointer_size = self.pointer_size_for(uri);
+
         // 1. Cursor on a type or import reference (e.g. `Camera` in
         //    `pub field: Camera`, `*mut Camera`, or a name in a `use`
         //    statement). For an FQN like `a::b::C`, the individual segment under
         //    the cursor is resolved: the leaf jumps to the type, earlier
         //    segments to their module's file. This must take priority over the
         //    enclosing-definition check below, since a field's type span is
-        //    contained within its parent definition's span.
-        if let Some(reference) = find_reference_at(&module, &loc, &scope, decl_registry, tokens) {
+        //    contained within its parent definition's span. A pointer/array
+        //    *shell* has no definition, so it falls through to a null result.
+        if let Some(Ref::Item { item, module_path, .. }) = find_reference_at(
+            &module, &loc, &scope, decl_registry, tokens, type_registry, pointer_size,
+        ) {
             // a) Concrete item (type/extern/predefined) → jump to its name.
-            if let Some(item_path) = &reference.item {
+            if let Some(item_path) = &item {
                 if let Some(rd) = self.resolved_definition(item_path, type_registry) {
                     if let Some(target_content) = self.get_content(&rd.uri) {
                         let range = pyxis_span_to_lsp_range(target_content, &rd.name_span);
@@ -477,7 +464,7 @@ impl ServerState {
                 }
             }
             // b) Module segment → jump to the top of its file.
-            if let Some(target_uri) = self.module_uri(&reference.module_path) {
+            if let Some(target_uri) = self.module_uri(&module_path) {
                 let location = lsp_types::Location {
                     uri: target_uri,
                     range: Range {
@@ -1247,17 +1234,33 @@ fn error_response(id: lsp_server::RequestId, e: serde_json::Error) -> Response {
     }
 }
 
-/// A type or import reference found under the cursor: the resolved `ItemPath`
-/// of the referenced item, plus the source span of the reference itself (used
-/// to highlight the hover range).
-struct Reference {
-    /// Source span of the *segment* under the cursor (for hover-range highlight).
-    span: Span,
-    /// Resolved concrete item path, if this segment names a type/extern/predefined.
-    item: Option<ItemPath>,
-    /// Absolute path of this segment — used as a module target when `item` is
-    /// `None` (e.g. the `game::event_handler` part of an FQN reference).
-    module_path: ItemPath,
+/// A reference found under the cursor. Either a *named* reference (a type/import
+/// segment, resolved to a concrete item or module) or a pointer/array/unknown
+/// *shell* whose pre-rendered hover markdown describes its shape.
+enum Ref {
+    Item {
+        /// Resolved concrete item path, if this segment names a type/extern/predefined.
+        item: Option<ItemPath>,
+        /// Absolute path of this segment — used as a module target when `item`
+        /// is `None` (e.g. the `game::event_handler` part of an FQN reference).
+        module_path: ItemPath,
+        /// Source span of the *segment* under the cursor (hover-range highlight).
+        span: Span,
+    },
+    Shell {
+        /// Pre-rendered hover markdown for the shell.
+        md: String,
+        /// Span of the shell type (hover-range highlight). Shells have no
+        /// definition, so go-to-def ignores this variant.
+        span: Span,
+    },
+}
+
+/// The result of locating the cursor within a grammar `Type`: either on a named
+/// type identifier (the leaf to resolve) or on a pointer/array/unknown shell.
+enum TypeHit<'a> {
+    Ident(&'a ItemPath, Span),
+    Shell(&'a Type),
 }
 
 /// Find a type or import reference at the given location in a parsed module.
@@ -1277,18 +1280,31 @@ fn find_reference_at(
     scope: &[ItemPath],
     decl_registry: &DeclarationRegistry,
     tokens: &[Token],
-) -> Option<Reference> {
-    let resolve = |raw: &ItemPath, full_span: Span| -> Reference {
+    type_registry: &TypeRegistry,
+    pointer_size: usize,
+) -> Option<Ref> {
+    let resolve = |raw: &ItemPath, full_span: Span| -> Ref {
         let (sub_path, seg_span) =
             segment_at(raw, &full_span, loc, tokens).unwrap_or((raw.clone(), full_span));
         let item = resolve_type_path(&sub_path, scope, decl_registry);
-        Reference { span: seg_span, item, module_path: sub_path }
+        Ref::Item { item, module_path: sub_path, span: seg_span }
     };
     // For `use` trees the segment is already resolved by use_tree_reference, so
     // build the reference directly without re-running segment_at.
-    let make_ref = |seg_path: ItemPath, span: Span| -> Reference {
+    let make_ref = |seg_path: ItemPath, span: Span| -> Ref {
         let item = resolve_type_path(&seg_path, scope, decl_registry);
-        Reference { span, item, module_path: seg_path }
+        Ref::Item { item, module_path: seg_path, span }
+    };
+    // Turn a located type-position hit into a reference: a named ident resolves
+    // like any other path; a pointer/array/unknown shell renders its shape.
+    let from_hit = |hit: TypeHit| -> Ref {
+        match hit {
+            TypeHit::Ident(path, span) => resolve(path, span),
+            TypeHit::Shell(type_) => Ref::Shell {
+                md: shell_hover_md(type_, type_registry, scope, decl_registry, pointer_size),
+                span: type_.location().span,
+            },
+        }
     };
 
     use pyxis::grammar::ImplItem;
@@ -1333,22 +1349,22 @@ fn find_reference_at(
                 }
                 for impl_item in &impl_block.items {
                     if let ImplItem::Function(f) = impl_item {
-                        if let Some((path, span)) = fn_signature_type_ref(f, loc) {
-                            return Some(resolve(path, span));
+                        if let Some(hit) = fn_signature_type_ref(f, loc) {
+                            return Some(from_hit(hit));
                         }
                     }
                 }
             }
             // Free functions: argument and return types.
             ModuleItem::Function { function } => {
-                if let Some((path, span)) = fn_signature_type_ref(function, loc) {
-                    return Some(resolve(path, span));
+                if let Some(hit) = fn_signature_type_ref(function, loc) {
+                    return Some(from_hit(hit));
                 }
             }
             // Extern values: `extern name: Type;` — the referenced type.
             ModuleItem::ExternValue { extern_value } => {
-                if let Some((path, span)) = find_type_in_grammar_type(&extern_value.type_, loc) {
-                    return Some(resolve(path, span));
+                if let Some(hit) = type_hit_at(&extern_value.type_, loc) {
+                    return Some(from_hit(hit));
                 }
             }
             _ => {}
@@ -1357,8 +1373,8 @@ fn find_reference_at(
 
     // Type positions inside definitions.
     for definition in module.definitions() {
-        if let Some((path, span)) = find_type_ref_in_definition(definition, loc) {
-            return Some(resolve(path, span));
+        if let Some(hit) = find_type_ref_in_definition(definition, loc) {
+            return Some(from_hit(hit));
         }
     }
 
@@ -1390,50 +1406,22 @@ fn segment_at(
     None
 }
 
-/// Search a single definition's type positions for a type reference whose span
-/// contains `loc`. Returns the matched (unresolved) `ItemPath` and its span.
-/// If the cursor is on the pointer/array shell of one of a function's argument
-/// or return types, describe the shape (so `*const f32` in a vftable signature
-/// isn't treated as the enclosing argument/function).
-fn fn_signature_shell(
-    f: &Function,
-    loc: &Location,
-    type_registry: &TypeRegistry,
-    scope: &[ItemPath],
-    decl_registry: &DeclarationRegistry,
-    pointer_size: usize,
-) -> Option<(String, Span)> {
-    use pyxis::grammar::Argument;
-    for arg in &f.arguments {
-        if let Argument::Named { type_, .. } = arg {
-            if let Some(hit) =
-                type_shell_at(type_, loc, type_registry, scope, decl_registry, pointer_size)
-            {
-                return Some(hit);
-            }
-        }
-    }
-    f.return_type
-        .as_ref()
-        .and_then(|ret| type_shell_at(ret, loc, type_registry, scope, decl_registry, pointer_size))
-}
-
-/// Find a type reference (argument or return type) under the cursor in a
-/// function signature.
+/// Find a type hit (argument or return type) under the cursor in a function
+/// signature — a named ident or a pointer/array/unknown shell.
 fn fn_signature_type_ref<'a>(
     f: &'a Function,
     loc: &Location,
-) -> Option<(&'a ItemPath, Span)> {
+) -> Option<TypeHit<'a>> {
     use pyxis::grammar::Argument;
     for arg in &f.arguments {
         if let Argument::Named { type_, .. } = arg {
-            if let Some(found) = find_type_in_grammar_type(type_, loc) {
+            if let Some(found) = type_hit_at(type_, loc) {
                 return Some(found);
             }
         }
     }
     if let Some(ret) = &f.return_type {
-        if let Some(found) = find_type_in_grammar_type(ret, loc) {
+        if let Some(found) = type_hit_at(ret, loc) {
             return Some(found);
         }
     }
@@ -1443,7 +1431,7 @@ fn fn_signature_type_ref<'a>(
 fn find_type_ref_in_definition<'a>(
     definition: &'a ItemDefinition,
     loc: &Location,
-) -> Option<(&'a ItemPath, Span)> {
+) -> Option<TypeHit<'a>> {
     use pyxis::grammar::{Argument, ItemDefinitionInner};
 
     match &definition.inner {
@@ -1451,7 +1439,7 @@ fn find_type_ref_in_definition<'a>(
             for statement in td.statements() {
                 match &statement.field {
                     TypeField::Field(_, _, type_) => {
-                        if let Some(found) = find_type_in_grammar_type(type_, loc) {
+                        if let Some(found) = type_hit_at(type_, loc) {
                             return Some(found);
                         }
                     }
@@ -1459,13 +1447,13 @@ fn find_type_ref_in_definition<'a>(
                         for sig in fns {
                             for arg in &sig.arguments {
                                 if let Argument::Named { type_, .. } = arg {
-                                    if let Some(found) = find_type_in_grammar_type(type_, loc) {
+                                    if let Some(found) = type_hit_at(type_, loc) {
                                         return Some(found);
                                     }
                                 }
                             }
                             if let Some(ret) = &sig.return_type {
-                                if let Some(found) = find_type_in_grammar_type(ret, loc) {
+                                if let Some(found) = type_hit_at(ret, loc) {
                                     return Some(found);
                                 }
                             }
@@ -1474,9 +1462,9 @@ fn find_type_ref_in_definition<'a>(
                 }
             }
         }
-        ItemDefinitionInner::Enum(e) => return find_type_in_grammar_type(&e.type_, loc),
-        ItemDefinitionInner::Bitflags(b) => return find_type_in_grammar_type(&b.type_, loc),
-        ItemDefinitionInner::TypeAlias(ta) => return find_type_in_grammar_type(&ta.target, loc),
+        ItemDefinitionInner::Enum(e) => return type_hit_at(&e.type_, loc),
+        ItemDefinitionInner::Bitflags(b) => return type_hit_at(&b.type_, loc),
+        ItemDefinitionInner::TypeAlias(ta) => return type_hit_at(&ta.target, loc),
     }
 
     None
@@ -1543,30 +1531,40 @@ fn use_tree_reference(
     }
 }
 
-/// Recursively search a grammar `Type` for an `Ident` whose location contains
-/// `loc`. Returns the `ItemPath` of the matching type reference and its span.
-fn find_type_in_grammar_type<'a>(
-    type_: &'a Type,
-    loc: &Location,
-) -> Option<(&'a ItemPath, Span)> {
+/// Recursively locate the cursor within a grammar `Type`. Returns whether the
+/// cursor is on a named type identifier (the leaf to resolve — checking the
+/// narrower generic args first) or on a pointer/array/unknown *shell* (the
+/// pointer/array/unknown wrapping, rather than its inner pointee/element). This
+/// single walk drives both type-reference resolution and shell-shape hovers at
+/// every type position.
+fn type_hit_at<'a>(type_: &'a Type, loc: &Location) -> Option<TypeHit<'a>> {
     if !type_.location().span.contains(loc) {
         return None;
     }
     match type_ {
         Type::Ident { path, generic_args, .. } => {
-            // Check generic args first (they're narrower spans)
             for arg in generic_args {
-                if let Some(found) = find_type_in_grammar_type(arg, loc) {
+                if let Some(found) = type_hit_at(arg, loc) {
                     return Some(found);
                 }
             }
-            Some((path, type_.location().span))
+            Some(TypeHit::Ident(path, type_.location().span))
         }
         Type::ConstPointer { pointee, .. } | Type::MutPointer { pointee, .. } => {
-            find_type_in_grammar_type(pointee, loc)
+            if pointee.location().span.contains(loc) {
+                type_hit_at(pointee, loc)
+            } else {
+                Some(TypeHit::Shell(type_))
+            }
         }
-        Type::Array { element, .. } => find_type_in_grammar_type(element, loc),
-        Type::Unknown { .. } => None,
+        Type::Array { element, .. } => {
+            if element.location().span.contains(loc) {
+                type_hit_at(element, loc)
+            } else {
+                Some(TypeHit::Shell(type_))
+            }
+        }
+        Type::Unknown { .. } => Some(TypeHit::Shell(type_)),
     }
 }
 
@@ -2055,33 +2053,18 @@ fn field_offset(
     None
 }
 
-/// If the cursor is on the pointer/array/unknown *shell* of a type (not its
-/// inner pointee/element, which is handled as a type reference), return a
-/// hover describing the shape. Recurses through nested pointers/arrays.
-fn type_shell_at(
+/// Render hover markdown for a pointer/array/unknown *shell* type. The caller
+/// (via `type_hit_at`) has already determined the cursor is on this exact type's
+/// shell, not its inner pointee/element. The output is intentionally identical
+/// to the legacy `type_shell_at` so snapshots/tests don't move.
+fn shell_hover_md(
     type_: &Type,
-    loc: &Location,
     type_registry: &TypeRegistry,
     scope: &[ItemPath],
     decl_registry: &DeclarationRegistry,
     pointer_size: usize,
-) -> Option<(String, Span)> {
-    if !type_.location().span.contains(loc) {
-        return None;
-    }
-    let inner = match type_ {
-        Type::ConstPointer { pointee, .. } | Type::MutPointer { pointee, .. } => Some(&**pointee),
-        Type::Array { element, .. } => Some(&**element),
-        _ => None,
-    };
-    // Cursor is deeper, on the inner type — recurse (it may itself be a shell).
-    if let Some(inner) = inner {
-        if inner.location().span.contains(loc) {
-            return type_shell_at(inner, loc, type_registry, scope, decl_registry, pointer_size);
-        }
-    }
-    let span = type_.location().span;
-    let md = match type_ {
+) -> String {
+    match type_ {
         Type::ConstPointer { pointee, .. } => {
             let mut md = format!("**pointer** `{type_}`\n\npoints to `{pointee}` (const)\n");
             push_facts(&mut md, &[("size", fmt_bytes(pointer_size))]);
@@ -2109,11 +2092,9 @@ fn type_shell_at(
             push_facts(&mut md, &[("size", fmt_bytes(*size))]);
             md
         }
-        // An Ident with the cursor not on the inner pointee/element shouldn't
-        // reach here (branch 1 handles bare idents); nothing to describe.
-        Type::Ident { .. } => return None,
-    };
-    Some((md, span))
+        // type_hit_at only yields Shell for pointer/array/unknown.
+        Type::Ident { .. } => String::new(),
+    }
 }
 
 /// Best-effort alignment of a type: pointer → pointer size, array → element

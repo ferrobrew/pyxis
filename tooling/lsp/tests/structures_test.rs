@@ -301,6 +301,68 @@ fn pointer_shell_in_function_signature() {
 }
 
 #[test]
+fn shell_in_type_alias_target() {
+    // Hovering the `*const` shell of a type-alias target describes the pointer,
+    // while the pointee still resolves to its type.
+    let base = std::env::temp_dir().join(format!("pyxis-alias-shell-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    write(&base.join("pyxis.toml"), "[project]\nname = \"t\"\npointer_size = 8\n");
+    let src = "pub type Foo {\n    pub x: u64,\n}\npub type Alias = *const Foo;\n";
+    write(&base.join("m.pyxis"), src);
+    let init = serde_json::json!({ "rootUri": format!("file://{}", base.display()), "capabilities": {} });
+    let st = ServerState::new(&init).unwrap();
+    let uri: lsp_types::Uri = format!("file://{}", base.join("m.pyxis").display()).parse().unwrap();
+    let l = src.lines().nth(3).unwrap();
+    assert!(hover_text(&st, &uri, 3, l.find('*').unwrap() as u32).contains("**pointer**"),
+        "alias target pointer shell describes the pointer");
+    assert!(hover_text(&st, &uri, 3, l.find("Foo").unwrap() as u32).contains("**type** `Foo`"),
+        "alias target pointee still resolves");
+}
+
+#[test]
+fn shell_in_extern_value_type() {
+    // Hovering the `*const` shell of an extern value's type describes the pointer.
+    let base = std::env::temp_dir().join(format!("pyxis-extern-shell-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    write(&base.join("pyxis.toml"), "[project]\nname = \"t\"\npointer_size = 8\n");
+    let src = "pub type Foo {\n    pub x: u64,\n}\n#[address(0x100)]\nextern p: *const Foo;\n";
+    write(&base.join("m.pyxis"), src);
+    let init = serde_json::json!({ "rootUri": format!("file://{}", base.display()), "capabilities": {} });
+    let st = ServerState::new(&init).unwrap();
+    let uri: lsp_types::Uri = format!("file://{}", base.join("m.pyxis").display()).parse().unwrap();
+    let l = src.lines().nth(4).unwrap();
+    assert!(hover_text(&st, &uri, 4, l.find('*').unwrap() as u32).contains("**pointer**"),
+        "extern value pointer shell describes the pointer");
+    assert!(hover_text(&st, &uri, 4, l.find("Foo").unwrap() as u32).contains("**type** `Foo`"),
+        "extern value pointee still resolves");
+}
+
+#[test]
+fn shell_in_generic_argument() {
+    // Hovering the `*const` shell *inside* a generic argument describes the
+    // inner pointer, not the outer generic type.
+    let base = std::env::temp_dir().join(format!("pyxis-generic-shell-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    write(&base.join("pyxis.toml"), "[project]\nname = \"t\"\npointer_size = 8\n");
+    let src = "pub type Foo {\n    pub x: u64,\n}\npub type SharedPtr<T> {\n    pub ptr: *mut T,\n}\npub type Holder {\n    pub h: SharedPtr<*const Foo>,\n}\n";
+    write(&base.join("m.pyxis"), src);
+    let init = serde_json::json!({ "rootUri": format!("file://{}", base.display()), "capabilities": {} });
+    let st = ServerState::new(&init).unwrap();
+    let uri: lsp_types::Uri = format!("file://{}", base.join("m.pyxis").display()).parse().unwrap();
+    let l = src.lines().nth(7).unwrap(); // `    pub h: SharedPtr<*const Foo>,`
+    // The `*const` inside the generic arg is a pointer shell, not SharedPtr.
+    let star = l.find('*').unwrap() as u32;
+    let h = hover_text(&st, &uri, 7, star);
+    assert!(h.contains("**pointer**"), "inner generic-arg pointer shell describes the pointer: {h}");
+    // The outer generic name still resolves to its type.
+    assert!(hover_text(&st, &uri, 7, l.find("SharedPtr").unwrap() as u32).contains("**type** `SharedPtr`"),
+        "outer generic still resolves");
+    // The innermost pointee still resolves to its type.
+    assert!(hover_text(&st, &uri, 7, l.find("Foo").unwrap() as u32).contains("**type** `Foo`"),
+        "generic-arg pointee still resolves");
+}
+
+#[test]
 fn attribute_hover_on_free_function_and_extern() {
     let base = std::env::temp_dir().join(format!("pyxis-fa-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&base);
