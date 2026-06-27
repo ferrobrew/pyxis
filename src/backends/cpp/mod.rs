@@ -33,11 +33,7 @@ use extern_bindings::{CppExternBinding, build_cpp_extern_bindings};
 /// Top-level C++-backend entry point. Builds the cross-module C++ binding
 /// map once, then emits a `.hpp` (and matching `.cpp` if needed) per module,
 /// the shared `pyxis_runtime.hpp`, and the project-level CMake glue.
-pub fn build(
-    out_dir: &Path,
-    semantic_state: &SemanticOutput,
-    project: &Project,
-) -> Result<()> {
+pub fn build(out_dir: &Path, semantic_state: &SemanticOutput, project: &Project) -> Result<()> {
     let bindings = build_cpp_extern_bindings(semantic_state);
 
     // Pre-flight: detect cross-module FullDef cycles by aggregating each

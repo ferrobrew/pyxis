@@ -1,10 +1,7 @@
 use crate::{
     grammar::test_aliases::*,
     semantic::{
-        Module,
-        error::SemanticError,
-        builder::SemanticBuilder,
-        output::SemanticOutput,
+        Module, builder::SemanticBuilder, error::SemanticError, output::SemanticOutput,
         types::test_aliases::*,
     },
 };
@@ -24,10 +21,7 @@ pub fn pointer_size() -> usize {
     })
 }
 
-pub fn build_state(
-    module: &M,
-    module_path: &IP,
-) -> crate::semantic::error::Result<SemanticOutput> {
+pub fn build_state(module: &M, module_path: &IP) -> crate::semantic::error::Result<SemanticOutput> {
     let mut builder = SemanticBuilder::new(pointer_size());
     builder.add_module(module, module_path)?;
     builder.build()

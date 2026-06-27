@@ -3,7 +3,7 @@
 use crate::{
     grammar::test_aliases::*,
     semantic::{
-        SemanticError, SemanticBuilder,
+        SemanticBuilder, SemanticError,
         doc_links::{DocLinkMemberKind, DocLinkTarget, extract_links},
     },
 };
@@ -128,9 +128,7 @@ fn resolves_a_type_in_a_sibling_module() {
     let referencing = M::new();
 
     let mut builder = SemanticBuilder::new(pointer_size());
-    builder
-        .add_module(&other, &IP::from("other"))
-        .unwrap();
+    builder.add_module(&other, &IP::from("other")).unwrap();
     builder
         .add_module(&referencing, &IP::from("referencing"))
         .unwrap();

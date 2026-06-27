@@ -17,7 +17,10 @@ pub fn pyxis_span_to_lsp_range(source: &str, span: &pyxis::span::Span) -> Range 
 fn pyxis_location_to_lsp_position(source: &str, loc: &pyxis::span::Location) -> Position {
     let line = (loc.line.saturating_sub(1)) as u32;
     let column = byte_column_to_utf16(source, loc.line, loc.column);
-    Position { line, character: column }
+    Position {
+        line,
+        character: column,
+    }
 }
 
 /// Convert a byte column offset within a specific line to a UTF-16 code-unit offset.
@@ -63,13 +66,19 @@ pub fn widen_empty_range(source: &str, range: Range) -> Range {
             // Underline the character at the position.
             let mut end = range.end;
             end.character = range.start.character + 1;
-            return Range { start: range.start, end };
+            return Range {
+                start: range.start,
+                end,
+            };
         }
         if range.start.character > 0 {
             // At/after end of a non-empty line: underline the preceding character.
             let mut start = range.start;
             start.character -= 1;
-            return Range { start, end: range.end };
+            return Range {
+                start,
+                end: range.end,
+            };
         }
     }
     // Empty position (e.g. EOF on a blank line): underline the end of the
@@ -79,15 +88,24 @@ pub fn widen_empty_range(source: &str, range: Range) -> Range {
             let len = utf16_len(prev);
             let line = (line_idx - 1) as u32;
             return Range {
-                start: Position { line, character: len.saturating_sub(1) },
-                end: Position { line, character: len },
+                start: Position {
+                    line,
+                    character: len.saturating_sub(1),
+                },
+                end: Position {
+                    line,
+                    character: len,
+                },
             };
         }
     }
     // Last resort: widen the end by one column.
     let mut end = range.end;
     end.character += 1;
-    Range { start: range.start, end }
+    Range {
+        start: range.start,
+        end,
+    }
 }
 
 /// Find the Pyxis location (1-indexed line, byte column) at an LSP position (0-indexed line, UTF-16 column).
@@ -152,18 +170,57 @@ mod tests {
     fn test_widen_empty_range() {
         let source = "pub type Foo {\n    pub x: u32,\n}\n";
         // Non-empty ranges are left untouched.
-        let r = Range { start: Position { line: 0, character: 0 }, end: Position { line: 0, character: 3 } };
+        let r = Range {
+            start: Position {
+                line: 0,
+                character: 0,
+            },
+            end: Position {
+                line: 0,
+                character: 3,
+            },
+        };
         assert_eq!(super::widen_empty_range(source, r), r);
 
         // Empty range mid-line → widened to the character at the position.
-        let r = Range { start: Position { line: 1, character: 11 }, end: Position { line: 1, character: 11 } };
+        let r = Range {
+            start: Position {
+                line: 1,
+                character: 11,
+            },
+            end: Position {
+                line: 1,
+                character: 11,
+            },
+        };
         let w = super::widen_empty_range(source, r);
-        assert_eq!(w.start, Position { line: 1, character: 11 });
-        assert_eq!(w.end, Position { line: 1, character: 12 });
+        assert_eq!(
+            w.start,
+            Position {
+                line: 1,
+                character: 11
+            }
+        );
+        assert_eq!(
+            w.end,
+            Position {
+                line: 1,
+                character: 12
+            }
+        );
 
         // Empty range on an empty line (EOF) → backs up to the previous line's end.
         let eof_source = "pub type Foo {\n    pub x: u32,\n";
-        let r = Range { start: Position { line: 2, character: 0 }, end: Position { line: 2, character: 0 } };
+        let r = Range {
+            start: Position {
+                line: 2,
+                character: 0,
+            },
+            end: Position {
+                line: 2,
+                character: 0,
+            },
+        };
         let w = super::widen_empty_range(eof_source, r);
         assert_ne!(w.start, w.end, "EOF diagnostic range must be non-empty");
         assert_eq!(w.start.line, 1, "should back up to the previous line");
@@ -172,7 +229,10 @@ mod tests {
     #[test]
     fn test_reverse_conversion() {
         let source = "pub type Foo {\n    pub x: u32,\n}";
-        let pos = Position { line: 0, character: 4 };
+        let pos = Position {
+            line: 0,
+            character: 4,
+        };
         let loc = lsp_position_to_pyxis_location(source, pos);
         assert_eq!(loc.line, 1);
         assert_eq!(loc.column, 5);

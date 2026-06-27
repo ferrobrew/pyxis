@@ -114,8 +114,14 @@ fn can_carry_backend_across() {
     let module = state.modules().get(&test_path).unwrap();
 
     assert_eq!(
-        module.backends.get(&crate::Backend::Rust).unwrap()
-            .iter().cloned().map(|b| b.strip_locations()).collect::<Vec<_>>(),
+        module
+            .backends
+            .get(&crate::Backend::Rust)
+            .unwrap()
+            .iter()
+            .cloned()
+            .map(|b| b.strip_locations())
+            .collect::<Vec<_>>(),
         [
             SB::new(prologue.to_string(), epilogue.to_string()),
             SB::new(None, epilogue.to_string()),

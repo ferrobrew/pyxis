@@ -56,9 +56,9 @@ fn spike_incremental_invalidation() {
     assert_eq!(defs1.len(), 1);
 
     // Change the content — Salsa should invalidate the cached parse
-    source.set_contents(&mut db).to(
-        "pub type A { pub x: u32, } pub type B { pub y: u32, }".to_string(),
-    );
+    source
+        .set_contents(&mut db)
+        .to("pub type A { pub x: u32, } pub type B { pub y: u32, }".to_string());
 
     let parsed2 = parse_file(&db, source);
     let module2 = parsed2.module(&db);
@@ -150,9 +150,9 @@ fn resolve_item_incremental_on_change() {
     let item_a1 = resolved_a1.item(&db).clone();
 
     // Change source2 (type B). Type A doesn't depend on B.
-    source2.set_contents(&mut db).to(
-        "pub type B { pub y: u32, pub z: u32, }".to_string(),
-    );
+    source2
+        .set_contents(&mut db)
+        .to("pub type B { pub y: u32, pub z: u32, }".to_string());
 
     // Resolve A again — should return the cached result (unchanged)
     let source_set2 = SourceSet::new(&db, vec![source1, source2]);
@@ -160,7 +160,10 @@ fn resolve_item_incremental_on_change() {
     let item_a2 = resolved_a2.item(&db).clone();
 
     // A should be unchanged because it doesn't depend on B
-    assert_eq!(item_a1, item_a2, "item A should be unchanged when B changes");
+    assert_eq!(
+        item_a1, item_a2,
+        "item A should be unchanged when B changes"
+    );
 
     // B should have changed (different size)
     let resolved_b2 = resolve_item(&db, source_set2, 4, path_b);

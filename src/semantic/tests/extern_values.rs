@@ -18,9 +18,7 @@ fn can_define_extern_value() {
     )]);
 
     let mut builder = SemanticBuilder::new(4);
-    builder
-        .add_module(&module1, &IP::from("module1"))
-        .unwrap();
+    builder.add_module(&module1, &IP::from("module1")).unwrap();
     let resolved = builder.build().unwrap();
 
     let extern_value = resolved

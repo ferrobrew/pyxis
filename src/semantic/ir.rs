@@ -65,7 +65,10 @@ pub struct SemanticAnalysis<'db> {
 }
 
 impl SemanticAnalysis<'_> {
-    pub fn to_semantic_output(&self, db: &dyn super::Db) -> Option<crate::semantic::SemanticOutput> {
+    pub fn to_semantic_output(
+        &self,
+        db: &dyn super::Db,
+    ) -> Option<crate::semantic::SemanticOutput> {
         use crate::semantic::SemanticOutput;
 
         if !self.errors(db).is_empty() || !self.parse_errors(db).is_empty() {

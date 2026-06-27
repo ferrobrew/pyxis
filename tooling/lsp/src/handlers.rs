@@ -5,9 +5,9 @@ use std::collections::HashMap;
 use lsp_server::{Request, Response};
 use lsp_types::{
     CodeLens, CompletionItem, CompletionItemKind, DocumentSymbol, DocumentSymbolParams,
-    DocumentSymbolResponse, Hover, HoverContents, InlayHint, InlayHintLabel,
-    MarkupContent, MarkupKind, Position, Range, SymbolInformation, SymbolKind, Uri,
-    TextDocumentPositionParams, TextEdit, WorkspaceEdit, WorkspaceSymbolParams,
+    DocumentSymbolResponse, Hover, HoverContents, InlayHint, InlayHintLabel, MarkupContent,
+    MarkupKind, Position, Range, SymbolInformation, SymbolKind, TextDocumentPositionParams,
+    TextEdit, Uri, WorkspaceEdit, WorkspaceSymbolParams,
 };
 
 use pyxis::grammar::{
@@ -65,7 +65,8 @@ impl ServerState {
         let source_set = semantic::SourceSet::new(&self.db, sources);
         let analysis = semantic::analyze(&self.db, self.pointer_size_for(uri), source_set);
         let type_registry = analysis.type_registry(&self.db);
-        let decl_set = semantic::collect_declarations(&self.db, source_set, self.pointer_size_for(uri));
+        let decl_set =
+            semantic::collect_declarations(&self.db, source_set, self.pointer_size_for(uri));
         let decl_registry = decl_set.registry(&self.db);
 
         let pointer_size = self.pointer_size_for(uri);
@@ -76,10 +77,20 @@ impl ServerState {
         //    module it names. A pointer/array/unknown *shell* (rather than the
         //    pointee/element) describes the shape — at every type position.
         if let Some(reference) = find_reference_at(
-            &module, &loc, &scope, decl_registry, tokens, type_registry, pointer_size,
+            &module,
+            &loc,
+            &scope,
+            decl_registry,
+            tokens,
+            type_registry,
+            pointer_size,
         ) {
             match reference {
-                Ref::Item { item, module_path, span } => {
+                Ref::Item {
+                    item,
+                    module_path,
+                    span,
+                } => {
                     let hover = item
                         .as_ref()
                         .and_then(|item_path| {
@@ -120,7 +131,8 @@ impl ServerState {
             match item {
                 ModuleItem::Definition { definition } => {
                     // The definition's own name.
-                    if let Some(span) = name_token_span(tokens,
+                    if let Some(span) = name_token_span(
+                        tokens,
                         &definition.declaration_location.span.start,
                         definition.name.as_str(),
                     ) {
@@ -129,7 +141,8 @@ impl ServerState {
                                 Some(mp) => mp.join(definition.name.as_str().into()),
                                 None => ItemPath::from(definition.name.as_str()),
                             };
-                            let resolved = resolve_item(&self.db, source_set, pointer_size, item_path);
+                            let resolved =
+                                resolve_item(&self.db, source_set, pointer_size, item_path);
                             let resolved_item = resolved.item(&self.db);
                             let value = if let Some(rs) = resolved_item.resolved() {
                                 format_type_hover_with_size(definition, rs.size, rs.alignment)
@@ -150,13 +163,18 @@ impl ServerState {
                                     // The pointer/array shell and the pointee/
                                     // element are both handled as references in
                                     // branch 1; here we only describe the field.
-                                    let span = name_token_span(tokens,
+                                    let span = name_token_span(
+                                        tokens,
                                         &statement.location.span.start,
                                         name.as_str(),
                                     )
                                     .unwrap_or(statement.location.span);
                                     let size = type_size_of(
-                                        type_, type_registry, &scope, decl_registry, pointer_size,
+                                        type_,
+                                        type_registry,
+                                        &scope,
+                                        decl_registry,
+                                        pointer_size,
                                     );
                                     // Offset within the parent type's resolved
                                     // layout. The parent is resolved via
@@ -166,13 +184,22 @@ impl ServerState {
                                         Some(mp) => mp.join(definition.name.as_str().into()),
                                         None => ItemPath::from(definition.name.as_str()),
                                     };
-                                    let parent = resolve_item(&self.db, source_set, pointer_size, parent_path);
-                                    let offset = parent
-                                        .item(&self.db)
-                                        .resolved()
-                                        .and_then(|rs| field_offset(rs, name.as_str(), type_registry));
+                                    let parent = resolve_item(
+                                        &self.db,
+                                        source_set,
+                                        pointer_size,
+                                        parent_path,
+                                    );
+                                    let offset = parent.item(&self.db).resolved().and_then(|rs| {
+                                        field_offset(rs, name.as_str(), type_registry)
+                                    });
                                     let value = format_field_hover(
-                                        vis, name, type_, &statement.attributes, size, offset,
+                                        vis,
+                                        name,
+                                        type_,
+                                        &statement.attributes,
+                                        size,
+                                        offset,
                                     );
                                     return hover_response(req.id, value, content, &span);
                                 }
@@ -185,43 +212,69 @@ impl ServerState {
                                         // array shells) are handled in branch 1.
                                         // An argument name…
                                         if let Some((value, span)) = named_arg_hover(
-                                            f, &loc, tokens, type_registry, &scope,
-                                            decl_registry, pointer_size,
+                                            f,
+                                            &loc,
+                                            tokens,
+                                            type_registry,
+                                            &scope,
+                                            decl_registry,
+                                            pointer_size,
                                         ) {
                                             return hover_response(req.id, value, content, &span);
                                         }
                                         // …`self`, resolving to the owning type…
                                         if let Some(span) = self_arg_span(f, &loc) {
                                             let owner = match self.module_path_for(uri) {
-                                                Some(mp) => mp.join(definition.name.as_str().into()),
+                                                Some(mp) => {
+                                                    mp.join(definition.name.as_str().into())
+                                                }
                                                 None => ItemPath::from(definition.name.as_str()),
                                             };
-                                            if let Some(value) =
-                                                self.type_hover_text(&owner, type_registry, decl_registry)
-                                            {
-                                                return hover_response(req.id, value, content, &span);
+                                            if let Some(value) = self.type_hover_text(
+                                                &owner,
+                                                type_registry,
+                                                decl_registry,
+                                            ) {
+                                                return hover_response(
+                                                    req.id, value, content, &span,
+                                                );
                                             }
                                         }
                                         // …or the function itself.
-                                        let span = name_token_span(tokens, &f.location.span.start, f.name.as_str(),
+                                        let span = name_token_span(
+                                            tokens,
+                                            &f.location.span.start,
+                                            f.name.as_str(),
                                         )
                                         .unwrap_or(f.location.span);
                                         return hover_response(
-                                            req.id, format_function_hover(f), content, &span,
+                                            req.id,
+                                            format_function_hover(f),
+                                            content,
+                                            &span,
                                         );
                                     }
                                     // Cursor on the `vftable` keyword → describe
                                     // the generated vtable struct (the resolved
                                     // count includes inherited entries).
-                                    if let Some(span) = name_token_span(tokens, &statement.location.span.start, "vftable",
+                                    if let Some(span) = name_token_span(
+                                        tokens,
+                                        &statement.location.span.start,
+                                        "vftable",
                                     ) {
                                         if span.contains(&loc) {
                                             let owner = match self.module_path_for(uri) {
-                                                Some(mp) => mp.join(definition.name.as_str().into()),
+                                                Some(mp) => {
+                                                    mp.join(definition.name.as_str().into())
+                                                }
                                                 None => ItemPath::from(definition.name.as_str()),
                                             };
-                                            let resolved =
-                                                resolve_item(&self.db, source_set, pointer_size, owner);
+                                            let resolved = resolve_item(
+                                                &self.db,
+                                                source_set,
+                                                pointer_size,
+                                                owner,
+                                            );
                                             let count = match resolved.item(&self.db).resolved() {
                                                 Some(rs) => match &rs.inner {
                                                     pyxis::semantic::types::ItemDefinitionInner::Type(td) => td
@@ -248,14 +301,25 @@ impl ServerState {
                     if let pyxis::grammar::ItemDefinitionInner::Enum(e) = &definition.inner {
                         for statement in e.statements() {
                             if statement.location.span.contains(&loc) {
-                                let span = name_token_span(tokens, &statement.location.span.start, statement.name.as_str(),
+                                let span = name_token_span(
+                                    tokens,
+                                    &statement.location.span.start,
+                                    statement.name.as_str(),
                                 )
                                 .unwrap_or(statement.location.span);
-                                let value = self
-                                    .variant_value(uri, definition, statement.name.as_str(), source_set, pointer_size);
+                                let value = self.variant_value(
+                                    uri,
+                                    definition,
+                                    statement.name.as_str(),
+                                    source_set,
+                                    pointer_size,
+                                );
                                 let md = format_variant_hover(
-                                    "variant", statement.name.as_str(), value,
-                                    &statement.attributes, &statement.doc_comments,
+                                    "variant",
+                                    statement.name.as_str(),
+                                    value,
+                                    &statement.attributes,
+                                    &statement.doc_comments,
                                 );
                                 return hover_response(req.id, md, content, &span);
                             }
@@ -264,14 +328,25 @@ impl ServerState {
                     if let pyxis::grammar::ItemDefinitionInner::Bitflags(b) = &definition.inner {
                         for statement in b.statements() {
                             if statement.location.span.contains(&loc) {
-                                let span = name_token_span(tokens, &statement.location.span.start, statement.name.as_str(),
+                                let span = name_token_span(
+                                    tokens,
+                                    &statement.location.span.start,
+                                    statement.name.as_str(),
                                 )
                                 .unwrap_or(statement.location.span);
-                                let value = self
-                                    .variant_value(uri, definition, statement.name.as_str(), source_set, pointer_size);
+                                let value = self.variant_value(
+                                    uri,
+                                    definition,
+                                    statement.name.as_str(),
+                                    source_set,
+                                    pointer_size,
+                                );
                                 let md = format_variant_hover(
-                                    "flag", statement.name.as_str(), value,
-                                    &statement.attributes, &statement.doc_comments,
+                                    "flag",
+                                    statement.name.as_str(),
+                                    value,
+                                    &statement.attributes,
+                                    &statement.doc_comments,
                                 );
                                 return hover_response(req.id, md, content, &span);
                             }
@@ -293,7 +368,13 @@ impl ServerState {
                             // are handled in branch 1.
                             // An argument name…
                             if let Some((value, span)) = named_arg_hover(
-                                f, &loc, tokens, type_registry, &scope, decl_registry, pointer_size,
+                                f,
+                                &loc,
+                                tokens,
+                                type_registry,
+                                &scope,
+                                decl_registry,
+                                pointer_size,
                             ) {
                                 return hover_response(req.id, value, content, &span);
                             }
@@ -303,19 +384,24 @@ impl ServerState {
                                 if let Some(resolved) =
                                     resolve_type_path(&owner, &scope, decl_registry)
                                 {
-                                    if let Some(value) =
-                                        self.type_hover_text(&resolved, type_registry, decl_registry)
-                                    {
+                                    if let Some(value) = self.type_hover_text(
+                                        &resolved,
+                                        type_registry,
+                                        decl_registry,
+                                    ) {
                                         return hover_response(req.id, value, content, &span);
                                     }
                                 }
                             }
                             // …or the function itself.
-                            let span = name_token_span(tokens, &f.location.span.start, f.name.as_str(),
-                            )
-                            .unwrap_or(f.location.span);
+                            let span =
+                                name_token_span(tokens, &f.location.span.start, f.name.as_str())
+                                    .unwrap_or(f.location.span);
                             return hover_response(
-                                req.id, format_function_hover(f), content, &span,
+                                req.id,
+                                format_function_hover(f),
+                                content,
+                                &span,
                             );
                         }
                     }
@@ -325,21 +411,36 @@ impl ServerState {
                     if function.location.span.contains(&loc) {
                         // Arg/return types (including shells) → branch 1.
                         if let Some((value, span)) = named_arg_hover(
-                            function, &loc, tokens, type_registry, &scope, decl_registry, pointer_size,
+                            function,
+                            &loc,
+                            tokens,
+                            type_registry,
+                            &scope,
+                            decl_registry,
+                            pointer_size,
                         ) {
                             return hover_response(req.id, value, content, &span);
                         }
-                        let span = name_token_span(tokens, &function.location.span.start, function.name.as_str(),
+                        let span = name_token_span(
+                            tokens,
+                            &function.location.span.start,
+                            function.name.as_str(),
                         )
                         .unwrap_or(function.location.span);
                         return hover_response(
-                            req.id, format_function_hover(function), content, &span,
+                            req.id,
+                            format_function_hover(function),
+                            content,
+                            &span,
                         );
                     }
                 }
                 // Extern values: `extern name: Type;` — the value's own name.
                 ModuleItem::ExternValue { extern_value } => {
-                    if let Some(span) = name_token_span(tokens, &extern_value.location.span.start, extern_value.name.as_str(),
+                    if let Some(span) = name_token_span(
+                        tokens,
+                        &extern_value.location.span.start,
+                        extern_value.name.as_str(),
                     ) {
                         if span.contains(&loc) {
                             let mut md = format!(
@@ -349,7 +450,11 @@ impl ServerState {
                                 extern_value.type_,
                             );
                             if let Some(size) = type_size_of(
-                                &extern_value.type_, type_registry, &scope, decl_registry, pointer_size,
+                                &extern_value.type_,
+                                type_registry,
+                                &scope,
+                                decl_registry,
+                                pointer_size,
                             ) {
                                 push_facts(&mut md, &[("type size", fmt_bytes(size))]);
                             }
@@ -359,8 +464,7 @@ impl ServerState {
                 }
                 // Extern types: `extern type Name;` — the declared name.
                 ModuleItem::ExternType { name, location, .. } => {
-                    if let Some(span) =
-                        name_token_span(tokens, &location.span.start, name.as_str())
+                    if let Some(span) = name_token_span(tokens, &location.span.start, name.as_str())
                     {
                         if span.contains(&loc) {
                             let path = match self.module_path_for(uri) {
@@ -433,7 +537,8 @@ impl ServerState {
         let source_set = semantic::SourceSet::new(&self.db, sources);
         let analysis = semantic::analyze(&self.db, self.pointer_size_for(uri), source_set);
         let type_registry = analysis.type_registry(&self.db);
-        let decl_set = semantic::collect_declarations(&self.db, source_set, self.pointer_size_for(uri));
+        let decl_set =
+            semantic::collect_declarations(&self.db, source_set, self.pointer_size_for(uri));
         let decl_registry = decl_set.registry(&self.db);
 
         let pointer_size = self.pointer_size_for(uri);
@@ -446,8 +551,16 @@ impl ServerState {
         //    enclosing-definition check below, since a field's type span is
         //    contained within its parent definition's span. A pointer/array
         //    *shell* has no definition, so it falls through to a null result.
-        if let Some(Ref::Item { item, module_path, .. }) = find_reference_at(
-            &module, &loc, &scope, decl_registry, tokens, type_registry, pointer_size,
+        if let Some(Ref::Item {
+            item, module_path, ..
+        }) = find_reference_at(
+            &module,
+            &loc,
+            &scope,
+            decl_registry,
+            tokens,
+            type_registry,
+            pointer_size,
         ) {
             // a) Concrete item (type/extern/predefined) → jump to its name.
             if let Some(item_path) = &item {
@@ -457,7 +570,12 @@ impl ServerState {
                         let location = lsp_types::Location { uri: rd.uri, range };
                         return Response {
                             id: req.id,
-                            result: Some(serde_json::to_value(lsp_types::GotoDefinitionResponse::Scalar(location)).unwrap()),
+                            result: Some(
+                                serde_json::to_value(lsp_types::GotoDefinitionResponse::Scalar(
+                                    location,
+                                ))
+                                .unwrap(),
+                            ),
                             error: None,
                         };
                     }
@@ -468,13 +586,22 @@ impl ServerState {
                 let location = lsp_types::Location {
                     uri: target_uri,
                     range: Range {
-                        start: Position { line: 0, character: 0 },
-                        end: Position { line: 0, character: 0 },
+                        start: Position {
+                            line: 0,
+                            character: 0,
+                        },
+                        end: Position {
+                            line: 0,
+                            character: 0,
+                        },
                     },
                 };
                 return Response {
                     id: req.id,
-                    result: Some(serde_json::to_value(lsp_types::GotoDefinitionResponse::Scalar(location)).unwrap()),
+                    result: Some(
+                        serde_json::to_value(lsp_types::GotoDefinitionResponse::Scalar(location))
+                            .unwrap(),
+                    ),
                     error: None,
                 };
             }
@@ -483,16 +610,25 @@ impl ServerState {
         // 2. Cursor on a definition's own name → jump to itself (scoped to the
         //    name, not the whole declaration).
         for definition in module.definitions() {
-            if let Some(span) = name_token_span(tokens,
+            if let Some(span) = name_token_span(
+                tokens,
                 &definition.declaration_location.span.start,
                 definition.name.as_str(),
             ) {
                 if span.contains(&loc) {
                     let range = pyxis_span_to_lsp_range(content, &span);
-                    let location = lsp_types::Location { uri: uri.clone(), range };
+                    let location = lsp_types::Location {
+                        uri: uri.clone(),
+                        range,
+                    };
                     return Response {
                         id: req.id,
-                        result: Some(serde_json::to_value(lsp_types::GotoDefinitionResponse::Scalar(location)).unwrap()),
+                        result: Some(
+                            serde_json::to_value(lsp_types::GotoDefinitionResponse::Scalar(
+                                location,
+                            ))
+                            .unwrap(),
+                        ),
                         error: None,
                     };
                 }
@@ -509,8 +645,8 @@ impl ServerState {
     /// textDocument/completion
     pub fn handle_completion(&self, req: Request) -> Response {
         let keywords = vec![
-            "pub", "type", "enum", "bitflags", "impl", "fn", "extern", "use", "backend",
-            "vftable", "const", "mut", "as", "prologue", "epilogue", "self", "Self",
+            "pub", "type", "enum", "bitflags", "impl", "fn", "extern", "use", "backend", "vftable",
+            "const", "mut", "as", "prologue", "epilogue", "self", "Self",
         ];
 
         let items: Vec<CompletionItem> = keywords
@@ -564,9 +700,7 @@ impl ServerState {
 
         Response {
             id: req.id,
-            result: Some(
-                serde_json::to_value(DocumentSymbolResponse::Nested(symbols)).unwrap(),
-            ),
+            result: Some(serde_json::to_value(DocumentSymbolResponse::Nested(symbols)).unwrap()),
             error: None,
         }
     }
@@ -645,7 +779,10 @@ impl ServerState {
                 // Return a single TextEdit replacing the entire document
                 let edit = TextEdit {
                     range: Range {
-                        start: Position { line: 0, character: 0 },
+                        start: Position {
+                            line: 0,
+                            character: 0,
+                        },
                         end: Position {
                             line: u32::MAX,
                             character: 0,
@@ -967,15 +1104,23 @@ impl ServerState {
             .definitions()
             .find(|d| d.name.as_str() == target_name)
             .cloned()?;
-        let name_span =
-            name_token_span(&tokens_arc, &def.declaration_location.span.start, target_name)
-                .unwrap_or(def.location.span);
+        let name_span = name_token_span(
+            &tokens_arc,
+            &def.declaration_location.span.start,
+            target_name,
+        )
+        .unwrap_or(def.location.span);
         let size_align = type_registry
             .get(resolved_path, &ItemLocation::internal())
             .ok()
             .and_then(|i| i.resolved())
             .map(|r| (r.size, r.alignment));
-        Some(ResolvedDefinition { def, uri, name_span, size_align })
+        Some(ResolvedDefinition {
+            def,
+            uri,
+            name_span,
+            size_align,
+        })
     }
 
     /// Resolved value of an enum variant / bitflags flag named `variant_name`
@@ -1047,10 +1192,7 @@ struct ResolvedDefinition {
 
 /// Hover for a predefined (`bool`, `u32`, …) or extern type — these have no
 /// source definition but a known size/alignment.
-fn builtin_hover(
-    path: &ItemPath,
-    decl_registry: &DeclarationRegistry,
-) -> Option<String> {
+fn builtin_hover(path: &ItemPath, decl_registry: &DeclarationRegistry) -> Option<String> {
     let (kind, size, alignment) = if let Some(p) = decl_registry.get_predefined(path) {
         ("builtin", p.size, p.alignment)
     } else if let Some(e) = decl_registry.get_extern_type(path) {
@@ -1059,7 +1201,10 @@ fn builtin_hover(
         return None;
     };
     let mut md = format!("**{kind}** `{path}`\n");
-    push_facts(&mut md, &[("size", fmt_bytes(size)), ("align", fmt_bytes(alignment))]);
+    push_facts(
+        &mut md,
+        &[("size", fmt_bytes(size)), ("align", fmt_bytes(alignment))],
+    );
     Some(md)
 }
 
@@ -1094,7 +1239,10 @@ fn format_type_hover_with_size(
     alignment: usize,
 ) -> String {
     let mut md = format_type_hover(definition);
-    push_facts(&mut md, &[("size", fmt_bytes(size)), ("align", fmt_bytes(alignment))]);
+    push_facts(
+        &mut md,
+        &[("size", fmt_bytes(size)), ("align", fmt_bytes(alignment))],
+    );
     md
 }
 
@@ -1287,13 +1435,21 @@ fn find_reference_at(
         let (sub_path, seg_span) =
             segment_at(raw, &full_span, loc, tokens).unwrap_or((raw.clone(), full_span));
         let item = resolve_type_path(&sub_path, scope, decl_registry);
-        Ref::Item { item, module_path: sub_path, span: seg_span }
+        Ref::Item {
+            item,
+            module_path: sub_path,
+            span: seg_span,
+        }
     };
     // For `use` trees the segment is already resolved by use_tree_reference, so
     // build the reference directly without re-running segment_at.
     let make_ref = |seg_path: ItemPath, span: Span| -> Ref {
         let item = resolve_type_path(&seg_path, scope, decl_registry);
-        Ref::Item { item, module_path: seg_path, span }
+        Ref::Item {
+            item,
+            module_path: seg_path,
+            span,
+        }
     };
     // Turn a located type-position hit into a reference: a named ident resolves
     // like any other path; a pointer/array/unknown shell renders its shape.
@@ -1339,9 +1495,11 @@ fn find_reference_at(
             // `impl` blocks (including `#[cfg(...)]`-gated ones): the target
             // type name and every function signature's types.
             ModuleItem::Impl { impl_block } => {
-                if let Some(span) =
-                    name_token_span(tokens, &impl_block.location.span.start, impl_block.name.as_str())
-                {
+                if let Some(span) = name_token_span(
+                    tokens,
+                    &impl_block.location.span.start,
+                    impl_block.name.as_str(),
+                ) {
                     if span.contains(loc) {
                         let raw = ItemPath::from(impl_block.name.as_str());
                         return Some(resolve(&raw, span));
@@ -1393,9 +1551,9 @@ fn segment_at(
 ) -> Option<(ItemPath, Span)> {
     // The path's identifier tokens, in order, within the path's span (the `::`
     // separators lex as their own `ColonColon` tokens and are skipped).
-    let idents = tokens.iter().filter(|t| {
-        matches!(t.kind, TokenKind::Ident(_)) && span.contains(&t.location.span.start)
-    });
+    let idents = tokens
+        .iter()
+        .filter(|t| matches!(t.kind, TokenKind::Ident(_)) && span.contains(&t.location.span.start));
     for (i, ident) in idents.enumerate() {
         if ident.location.span.contains(loc) {
             let count = (i + 1).min(path.len());
@@ -1408,10 +1566,7 @@ fn segment_at(
 
 /// Find a type hit (argument or return type) under the cursor in a function
 /// signature — a named ident or a pointer/array/unknown shell.
-fn fn_signature_type_ref<'a>(
-    f: &'a Function,
-    loc: &Location,
-) -> Option<TypeHit<'a>> {
+fn fn_signature_type_ref<'a>(f: &'a Function, loc: &Location) -> Option<TypeHit<'a>> {
     use pyxis::grammar::Argument;
     for arg in &f.arguments {
         if let Argument::Named { type_, .. } = arg {
@@ -1490,7 +1645,11 @@ fn use_tree_reference(
             }
             segment_at(path, &location.span, loc, tokens)
         }
-        UseTree::Group { prefix, items, location } => {
+        UseTree::Group {
+            prefix,
+            items,
+            location,
+        } => {
             // NB: a group's span starts at `{`, so the shared prefix that
             // precedes it is *outside* this span — don't early-return on it.
             // A leaf import — prepend the group's prefix to the matched segment.
@@ -1505,7 +1664,8 @@ fn use_tree_reference(
             // contiguous run of Ident/:: tokens immediately before the brace.
             if !prefix.is_empty() {
                 let brace = location.span.start;
-                if let Some(brace_idx) = tokens.iter().position(|t| t.location.span.start >= brace) {
+                if let Some(brace_idx) = tokens.iter().position(|t| t.location.span.start >= brace)
+                {
                     let mut start_idx = brace_idx;
                     while start_idx > 0
                         && matches!(
@@ -1542,7 +1702,9 @@ fn type_hit_at<'a>(type_: &'a Type, loc: &Location) -> Option<TypeHit<'a>> {
         return None;
     }
     match type_ {
-        Type::Ident { path, generic_args, .. } => {
+        Type::Ident {
+            path, generic_args, ..
+        } => {
             for arg in generic_args {
                 if let Some(found) = type_hit_at(arg, loc) {
                     return Some(found);
@@ -1764,10 +1926,7 @@ fn span_text(content: &str, span: &Span) -> Option<String> {
 
 /// Find an attribute whose span contains `loc`, anywhere in the module (type /
 /// field / vftable / enum-variant / impl / function attributes).
-fn attribute_at<'a>(
-    module: &'a Module,
-    loc: &Location,
-) -> Option<(&'a Attribute, Span)> {
+fn attribute_at<'a>(module: &'a Module, loc: &Location) -> Option<(&'a Attribute, Span)> {
     use pyxis::grammar::{ImplItem, ItemDefinitionInner};
     let find = |attrs: &'a Attributes| {
         attrs
@@ -1854,11 +2013,7 @@ fn attribute_at<'a>(
 }
 
 /// Hover markdown for an attribute under the cursor.
-fn format_attribute_hover(
-    attribute: &Attribute,
-    span: &Span,
-    content: &str,
-) -> String {
+fn format_attribute_hover(attribute: &Attribute, span: &Span, content: &str) -> String {
     // The attribute span covers the inner content (`size(0x10)`); re-wrap it as
     // `#[…]` so the hover shows the attribute as written.
     let src = span_text(content, span)
@@ -1922,7 +2077,12 @@ fn named_arg_hover(
 ) -> Option<(String, Span)> {
     use pyxis::grammar::Argument;
     for arg in &f.arguments {
-        if let Argument::Named { ident, type_, location } = arg {
+        if let Argument::Named {
+            ident,
+            type_,
+            location,
+        } = arg
+        {
             if location.span.contains(loc) {
                 let span = name_token_span(tokens, &location.span.start, ident.as_str())
                     .unwrap_or(location.span);
@@ -1942,10 +2102,7 @@ fn named_arg_hover(
 
 /// The span of a `self`/`&self`/`&mut self` receiver of `f` if the cursor is on
 /// it (so a `self` hover can show the containing type, scoped to `self`).
-fn self_arg_span(
-    f: &Function,
-    loc: &Location,
-) -> Option<Span> {
+fn self_arg_span(f: &Function, loc: &Location) -> Option<Span> {
     use pyxis::grammar::Argument;
     for arg in &f.arguments {
         match arg {
@@ -2078,10 +2235,12 @@ fn shell_hover_md(
         Type::Array { element, size, .. } => {
             let mut md = format!("**array** `{type_}`\n\n`{size}` × `{element}`\n");
             let mut facts = Vec::new();
-            if let Some(s) = type_size_of(type_, type_registry, scope, decl_registry, pointer_size) {
+            if let Some(s) = type_size_of(type_, type_registry, scope, decl_registry, pointer_size)
+            {
                 facts.push(("size", fmt_bytes(s)));
             }
-            if let Some(a) = type_align_of(type_, type_registry, scope, decl_registry, pointer_size) {
+            if let Some(a) = type_align_of(type_, type_registry, scope, decl_registry, pointer_size)
+            {
                 facts.push(("align", fmt_bytes(a)));
             }
             push_facts(&mut md, &facts);

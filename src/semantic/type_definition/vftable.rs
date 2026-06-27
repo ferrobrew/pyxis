@@ -1,7 +1,6 @@
 use crate::{
     grammar::{self, ItemPath},
     semantic::{
-
         attribute::parse_index,
         error::{Result, SemanticError},
         function,

@@ -11,8 +11,8 @@ use std::sync::Arc;
 
 use crate::grammar::{ItemDefinition, ItemDefinitionInner, ItemPath, Module};
 use crate::parser::ParseError;
-use crate::semantic::declaration_registry::DeclarationRegistry;
 use crate::semantic::TypeRegistry;
+use crate::semantic::declaration_registry::DeclarationRegistry;
 use crate::span::FileId;
 
 use super::db::Db;
@@ -125,20 +125,12 @@ fn try_resolve_item(
         );
     }
     if let Some(info) = registry.get_extern_type(item_path) {
-        return (
-            make_extern_definition(item_path, info),
-            vec![],
-            vec![],
-        );
+        return (make_extern_definition(item_path, info), vec![], vec![]);
     }
 
     // Find this item's declaration
     let Some(definition) = registry.get_definition(item_path) else {
-        return (
-            make_unresolved_definition(item_path),
-            vec![],
-            vec![],
-        );
+        return (make_unresolved_definition(item_path), vec![], vec![]);
     };
 
     // Build a TypeRegistry with predefined + extern types resolved,
@@ -193,8 +185,16 @@ fn try_resolve_item(
 
     // Try to build the item once. Dependencies that aren't resolved yet
     // will cause Deferred — analyze's iterative loop handles re-trying.
-    let outcome = build_item(&definition, item_path, visibility, &def_location,
-        &definition.doc_comments, &type_param_names, &mut type_registry, &mut modules);
+    let outcome = build_item(
+        &definition,
+        item_path,
+        visibility,
+        &def_location,
+        &definition.doc_comments,
+        &type_param_names,
+        &mut type_registry,
+        &mut modules,
+    );
 
     let (item_def, errors) = match outcome {
         Ok(crate::semantic::error::BuildOutcome::Resolved(item)) => {
@@ -218,27 +218,17 @@ fn try_resolve_item(
             (resolved_def, Vec::new())
         }
         Ok(crate::semantic::error::BuildOutcome::Deferred) => {
-            (
-                make_unresolved_definition(item_path),
-                vec![],
-            )
+            (make_unresolved_definition(item_path), vec![])
         }
-        Ok(crate::semantic::error::BuildOutcome::NotFoundType(unresolved_ref)) => {
-            (
-                make_unresolved_definition(item_path),
-                vec![crate::semantic::SemanticError::TypeResolutionStalled {
-                    unresolved_types: vec![item_path.to_string()],
-                    resolved_types: vec![],
-                    unresolved_references: vec![unresolved_ref],
-                }],
-            )
-        }
-        Err(e) => {
-            (
-                make_unresolved_definition(item_path),
-                vec![e],
-            )
-        }
+        Ok(crate::semantic::error::BuildOutcome::NotFoundType(unresolved_ref)) => (
+            make_unresolved_definition(item_path),
+            vec![crate::semantic::SemanticError::TypeResolutionStalled {
+                unresolved_types: vec![item_path.to_string()],
+                resolved_types: vec![],
+                unresolved_references: vec![unresolved_ref],
+            }],
+        ),
+        Err(e) => (make_unresolved_definition(item_path), vec![e]),
     };
 
     // Collect generated items (e.g., vftable struct types)
@@ -247,7 +237,10 @@ fn try_resolve_item(
         if path == item_path {
             continue;
         }
-        if registry.contains(path) || registry.get_predefined(path).is_some() || registry.get_extern_type(path).is_some() {
+        if registry.contains(path)
+            || registry.get_predefined(path).is_some()
+            || registry.get_extern_type(path).is_some()
+        {
             continue;
         }
         if item.is_resolved() {
@@ -375,7 +368,8 @@ pub fn analyze<'db>(
     let mut type_registry = TypeRegistry::new(pointer_size);
     register_predefined(&mut type_registry);
 
-    let mut definition_paths: std::collections::BTreeSet<ItemPath> = std::collections::BTreeSet::new();
+    let mut definition_paths: std::collections::BTreeSet<ItemPath> =
+        std::collections::BTreeSet::new();
 
     // Predefined types live in the root module; add them to definition_paths
     // so the JSON backend (which iterates module.definitions) includes them.
@@ -424,12 +418,13 @@ pub fn analyze<'db>(
                         address = Some(attr_address);
                     }
                 }
-                let address = address.ok_or_else(|| crate::semantic::SemanticError::MissingAttribute {
-                    attribute_name: AttributeName::Address,
-                    extern_kind: ExternKind::Value,
-                    item_path: module_path.join(name.as_str().into()),
-                    location: ev.location,
-                })?;
+                let address =
+                    address.ok_or_else(|| crate::semantic::SemanticError::MissingAttribute {
+                        attribute_name: AttributeName::Address,
+                        extern_kind: ExternKind::Value,
+                        item_path: module_path.join(name.as_str().into()),
+                        location: ev.location,
+                    })?;
                 Ok(ExternValue {
                     visibility: Visibility::from(ev.visibility),
                     name: name.as_str().to_owned(),
@@ -446,7 +441,13 @@ pub fn analyze<'db>(
                 let impls: Vec<_> = module.impls().cloned().collect();
                 let backends: Vec<_> = module.backends().cloned().collect();
 
-                match SemanticModule::new(module_path.clone(), module.as_ref().clone(), ev, &impls, &backends) {
+                match SemanticModule::new(
+                    module_path.clone(),
+                    module.as_ref().clone(),
+                    ev,
+                    &impls,
+                    &backends,
+                ) {
                     Ok(m) => {
                         modules.insert(module_path, m);
                     }
@@ -480,7 +481,8 @@ pub fn analyze<'db>(
     // module whose path is their parent. This includes predefined types
     // (whose parent is the root module) and generated items (vftables).
     for (module_path, module) in modules.iter_mut() {
-        module.definition_paths = definition_paths.iter()
+        module.definition_paths = definition_paths
+            .iter()
             .filter(|p| p.parent().map_or(false, |parent| &parent == module_path))
             .cloned()
             .collect();
@@ -494,25 +496,21 @@ pub fn analyze<'db>(
             db,
             Arc::new(type_registry.clone()),
             Arc::new(modules.clone()),
-            Arc::new(doc_links::DocLinkResolver::build(
-                &type_registry,
-                &modules,
-            )),
+            Arc::new(doc_links::DocLinkResolver::build(&type_registry, &modules)),
             Arc::new(vec![e]),
             Arc::new(vec![]),
         );
     }
     // validate_backend_for_targets also needs to run before type resolution
     // so that for_type paths are resolved before backends read them.
-    if let Err(e) = crate::semantic::validation::validate_backend_for_targets(&type_registry, &mut modules) {
+    if let Err(e) =
+        crate::semantic::validation::validate_backend_for_targets(&type_registry, &mut modules)
+    {
         return SemanticAnalysis::new(
             db,
             Arc::new(type_registry.clone()),
             Arc::new(modules.clone()),
-            Arc::new(doc_links::DocLinkResolver::build(
-                &type_registry,
-                &modules,
-            )),
+            Arc::new(doc_links::DocLinkResolver::build(&type_registry, &modules)),
             Arc::new(vec![e]),
             Arc::new(vec![]),
         );
@@ -604,7 +602,8 @@ pub fn analyze<'db>(
 
     // Re-assign definition_paths to include generated items (vftables etc.)
     for (module_path, module) in modules.iter_mut() {
-        module.definition_paths = definition_paths.iter()
+        module.definition_paths = definition_paths
+            .iter()
             .filter(|p| p.parent().map_or(false, |parent| &parent == module_path))
             .cloned()
             .collect();
@@ -615,10 +614,7 @@ pub fn analyze<'db>(
             db,
             Arc::new(type_registry.clone()),
             Arc::new(modules.clone()),
-            Arc::new(doc_links::DocLinkResolver::build(
-                &type_registry,
-                &modules,
-            )),
+            Arc::new(doc_links::DocLinkResolver::build(&type_registry, &modules)),
             Arc::new(semantic_errors),
             Arc::new(vec![]),
         );
@@ -643,10 +639,7 @@ pub fn analyze<'db>(
             db,
             Arc::new(type_registry.clone()),
             Arc::new(modules.clone()),
-            Arc::new(doc_links::DocLinkResolver::build(
-                &type_registry,
-                &modules,
-            )),
+            Arc::new(doc_links::DocLinkResolver::build(&type_registry, &modules)),
             Arc::new(semantic_errors),
             Arc::new(vec![]),
         );
@@ -659,10 +652,7 @@ pub fn analyze<'db>(
             db,
             Arc::new(type_registry.clone()),
             Arc::new(modules.clone()),
-            Arc::new(doc_links::DocLinkResolver::build(
-                &type_registry,
-                &modules,
-            )),
+            Arc::new(doc_links::DocLinkResolver::build(&type_registry, &modules)),
             Arc::new(vec![e]),
             Arc::new(vec![]),
         );
@@ -751,14 +741,14 @@ pub fn compute_associated_functions<'db>(
     db: &'db dyn Db,
     analysis: SemanticAnalysis<'db>,
 ) -> Arc<AssociatedFunctionsResult> {
-    use std::collections::{BTreeMap as BTree, BTreeSet, HashMap, HashSet};
     use crate::semantic::{
+        SemanticError,
         error::DuplicateDefinitionKind,
         function::{self, FunctionBuildOutcome},
         types::{Function, FunctionBody, ItemDefinitionInner, Type},
-        SemanticError,
     };
     use crate::span::HasLocation;
+    use std::collections::{BTreeMap as BTree, BTreeSet, HashMap, HashSet};
 
     let type_registry = analysis.type_registry(db);
     let modules = analysis.modules(db);
@@ -768,14 +758,24 @@ pub fn compute_associated_functions<'db>(
     let mut bases_of: BTree<ItemPath, Vec<(String, ItemPath)>> = BTree::new();
     let mut all_type_paths: Vec<ItemPath> = Vec::new();
     for path in type_registry.resolved() {
-        let Ok(item) = type_registry.get(&path, &location) else { continue };
-        let Some(resolved) = item.resolved() else { continue };
-        let ItemDefinitionInner::Type(td) = &resolved.inner else { continue };
+        let Ok(item) = type_registry.get(&path, &location) else {
+            continue;
+        };
+        let Some(resolved) = item.resolved() else {
+            continue;
+        };
+        let ItemDefinitionInner::Type(td) = &resolved.inner else {
+            continue;
+        };
         all_type_paths.push(path.clone());
         let mut bases = Vec::new();
         for region in &td.regions {
-            if !region.is_base { continue; }
-            let Some(name) = region.name.clone() else { continue };
+            if !region.is_base {
+                continue;
+            }
+            let Some(name) = region.name.clone() else {
+                continue;
+            };
             if let Type::Raw(base_path) = &region.type_ref {
                 bases.push((name, base_path.clone()));
             }
@@ -792,7 +792,9 @@ pub fn compute_associated_functions<'db>(
         visited: &mut BTreeSet<ItemPath>,
         order: &mut Vec<ItemPath>,
     ) {
-        if !visited.insert(path.clone()) { return; }
+        if !visited.insert(path.clone()) {
+            return;
+        }
         if let Some(bases) = bases_of.get(path) {
             for (_, base) in bases {
                 visit(base, bases_of, visited, order);
@@ -809,10 +811,16 @@ pub fn compute_associated_functions<'db>(
     let mut errors: Vec<SemanticError> = Vec::new();
 
     for path in &order {
-        let Ok(item) = type_registry.get(path, &location) else { continue };
+        let Ok(item) = type_registry.get(path, &location) else {
+            continue;
+        };
         let item_location = item.location;
-        let Some(resolved) = item.resolved() else { continue };
-        let ItemDefinitionInner::Type(td) = &resolved.inner else { continue };
+        let Some(resolved) = item.resolved() else {
+            continue;
+        };
+        let ItemDefinitionInner::Type(td) = &resolved.inner else {
+            continue;
+        };
         let regions = td.regions.clone();
         let vftable_function_names: HashSet<String> = td
             .vftable
@@ -822,7 +830,9 @@ pub fn compute_associated_functions<'db>(
 
         // Find the module for this type (for impl blocks + scope)
         let module_path = path.parent().unwrap_or_else(ItemPath::empty);
-        let Some(module) = modules.get(&module_path) else { continue };
+        let Some(module) = modules.get(&module_path) else {
+            continue;
+        };
         let scope = module.scope();
 
         // Collect impl functions for this type
@@ -864,11 +874,17 @@ pub fn compute_associated_functions<'db>(
 
         // Inherit from base regions
         for (i, region) in regions.iter().filter(|r| r.is_base).enumerate() {
-            let Some(name) = region.name.clone() else { continue };
-            let Type::Raw(base_path) = &region.type_ref else { continue };
+            let Some(name) = region.name.clone() else {
+                continue;
+            };
+            let Type::Raw(base_path) = &region.type_ref else {
+                continue;
+            };
 
             // Get base's associated functions from our result map
-            let Some(base_fns) = result.get(base_path) else { continue };
+            let Some(base_fns) = result.get(base_path) else {
+                continue;
+            };
 
             let add_functions = |functions: &[Function],
                                  associated_functions: &mut Vec<Function>,
@@ -881,7 +897,9 @@ pub fn compute_associated_functions<'db>(
                                 | crate::semantic::function::Argument::MutSelf { .. }
                         )
                     });
-                    if !has_self { continue; }
+                    if !has_self {
+                        continue;
+                    }
                     let mut function = function.clone();
                     let original_name = function.name.clone();
                     if used_names.contains(&original_name) {
@@ -904,7 +922,11 @@ pub fn compute_associated_functions<'db>(
                     if let Some(base_resolved) = base_item.resolved() {
                         if let ItemDefinitionInner::Type(base_td) = &base_resolved.inner {
                             if let Some(vftable) = &base_td.vftable {
-                                add_functions(&vftable.functions, &mut associated_functions, &mut used_names);
+                                add_functions(
+                                    &vftable.functions,
+                                    &mut associated_functions,
+                                    &mut used_names,
+                                );
                             }
                         }
                     }
@@ -914,7 +936,8 @@ pub fn compute_associated_functions<'db>(
 
         // Build own impl methods
         let reserved = used_names.clone();
-        let mut own_method_cfgs: HashMap<String, Vec<Option<crate::parser::cfg::CfgPredicate>>> = HashMap::new();
+        let mut own_method_cfgs: HashMap<String, Vec<Option<crate::parser::cfg::CfgPredicate>>> =
+            HashMap::new();
 
         for ImplFunc {
             func: grammar_fn,
@@ -975,8 +998,12 @@ pub fn compute_associated_functions<'db>(
             let disjoint_with_existing = own_method_cfgs
                 .get(&name)
                 .map(|cfgs| {
-                    cfgs.iter()
-                        .all(|e| crate::parser::cfg::CfgPredicate::provably_disjoint(e.as_ref(), function.cfg.as_ref()))
+                    cfgs.iter().all(|e| {
+                        crate::parser::cfg::CfgPredicate::provably_disjoint(
+                            e.as_ref(),
+                            function.cfg.as_ref(),
+                        )
+                    })
                 })
                 .unwrap_or(true);
             if !disjoint_with_existing {
@@ -1055,36 +1082,56 @@ fn build_item(
 ) -> crate::semantic::error::Result<crate::semantic::error::BuildOutcome> {
     match &definition.inner {
         ItemDefinitionInner::Type(ty) => {
-            let mut ctx = crate::semantic::resolution_context::ResolutionContext::new(
-                type_registry, modules,
-            );
+            let mut ctx =
+                crate::semantic::resolution_context::ResolutionContext::new(type_registry, modules);
             crate::semantic::type_definition::build(
-                &mut ctx, item_path, visibility, ty, def_location,
-                doc_comments, type_param_names,
+                &mut ctx,
+                item_path,
+                visibility,
+                ty,
+                def_location,
+                doc_comments,
+                type_param_names,
             )
         }
         ItemDefinitionInner::Enum(e) => {
             let ctx_ref = crate::semantic::resolution_context::ResolutionContextRef::new(
-                type_registry, modules,
+                type_registry,
+                modules,
             );
             crate::semantic::enum_definition::build(
-                &ctx_ref, item_path, e, def_location, doc_comments,
+                &ctx_ref,
+                item_path,
+                e,
+                def_location,
+                doc_comments,
             )
         }
         ItemDefinitionInner::Bitflags(b) => {
             let ctx_ref = crate::semantic::resolution_context::ResolutionContextRef::new(
-                type_registry, modules,
+                type_registry,
+                modules,
             );
             crate::semantic::bitflags_definition::build(
-                &ctx_ref, item_path, b, def_location, doc_comments,
+                &ctx_ref,
+                item_path,
+                b,
+                def_location,
+                doc_comments,
             )
         }
         ItemDefinitionInner::TypeAlias(ta) => {
             let ctx_ref = crate::semantic::resolution_context::ResolutionContextRef::new(
-                type_registry, modules,
+                type_registry,
+                modules,
             );
             crate::semantic::type_alias_definition::build(
-                &ctx_ref, item_path, ta, def_location, doc_comments, type_param_names,
+                &ctx_ref,
+                item_path,
+                ta,
+                def_location,
+                doc_comments,
+                type_param_names,
             )
         }
     }
@@ -1152,7 +1199,9 @@ fn register_unresolved(
 }
 
 fn make_unresolved_definition(path: &ItemPath) -> crate::semantic::types::ItemDefinition {
-    use crate::grammar::{Ident, ItemDefinition as GrammarDef, ItemDefinitionInner, TypeDefinition};
+    use crate::grammar::{
+        Ident, ItemDefinition as GrammarDef, ItemDefinitionInner, TypeDefinition,
+    };
     use crate::span::ItemLocation;
 
     let grammar_def = GrammarDef {
@@ -1183,7 +1232,11 @@ fn make_unresolved_definition(path: &ItemPath) -> crate::semantic::types::ItemDe
     }
 }
 
-fn make_predefined_definition(path: &ItemPath, size: usize, alignment: usize) -> crate::semantic::types::ItemDefinition {
+fn make_predefined_definition(
+    path: &ItemPath,
+    size: usize,
+    alignment: usize,
+) -> crate::semantic::types::ItemDefinition {
     crate::semantic::types::ItemDefinition {
         visibility: crate::semantic::types::Visibility::Public,
         path: path.clone(),
@@ -1209,7 +1262,10 @@ fn make_predefined_definition(path: &ItemPath, size: usize, alignment: usize) ->
     }
 }
 
-fn make_extern_definition(path: &ItemPath, info: &crate::semantic::declaration_registry::ExternTypeInfo) -> crate::semantic::types::ItemDefinition {
+fn make_extern_definition(
+    path: &ItemPath,
+    info: &crate::semantic::declaration_registry::ExternTypeInfo,
+) -> crate::semantic::types::ItemDefinition {
     crate::semantic::types::ItemDefinition {
         visibility: crate::semantic::types::Visibility::Public,
         path: path.clone(),
@@ -1221,7 +1277,8 @@ fn make_extern_definition(path: &ItemPath, info: &crate::semantic::declaration_r
                 inner: crate::semantic::types::TypeDefinition {
                     doc: info.doc_comments.clone(),
                     ..Default::default()
-                }.into(),
+                }
+                .into(),
             },
         ),
         category: crate::semantic::types::ItemCategory::Extern,

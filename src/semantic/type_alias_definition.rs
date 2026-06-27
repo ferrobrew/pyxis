@@ -3,7 +3,6 @@
 use crate::{
     grammar::{self, ItemPath},
     semantic::{
-
         error::{BuildOutcome, Result, UnresolvedTypeContext, UnresolvedTypeReference},
         type_registry::TypeLookupResult,
         types::{ItemStateResolved, Type},

@@ -9,10 +9,7 @@ use std::collections::BTreeMap;
 
 use crate::{
     grammar::ItemPath,
-    semantic::{
-        Module,
-        type_registry::TypeRegistry,
-    },
+    semantic::{Module, type_registry::TypeRegistry},
 };
 
 /// The output of semantic analysis, projected from `SemanticAnalysis`.

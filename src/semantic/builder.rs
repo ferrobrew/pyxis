@@ -17,10 +17,7 @@ use std::collections::BTreeMap;
 use crate::{
     grammar::{self, ItemPath},
     pretty_print::pretty_print,
-    semantic::{
-        self, Db, PyxisDatabaseImpl, SourceFile, SourceSet,
-        SemanticOutput, SemanticError,
-    },
+    semantic::{self, Db, PyxisDatabaseImpl, SemanticError, SemanticOutput, SourceFile, SourceSet},
     span::HasLocation,
 };
 
@@ -61,7 +58,10 @@ impl SemanticBuilder {
         module: &grammar::Module,
         path: &ItemPath,
     ) -> crate::semantic::error::Result<()> {
-        use crate::semantic::{attribute, error::{AttributeName, ExternKind}};
+        use crate::semantic::{
+            attribute,
+            error::{AttributeName, ExternKind},
+        };
 
         // Reject two source files mapping to the same module path
         let path_str = path

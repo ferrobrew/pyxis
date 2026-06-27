@@ -28,7 +28,10 @@ impl<'a> ResolutionContext<'a> {
         type_registry: &'a mut TypeRegistry,
         modules: &'a mut BTreeMap<ItemPath, Module>,
     ) -> Self {
-        Self { type_registry, modules }
+        Self {
+            type_registry,
+            modules,
+        }
     }
 
     pub fn get_module_for_path(
@@ -75,11 +78,11 @@ pub struct ResolutionContextRef<'a> {
 }
 
 impl<'a> ResolutionContextRef<'a> {
-    pub fn new(
-        type_registry: &'a TypeRegistry,
-        modules: &'a BTreeMap<ItemPath, Module>,
-    ) -> Self {
-        Self { type_registry, modules }
+    pub fn new(type_registry: &'a TypeRegistry, modules: &'a BTreeMap<ItemPath, Module>) -> Self {
+        Self {
+            type_registry,
+            modules,
+        }
     }
 
     pub fn get_module_for_path(

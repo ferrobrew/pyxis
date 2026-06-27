@@ -1,20 +1,20 @@
 pub mod error;
 pub mod types;
 
+pub(crate) mod attribute;
+pub(crate) mod bitflags_definition;
 pub mod builder;
 pub mod db;
 pub mod declaration_registry;
-pub(crate) mod attribute;
-pub(crate) mod bitflags_definition;
 pub mod doc_links;
-pub mod inputs;
 pub(crate) mod enum_definition;
 pub(crate) mod function;
+pub mod inputs;
 pub mod ir;
 pub mod module;
+pub mod output;
 pub mod queries;
 pub mod resolution_context;
-pub mod output;
 pub(crate) mod type_alias_definition;
 pub(crate) mod type_definition;
 pub mod type_registry;

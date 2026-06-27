@@ -149,12 +149,8 @@ impl ServerState {
         let file_id = self
             .file_store
             .register_in_memory(relative_path.clone(), source.clone());
-        let source_file = SourceFile::new(
-            &self.db,
-            relative_path,
-            file_id.as_u32(),
-            source.clone(),
-        );
+        let source_file =
+            SourceFile::new(&self.db, relative_path, file_id.as_u32(), source.clone());
 
         let uri = file_path_to_uri(path).unwrap_or_else(|| {
             let uri_str = format!("file:///{}", path.display());
@@ -236,9 +232,11 @@ impl ServerState {
     }
 
     /// Handle textDocument/didOpen
-    pub fn handle_did_open(&mut self, notif: Notification) -> Result<(), Box<dyn std::error::Error>> {
-        let params: lsp_types::DidOpenTextDocumentParams =
-            serde_json::from_value(notif.params)?;
+    pub fn handle_did_open(
+        &mut self,
+        notif: Notification,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let params: lsp_types::DidOpenTextDocumentParams = serde_json::from_value(notif.params)?;
         let uri = params.text_document.uri.clone();
         let text = params.text_document.text;
 
@@ -248,7 +246,8 @@ impl ServerState {
             use pyxis::semantic::Setter;
             doc.source_file.set_contents(&mut self.db).to(text.clone());
             doc.content = text;
-            self.file_store.update_in_memory(doc.file_id, doc.content.clone());
+            self.file_store
+                .update_in_memory(doc.file_id, doc.content.clone());
         } else {
             let fs_path = uri_to_file_path(&uri);
 
@@ -269,14 +268,12 @@ impl ServerState {
                 _ => uri_to_filename(&uri),
             };
 
-            let file_id = self.file_store.register_in_memory(relative_path.clone(), text.clone());
+            let file_id = self
+                .file_store
+                .register_in_memory(relative_path.clone(), text.clone());
 
-            let source_file = SourceFile::new(
-                &self.db,
-                relative_path,
-                file_id.as_u32(),
-                text.clone(),
-            );
+            let source_file =
+                SourceFile::new(&self.db, relative_path, file_id.as_u32(), text.clone());
 
             self.documents.insert(
                 uri.clone(),
@@ -294,9 +291,11 @@ impl ServerState {
     }
 
     /// Handle textDocument/didChange (FULL sync)
-    pub fn handle_did_change(&mut self, notif: Notification) -> Result<(), Box<dyn std::error::Error>> {
-        let params: lsp_types::DidChangeTextDocumentParams =
-            serde_json::from_value(notif.params)?;
+    pub fn handle_did_change(
+        &mut self,
+        notif: Notification,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let params: lsp_types::DidChangeTextDocumentParams = serde_json::from_value(notif.params)?;
         let uri = params.text_document.uri.clone();
 
         if let Some(doc) = self.documents.get_mut(&uri) {
@@ -305,7 +304,8 @@ impl ServerState {
                 let new_content = doc.content.clone();
                 use pyxis::semantic::Setter;
                 doc.source_file.set_contents(&mut self.db).to(new_content);
-                self.file_store.update_in_memory(doc.file_id, doc.content.clone());
+                self.file_store
+                    .update_in_memory(doc.file_id, doc.content.clone());
             }
         }
         Ok(())
@@ -330,10 +330,12 @@ impl ServerState {
     /// So a save is a no-op for content; it only triggers a re-publish of
     /// diagnostics (done by the caller in main_loop), using the content the
     /// editor already kept in sync via didChange.
-    pub fn handle_did_save(&mut self, notif: Notification) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn handle_did_save(
+        &mut self,
+        notif: Notification,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         // Parse to validate the payload, but intentionally ignore `text`.
-        let _params: lsp_types::DidSaveTextDocumentParams =
-            serde_json::from_value(notif.params)?;
+        let _params: lsp_types::DidSaveTextDocumentParams = serde_json::from_value(notif.params)?;
         Ok(())
     }
 
@@ -344,9 +346,11 @@ impl ServerState {
     /// diagnostics). Removing it would cause other files' use-statements and
     /// type references to fail resolution. The editor will re-send did_open
     /// if the file is opened again.
-    pub fn handle_did_close(&mut self, notif: Notification) -> Result<(), Box<dyn std::error::Error>> {
-        let _params: lsp_types::DidCloseTextDocumentParams =
-            serde_json::from_value(notif.params)?;
+    pub fn handle_did_close(
+        &mut self,
+        notif: Notification,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let _params: lsp_types::DidCloseTextDocumentParams = serde_json::from_value(notif.params)?;
         // Intentionally a no-op — keep the file in the db.
         Ok(())
     }
@@ -379,7 +383,9 @@ impl ServerState {
     pub(crate) fn module_path_for(&self, uri: &Uri) -> Option<pyxis::grammar::ItemPath> {
         let doc = self.documents.get(uri)?;
         let path_str = doc.source_file.path(&self.db);
-        Some(pyxis::grammar::ItemPath::from_path(std::path::Path::new(path_str.as_str())))
+        Some(pyxis::grammar::ItemPath::from_path(std::path::Path::new(
+            path_str.as_str(),
+        )))
     }
 
     /// Look up the URI for a given FileId (for cross-file go-to-definition).
@@ -495,7 +501,11 @@ impl ServerState {
     /// query that `parse_file` already ran — no re-tokenizing).
     pub fn tokens_for(&self, uri: &Uri) -> Option<std::sync::Arc<Vec<pyxis::tokenizer::Token>>> {
         let doc = self.documents.get(uri)?;
-        Some(semantic::tokenize_file(&self.db, doc.source_file).tokens(&self.db).clone())
+        Some(
+            semantic::tokenize_file(&self.db, doc.source_file)
+                .tokens(&self.db)
+                .clone(),
+        )
     }
 
     /// Get the parsed module for a URI
@@ -509,7 +519,11 @@ impl ServerState {
 fn make_publish_diagnostics(uri: Uri, diagnostics: Vec<Diagnostic>) -> Notification {
     Notification::new(
         "textDocument/publishDiagnostics".into(),
-        PublishDiagnosticsParams { uri, diagnostics, version: None },
+        PublishDiagnosticsParams {
+            uri,
+            diagnostics,
+            version: None,
+        },
     )
 }
 
@@ -527,12 +541,13 @@ fn uri_to_file_path(uri: &Uri) -> Option<std::path::PathBuf> {
     let path_str = s.strip_prefix("file://")?;
     // On Unix, the path is already absolute (e.g. /home/user/project)
     // On Windows, file:// URIs use /C:/... format
-    let path_str = if path_str.starts_with('/') && path_str.len() > 2 && path_str.as_bytes()[2] == b':' {
-        // Windows: /C:/... → C:/...
-        &path_str[1..]
-    } else {
-        path_str
-    };
+    let path_str =
+        if path_str.starts_with('/') && path_str.len() > 2 && path_str.as_bytes()[2] == b':' {
+            // Windows: /C:/... → C:/...
+            &path_str[1..]
+        } else {
+            path_str
+        };
     // Decode percent-encoding for spaces etc.
     let decoded = percent_decode(path_str);
     let path = std::path::PathBuf::from(decoded);

@@ -2,7 +2,7 @@
 
 use crate::{
     grammar::test_aliases::*,
-    semantic::{error::SemanticError, builder::SemanticBuilder, types::test_aliases::*},
+    semantic::{builder::SemanticBuilder, error::SemanticError, types::test_aliases::*},
     span::{ItemLocation, StripLocations},
 };
 
@@ -22,12 +22,8 @@ fn can_use_type_from_another_module() {
     )]);
 
     let mut builder = SemanticBuilder::new(4);
-    builder
-        .add_module(&module1, &IP::from("module1"))
-        .unwrap();
-    builder
-        .add_module(&module2, &IP::from("module2"))
-        .unwrap();
+    builder.add_module(&module1, &IP::from("module1")).unwrap();
+    builder.add_module(&module2, &IP::from("module2")).unwrap();
     let resolved = builder.build().unwrap();
 
     let path = IP::from("module1::TestType1");
@@ -83,12 +79,8 @@ fn can_use_braced_imports_from_another_module() {
     ]);
 
     let mut builder = SemanticBuilder::new(4);
-    builder
-        .add_module(&module1, &IP::from("module1"))
-        .unwrap();
-    builder
-        .add_module(&module_math, &IP::from("math"))
-        .unwrap();
+    builder.add_module(&module1, &IP::from("module1")).unwrap();
+    builder.add_module(&module_math, &IP::from("math")).unwrap();
     let resolved = builder.build().unwrap();
 
     // Verify the Transform type was resolved correctly with both imported types
@@ -115,7 +107,6 @@ fn can_use_braced_imports_from_another_module() {
 
 #[test]
 fn will_fail_on_use_of_nonexistent_type() {
-
     // Test that using a type that doesn't exist produces an error
     let module1 = M::new()
         .with_uses([IP::from("math::NonExistent")])
@@ -125,9 +116,7 @@ fn will_fail_on_use_of_nonexistent_type() {
         )]);
 
     let mut builder = SemanticBuilder::new(4);
-    builder
-        .add_module(&module1, &IP::from("module1"))
-        .unwrap();
+    builder.add_module(&module1, &IP::from("module1")).unwrap();
 
     let err = builder.build().unwrap_err();
     assert_eq!(
@@ -142,7 +131,6 @@ fn will_fail_on_use_of_nonexistent_type() {
 
 #[test]
 fn will_fail_on_braced_import_with_nonexistent_type() {
-
     // Test that braced imports with a nonexistent type produce an error
     let module1 = M::new()
         .with_use_trees([UT::group(
@@ -159,12 +147,8 @@ fn will_fail_on_braced_import_with_nonexistent_type() {
     )]);
 
     let mut builder = SemanticBuilder::new(4);
-    builder
-        .add_module(&module1, &IP::from("module1"))
-        .unwrap();
-    builder
-        .add_module(&module_math, &IP::from("math"))
-        .unwrap();
+    builder.add_module(&module1, &IP::from("module1")).unwrap();
+    builder.add_module(&module_math, &IP::from("math")).unwrap();
 
     let err = builder.build().unwrap_err();
     assert_eq!(
@@ -179,7 +163,6 @@ fn will_fail_on_braced_import_with_nonexistent_type() {
 
 #[test]
 fn will_fail_on_use_of_nonexistent_module() {
-
     // Test that using a module that doesn't exist produces an error
     let module1 = M::new()
         .with_uses([IP::from("nonexistent::SomeType")])
@@ -189,9 +172,7 @@ fn will_fail_on_use_of_nonexistent_module() {
         )]);
 
     let mut builder = SemanticBuilder::new(4);
-    builder
-        .add_module(&module1, &IP::from("module1"))
-        .unwrap();
+    builder.add_module(&module1, &IP::from("module1")).unwrap();
 
     let err = builder.build().unwrap_err();
     assert_eq!(
@@ -220,12 +201,8 @@ fn can_use_module_in_use_statement() {
     )]);
 
     let mut builder = SemanticBuilder::new(4);
-    builder
-        .add_module(&module1, &IP::from("module1"))
-        .unwrap();
-    builder
-        .add_module(&module_math, &IP::from("math"))
-        .unwrap();
+    builder.add_module(&module1, &IP::from("module1")).unwrap();
+    builder.add_module(&module_math, &IP::from("math")).unwrap();
 
     // Should succeed because "math" is a valid module
     builder.build().unwrap();

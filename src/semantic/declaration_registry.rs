@@ -75,11 +75,7 @@ impl DeclarationRegistry {
     }
 
     /// Register a module and all its items.
-    pub fn register_module(
-        &mut self,
-        module: &grammar::Module,
-        module_path: &ItemPath,
-    ) {
+    pub fn register_module(&mut self, module: &grammar::Module, module_path: &ItemPath) {
         // Build the scope: the module's own path plus use'd paths
         let scope = std::iter::once(module_path.clone())
             .chain(module.uses().flat_map(|u| {
@@ -124,21 +120,25 @@ impl DeclarationRegistry {
                     let loc = attribute.location();
                     if let Ok(Some(s)) = crate::semantic::attribute::parse_size(ident, items, loc) {
                         size = Some(s);
-                    } else if let Ok(Some(a)) = crate::semantic::attribute::parse_align(ident, items, loc) {
+                    } else if let Ok(Some(a)) =
+                        crate::semantic::attribute::parse_align(ident, items, loc)
+                    {
                         alignment = Some(a);
                     }
                 }
                 if let (Some(size), Some(alignment)) = (size, alignment) {
                     let extern_path = module_path.join(extern_name.as_str().into());
-                    self.extern_types
-                        .insert(extern_path, ExternTypeInfo {
+                    self.extern_types.insert(
+                        extern_path,
+                        ExternTypeInfo {
                             size,
                             alignment,
                             location: *extern_location,
                             declaration_location: *extern_declaration_location,
                             doc_comments: extern_doc_comments.clone(),
                             cfg: attributes.cfg(),
-                        });
+                        },
+                    );
                 }
             }
         }
@@ -151,7 +151,8 @@ impl DeclarationRegistry {
             let path = ItemPath::from(predefined.name());
             let size = predefined.size();
             let alignment = size.max(1);
-            self.predefined.insert(path, PredefinedInfo { size, alignment });
+            self.predefined
+                .insert(path, PredefinedInfo { size, alignment });
         }
     }
 
@@ -225,7 +226,11 @@ impl DeclarationRegistry {
         module_path: &ItemPath,
     ) -> Vec<ItemPath> {
         let mut refs = Vec::new();
-        let scope = self.modules.get(module_path).map(|m| m.scope.as_slice()).unwrap_or(&[]);
+        let scope = self
+            .modules
+            .get(module_path)
+            .map(|m| m.scope.as_slice())
+            .unwrap_or(&[]);
 
         match &definition.inner {
             grammar::ItemDefinitionInner::Type(td) => {
@@ -293,7 +298,9 @@ fn collect_type_refs(
     refs: &mut Vec<ItemPath>,
 ) {
     match type_ {
-        grammar::Type::Ident { path, generic_args, .. } => {
+        grammar::Type::Ident {
+            path, generic_args, ..
+        } => {
             // Resolve the path through the scope
             let name = path.last().map(|s| s.as_str()).unwrap_or("");
             match registry.resolve_name(scope, name) {

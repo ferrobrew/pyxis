@@ -6,7 +6,7 @@
 
 use crate::{
     grammar::test_aliases::*,
-    semantic::{error::SemanticError, builder::SemanticBuilder},
+    semantic::{builder::SemanticBuilder, error::SemanticError},
     span::{ItemLocation, StripLocations},
 };
 

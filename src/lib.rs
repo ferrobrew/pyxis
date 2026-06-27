@@ -333,8 +333,7 @@ pub fn build_with_store_and_options(
         let filename = relative_path.display().to_string();
         let file_id = file_store.register_path(filename.clone(), path.to_path_buf());
         let file_id_u32 = file_id.index() as u32;
-        let source_file =
-            semantic::SourceFile::new(&db, filename, file_id_u32, source);
+        let source_file = semantic::SourceFile::new(&db, filename, file_id_u32, source);
         sources.push(source_file);
     }
 
@@ -353,13 +352,13 @@ pub fn build_with_store_and_options(
         return Err(BuildError::Semantic(first_semantic_err.clone()));
     }
 
-    let resolved_semantic_state = analysis
-        .to_semantic_output(&db)
-        .ok_or_else(|| BuildError::Semantic(SemanticError::TypeResolutionStalled {
+    let resolved_semantic_state = analysis.to_semantic_output(&db).ok_or_else(|| {
+        BuildError::Semantic(SemanticError::TypeResolutionStalled {
             unresolved_types: vec![],
             resolved_types: vec![],
             unresolved_references: vec![],
-        }))?;
+        })
+    })?;
 
     match backend {
         Backend::Rust => {

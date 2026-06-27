@@ -5,9 +5,9 @@
 use expect_test::expect;
 use lsp_server::{Connection, Message, Notification, Request, RequestId};
 use lsp_types::{
-    ClientCapabilities, DidOpenTextDocumentParams, InitializeParams, InitializedParams,
-    Position, TextDocumentIdentifier, TextDocumentItem, TextDocumentPositionParams,
-    DocumentSymbolParams, DocumentFormattingParams, FormattingOptions,
+    ClientCapabilities, DidOpenTextDocumentParams, DocumentFormattingParams, DocumentSymbolParams,
+    FormattingOptions, InitializeParams, InitializedParams, Position, TextDocumentIdentifier,
+    TextDocumentItem, TextDocumentPositionParams,
 };
 
 fn spawn_server() -> Connection {
@@ -58,10 +58,17 @@ fn open_file(conn: &Connection, uri: &str, text: &str) {
     );
     conn.sender.send(Message::Notification(notif)).unwrap();
     // Drain diagnostics
-    let _ = conn.receiver.recv_timeout(std::time::Duration::from_millis(200));
+    let _ = conn
+        .receiver
+        .recv_timeout(std::time::Duration::from_millis(200));
 }
 
-fn send_request(conn: &Connection, id: i32, method: &str, params: serde_json::Value) -> serde_json::Value {
+fn send_request(
+    conn: &Connection,
+    id: i32,
+    method: &str,
+    params: serde_json::Value,
+) -> serde_json::Value {
     let req = Request::new(RequestId::from(id), method.into(), params);
     conn.sender.send(Message::Request(req)).unwrap();
     loop {
@@ -94,10 +101,21 @@ fn snapshot_hover() {
     init_server(&conn);
     open_file(&conn, TEST_URI, TEST_CODE);
 
-    let result = send_request(&conn, 2, "textDocument/hover", serde_json::to_value(TextDocumentPositionParams {
-        text_document: TextDocumentIdentifier { uri: TEST_URI.parse().unwrap() },
-        position: Position { line: 0, character: 9 },
-    }).unwrap());
+    let result = send_request(
+        &conn,
+        2,
+        "textDocument/hover",
+        serde_json::to_value(TextDocumentPositionParams {
+            text_document: TextDocumentIdentifier {
+                uri: TEST_URI.parse().unwrap(),
+            },
+            position: Position {
+                line: 0,
+                character: 9,
+            },
+        })
+        .unwrap(),
+    );
 
     let formatted = serde_json::to_string_pretty(&result).unwrap();
     expect![[r#"
@@ -116,7 +134,8 @@ fn snapshot_hover() {
               "line": 0
             }
           }
-        }"#]].assert_eq(&formatted);
+        }"#]]
+    .assert_eq(&formatted);
 }
 
 #[test]
@@ -125,10 +144,21 @@ fn snapshot_completion() {
     init_server(&conn);
     open_file(&conn, TEST_URI, TEST_CODE);
 
-    let result = send_request(&conn, 2, "textDocument/completion", serde_json::to_value(TextDocumentPositionParams {
-        text_document: TextDocumentIdentifier { uri: TEST_URI.parse().unwrap() },
-        position: Position { line: 0, character: 0 },
-    }).unwrap());
+    let result = send_request(
+        &conn,
+        2,
+        "textDocument/completion",
+        serde_json::to_value(TextDocumentPositionParams {
+            text_document: TextDocumentIdentifier {
+                uri: TEST_URI.parse().unwrap(),
+            },
+            position: Position {
+                line: 0,
+                character: 0,
+            },
+        })
+        .unwrap(),
+    );
 
     let formatted = serde_json::to_string_pretty(&result).unwrap();
     expect![[r#"
@@ -201,7 +231,8 @@ fn snapshot_completion() {
             "kind": 14,
             "label": "Self"
           }
-        ]"#]].assert_eq(&formatted);
+        ]"#]]
+    .assert_eq(&formatted);
 }
 
 #[test]
@@ -210,11 +241,19 @@ fn snapshot_document_symbols() {
     init_server(&conn);
     open_file(&conn, TEST_URI, TEST_CODE);
 
-    let result = send_request(&conn, 2, "textDocument/documentSymbol", serde_json::to_value(DocumentSymbolParams {
-        text_document: TextDocumentIdentifier { uri: TEST_URI.parse().unwrap() },
-        work_done_progress_params: Default::default(),
-        partial_result_params: Default::default(),
-    }).unwrap());
+    let result = send_request(
+        &conn,
+        2,
+        "textDocument/documentSymbol",
+        serde_json::to_value(DocumentSymbolParams {
+            text_document: TextDocumentIdentifier {
+                uri: TEST_URI.parse().unwrap(),
+            },
+            work_done_progress_params: Default::default(),
+            partial_result_params: Default::default(),
+        })
+        .unwrap(),
+    );
 
     let formatted = serde_json::to_string_pretty(&result).unwrap();
     expect![[r#"
@@ -291,7 +330,8 @@ fn snapshot_document_symbols() {
               }
             }
           }
-        ]"#]].assert_eq(&formatted);
+        ]"#]]
+    .assert_eq(&formatted);
 }
 
 #[test]
@@ -300,11 +340,19 @@ fn snapshot_formatting() {
     init_server(&conn);
     open_file(&conn, TEST_URI, TEST_CODE);
 
-    let result = send_request(&conn, 2, "textDocument/formatting", serde_json::to_value(DocumentFormattingParams {
-        text_document: TextDocumentIdentifier { uri: TEST_URI.parse().unwrap() },
-        options: FormattingOptions::default(),
-        work_done_progress_params: Default::default(),
-    }).unwrap());
+    let result = send_request(
+        &conn,
+        2,
+        "textDocument/formatting",
+        serde_json::to_value(DocumentFormattingParams {
+            text_document: TextDocumentIdentifier {
+                uri: TEST_URI.parse().unwrap(),
+            },
+            options: FormattingOptions::default(),
+            work_done_progress_params: Default::default(),
+        })
+        .unwrap(),
+    );
 
     let formatted = serde_json::to_string_pretty(&result).unwrap();
     expect![[r#"
@@ -331,11 +379,19 @@ fn snapshot_code_lens() {
     init_server(&conn);
     open_file(&conn, TEST_URI, TEST_CODE);
 
-    let result = send_request(&conn, 2, "textDocument/codeLens", serde_json::to_value(lsp_types::CodeLensParams {
-        text_document: TextDocumentIdentifier { uri: TEST_URI.parse().unwrap() },
-        work_done_progress_params: Default::default(),
-        partial_result_params: Default::default(),
-    }).unwrap());
+    let result = send_request(
+        &conn,
+        2,
+        "textDocument/codeLens",
+        serde_json::to_value(lsp_types::CodeLensParams {
+            text_document: TextDocumentIdentifier {
+                uri: TEST_URI.parse().unwrap(),
+            },
+            work_done_progress_params: Default::default(),
+            partial_result_params: Default::default(),
+        })
+        .unwrap(),
+    );
 
     let formatted = serde_json::to_string_pretty(&result).unwrap();
     expect![[r#"
@@ -356,7 +412,8 @@ fn snapshot_code_lens() {
               }
             }
           }
-        ]"#]].assert_eq(&formatted);
+        ]"#]]
+    .assert_eq(&formatted);
 }
 
 #[test]
@@ -380,7 +437,10 @@ fn snapshot_diagnostics() {
     conn.sender.send(Message::Notification(notif)).unwrap();
 
     // Wait for diagnostics
-    let notif = conn.receiver.recv_timeout(std::time::Duration::from_secs(5)).unwrap();
+    let notif = conn
+        .receiver
+        .recv_timeout(std::time::Duration::from_secs(5))
+        .unwrap();
     let notif: Notification = match notif {
         Message::Notification(n) => n,
         _ => panic!("expected notification"),
@@ -407,7 +467,8 @@ fn snapshot_diagnostics() {
             }
           ],
           "uri": "file:///test.pyxis"
-        }"#]].assert_eq(&formatted);
+        }"#]]
+    .assert_eq(&formatted);
 }
 
 #[test]
@@ -416,14 +477,25 @@ fn snapshot_rename_invalid() {
     init_server(&conn);
     open_file(&conn, TEST_URI, TEST_CODE);
 
-    let result = send_request(&conn, 2, "textDocument/rename", serde_json::to_value(lsp_types::RenameParams {
-        text_document_position: TextDocumentPositionParams {
-            text_document: TextDocumentIdentifier { uri: TEST_URI.parse().unwrap() },
-            position: Position { line: 0, character: 9 },
-        },
-        new_name: "123invalid".to_string(),
-        work_done_progress_params: Default::default(),
-    }).unwrap());
+    let result = send_request(
+        &conn,
+        2,
+        "textDocument/rename",
+        serde_json::to_value(lsp_types::RenameParams {
+            text_document_position: TextDocumentPositionParams {
+                text_document: TextDocumentIdentifier {
+                    uri: TEST_URI.parse().unwrap(),
+                },
+                position: Position {
+                    line: 0,
+                    character: 9,
+                },
+            },
+            new_name: "123invalid".to_string(),
+            work_done_progress_params: Default::default(),
+        })
+        .unwrap(),
+    );
 
     // Should return an error for invalid identifier
     let formatted = serde_json::to_string_pretty(&result).unwrap();

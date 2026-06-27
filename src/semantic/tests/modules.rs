@@ -4,7 +4,7 @@
 
 use crate::{
     grammar::test_aliases::*,
-    semantic::{error::SemanticError, builder::SemanticBuilder},
+    semantic::{builder::SemanticBuilder, error::SemanticError},
 };
 
 /// A folder that contains `.pyxis` files but has no `mod.pyxis` should still
@@ -25,11 +25,7 @@ fn synthesizes_ancestor_modules_without_a_mod_file() {
 
     // The intermediate `world` module is synthesized during build.
     assert!(resolved.modules().contains_key(&IP::from("world")));
-    assert!(
-        resolved
-            .modules()
-            .contains_key(&IP::from("world::weather"))
-    );
+    assert!(resolved.modules().contains_key(&IP::from("world::weather")));
 }
 
 /// A folder module (`world/mod.pyxis` -> `world`) cannot coexist with a

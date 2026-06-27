@@ -1018,9 +1018,10 @@ impl SemanticError {
             SemanticError::InvalidAttributeValue { location, .. } => Some(location),
             SemanticError::ConflictingAttributes { location, .. } => Some(location),
             SemanticError::TypeResolutionFailed { location, .. } => Some(location),
-            SemanticError::TypeResolutionStalled { unresolved_references, .. } => {
-                unresolved_references.first().map(|r| &r.location)
-            }
+            SemanticError::TypeResolutionStalled {
+                unresolved_references,
+                ..
+            } => unresolved_references.first().map(|r| &r.location),
             SemanticError::BitflagsInvalidType { location, .. } => Some(location),
             SemanticError::RegionFieldNotRawType { location, .. } => Some(location),
             SemanticError::RegionFieldNotStructType { location, .. } => Some(location),

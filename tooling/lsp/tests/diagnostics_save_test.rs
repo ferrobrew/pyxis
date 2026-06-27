@@ -52,7 +52,10 @@ fn save_does_not_clear_parse_error() {
         ))
         .unwrap();
     let diags = state.collect_diagnostics();
-    assert!(!has_error(&diags), "valid file should have no error: {diags:?}");
+    assert!(
+        !has_error(&diags),
+        "valid file should have no error: {diags:?}"
+    );
 
     // 2. Type a corruption that produces a parse error.
     let corrupt = "type Foo { pub x: u32".to_string();
@@ -73,7 +76,10 @@ fn save_does_not_clear_parse_error() {
         ))
         .unwrap();
     let diags = state.collect_diagnostics();
-    assert!(has_error(&diags), "typed corruption should show parse error: {diags:?}");
+    assert!(
+        has_error(&diags),
+        "typed corruption should show parse error: {diags:?}"
+    );
 
     // 3. Save. Crucially, the `text` included on the save lags / differs from
     //    the live buffer — here it carries the older *clean* content (modelling

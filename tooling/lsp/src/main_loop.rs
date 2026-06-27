@@ -39,7 +39,9 @@ pub fn run_with_connection(connection: Connection) -> Result<(), Box<dyn std::er
                 // We ignore the save payload (didChange keeps content in sync),
                 // so don't ask the client to send the full text on every save.
                 save: Some(lsp_types::TextDocumentSyncSaveOptions::SaveOptions(
-                    lsp_types::SaveOptions { include_text: Some(false) },
+                    lsp_types::SaveOptions {
+                        include_text: Some(false),
+                    },
                 )),
             },
         )),
