@@ -64,19 +64,7 @@ impl ServerState {
             let hover = reference
                 .item
                 .as_ref()
-                .and_then(|item_path| {
-                    // User-defined type located in a source file …
-                    self.resolved_definition(item_path, type_registry)
-                        .map(|rd| match rd.size_align {
-                            Some((size, alignment)) => {
-                                format_type_hover_with_size(&rd.def, size, alignment)
-                            }
-                            None => format_type_hover(&rd.def),
-                        })
-                        // … or a predefined/extern type, which has no source
-                        // definition but still has a known size/alignment.
-                        .or_else(|| builtin_hover(item_path, decl_registry))
-                })
+                .and_then(|item_path| self.type_hover_text(item_path, type_registry, decl_registry))
                 .or_else(|| {
                     self.module_uri(&reference.module_path)
                         .map(|_| format!("**module** `{}`", reference.module_path))
@@ -163,20 +151,36 @@ impl ServerState {
                                 }
                                 pyxis::grammar::TypeField::Vftable(fns) => {
                                     for f in fns {
-                                        if f.location.span.contains(&loc) {
-                                            let span = name_span_after(
-                                                content,
-                                                &f.location.span.start,
-                                                f.name.as_str(),
-                                            )
-                                            .unwrap_or(f.location.span);
-                                            return hover_response(
-                                                req.id,
-                                                format_function_hover(f),
-                                                content,
-                                                &span,
-                                            );
+                                        if !f.location.span.contains(&loc) {
+                                            continue;
                                         }
+                                        // An argument name…
+                                        if let Some((value, span)) = named_arg_hover(
+                                            f, &loc, content, type_registry, &scope,
+                                            decl_registry, pointer_size,
+                                        ) {
+                                            return hover_response(req.id, value, content, &span);
+                                        }
+                                        // …`self`, resolving to the owning type…
+                                        if let Some(span) = self_arg_span(f, &loc) {
+                                            let owner = match self.module_path_for(uri) {
+                                                Some(mp) => mp.join(definition.name.as_str().into()),
+                                                None => ItemPath::from(definition.name.as_str()),
+                                            };
+                                            if let Some(value) =
+                                                self.type_hover_text(&owner, type_registry, decl_registry)
+                                            {
+                                                return hover_response(req.id, value, content, &span);
+                                            }
+                                        }
+                                        // …or the function itself.
+                                        let span = name_span_after(
+                                            content, &f.location.span.start, f.name.as_str(),
+                                        )
+                                        .unwrap_or(f.location.span);
+                                        return hover_response(
+                                            req.id, format_function_hover(f), content, &span,
+                                        );
                                     }
                                 }
                             }
@@ -210,20 +214,36 @@ impl ServerState {
                 pyxis::grammar::ModuleItem::Impl { impl_block } => {
                     for impl_item in &impl_block.items {
                         if let pyxis::grammar::ImplItem::Function(f) = impl_item {
-                            if f.location.span.contains(&loc) {
-                                let span = name_span_after(
-                                    content,
-                                    &f.location.span.start,
-                                    f.name.as_str(),
-                                )
-                                .unwrap_or(f.location.span);
-                                return hover_response(
-                                    req.id,
-                                    format_function_hover(f),
-                                    content,
-                                    &span,
-                                );
+                            if !f.location.span.contains(&loc) {
+                                continue;
                             }
+                            // An argument name…
+                            if let Some((value, span)) = named_arg_hover(
+                                f, &loc, content, type_registry, &scope, decl_registry, pointer_size,
+                            ) {
+                                return hover_response(req.id, value, content, &span);
+                            }
+                            // …`self`, resolving to the impl target type…
+                            if let Some(span) = self_arg_span(f, &loc) {
+                                let owner = ItemPath::from(impl_block.name.as_str());
+                                if let Some(resolved) =
+                                    resolve_type_path(&owner, &scope, decl_registry)
+                                {
+                                    if let Some(value) =
+                                        self.type_hover_text(&resolved, type_registry, decl_registry)
+                                    {
+                                        return hover_response(req.id, value, content, &span);
+                                    }
+                                }
+                            }
+                            // …or the function itself.
+                            let span = name_span_after(
+                                content, &f.location.span.start, f.name.as_str(),
+                            )
+                            .unwrap_or(f.location.span);
+                            return hover_response(
+                                req.id, format_function_hover(f), content, &span,
+                            );
                         }
                     }
                 }
@@ -810,6 +830,22 @@ impl ServerState {
             .and_then(|i| i.resolved())
             .map(|r| (r.size, r.alignment));
         Some(ResolvedDefinition { def, uri, name_span, size_align })
+    }
+
+    /// Hover markdown for a resolved item path: a user-defined type located in
+    /// its source file, or a predefined/extern builtin.
+    fn type_hover_text(
+        &self,
+        item_path: &ItemPath,
+        type_registry: &pyxis::semantic::type_registry::TypeRegistry,
+        decl_registry: &pyxis::semantic::declaration_registry::DeclarationRegistry,
+    ) -> Option<String> {
+        self.resolved_definition(item_path, type_registry)
+            .map(|rd| match rd.size_align {
+                Some((size, alignment)) => format_type_hover_with_size(&rd.def, size, alignment),
+                None => format_type_hover(&rd.def),
+            })
+            .or_else(|| builtin_hover(item_path, decl_registry))
     }
 
     /// Find the document URI whose module path equals `module_path` (used to
@@ -1434,6 +1470,58 @@ fn render_fn_signature(f: &pyxis::grammar::Function) -> String {
         s.push_str(&format!(" -> {ret}"));
     }
     s
+}
+
+/// If the cursor is on a named argument of `f`, produce its hover (name, type,
+/// type size) scoped to the argument name. The argument *type* is handled by
+/// `find_reference_at`, so this only fires on the name.
+fn named_arg_hover(
+    f: &pyxis::grammar::Function,
+    loc: &pyxis::span::Location,
+    content: &str,
+    type_registry: &pyxis::semantic::type_registry::TypeRegistry,
+    scope: &[ItemPath],
+    decl_registry: &pyxis::semantic::declaration_registry::DeclarationRegistry,
+    pointer_size: usize,
+) -> Option<(String, pyxis::span::Span)> {
+    use pyxis::grammar::Argument;
+    for arg in &f.arguments {
+        if let Argument::Named { ident, type_, location } = arg {
+            if location.span.contains(loc) {
+                let span = name_span_after(content, &location.span.start, ident.as_str())
+                    .unwrap_or(location.span);
+                let mut md = format!("**arg** `{}`\n\n", ident.as_str());
+                md.push_str(&format!("```pyxis\n{}: {}\n```\n", ident.as_str(), type_));
+                if let Some(size) =
+                    type_size_of(type_, type_registry, scope, decl_registry, pointer_size)
+                {
+                    push_facts(&mut md, &[("type size", fmt_bytes(size))]);
+                }
+                return Some((md, span));
+            }
+        }
+    }
+    None
+}
+
+/// The span of a `self`/`&self`/`&mut self` receiver of `f` if the cursor is on
+/// it (so a `self` hover can show the containing type, scoped to `self`).
+fn self_arg_span(
+    f: &pyxis::grammar::Function,
+    loc: &pyxis::span::Location,
+) -> Option<pyxis::span::Span> {
+    use pyxis::grammar::Argument;
+    for arg in &f.arguments {
+        match arg {
+            Argument::ConstSelf { location } | Argument::MutSelf { location }
+                if location.span.contains(loc) =>
+            {
+                return Some(location.span);
+            }
+            _ => {}
+        }
+    }
+    None
 }
 
 /// Hover markdown for a function (vftable entry or impl method).

@@ -147,3 +147,18 @@ fn predefined_field_type_hovers_the_type() {
     let h = hover_text(&st, &uri, 1, c);
     assert!(h.contains("**builtin** `bool`"), "hovering bool should describe bool, not the field: {h}");
 }
+
+#[test]
+fn function_args_and_self() {
+    let base = std::env::temp_dir().join(format!("pyxis-arg-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    write(&base.join("pyxis.toml"), "[project]\nname = \"t\"\npointer_size = 8\n");
+    let src = "pub type Foo {\n    pub x: u64,\n    vftable {\n        pub fn doit(&mut self, count: u32);\n    },\n}\n";
+    write(&base.join("foo.pyxis"), src);
+    let init = serde_json::json!({ "rootUri": format!("file://{}", base.display()), "capabilities": {} });
+    let st = ServerState::new(&init).unwrap();
+    let uri: lsp_types::Uri = format!("file://{}", base.join("foo.pyxis").display()).parse().unwrap();
+    let l = src.lines().nth(3).unwrap();
+    assert!(hover_text(&st, &uri, 3, l.find("count").unwrap() as u32 + 1).contains("**arg** `count`"));
+    assert!(hover_text(&st, &uri, 3, l.find("self").unwrap() as u32 + 1).contains("**type** `Foo`"));
+}
