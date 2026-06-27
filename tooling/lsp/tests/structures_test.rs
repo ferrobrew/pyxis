@@ -195,3 +195,19 @@ fn attribute_hover_describes_attribute() {
     let b = hover_text(&st, &uri, 2, 7); // #[base]
     assert!(b.contains("**attribute**") && b.contains("base class"), "got {b}");
 }
+
+#[test]
+fn free_functions_hover() {
+    let base = std::env::temp_dir().join(format!("pyxis-ff-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    write(&base.join("pyxis.toml"), "[project]\nname = \"t\"\npointer_size = 8\n");
+    let src = "pub type T {\n    pub x: u64,\n}\nfn free_fn(item: *const T) -> bool;\n";
+    write(&base.join("m.pyxis"), src);
+    let init = serde_json::json!({ "rootUri": format!("file://{}", base.display()), "capabilities": {} });
+    let st = ServerState::new(&init).unwrap();
+    let uri: lsp_types::Uri = format!("file://{}", base.join("m.pyxis").display()).parse().unwrap();
+    let l = src.lines().nth(3).unwrap();
+    assert!(hover_text(&st, &uri, 3, l.find("free_fn").unwrap() as u32 + 1).contains("**fn** `free_fn`"));
+    assert!(hover_text(&st, &uri, 3, l.find("item").unwrap() as u32 + 1).contains("**arg** `item`"));
+    assert!(hover_text(&st, &uri, 3, l.find('T').unwrap() as u32).contains("**type** `T`"));
+}

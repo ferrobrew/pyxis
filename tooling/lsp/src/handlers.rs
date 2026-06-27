@@ -294,6 +294,23 @@ impl ServerState {
                         }
                     }
                 }
+                // Free functions: argument names and the function itself.
+                pyxis::grammar::ModuleItem::Function { function } => {
+                    if function.location.span.contains(&loc) {
+                        if let Some((value, span)) = named_arg_hover(
+                            function, &loc, content, type_registry, &scope, decl_registry, pointer_size,
+                        ) {
+                            return hover_response(req.id, value, content, &span);
+                        }
+                        let span = name_span_after(
+                            content, &function.location.span.start, function.name.as_str(),
+                        )
+                        .unwrap_or(function.location.span);
+                        return hover_response(
+                            req.id, format_function_hover(function), content, &span,
+                        );
+                    }
+                }
                 _ => {}
             }
         }
@@ -1179,7 +1196,7 @@ fn find_reference_at(
         Reference { span, item, module_path: seg_path }
     };
 
-    use pyxis::grammar::{Argument, ImplItem, ModuleItem};
+    use pyxis::grammar::{ImplItem, ModuleItem};
 
     for item in &module.items {
         match item {
@@ -1221,19 +1238,16 @@ fn find_reference_at(
                 }
                 for impl_item in &impl_block.items {
                     if let ImplItem::Function(f) = impl_item {
-                        for arg in &f.arguments {
-                            if let Argument::Named { type_, .. } = arg {
-                                if let Some((path, span)) = find_type_in_grammar_type(type_, loc) {
-                                    return Some(resolve(path, span));
-                                }
-                            }
-                        }
-                        if let Some(ret) = &f.return_type {
-                            if let Some((path, span)) = find_type_in_grammar_type(ret, loc) {
-                                return Some(resolve(path, span));
-                            }
+                        if let Some((path, span)) = fn_signature_type_ref(f, loc) {
+                            return Some(resolve(path, span));
                         }
                     }
+                }
+            }
+            // Free functions: argument and return types.
+            ModuleItem::Function { function } => {
+                if let Some((path, span)) = fn_signature_type_ref(function, loc) {
+                    return Some(resolve(path, span));
                 }
             }
             _ => {}
@@ -1293,6 +1307,28 @@ fn segment_at(
 
 /// Search a single definition's type positions for a type reference whose span
 /// contains `loc`. Returns the matched (unresolved) `ItemPath` and its span.
+/// Find a type reference (argument or return type) under the cursor in a
+/// function signature.
+fn fn_signature_type_ref<'a>(
+    f: &'a pyxis::grammar::Function,
+    loc: &pyxis::span::Location,
+) -> Option<(&'a ItemPath, pyxis::span::Span)> {
+    use pyxis::grammar::Argument;
+    for arg in &f.arguments {
+        if let Argument::Named { type_, .. } = arg {
+            if let Some(found) = find_type_in_grammar_type(type_, loc) {
+                return Some(found);
+            }
+        }
+    }
+    if let Some(ret) = &f.return_type {
+        if let Some(found) = find_type_in_grammar_type(ret, loc) {
+            return Some(found);
+        }
+    }
+    None
+}
+
 fn find_type_ref_in_definition<'a>(
     definition: &'a pyxis::grammar::ItemDefinition,
     loc: &pyxis::span::Location,
