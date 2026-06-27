@@ -1366,18 +1366,23 @@ fn find_for_path_span(
 
 /// Render a definition/field's attributes compactly (e.g. `#[base] #[cfg(...)]`).
 fn render_attributes(attributes: &pyxis::grammar::Attributes) -> String {
-    use pyxis::grammar::Attribute;
     attributes
         .0
         .iter()
-        .map(|a| match a {
-            Attribute::Ident { ident, .. } => format!("#[{}]", ident.as_str()),
-            Attribute::Function { name, .. } => format!("#[{}(…)]", name.as_str()),
-            Attribute::Assign { name, .. } => format!("#[{} = …]", name.as_str()),
-            Attribute::Cfg { .. } => "#[cfg(…)]".to_string(),
-        })
+        .map(|a| format!("`{}`", render_attribute(a)))
         .collect::<Vec<_>>()
         .join(" ")
+}
+
+/// Render a single attribute as Pyxis source (without code fencing).
+fn render_attribute(attribute: &pyxis::grammar::Attribute) -> String {
+    use pyxis::grammar::Attribute;
+    match attribute {
+        Attribute::Ident { ident, .. } => format!("#[{}]", ident.as_str()),
+        Attribute::Function { name, .. } => format!("#[{}(…)]", name.as_str()),
+        Attribute::Assign { name, .. } => format!("#[{} = …]", name.as_str()),
+        Attribute::Cfg { .. } => "#[cfg(…)]".to_string(),
+    }
 }
 
 /// Render a function signature as Pyxis source (e.g. `pub fn foo(&mut self, x: u32) -> bool`).
