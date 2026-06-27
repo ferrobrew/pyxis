@@ -1834,6 +1834,21 @@ fn attribute_at<'a>(
                     }
                 }
             }
+            ModuleItem::Function { function } => {
+                if let Some(hit) = find(&function.attributes) {
+                    return Some(hit);
+                }
+            }
+            ModuleItem::ExternValue { extern_value } => {
+                if let Some(hit) = find(&extern_value.attributes) {
+                    return Some(hit);
+                }
+            }
+            ModuleItem::ExternType { attributes, .. } => {
+                if let Some(hit) = find(attributes) {
+                    return Some(hit);
+                }
+            }
             _ => {}
         }
     }

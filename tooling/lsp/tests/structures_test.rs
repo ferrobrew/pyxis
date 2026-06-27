@@ -299,3 +299,17 @@ fn pointer_shell_in_function_signature() {
     assert!(hover_text(&st, &uri, 2, l.find("*const u32").unwrap() as u32).contains("**pointer**"));
     assert!(hover_text(&st, &uri, 2, l.find("f32").unwrap() as u32).contains("**builtin** `f32`"));
 }
+
+#[test]
+fn attribute_hover_on_free_function_and_extern() {
+    let base = std::env::temp_dir().join(format!("pyxis-fa-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    write(&base.join("pyxis.toml"), "[project]\nname = \"t\"\npointer_size = 8\n");
+    let src = "#[address(0x100)]\nfn do_thing(x: u32) -> bool;\n\n#[address(0x200)]\nextern foo: u32;\n";
+    write(&base.join("m.pyxis"), src);
+    let init = serde_json::json!({ "rootUri": format!("file://{}", base.display()), "capabilities": {} });
+    let st = ServerState::new(&init).unwrap();
+    let uri: lsp_types::Uri = format!("file://{}", base.join("m.pyxis").display()).parse().unwrap();
+    assert!(hover_text(&st, &uri, 0, 3).contains("**attribute**"), "free-function attribute");
+    assert!(hover_text(&st, &uri, 3, 3).contains("**attribute**"), "extern value attribute");
+}
