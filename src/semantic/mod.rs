@@ -36,8 +36,11 @@ pub use builder::SemanticBuilder;
 // there is no separate "batch pipeline" and "LSP pipeline."
 pub use db::{Db, PyxisDatabaseImpl};
 pub use inputs::{SourceFile, SourceSet};
-pub use ir::{DeclarationSet, ParsedFile, ResolvedItem, SemanticAnalysis};
-pub use queries::{analyze, collect_declarations, compute_associated_functions, parse_file, resolve_item};
+pub use ir::{DeclarationSet, ParsedFile, ResolvedItem, SemanticAnalysis, TokenizedFile};
+pub use queries::{
+    analyze, collect_declarations, compute_associated_functions, parse_file, resolve_item,
+    tokenize_file,
+};
 
 // Re-export salsa's Setter trait for downstream crates (LSP)
 pub use salsa::Setter;

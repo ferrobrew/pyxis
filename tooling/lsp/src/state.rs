@@ -491,6 +491,13 @@ impl ServerState {
         self.documents.get(uri).map(|d| d.content.as_str())
     }
 
+    /// Get the cached token stream for a URI (reuses the Salsa `tokenize_file`
+    /// query that `parse_file` already ran — no re-tokenizing).
+    pub fn tokens_for(&self, uri: &Uri) -> Option<std::sync::Arc<Vec<pyxis::tokenizer::Token>>> {
+        let doc = self.documents.get(uri)?;
+        Some(semantic::tokenize_file(&self.db, doc.source_file).tokens(&self.db).clone())
+    }
+
     /// Get the parsed module for a URI
     pub fn get_parsed_module(&self, uri: &Uri) -> Option<pyxis::grammar::Module> {
         let doc = self.documents.get(uri)?;

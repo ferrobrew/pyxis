@@ -339,6 +339,16 @@ impl ServerState {
                         }
                     }
                 }
+                // Backend keywords (cpp/rust/prologue/epilogue/definition/for).
+                pyxis::grammar::ModuleItem::Backend { backend } => {
+                    if backend.location.span.contains(&loc) {
+                        if let Some(tokens) = self.tokens_for(uri) {
+                            if let Some((value, span)) = backend_term_at(&tokens, backend, &loc) {
+                                return hover_response(req.id, value, content, &span);
+                            }
+                        }
+                    }
+                }
                 _ => {}
             }
         }
@@ -1605,6 +1615,37 @@ fn find_for_path_span(
         }
     }
     None
+}
+
+/// Describe a backend keyword (`cpp`/`rust`/`prologue`/`epilogue`/`definition`/
+/// `uses`/`for`) under the cursor. The grammar AST carries no spans for these,
+/// so we tokenize and match the token directly. A `r#"…"#` splice lexes as a
+/// single token, so keywords inside the spliced code can never match.
+fn backend_term_at(
+    tokens: &[pyxis::tokenizer::Token],
+    backend: &pyxis::grammar::Backend,
+    loc: &pyxis::span::Location,
+) -> Option<(String, pyxis::span::Span)> {
+    use pyxis::tokenizer::TokenKind;
+    let name = backend.name.name();
+    let token = tokens.iter().find(|t| t.location.span.contains(loc))?;
+    let desc: String = match &token.kind {
+        TokenKind::Backend => format!("The `{name}` backend block."),
+        TokenKind::Prologue => "Splice emitted *before* this backend's generated output.".into(),
+        TokenKind::Epilogue => "Splice emitted *after* this backend's generated output.".into(),
+        TokenKind::Ident(s) if s == name => {
+            format!("The `{name}` backend — code emitted by the {name} generator.")
+        }
+        TokenKind::Ident(s) if s == "for" => "Attributes this splice to a specific type.".into(),
+        TokenKind::Ident(s) if s == "definition" => {
+            "Targets the source/definition file rather than the header.".into()
+        }
+        TokenKind::Ident(s) if s == "uses" => {
+            "Declares other-module items this backend block depends on.".into()
+        }
+        _ => return None,
+    };
+    Some((format!("**backend**\n\n{desc}"), token.location.span))
 }
 
 /// Render a definition/field's attributes compactly (e.g. `#[base] #[cfg(...)]`).

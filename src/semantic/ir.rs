@@ -4,6 +4,17 @@ use std::sync::Arc;
 
 use crate::semantic::declaration_registry::DeclarationRegistry;
 
+/// A tokenized file (tokens + any lex error, reported as a parse error).
+/// Shared by `parse_file` and editor tooling so a file is lexed at most once
+/// per edit rather than re-tokenized on demand.
+#[salsa::tracked]
+pub struct TokenizedFile<'db> {
+    #[returns(ref)]
+    pub tokens: Arc<Vec<crate::tokenizer::Token>>,
+    #[returns(ref)]
+    pub errors: Arc<Vec<crate::parser::ParseError>>,
+}
+
 /// A parsed file (grammar::Module + parse errors).
 #[salsa::tracked]
 pub struct ParsedFile<'db> {
