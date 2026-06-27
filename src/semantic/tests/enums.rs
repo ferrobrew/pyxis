@@ -119,7 +119,6 @@ fn can_carry_backend_across() {
             .get(&crate::Backend::Rust)
             .unwrap()
             .iter()
-            .cloned()
             .map(|b| b.strip_locations())
             .collect::<Vec<_>>(),
         [

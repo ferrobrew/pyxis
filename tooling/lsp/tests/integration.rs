@@ -4,9 +4,8 @@
 
 use lsp_server::{Connection, Message, Request, RequestId};
 use lsp_types::{
-    ClientCapabilities, DidOpenTextDocumentParams, GeneralClientCapabilities, InitializeParams,
-    InitializedParams, OneOf, Position, TextDocumentClientCapabilities, TextDocumentIdentifier,
-    TextDocumentItem, TextDocumentPositionParams,
+    ClientCapabilities, DidOpenTextDocumentParams, InitializeParams, InitializedParams, Position,
+    TextDocumentIdentifier, TextDocumentItem, TextDocumentPositionParams,
 };
 use pyxis_lsp as _;
 
@@ -43,10 +42,9 @@ fn wait_for_notification(conn: &Connection) -> Option<lsp_server::Notification> 
         if let Ok(msg) = conn
             .receiver
             .recv_timeout(std::time::Duration::from_millis(100))
+            && let Message::Notification(n) = msg
         {
-            if let Message::Notification(n) = msg {
-                return Some(n);
-            }
+            return Some(n);
         }
     }
     None

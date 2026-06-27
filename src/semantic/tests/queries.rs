@@ -4,7 +4,7 @@
 //! resolve_item) to ensure they work correctly and cache results.
 
 use crate::semantic::{
-    self, Db, PyxisDatabaseImpl, SourceFile, SourceSet, analyze, parse_file, resolve_item,
+    PyxisDatabaseImpl, SourceFile, SourceSet, analyze, parse_file, resolve_item,
 };
 use salsa::Setter;
 

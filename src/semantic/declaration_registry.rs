@@ -9,11 +9,11 @@
 //! `resolve_item` uses it for name resolution, then calls `resolve_item`
 //! on referenced types to get their resolved state.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use crate::{
-    grammar::{self, ItemPath, ItemPathSegment},
-    span::{HasLocation, ItemLocation},
+    grammar::{self, ItemPath},
+    span::HasLocation,
 };
 
 /// A read-only registry of all declared items.

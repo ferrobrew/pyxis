@@ -62,10 +62,10 @@ impl ServerState {
         let Some(doc) = self.documents.get(uri) else {
             return 4;
         };
-        if let Some(project_root) = &doc.project_root {
-            if let Some(&ps) = self.projects.get(project_root) {
-                return ps;
-            }
+        if let Some(project_root) = &doc.project_root
+            && let Some(&ps) = self.projects.get(project_root)
+        {
+            return ps;
         }
         4
     }
@@ -83,12 +83,14 @@ impl ServerState {
             }
         }
 
-        if roots.is_empty() {
-            if let Some(root_uri) = &params.root_uri {
-                if let Some(path) = uri_to_file_path(root_uri) {
-                    roots.push(path);
-                }
-            }
+        // `root_uri` is deprecated in favour of `workspace_folders`, but older
+        // clients still only send it, so fall back to it.
+        #[allow(deprecated)]
+        if roots.is_empty()
+            && let Some(root_uri) = &params.root_uri
+            && let Some(path) = uri_to_file_path(root_uri)
+        {
+            roots.push(path);
         }
 
         roots
@@ -298,15 +300,15 @@ impl ServerState {
         let params: lsp_types::DidChangeTextDocumentParams = serde_json::from_value(notif.params)?;
         let uri = params.text_document.uri.clone();
 
-        if let Some(doc) = self.documents.get_mut(&uri) {
-            if let Some(change) = params.content_changes.into_iter().last() {
-                doc.content = change.text;
-                let new_content = doc.content.clone();
-                use pyxis::semantic::Setter;
-                doc.source_file.set_contents(&mut self.db).to(new_content);
-                self.file_store
-                    .update_in_memory(doc.file_id, doc.content.clone());
-            }
+        if let Some(doc) = self.documents.get_mut(&uri)
+            && let Some(change) = params.content_changes.into_iter().last()
+        {
+            doc.content = change.text;
+            let new_content = doc.content.clone();
+            use pyxis::semantic::Setter;
+            doc.source_file.set_contents(&mut self.db).to(new_content);
+            self.file_store
+                .update_in_memory(doc.file_id, doc.content.clone());
         }
         Ok(())
     }
@@ -355,11 +357,6 @@ impl ServerState {
         Ok(())
     }
 
-    /// Collect all sources for the analyze() query
-    pub(crate) fn sources(&self) -> Vec<SourceFile> {
-        self.documents.values().map(|d| d.source_file).collect()
-    }
-
     /// Collect sources belonging to the same project as the given URI.
     /// This ensures cross-module features (hover, go-to-def, etc.) only
     /// analyze files within the same project — important for monorepos
@@ -388,11 +385,6 @@ impl ServerState {
         )))
     }
 
-    /// Look up the URI for a given FileId (for cross-file go-to-definition).
-    pub(crate) fn file_id_to_uri(&self, file_id: &FileId) -> Option<Uri> {
-        self.file_id_to_uri.get(file_id).cloned()
-    }
-
     /// Run the Salsa analyze query and collect diagnostics.
     /// Groups documents by project root so each project is analyzed
     /// independently with its own pointer_size.
@@ -413,10 +405,10 @@ impl ServerState {
 
         // Set pointer_size for each group based on the project config
         for (project_root, (_, pointer_size)) in project_groups.iter_mut() {
-            if let Some(root) = project_root {
-                if let Some(&ps) = self.projects.get(*root) {
-                    *pointer_size = ps;
-                }
+            if let Some(root) = project_root
+                && let Some(&ps) = self.projects.get(*root)
+            {
+                *pointer_size = ps;
             }
         }
 
@@ -452,10 +444,10 @@ impl ServerState {
                             notifications.push(notif);
                         }
                     }
-                } else if let Some(loc) = sem_err.location() {
-                    if let Some(notif) = self.error_to_notification(loc, &sem_err.to_string()) {
-                        notifications.push(notif);
-                    }
+                } else if let Some(loc) = sem_err.location()
+                    && let Some(notif) = self.error_to_notification(loc, &sem_err.to_string())
+                {
+                    notifications.push(notif);
                 }
             }
         }

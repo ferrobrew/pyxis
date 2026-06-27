@@ -128,14 +128,6 @@ impl TypeRegistry {
         self.types.iter()
     }
 
-    pub(crate) fn unresolved(&self) -> Vec<ItemPath> {
-        self.types
-            .iter()
-            .filter(|(_, t)| !t.is_predefined() && !t.is_resolved())
-            .map(|(k, _)| k.clone())
-            .collect()
-    }
-
     pub(crate) fn add(&mut self, type_: ItemDefinition) {
         self.types.insert(type_.path.clone(), type_);
     }

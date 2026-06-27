@@ -83,21 +83,21 @@ pub fn widen_empty_range(source: &str, range: Range) -> Range {
     }
     // Empty position (e.g. EOF on a blank line): underline the end of the
     // previous line instead.
-    if line_idx > 0 {
-        if let Some(prev) = lines.get(line_idx - 1) {
-            let len = utf16_len(prev);
-            let line = (line_idx - 1) as u32;
-            return Range {
-                start: Position {
-                    line,
-                    character: len.saturating_sub(1),
-                },
-                end: Position {
-                    line,
-                    character: len,
-                },
-            };
-        }
+    if line_idx > 0
+        && let Some(prev) = lines.get(line_idx - 1)
+    {
+        let len = utf16_len(prev);
+        let line = (line_idx - 1) as u32;
+        return Range {
+            start: Position {
+                line,
+                character: len.saturating_sub(1),
+            },
+            end: Position {
+                line,
+                character: len,
+            },
+        };
     }
     // Last resort: widen the end by one column.
     let mut end = range.end;

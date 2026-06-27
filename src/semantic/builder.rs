@@ -12,12 +12,10 @@
 //! let resolved = builder.build()?;
 //! ```
 
-use std::collections::BTreeMap;
-
 use crate::{
     grammar::{self, ItemPath},
     pretty_print::pretty_print,
-    semantic::{self, Db, PyxisDatabaseImpl, SemanticError, SemanticOutput, SourceFile, SourceSet},
+    semantic::{self, PyxisDatabaseImpl, SemanticError, SemanticOutput, SourceFile, SourceSet},
     span::HasLocation,
 };
 

@@ -344,7 +344,7 @@ pub fn build(
                 }
 
                 vftable_functions = match vftable::convert_grammar_functions_to_semantic_functions(
-                    &semantic.type_registry,
+                    semantic.type_registry,
                     module,
                     size,
                     functions,
@@ -370,7 +370,7 @@ pub fn build(
                         pending_regions[0]
                             .1
                             .type_ref
-                            .alignment(&semantic.type_registry)
+                            .alignment(semantic.type_registry)
                     })
                     .flatten())
                 .unwrap_or(semantic.type_registry.pointer_size());
@@ -379,7 +379,7 @@ pub fn build(
             let required_alignment = util::lcm(
                 pending_regions
                     .iter()
-                    .flat_map(|(_, r)| r.type_ref.alignment(&semantic.type_registry)),
+                    .flat_map(|(_, r)| r.type_ref.alignment(semantic.type_registry)),
             );
 
             // Use the maximum of requested and required alignment
@@ -492,7 +492,7 @@ pub fn build(
             // Check if the type is copyable, recursively handling generics and arrays
             if !is_type_trait_satisfied(
                 type_ref,
-                &semantic.type_registry,
+                semantic.type_registry,
                 &region.location,
                 ItemDefinitionInner::copyable,
             )? {
@@ -522,7 +522,7 @@ pub fn build(
             // Check if the type is cloneable, recursively handling generics and arrays
             if !is_type_trait_satisfied(
                 type_ref,
-                &semantic.type_registry,
+                semantic.type_registry,
                 &region.location,
                 ItemDefinitionInner::cloneable,
             )? {
@@ -551,7 +551,7 @@ pub fn build(
         // The requested alignment, the alignment of a single-region type, or the pointer size.
         let alignment = align
             .or((regions.len() == 1)
-                .then(|| regions[0].type_ref.alignment(&semantic.type_registry))
+                .then(|| regions[0].type_ref.alignment(semantic.type_registry))
                 .flatten())
             .unwrap_or(semantic.type_registry.pointer_size());
 
@@ -559,7 +559,7 @@ pub fn build(
         let required_alignment = util::lcm(
             regions
                 .iter()
-                .flat_map(|r| r.type_ref.alignment(&semantic.type_registry)),
+                .flat_map(|r| r.type_ref.alignment(semantic.type_registry)),
         );
 
         // Ensure that the alignment is at least the minimum required alignment.
@@ -577,7 +577,7 @@ pub fn build(
             let mut last_address = 0;
             for region in &regions {
                 let name = region.name.as_deref().unwrap_or("unnamed");
-                let field_alignment = region.type_ref.alignment(&semantic.type_registry).unwrap();
+                let field_alignment = region.type_ref.alignment(semantic.type_registry).unwrap();
                 if last_address % field_alignment != 0 {
                     return Err(SemanticError::FieldNotAligned {
                         field_name: name.into(),
@@ -587,7 +587,7 @@ pub fn build(
                         location: *location,
                     });
                 }
-                last_address += region.size(&semantic.type_registry).unwrap();
+                last_address += region.size(semantic.type_registry).unwrap();
             }
         }
 
@@ -667,7 +667,7 @@ fn resolve_regions(
     )?;
     if let Some(vftable_region) = vftable_region
         && resolved
-            .push(&semantic.type_registry, vftable_region)
+            .push(semantic.type_registry, vftable_region)
             .is_none()
     {
         return Ok(None);
@@ -698,14 +698,14 @@ fn resolve_regions(
                 *region.location(),
             );
             if resolved
-                .push(&semantic.type_registry, padding_region)
+                .push(semantic.type_registry, padding_region)
                 .is_none()
             {
                 return Ok(None);
             }
         }
 
-        if resolved.push(&semantic.type_registry, region).is_none() {
+        if resolved.push(semantic.type_registry, region).is_none() {
             return Ok(None);
         }
     }
@@ -721,7 +721,7 @@ fn resolve_regions(
             *type_location,
         );
         if resolved
-            .push(&semantic.type_registry, padding_region)
+            .push(semantic.type_registry, padding_region)
             .is_none()
         {
             return Ok(None);
@@ -731,7 +731,7 @@ fn resolve_regions(
     // Find total size, and ensure that all regions have names
     let mut size = 0;
     for region in &mut resolved.regions {
-        let Some(region_size) = region.size(&semantic.type_registry) else {
+        let Some(region_size) = region.size(semantic.type_registry) else {
             return Ok(None);
         };
 

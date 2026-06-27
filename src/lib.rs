@@ -321,7 +321,7 @@ pub fn build_with_store_and_options(
     let config = config::Config::load(&in_dir.join("pyxis.toml"))?;
 
     // Build a Salsa database and register all .pyxis source files as inputs.
-    let mut db = semantic::PyxisDatabaseImpl::default();
+    let db = semantic::PyxisDatabaseImpl::default();
     let mut sources = Vec::new();
 
     for path in glob::glob(&format!("{}/**/*.pyxis", in_dir.display()))?.filter_map(Result::ok) {

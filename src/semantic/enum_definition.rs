@@ -135,7 +135,7 @@ pub fn build(
         };
 
     // TODO: verify that `ty` actually makes sense for an enum
-    let Some(size) = ty.size(&semantic.type_registry) else {
+    let Some(size) = ty.size(semantic.type_registry) else {
         return Ok(BuildOutcome::Deferred);
     };
 
@@ -237,7 +237,7 @@ pub fn build(
             .collect::<Vec<_>>()
         {
             let function = match function::build(
-                &semantic.type_registry,
+                semantic.type_registry,
                 &module.scope(),
                 false,
                 function,
@@ -254,7 +254,7 @@ pub fn build(
 
     Ok(BuildOutcome::Resolved(ItemStateResolved {
         size,
-        alignment: ty.alignment(&semantic.type_registry).ok_or_else(|| {
+        alignment: ty.alignment(semantic.type_registry).ok_or_else(|| {
             SemanticError::TypeResolutionFailed {
                 type_: definition.type_.clone(),
                 resolution_context: TypeResolutionContext::EnumBaseTypeAlignment {

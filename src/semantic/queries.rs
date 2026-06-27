@@ -9,7 +9,7 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use crate::grammar::{ItemDefinition, ItemDefinitionInner, ItemPath, Module};
+use crate::grammar::{ItemDefinitionInner, ItemPath, Module};
 use crate::parser::ParseError;
 use crate::semantic::TypeRegistry;
 use crate::semantic::declaration_registry::DeclarationRegistry;
@@ -186,7 +186,7 @@ fn try_resolve_item(
     // Try to build the item once. Dependencies that aren't resolved yet
     // will cause Deferred — analyze's iterative loop handles re-trying.
     let outcome = build_item(
-        &definition,
+        definition,
         item_path,
         visibility,
         &def_location,
@@ -260,7 +260,7 @@ pub fn resolve_item<'db>(
     pointer_size: usize,
     item_path: ItemPath,
 ) -> ResolvedItem<'db> {
-    let decl_set = collect_declarations(db, sources.clone(), pointer_size);
+    let decl_set = collect_declarations(db, sources, pointer_size);
     let registry = decl_set.registry(db);
 
     // Run a mini iterative resolution loop to resolve dependencies before
@@ -361,7 +361,7 @@ pub fn analyze<'db>(
     }
 
     // Build the declaration registry
-    let decl_set = collect_declarations(db, sources.clone(), pointer_size);
+    let decl_set = collect_declarations(db, sources, pointer_size);
     let decl_registry = decl_set.registry(db);
 
     // Resolve all items via resolve_item (Salsa tracks dependencies)
@@ -483,7 +483,7 @@ pub fn analyze<'db>(
     for (module_path, module) in modules.iter_mut() {
         module.definition_paths = definition_paths
             .iter()
-            .filter(|p| p.parent().map_or(false, |parent| &parent == module_path))
+            .filter(|p| p.parent().is_some_and(|parent| &parent == module_path))
             .cloned()
             .collect();
     }
@@ -604,7 +604,7 @@ pub fn analyze<'db>(
     for (module_path, module) in modules.iter_mut() {
         module.definition_paths = definition_paths
             .iter()
-            .filter(|p| p.parent().map_or(false, |parent| &parent == module_path))
+            .filter(|p| p.parent().is_some_and(|parent| &parent == module_path))
             .cloned()
             .collect();
     }
@@ -695,7 +695,6 @@ pub fn analyze<'db>(
     }
 
     // Merge associated functions into type definitions
-    let mut type_registry = type_registry;
     for (path, fns) in af_result.functions.iter() {
         if let Ok(item) = type_registry.get_mut(path, &crate::span::ItemLocation::internal()) {
             if let crate::semantic::types::ItemState::Resolved(state) = &mut item.state {
@@ -747,7 +746,6 @@ pub fn compute_associated_functions<'db>(
         function::{self, FunctionBuildOutcome},
         types::{Function, FunctionBody, ItemDefinitionInner, Type},
     };
-    use crate::span::HasLocation;
     use std::collections::{BTreeMap as BTree, BTreeSet, HashMap, HashSet};
 
     let type_registry = analysis.type_registry(db);
@@ -1055,7 +1053,7 @@ pub struct AssociatedFunctionsResult {
 fn cycle_result_fn<'db>(
     db: &'db dyn Db,
     _id: salsa::Id,
-    sources: SourceSet<'db>,
+    _sources: SourceSet<'db>,
     _pointer_size: usize,
     item_path: ItemPath,
 ) -> ResolvedItem<'db> {
@@ -1070,6 +1068,7 @@ fn cycle_result_fn<'db>(
 
 /// Build a single item using the existing type_definition/enum/bitflags/type_alias
 /// build functions, with the given registry and modules.
+#[allow(clippy::too_many_arguments)]
 fn build_item(
     definition: &crate::grammar::ItemDefinition,
     item_path: &ItemPath,
