@@ -36,7 +36,7 @@ mod imports;
 mod inheritance;
 mod min_size;
 mod modules;
-mod salsa_queries;
+mod queries;
 mod type_aliases;
 mod util;
 mod vftable;

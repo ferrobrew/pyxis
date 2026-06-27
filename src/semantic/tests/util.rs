@@ -4,7 +4,7 @@ use crate::{
         Module,
         error::SemanticError,
         builder::SemanticBuilder,
-        semantic_state::SemanticOutput,
+        output::SemanticOutput,
         types::test_aliases::*,
     },
 };

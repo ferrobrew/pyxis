@@ -1,9 +1,5 @@
 //! Semantic validation passes — pure functions that check the resolved
 //! type registry and modules for errors.
-//!
-//! These were previously methods on `SemanticState`; they've been extracted
-//! as free functions so they can be called directly from `analyze` without
-//! the `SemanticState` wrapper.
 
 use std::collections::BTreeMap;
 

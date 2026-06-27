@@ -1,10 +1,10 @@
 //! SemanticBuilder — a thin convenience wrapper around the Salsa query graph.
 //!
-//! This replaces the old imperative `SemanticState` builder for test/batch
-//! use cases. Instead of building a mutable `TypeRegistry` incrementally, it
-//! pretty-prints each added module to source text and feeds it through the
-//! Salsa-backed `analyze` query. This means all semantic analysis goes
-//! through the same incremental query graph that the LSP uses.
+//! This is used by tests and batch compilation. Instead of building a mutable
+//! TypeRegistry incrementally, it pretty-prints each added module to source
+//! text and feeds it through the Salsa-backed `analyze` query. This means all
+//! semantic analysis goes through the same incremental query graph that the
+//! LSP uses.
 //!
 //! ```ignore
 //! let builder = SemanticBuilder::new(pointer_size);
@@ -82,9 +82,8 @@ impl SemanticBuilder {
             });
         }
 
-        // Validate extern types have required attributes (size + align).
-        // The old SemanticState::add_module did this eagerly; we do the same
-        // so tests that expect MissingExternAttribute from add_module work.
+        // Validate extern types have required attributes (size + align),
+        // matching the batch compiler's eager validation.
         for extern_type in module.extern_types() {
             if let grammar::ModuleItem::ExternType {
                 name: extern_name,
@@ -187,7 +186,7 @@ impl SemanticBuilder {
         }
 
         // Dual-path error model: collect all errors, merge TypeResolutionStalled
-        // errors into one (to match the old SemanticState::build() behavior),
+        // errors into one (to match the batch compiler's behavior),
         // and return the first as Err.
         let errors = analysis.errors(&db);
         if errors.is_empty() {

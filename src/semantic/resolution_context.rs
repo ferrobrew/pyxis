@@ -1,8 +1,6 @@
-//! Resolution context — replaces SemanticState for the build functions.
-//!
-//! This struct holds references to the type registry and modules,
-//! providing the same lookup interface that SemanticState's methods
-//! provided, without the SemanticState wrapper.
+//! Resolution context — provides the type registry and module map lookup
+//! interface that the build functions (type_definition, enum_definition,
+//! bitflags_definition, type_alias_definition) need during per-item resolution.
 
 use std::collections::BTreeMap;
 

@@ -264,7 +264,7 @@ pub fn resolve_item<'db>(
             )
         }
         Ok(crate::semantic::error::BuildOutcome::NotFoundType(unresolved_ref)) => {
-            // Match the old SemanticState::build() behavior: a missing type
+            // Match the old batch-compiler behavior: a missing type
             // reference produces TypeResolutionStalled with the unresolved
             // reference info, not TypeNotFound.
             (
