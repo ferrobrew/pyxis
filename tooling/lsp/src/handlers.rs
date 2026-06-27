@@ -827,6 +827,30 @@ struct ResolvedDefinition {
     size_align: Option<(usize, usize)>,
 }
 
+/// Render a byte quantity as `` `0x10` (16) `` for hover facts.
+fn fmt_bytes(n: usize) -> String {
+    format!("`0x{n:X}` ({n})")
+}
+
+/// Join labelled facts into a single markdown line so they don't collapse onto
+/// each other (a lone `\n` is not a line break in markdown). rust-analyzer
+/// renders the same kind of `size = …, align = …` brief; we use ` | ` so the
+/// facts read as a compact, scannable strip.
+fn facts_line(facts: &[(&str, String)]) -> String {
+    facts
+        .iter()
+        .map(|(label, value)| format!("{label} {value}"))
+        .collect::<Vec<_>>()
+        .join("  |  ")
+}
+
+/// Append a facts line as its own paragraph (blank line before).
+fn push_facts(md: &mut String, facts: &[(&str, String)]) {
+    if !facts.is_empty() {
+        md.push_str(&format!("\n{}\n", facts_line(facts)));
+    }
+}
+
 /// Format a type definition for hover display with size and alignment
 fn format_type_hover_with_size(
     definition: &pyxis::grammar::ItemDefinition,
@@ -834,8 +858,7 @@ fn format_type_hover_with_size(
     alignment: usize,
 ) -> String {
     let mut md = format_type_hover(definition);
-    md.push_str(&format!("\n**Size:** `0x{:X}` ({}) bytes\n", size, size));
-    md.push_str(&format!("**Alignment:** `0x{:X}` ({}) bytes\n", alignment, alignment));
+    push_facts(&mut md, &[("size", fmt_bytes(size)), ("align", fmt_bytes(alignment))]);
     md
 }
 
@@ -1418,12 +1441,14 @@ fn format_field_hover(
     if !attrs.is_empty() {
         md.push_str(&format!("\n**Attributes:** {attrs}\n"));
     }
+    let mut facts = Vec::new();
     if let Some(offset) = offset {
-        md.push_str(&format!("\n**Offset:** `0x{offset:X}` ({offset})\n"));
+        facts.push(("offset", format!("`0x{offset:X}` ({offset})")));
     }
     if let Some(size) = type_size {
-        md.push_str(&format!("**Type size:** `0x{size:X}` ({size}) bytes\n"));
+        facts.push(("type size", fmt_bytes(size)));
     }
+    push_facts(&mut md, &facts);
     md
 }
 

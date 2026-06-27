@@ -114,7 +114,7 @@ fn field_hover_shows_offset() {
     let uri: lsp_types::Uri = format!("file://{}", base.join("s.pyxis").display()).parse().unwrap();
     let c = src.lines().nth(2).unwrap().find('b').unwrap() as u32 + 1;
     let h = hover_text(&st, &uri, 2, c);
-    assert!(h.contains("**Offset:** `0x8`"), "field b should be at offset 0x8: {h}");
+    assert!(h.contains("offset `0x8`"), "field b should be at offset 0x8: {h}");
 }
 
 #[test]
