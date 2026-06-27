@@ -970,6 +970,21 @@
     }
   },
   {
+    "type": "raw_string_literal",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": false,
+      "types": [
+        {
+          "type": "raw_string_content",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
     "type": "source_file",
     "named": true,
     "root": true,
@@ -1310,6 +1325,10 @@
     "named": false
   },
   {
+    "type": "\"#",
+    "named": false
+  },
+  {
     "type": "#",
     "named": false
   },
@@ -1443,7 +1462,11 @@
     "named": false
   },
   {
-    "type": "raw_string_literal",
+    "type": "r#\"",
+    "named": false
+  },
+  {
+    "type": "raw_string_content",
     "named": true
   },
   {

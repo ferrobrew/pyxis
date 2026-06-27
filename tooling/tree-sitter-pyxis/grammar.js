@@ -513,16 +513,15 @@ module.exports = grammar({
         ),
       ),
 
+    // Split into delimiters + an inner `raw_string_content` node so editors can
+    // inject the backend language into just the code (not the `r#"`/`"#`
+    // delimiters). The matching mirrors the old single-token form: content is
+    // any char except `"`, or a `"` not followed by `#` (the close delimiter).
     raw_string_literal: ($) =>
-      token(
-        seq(
-          "r#",
-          '"',
-          repeat(choice(/[^"]/, seq('"', /[^#]/))),
-          '"',
-          "#",
-        ),
-      ),
+      seq('r#"', optional($.raw_string_content), token.immediate('"#')),
+
+    raw_string_content: (_) =>
+      token.immediate(repeat1(choice(/[^"]/, /"[^#]/))),
 
     // `Self` type and identifiers. We don't make `Self` a separate keyword
     // token; it is captured as an identifier and matched in highlights.

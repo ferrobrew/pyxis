@@ -328,25 +328,25 @@ backend rust epilogue definition r#"
       (identifier))
     (backend_splice
       slot: (backend_slot)
-      body: (raw_string_literal)))
+      body: (raw_string_literal (raw_string_content))))
   (backend_block
     name: (backend_name
       (identifier))
     (backend_splice
       slot: (backend_slot)
-      body: (raw_string_literal))
+      body: (raw_string_literal (raw_string_content)))
     (backend_splice
       slot: (backend_slot)
       for_type: (type_identifier
         (path
           (identifier)))
-      body: (raw_string_literal)))
+      body: (raw_string_literal (raw_string_content))))
   (backend_block
     name: (backend_name
       (identifier))
     (backend_splice
       slot: (backend_slot)
-      body: (raw_string_literal))))
+      body: (raw_string_literal (raw_string_content)))))
 
 ================================================================================
 Attributes with cfg predicates
