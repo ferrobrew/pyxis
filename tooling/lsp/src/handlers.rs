@@ -186,6 +186,13 @@ impl ServerState {
                                         if !f.location.span.contains(&loc) {
                                             continue;
                                         }
+                                        // A pointer/array shell of an arg/return type…
+                                        if let Some((value, span)) = fn_signature_shell(
+                                            f, &loc, type_registry, &scope,
+                                            decl_registry, pointer_size,
+                                        ) {
+                                            return hover_response(req.id, value, content, &span);
+                                        }
                                         // An argument name…
                                         if let Some((value, span)) = named_arg_hover(
                                             f, &loc, tokens, type_registry, &scope,
@@ -292,6 +299,12 @@ impl ServerState {
                             if !f.location.span.contains(&loc) {
                                 continue;
                             }
+                            // A pointer/array shell of an arg/return type…
+                            if let Some((value, span)) = fn_signature_shell(
+                                f, &loc, type_registry, &scope, decl_registry, pointer_size,
+                            ) {
+                                return hover_response(req.id, value, content, &span);
+                            }
                             // An argument name…
                             if let Some((value, span)) = named_arg_hover(
                                 f, &loc, tokens, type_registry, &scope, decl_registry, pointer_size,
@@ -324,6 +337,11 @@ impl ServerState {
                 // Free functions: argument names and the function itself.
                 ModuleItem::Function { function } => {
                     if function.location.span.contains(&loc) {
+                        if let Some((value, span)) = fn_signature_shell(
+                            function, &loc, type_registry, &scope, decl_registry, pointer_size,
+                        ) {
+                            return hover_response(req.id, value, content, &span);
+                        }
                         if let Some((value, span)) = named_arg_hover(
                             function, &loc, tokens, type_registry, &scope, decl_registry, pointer_size,
                         ) {
@@ -1374,6 +1392,32 @@ fn segment_at(
 
 /// Search a single definition's type positions for a type reference whose span
 /// contains `loc`. Returns the matched (unresolved) `ItemPath` and its span.
+/// If the cursor is on the pointer/array shell of one of a function's argument
+/// or return types, describe the shape (so `*const f32` in a vftable signature
+/// isn't treated as the enclosing argument/function).
+fn fn_signature_shell(
+    f: &Function,
+    loc: &Location,
+    type_registry: &TypeRegistry,
+    scope: &[ItemPath],
+    decl_registry: &DeclarationRegistry,
+    pointer_size: usize,
+) -> Option<(String, Span)> {
+    use pyxis::grammar::Argument;
+    for arg in &f.arguments {
+        if let Argument::Named { type_, .. } = arg {
+            if let Some(hit) =
+                type_shell_at(type_, loc, type_registry, scope, decl_registry, pointer_size)
+            {
+                return Some(hit);
+            }
+        }
+    }
+    f.return_type
+        .as_ref()
+        .and_then(|ret| type_shell_at(ret, loc, type_registry, scope, decl_registry, pointer_size))
+}
+
 /// Find a type reference (argument or return type) under the cursor in a
 /// function signature.
 fn fn_signature_type_ref<'a>(

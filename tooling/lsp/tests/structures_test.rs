@@ -282,3 +282,20 @@ fn vftable_keyword_describes_struct() {
     let h = hover_text(&st, &uri, 1, c);
     assert!(h.contains("**vftable**") && h.contains("`2` virtual"), "got {h}");
 }
+
+#[test]
+fn pointer_shell_in_function_signature() {
+    let base = std::env::temp_dir().join(format!("pyxis-cps-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    write(&base.join("pyxis.toml"), "[project]\nname = \"t\"\npointer_size = 8\n");
+    let src = "pub type Foo {\n    vftable {\n        pub fn f(&mut self, mat: *const f32) -> *const u32;\n    },\n}\n";
+    write(&base.join("m.pyxis"), src);
+    let init = serde_json::json!({ "rootUri": format!("file://{}", base.display()), "capabilities": {} });
+    let st = ServerState::new(&init).unwrap();
+    let uri: lsp_types::Uri = format!("file://{}", base.join("m.pyxis").display()).parse().unwrap();
+    let l = src.lines().nth(2).unwrap();
+    // the `*const` of the argument and of the return type both describe the pointer
+    assert!(hover_text(&st, &uri, 2, l.find("*const f32").unwrap() as u32).contains("**pointer**"));
+    assert!(hover_text(&st, &uri, 2, l.find("*const u32").unwrap() as u32).contains("**pointer**"));
+    assert!(hover_text(&st, &uri, 2, l.find("f32").unwrap() as u32).contains("**builtin** `f32`"));
+}
