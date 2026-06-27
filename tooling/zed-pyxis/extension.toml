@@ -10,6 +10,5 @@ name = "Pyxis Language Server"
 language = "Pyxis"
 
 [grammars.pyxis]
-repository = "https://github.com/ferrobrew/pyxis"
-commit = "main"
-path = "tooling/tree-sitter-pyxis"
+repository = "file://../tree-sitter-pyxis"
+commit = "HEAD"
