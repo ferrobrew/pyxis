@@ -918,6 +918,204 @@ impl ServerState {
         }
     }
 
+    /// Resolve the cursor to the canonical path of the symbol it names — a type
+    /// reference, a `use` leaf, or a definition's own name. The anchor for
+    /// find-references / document-highlight / rename.
+    fn symbol_at(&self, uri: &Uri, loc: &Location) -> Option<ItemPath> {
+        let module = self.get_parsed_module(uri)?;
+        let tokens_arc = self.tokens_for(uri);
+        let tokens: &[Token] = tokens_arc.as_deref().map(Vec::as_slice).unwrap_or(&[]);
+        let scope = self.scope_for(uri);
+        let pointer_size = self.pointer_size_for(uri);
+        let sources = self.sources_for(uri);
+        let source_set = semantic::SourceSet::new(&self.db, sources);
+        let analysis = semantic::analyze(&self.db, pointer_size, source_set);
+        let type_registry = analysis.type_registry(&self.db);
+        let decl_set = semantic::collect_declarations(&self.db, source_set, pointer_size);
+        let decl_registry = decl_set.registry(&self.db);
+
+        // A reference (type position or `use` leaf) → its resolved item.
+        if let Some(Ref::Item { item: Some(p), .. }) = find_reference_at(
+            &module,
+            loc,
+            &scope,
+            decl_registry,
+            tokens,
+            type_registry,
+            pointer_size,
+        ) {
+            return Some(p);
+        }
+        // A definition's own name → the definition's own path.
+        for def in module.definitions() {
+            if let Some(span) = name_token_span(
+                tokens,
+                &def.declaration_location.span.start,
+                def.name.as_str(),
+            ) && span.contains(loc)
+            {
+                return Some(match self.module_path_for(uri) {
+                    Some(mp) => mp.join(def.name.as_str().into()),
+                    None => ItemPath::from(def.name.as_str()),
+                });
+            }
+        }
+        None
+    }
+
+    /// Every occurrence — definition name, type references, and `use` leaves —
+    /// of the resolved symbol `target`, across the requesting file's project.
+    /// The shared engine behind find-references, document-highlight, and rename.
+    fn symbol_occurrences(&self, target: &ItemPath, from_uri: &Uri) -> Vec<lsp_types::Location> {
+        let mut out: Vec<lsp_types::Location> = Vec::new();
+        let Some(name) = target.last().map(|s| s.as_str().to_string()) else {
+            return out;
+        };
+        let from_root = self
+            .documents
+            .get(from_uri)
+            .and_then(|d| d.project_root.clone());
+
+        let pointer_size = self.pointer_size_for(from_uri);
+        let sources = self.sources_for(from_uri);
+        let source_set = semantic::SourceSet::new(&self.db, sources);
+        let analysis = semantic::analyze(&self.db, pointer_size, source_set);
+        let type_registry = analysis.type_registry(&self.db);
+        let decl_set = semantic::collect_declarations(&self.db, source_set, pointer_size);
+        let decl_registry = decl_set.registry(&self.db);
+
+        // Files in the same project (same relative path across projects shares a
+        // module path, so we must not cross the project boundary).
+        let uris: Vec<Uri> = self
+            .documents
+            .iter()
+            .filter(|(_, d)| d.project_root == from_root)
+            .map(|(u, _)| u.clone())
+            .collect();
+
+        for uri in &uris {
+            let Some(module) = self.get_parsed_module(uri) else {
+                continue;
+            };
+            let Some(content) = self.get_content(uri) else {
+                continue;
+            };
+            let tokens_arc = self.tokens_for(uri);
+            let tokens: &[Token] = tokens_arc.as_deref().map(Vec::as_slice).unwrap_or(&[]);
+            let scope = self.scope_for(uri);
+
+            // References + `use` leaves: each ident token spelled like the target,
+            // confirmed by resolving it back to the target path.
+            for tok in tokens.iter() {
+                if !matches!(&tok.kind, TokenKind::Ident(s) if *s == name) {
+                    continue;
+                }
+                if let Some(Ref::Item { item: Some(p), .. }) = find_reference_at(
+                    &module,
+                    &tok.location.span.start,
+                    &scope,
+                    decl_registry,
+                    tokens,
+                    type_registry,
+                    pointer_size,
+                ) && p == *target
+                {
+                    out.push(lsp_types::Location {
+                        uri: uri.clone(),
+                        range: pyxis_span_to_lsp_range(content, &tok.location.span),
+                    });
+                }
+            }
+
+            // Definition site: the type's own name token.
+            if self
+                .module_path_for(uri)
+                .map(|mp| mp.join(name.as_str().into()))
+                .as_ref()
+                == Some(target)
+            {
+                for def in module.definitions() {
+                    if def.name.as_str() == name
+                        && let Some(span) =
+                            name_token_span(tokens, &def.declaration_location.span.start, &name)
+                    {
+                        out.push(lsp_types::Location {
+                            uri: uri.clone(),
+                            range: pyxis_span_to_lsp_range(content, &span),
+                        });
+                    }
+                }
+            }
+        }
+        out
+    }
+
+    /// textDocument/references
+    pub fn handle_references(&self, req: Request) -> Response {
+        let params: lsp_types::ReferenceParams = match serde_json::from_value(req.params.clone()) {
+            Ok(p) => p,
+            Err(e) => return error_response(req.id, e),
+        };
+        let uri = &params.text_document_position.text_document.uri;
+        let include_decl = params.context.include_declaration;
+        let locations = self
+            .get_content(uri)
+            .map(|content| {
+                lsp_position_to_pyxis_location(content, params.text_document_position.position)
+            })
+            .and_then(|loc| self.symbol_at(uri, &loc).map(|target| (target, loc)))
+            .map(|(target, _)| {
+                let mut locs = self.symbol_occurrences(&target, uri);
+                if !include_decl {
+                    // Drop the definition site (the name at the type's own module).
+                    if let Some(decl_uri) =
+                        self.module_uri(&target.parent().unwrap_or(target.clone()), uri)
+                    {
+                        let decl_module = target.parent();
+                        locs.retain(|l| {
+                            !(l.uri == decl_uri && self.module_path_for(&l.uri) == decl_module)
+                        });
+                    }
+                }
+                locs
+            })
+            .unwrap_or_default();
+        Response {
+            id: req.id,
+            result: Some(serde_json::to_value(locations).unwrap()),
+            error: None,
+        }
+    }
+
+    /// textDocument/documentHighlight — occurrences within the current file only.
+    pub fn handle_document_highlight(&self, req: Request) -> Response {
+        let params: TextDocumentPositionParams = match serde_json::from_value(req.params.clone()) {
+            Ok(p) => p,
+            Err(e) => return error_response(req.id, e),
+        };
+        let uri = &params.text_document.uri;
+        let highlights: Vec<lsp_types::DocumentHighlight> = self
+            .get_content(uri)
+            .map(|content| lsp_position_to_pyxis_location(content, params.position))
+            .and_then(|loc| self.symbol_at(uri, &loc))
+            .map(|target| {
+                self.symbol_occurrences(&target, uri)
+                    .into_iter()
+                    .filter(|l| &l.uri == uri)
+                    .map(|l| lsp_types::DocumentHighlight {
+                        range: l.range,
+                        kind: Some(lsp_types::DocumentHighlightKind::TEXT),
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        Response {
+            id: req.id,
+            result: Some(serde_json::to_value(highlights).unwrap()),
+            error: None,
+        }
+    }
+
     /// textDocument/rename
     #[allow(clippy::mutable_key_type)] // lsp_types::Uri key is fine here
     pub fn handle_rename(&self, req: Request) -> Response {
@@ -951,28 +1149,13 @@ impl ServerState {
             };
         };
 
-        let Some(module) = self.get_parsed_module(uri) else {
-            return Response {
-                id: req.id,
-                result: Some(serde_json::Value::Null),
-                error: None,
-            };
-        };
-
         let loc = lsp_position_to_pyxis_location(content, params.text_document_position.position);
 
-        // Find the item at the cursor
-        let mut target_name: Option<String> = None;
-        for definition in module.definitions() {
-            if definition.location.span.contains(&loc)
-                || definition.declaration_location.span.contains(&loc)
-            {
-                target_name = Some(definition.name.as_str().to_string());
-                break;
-            }
-        }
-
-        let Some(target_name) = target_name else {
+        // Resolve the symbol under the cursor, then rewrite every occurrence of
+        // it (definition, references, `use` leaves) across the project — each
+        // occurrence span is exactly the identifier token, so renaming a leaf of
+        // a path leaves the rest of the path intact.
+        let Some(target) = self.symbol_at(uri, &loc) else {
             return Response {
                 id: req.id,
                 result: Some(serde_json::to_value(WorkspaceEdit::default()).unwrap()),
@@ -980,51 +1163,12 @@ impl ServerState {
             };
         };
 
-        // Find all occurrences of the target name in all open documents
         let mut edits: HashMap<Uri, Vec<TextEdit>> = HashMap::new();
-
-        for (doc_uri, doc) in &self.documents {
-            let parsed = semantic::parse_file(&self.db, doc.source_file);
-            let module = parsed.module(&self.db);
-            let content = &doc.content;
-
-            let mut doc_edits = Vec::new();
-
-            // Find the definition
-            for definition in module.definitions() {
-                if definition.name.as_str() == target_name {
-                    // The name follows the keyword; compute its span
-                    let name_loc = definition.declaration_location.span;
-                    let range = pyxis_span_to_lsp_range(content, &name_loc);
-                    doc_edits.push(TextEdit {
-                        range,
-                        new_text: new_name.clone(),
-                    });
-                }
-            }
-
-            // Find type references in fields
-            for definition in module.definitions() {
-                if let pyxis::grammar::ItemDefinitionInner::Type(td) = &definition.inner {
-                    for statement in td.statements() {
-                        if let TypeField::Field(_, _, type_) = &statement.field
-                            && let Some(path) = type_.as_path()
-                            && path.last().map(|s| s.as_str()) == Some(target_name.as_str())
-                        {
-                            let loc = type_.location();
-                            let range = pyxis_span_to_lsp_range(content, &loc.span);
-                            doc_edits.push(TextEdit {
-                                range,
-                                new_text: new_name.clone(),
-                            });
-                        }
-                    }
-                }
-            }
-
-            if !doc_edits.is_empty() {
-                edits.insert(doc_uri.clone(), doc_edits);
-            }
+        for occurrence in self.symbol_occurrences(&target, uri) {
+            edits.entry(occurrence.uri).or_default().push(TextEdit {
+                range: occurrence.range,
+                new_text: new_name.clone(),
+            });
         }
 
         let workspace_edit = WorkspaceEdit {

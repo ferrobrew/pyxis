@@ -50,6 +50,8 @@ pub fn run_with_connection(connection: Connection) -> Result<(), Box<dyn std::er
         completion_provider: Some(CompletionOptions::default()),
         document_symbol_provider: Some(OneOf::Left(true)),
         workspace_symbol_provider: Some(OneOf::Left(true)),
+        references_provider: Some(OneOf::Left(true)),
+        document_highlight_provider: Some(OneOf::Left(true)),
         document_formatting_provider: Some(OneOf::Left(true)),
         code_lens_provider: Some(CodeLensOptions {
             resolve_provider: Some(false),
@@ -152,6 +154,8 @@ fn handle_request(
     let response = match req.method.as_str() {
         "textDocument/hover" => state.handle_hover(req),
         "textDocument/definition" => state.handle_definition(req),
+        "textDocument/references" => state.handle_references(req),
+        "textDocument/documentHighlight" => state.handle_document_highlight(req),
         "textDocument/completion" => state.handle_completion(req),
         "textDocument/documentSymbol" => state.handle_document_symbols(req),
         "workspace/symbol" => state.handle_workspace_symbols(req),

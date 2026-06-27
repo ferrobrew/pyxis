@@ -673,3 +673,143 @@ fn cross_project_resolution_stays_in_project() {
         "def must not cross into a sibling project, got {def}"
     );
 }
+
+fn references(
+    s: &ServerState,
+    u: &lsp_types::Uri,
+    line: u32,
+    ch: u32,
+    include_decl: bool,
+) -> Vec<lsp_types::Location> {
+    let params = lsp_types::ReferenceParams {
+        text_document_position: TextDocumentPositionParams {
+            text_document: TextDocumentIdentifier { uri: u.clone() },
+            position: Position {
+                line,
+                character: ch,
+            },
+        },
+        work_done_progress_params: Default::default(),
+        partial_result_params: Default::default(),
+        context: lsp_types::ReferenceContext {
+            include_declaration: include_decl,
+        },
+    };
+    let r = Request::new(
+        RequestId::from(1),
+        "textDocument/references".into(),
+        serde_json::to_value(params).unwrap(),
+    );
+    serde_json::from_value(s.handle_references(r).result.unwrap()).unwrap()
+}
+
+// A two-file project: `world/shared.pyxis` defines Foo; `consumer.pyxis` imports
+// and uses it twice. Exercises the shared symbol-occurrences engine.
+fn occ_project() -> (ServerState, lsp_types::Uri, lsp_types::Uri, u32) {
+    let base = std::env::temp_dir().join(format!(
+        "pyxis-occ-{}-{:?}",
+        std::process::id(),
+        std::thread::current().id()
+    ));
+    let _ = std::fs::remove_dir_all(&base);
+    write(
+        &base.join("pyxis.toml"),
+        "[project]\nname = \"o\"\npointer_size = 8\n",
+    );
+    write(
+        &base.join("world/shared.pyxis"),
+        "pub type Foo {\n    pub x: u64,\n}\n",
+    );
+    write(
+        &base.join("consumer.pyxis"),
+        "use world::shared::Foo;\n\npub type C {\n    pub f: Foo,\n    pub g: Foo,\n}\n",
+    );
+    let init =
+        serde_json::json!({ "rootUri": format!("file://{}", base.display()), "capabilities": {} });
+    let st = ServerState::new(&init).unwrap();
+    let consumer: lsp_types::Uri = format!("file://{}", base.join("consumer.pyxis").display())
+        .parse()
+        .unwrap();
+    let shared: lsp_types::Uri = format!("file://{}", base.join("world/shared.pyxis").display())
+        .parse()
+        .unwrap();
+    // column of the first `Foo` field reference (line 3: "    pub f: Foo,")
+    let col = "    pub f: ".len() as u32;
+    (st, consumer, shared, col)
+}
+
+#[test]
+fn find_references_spans_definition_and_uses() {
+    let (st, consumer, shared, col) = occ_project();
+    // Invoke on the field reference; expect: definition + use leaf + 2 field refs.
+    let locs = references(&st, &consumer, 3, col, true);
+    assert_eq!(locs.len(), 4, "got {locs:#?}");
+    assert!(
+        locs.iter().any(|l| l.uri == shared),
+        "must include the definition file"
+    );
+    assert_eq!(
+        locs.iter().filter(|l| l.uri == consumer).count(),
+        3,
+        "use leaf + 2 fields"
+    );
+    // Excluding the declaration drops the definition-file occurrence.
+    let no_decl = references(&st, &consumer, 3, col, false);
+    assert_eq!(no_decl.len(), 3);
+    assert!(no_decl.iter().all(|l| l.uri == consumer));
+}
+
+#[test]
+fn document_highlight_is_current_file_only() {
+    let (st, consumer, _shared, col) = occ_project();
+    let params = TextDocumentPositionParams {
+        text_document: TextDocumentIdentifier {
+            uri: consumer.clone(),
+        },
+        position: Position {
+            line: 3,
+            character: col,
+        },
+    };
+    let r = Request::new(
+        RequestId::from(1),
+        "textDocument/documentHighlight".into(),
+        serde_json::to_value(params).unwrap(),
+    );
+    let hl: Vec<lsp_types::DocumentHighlight> =
+        serde_json::from_value(st.handle_document_highlight(r).result.unwrap()).unwrap();
+    // use leaf + 2 field refs, all in consumer.pyxis (not the definition file).
+    assert_eq!(hl.len(), 3, "got {hl:#?}");
+}
+
+#[test]
+#[allow(clippy::mutable_key_type)] // lsp_types::Uri key is fine here
+fn rename_rewrites_every_occurrence() {
+    let (st, consumer, shared, col) = occ_project();
+    let params = lsp_types::RenameParams {
+        text_document_position: TextDocumentPositionParams {
+            text_document: TextDocumentIdentifier {
+                uri: consumer.clone(),
+            },
+            position: Position {
+                line: 3,
+                character: col,
+            },
+        },
+        new_name: "Bar".to_string(),
+        work_done_progress_params: Default::default(),
+    };
+    let r = Request::new(
+        RequestId::from(1),
+        "textDocument/rename".into(),
+        serde_json::to_value(params).unwrap(),
+    );
+    let we: lsp_types::WorkspaceEdit =
+        serde_json::from_value(st.handle_rename(r).result.unwrap()).unwrap();
+    let changes = we.changes.unwrap();
+    // Edits across both files: the definition + the use leaf + 2 field refs.
+    let total: usize = changes.values().map(|v| v.len()).sum();
+    assert_eq!(total, 4, "got {changes:#?}");
+    assert!(changes[&shared].iter().all(|e| e.new_text == "Bar"));
+    assert!(changes.contains_key(&consumer) && changes.contains_key(&shared));
+}
