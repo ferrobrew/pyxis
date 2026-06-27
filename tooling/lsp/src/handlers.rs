@@ -203,6 +203,37 @@ impl ServerState {
                                             req.id, format_function_hover(f), content, &span,
                                         );
                                     }
+                                    // Cursor on the `vftable` keyword → describe
+                                    // the generated vtable struct (the resolved
+                                    // count includes inherited entries).
+                                    if let Some(span) = name_span_after(
+                                        content, &statement.location.span.start, "vftable",
+                                    ) {
+                                        if span.contains(&loc) {
+                                            let owner = match self.module_path_for(uri) {
+                                                Some(mp) => mp.join(definition.name.as_str().into()),
+                                                None => ItemPath::from(definition.name.as_str()),
+                                            };
+                                            let resolved =
+                                                resolve_item(&self.db, source_set, pointer_size, owner);
+                                            let count = match resolved.item(&self.db).resolved() {
+                                                Some(rs) => match &rs.inner {
+                                                    pyxis::semantic::types::ItemDefinitionInner::Type(td) => td
+                                                        .vftable
+                                                        .as_ref()
+                                                        .map(|v| v.functions.len())
+                                                        .unwrap_or(fns.len()),
+                                                    _ => fns.len(),
+                                                },
+                                                None => fns.len(),
+                                            };
+                                            let md = format!(
+                                                "**vftable** of `{}`\n\nGenerates a vtable struct with `{count}` virtual function(s).",
+                                                definition.name.as_str(),
+                                            );
+                                            return hover_response(req.id, md, content, &span);
+                                        }
+                                    }
                                 }
                             }
                         }

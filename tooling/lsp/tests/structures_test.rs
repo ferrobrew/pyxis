@@ -263,3 +263,18 @@ fn backend_terms_hover() {
     assert!(hover_text(&st, &uri, 5, src.lines().nth(5).unwrap().find("for").unwrap() as u32).is_empty()
         || !hover_text(&st, &uri, 5, src.lines().nth(5).unwrap().find("for").unwrap() as u32).contains("**backend**"));
 }
+
+#[test]
+fn vftable_keyword_describes_struct() {
+    let base = std::env::temp_dir().join(format!("pyxis-vf-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    write(&base.join("pyxis.toml"), "[project]\nname = \"t\"\npointer_size = 8\n");
+    let src = "pub type Foo {\n    vftable {\n        pub fn a(&mut self);\n        pub fn b(&mut self);\n    },\n}\n";
+    write(&base.join("m.pyxis"), src);
+    let init = serde_json::json!({ "rootUri": format!("file://{}", base.display()), "capabilities": {} });
+    let st = ServerState::new(&init).unwrap();
+    let uri: lsp_types::Uri = format!("file://{}", base.join("m.pyxis").display()).parse().unwrap();
+    let c = src.lines().nth(1).unwrap().find("vftable").unwrap() as u32 + 2;
+    let h = hover_text(&st, &uri, 1, c);
+    assert!(h.contains("**vftable**") && h.contains("`2` virtual"), "got {h}");
+}
