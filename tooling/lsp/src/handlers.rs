@@ -1160,6 +1160,12 @@ fn find_reference_at(
         let item = resolve_type_path(&sub_path, scope, decl_registry);
         Reference { span: seg_span, item, module_path: sub_path }
     };
+    // For `use` trees the segment is already resolved by use_tree_reference, so
+    // build the reference directly without re-running segment_at.
+    let make_ref = |seg_path: ItemPath, span: pyxis::span::Span| -> Reference {
+        let item = resolve_type_path(&seg_path, scope, decl_registry);
+        Reference { span, item, module_path: seg_path }
+    };
 
     use pyxis::grammar::{Argument, ImplItem, ModuleItem};
 
@@ -1167,16 +1173,16 @@ fn find_reference_at(
         match item {
             // `use` statements: cursor on an imported path.
             ModuleItem::Use { tree, .. } => {
-                if let Some((path, span)) = find_path_in_use_tree(tree, loc) {
-                    return Some(resolve(&path, span));
+                if let Some((path, span)) = use_tree_reference(tree, loc, content) {
+                    return Some(make_ref(path, span));
                 }
             }
             // `backend` blocks carry their own `use`-style dependency list, and
             // prologue/epilogue splices can be attributed `for <Type>`.
             ModuleItem::Backend { backend } => {
                 for tree in &backend.uses {
-                    if let Some((path, span)) = find_path_in_use_tree(tree, loc) {
-                        return Some(resolve(&path, span));
+                    if let Some((path, span)) = use_tree_reference(tree, loc, content) {
+                        return Some(make_ref(path, span));
                     }
                 }
                 for for_type in [&backend.prologue.for_type, &backend.epilogue.for_type]
@@ -1317,26 +1323,56 @@ fn find_type_ref_in_definition<'a>(
     None
 }
 
-/// Find the imported path under the cursor within a `use` tree, returning the
-/// fully-qualified path (prefix-joined for grouped imports) and its span.
-fn find_path_in_use_tree(
+/// Resolve the import-path segment under the cursor within a `use` tree.
+///
+/// Returns the segment's full path (prefix-joined for grouped imports) and the
+/// segment's span. Handles both the imported leaves and the shared prefix of a
+/// braced group, resolving the specific `::`-separated segment the cursor is on
+/// — so each ident of `types::shared_ptr::{SharedPtr, WeakPtr}` navigates
+/// independently. The returned path is already truncated to the segment, so
+/// callers must NOT run `segment_at` on it again.
+fn use_tree_reference(
     tree: &pyxis::grammar::UseTree,
     loc: &pyxis::span::Location,
+    content: &str,
 ) -> Option<(ItemPath, pyxis::span::Span)> {
     use pyxis::grammar::UseTree;
+    use pyxis::span::{Location, Span};
     match tree {
-        UseTree::Path { path, location } => location
-            .span
-            .contains(loc)
-            .then(|| (path.clone(), location.span)),
-        UseTree::Group { prefix, items, location } => {
+        UseTree::Path { path, location } => {
             if !location.span.contains(loc) {
                 return None;
             }
+            segment_at(path, &location.span, loc, content)
+        }
+        UseTree::Group { prefix, items, location } => {
+            // NB: a group's span starts at `{`, so the shared prefix that
+            // precedes it is *outside* this span — don't early-return on it.
+            // A leaf import — prepend the group's prefix to the matched segment.
             for item in items {
-                if let Some((sub, span)) = find_path_in_use_tree(item, loc) {
+                if let Some((sub, span)) = use_tree_reference(item, loc, content) {
                     let full: ItemPath = prefix.iter().chain(sub.iter()).cloned().collect();
                     return Some((full, span));
+                }
+            }
+            // The shared prefix (`a::b` in `a::b::{C, D}`). The group's span
+            // starts at `{`, so the prefix text precedes it on the same line —
+            // find it by scanning back from the brace.
+            if !prefix.is_empty() {
+                let start = location.span.start;
+                if let Some(line) = content.lines().nth(start.line.saturating_sub(1)) {
+                    let brace = start.column.saturating_sub(1).min(line.len());
+                    let prefix_str = prefix.to_string();
+                    if let Some(pos) = line[..brace].rfind(&prefix_str) {
+                        let col = pos + 1;
+                        let prefix_span = Span::new(
+                            Location::new(start.line, col),
+                            Location::new(start.line, col + prefix_str.len()),
+                        );
+                        if prefix_span.contains(loc) {
+                            return segment_at(prefix, &prefix_span, loc, content);
+                        }
+                    }
                 }
             }
             None
