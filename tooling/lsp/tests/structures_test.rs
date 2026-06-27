@@ -179,3 +179,19 @@ fn enum_variant_shows_value() {
     assert!(h.contains("**variant** `C`"), "should describe the variant, not the enum: {h}");
     assert!(h.contains("value `6`"), "auto-incremented value should be 6: {h}");
 }
+
+#[test]
+fn attribute_hover_describes_attribute() {
+    let base = std::env::temp_dir().join(format!("pyxis-attr-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    write(&base.join("pyxis.toml"), "[project]\nname = \"t\"\npointer_size = 8\n");
+    let src = "#[size(0x10)]\npub type Foo {\n    #[base]\n    pub p: u64,\n}\n";
+    write(&base.join("foo.pyxis"), src);
+    let init = serde_json::json!({ "rootUri": format!("file://{}", base.display()), "capabilities": {} });
+    let st = ServerState::new(&init).unwrap();
+    let uri: lsp_types::Uri = format!("file://{}", base.join("foo.pyxis").display()).parse().unwrap();
+    let h = hover_text(&st, &uri, 0, 3); // #[size(0x10)]
+    assert!(h.contains("**attribute**") && h.contains("#[size(0x10)]"), "got {h}");
+    let b = hover_text(&st, &uri, 2, 7); // #[base]
+    assert!(b.contains("**attribute**") && b.contains("base class"), "got {b}");
+}

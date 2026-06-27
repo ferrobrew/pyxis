@@ -84,7 +84,19 @@ impl ServerState {
             }
         }
 
-        // 2. Structural elements — scoped tightly to what's under the cursor
+        // 2. An attribute → describe the attribute itself, not the item it's
+        //    attached to. Must precede the structural checks below, since an
+        //    attribute's span sits inside its field/type's span.
+        if let Some((attribute, span)) = attribute_at(&module, &loc) {
+            return hover_response(
+                req.id,
+                format_attribute_hover(attribute, &span, content),
+                content,
+                &span,
+            );
+        }
+
+        // 3. Structural elements — scoped tightly to what's under the cursor
         //    rather than the whole enclosing definition:
         //    - a definition's own name → the type (size/align/fields);
         //    - a field name → the field (type + attributes + size);
@@ -1533,6 +1545,141 @@ fn render_attributes(attributes: &pyxis::grammar::Attributes) -> String {
         .map(|a| format!("`{}`", render_attribute(a)))
         .collect::<Vec<_>>()
         .join(" ")
+}
+
+/// The attribute name (`size`, `cfg`, `base`, …).
+fn attribute_name(attribute: &pyxis::grammar::Attribute) -> &str {
+    use pyxis::grammar::Attribute;
+    match attribute {
+        Attribute::Ident { ident, .. } => ident.as_str(),
+        Attribute::Function { name, .. } => name.as_str(),
+        Attribute::Assign { name, .. } => name.as_str(),
+        Attribute::Cfg { .. } => "cfg",
+    }
+}
+
+/// A one-line description of a known Pyxis attribute.
+fn attribute_description(name: &str) -> Option<&'static str> {
+    Some(match name {
+        "size" => "Asserts/overrides the type's total size in bytes.",
+        "align" => "Overrides the type's alignment in bytes.",
+        "packed" => "Removes inter-field padding (alignment 1).",
+        "base" => "Marks the field as a base class, inlined at the start of the type.",
+        "index" => "Pins a vftable entry to a specific slot index.",
+        "address" => "Pins the item to a fixed absolute address.",
+        "singleton" => "Marks the type as a singleton living at a fixed address.",
+        "copyable" => "Marks the type as trivially copyable.",
+        "cloneable" => "Marks the type as cloneable.",
+        "defaultable" | "default" => "Marks the type/variant as the default.",
+        "cfg" => "Conditional-compilation predicate; each backend evaluates it independently.",
+        "calling_convention" => "Sets the function's calling convention.",
+        _ => return None,
+    })
+}
+
+/// The source text covered by `span` (single line only).
+fn span_text(content: &str, span: &pyxis::span::Span) -> Option<String> {
+    if span.start.line != span.end.line {
+        return None;
+    }
+    let line = content.lines().nth(span.start.line.saturating_sub(1))?;
+    let lo = span.start.column.saturating_sub(1);
+    let hi = span.end.column.saturating_sub(1).min(line.len());
+    line.get(lo..hi).map(str::to_string)
+}
+
+/// Find an attribute whose span contains `loc`, anywhere in the module (type /
+/// field / vftable / enum-variant / impl / function attributes).
+fn attribute_at<'a>(
+    module: &'a pyxis::grammar::Module,
+    loc: &pyxis::span::Location,
+) -> Option<(&'a pyxis::grammar::Attribute, pyxis::span::Span)> {
+    use pyxis::grammar::{ImplItem, ItemDefinitionInner, ModuleItem, TypeField};
+    let find = |attrs: &'a pyxis::grammar::Attributes| {
+        attrs
+            .0
+            .iter()
+            .find(|a| a.location().span.contains(loc))
+            .map(|a| (a, a.location().span))
+    };
+    for item in &module.items {
+        match item {
+            ModuleItem::Definition { definition } => {
+                let inner_attrs = match &definition.inner {
+                    ItemDefinitionInner::Type(td) => &td.attributes,
+                    ItemDefinitionInner::Enum(e) => &e.attributes,
+                    ItemDefinitionInner::Bitflags(b) => &b.attributes,
+                    ItemDefinitionInner::TypeAlias(ta) => &ta.attributes,
+                };
+                if let Some(hit) = find(inner_attrs) {
+                    return Some(hit);
+                }
+                match &definition.inner {
+                    ItemDefinitionInner::Type(td) => {
+                        for s in td.statements() {
+                            if let Some(hit) = find(&s.attributes) {
+                                return Some(hit);
+                            }
+                            if let TypeField::Vftable(fns) = &s.field {
+                                for f in fns {
+                                    if let Some(hit) = find(&f.attributes) {
+                                        return Some(hit);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    ItemDefinitionInner::Enum(e) => {
+                        for s in e.statements() {
+                            if let Some(hit) = find(&s.attributes) {
+                                return Some(hit);
+                            }
+                        }
+                    }
+                    ItemDefinitionInner::Bitflags(b) => {
+                        for s in b.statements() {
+                            if let Some(hit) = find(&s.attributes) {
+                                return Some(hit);
+                            }
+                        }
+                    }
+                    ItemDefinitionInner::TypeAlias(_) => {}
+                }
+            }
+            ModuleItem::Impl { impl_block } => {
+                if let Some(hit) = find(&impl_block.attributes) {
+                    return Some(hit);
+                }
+                for it in &impl_block.items {
+                    if let ImplItem::Function(f) = it {
+                        if let Some(hit) = find(&f.attributes) {
+                            return Some(hit);
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+/// Hover markdown for an attribute under the cursor.
+fn format_attribute_hover(
+    attribute: &pyxis::grammar::Attribute,
+    span: &pyxis::span::Span,
+    content: &str,
+) -> String {
+    // The attribute span covers the inner content (`size(0x10)`); re-wrap it as
+    // `#[…]` so the hover shows the attribute as written.
+    let src = span_text(content, span)
+        .map(|s| format!("#[{s}]"))
+        .unwrap_or_else(|| render_attribute(attribute));
+    let mut md = format!("**attribute**\n\n```pyxis\n{src}\n```\n");
+    if let Some(desc) = attribute_description(attribute_name(attribute)) {
+        md.push_str(&format!("\n{desc}\n"));
+    }
+    md
 }
 
 /// Render a single attribute as Pyxis source (without code fencing).
