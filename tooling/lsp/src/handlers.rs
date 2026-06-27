@@ -311,6 +311,44 @@ impl ServerState {
                         );
                     }
                 }
+                // Extern values: `extern name: Type;` — the value's own name.
+                pyxis::grammar::ModuleItem::ExternValue { extern_value } => {
+                    if let Some(span) = name_span_after(
+                        content, &extern_value.location.span.start, extern_value.name.as_str(),
+                    ) {
+                        if span.contains(&loc) {
+                            let mut md = format!(
+                                "**extern value** `{}`\n\n```pyxis\n{}: {}\n```\n",
+                                extern_value.name.as_str(),
+                                extern_value.name.as_str(),
+                                extern_value.type_,
+                            );
+                            if let Some(size) = type_size_of(
+                                &extern_value.type_, type_registry, &scope, decl_registry, pointer_size,
+                            ) {
+                                push_facts(&mut md, &[("type size", fmt_bytes(size))]);
+                            }
+                            return hover_response(req.id, md, content, &span);
+                        }
+                    }
+                }
+                // Extern types: `extern type Name;` — the declared name.
+                pyxis::grammar::ModuleItem::ExternType { name, location, .. } => {
+                    if let Some(span) =
+                        name_span_after(content, &location.span.start, name.as_str())
+                    {
+                        if span.contains(&loc) {
+                            let path = match self.module_path_for(uri) {
+                                Some(mp) => mp.join(name.as_str().into()),
+                                None => ItemPath::from(name.as_str()),
+                            };
+                            let value = self
+                                .type_hover_text(&path, type_registry, decl_registry)
+                                .unwrap_or_else(|| format!("**extern type** `{}`", name.as_str()));
+                            return hover_response(req.id, value, content, &span);
+                        }
+                    }
+                }
                 _ => {}
             }
         }
@@ -1247,6 +1285,12 @@ fn find_reference_at(
             // Free functions: argument and return types.
             ModuleItem::Function { function } => {
                 if let Some((path, span)) = fn_signature_type_ref(function, loc) {
+                    return Some(resolve(path, span));
+                }
+            }
+            // Extern values: `extern name: Type;` — the referenced type.
+            ModuleItem::ExternValue { extern_value } => {
+                if let Some((path, span)) = find_type_in_grammar_type(&extern_value.type_, loc) {
                     return Some(resolve(path, span));
                 }
             }

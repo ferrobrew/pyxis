@@ -211,3 +211,20 @@ fn free_functions_hover() {
     assert!(hover_text(&st, &uri, 3, l.find("item").unwrap() as u32 + 1).contains("**arg** `item`"));
     assert!(hover_text(&st, &uri, 3, l.find('T').unwrap() as u32).contains("**type** `T`"));
 }
+
+#[test]
+fn extern_value_and_type_hover() {
+    let base = std::env::temp_dir().join(format!("pyxis-ex-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    write(&base.join("pyxis.toml"), "[project]\nname = \"t\"\npointer_size = 8\n");
+    // extern value references a type defined later (forward ref).
+    let src = "#[address(0x100)]\nextern foo: Bar;\n\npub type Bar {\n    pub x: u64,\n}\n";
+    write(&base.join("m.pyxis"), src);
+    let init = serde_json::json!({ "rootUri": format!("file://{}", base.display()), "capabilities": {} });
+    let st = ServerState::new(&init).unwrap();
+    let uri: lsp_types::Uri = format!("file://{}", base.join("m.pyxis").display()).parse().unwrap();
+    let l = src.lines().nth(1).unwrap();
+    assert!(hover_text(&st, &uri, 1, l.find("foo").unwrap() as u32 + 1).contains("**extern value** `foo`"));
+    assert!(hover_text(&st, &uri, 1, l.find("Bar").unwrap() as u32 + 1).contains("**type** `Bar`"),
+        "forward-referenced extern type should resolve");
+}
