@@ -42,6 +42,54 @@ fn byte_column_to_utf16(source: &str, line: usize, byte_column: usize) -> u32 {
     utf16_offset
 }
 
+/// Ensure a diagnostic range is non-empty so editors render an inline squiggle.
+///
+/// Zero-width ranges (common for parse/lexer errors at EOF or an unexpected
+/// character) are valid LSP but many editors — Zed included — won't draw an
+/// underline for them, showing the diagnostic only in the problems list. This
+/// widens an empty range to cover one character: the character at the position,
+/// else the one before it, else the end of the previous line.
+pub fn widen_empty_range(source: &str, range: Range) -> Range {
+    if range.start != range.end {
+        return range;
+    }
+    let lines: Vec<&str> = source.lines().collect();
+    let utf16_len = |s: &str| s.chars().map(|c| c.len_utf16()).sum::<usize>() as u32;
+    let line_idx = range.start.line as usize;
+
+    if let Some(line) = lines.get(line_idx) {
+        let len = utf16_len(line);
+        if range.start.character < len {
+            // Underline the character at the position.
+            let mut end = range.end;
+            end.character = range.start.character + 1;
+            return Range { start: range.start, end };
+        }
+        if range.start.character > 0 {
+            // At/after end of a non-empty line: underline the preceding character.
+            let mut start = range.start;
+            start.character -= 1;
+            return Range { start, end: range.end };
+        }
+    }
+    // Empty position (e.g. EOF on a blank line): underline the end of the
+    // previous line instead.
+    if line_idx > 0 {
+        if let Some(prev) = lines.get(line_idx - 1) {
+            let len = utf16_len(prev);
+            let line = (line_idx - 1) as u32;
+            return Range {
+                start: Position { line, character: len.saturating_sub(1) },
+                end: Position { line, character: len },
+            };
+        }
+    }
+    // Last resort: widen the end by one column.
+    let mut end = range.end;
+    end.character += 1;
+    Range { start: range.start, end }
+}
+
 /// Find the Pyxis location (1-indexed line, byte column) at an LSP position (0-indexed line, UTF-16 column).
 pub fn lsp_position_to_pyxis_location(source: &str, position: Position) -> pyxis::span::Location {
     let line = (position.line as usize) + 1; // 0-indexed → 1-indexed
@@ -98,6 +146,27 @@ mod tests {
         assert_eq!(range.end.line, 0);
         // "café" is 4 UTF-16 code units, but é is 2 bytes = 1 UTF-16 code unit
         assert_eq!(range.end.character, 8); // 4 + 4 = 8
+    }
+
+    #[test]
+    fn test_widen_empty_range() {
+        let source = "pub type Foo {\n    pub x: u32,\n}\n";
+        // Non-empty ranges are left untouched.
+        let r = Range { start: Position { line: 0, character: 0 }, end: Position { line: 0, character: 3 } };
+        assert_eq!(super::widen_empty_range(source, r), r);
+
+        // Empty range mid-line → widened to the character at the position.
+        let r = Range { start: Position { line: 1, character: 11 }, end: Position { line: 1, character: 11 } };
+        let w = super::widen_empty_range(source, r);
+        assert_eq!(w.start, Position { line: 1, character: 11 });
+        assert_eq!(w.end, Position { line: 1, character: 12 });
+
+        // Empty range on an empty line (EOF) → backs up to the previous line's end.
+        let eof_source = "pub type Foo {\n    pub x: u32,\n";
+        let r = Range { start: Position { line: 2, character: 0 }, end: Position { line: 2, character: 0 } };
+        let w = super::widen_empty_range(eof_source, r);
+        assert_ne!(w.start, w.end, "EOF diagnostic range must be non-empty");
+        assert_eq!(w.start.line, 1, "should back up to the previous line");
     }
 
     #[test]

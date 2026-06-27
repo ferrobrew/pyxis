@@ -312,19 +312,28 @@ impl ServerState {
     }
 
     /// Handle textDocument/didSave
+    ///
+    /// We deliberately do NOT update the document's content from `params.text`,
+    /// even though we request `include_text` in the save capability.
+    ///
+    /// Root cause of issue 4 (save clearing a live parse error): with FULL text
+    /// sync, `textDocument/didChange` is the *authoritative* and most up-to-date
+    /// source of the buffer's content — it is applied synchronously as the user
+    /// types. The `text` included on a save is the on-disk snapshot, which can
+    /// lag or differ from the live buffer (clients may send a stale/normalized
+    /// copy, or one captured before the corrupt edit was flushed to disk).
+    ///
+    /// If we let the save text overwrite the synced buffer, saving a corrupt
+    /// file could clobber the (correct, corrupt) didChange content with stale
+    /// clean text, making the parse-error diagnostic incorrectly disappear.
+    ///
+    /// So a save is a no-op for content; it only triggers a re-publish of
+    /// diagnostics (done by the caller in main_loop), using the content the
+    /// editor already kept in sync via didChange.
     pub fn handle_did_save(&mut self, notif: Notification) -> Result<(), Box<dyn std::error::Error>> {
-        let params: lsp_types::DidSaveTextDocumentParams =
+        // Parse to validate the payload, but intentionally ignore `text`.
+        let _params: lsp_types::DidSaveTextDocumentParams =
             serde_json::from_value(notif.params)?;
-        let uri = params.text_document.uri;
-
-        if let Some(text) = params.text {
-            if let Some(doc) = self.documents.get_mut(&uri) {
-                doc.content = text.clone();
-                use pyxis::semantic::Setter;
-                doc.source_file.set_contents(&mut self.db).to(text);
-                self.file_store.update_in_memory(doc.file_id, doc.content.clone());
-            }
-        }
         Ok(())
     }
 
@@ -464,6 +473,9 @@ impl ServerState {
         let uri = self.file_id_to_uri.get(&location.file_id)?;
         let content = self.documents.get(uri)?.content.clone();
         let range = crate::span::pyxis_span_to_lsp_range(&content, &location.span);
+        // Parse/lexer errors are often zero-width (EOF, unexpected char); widen
+        // so editors draw an inline squiggle rather than only listing them.
+        let range = crate::span::widen_empty_range(&content, range);
         let diagnostic = Diagnostic {
             range,
             severity: Some(lsp_types::DiagnosticSeverity::ERROR),
