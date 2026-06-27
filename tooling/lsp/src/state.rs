@@ -26,8 +26,11 @@ pub(crate) struct Document {
     pub(crate) source_file: SourceFile,
     pub(crate) file_id: FileId,
     pub(crate) content: String,
-    /// The project root this file belongs to (for determining pointer_size)
+    /// The project root this file belongs to (for determining pointer_size
+    /// and grouping sources for analyze())
     pub(crate) project_root: Option<std::path::PathBuf>,
+    /// The absolute filesystem path of this file (for dedup)
+    pub(crate) abs_path: Option<std::path::PathBuf>,
 }
 
 impl ServerState {
@@ -37,6 +40,9 @@ impl ServerState {
 
         // Determine workspace root paths
         let root_paths = Self::extract_root_paths(&params);
+
+        let mut debug_log = String::new();
+        debug_log.push_str(&format!("Workspace roots: {:?}\n", root_paths));
 
         let mut state = Self {
             db: PyxisDatabaseImpl::default(),
@@ -50,6 +56,21 @@ impl ServerState {
         for root in &root_paths {
             state.discover_projects(root);
         }
+        debug_log.push_str(&format!("Discovered {} projects, {} documents\n",
+            state.projects.len(), state.documents.len()));
+        for (root, ps) in &state.projects {
+            let count = state.documents.values()
+                .filter(|d| d.project_root.as_ref() == Some(root))
+                .count();
+            debug_log.push_str(&format!("  project {:?} (pointer_size={}) → {} files\n", root, ps, count));
+            for d in state.documents.values() {
+                if d.project_root.as_ref() == Some(root) {
+                    debug_log.push_str(&format!("    - {} (file_id={})\n",
+                        state.file_store.filename(d.file_id), d.file_id.as_u32()));
+                }
+            }
+        }
+        let _ = std::fs::write("/tmp/pyxis-lsp-debug.log", debug_log);
 
         Ok(state)
     }
@@ -132,11 +153,13 @@ impl ServerState {
             .display()
             .to_string();
 
-        // Skip if already registered
+        // Skip if already registered (dedup by absolute path, not relative —
+        // different projects can have the same relative path e.g. "types/math.pyxis")
+        let abs_path = path.to_path_buf();
         if self
             .documents
             .values()
-            .any(|d| self.file_store.filename(d.file_id) == relative_path)
+            .any(|d| d.abs_path.as_ref() == Some(&abs_path))
         {
             return;
         }
@@ -163,6 +186,7 @@ impl ServerState {
                 file_id,
                 content: source,
                 project_root: Some(project_root.to_path_buf()),
+                abs_path: Some(abs_path),
             },
         );
         self.file_id_to_uri.insert(file_id, uri);
@@ -279,6 +303,7 @@ impl ServerState {
                     file_id,
                     content: text,
                     project_root,
+                    abs_path: fs_path,
                 },
             );
             self.file_id_to_uri.insert(file_id, uri);
@@ -394,7 +419,14 @@ impl ServerState {
 
         let mut notifications = Vec::new();
 
-        for (_, (sources, pointer_size)) in project_groups {
+        for (project_root, (sources, pointer_size)) in project_groups {
+            let mut debug_log = String::new();
+            debug_log.push_str(&format!("collect_diagnostics: project={:?}, {} sources, pointer_size={}\n",
+                project_root, sources.len(), pointer_size));
+            for s in &sources {
+                debug_log.push_str(&format!("  source: path={}\n", s.path(&self.db)));
+            }
+            let _ = std::fs::write("/tmp/pyxis-lsp-diag.log", debug_log);
             if sources.is_empty() {
                 continue;
             }
