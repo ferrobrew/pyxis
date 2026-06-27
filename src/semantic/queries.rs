@@ -80,44 +80,49 @@ pub fn collect_declarations<'db>(
 /// iterates: it starts with the cycle_result, then re-runs the query to
 /// see if it converges (the dependency may have been resolved by the time
 /// the cycle unwinds).
-#[salsa::tracked]
-pub fn resolve_item<'db>(
-    db: &'db dyn Db,
-    sources: SourceSet<'db>,
+/// Resolve a single item (type/enum/bitflags/type-alias).
+///
+/// This is NOT a Salsa tracked function — it's a plain function that tries
+/// to resolve the item given the current state of the type registry. The
+/// iterative resolution loop in `analyze` calls this repeatedly until all
+/// items are resolved or no progress can be made.
+///
+/// Salsa incrementality is preserved at the `parse_file` level — when a
+/// file changes, `parse_file` re-runs, `collect_declarations` re-runs, and
+/// `analyze` re-runs the iterative loop from scratch. Per-item caching is
+/// lost, but correctness is maintained.
+fn try_resolve_item(
+    registry: &DeclarationRegistry,
     pointer_size: usize,
-    item_path: ItemPath,
-) -> ResolvedItem<'db> {
-    let decl_set = collect_declarations(db, sources.clone(), pointer_size);
-    let registry = decl_set.registry(db);
-
+    item_path: &ItemPath,
+    resolved_items: &BTreeMap<ItemPath, crate::semantic::types::ItemDefinition>,
+) -> (
+    crate::semantic::types::ItemDefinition,
+    Vec<crate::semantic::SemanticError>,
+    Vec<crate::semantic::types::ItemDefinition>,
+) {
     // Check if it's a predefined or extern type (already resolved)
-    if let Some(info) = registry.get_predefined(&item_path) {
-        return ResolvedItem::new(
-            db,
-            item_path.clone(),
-            Arc::new(make_predefined_definition(&item_path, info.size, info.alignment)),
-            Arc::new(vec![]),
-            Arc::new(vec![]),
+    if let Some(info) = registry.get_predefined(item_path) {
+        return (
+            make_predefined_definition(item_path, info.size, info.alignment),
+            vec![],
+            vec![],
         );
     }
-    if let Some(info) = registry.get_extern_type(&item_path) {
-        return ResolvedItem::new(
-            db,
-            item_path.clone(),
-            Arc::new(make_extern_definition(&item_path, info)),
-            Arc::new(vec![]),
-            Arc::new(vec![]),
+    if let Some(info) = registry.get_extern_type(item_path) {
+        return (
+            make_extern_definition(item_path, info),
+            vec![],
+            vec![],
         );
     }
 
     // Find this item's declaration
-    let Some(definition) = registry.get_definition(&item_path) else {
-        return ResolvedItem::new(
-            db,
-            item_path.clone(),
-            Arc::new(make_unresolved_definition(&item_path)),
-            Arc::new(vec![]),
-            Arc::new(vec![]),
+    let Some(definition) = registry.get_definition(item_path) else {
+        return (
+            make_unresolved_definition(item_path),
+            vec![],
+            vec![],
         );
     };
 
@@ -133,6 +138,16 @@ pub fn resolve_item<'db>(
     for other_path in registry.item_paths() {
         if let Some(other_def) = registry.get_definition(other_path) {
             register_unresolved(&mut type_registry, other_path, other_def);
+        }
+    }
+
+    // Inject items already resolved in prior iterations as Resolved.
+    // This lets the current item's build see resolved dependencies without
+    // needing recursive resolve_item calls — the iterative loop in analyze()
+    // feeds these in.
+    for (resolved_path, resolved_def) in resolved_items {
+        if resolved_path != item_path {
+            type_registry.add(resolved_def.clone());
         }
     }
 
@@ -153,22 +168,6 @@ pub fn resolve_item<'db>(
         }
     }
 
-    // Pre-resolve direct dependencies via resolve_item (Salsa tracks the
-    // dependency graph). For most types, this is sufficient.
-    let module_path = item_path.parent().unwrap_or_else(|| ItemPath::empty());
-    let referenced_types = registry.get_referenced_types(definition, &module_path);
-
-    for dep_path in &referenced_types {
-        if dep_path == &item_path {
-            continue;
-        }
-        let dep_resolved = resolve_item(db, sources.clone(), pointer_size, dep_path.clone());
-        let dep_item = dep_resolved.item(db);
-        if dep_item.is_resolved() {
-            type_registry.update_item(dep_path.clone(), (**dep_item).clone());
-        }
-    }
-
     let visibility: crate::semantic::types::Visibility = definition.visibility.into();
     let def_location = definition.location;
     let type_param_names: Vec<String> = definition
@@ -177,60 +176,10 @@ pub fn resolve_item<'db>(
         .map(|tp| tp.name.clone())
         .collect();
 
-    // Iteratively resolve dependencies: each time build() returns Deferred,
-    // find an unresolved dependency, call resolve_item on it, insert the
-    // result, and retry. Salsa memoizes each resolve_item call.
-    //
-    // The pre-resolution above (via get_referenced_types) handles the common
-    // case efficiently, but type alias chains (A → B → C → D) and other
-    // transitive dependencies may still leave items unresolved. The loop
-    // handles these by repeatedly resolving whatever build() reports as
-    // unresolved, until the item resolves or no progress can be made.
-    let max_iterations = registry.item_paths().count() + 1;
-    let mut outcome = build_item(&definition, &item_path, visibility, &def_location,
+    // Try to build the item once. Dependencies that aren't resolved yet
+    // will cause Deferred — analyze's iterative loop handles re-trying.
+    let outcome = build_item(&definition, item_path, visibility, &def_location,
         &definition.doc_comments, &type_param_names, &mut type_registry, &mut modules);
-
-    for _ in 0..max_iterations {
-        match &outcome {
-            Ok(crate::semantic::error::BuildOutcome::Resolved(_))
-            | Err(_)
-            | Ok(crate::semantic::error::BuildOutcome::NotFoundType(_)) => break,
-            Ok(crate::semantic::error::BuildOutcome::Deferred) => {
-                // Find an unresolved dependency and resolve it via resolve_item
-                let unresolved = type_registry.unresolved();
-                let mut resolved_one = false;
-
-                for dep_path in &unresolved {
-                    if dep_path == &item_path {
-                        continue;
-                    }
-                    if !registry.contains(dep_path) {
-                        continue;
-                    }
-
-                    // Call resolve_item on the dependency (Salsa tracks this)
-                    let dep_resolved = resolve_item(db, sources.clone(), pointer_size, dep_path.clone());
-                    let dep_item = dep_resolved.item(db);
-                    let dep_errors = dep_resolved.errors(db);
-
-                    if dep_errors.is_empty() && dep_item.is_resolved() {
-                        type_registry.update_item(dep_path.clone(), (**dep_item).clone());
-                        resolved_one = true;
-                        break;
-                    }
-                }
-
-                if !resolved_one {
-                    // No more dependencies can be resolved — truly stalled
-                    break;
-                }
-
-                // Retry building with the newly resolved dependency
-                outcome = build_item(&definition, &item_path, visibility, &def_location,
-                    &definition.doc_comments, &type_param_names, &mut type_registry, &mut modules);
-            }
-        }
-    }
 
     let (item_def, errors) = match outcome {
         Ok(crate::semantic::error::BuildOutcome::Resolved(item)) => {
@@ -255,20 +204,13 @@ pub fn resolve_item<'db>(
         }
         Ok(crate::semantic::error::BuildOutcome::Deferred) => {
             (
-                make_unresolved_definition(&item_path),
-                vec![crate::semantic::SemanticError::TypeResolutionStalled {
-                    unresolved_types: vec![item_path.to_string()],
-                    resolved_types: vec![],
-                    unresolved_references: vec![],
-                }],
+                make_unresolved_definition(item_path),
+                vec![],
             )
         }
         Ok(crate::semantic::error::BuildOutcome::NotFoundType(unresolved_ref)) => {
-            // Match the old batch-compiler behavior: a missing type
-            // reference produces TypeResolutionStalled with the unresolved
-            // reference info, not TypeNotFound.
             (
-                make_unresolved_definition(&item_path),
+                make_unresolved_definition(item_path),
                 vec![crate::semantic::SemanticError::TypeResolutionStalled {
                     unresolved_types: vec![item_path.to_string()],
                     resolved_types: vec![],
@@ -278,29 +220,80 @@ pub fn resolve_item<'db>(
         }
         Err(e) => {
             (
-                make_unresolved_definition(&item_path),
+                make_unresolved_definition(item_path),
                 vec![e],
             )
         }
     };
 
-    // Collect generated items (e.g., vftable struct types) that were added
-    // to the local registry during build_item but aren't declared items.
-    // These are items in the local registry whose paths don't appear in the
-    // declaration registry's item_paths, predefined, or extern_types.
+    // Collect generated items (e.g., vftable struct types)
     let mut generated_items = Vec::new();
     for (path, item) in type_registry.iter() {
-        if path == &item_path {
+        if path == item_path {
             continue;
         }
         if registry.contains(path) || registry.get_predefined(path).is_some() || registry.get_extern_type(path).is_some() {
             continue;
         }
-        // This is a generated item — collect it if resolved
         if item.is_resolved() {
             generated_items.push((*item).clone());
         }
     }
+
+    (item_def, errors, generated_items)
+}
+
+/// Salsa tracked wrapper for the LSP. Resolves a single item, caching
+/// the result. Uses cycle_result to handle mutually recursive types.
+#[salsa::tracked(cycle_result=cycle_result_fn)]
+pub fn resolve_item<'db>(
+    db: &'db dyn Db,
+    sources: SourceSet<'db>,
+    pointer_size: usize,
+    item_path: ItemPath,
+) -> ResolvedItem<'db> {
+    let decl_set = collect_declarations(db, sources.clone(), pointer_size);
+    let registry = decl_set.registry(db);
+
+    // Run a mini iterative resolution loop to resolve dependencies before
+    // resolving the target item. This mirrors analyze()'s loop but scoped to
+    // resolving just what the target item needs. We resolve all items (cheap
+    // enough for LSP single-item queries) so the target sees its dependencies.
+    let item_paths: Vec<ItemPath> = registry.item_paths().cloned().collect();
+    let mut resolved_items: BTreeMap<ItemPath, crate::semantic::types::ItemDefinition> =
+        BTreeMap::new();
+    let max_iterations = item_paths.len() + 1;
+
+    for _iteration in 0..max_iterations {
+        let mut made_progress = false;
+
+        for path in &item_paths {
+            if resolved_items.contains_key(path) {
+                continue;
+            }
+
+            let (item_def, errors, _gen_items) =
+                try_resolve_item(registry, pointer_size, path, &resolved_items);
+
+            // If the item has errors, record it as resolved-with-error so we
+            // don't retry it. If it's resolved, record it. If deferred, skip.
+            if !errors.is_empty() || item_def.is_resolved() {
+                resolved_items.insert(path.clone(), item_def);
+                made_progress = true;
+            }
+        }
+
+        if !made_progress {
+            break;
+        }
+        if item_paths.iter().all(|p| resolved_items.contains_key(p)) {
+            break;
+        }
+    }
+
+    // Now resolve the target item with all dependencies available
+    let (item_def, errors, generated_items) =
+        try_resolve_item(registry, pointer_size, &item_path, &resolved_items);
 
     ResolvedItem::new(
         db,
@@ -510,28 +503,88 @@ pub fn analyze<'db>(
         );
     }
 
-    // Resolve all declared items via resolve_item
+    // Resolve all declared items iteratively. try_resolve_item resolves a
+    // single item given the current state of already-resolved dependencies.
+    // We iterate until no progress is made (mutually-recursive or stalled
+    // types) or all items resolve. This replaces the old recursive resolve_item
+    // — Salsa incrementality is preserved at the parse_file level.
     let mut semantic_errors: Vec<crate::semantic::SemanticError> = Vec::new();
 
-    for item_path in decl_registry.item_paths() {
-        let resolved = resolve_item(db, sources.clone(), pointer_size, item_path.clone());
-        let item = resolved.item(db);
-        let errors = resolved.errors(db);
+    // Items resolved so far, keyed by path. Fed back into try_resolve_item so
+    // that dependent items see resolved dependencies without recursion.
+    let mut resolved_items: BTreeMap<ItemPath, crate::semantic::types::ItemDefinition> =
+        BTreeMap::new();
 
-        if !errors.is_empty() {
-            semantic_errors.extend(errors.iter().cloned());
+    // Collect generated items (e.g., vftable struct types) to add to the
+    // final registry. Their module definition_paths are registered below.
+    let mut generated_items: Vec<crate::semantic::types::ItemDefinition> = Vec::new();
+
+    let item_paths: Vec<ItemPath> = decl_registry.item_paths().cloned().collect();
+    let max_iterations = item_paths.len() + 1;
+
+    for _iteration in 0..max_iterations {
+        let mut made_progress = false;
+
+        for item_path in &item_paths {
+            // Skip already-resolved items
+            if resolved_items.contains_key(item_path) {
+                continue;
+            }
+
+            let (item_def, errors, gen_items) =
+                try_resolve_item(decl_registry, pointer_size, item_path, &resolved_items);
+
+            if !errors.is_empty() {
+                semantic_errors.extend(errors.iter().cloned());
+                // Mark as resolved-with-error so we don't retry it
+                resolved_items.insert(item_path.clone(), item_def);
+                made_progress = true;
+                continue;
+            }
+
+            if item_def.is_resolved() {
+                resolved_items.insert(item_path.clone(), item_def);
+                made_progress = true;
+                // Collect generated items from this resolution
+                for gen_item in gen_items {
+                    let gen_path = gen_item.path.clone();
+                    definition_paths.insert(gen_path);
+                    generated_items.push(gen_item);
+                }
+            }
+            // else: Deferred — will be retried in the next iteration once
+            // more dependencies are resolved.
         }
 
-        type_registry.add((**item).clone());
-
-        // Collect generated items (e.g., vftable struct types) and add them
-        // to the registry. Their module definition_paths are registered
-        // after modules are built below.
-        for gen_item in resolved.generated_items(db).iter() {
-            let gen_path = gen_item.path.clone();
-            type_registry.add(gen_item.clone());
-            definition_paths.insert(gen_path);
+        if !made_progress {
+            // No item resolved this iteration — remaining items are stalled
+            // (mutual recursion or missing types). Emit a TypeResolutionStalled
+            // error for each remaining unresolved item, matching the old
+            // batch-compiler behavior.
+            for item_path in &item_paths {
+                if !resolved_items.contains_key(item_path) {
+                    semantic_errors.push(crate::semantic::SemanticError::TypeResolutionStalled {
+                        unresolved_types: vec![item_path.to_string()],
+                        resolved_types: vec![],
+                        unresolved_references: vec![],
+                    });
+                }
+            }
+            break;
         }
+
+        // If all items are resolved, we're done
+        if item_paths.iter().all(|p| resolved_items.contains_key(p)) {
+            break;
+        }
+    }
+
+    // Merge resolved items + generated items into the type registry
+    for item_def in resolved_items.values() {
+        type_registry.add(item_def.clone());
+    }
+    for gen_item in &generated_items {
+        type_registry.add(gen_item.clone());
     }
 
     // Re-assign definition_paths to include generated items (vftables etc.)
@@ -951,13 +1004,16 @@ pub struct AssociatedFunctionsResult {
 
 // --- Helpers ---
 
-/// Cycle recovery function for resolve_item.
-/// Returns an unresolved placeholder when a cycle is detected
-/// (e.g., mutually recursive types A↔B).
-fn cycle_default<'db>(
+/// Cycle recovery: when resolve_item(A) calls resolve_item(B) which calls
+/// resolve_item(A) (mutual recursion), return an unresolved placeholder.
+/// The iterative loop in resolve_item handles convergence by resolving
+/// dependencies one at a time — when the cycle unwinds, the placeholder
+/// causes build_item to return Deferred, and the loop resolves the
+/// dependency via the unresolved() list instead of recursing.
+fn cycle_result_fn<'db>(
     db: &'db dyn Db,
     _id: salsa::Id,
-    _sources: SourceSet<'db>,
+    sources: SourceSet<'db>,
     _pointer_size: usize,
     item_path: ItemPath,
 ) -> ResolvedItem<'db> {
@@ -968,27 +1024,6 @@ fn cycle_default<'db>(
         Arc::new(vec![]),
         Arc::new(vec![]),
     )
-}
-
-/// Cycle recovery: decides whether to accept the new value or keep iterating.
-/// If the new value is resolved, accept it (convergence). Otherwise, keep
-/// the old value (still unresolved, keep iterating).
-fn cycle_recover<'db>(
-    db: &'db dyn Db,
-    _cycle: &salsa::Cycle,
-    old_value: &ResolvedItem<'db>,
-    new_value: ResolvedItem<'db>,
-    _sources: SourceSet<'db>,
-    _pointer_size: usize,
-    _item_path: ItemPath,
-) -> ResolvedItem<'db> {
-    // If the new value is resolved, use it (convergence)
-    if new_value.item(db).is_resolved() {
-        new_value
-    } else {
-        // Keep the old value — Salsa will iterate again
-        old_value.clone()
-    }
 }
 
 /// Build a single item using the existing type_definition/enum/bitflags/type_alias
