@@ -48,37 +48,180 @@ impl ServerState {
 
         let loc = lsp_position_to_pyxis_location(content, position);
 
-        // Find the item at the cursor position
-        for definition in module.definitions() {
-            if definition.location.span.contains(&loc) {
-                // Try to get resolved info (size/alignment) via resolve_item.
-                // Build the full module-qualified item path (e.g.
-                // "world::weather::Weather") from the document's module path.
-                let sources = self.sources_for(uri);
-                let source_set = semantic::SourceSet::new(&self.db, sources);
-                let item_path = match self.module_path_for(uri) {
-                    Some(mp) => mp.join(definition.name.as_str().into()),
-                    None => ItemPath::from(definition.name.as_str()),
-                };
-                let resolved = resolve_item(&self.db, source_set, self.pointer_size_for(uri), item_path);
-                let resolved_item = resolved.item(&self.db);
+        let scope = self.scope_for(uri);
+        let sources = self.sources_for(uri);
+        let source_set = semantic::SourceSet::new(&self.db, sources);
+        let analysis = semantic::analyze(&self.db, self.pointer_size_for(uri), source_set);
+        let type_registry = analysis.type_registry(&self.db);
+        let decl_set = semantic::collect_declarations(&self.db, source_set, self.pointer_size_for(uri));
+        let decl_registry = decl_set.registry(&self.db);
 
-                let hover = if let Some(resolved_state) = resolved_item.resolved() {
-                    format_type_hover_with_size(&definition, resolved_state.size, resolved_state.alignment)
-                } else {
-                    format_type_hover(&definition)
-                };
+        // 1. Cursor on a type or import reference (e.g. a field's type, or a
+        //    segment of a `use`/FQN path) → hover the *referenced* item, not the
+        //    enclosing definition. For an intermediate FQN segment, show the
+        //    module it names.
+        if let Some(reference) = find_reference_at(&module, &loc, &scope, decl_registry, content) {
+            let hover = reference
+                .item
+                .as_ref()
+                .and_then(|item_path| self.resolved_definition(item_path, type_registry))
+                .map(|rd| match rd.size_align {
+                    Some((size, alignment)) => {
+                        format_type_hover_with_size(&rd.def, size, alignment)
+                    }
+                    None => format_type_hover(&rd.def),
+                })
+                .or_else(|| {
+                    self.module_uri(&reference.module_path)
+                        .map(|_| format!("**module** `{}`", reference.module_path))
+                });
+            if let Some(value) = hover {
                 return Response {
                     id: req.id,
                     result: Some(serde_json::to_value(Hover {
                         contents: HoverContents::Markup(MarkupContent {
                             kind: MarkupKind::Markdown,
-                            value: hover,
+                            value,
                         }),
-                        range: Some(pyxis_span_to_lsp_range(content, &definition.location.span)),
+                        range: Some(pyxis_span_to_lsp_range(content, &reference.span)),
                     }).unwrap()),
                     error: None,
                 };
+            }
+        }
+
+        // 2. Structural elements — scoped tightly to what's under the cursor
+        //    rather than the whole enclosing definition:
+        //    - a definition's own name → the type (size/align/fields);
+        //    - a field name → the field (type + attributes + size);
+        //    - a vftable entry or an impl method → its signature.
+        let pointer_size = self.pointer_size_for(uri);
+        for item in &module.items {
+            match item {
+                pyxis::grammar::ModuleItem::Definition { definition } => {
+                    // The definition's own name.
+                    if let Some(span) = name_span_after(
+                        content,
+                        &definition.declaration_location.span.start,
+                        definition.name.as_str(),
+                    ) {
+                        if span.contains(&loc) {
+                            let item_path = match self.module_path_for(uri) {
+                                Some(mp) => mp.join(definition.name.as_str().into()),
+                                None => ItemPath::from(definition.name.as_str()),
+                            };
+                            let resolved = resolve_item(&self.db, source_set, pointer_size, item_path);
+                            let resolved_item = resolved.item(&self.db);
+                            let value = if let Some(rs) = resolved_item.resolved() {
+                                format_type_hover_with_size(definition, rs.size, rs.alignment)
+                            } else {
+                                format_type_hover(definition)
+                            };
+                            return hover_response(req.id, value, content, &span);
+                        }
+                    }
+                    // Fields and vftable entries of a type definition.
+                    if let pyxis::grammar::ItemDefinitionInner::Type(td) = &definition.inner {
+                        for statement in td.statements() {
+                            if !statement.location.span.contains(&loc) {
+                                continue;
+                            }
+                            match &statement.field {
+                                pyxis::grammar::TypeField::Field(vis, name, type_) => {
+                                    let span = name_span_after(
+                                        content,
+                                        &statement.location.span.start,
+                                        name.as_str(),
+                                    )
+                                    .unwrap_or(statement.location.span);
+                                    let size = type_size_of(
+                                        type_, type_registry, &scope, decl_registry, pointer_size,
+                                    );
+                                    // Offset within the parent type's resolved
+                                    // layout. The parent is resolved via
+                                    // resolve_item (analyze()'s registry leaves
+                                    // composite types unresolved).
+                                    let parent_path = match self.module_path_for(uri) {
+                                        Some(mp) => mp.join(definition.name.as_str().into()),
+                                        None => ItemPath::from(definition.name.as_str()),
+                                    };
+                                    let parent = resolve_item(&self.db, source_set, pointer_size, parent_path);
+                                    let offset = parent
+                                        .item(&self.db)
+                                        .resolved()
+                                        .and_then(|rs| field_offset(rs, name.as_str(), type_registry));
+                                    let value = format_field_hover(
+                                        vis, name, type_, &statement.attributes, size, offset,
+                                    );
+                                    return hover_response(req.id, value, content, &span);
+                                }
+                                pyxis::grammar::TypeField::Vftable(fns) => {
+                                    for f in fns {
+                                        if f.location.span.contains(&loc) {
+                                            let span = name_span_after(
+                                                content,
+                                                &f.location.span.start,
+                                                f.name.as_str(),
+                                            )
+                                            .unwrap_or(f.location.span);
+                                            return hover_response(
+                                                req.id,
+                                                format_function_hover(f),
+                                                content,
+                                                &span,
+                                            );
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    // Anywhere else inside the definition's body (enum/bitflags
+                    // variants, blank lines) → show the containing type, but
+                    // keep the highlight scoped to its name rather than the
+                    // whole definition.
+                    if definition.location.span.contains(&loc) {
+                        if let Some(span) = name_span_after(
+                            content,
+                            &definition.declaration_location.span.start,
+                            definition.name.as_str(),
+                        ) {
+                            let item_path = match self.module_path_for(uri) {
+                                Some(mp) => mp.join(definition.name.as_str().into()),
+                                None => ItemPath::from(definition.name.as_str()),
+                            };
+                            let resolved = resolve_item(&self.db, source_set, pointer_size, item_path);
+                            let value = if let Some(rs) = resolved.item(&self.db).resolved() {
+                                format_type_hover_with_size(definition, rs.size, rs.alignment)
+                            } else {
+                                format_type_hover(definition)
+                            };
+                            return hover_response(req.id, value, content, &span);
+                        }
+                    }
+                }
+                // Impl methods (including `#[cfg(...)]`-gated blocks).
+                pyxis::grammar::ModuleItem::Impl { impl_block } => {
+                    for impl_item in &impl_block.items {
+                        if let pyxis::grammar::ImplItem::Function(f) = impl_item {
+                            if f.location.span.contains(&loc) {
+                                let span = name_span_after(
+                                    content,
+                                    &f.location.span.start,
+                                    f.name.as_str(),
+                                )
+                                .unwrap_or(f.location.span);
+                                return hover_response(
+                                    req.id,
+                                    format_function_hover(f),
+                                    content,
+                                    &span,
+                                );
+                            }
+                        }
+                    }
+                }
+                _ => {}
             }
         }
 
@@ -117,15 +260,47 @@ impl ServerState {
 
         let loc = lsp_position_to_pyxis_location(content, position);
 
-        // First: check if the cursor is on a definition itself
-        for definition in module.definitions() {
-            if definition.location.span.contains(&loc)
-                || definition.declaration_location.span.contains(&loc)
-            {
-                let range = pyxis_span_to_lsp_range(content, &definition.declaration_location.span);
+        let scope = self.scope_for(uri);
+
+        // Run analyze to get the type registry with resolved items, and the
+        // declaration registry for name resolution.
+        let sources = self.sources_for(uri);
+        let source_set = semantic::SourceSet::new(&self.db, sources);
+        let analysis = semantic::analyze(&self.db, self.pointer_size_for(uri), source_set);
+        let type_registry = analysis.type_registry(&self.db);
+        let decl_set = semantic::collect_declarations(&self.db, source_set, self.pointer_size_for(uri));
+        let decl_registry = decl_set.registry(&self.db);
+
+        // 1. Cursor on a type or import reference (e.g. `Camera` in
+        //    `pub field: Camera`, `*mut Camera`, or a name in a `use`
+        //    statement). For an FQN like `a::b::C`, the individual segment under
+        //    the cursor is resolved: the leaf jumps to the type, earlier
+        //    segments to their module's file. This must take priority over the
+        //    enclosing-definition check below, since a field's type span is
+        //    contained within its parent definition's span.
+        if let Some(reference) = find_reference_at(&module, &loc, &scope, decl_registry, content) {
+            // a) Concrete item (type/extern/predefined) → jump to its name.
+            if let Some(item_path) = &reference.item {
+                if let Some(rd) = self.resolved_definition(item_path, type_registry) {
+                    if let Some(target_content) = self.get_content(&rd.uri) {
+                        let range = pyxis_span_to_lsp_range(target_content, &rd.name_span);
+                        let location = lsp_types::Location { uri: rd.uri, range };
+                        return Response {
+                            id: req.id,
+                            result: Some(serde_json::to_value(lsp_types::GotoDefinitionResponse::Scalar(location)).unwrap()),
+                            error: None,
+                        };
+                    }
+                }
+            }
+            // b) Module segment → jump to the top of its file.
+            if let Some(target_uri) = self.module_uri(&reference.module_path) {
                 let location = lsp_types::Location {
-                    uri: uri.clone(),
-                    range,
+                    uri: target_uri,
+                    range: Range {
+                        start: Position { line: 0, character: 0 },
+                        end: Position { line: 0, character: 0 },
+                    },
                 };
                 return Response {
                     id: req.id,
@@ -135,44 +310,17 @@ impl ServerState {
             }
         }
 
-        // Second: check if the cursor is on a type reference (e.g. `Camera`
-        // in `pub field: Camera` or `*mut Camera`). Walk the AST to find a
-        // Type whose location contains the cursor, resolve it to a full
-        // ItemPath via the declaration registry, then look up the definition's
-        // declaration_location in the type registry.
-        let module_path = self.module_path_for(uri);
-        let scope: Vec<ItemPath> = match &module_path {
-            Some(mp) => vec![mp.clone()],
-            None => vec![],
-        };
-
-        // Run analyze to get the type registry with resolved items
-        let sources = self.sources_for(uri);
-        let source_set = semantic::SourceSet::new(&self.db, sources);
-        let analysis = semantic::analyze(&self.db, self.pointer_size_for(uri), source_set);
-        let type_registry = analysis.type_registry(&self.db);
-
-        // Get the declaration registry for name resolution
-        let decl_set = semantic::collect_declarations(&self.db, source_set, self.pointer_size_for(uri));
-        let decl_registry = decl_set.registry(&self.db);
-
-        // Find a type reference at the cursor position
-        if let Some(resolved_path) = find_type_reference_at(&module, &loc, &scope, decl_registry) {
-            if let Ok(item) = type_registry.get(&resolved_path, &pyxis::span::ItemLocation::internal()) {
-                let def_loc = &item.declaration_location;
-                if let Some(target_uri) = self.file_id_to_uri(&def_loc.file_id) {
-                    let Some(target_content) = self.get_content(&target_uri) else {
-                        return Response {
-                            id: req.id,
-                            result: Some(serde_json::Value::Null),
-                            error: None,
-                        };
-                    };
-                    let range = pyxis_span_to_lsp_range(&target_content, &def_loc.span);
-                    let location = lsp_types::Location {
-                        uri: target_uri,
-                        range,
-                    };
+        // 2. Cursor on a definition's own name → jump to itself (scoped to the
+        //    name, not the whole declaration).
+        for definition in module.definitions() {
+            if let Some(span) = name_span_after(
+                content,
+                &definition.declaration_location.span.start,
+                definition.name.as_str(),
+            ) {
+                if span.contains(&loc) {
+                    let range = pyxis_span_to_lsp_range(content, &span);
+                    let location = lsp_types::Location { uri: uri.clone(), range };
                     return Response {
                         id: req.id,
                         result: Some(serde_json::to_value(lsp_types::GotoDefinitionResponse::Scalar(location)).unwrap()),
@@ -604,6 +752,79 @@ impl ServerState {
             error: None,
         }
     }
+
+    /// Build the name-resolution scope for a document: its own module path plus
+    /// every `use`-imported path. This mirrors `DeclarationRegistry::register_module`
+    /// — `resolve_name` matches imported names by their full paths' last segment,
+    /// so a single-segment type reference like `EventHandler` only resolves when
+    /// the corresponding `use game::event_handler::EventHandler;` path is present
+    /// in the scope.
+    fn scope_for(&self, uri: &Uri) -> Vec<ItemPath> {
+        let Some(module_path) = self.module_path_for(uri) else {
+            return vec![];
+        };
+        let mut scope = vec![module_path];
+        if let Some(module) = self.get_parsed_module(uri) {
+            for item in &module.items {
+                if let pyxis::grammar::ModuleItem::Use { tree, .. } = item {
+                    scope.extend(tree.flatten());
+                }
+            }
+        }
+        scope
+    }
+
+    /// Resolve an item path to its grammar definition by locating it in its
+    /// module's source file. Deliberately does NOT depend on the type registry
+    /// for *finding* the definition — types with semantic errors (e.g. a
+    /// mid-edit `#[size]` mismatch, common in RE work) drop out of the registry,
+    /// but their declaration is still in the file, so hover/go-to-def keep
+    /// working. The registry is only consulted for size/alignment, which is
+    /// legitimately absent when the type doesn't resolve.
+    fn resolved_definition(
+        &self,
+        resolved_path: &ItemPath,
+        type_registry: &pyxis::semantic::type_registry::TypeRegistry,
+    ) -> Option<ResolvedDefinition> {
+        let module_path = resolved_path.parent()?;
+        let uri = self.module_uri(&module_path)?;
+        let content = self.get_content(&uri)?.to_string();
+        let module = self.get_parsed_module(&uri)?;
+        let target_name = resolved_path.last()?.as_str();
+        let def = module
+            .definitions()
+            .find(|d| d.name.as_str() == target_name)
+            .cloned()?;
+        let name_span =
+            name_span_after(&content, &def.declaration_location.span.start, target_name)
+                .unwrap_or(def.location.span);
+        let size_align = type_registry
+            .get(resolved_path, &pyxis::span::ItemLocation::internal())
+            .ok()
+            .and_then(|i| i.resolved())
+            .map(|r| (r.size, r.alignment));
+        Some(ResolvedDefinition { def, uri, name_span, size_align })
+    }
+
+    /// Find the document URI whose module path equals `module_path` (used to
+    /// navigate to an intermediate module segment of an FQN reference).
+    fn module_uri(&self, module_path: &ItemPath) -> Option<Uri> {
+        self.documents
+            .keys()
+            .find(|uri| self.module_path_for(uri).as_ref() == Some(module_path))
+            .cloned()
+    }
+}
+
+/// A type/item definition located in its source file.
+struct ResolvedDefinition {
+    def: pyxis::grammar::ItemDefinition,
+    /// URI of the file the definition lives in.
+    uri: Uri,
+    /// Span of the definition's name (the go-to-definition target).
+    name_span: pyxis::span::Span,
+    /// Size/alignment, if the type resolved cleanly.
+    size_align: Option<(usize, usize)>,
 }
 
 /// Format a type definition for hover display with size and alignment
@@ -643,7 +864,7 @@ fn format_type_hover(definition: &pyxis::grammar::ItemDefinition) -> String {
                 } else {
                     ""
                 };
-                md.push_str(&format!("- {}{}: {}\n", vis_str, name, type_));
+                md.push_str(&format!("- `{}{}: {}`\n", vis_str, name, type_));
             }
         }
     }
@@ -719,6 +940,29 @@ fn is_valid_identifier(s: &str) -> bool {
     chars.all(|c| c.is_alphanumeric() || c == '_')
 }
 
+/// Build a hover Response with markdown content and a highlight range.
+fn hover_response(
+    id: lsp_server::RequestId,
+    value: String,
+    content: &str,
+    span: &pyxis::span::Span,
+) -> Response {
+    Response {
+        id,
+        result: Some(
+            serde_json::to_value(Hover {
+                contents: HoverContents::Markup(MarkupContent {
+                    kind: MarkupKind::Markdown,
+                    value,
+                }),
+                range: Some(pyxis_span_to_lsp_range(content, span)),
+            })
+            .unwrap(),
+        ),
+        error: None,
+    }
+}
+
 fn error_response(id: lsp_server::RequestId, e: serde_json::Error) -> Response {
     Response {
         id,
@@ -731,85 +975,233 @@ fn error_response(id: lsp_server::RequestId, e: serde_json::Error) -> Response {
     }
 }
 
-/// Find a type reference at the given location in a parsed module.
+/// A type or import reference found under the cursor: the resolved `ItemPath`
+/// of the referenced item, plus the source span of the reference itself (used
+/// to highlight the hover range).
+struct Reference {
+    /// Source span of the *segment* under the cursor (for hover-range highlight).
+    span: pyxis::span::Span,
+    /// Resolved concrete item path, if this segment names a type/extern/predefined.
+    item: Option<ItemPath>,
+    /// Absolute path of this segment — used as a module target when `item` is
+    /// `None` (e.g. the `game::event_handler` part of an FQN reference).
+    module_path: ItemPath,
+}
+
+/// Find a type or import reference at the given location in a parsed module.
 ///
-/// Walks the grammar AST looking for `Type::Ident` nodes whose span contains
-/// the cursor position. When found, resolves the type name through the
-/// declaration registry (which handles scope/use-statement resolution) to
-/// get the full `ItemPath`.
+/// Walks `use` statements and type positions (field types, enum/bitflags base
+/// types, type-alias targets, vftable signatures) looking for the AST node
+/// whose span contains the cursor. For multi-segment paths (`a::b::C`), the
+/// *individual* segment under the cursor is resolved independently: the leaf
+/// resolves to a type, earlier segments to their module namespaces.
 ///
 /// Resolution itself comes from the Salsa-computed `DeclarationRegistry` —
 /// this function only does the position→node matching, which is an LSP
 /// concern (the compiler never works with cursor positions).
-fn find_type_reference_at(
+fn find_reference_at(
     module: &pyxis::grammar::Module,
     loc: &pyxis::span::Location,
     scope: &[ItemPath],
     decl_registry: &pyxis::semantic::declaration_registry::DeclarationRegistry,
-) -> Option<ItemPath> {
-    for definition in module.definitions() {
-        // Walk type definition fields
-        if let pyxis::grammar::ItemDefinitionInner::Type(td) = &definition.inner {
-            for statement in td.statements() {
-                if let pyxis::grammar::TypeField::Field(_, _, type_) = &statement.field {
-                    if let Some(path) = find_type_in_grammar_type(type_, loc) {
-                        return resolve_type_path(path, scope, decl_registry);
+    content: &str,
+) -> Option<Reference> {
+    let resolve = |raw: &ItemPath, full_span: pyxis::span::Span| -> Reference {
+        let (sub_path, seg_span) =
+            segment_at(raw, &full_span, loc, content).unwrap_or((raw.clone(), full_span));
+        let item = resolve_type_path(&sub_path, scope, decl_registry);
+        Reference { span: seg_span, item, module_path: sub_path }
+    };
+
+    use pyxis::grammar::{Argument, ImplItem, ModuleItem};
+
+    for item in &module.items {
+        match item {
+            // `use` statements: cursor on an imported path.
+            ModuleItem::Use { tree, .. } => {
+                if let Some((path, span)) = find_path_in_use_tree(tree, loc) {
+                    return Some(resolve(&path, span));
+                }
+            }
+            // `backend` blocks carry their own `use`-style dependency list, and
+            // prologue/epilogue splices can be attributed `for <Type>`.
+            ModuleItem::Backend { backend } => {
+                for tree in &backend.uses {
+                    if let Some((path, span)) = find_path_in_use_tree(tree, loc) {
+                        return Some(resolve(&path, span));
+                    }
+                }
+                for for_type in [&backend.prologue.for_type, &backend.epilogue.for_type]
+                    .into_iter()
+                    .flatten()
+                {
+                    if let Some(span) =
+                        find_for_path_span(content, &backend.location.span, for_type, loc)
+                    {
+                        return Some(resolve(for_type, span));
                     }
                 }
             }
-        }
-
-        // Walk enum/bitflags base types
-        if let pyxis::grammar::ItemDefinitionInner::Enum(e) = &definition.inner {
-            if let Some(path) = find_type_in_grammar_type(&e.type_, loc) {
-                return resolve_type_path(path, scope, decl_registry);
-            }
-        }
-        if let pyxis::grammar::ItemDefinitionInner::Bitflags(b) = &definition.inner {
-            if let Some(path) = find_type_in_grammar_type(&b.type_, loc) {
-                return resolve_type_path(path, scope, decl_registry);
-            }
-        }
-
-        // Walk type alias target types
-        if let pyxis::grammar::ItemDefinitionInner::TypeAlias(ta) = &definition.inner {
-            if let Some(path) = find_type_in_grammar_type(&ta.target, loc) {
-                return resolve_type_path(path, scope, decl_registry);
-            }
-        }
-
-        // Walk vftable function signatures (params + return types)
-        if let pyxis::grammar::ItemDefinitionInner::Type(td) = &definition.inner {
-            for statement in td.statements() {
-                if let pyxis::grammar::TypeField::Vftable(fns) = &statement.field {
-                    for sig in fns {
-                        for arg in &sig.arguments {
-                            if let pyxis::grammar::Argument::Named { type_, .. } = arg {
-                                if let Some(path) = find_type_in_grammar_type(type_, loc) {
-                                    return resolve_type_path(path, scope, decl_registry);
+            // `impl` blocks (including `#[cfg(...)]`-gated ones): the target
+            // type name and every function signature's types.
+            ModuleItem::Impl { impl_block } => {
+                if let Some(span) =
+                    name_span_after(content, &impl_block.location.span.start, impl_block.name.as_str())
+                {
+                    if span.contains(loc) {
+                        let raw = ItemPath::from(impl_block.name.as_str());
+                        return Some(resolve(&raw, span));
+                    }
+                }
+                for impl_item in &impl_block.items {
+                    if let ImplItem::Function(f) = impl_item {
+                        for arg in &f.arguments {
+                            if let Argument::Named { type_, .. } = arg {
+                                if let Some((path, span)) = find_type_in_grammar_type(type_, loc) {
+                                    return Some(resolve(path, span));
                                 }
                             }
                         }
-                        if let Some(ret) = &sig.return_type {
-                            if let Some(path) = find_type_in_grammar_type(ret, loc) {
-                                return resolve_type_path(path, scope, decl_registry);
+                        if let Some(ret) = &f.return_type {
+                            if let Some((path, span)) = find_type_in_grammar_type(ret, loc) {
+                                return Some(resolve(path, span));
                             }
                         }
                     }
                 }
             }
+            _ => {}
+        }
+    }
+
+    // Type positions inside definitions.
+    for definition in module.definitions() {
+        if let Some((path, span)) = find_type_ref_in_definition(definition, loc) {
+            return Some(resolve(path, span));
         }
     }
 
     None
 }
 
+/// Given a `::`-separated path as written in `source`, its full span, and a
+/// cursor location, return the path truncated to the segment under the cursor
+/// (an absolute prefix for FQN paths) plus that segment's own span. Paths are
+/// always written on a single line.
+fn segment_at(
+    path: &ItemPath,
+    span: &pyxis::span::Span,
+    loc: &pyxis::span::Location,
+    source: &str,
+) -> Option<(ItemPath, pyxis::span::Span)> {
+    use pyxis::span::{Location, Span};
+    let line = span.start.line;
+    if loc.line != line || span.end.line != line {
+        return None;
+    }
+    let line_str = source.lines().nth(line.saturating_sub(1))?;
+    let lo = span.start.column.saturating_sub(1);
+    let hi = span.end.column.saturating_sub(1).min(line_str.len());
+    if lo >= hi {
+        return None;
+    }
+    let text = &line_str[lo..hi];
+
+    let mut col = span.start.column; // 1-indexed byte column of the segment start
+    for (i, part) in text.split("::").enumerate() {
+        let seg_start = col;
+        let seg_end = col + part.len(); // exclusive
+        if loc.column >= seg_start && loc.column < seg_end {
+            let count = (i + 1).min(path.len());
+            let prefix: ItemPath = path.iter().take(count).cloned().collect();
+            let seg_span = Span::new(
+                Location::new(line, seg_start),
+                Location::new(line, seg_end),
+            );
+            return Some((prefix, seg_span));
+        }
+        col = seg_end + 2; // skip the "::"
+    }
+    None
+}
+
+/// Search a single definition's type positions for a type reference whose span
+/// contains `loc`. Returns the matched (unresolved) `ItemPath` and its span.
+fn find_type_ref_in_definition<'a>(
+    definition: &'a pyxis::grammar::ItemDefinition,
+    loc: &pyxis::span::Location,
+) -> Option<(&'a ItemPath, pyxis::span::Span)> {
+    use pyxis::grammar::{Argument, ItemDefinitionInner, TypeField};
+
+    match &definition.inner {
+        ItemDefinitionInner::Type(td) => {
+            for statement in td.statements() {
+                match &statement.field {
+                    TypeField::Field(_, _, type_) => {
+                        if let Some(found) = find_type_in_grammar_type(type_, loc) {
+                            return Some(found);
+                        }
+                    }
+                    TypeField::Vftable(fns) => {
+                        for sig in fns {
+                            for arg in &sig.arguments {
+                                if let Argument::Named { type_, .. } = arg {
+                                    if let Some(found) = find_type_in_grammar_type(type_, loc) {
+                                        return Some(found);
+                                    }
+                                }
+                            }
+                            if let Some(ret) = &sig.return_type {
+                                if let Some(found) = find_type_in_grammar_type(ret, loc) {
+                                    return Some(found);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        ItemDefinitionInner::Enum(e) => return find_type_in_grammar_type(&e.type_, loc),
+        ItemDefinitionInner::Bitflags(b) => return find_type_in_grammar_type(&b.type_, loc),
+        ItemDefinitionInner::TypeAlias(ta) => return find_type_in_grammar_type(&ta.target, loc),
+    }
+
+    None
+}
+
+/// Find the imported path under the cursor within a `use` tree, returning the
+/// fully-qualified path (prefix-joined for grouped imports) and its span.
+fn find_path_in_use_tree(
+    tree: &pyxis::grammar::UseTree,
+    loc: &pyxis::span::Location,
+) -> Option<(ItemPath, pyxis::span::Span)> {
+    use pyxis::grammar::UseTree;
+    match tree {
+        UseTree::Path { path, location } => location
+            .span
+            .contains(loc)
+            .then(|| (path.clone(), location.span)),
+        UseTree::Group { prefix, items, location } => {
+            if !location.span.contains(loc) {
+                return None;
+            }
+            for item in items {
+                if let Some((sub, span)) = find_path_in_use_tree(item, loc) {
+                    let full: ItemPath = prefix.iter().chain(sub.iter()).cloned().collect();
+                    return Some((full, span));
+                }
+            }
+            None
+        }
+    }
+}
+
 /// Recursively search a grammar `Type` for an `Ident` whose location contains
-/// `loc`. Returns the `ItemPath` of the matching type reference.
+/// `loc`. Returns the `ItemPath` of the matching type reference and its span.
 fn find_type_in_grammar_type<'a>(
     type_: &'a pyxis::grammar::Type,
     loc: &pyxis::span::Location,
-) -> Option<&'a ItemPath> {
+) -> Option<(&'a ItemPath, pyxis::span::Span)> {
     use pyxis::grammar::Type;
     if !type_.location().span.contains(loc) {
         return None;
@@ -818,11 +1210,11 @@ fn find_type_in_grammar_type<'a>(
         Type::Ident { path, generic_args, .. } => {
             // Check generic args first (they're narrower spans)
             for arg in generic_args {
-                if let Some(p) = find_type_in_grammar_type(arg, loc) {
-                    return Some(p);
+                if let Some(found) = find_type_in_grammar_type(arg, loc) {
+                    return Some(found);
                 }
             }
-            Some(path)
+            Some((path, type_.location().span))
         }
         Type::ConstPointer { pointee, .. } | Type::MutPointer { pointee, .. } => {
             find_type_in_grammar_type(pointee, loc)
@@ -857,5 +1249,229 @@ fn resolve_type_path(
         | NameResolution::FoundPredefined(p)
         | NameResolution::FoundExtern(p) => Some(p),
         NameResolution::NotFound => None,
+    }
+}
+
+fn is_ident_byte(b: u8) -> bool {
+    b == b'_' || b.is_ascii_alphanumeric()
+}
+
+/// Find the span of the identifier `name` at or after `from` in `source`.
+///
+/// Grammar `Ident`s don't carry their own span, so name spans (type names,
+/// field names, function names) are recovered by searching forward from the
+/// declaration's start point for the whole-word occurrence of the name.
+fn name_span_after(
+    source: &str,
+    from: &pyxis::span::Location,
+    name: &str,
+) -> Option<pyxis::span::Span> {
+    use pyxis::span::{Location, Span};
+    if name.is_empty() {
+        return None;
+    }
+    let lines: Vec<&str> = source.lines().collect();
+    let start_line = from.line.saturating_sub(1);
+    for (li, line) in lines.iter().enumerate().skip(start_line) {
+        let from_byte = if li == start_line {
+            from.column.saturating_sub(1)
+        } else {
+            0
+        };
+        if from_byte > line.len() {
+            continue;
+        }
+        let bytes = line.as_bytes();
+        let mut search = from_byte;
+        while let Some(rel) = line[search..].find(name) {
+            let abs = search + rel;
+            let before_ok = abs == 0 || !is_ident_byte(bytes[abs - 1]);
+            let after = abs + name.len();
+            let after_ok = after >= bytes.len() || !is_ident_byte(bytes[after]);
+            if before_ok && after_ok {
+                let col = abs + 1; // 1-indexed byte column
+                return Some(Span::new(
+                    Location::new(li + 1, col),
+                    Location::new(li + 1, col + name.len()),
+                ));
+            }
+            search = abs + 1;
+        }
+    }
+    None
+}
+
+/// Find the span of a `for <path>` clause (in a backend prologue/epilogue)
+/// whose path matches `path` and whose span contains `loc`. The `for_type`
+/// clause has no recorded span, so we recover it by scanning the backend
+/// block's source for `for <path>`.
+fn find_for_path_span(
+    content: &str,
+    block_span: &pyxis::span::Span,
+    path: &ItemPath,
+    loc: &pyxis::span::Location,
+) -> Option<pyxis::span::Span> {
+    use pyxis::span::{Location, Span};
+    let path_str = path.to_string();
+    let lines: Vec<&str> = content.lines().collect();
+    let lo = block_span.start.line.saturating_sub(1);
+    let hi = block_span.end.line.saturating_sub(1).min(lines.len().saturating_sub(1));
+    for li in lo..=hi {
+        let line = lines[li];
+        let bytes = line.as_bytes();
+        let mut search = 0;
+        while let Some(rel) = line[search..].find("for ") {
+            let after = search + rel + 4; // first byte of the path after "for "
+            if line[after..].starts_with(&path_str) {
+                let end = after + path_str.len();
+                let boundary_ok = bytes.get(end).is_none_or(|&b| !is_ident_byte(b) && b != b':');
+                if boundary_ok {
+                    let span = Span::new(
+                        Location::new(li + 1, after + 1),
+                        Location::new(li + 1, end + 1),
+                    );
+                    if span.contains(loc) {
+                        return Some(span);
+                    }
+                }
+            }
+            search = after;
+        }
+    }
+    None
+}
+
+/// Render a definition/field's attributes compactly (e.g. `#[base] #[cfg(...)]`).
+fn render_attributes(attributes: &pyxis::grammar::Attributes) -> String {
+    use pyxis::grammar::Attribute;
+    attributes
+        .0
+        .iter()
+        .map(|a| match a {
+            Attribute::Ident { ident, .. } => format!("#[{}]", ident.as_str()),
+            Attribute::Function { name, .. } => format!("#[{}(…)]", name.as_str()),
+            Attribute::Assign { name, .. } => format!("#[{} = …]", name.as_str()),
+            Attribute::Cfg { .. } => "#[cfg(…)]".to_string(),
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// Render a function signature as Pyxis source (e.g. `pub fn foo(&mut self, x: u32) -> bool`).
+fn render_fn_signature(f: &pyxis::grammar::Function) -> String {
+    use pyxis::grammar::{Argument, Visibility};
+    let mut s = String::new();
+    if matches!(f.visibility, Visibility::Public) {
+        s.push_str("pub ");
+    }
+    s.push_str("fn ");
+    s.push_str(f.name.as_str());
+    s.push('(');
+    let args: Vec<String> = f
+        .arguments
+        .iter()
+        .map(|arg| match arg {
+            Argument::ConstSelf { .. } => "&self".to_string(),
+            Argument::MutSelf { .. } => "&mut self".to_string(),
+            Argument::Named { ident, type_, .. } => format!("{}: {}", ident.as_str(), type_),
+        })
+        .collect();
+    s.push_str(&args.join(", "));
+    s.push(')');
+    if let Some(ret) = &f.return_type {
+        s.push_str(&format!(" -> {ret}"));
+    }
+    s
+}
+
+/// Hover markdown for a function (vftable entry or impl method).
+fn format_function_hover(f: &pyxis::grammar::Function) -> String {
+    let mut md = format!("**fn** `{}`\n\n", f.name.as_str());
+    md.push_str(&format!("```pyxis\n{}\n```\n", render_fn_signature(f)));
+    let attrs = render_attributes(&f.attributes);
+    if !attrs.is_empty() {
+        md.push_str(&format!("\n**Attributes:** {attrs}\n"));
+    }
+    if !f.doc_comments.is_empty() {
+        md.push_str(&format!("\n{}\n", f.doc_comments.join("\n")));
+    }
+    md
+}
+
+/// Hover markdown for a struct field.
+fn format_field_hover(
+    vis: &pyxis::grammar::Visibility,
+    name: &pyxis::grammar::Ident,
+    type_: &pyxis::grammar::Type,
+    attributes: &pyxis::grammar::Attributes,
+    type_size: Option<usize>,
+    offset: Option<usize>,
+) -> String {
+    let vis_str = if matches!(vis, pyxis::grammar::Visibility::Public) {
+        "pub "
+    } else {
+        ""
+    };
+    let mut md = format!("**field** `{}`\n\n", name.as_str());
+    md.push_str(&format!("```pyxis\n{}{}: {}\n```\n", vis_str, name.as_str(), type_));
+    let attrs = render_attributes(attributes);
+    if !attrs.is_empty() {
+        md.push_str(&format!("\n**Attributes:** {attrs}\n"));
+    }
+    if let Some(offset) = offset {
+        md.push_str(&format!("\n**Offset:** `0x{offset:X}` ({offset})\n"));
+    }
+    if let Some(size) = type_size {
+        md.push_str(&format!("**Type size:** `0x{size:X}` ({size}) bytes\n"));
+    }
+    md
+}
+
+/// Compute a field's byte offset within its resolved parent type by summing the
+/// sizes of preceding layout regions. The resolver inserts explicit padding
+/// regions, so the running total is the true offset.
+fn field_offset(
+    parent_resolved: &pyxis::semantic::types::ItemStateResolved,
+    field_name: &str,
+    type_registry: &pyxis::semantic::type_registry::TypeRegistry,
+) -> Option<usize> {
+    let pyxis::semantic::types::ItemDefinitionInner::Type(td) = &parent_resolved.inner else {
+        return None;
+    };
+    let mut offset = 0usize;
+    for region in &td.regions {
+        if region.name.as_deref() == Some(field_name) {
+            return Some(offset);
+        }
+        offset += region.size(type_registry)?;
+    }
+    None
+}
+
+/// Best-effort size of a field type: pointer → pointer size, array →
+/// element × count, `unknown<N>` → N, named type → its resolved size.
+fn type_size_of(
+    type_: &pyxis::grammar::Type,
+    type_registry: &pyxis::semantic::type_registry::TypeRegistry,
+    scope: &[ItemPath],
+    decl_registry: &pyxis::semantic::declaration_registry::DeclarationRegistry,
+    pointer_size: usize,
+) -> Option<usize> {
+    use pyxis::grammar::Type;
+    match type_ {
+        Type::ConstPointer { .. } | Type::MutPointer { .. } => Some(pointer_size),
+        Type::Array { element, size, .. } => {
+            type_size_of(element, type_registry, scope, decl_registry, pointer_size)
+                .map(|s| s * size)
+        }
+        Type::Unknown { size, .. } => Some(*size),
+        Type::Ident { path, .. } => {
+            let resolved = resolve_type_path(path, scope, decl_registry)?;
+            type_registry
+                .get(&resolved, &pyxis::span::ItemLocation::internal())
+                .ok()?
+                .resolved()
+                .map(|r| r.size)
+        }
     }
 }

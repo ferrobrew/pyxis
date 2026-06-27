@@ -104,15 +104,15 @@ fn snapshot_hover() {
         {
           "contents": {
             "kind": "markdown",
-            "value": "**type** `Foo`\n\n**Fields:**\n- pub x: u32\n- pub y: u64\n"
+            "value": "**type** `Foo`\n\n**Fields:**\n- `pub x: u32`\n- `pub y: u64`\n"
           },
           "range": {
             "end": {
-              "character": 1,
-              "line": 3
+              "character": 12,
+              "line": 0
             },
             "start": {
-              "character": 0,
+              "character": 9,
               "line": 0
             }
           }
