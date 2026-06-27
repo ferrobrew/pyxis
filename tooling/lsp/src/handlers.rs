@@ -233,29 +233,10 @@ impl ServerState {
                             }
                         }
                     }
-                    // Anywhere else inside the definition's body (blank lines,
-                    // the base type) → show the containing type, but keep the
-                    // highlight scoped to its name rather than the whole
-                    // definition.
-                    if definition.location.span.contains(&loc) {
-                        if let Some(span) = name_span_after(
-                            content,
-                            &definition.declaration_location.span.start,
-                            definition.name.as_str(),
-                        ) {
-                            let item_path = match self.module_path_for(uri) {
-                                Some(mp) => mp.join(definition.name.as_str().into()),
-                                None => ItemPath::from(definition.name.as_str()),
-                            };
-                            let resolved = resolve_item(&self.db, source_set, pointer_size, item_path);
-                            let value = if let Some(rs) = resolved.item(&self.db).resolved() {
-                                format_type_hover_with_size(definition, rs.size, rs.alignment)
-                            } else {
-                                format_type_hover(definition)
-                            };
-                            return hover_response(req.id, value, content, &span);
-                        }
-                    }
+                    // Deliberately no "anywhere else in the body" fallback: a
+                    // hover must never highlight a token the cursor isn't on, so
+                    // blank space / braces / keywords resolve to nothing rather
+                    // than the (distant) type name.
                 }
                 // Impl methods (including `#[cfg(...)]`-gated blocks).
                 pyxis::grammar::ModuleItem::Impl { impl_block } => {
