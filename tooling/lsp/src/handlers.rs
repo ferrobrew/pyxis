@@ -138,9 +138,10 @@ impl ServerState {
                                     // field type → describe the shape, not the
                                     // field. (The pointee/element is handled as a
                                     // type reference in branch 1.)
-                                    if let Some((value, span)) =
-                                        type_shell_at(type_, &loc, pointer_size)
-                                    {
+                                    if let Some((value, span)) = type_shell_at(
+                                        type_, &loc, type_registry, &scope, decl_registry,
+                                        pointer_size,
+                                    ) {
                                         return hover_response(req.id, value, content, &span);
                                     }
                                     let span = name_span_after(
@@ -1972,8 +1973,8 @@ fn format_field_hover(
     } else {
         ""
     };
-    let mut md = format!("**field** `{}`\n\n", name.as_str());
-    md.push_str(&format!("```pyxis\n{}{}: {}\n```\n", vis_str, name.as_str(), type_));
+    // The signature line already names the field, so no separate header.
+    let mut md = format!("```pyxis\n{}{}: {}\n```\n", vis_str, name.as_str(), type_);
     let attrs = render_attributes(attributes);
     if !attrs.is_empty() {
         md.push_str(&format!("\n**Attributes:** {attrs}\n"));
@@ -2016,6 +2017,9 @@ fn field_offset(
 fn type_shell_at(
     type_: &pyxis::grammar::Type,
     loc: &pyxis::span::Location,
+    type_registry: &pyxis::semantic::type_registry::TypeRegistry,
+    scope: &[ItemPath],
+    decl_registry: &pyxis::semantic::declaration_registry::DeclarationRegistry,
     pointer_size: usize,
 ) -> Option<(String, pyxis::span::Span)> {
     use pyxis::grammar::Type;
@@ -2030,7 +2034,7 @@ fn type_shell_at(
     // Cursor is deeper, on the inner type — recurse (it may itself be a shell).
     if let Some(inner) = inner {
         if inner.location().span.contains(loc) {
-            return type_shell_at(inner, loc, pointer_size);
+            return type_shell_at(inner, loc, type_registry, scope, decl_registry, pointer_size);
         }
     }
     let span = type_.location().span;
@@ -2046,7 +2050,16 @@ fn type_shell_at(
             md
         }
         Type::Array { element, size, .. } => {
-            format!("**array** `{type_}`\n\n`{size}` × `{element}`\n")
+            let mut md = format!("**array** `{type_}`\n\n`{size}` × `{element}`\n");
+            let mut facts = Vec::new();
+            if let Some(s) = type_size_of(type_, type_registry, scope, decl_registry, pointer_size) {
+                facts.push(("size", fmt_bytes(s)));
+            }
+            if let Some(a) = type_align_of(type_, type_registry, scope, decl_registry, pointer_size) {
+                facts.push(("align", fmt_bytes(a)));
+            }
+            push_facts(&mut md, &facts);
+            md
         }
         Type::Unknown { size, .. } => {
             let mut md = format!("**unknown** `{type_}`\n");
@@ -2058,6 +2071,33 @@ fn type_shell_at(
         Type::Ident { .. } => return None,
     };
     Some((md, span))
+}
+
+/// Best-effort alignment of a type: pointer → pointer size, array → element
+/// alignment, named type → its resolved alignment.
+fn type_align_of(
+    type_: &pyxis::grammar::Type,
+    type_registry: &pyxis::semantic::type_registry::TypeRegistry,
+    scope: &[ItemPath],
+    decl_registry: &pyxis::semantic::declaration_registry::DeclarationRegistry,
+    pointer_size: usize,
+) -> Option<usize> {
+    use pyxis::grammar::Type;
+    match type_ {
+        Type::ConstPointer { .. } | Type::MutPointer { .. } => Some(pointer_size),
+        Type::Array { element, .. } => {
+            type_align_of(element, type_registry, scope, decl_registry, pointer_size)
+        }
+        Type::Unknown { .. } => None,
+        Type::Ident { path, .. } => {
+            let resolved = resolve_type_path(path, scope, decl_registry)?;
+            type_registry
+                .get(&resolved, &pyxis::span::ItemLocation::internal())
+                .ok()?
+                .resolved()
+                .map(|r| r.alignment)
+        }
+    }
 }
 
 /// Best-effort size of a field type: pointer → pointer size, array →

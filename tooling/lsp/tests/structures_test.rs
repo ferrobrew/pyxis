@@ -71,8 +71,7 @@ fn structural_hovers() {
 
     let (l, c) = at("transform", 0); // field name
     let h = hover_text(&st, &uri, l, c);
-    assert!(h.contains("**field** `transform`"), "got {h}");
-    assert!(h.contains("Matrix4"), "field hover shows its type: {h}");
+    assert!(h.contains("pub transform: Matrix4"), "field hover shows its signature: {h}");
 
     let (l, c) = at("destructor", 0); // vftable fn
     assert!(hover_text(&st, &uri, l, c).contains("**fn** `destructor`"));
