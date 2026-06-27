@@ -41,9 +41,6 @@ impl ServerState {
         // Determine workspace root paths
         let root_paths = Self::extract_root_paths(&params);
 
-        let mut debug_log = String::new();
-        debug_log.push_str(&format!("Workspace roots: {:?}\n", root_paths));
-
         let mut state = Self {
             db: PyxisDatabaseImpl::default(),
             file_store: FileStore::new(),
@@ -56,21 +53,6 @@ impl ServerState {
         for root in &root_paths {
             state.discover_projects(root);
         }
-        debug_log.push_str(&format!("Discovered {} projects, {} documents\n",
-            state.projects.len(), state.documents.len()));
-        for (root, ps) in &state.projects {
-            let count = state.documents.values()
-                .filter(|d| d.project_root.as_ref() == Some(root))
-                .count();
-            debug_log.push_str(&format!("  project {:?} (pointer_size={}) → {} files\n", root, ps, count));
-            for d in state.documents.values() {
-                if d.project_root.as_ref() == Some(root) {
-                    debug_log.push_str(&format!("    - {} (file_id={})\n",
-                        state.file_store.filename(d.file_id), d.file_id.as_u32()));
-                }
-            }
-        }
-        let _ = std::fs::write("/tmp/pyxis-lsp-debug.log", debug_log);
 
         Ok(state)
     }
@@ -347,10 +329,16 @@ impl ServerState {
     }
 
     /// Handle textDocument/didClose
+    ///
+    /// We do NOT remove the document from the database. The file still exists
+    /// on disk and is needed for cross-file analysis (go-to-definition, hover,
+    /// diagnostics). Removing it would cause other files' use-statements and
+    /// type references to fail resolution. The editor will re-send did_open
+    /// if the file is opened again.
     pub fn handle_did_close(&mut self, notif: Notification) -> Result<(), Box<dyn std::error::Error>> {
-        let params: lsp_types::DidCloseTextDocumentParams =
+        let _params: lsp_types::DidCloseTextDocumentParams =
             serde_json::from_value(notif.params)?;
-        self.documents.remove(&params.text_document.uri);
+        // Intentionally a no-op — keep the file in the db.
         Ok(())
     }
 
@@ -419,14 +407,7 @@ impl ServerState {
 
         let mut notifications = Vec::new();
 
-        for (project_root, (sources, pointer_size)) in project_groups {
-            let mut debug_log = String::new();
-            debug_log.push_str(&format!("collect_diagnostics: project={:?}, {} sources, pointer_size={}\n",
-                project_root, sources.len(), pointer_size));
-            for s in &sources {
-                debug_log.push_str(&format!("  source: path={}\n", s.path(&self.db)));
-            }
-            let _ = std::fs::write("/tmp/pyxis-lsp-diag.log", debug_log);
+        for (_project_root, (sources, pointer_size)) in project_groups {
             if sources.is_empty() {
                 continue;
             }

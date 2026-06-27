@@ -7,7 +7,7 @@ author = "Pyxis Contributors"
 
 [language_servers.pyxis]
 name = "Pyxis Language Server"
-language = "Pyxis"
+languages = ["Pyxis"]
 
 [grammars.pyxis]
 repository = "file://../tree-sitter-pyxis"

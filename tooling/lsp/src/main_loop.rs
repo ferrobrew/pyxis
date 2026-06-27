@@ -30,7 +30,17 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 /// Run the LSP server with a given connection (for testing).
 pub fn run_with_connection(connection: Connection) -> Result<(), Box<dyn std::error::Error>> {
     let server_capabilities = ServerCapabilities {
-        text_document_sync: Some(TextDocumentSyncCapability::Kind(TextDocumentSyncKind::FULL)),
+        text_document_sync: Some(TextDocumentSyncCapability::Options(
+            lsp_types::TextDocumentSyncOptions {
+                open_close: Some(true),
+                change: Some(TextDocumentSyncKind::FULL),
+                will_save: None,
+                will_save_wait_until: None,
+                save: Some(lsp_types::TextDocumentSyncSaveOptions::SaveOptions(
+                    lsp_types::SaveOptions { include_text: Some(true) },
+                )),
+            },
+        )),
         hover_provider: Some(HoverProviderCapability::Simple(true)),
         definition_provider: Some(OneOf::Left(true)),
         completion_provider: Some(CompletionOptions::default()),
@@ -53,8 +63,14 @@ pub fn run_with_connection(connection: Connection) -> Result<(), Box<dyn std::er
         }),
     };
 
+    // NOTE: do NOT use `connection.initialize()` here — it wraps its argument
+    // in `{ "capabilities": <arg> }`, so passing a full InitializeResult would
+    // double-nest the capabilities (`result.capabilities.capabilities`) and the
+    // client would see the server as having no capabilities at all. Drive the
+    // handshake manually so the InitializeResult (incl. serverInfo) is sent verbatim.
     let initialize_value = serde_json::to_value(initialize_result)?;
-    let initialize_params = connection.initialize(initialize_value)?;
+    let (initialize_id, initialize_params) = connection.initialize_start()?;
+    connection.initialize_finish(initialize_id, initialize_value)?;
 
     let mut state = ServerState::new(&initialize_params)?;
     main_loop(&connection, &mut state)?;
