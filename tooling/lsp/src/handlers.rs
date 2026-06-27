@@ -54,7 +54,7 @@ impl ServerState {
                 // Try to get resolved info (size/alignment) via resolve_item.
                 // Build the full module-qualified item path (e.g.
                 // "world::weather::Weather") from the document's module path.
-                let sources = self.sources();
+                let sources = self.sources_for(uri);
                 let source_set = semantic::SourceSet::new(&self.db, sources);
                 let item_path = match self.module_path_for(uri) {
                     Some(mp) => mp.join(definition.name.as_str().into()),
@@ -117,7 +117,7 @@ impl ServerState {
 
         let loc = lsp_position_to_pyxis_location(content, position);
 
-        // Find a type definition at the cursor
+        // First: check if the cursor is on a definition itself
         for definition in module.definitions() {
             if definition.location.span.contains(&loc)
                 || definition.declaration_location.span.contains(&loc)
@@ -132,6 +132,53 @@ impl ServerState {
                     result: Some(serde_json::to_value(lsp_types::GotoDefinitionResponse::Scalar(location)).unwrap()),
                     error: None,
                 };
+            }
+        }
+
+        // Second: check if the cursor is on a type reference (e.g. `Camera`
+        // in `pub field: Camera` or `*mut Camera`). Walk the AST to find a
+        // Type whose location contains the cursor, resolve it to a full
+        // ItemPath via the declaration registry, then look up the definition's
+        // declaration_location in the type registry.
+        let module_path = self.module_path_for(uri);
+        let scope: Vec<ItemPath> = match &module_path {
+            Some(mp) => vec![mp.clone()],
+            None => vec![],
+        };
+
+        // Run analyze to get the type registry with resolved items
+        let sources = self.sources_for(uri);
+        let source_set = semantic::SourceSet::new(&self.db, sources);
+        let analysis = semantic::analyze(&self.db, self.pointer_size_for(uri), source_set);
+        let type_registry = analysis.type_registry(&self.db);
+
+        // Get the declaration registry for name resolution
+        let decl_set = semantic::collect_declarations(&self.db, source_set, self.pointer_size_for(uri));
+        let decl_registry = decl_set.registry(&self.db);
+
+        // Find a type reference at the cursor position
+        if let Some(resolved_path) = find_type_reference_at(&module, &loc, &scope, decl_registry) {
+            if let Ok(item) = type_registry.get(&resolved_path, &pyxis::span::ItemLocation::internal()) {
+                let def_loc = &item.declaration_location;
+                if let Some(target_uri) = self.file_id_to_uri(&def_loc.file_id) {
+                    let Some(target_content) = self.get_content(&target_uri) else {
+                        return Response {
+                            id: req.id,
+                            result: Some(serde_json::Value::Null),
+                            error: None,
+                        };
+                    };
+                    let range = pyxis_span_to_lsp_range(&target_content, &def_loc.span);
+                    let location = lsp_types::Location {
+                        uri: target_uri,
+                        range,
+                    };
+                    return Response {
+                        id: req.id,
+                        result: Some(serde_json::to_value(lsp_types::GotoDefinitionResponse::Scalar(location)).unwrap()),
+                        error: None,
+                    };
+                }
             }
         }
 
@@ -326,7 +373,7 @@ impl ServerState {
             };
         };
 
-        let sources = self.sources();
+        let sources = self.sources_for(uri);
         let source_set = semantic::SourceSet::new(&self.db, sources);
         let analysis = semantic::analyze(&self.db, self.pointer_size_for(uri), source_set);
         let type_registry = analysis.type_registry(&self.db);
@@ -387,7 +434,7 @@ impl ServerState {
             };
         };
 
-        let sources = self.sources();
+        let sources = self.sources_for(uri);
         let source_set = semantic::SourceSet::new(&self.db, sources);
         let analysis = semantic::analyze(&self.db, self.pointer_size_for(uri), source_set);
         let type_registry = analysis.type_registry(&self.db);
@@ -681,5 +728,134 @@ fn error_response(id: lsp_server::RequestId, e: serde_json::Error) -> Response {
             message: e.to_string(),
             data: None,
         }),
+    }
+}
+
+/// Find a type reference at the given location in a parsed module.
+///
+/// Walks the grammar AST looking for `Type::Ident` nodes whose span contains
+/// the cursor position. When found, resolves the type name through the
+/// declaration registry (which handles scope/use-statement resolution) to
+/// get the full `ItemPath`.
+///
+/// Resolution itself comes from the Salsa-computed `DeclarationRegistry` —
+/// this function only does the position→node matching, which is an LSP
+/// concern (the compiler never works with cursor positions).
+fn find_type_reference_at(
+    module: &pyxis::grammar::Module,
+    loc: &pyxis::span::Location,
+    scope: &[ItemPath],
+    decl_registry: &pyxis::semantic::declaration_registry::DeclarationRegistry,
+) -> Option<ItemPath> {
+    for definition in module.definitions() {
+        // Walk type definition fields
+        if let pyxis::grammar::ItemDefinitionInner::Type(td) = &definition.inner {
+            for statement in td.statements() {
+                if let pyxis::grammar::TypeField::Field(_, _, type_) = &statement.field {
+                    if let Some(path) = find_type_in_grammar_type(type_, loc) {
+                        return resolve_type_path(path, scope, decl_registry);
+                    }
+                }
+            }
+        }
+
+        // Walk enum/bitflags base types
+        if let pyxis::grammar::ItemDefinitionInner::Enum(e) = &definition.inner {
+            if let Some(path) = find_type_in_grammar_type(&e.type_, loc) {
+                return resolve_type_path(path, scope, decl_registry);
+            }
+        }
+        if let pyxis::grammar::ItemDefinitionInner::Bitflags(b) = &definition.inner {
+            if let Some(path) = find_type_in_grammar_type(&b.type_, loc) {
+                return resolve_type_path(path, scope, decl_registry);
+            }
+        }
+
+        // Walk type alias target types
+        if let pyxis::grammar::ItemDefinitionInner::TypeAlias(ta) = &definition.inner {
+            if let Some(path) = find_type_in_grammar_type(&ta.target, loc) {
+                return resolve_type_path(path, scope, decl_registry);
+            }
+        }
+
+        // Walk vftable function signatures (params + return types)
+        if let pyxis::grammar::ItemDefinitionInner::Type(td) = &definition.inner {
+            for statement in td.statements() {
+                if let pyxis::grammar::TypeField::Vftable(fns) = &statement.field {
+                    for sig in fns {
+                        for arg in &sig.arguments {
+                            if let pyxis::grammar::Argument::Named { type_, .. } = arg {
+                                if let Some(path) = find_type_in_grammar_type(type_, loc) {
+                                    return resolve_type_path(path, scope, decl_registry);
+                                }
+                            }
+                        }
+                        if let Some(ret) = &sig.return_type {
+                            if let Some(path) = find_type_in_grammar_type(ret, loc) {
+                                return resolve_type_path(path, scope, decl_registry);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    None
+}
+
+/// Recursively search a grammar `Type` for an `Ident` whose location contains
+/// `loc`. Returns the `ItemPath` of the matching type reference.
+fn find_type_in_grammar_type<'a>(
+    type_: &'a pyxis::grammar::Type,
+    loc: &pyxis::span::Location,
+) -> Option<&'a ItemPath> {
+    use pyxis::grammar::Type;
+    if !type_.location().span.contains(loc) {
+        return None;
+    }
+    match type_ {
+        Type::Ident { path, generic_args, .. } => {
+            // Check generic args first (they're narrower spans)
+            for arg in generic_args {
+                if let Some(p) = find_type_in_grammar_type(arg, loc) {
+                    return Some(p);
+                }
+            }
+            Some(path)
+        }
+        Type::ConstPointer { pointee, .. } | Type::MutPointer { pointee, .. } => {
+            find_type_in_grammar_type(pointee, loc)
+        }
+        Type::Array { element, .. } => find_type_in_grammar_type(element, loc),
+        Type::Unknown { .. } => None,
+    }
+}
+
+/// Resolve a type path (from the grammar AST) to a full `ItemPath` using the
+/// declaration registry's scope resolution (handles use-statements, relative
+/// paths, and absolute paths). This is the Salsa-computed resolution — we're
+/// just calling it, not reimplementing it.
+fn resolve_type_path(
+    path: &ItemPath,
+    scope: &[ItemPath],
+    decl_registry: &pyxis::semantic::declaration_registry::DeclarationRegistry,
+) -> Option<ItemPath> {
+    use pyxis::semantic::declaration_registry::NameResolution;
+
+    // For multi-segment paths (e.g. `types::math::Vector2`), the path is
+    // likely absolute — check it directly against the registry first.
+    if path.len() > 1 && decl_registry.contains(path) {
+        return Some(path.clone());
+    }
+
+    // Single-segment or unresolved multi-segment: resolve the leaf name
+    // through the scope (handles use-statements and relative resolution).
+    let name = path.last()?.as_str();
+    match decl_registry.resolve_name(scope, name) {
+        NameResolution::Found(p)
+        | NameResolution::FoundPredefined(p)
+        | NameResolution::FoundExtern(p) => Some(p),
+        NameResolution::NotFound => None,
     }
 }

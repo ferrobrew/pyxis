@@ -334,6 +334,23 @@ impl ServerState {
         self.documents.values().map(|d| d.source_file).collect()
     }
 
+    /// Collect sources belonging to the same project as the given URI.
+    /// This ensures cross-module features (hover, go-to-def, etc.) only
+    /// analyze files within the same project — important for monorepos
+    /// where multiple projects share module paths like `types::math`.
+    pub(crate) fn sources_for(&self, uri: &Uri) -> Vec<SourceFile> {
+        let target_root = self
+            .documents
+            .get(uri)
+            .and_then(|d| d.project_root.as_ref());
+
+        self.documents
+            .values()
+            .filter(|d| d.project_root.as_ref() == target_root)
+            .map(|d| d.source_file)
+            .collect()
+    }
+
     /// Compute the module path for a document from its SourceFile.path
     /// (which is project-relative, e.g. "world/weather.pyxis").
     /// This mirrors collect_declarations' ItemPath::from_path derivation.
@@ -341,6 +358,11 @@ impl ServerState {
         let doc = self.documents.get(uri)?;
         let path_str = doc.source_file.path(&self.db);
         Some(pyxis::grammar::ItemPath::from_path(std::path::Path::new(path_str.as_str())))
+    }
+
+    /// Look up the URI for a given FileId (for cross-file go-to-definition).
+    pub(crate) fn file_id_to_uri(&self, file_id: &FileId) -> Option<Uri> {
+        self.file_id_to_uri.get(file_id).cloned()
     }
 
     /// Run the Salsa analyze query and collect diagnostics.

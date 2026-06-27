@@ -57,15 +57,43 @@
 (visibility) @keyword
 
 ; ============================================================================
-; Types — builtin primitives
+; Types — references
 ; ============================================================================
+; A `type_identifier` wraps a `path` of one or more `identifier` nodes.
+; The last identifier is the type name; intermediate ones are namespace
+; segments (handled by the Paths section below).
+;
+; Builtin primitives: u8, u32, f32, bool, void, AtomicU32, etc.
+; These match regardless of whether the type_identifier is a direct field
+; (e.g. `field type:`) or nested inside pointer_type/array_type/generic_type.
 (type_identifier
   (path
     (identifier) @type.builtin
     (#match? @type.builtin
       "^(u8|u16|u32|u64|u128|usize|i8|i16|i32|i64|i128|isize|f32|f64|bool|void|char|c_char|c_int|AtomicBool|AtomicU8|AtomicU16|AtomicU32|AtomicU64|AtomicI8|AtomicI16|AtomicI32|AtomicI64|AtomicPtr)$")))
 
-; Type definition names (after `type`/`enum`/`bitflags`)
+; Non-builtin type references: the leaf identifier of a type_identifier path.
+; We match a path whose last child is an identifier (no trailing `::`).
+; The `.` after `(identifier) @type` anchors it as the final child of `path`.
+; This covers all type positions — field types, pointer pointees, array
+; elements, generic arguments, return types, parameter types, impl targets,
+; type alias values, enum/bitflags base types.
+(type_identifier
+  (path
+    (identifier) @type .)
+  (#not-match? @type
+    "^(u8|u16|u32|u64|u128|usize|i8|i16|i32|i64|i128|isize|f32|f64|bool|void|char|c_char|c_int|AtomicBool|AtomicU8|AtomicU16|AtomicU32|AtomicU64|AtomicI8|AtomicI16|AtomicI32|AtomicI64|AtomicPtr)$"))
+
+; Generic type outer name (e.g. `SharedPtr` in `SharedPtr<Camera>`)
+(generic_type
+  name: (path
+    (identifier) @type .)
+  (#not-match? @type
+    "^(u8|u16|u32|u64|u128|usize|i8|i16|i32|i64|i128|isize|f32|f64|bool|void|char|c_char|c_int|AtomicBool|AtomicU8|AtomicU16|AtomicU32|AtomicU64|AtomicI8|AtomicI16|AtomicI32|AtomicI64|AtomicPtr)$"))
+
+; ============================================================================
+; Type definition names (the identifier after `type`/`enum`/`bitflags`)
+; ============================================================================
 (type_definition
   name: (identifier) @type)
 (enum_definition
@@ -86,33 +114,6 @@
 ; Type parameter names (generics)
 (type_parameter
   name: (identifier) @type.parameter)
-
-; Non-builtin type identifiers in field/argument/return positions
-(field
-  type: (type_identifier
-    (path
-      (identifier) @type))
-  (#not-match? @type
-    "^(u8|u16|u32|u64|u128|usize|i8|i16|i32|i64|i128|isize|f32|f64|bool|void|char|c_char|c_int|AtomicBool|AtomicU8|AtomicU16|AtomicU32|AtomicU64|AtomicI8|AtomicI16|AtomicI32|AtomicI64|AtomicPtr)$"))
-
-(function_signature
-  return_type: (type_identifier
-    (path
-      (identifier) @type))
-  (#not-match? @type
-    "^(u8|u16|u32|u64|u128|usize|i8|i16|i32|i64|i128|isize|f32|f64|bool|void|char|c_char|c_int|AtomicBool|AtomicU8|AtomicU16|AtomicU32|AtomicU64|AtomicI8|AtomicI16|AtomicI32|AtomicI64|AtomicPtr)$"))
-
-(named_argument
-  type: (type_identifier
-    (path
-      (identifier) @type))
-  (#not-match? @type
-    "^(u8|u16|u32|u64|u128|usize|i8|i16|i32|i64|i128|isize|f32|f64|bool|void|char|c_char|c_int|AtomicBool|AtomicU8|AtomicU16|AtomicU32|AtomicU64|AtomicI8|AtomicI16|AtomicI32|AtomicI64|AtomicPtr)$"))
-
-; Generic type name (the outer identifier in `Foo<Bar>`)
-(generic_type
-  name: (path
-    (identifier) @type))
 
 ; ============================================================================
 ; Functions
