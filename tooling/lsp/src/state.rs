@@ -18,14 +18,16 @@ pub struct ServerState {
     pub(crate) documents: HashMap<Uri, Document>,
     /// FileId → URI, for converting diagnostic ItemLocations to LSP Locations
     file_id_to_uri: HashMap<FileId, Uri>,
-    /// Pointer size (default 4, could be config-derived in future)
-    pub(crate) pointer_size: usize,
+    /// Map from project root path → project config (pointer_size)
+    projects: HashMap<std::path::PathBuf, usize>,
 }
 
 pub(crate) struct Document {
     pub(crate) source_file: SourceFile,
     pub(crate) file_id: FileId,
     pub(crate) content: String,
+    /// The project root this file belongs to (for determining pointer_size)
+    pub(crate) project_root: Option<std::path::PathBuf>,
 }
 
 impl ServerState {
@@ -36,32 +38,33 @@ impl ServerState {
         // Determine workspace root paths
         let root_paths = Self::extract_root_paths(&params);
 
-        // Read pointer_size from pyxis.toml if available
-        let mut pointer_size = 4;
-        for root in &root_paths {
-            let config_path = root.join("pyxis.toml");
-            if config_path.exists() {
-                if let Ok(config) = pyxis::config::Config::load(&config_path) {
-                    pointer_size = config.project.pointer_size;
-                    break;
-                }
-            }
-        }
-
         let mut state = Self {
             db: PyxisDatabaseImpl::default(),
             file_store: FileStore::new(),
             documents: HashMap::new(),
             file_id_to_uri: HashMap::new(),
-            pointer_size,
+            projects: HashMap::new(),
         };
 
-        // Discover and register all .pyxis files in the workspace
+        // Discover all pyxis.toml files and their associated .pyxis files
         for root in &root_paths {
-            state.discover_files(root);
+            state.discover_projects(root);
         }
 
         Ok(state)
+    }
+
+    /// Get the pointer_size for a given file URI by finding its project root.
+    pub(crate) fn pointer_size_for(&self, uri: &Uri) -> usize {
+        let Some(doc) = self.documents.get(uri) else {
+            return 4;
+        };
+        if let Some(project_root) = &doc.project_root {
+            if let Some(&ps) = self.projects.get(project_root) {
+                return ps;
+            }
+        }
+        4
     }
 
     /// Extract workspace root paths from initialize params.
@@ -88,57 +91,102 @@ impl ServerState {
         roots
     }
 
-    /// Scan a directory recursively for .pyxis files and register them in the Salsa db.
-    fn discover_files(&mut self, root: &std::path::Path) {
-        let mut files = Vec::new();
-        Self::collect_pyxis_files(root, &mut files);
-        for path in files {
-            let source = match std::fs::read_to_string(&path) {
-                Ok(s) => s,
-                Err(_) => continue,
+    /// Scan a workspace root for pyxis.toml files. Each pyxis.toml defines a
+    /// project; all .pyxis files under it (but not under a deeper pyxis.toml)
+    /// belong to that project.
+    fn discover_projects(&mut self, root: &std::path::Path) {
+        // Find all pyxis.toml files under the workspace root
+        let mut config_files = Vec::new();
+        Self::collect_files(root, "pyxis.toml", &mut config_files);
+
+        for config_path in config_files {
+            let project_root = config_path.parent().unwrap_or(root).to_path_buf();
+
+            // Read pointer_size from pyxis.toml
+            let pointer_size = if let Ok(config) = pyxis::config::Config::load(&config_path) {
+                config.project.pointer_size
+            } else {
+                4
             };
+            self.projects.insert(project_root.clone(), pointer_size);
 
-            let relative_path = path
-                .strip_prefix(root)
-                .unwrap_or(&path)
-                .display()
-                .to_string();
-
-            // Skip if already registered (e.g. opened via didOpen)
-            if self
-                .documents
-                .values()
-                .any(|d| self.file_store.filename(d.file_id).ends_with(&relative_path))
-            {
-                continue;
+            // Discover all .pyxis files under this project root
+            let mut pyxis_files = Vec::new();
+            Self::collect_pyxis_files(&project_root, &mut pyxis_files);
+            for path in pyxis_files {
+                self.register_discovered_file(&path, &project_root);
             }
-
-            let file_id = self
-                .file_store
-                .register_in_memory(relative_path.clone(), source.clone());
-            let source_file = SourceFile::new(
-                &self.db,
-                relative_path.clone(),
-                file_id.as_u32(),
-                source.clone(),
-            );
-
-            let uri = file_path_to_uri(&path)
-                .unwrap_or_else(|| {
-                    let uri_str = format!("file:///{}", relative_path.clone());
-                    Uri::from_str(&uri_str).unwrap()
-                });
-
-            self.documents.insert(
-                uri.clone(),
-                Document {
-                    source_file,
-                    file_id,
-                    content: source,
-                },
-            );
-            self.file_id_to_uri.insert(file_id, uri);
         }
+    }
+
+    /// Register a discovered .pyxis file in the Salsa db.
+    fn register_discovered_file(&mut self, path: &std::path::Path, project_root: &std::path::Path) {
+        let source = match std::fs::read_to_string(path) {
+            Ok(s) => s,
+            Err(_) => return,
+        };
+
+        let relative_path = path
+            .strip_prefix(project_root)
+            .unwrap_or(path)
+            .display()
+            .to_string();
+
+        // Skip if already registered
+        if self
+            .documents
+            .values()
+            .any(|d| self.file_store.filename(d.file_id) == relative_path)
+        {
+            return;
+        }
+
+        let file_id = self
+            .file_store
+            .register_in_memory(relative_path.clone(), source.clone());
+        let source_file = SourceFile::new(
+            &self.db,
+            relative_path,
+            file_id.as_u32(),
+            source.clone(),
+        );
+
+        let uri = file_path_to_uri(path).unwrap_or_else(|| {
+            let uri_str = format!("file:///{}", path.display());
+            Uri::from_str(&uri_str).unwrap()
+        });
+
+        self.documents.insert(
+            uri.clone(),
+            Document {
+                source_file,
+                file_id,
+                content: source,
+                project_root: Some(project_root.to_path_buf()),
+            },
+        );
+        self.file_id_to_uri.insert(file_id, uri);
+    }
+
+    /// Find the project root for a file by walking up the directory tree
+    /// looking for a pyxis.toml file.
+    fn find_project_root(&self, path: &std::path::Path) -> Option<std::path::PathBuf> {
+        // First check if any known project root is an ancestor of this path
+        for project_root in self.projects.keys() {
+            if path.starts_with(project_root) {
+                return Some(project_root.clone());
+            }
+        }
+
+        // Walk up the directory tree looking for pyxis.toml
+        let mut current = path.parent();
+        while let Some(dir) = current {
+            if dir.join("pyxis.toml").exists() {
+                return Some(dir.to_path_buf());
+            }
+            current = dir.parent();
+        }
+        None
     }
 
     /// Recursively collect all .pyxis file paths under a directory.
@@ -150,13 +198,32 @@ impl ServerState {
         for entry in entries.flatten() {
             let path = entry.path();
             if path.is_dir() {
-                // Skip hidden directories (e.g. .git) and build artifacts
                 let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
                 if name.starts_with('.') || name == "target" || name == "node_modules" {
                     continue;
                 }
                 Self::collect_pyxis_files(&path, out);
             } else if path.extension().and_then(|e| e.to_str()) == Some("pyxis") {
+                out.push(path);
+            }
+        }
+    }
+
+    /// Recursively collect all files with a given name under a directory.
+    fn collect_files(dir: &std::path::Path, filename: &str, out: &mut Vec<std::path::PathBuf>) {
+        let entries = match std::fs::read_dir(dir) {
+            Ok(e) => e,
+            Err(_) => return,
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                if name.starts_with('.') || name == "target" || name == "node_modules" {
+                    continue;
+                }
+                Self::collect_files(&path, filename, out);
+            } else if path.file_name().and_then(|n| n.to_str()) == Some(filename) {
                 out.push(path);
             }
         }
@@ -180,6 +247,10 @@ impl ServerState {
             let filename = uri_to_filename(&uri);
             let file_id = self.file_store.register_in_memory(filename, text.clone());
 
+            // Try to find the project root for this file
+            let project_root = uri_to_file_path(&uri)
+                .and_then(|path| self.find_project_root(&path));
+
             let source_file = SourceFile::new(
                 &self.db,
                 uri_to_filename(&uri),
@@ -193,6 +264,7 @@ impl ServerState {
                     source_file,
                     file_id,
                     content: text,
+                    project_root,
                 },
             );
             self.file_id_to_uri.insert(file_id, uri);
@@ -248,44 +320,69 @@ impl ServerState {
         self.documents.values().map(|d| d.source_file).collect()
     }
 
-    /// Run the Salsa analyze query and collect diagnostics
+    /// Run the Salsa analyze query and collect diagnostics.
+    /// Groups documents by project root so each project is analyzed
+    /// independently with its own pointer_size.
     pub fn collect_diagnostics(&self) -> Vec<Notification> {
-        let sources = self.sources();
-        if sources.is_empty() {
+        if self.documents.is_empty() {
             return vec![];
         }
 
-        let source_set = semantic::SourceSet::new(&self.db, sources);
-        let analysis = semantic::analyze(&self.db, self.pointer_size, source_set);
+        // Group sources by project root (None → default project)
+        let mut project_groups: HashMap<Option<&std::path::PathBuf>, (Vec<SourceFile>, usize)> =
+            HashMap::new();
+        for doc in self.documents.values() {
+            let entry = project_groups
+                .entry(doc.project_root.as_ref())
+                .or_insert_with(|| (Vec::new(), 4));
+            entry.0.push(doc.source_file);
+        }
 
-        let mut notifications = Vec::new();
-
-        // Collect parse errors
-        for parse_err in analysis.parse_errors(&self.db).iter() {
-            let loc = parse_err.location();
-            if let Some(notif) = self.error_to_notification(loc, &parse_err.to_string()) {
-                notifications.push(notif);
+        // Set pointer_size for each group based on the project config
+        for (project_root, (_, pointer_size)) in project_groups.iter_mut() {
+            if let Some(root) = project_root {
+                if let Some(&ps) = self.projects.get(*root) {
+                    *pointer_size = ps;
+                }
             }
         }
 
-        // Collect semantic errors
-        for sem_err in analysis.errors(&self.db).iter() {
-            // TypeResolutionStalled may contain multiple unresolved references;
-            // emit one diagnostic per reference for better UX.
-            if let pyxis::semantic::SemanticError::TypeResolutionStalled {
-                unresolved_references,
-                ..
-            } = sem_err
-            {
-                for r in unresolved_references {
-                    let msg = format!("{}: Type not found: `{}`", r.location, r.type_name);
-                    if let Some(notif) = self.error_to_notification(&r.location, &msg) {
+        let mut notifications = Vec::new();
+
+        for (_, (sources, pointer_size)) in project_groups {
+            if sources.is_empty() {
+                continue;
+            }
+            let source_set = semantic::SourceSet::new(&self.db, sources);
+            let analysis = semantic::analyze(&self.db, pointer_size, source_set);
+
+            // Collect parse errors
+            for parse_err in analysis.parse_errors(&self.db).iter() {
+                let loc = parse_err.location();
+                if let Some(notif) = self.error_to_notification(loc, &parse_err.to_string()) {
+                    notifications.push(notif);
+                }
+            }
+
+            // Collect semantic errors
+            for sem_err in analysis.errors(&self.db).iter() {
+                // TypeResolutionStalled may contain multiple unresolved references;
+                // emit one diagnostic per reference for better UX.
+                if let pyxis::semantic::SemanticError::TypeResolutionStalled {
+                    unresolved_references,
+                    ..
+                } = sem_err
+                {
+                    for r in unresolved_references {
+                        let msg = format!("{}: Type not found: `{}`", r.location, r.type_name);
+                        if let Some(notif) = self.error_to_notification(&r.location, &msg) {
+                            notifications.push(notif);
+                        }
+                    }
+                } else if let Some(loc) = sem_err.location() {
+                    if let Some(notif) = self.error_to_notification(loc, &sem_err.to_string()) {
                         notifications.push(notif);
                     }
-                }
-            } else if let Some(loc) = sem_err.location() {
-                if let Some(notif) = self.error_to_notification(loc, &sem_err.to_string()) {
-                    notifications.push(notif);
                 }
             }
         }

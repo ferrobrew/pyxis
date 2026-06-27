@@ -55,7 +55,7 @@ impl ServerState {
                 let sources = self.sources();
                 let source_set = semantic::SourceSet::new(&self.db, sources);
                 let item_path = ItemPath::from(definition.name.as_str());
-                let resolved = resolve_item(&self.db, source_set, self.pointer_size, item_path);
+                let resolved = resolve_item(&self.db, source_set, self.pointer_size_for(uri), item_path);
                 let resolved_item = resolved.item(&self.db);
 
                 let hover = if let Some(resolved_state) = resolved_item.resolved() {
@@ -323,7 +323,7 @@ impl ServerState {
 
         let sources = self.sources();
         let source_set = semantic::SourceSet::new(&self.db, sources);
-        let analysis = semantic::analyze(&self.db, self.pointer_size, source_set);
+        let analysis = semantic::analyze(&self.db, self.pointer_size_for(uri), source_set);
         let type_registry = analysis.type_registry(&self.db);
 
         let mut lenses = Vec::new();
@@ -381,7 +381,7 @@ impl ServerState {
 
         let sources = self.sources();
         let source_set = semantic::SourceSet::new(&self.db, sources);
-        let analysis = semantic::analyze(&self.db, self.pointer_size, source_set);
+        let analysis = semantic::analyze(&self.db, self.pointer_size_for(uri), source_set);
         let type_registry = analysis.type_registry(&self.db);
 
         let mut hints = Vec::new();
