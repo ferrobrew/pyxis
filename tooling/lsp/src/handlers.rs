@@ -627,7 +627,10 @@ impl ServerState {
 
         match pyxis::parser::parse_str_with_file_id(content, file_id) {
             Ok(module) => {
-                let formatted = pyxis::pretty_print::pretty_print(&module);
+                // pretty_print trims trailing whitespace; re-add a single final
+                // newline so format-on-save doesn't strip the file's trailing
+                // newline (which shows up as "the last line was removed").
+                let formatted = format!("{}\n", pyxis::pretty_print::pretty_print(&module));
 
                 // Return a single TextEdit replacing the entire document
                 let edit = TextEdit {

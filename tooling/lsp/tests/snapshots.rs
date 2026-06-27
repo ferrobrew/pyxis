@@ -310,7 +310,7 @@ fn snapshot_formatting() {
     expect![[r#"
         [
           {
-            "newText": "pub type Foo {\n    pub x: u32,\n    pub y: u64,\n}\n\npub enum Color: u32 {\n    Red = 0,\n    Green = 1,\n    Blue = 2,\n}\n\npub fn freestanding() -> u32;",
+            "newText": "pub type Foo {\n    pub x: u32,\n    pub y: u64,\n}\n\npub enum Color: u32 {\n    Red = 0,\n    Green = 1,\n    Blue = 2,\n}\n\npub fn freestanding() -> u32;\n",
             "range": {
               "end": {
                 "character": 0,
