@@ -228,3 +228,21 @@ fn extern_value_and_type_hover() {
     assert!(hover_text(&st, &uri, 1, l.find("Bar").unwrap() as u32 + 1).contains("**type** `Bar`"),
         "forward-referenced extern type should resolve");
 }
+
+#[test]
+fn pointer_and_array_shells() {
+    let base = std::env::temp_dir().join(format!("pyxis-pa-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    write(&base.join("pyxis.toml"), "[project]\nname = \"t\"\npointer_size = 8\n");
+    let src = "pub type Foo {\n    pub x: u64,\n}\npub type T {\n    pub p: *mut Foo,\n    pub arr: [Foo; 4],\n}\n";
+    write(&base.join("m.pyxis"), src);
+    let init = serde_json::json!({ "rootUri": format!("file://{}", base.display()), "capabilities": {} });
+    let st = ServerState::new(&init).unwrap();
+    let uri: lsp_types::Uri = format!("file://{}", base.join("m.pyxis").display()).parse().unwrap();
+    let l4 = src.lines().nth(4).unwrap();
+    assert!(hover_text(&st, &uri, 4, l4.find('*').unwrap() as u32).contains("**pointer**"));
+    assert!(hover_text(&st, &uri, 4, l4.find("Foo").unwrap() as u32).contains("**type** `Foo`"));
+    let l5 = src.lines().nth(5).unwrap();
+    assert!(hover_text(&st, &uri, 5, l5.find('[').unwrap() as u32).contains("**array**"));
+    assert!(hover_text(&st, &uri, 5, l5.find("Foo").unwrap() as u32).contains("**type** `Foo`"));
+}

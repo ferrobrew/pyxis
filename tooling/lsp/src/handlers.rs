@@ -134,6 +134,15 @@ impl ServerState {
                             }
                             match &statement.field {
                                 pyxis::grammar::TypeField::Field(vis, name, type_) => {
+                                    // Cursor on the pointer/array *shell* of the
+                                    // field type → describe the shape, not the
+                                    // field. (The pointee/element is handled as a
+                                    // type reference in branch 1.)
+                                    if let Some((value, span)) =
+                                        type_shell_at(type_, &loc, pointer_size)
+                                    {
+                                        return hover_response(req.id, value, content, &span);
+                                    }
                                     let span = name_span_after(
                                         content,
                                         &statement.location.span.start,
@@ -1924,6 +1933,56 @@ fn field_offset(
         offset += region.size(type_registry)?;
     }
     None
+}
+
+/// If the cursor is on the pointer/array/unknown *shell* of a type (not its
+/// inner pointee/element, which is handled as a type reference), return a
+/// hover describing the shape. Recurses through nested pointers/arrays.
+fn type_shell_at(
+    type_: &pyxis::grammar::Type,
+    loc: &pyxis::span::Location,
+    pointer_size: usize,
+) -> Option<(String, pyxis::span::Span)> {
+    use pyxis::grammar::Type;
+    if !type_.location().span.contains(loc) {
+        return None;
+    }
+    let inner = match type_ {
+        Type::ConstPointer { pointee, .. } | Type::MutPointer { pointee, .. } => Some(&**pointee),
+        Type::Array { element, .. } => Some(&**element),
+        _ => None,
+    };
+    // Cursor is deeper, on the inner type — recurse (it may itself be a shell).
+    if let Some(inner) = inner {
+        if inner.location().span.contains(loc) {
+            return type_shell_at(inner, loc, pointer_size);
+        }
+    }
+    let span = type_.location().span;
+    let md = match type_ {
+        Type::ConstPointer { pointee, .. } => {
+            let mut md = format!("**pointer** `{type_}`\n\npoints to `{pointee}` (const)\n");
+            push_facts(&mut md, &[("size", fmt_bytes(pointer_size))]);
+            md
+        }
+        Type::MutPointer { pointee, .. } => {
+            let mut md = format!("**pointer** `{type_}`\n\npoints to `{pointee}` (mut)\n");
+            push_facts(&mut md, &[("size", fmt_bytes(pointer_size))]);
+            md
+        }
+        Type::Array { element, size, .. } => {
+            format!("**array** `{type_}`\n\n`{size}` × `{element}`\n")
+        }
+        Type::Unknown { size, .. } => {
+            let mut md = format!("**unknown** `{type_}`\n");
+            push_facts(&mut md, &[("size", fmt_bytes(*size))]);
+            md
+        }
+        // An Ident with the cursor not on the inner pointee/element shouldn't
+        // reach here (branch 1 handles bare idents); nothing to describe.
+        Type::Ident { .. } => return None,
+    };
+    Some((md, span))
 }
 
 /// Best-effort size of a field type: pointer → pointer size, array →
