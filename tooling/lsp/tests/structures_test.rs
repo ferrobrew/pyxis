@@ -132,3 +132,18 @@ fn backend_for_type_navigates() {
     assert!(hover_text(&st, &uri, 3, c).contains("**type** `SharedPtr`"),
         "hovering the `for <Type>` target should describe the type");
 }
+
+#[test]
+fn predefined_field_type_hovers_the_type() {
+    let base = std::env::temp_dir().join(format!("pyxis-bi-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    write(&base.join("pyxis.toml"), "[project]\nname = \"t\"\npointer_size = 8\n");
+    let src = "pub type S {\n    pub flag: bool,\n}\n";
+    write(&base.join("s.pyxis"), src);
+    let init = serde_json::json!({ "rootUri": format!("file://{}", base.display()), "capabilities": {} });
+    let st = ServerState::new(&init).unwrap();
+    let uri: lsp_types::Uri = format!("file://{}", base.join("s.pyxis").display()).parse().unwrap();
+    let c = src.lines().nth(1).unwrap().find("bool").unwrap() as u32 + 1;
+    let h = hover_text(&st, &uri, 1, c);
+    assert!(h.contains("**builtin** `bool`"), "hovering bool should describe bool, not the field: {h}");
+}

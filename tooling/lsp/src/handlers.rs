@@ -64,12 +64,18 @@ impl ServerState {
             let hover = reference
                 .item
                 .as_ref()
-                .and_then(|item_path| self.resolved_definition(item_path, type_registry))
-                .map(|rd| match rd.size_align {
-                    Some((size, alignment)) => {
-                        format_type_hover_with_size(&rd.def, size, alignment)
-                    }
-                    None => format_type_hover(&rd.def),
+                .and_then(|item_path| {
+                    // User-defined type located in a source file …
+                    self.resolved_definition(item_path, type_registry)
+                        .map(|rd| match rd.size_align {
+                            Some((size, alignment)) => {
+                                format_type_hover_with_size(&rd.def, size, alignment)
+                            }
+                            None => format_type_hover(&rd.def),
+                        })
+                        // … or a predefined/extern type, which has no source
+                        // definition but still has a known size/alignment.
+                        .or_else(|| builtin_hover(item_path, decl_registry))
                 })
                 .or_else(|| {
                     self.module_uri(&reference.module_path)
@@ -825,6 +831,24 @@ struct ResolvedDefinition {
     name_span: pyxis::span::Span,
     /// Size/alignment, if the type resolved cleanly.
     size_align: Option<(usize, usize)>,
+}
+
+/// Hover for a predefined (`bool`, `u32`, …) or extern type — these have no
+/// source definition but a known size/alignment.
+fn builtin_hover(
+    path: &ItemPath,
+    decl_registry: &pyxis::semantic::declaration_registry::DeclarationRegistry,
+) -> Option<String> {
+    let (kind, size, alignment) = if let Some(p) = decl_registry.get_predefined(path) {
+        ("builtin", p.size, p.alignment)
+    } else if let Some(e) = decl_registry.get_extern_type(path) {
+        ("extern type", e.size, e.alignment)
+    } else {
+        return None;
+    };
+    let mut md = format!("**{kind}** `{path}`\n");
+    push_facts(&mut md, &[("size", fmt_bytes(size)), ("align", fmt_bytes(alignment))]);
+    Some(md)
 }
 
 /// Render a byte quantity as `` `0x10` (16) `` for hover facts.
