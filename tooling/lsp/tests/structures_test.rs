@@ -593,3 +593,83 @@ fn attribute_hover_on_free_function_and_extern() {
         "extern value attribute"
     );
 }
+
+fn def_uri(s: &ServerState, u: &lsp_types::Uri, line: u32, ch: u32) -> Option<String> {
+    let r = Request::new(
+        RequestId::from(1),
+        "textDocument/definition".into(),
+        serde_json::to_value(TextDocumentPositionParams {
+            text_document: TextDocumentIdentifier { uri: u.clone() },
+            position: Position {
+                line,
+                character: ch,
+            },
+        })
+        .unwrap(),
+    );
+    let v = s
+        .handle_definition(r)
+        .result
+        .unwrap_or(serde_json::Value::Null);
+    v.get("uri").and_then(|x| x.as_str()).map(|s| s.to_string())
+}
+
+// Two+ projects under one workspace root can have files at the SAME relative
+// path (e.g. `world/shared.pyxis`), hence the same module path. Resolution must
+// stay within the requesting file's project, not match a same-named file in a
+// sibling project (the JustCause2/MadMax `physics_game_object` bug).
+#[test]
+fn cross_project_resolution_stays_in_project() {
+    let base = std::env::temp_dir().join(format!("pyxis-xproj-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    // projA defines Foo at world/shared.pyxis; the decoys have world/shared.pyxis
+    // too, with the same module path but WITHOUT Foo.
+    write(
+        &base.join("projA/pyxis.toml"),
+        "[project]\nname = \"a\"\npointer_size = 8\n",
+    );
+    write(
+        &base.join("projA/world/shared.pyxis"),
+        "pub type Foo {\n    pub x: u64,\n}\n",
+    );
+    write(
+        &base.join("projA/consumer.pyxis"),
+        "use world::shared::Foo;\n\npub type C {\n    pub f: Foo,\n}\n",
+    );
+    for decoy in ["projB", "projC", "projD"] {
+        write(
+            &base.join(decoy).join("pyxis.toml"),
+            "[project]\nname = \"d\"\npointer_size = 8\n",
+        );
+        write(
+            &base.join(decoy).join("world/shared.pyxis"),
+            "pub type Bar {\n    pub y: u64,\n}\n",
+        );
+    }
+
+    let init =
+        serde_json::json!({ "rootUri": format!("file://{}", base.display()), "capabilities": {} });
+    let st = ServerState::new(&init).unwrap();
+    let consumer: lsp_types::Uri =
+        format!("file://{}", base.join("projA/consumer.pyxis").display())
+            .parse()
+            .unwrap();
+    // `pub f: Foo,` is line 3 (0-indexed).
+    let src = std::fs::read_to_string(base.join("projA/consumer.pyxis")).unwrap();
+    let col = src.lines().nth(3).unwrap().find("Foo").unwrap() as u32;
+
+    // Resolves to projA's Foo — would be <none> if it picked a decoy's shared.pyxis.
+    assert!(
+        hover_text(&st, &consumer, 3, col).contains("**type** `Foo`"),
+        "hover should resolve Foo within projA"
+    );
+    let def = def_uri(&st, &consumer, 3, col).expect("definition");
+    assert!(
+        def.contains("/projA/world/shared.pyxis"),
+        "def should be projA's shared.pyxis, got {def}"
+    );
+    assert!(
+        !def.contains("/projB/") && !def.contains("/projC/") && !def.contains("/projD/"),
+        "def must not cross into a sibling project, got {def}"
+    );
+}

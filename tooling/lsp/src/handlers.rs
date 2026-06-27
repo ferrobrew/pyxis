@@ -94,10 +94,10 @@ impl ServerState {
                     let hover = item
                         .as_ref()
                         .and_then(|item_path| {
-                            self.type_hover_text(item_path, type_registry, decl_registry)
+                            self.type_hover_text(item_path, type_registry, decl_registry, uri)
                         })
                         .or_else(|| {
-                            self.module_uri(&module_path)
+                            self.module_uri(&module_path, uri)
                                 .map(|_| format!("**module** `{module_path}`"))
                         });
                     if let Some(value) = hover {
@@ -232,6 +232,7 @@ impl ServerState {
                                                 &owner,
                                                 type_registry,
                                                 decl_registry,
+                                                uri,
                                             ) {
                                                 return hover_response(
                                                     req.id, value, content, &span,
@@ -378,6 +379,7 @@ impl ServerState {
                                         &resolved,
                                         type_registry,
                                         decl_registry,
+                                        uri,
                                     )
                                 {
                                     return hover_response(req.id, value, content, &span);
@@ -454,7 +456,7 @@ impl ServerState {
                             None => ItemPath::from(name.as_str()),
                         };
                         let value = self
-                            .type_hover_text(&path, type_registry, decl_registry)
+                            .type_hover_text(&path, type_registry, decl_registry, uri)
                             .unwrap_or_else(|| format!("**extern type** `{}`", name.as_str()));
                         return hover_response(req.id, value, content, &span);
                     }
@@ -545,7 +547,7 @@ impl ServerState {
         ) {
             // a) Concrete item (type/extern/predefined) → jump to its name.
             if let Some(item_path) = &item
-                && let Some(rd) = self.resolved_definition(item_path, type_registry)
+                && let Some(rd) = self.resolved_definition(item_path, type_registry, uri)
                 && let Some(target_content) = self.get_content(&rd.uri)
             {
                 let range = pyxis_span_to_lsp_range(target_content, &rd.name_span);
@@ -560,7 +562,7 @@ impl ServerState {
                 };
             }
             // b) Module segment → jump to the top of its file.
-            if let Some(target_uri) = self.module_uri(&module_path) {
+            if let Some(target_uri) = self.module_uri(&module_path, uri) {
                 let location = lsp_types::Location {
                     uri: target_uri,
                     range: Range {
@@ -1070,9 +1072,10 @@ impl ServerState {
         &self,
         resolved_path: &ItemPath,
         type_registry: &TypeRegistry,
+        from_uri: &Uri,
     ) -> Option<ResolvedDefinition> {
         let module_path = resolved_path.parent()?;
-        let uri = self.module_uri(&module_path)?;
+        let uri = self.module_uri(&module_path, from_uri)?;
         let tokens_arc = self.tokens_for(&uri)?;
         let module = self.get_parsed_module(&uri)?;
         let target_name = resolved_path.last()?.as_str();
@@ -1136,8 +1139,9 @@ impl ServerState {
         item_path: &ItemPath,
         type_registry: &TypeRegistry,
         decl_registry: &DeclarationRegistry,
+        from_uri: &Uri,
     ) -> Option<String> {
-        self.resolved_definition(item_path, type_registry)
+        self.resolved_definition(item_path, type_registry, from_uri)
             .map(|rd| match rd.size_align {
                 Some((size, alignment)) => format_type_hover_with_size(&rd.def, size, alignment),
                 None => format_type_hover(&rd.def),
@@ -1145,12 +1149,25 @@ impl ServerState {
             .or_else(|| builtin_hover(item_path, decl_registry))
     }
 
-    /// Find the document URI whose module path equals `module_path` (used to
-    /// navigate to an intermediate module segment of an FQN reference).
-    fn module_uri(&self, module_path: &ItemPath) -> Option<Uri> {
+    /// Find the document URI whose module path equals `module_path`, scoped to
+    /// the same project as `from_uri`. Different projects can have files at the
+    /// same relative path (e.g. `game_objects/physics_game_object.pyxis` in both
+    /// JustCause2 and MadMax), hence the same module path — so we must resolve
+    /// within the requesting file's project rather than matching globally.
+    fn module_uri(&self, module_path: &ItemPath, from_uri: &Uri) -> Option<Uri> {
+        let from_root = self
+            .documents
+            .get(from_uri)
+            .and_then(|d| d.project_root.clone());
         self.documents
             .keys()
-            .find(|uri| self.module_path_for(uri).as_ref() == Some(module_path))
+            .find(|uri| {
+                self.documents
+                    .get(*uri)
+                    .and_then(|d| d.project_root.clone())
+                    == from_root
+                    && self.module_path_for(uri).as_ref() == Some(module_path)
+            })
             .cloned()
     }
 }
