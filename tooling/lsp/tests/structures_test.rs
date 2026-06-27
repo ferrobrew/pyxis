@@ -43,7 +43,12 @@ impl GameObject {
 "#;
 
 fn project() -> (ServerState, lsp_types::Uri) {
-    let base = std::env::temp_dir().join(format!("pyxis-structs-{}", std::process::id()));
+    // Unique per call: `structural_hovers` and `references_resolve_despite_size_error`
+    // both call this and run in parallel, so a dir keyed only by pid would race
+    // (one test's remove_dir_all + rewrite clobbering the other's file scan).
+    static COUNTER: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    let n = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let base = std::env::temp_dir().join(format!("pyxis-structs-{}-{}", std::process::id(), n));
     let _ = std::fs::remove_dir_all(&base);
     write(&base.join("pyxis.toml"), "[project]\nname = \"t\"\npointer_size = 8\n");
     write(&base.join("types/math.pyxis"), "pub type Matrix4 {\n    pub data: [f32; 16],\n}\n");

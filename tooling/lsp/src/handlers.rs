@@ -10,9 +10,15 @@ use lsp_types::{
     TextDocumentPositionParams, TextEdit, WorkspaceEdit, WorkspaceSymbolParams,
 };
 
-use pyxis::grammar::{ItemPath, ModuleItem};
+use pyxis::grammar::{
+    Attribute, Attributes, Function, ItemDefinition, ItemPath, Module, ModuleItem, Type, TypeField,
+    UseTree, Visibility,
+};
 use pyxis::semantic;
-use pyxis::span::{FileId, HasLocation};
+use pyxis::semantic::declaration_registry::DeclarationRegistry;
+use pyxis::semantic::type_registry::TypeRegistry;
+use pyxis::span::{FileId, HasLocation, ItemLocation, Location, Span};
+use pyxis::tokenizer::{Token, TokenKind};
 
 use crate::span::{lsp_position_to_pyxis_location, pyxis_span_to_lsp_range};
 use crate::state::ServerState;
@@ -48,6 +54,12 @@ impl ServerState {
 
         let loc = lsp_position_to_pyxis_location(content, position);
 
+        // The compiler's cached token stream — span helpers locate identifiers
+        // by matching real tokens rather than scanning source text, so names in
+        // comments / splices (which lex as comment/string tokens) are ignored.
+        let tokens_arc = self.tokens_for(uri);
+        let tokens: &[Token] = tokens_arc.as_deref().map(Vec::as_slice).unwrap_or(&[]);
+
         let scope = self.scope_for(uri);
         let sources = self.sources_for(uri);
         let source_set = semantic::SourceSet::new(&self.db, sources);
@@ -60,7 +72,7 @@ impl ServerState {
         //    segment of a `use`/FQN path) → hover the *referenced* item, not the
         //    enclosing definition. For an intermediate FQN segment, show the
         //    module it names.
-        if let Some(reference) = find_reference_at(&module, &loc, &scope, decl_registry, content) {
+        if let Some(reference) = find_reference_at(&module, &loc, &scope, decl_registry, tokens) {
             let hover = reference
                 .item
                 .as_ref()
@@ -104,10 +116,9 @@ impl ServerState {
         let pointer_size = self.pointer_size_for(uri);
         for item in &module.items {
             match item {
-                pyxis::grammar::ModuleItem::Definition { definition } => {
+                ModuleItem::Definition { definition } => {
                     // The definition's own name.
-                    if let Some(span) = name_span_after(
-                        content,
+                    if let Some(span) = name_token_span(tokens,
                         &definition.declaration_location.span.start,
                         definition.name.as_str(),
                     ) {
@@ -133,7 +144,7 @@ impl ServerState {
                                 continue;
                             }
                             match &statement.field {
-                                pyxis::grammar::TypeField::Field(vis, name, type_) => {
+                                TypeField::Field(vis, name, type_) => {
                                     // Cursor on the pointer/array *shell* of the
                                     // field type → describe the shape, not the
                                     // field. (The pointee/element is handled as a
@@ -144,8 +155,7 @@ impl ServerState {
                                     ) {
                                         return hover_response(req.id, value, content, &span);
                                     }
-                                    let span = name_span_after(
-                                        content,
+                                    let span = name_token_span(tokens,
                                         &statement.location.span.start,
                                         name.as_str(),
                                     )
@@ -171,14 +181,14 @@ impl ServerState {
                                     );
                                     return hover_response(req.id, value, content, &span);
                                 }
-                                pyxis::grammar::TypeField::Vftable(fns) => {
+                                TypeField::Vftable(fns) => {
                                     for f in fns {
                                         if !f.location.span.contains(&loc) {
                                             continue;
                                         }
                                         // An argument name…
                                         if let Some((value, span)) = named_arg_hover(
-                                            f, &loc, content, type_registry, &scope,
+                                            f, &loc, tokens, type_registry, &scope,
                                             decl_registry, pointer_size,
                                         ) {
                                             return hover_response(req.id, value, content, &span);
@@ -196,8 +206,7 @@ impl ServerState {
                                             }
                                         }
                                         // …or the function itself.
-                                        let span = name_span_after(
-                                            content, &f.location.span.start, f.name.as_str(),
+                                        let span = name_token_span(tokens, &f.location.span.start, f.name.as_str(),
                                         )
                                         .unwrap_or(f.location.span);
                                         return hover_response(
@@ -207,8 +216,7 @@ impl ServerState {
                                     // Cursor on the `vftable` keyword → describe
                                     // the generated vtable struct (the resolved
                                     // count includes inherited entries).
-                                    if let Some(span) = name_span_after(
-                                        content, &statement.location.span.start, "vftable",
+                                    if let Some(span) = name_token_span(tokens, &statement.location.span.start, "vftable",
                                     ) {
                                         if span.contains(&loc) {
                                             let owner = match self.module_path_for(uri) {
@@ -243,8 +251,7 @@ impl ServerState {
                     if let pyxis::grammar::ItemDefinitionInner::Enum(e) = &definition.inner {
                         for statement in e.statements() {
                             if statement.location.span.contains(&loc) {
-                                let span = name_span_after(
-                                    content, &statement.location.span.start, statement.name.as_str(),
+                                let span = name_token_span(tokens, &statement.location.span.start, statement.name.as_str(),
                                 )
                                 .unwrap_or(statement.location.span);
                                 let value = self
@@ -260,8 +267,7 @@ impl ServerState {
                     if let pyxis::grammar::ItemDefinitionInner::Bitflags(b) = &definition.inner {
                         for statement in b.statements() {
                             if statement.location.span.contains(&loc) {
-                                let span = name_span_after(
-                                    content, &statement.location.span.start, statement.name.as_str(),
+                                let span = name_token_span(tokens, &statement.location.span.start, statement.name.as_str(),
                                 )
                                 .unwrap_or(statement.location.span);
                                 let value = self
@@ -280,7 +286,7 @@ impl ServerState {
                     // than the (distant) type name.
                 }
                 // Impl methods (including `#[cfg(...)]`-gated blocks).
-                pyxis::grammar::ModuleItem::Impl { impl_block } => {
+                ModuleItem::Impl { impl_block } => {
                     for impl_item in &impl_block.items {
                         if let pyxis::grammar::ImplItem::Function(f) = impl_item {
                             if !f.location.span.contains(&loc) {
@@ -288,7 +294,7 @@ impl ServerState {
                             }
                             // An argument name…
                             if let Some((value, span)) = named_arg_hover(
-                                f, &loc, content, type_registry, &scope, decl_registry, pointer_size,
+                                f, &loc, tokens, type_registry, &scope, decl_registry, pointer_size,
                             ) {
                                 return hover_response(req.id, value, content, &span);
                             }
@@ -306,8 +312,7 @@ impl ServerState {
                                 }
                             }
                             // …or the function itself.
-                            let span = name_span_after(
-                                content, &f.location.span.start, f.name.as_str(),
+                            let span = name_token_span(tokens, &f.location.span.start, f.name.as_str(),
                             )
                             .unwrap_or(f.location.span);
                             return hover_response(
@@ -317,15 +322,14 @@ impl ServerState {
                     }
                 }
                 // Free functions: argument names and the function itself.
-                pyxis::grammar::ModuleItem::Function { function } => {
+                ModuleItem::Function { function } => {
                     if function.location.span.contains(&loc) {
                         if let Some((value, span)) = named_arg_hover(
-                            function, &loc, content, type_registry, &scope, decl_registry, pointer_size,
+                            function, &loc, tokens, type_registry, &scope, decl_registry, pointer_size,
                         ) {
                             return hover_response(req.id, value, content, &span);
                         }
-                        let span = name_span_after(
-                            content, &function.location.span.start, function.name.as_str(),
+                        let span = name_token_span(tokens, &function.location.span.start, function.name.as_str(),
                         )
                         .unwrap_or(function.location.span);
                         return hover_response(
@@ -334,9 +338,8 @@ impl ServerState {
                     }
                 }
                 // Extern values: `extern name: Type;` — the value's own name.
-                pyxis::grammar::ModuleItem::ExternValue { extern_value } => {
-                    if let Some(span) = name_span_after(
-                        content, &extern_value.location.span.start, extern_value.name.as_str(),
+                ModuleItem::ExternValue { extern_value } => {
+                    if let Some(span) = name_token_span(tokens, &extern_value.location.span.start, extern_value.name.as_str(),
                     ) {
                         if span.contains(&loc) {
                             let mut md = format!(
@@ -355,9 +358,9 @@ impl ServerState {
                     }
                 }
                 // Extern types: `extern type Name;` — the declared name.
-                pyxis::grammar::ModuleItem::ExternType { name, location, .. } => {
+                ModuleItem::ExternType { name, location, .. } => {
                     if let Some(span) =
-                        name_span_after(content, &location.span.start, name.as_str())
+                        name_token_span(tokens, &location.span.start, name.as_str())
                     {
                         if span.contains(&loc) {
                             let path = match self.module_path_for(uri) {
@@ -372,12 +375,10 @@ impl ServerState {
                     }
                 }
                 // Backend keywords (cpp/rust/prologue/epilogue/definition/for).
-                pyxis::grammar::ModuleItem::Backend { backend } => {
+                ModuleItem::Backend { backend } => {
                     if backend.location.span.contains(&loc) {
-                        if let Some(tokens) = self.tokens_for(uri) {
-                            if let Some((value, span)) = backend_term_at(&tokens, backend, &loc) {
-                                return hover_response(req.id, value, content, &span);
-                            }
+                        if let Some((value, span)) = backend_term_at(tokens, backend, &loc) {
+                            return hover_response(req.id, value, content, &span);
                         }
                     }
                 }
@@ -420,6 +421,10 @@ impl ServerState {
 
         let loc = lsp_position_to_pyxis_location(content, position);
 
+        // The compiler's cached token stream — see `handle_hover` for rationale.
+        let tokens_arc = self.tokens_for(uri);
+        let tokens: &[Token] = tokens_arc.as_deref().map(Vec::as_slice).unwrap_or(&[]);
+
         let scope = self.scope_for(uri);
 
         // Run analyze to get the type registry with resolved items, and the
@@ -438,7 +443,7 @@ impl ServerState {
         //    segments to their module's file. This must take priority over the
         //    enclosing-definition check below, since a field's type span is
         //    contained within its parent definition's span.
-        if let Some(reference) = find_reference_at(&module, &loc, &scope, decl_registry, content) {
+        if let Some(reference) = find_reference_at(&module, &loc, &scope, decl_registry, tokens) {
             // a) Concrete item (type/extern/predefined) → jump to its name.
             if let Some(item_path) = &reference.item {
                 if let Some(rd) = self.resolved_definition(item_path, type_registry) {
@@ -473,8 +478,7 @@ impl ServerState {
         // 2. Cursor on a definition's own name → jump to itself (scoped to the
         //    name, not the whole declaration).
         for definition in module.definitions() {
-            if let Some(span) = name_span_after(
-                content,
+            if let Some(span) = name_token_span(tokens,
                 &definition.declaration_location.span.start,
                 definition.name.as_str(),
             ) {
@@ -756,7 +760,7 @@ impl ServerState {
             // For each field, show its type size as an inlay hint
             if let pyxis::grammar::ItemDefinitionInner::Type(td) = &definition.inner {
                 for statement in td.statements() {
-                    if let pyxis::grammar::TypeField::Field(_, name, type_) = &statement.field {
+                    if let TypeField::Field(_, name, type_) = &statement.field {
                         let path = type_.as_path();
                         if let Some(path) = path {
                             // Use the field type's own location for the
@@ -882,7 +886,7 @@ impl ServerState {
             for definition in module.definitions() {
                 if let pyxis::grammar::ItemDefinitionInner::Type(td) = &definition.inner {
                     for statement in td.statements() {
-                        if let pyxis::grammar::TypeField::Field(_, _, type_) = &statement.field {
+                        if let TypeField::Field(_, _, type_) = &statement.field {
                             if let Some(path) = type_.as_path() {
                                 if path.last().map(|s| s.as_str()) == Some(target_name.as_str()) {
                                     let loc = type_.location();
@@ -929,7 +933,7 @@ impl ServerState {
         let mut scope = vec![module_path];
         if let Some(module) = self.get_parsed_module(uri) {
             for item in &module.items {
-                if let pyxis::grammar::ModuleItem::Use { tree, .. } = item {
+                if let ModuleItem::Use { tree, .. } = item {
                     scope.extend(tree.flatten());
                 }
             }
@@ -947,11 +951,11 @@ impl ServerState {
     fn resolved_definition(
         &self,
         resolved_path: &ItemPath,
-        type_registry: &pyxis::semantic::type_registry::TypeRegistry,
+        type_registry: &TypeRegistry,
     ) -> Option<ResolvedDefinition> {
         let module_path = resolved_path.parent()?;
         let uri = self.module_uri(&module_path)?;
-        let content = self.get_content(&uri)?.to_string();
+        let tokens_arc = self.tokens_for(&uri)?;
         let module = self.get_parsed_module(&uri)?;
         let target_name = resolved_path.last()?.as_str();
         let def = module
@@ -959,10 +963,10 @@ impl ServerState {
             .find(|d| d.name.as_str() == target_name)
             .cloned()?;
         let name_span =
-            name_span_after(&content, &def.declaration_location.span.start, target_name)
+            name_token_span(&tokens_arc, &def.declaration_location.span.start, target_name)
                 .unwrap_or(def.location.span);
         let size_align = type_registry
-            .get(resolved_path, &pyxis::span::ItemLocation::internal())
+            .get(resolved_path, &ItemLocation::internal())
             .ok()
             .and_then(|i| i.resolved())
             .map(|r| (r.size, r.alignment));
@@ -974,7 +978,7 @@ impl ServerState {
     fn variant_value(
         &self,
         uri: &Uri,
-        definition: &pyxis::grammar::ItemDefinition,
+        definition: &ItemDefinition,
         variant_name: &str,
         source_set: semantic::SourceSet,
         pointer_size: usize,
@@ -1004,8 +1008,8 @@ impl ServerState {
     fn type_hover_text(
         &self,
         item_path: &ItemPath,
-        type_registry: &pyxis::semantic::type_registry::TypeRegistry,
-        decl_registry: &pyxis::semantic::declaration_registry::DeclarationRegistry,
+        type_registry: &TypeRegistry,
+        decl_registry: &DeclarationRegistry,
     ) -> Option<String> {
         self.resolved_definition(item_path, type_registry)
             .map(|rd| match rd.size_align {
@@ -1027,11 +1031,11 @@ impl ServerState {
 
 /// A type/item definition located in its source file.
 struct ResolvedDefinition {
-    def: pyxis::grammar::ItemDefinition,
+    def: ItemDefinition,
     /// URI of the file the definition lives in.
     uri: Uri,
     /// Span of the definition's name (the go-to-definition target).
-    name_span: pyxis::span::Span,
+    name_span: Span,
     /// Size/alignment, if the type resolved cleanly.
     size_align: Option<(usize, usize)>,
 }
@@ -1040,7 +1044,7 @@ struct ResolvedDefinition {
 /// source definition but a known size/alignment.
 fn builtin_hover(
     path: &ItemPath,
-    decl_registry: &pyxis::semantic::declaration_registry::DeclarationRegistry,
+    decl_registry: &DeclarationRegistry,
 ) -> Option<String> {
     let (kind, size, alignment) = if let Some(p) = decl_registry.get_predefined(path) {
         ("builtin", p.size, p.alignment)
@@ -1080,7 +1084,7 @@ fn push_facts(md: &mut String, facts: &[(&str, String)]) {
 
 /// Format a type definition for hover display with size and alignment
 fn format_type_hover_with_size(
-    definition: &pyxis::grammar::ItemDefinition,
+    definition: &ItemDefinition,
     size: usize,
     alignment: usize,
 ) -> String {
@@ -1090,7 +1094,7 @@ fn format_type_hover_with_size(
 }
 
 /// Format a type definition for hover display
-fn format_type_hover(definition: &pyxis::grammar::ItemDefinition) -> String {
+fn format_type_hover(definition: &ItemDefinition) -> String {
     let name = definition.name.as_str();
     let kind = match &definition.inner {
         pyxis::grammar::ItemDefinitionInner::Type(_) => "type",
@@ -1108,8 +1112,8 @@ fn format_type_hover(definition: &pyxis::grammar::ItemDefinition) -> String {
     if let pyxis::grammar::ItemDefinitionInner::Type(td) = &definition.inner {
         md.push_str("**Fields:**\n");
         for statement in td.statements() {
-            if let pyxis::grammar::TypeField::Field(vis, name, type_) = &statement.field {
-                let vis_str = if matches!(vis, pyxis::grammar::Visibility::Public) {
+            if let TypeField::Field(vis, name, type_) = &statement.field {
+                let vis_str = if matches!(vis, Visibility::Public) {
                     "pub "
                 } else {
                     ""
@@ -1146,7 +1150,7 @@ fn module_item_to_symbol(item: &ModuleItem, source: &str) -> Option<DocumentSymb
         ModuleItem::ExternType { name, .. } => (
             name.as_str().to_string(),
             SymbolKind::STRUCT,
-            pyxis::span::Span::synthetic(),
+            Span::synthetic(),
         ),
         ModuleItem::ExternValue { extern_value } => (
             extern_value.name.as_str().to_string(),
@@ -1156,7 +1160,7 @@ fn module_item_to_symbol(item: &ModuleItem, source: &str) -> Option<DocumentSymb
         ModuleItem::Impl { impl_block } => {
             // Impl blocks: use the target type name
             let name = impl_block.name.as_str().to_string();
-            (name, SymbolKind::OBJECT, pyxis::span::Span::synthetic())
+            (name, SymbolKind::OBJECT, Span::synthetic())
         }
         ModuleItem::Use { .. } => return None,
         ModuleItem::Backend { .. } => return None,
@@ -1195,7 +1199,7 @@ fn hover_response(
     id: lsp_server::RequestId,
     value: String,
     content: &str,
-    span: &pyxis::span::Span,
+    span: &Span,
 ) -> Response {
     Response {
         id,
@@ -1230,7 +1234,7 @@ fn error_response(id: lsp_server::RequestId, e: serde_json::Error) -> Response {
 /// to highlight the hover range).
 struct Reference {
     /// Source span of the *segment* under the cursor (for hover-range highlight).
-    span: pyxis::span::Span,
+    span: Span,
     /// Resolved concrete item path, if this segment names a type/extern/predefined.
     item: Option<ItemPath>,
     /// Absolute path of this segment — used as a module target when `item` is
@@ -1250,32 +1254,32 @@ struct Reference {
 /// this function only does the position→node matching, which is an LSP
 /// concern (the compiler never works with cursor positions).
 fn find_reference_at(
-    module: &pyxis::grammar::Module,
-    loc: &pyxis::span::Location,
+    module: &Module,
+    loc: &Location,
     scope: &[ItemPath],
-    decl_registry: &pyxis::semantic::declaration_registry::DeclarationRegistry,
-    content: &str,
+    decl_registry: &DeclarationRegistry,
+    tokens: &[Token],
 ) -> Option<Reference> {
-    let resolve = |raw: &ItemPath, full_span: pyxis::span::Span| -> Reference {
+    let resolve = |raw: &ItemPath, full_span: Span| -> Reference {
         let (sub_path, seg_span) =
-            segment_at(raw, &full_span, loc, content).unwrap_or((raw.clone(), full_span));
+            segment_at(raw, &full_span, loc, tokens).unwrap_or((raw.clone(), full_span));
         let item = resolve_type_path(&sub_path, scope, decl_registry);
         Reference { span: seg_span, item, module_path: sub_path }
     };
     // For `use` trees the segment is already resolved by use_tree_reference, so
     // build the reference directly without re-running segment_at.
-    let make_ref = |seg_path: ItemPath, span: pyxis::span::Span| -> Reference {
+    let make_ref = |seg_path: ItemPath, span: Span| -> Reference {
         let item = resolve_type_path(&seg_path, scope, decl_registry);
         Reference { span, item, module_path: seg_path }
     };
 
-    use pyxis::grammar::{ImplItem, ModuleItem};
+    use pyxis::grammar::ImplItem;
 
     for item in &module.items {
         match item {
             // `use` statements: cursor on an imported path.
             ModuleItem::Use { tree, .. } => {
-                if let Some((path, span)) = use_tree_reference(tree, loc, content) {
+                if let Some((path, span)) = use_tree_reference(tree, loc, tokens) {
                     return Some(make_ref(path, span));
                 }
             }
@@ -1283,7 +1287,7 @@ fn find_reference_at(
             // prologue/epilogue splices can be attributed `for <Type>`.
             ModuleItem::Backend { backend } => {
                 for tree in &backend.uses {
-                    if let Some((path, span)) = use_tree_reference(tree, loc, content) {
+                    if let Some((path, span)) = use_tree_reference(tree, loc, tokens) {
                         return Some(make_ref(path, span));
                     }
                 }
@@ -1292,7 +1296,7 @@ fn find_reference_at(
                     .flatten()
                 {
                     if let Some(span) =
-                        find_for_path_span(content, &backend.location.span, for_type, loc)
+                        find_for_path_span(tokens, &backend.location.span, for_type, loc)
                     {
                         return Some(resolve(for_type, span));
                     }
@@ -1302,7 +1306,7 @@ fn find_reference_at(
             // type name and every function signature's types.
             ModuleItem::Impl { impl_block } => {
                 if let Some(span) =
-                    name_span_after(content, &impl_block.location.span.start, impl_block.name.as_str())
+                    name_token_span(tokens, &impl_block.location.span.start, impl_block.name.as_str())
                 {
                     if span.contains(loc) {
                         let raw = ItemPath::from(impl_block.name.as_str());
@@ -1349,37 +1353,21 @@ fn find_reference_at(
 /// always written on a single line.
 fn segment_at(
     path: &ItemPath,
-    span: &pyxis::span::Span,
-    loc: &pyxis::span::Location,
-    source: &str,
-) -> Option<(ItemPath, pyxis::span::Span)> {
-    use pyxis::span::{Location, Span};
-    let line = span.start.line;
-    if loc.line != line || span.end.line != line {
-        return None;
-    }
-    let line_str = source.lines().nth(line.saturating_sub(1))?;
-    let lo = span.start.column.saturating_sub(1);
-    let hi = span.end.column.saturating_sub(1).min(line_str.len());
-    if lo >= hi {
-        return None;
-    }
-    let text = &line_str[lo..hi];
-
-    let mut col = span.start.column; // 1-indexed byte column of the segment start
-    for (i, part) in text.split("::").enumerate() {
-        let seg_start = col;
-        let seg_end = col + part.len(); // exclusive
-        if loc.column >= seg_start && loc.column < seg_end {
+    span: &Span,
+    loc: &Location,
+    tokens: &[Token],
+) -> Option<(ItemPath, Span)> {
+    // The path's identifier tokens, in order, within the path's span (the `::`
+    // separators lex as their own `ColonColon` tokens and are skipped).
+    let idents = tokens.iter().filter(|t| {
+        matches!(t.kind, TokenKind::Ident(_)) && span.contains(&t.location.span.start)
+    });
+    for (i, ident) in idents.enumerate() {
+        if ident.location.span.contains(loc) {
             let count = (i + 1).min(path.len());
             let prefix: ItemPath = path.iter().take(count).cloned().collect();
-            let seg_span = Span::new(
-                Location::new(line, seg_start),
-                Location::new(line, seg_end),
-            );
-            return Some((prefix, seg_span));
+            return Some((prefix, ident.location.span));
         }
-        col = seg_end + 2; // skip the "::"
     }
     None
 }
@@ -1389,9 +1377,9 @@ fn segment_at(
 /// Find a type reference (argument or return type) under the cursor in a
 /// function signature.
 fn fn_signature_type_ref<'a>(
-    f: &'a pyxis::grammar::Function,
-    loc: &pyxis::span::Location,
-) -> Option<(&'a ItemPath, pyxis::span::Span)> {
+    f: &'a Function,
+    loc: &Location,
+) -> Option<(&'a ItemPath, Span)> {
     use pyxis::grammar::Argument;
     for arg in &f.arguments {
         if let Argument::Named { type_, .. } = arg {
@@ -1409,10 +1397,10 @@ fn fn_signature_type_ref<'a>(
 }
 
 fn find_type_ref_in_definition<'a>(
-    definition: &'a pyxis::grammar::ItemDefinition,
-    loc: &pyxis::span::Location,
-) -> Option<(&'a ItemPath, pyxis::span::Span)> {
-    use pyxis::grammar::{Argument, ItemDefinitionInner, TypeField};
+    definition: &'a ItemDefinition,
+    loc: &Location,
+) -> Option<(&'a ItemPath, Span)> {
+    use pyxis::grammar::{Argument, ItemDefinitionInner};
 
     match &definition.inner {
         ItemDefinitionInner::Type(td) => {
@@ -1459,45 +1447,49 @@ fn find_type_ref_in_definition<'a>(
 /// independently. The returned path is already truncated to the segment, so
 /// callers must NOT run `segment_at` on it again.
 fn use_tree_reference(
-    tree: &pyxis::grammar::UseTree,
-    loc: &pyxis::span::Location,
-    content: &str,
-) -> Option<(ItemPath, pyxis::span::Span)> {
-    use pyxis::grammar::UseTree;
-    use pyxis::span::{Location, Span};
+    tree: &UseTree,
+    loc: &Location,
+    tokens: &[Token],
+) -> Option<(ItemPath, Span)> {
     match tree {
         UseTree::Path { path, location } => {
             if !location.span.contains(loc) {
                 return None;
             }
-            segment_at(path, &location.span, loc, content)
+            segment_at(path, &location.span, loc, tokens)
         }
         UseTree::Group { prefix, items, location } => {
             // NB: a group's span starts at `{`, so the shared prefix that
             // precedes it is *outside* this span — don't early-return on it.
             // A leaf import — prepend the group's prefix to the matched segment.
             for item in items {
-                if let Some((sub, span)) = use_tree_reference(item, loc, content) {
+                if let Some((sub, span)) = use_tree_reference(item, loc, tokens) {
                     let full: ItemPath = prefix.iter().chain(sub.iter()).cloned().collect();
                     return Some((full, span));
                 }
             }
             // The shared prefix (`a::b` in `a::b::{C, D}`). The group's span
-            // starts at `{`, so the prefix text precedes it on the same line —
-            // find it by scanning back from the brace.
+            // starts at `{`, so the prefix tokens precede it — they're the
+            // contiguous run of Ident/:: tokens immediately before the brace.
             if !prefix.is_empty() {
-                let start = location.span.start;
-                if let Some(line) = content.lines().nth(start.line.saturating_sub(1)) {
-                    let brace = start.column.saturating_sub(1).min(line.len());
-                    let prefix_str = prefix.to_string();
-                    if let Some(pos) = line[..brace].rfind(&prefix_str) {
-                        let col = pos + 1;
+                let brace = location.span.start;
+                if let Some(brace_idx) = tokens.iter().position(|t| t.location.span.start >= brace) {
+                    let mut start_idx = brace_idx;
+                    while start_idx > 0
+                        && matches!(
+                            tokens[start_idx - 1].kind,
+                            TokenKind::Ident(_) | TokenKind::ColonColon
+                        )
+                    {
+                        start_idx -= 1;
+                    }
+                    if start_idx < brace_idx {
                         let prefix_span = Span::new(
-                            Location::new(start.line, col),
-                            Location::new(start.line, col + prefix_str.len()),
+                            tokens[start_idx].location.span.start,
+                            tokens[brace_idx - 1].location.span.end,
                         );
                         if prefix_span.contains(loc) {
-                            return segment_at(prefix, &prefix_span, loc, content);
+                            return segment_at(prefix, &prefix_span, loc, tokens);
                         }
                     }
                 }
@@ -1510,10 +1502,9 @@ fn use_tree_reference(
 /// Recursively search a grammar `Type` for an `Ident` whose location contains
 /// `loc`. Returns the `ItemPath` of the matching type reference and its span.
 fn find_type_in_grammar_type<'a>(
-    type_: &'a pyxis::grammar::Type,
-    loc: &pyxis::span::Location,
-) -> Option<(&'a ItemPath, pyxis::span::Span)> {
-    use pyxis::grammar::Type;
+    type_: &'a Type,
+    loc: &Location,
+) -> Option<(&'a ItemPath, Span)> {
     if !type_.location().span.contains(loc) {
         return None;
     }
@@ -1542,7 +1533,7 @@ fn find_type_in_grammar_type<'a>(
 fn resolve_type_path(
     path: &ItemPath,
     scope: &[ItemPath],
-    decl_registry: &pyxis::semantic::declaration_registry::DeclarationRegistry,
+    decl_registry: &DeclarationRegistry,
 ) -> Option<ItemPath> {
     use pyxis::semantic::declaration_registry::NameResolution;
 
@@ -1563,93 +1554,89 @@ fn resolve_type_path(
     }
 }
 
-fn is_ident_byte(b: u8) -> bool {
-    b == b'_' || b.is_ascii_alphanumeric()
-}
-
-/// Find the span of the identifier `name` at or after `from` in `source`.
+/// Find the span of the identifier `name` at or after `from` in the token
+/// stream.
 ///
 /// Grammar `Ident`s don't carry their own span, so name spans (type names,
-/// field names, function names) are recovered by searching forward from the
-/// declaration's start point for the whole-word occurrence of the name.
-fn name_span_after(
-    source: &str,
-    from: &pyxis::span::Location,
-    name: &str,
-) -> Option<pyxis::span::Span> {
-    use pyxis::span::{Location, Span};
+/// field names, function names) are recovered from the compiler's cached token
+/// stream: the first token at/after the declaration's start point whose text
+/// matches `name`. The `"vftable"` keyword lexes as `TokenKind::Vftable` rather
+/// than an `Ident`, so it's matched specially. Working off real tokens (rather
+/// than a text scan) means occurrences inside comments or `r#"…"#` splices —
+/// which lex as comment/string tokens, not `Ident`s — are correctly ignored.
+fn name_token_span(tokens: &[Token], from: &Location, name: &str) -> Option<Span> {
     if name.is_empty() {
         return None;
     }
-    let lines: Vec<&str> = source.lines().collect();
-    let start_line = from.line.saturating_sub(1);
-    for (li, line) in lines.iter().enumerate().skip(start_line) {
-        let from_byte = if li == start_line {
-            from.column.saturating_sub(1)
-        } else {
-            0
-        };
-        if from_byte > line.len() {
-            continue;
-        }
-        let bytes = line.as_bytes();
-        let mut search = from_byte;
-        while let Some(rel) = line[search..].find(name) {
-            let abs = search + rel;
-            let before_ok = abs == 0 || !is_ident_byte(bytes[abs - 1]);
-            let after = abs + name.len();
-            let after_ok = after >= bytes.len() || !is_ident_byte(bytes[after]);
-            if before_ok && after_ok {
-                let col = abs + 1; // 1-indexed byte column
-                return Some(Span::new(
-                    Location::new(li + 1, col),
-                    Location::new(li + 1, col + name.len()),
-                ));
-            }
-            search = abs + 1;
-        }
-    }
-    None
+    tokens
+        .iter()
+        .find(|t| {
+            t.location.span.start >= *from
+                && match &t.kind {
+                    TokenKind::Vftable => name == "vftable",
+                    TokenKind::Ident(s) => s == name,
+                    _ => false,
+                }
+        })
+        .map(|t| t.location.span)
 }
 
 /// Find the span of a `for <path>` clause (in a backend prologue/epilogue)
 /// whose path matches `path` and whose span contains `loc`. The `for_type`
-/// clause has no recorded span, so we recover it by scanning the backend
-/// block's source for `for <path>`.
+/// clause has no recorded span, so we recover it from the token stream: the
+/// `for` keyword (which lexes as `Ident("for")`) within the backend block,
+/// followed by the run of `Ident`/`::` tokens that make up the path.
 fn find_for_path_span(
-    content: &str,
-    block_span: &pyxis::span::Span,
+    tokens: &[Token],
+    block_span: &Span,
     path: &ItemPath,
-    loc: &pyxis::span::Location,
-) -> Option<pyxis::span::Span> {
-    use pyxis::span::{Location, Span};
-    let path_str = path.to_string();
-    let lines: Vec<&str> = content.lines().collect();
-    let lo = block_span.start.line.saturating_sub(1);
-    let hi = block_span.end.line.saturating_sub(1).min(lines.len().saturating_sub(1));
-    for li in lo..=hi {
-        let line = lines[li];
-        let bytes = line.as_bytes();
-        let mut search = 0;
-        while let Some(rel) = line[search..].find("for ") {
-            let after = search + rel + 4; // first byte of the path after "for "
-            if line[after..].starts_with(&path_str) {
-                let end = after + path_str.len();
-                let boundary_ok = bytes.get(end).is_none_or(|&b| !is_ident_byte(b) && b != b':');
-                if boundary_ok {
-                    let span = Span::new(
-                        Location::new(li + 1, after + 1),
-                        Location::new(li + 1, end + 1),
-                    );
-                    if span.contains(loc) {
-                        return Some(span);
-                    }
-                }
-            }
-            search = after;
+    loc: &Location,
+) -> Option<Span> {
+    for (i, t) in tokens.iter().enumerate() {
+        if !block_span.contains(&t.location.span.start) {
+            continue;
+        }
+        if !matches!(&t.kind, TokenKind::Ident(s) if s == "for") {
+            continue;
+        }
+        // The path is the run of Ident/:: tokens immediately following `for`.
+        let run_start = i + 1;
+        let mut run_end = run_start;
+        while run_end < tokens.len()
+            && matches!(
+                tokens[run_end].kind,
+                TokenKind::Ident(_) | TokenKind::ColonColon
+            )
+        {
+            run_end += 1;
+        }
+        let run = &tokens[run_start..run_end];
+        let (Some(first), Some(last)) = (run.first(), run.last()) else {
+            continue;
+        };
+        let span = Span::new(first.location.span.start, last.location.span.end);
+        if span.contains(loc) && run_matches_path(run, path) {
+            return Some(span);
         }
     }
     None
+}
+
+/// Whether the `Ident` tokens of `run` (ignoring the interleaved `::`) name
+/// exactly the segments of `path`.
+fn run_matches_path(run: &[Token], path: &ItemPath) -> bool {
+    let idents: Vec<&str> = run
+        .iter()
+        .filter_map(|t| match &t.kind {
+            TokenKind::Ident(s) => Some(s.as_str()),
+            _ => None,
+        })
+        .collect();
+    idents.len() == path.len()
+        && idents
+            .iter()
+            .zip(path.iter())
+            .all(|(seg, expected)| *seg == expected.as_str())
 }
 
 /// Describe a backend keyword (`cpp`/`rust`/`prologue`/`epilogue`/`definition`/
@@ -1659,8 +1646,8 @@ fn find_for_path_span(
 fn backend_term_at(
     tokens: &[pyxis::tokenizer::Token],
     backend: &pyxis::grammar::Backend,
-    loc: &pyxis::span::Location,
-) -> Option<(String, pyxis::span::Span)> {
+    loc: &Location,
+) -> Option<(String, Span)> {
     use pyxis::tokenizer::TokenKind;
     let name = backend.name.name();
     let token = tokens.iter().find(|t| t.location.span.contains(loc))?;
@@ -1684,7 +1671,7 @@ fn backend_term_at(
 }
 
 /// Render a definition/field's attributes compactly (e.g. `#[base] #[cfg(...)]`).
-fn render_attributes(attributes: &pyxis::grammar::Attributes) -> String {
+fn render_attributes(attributes: &Attributes) -> String {
     attributes
         .0
         .iter()
@@ -1694,8 +1681,7 @@ fn render_attributes(attributes: &pyxis::grammar::Attributes) -> String {
 }
 
 /// The attribute name (`size`, `cfg`, `base`, …).
-fn attribute_name(attribute: &pyxis::grammar::Attribute) -> &str {
-    use pyxis::grammar::Attribute;
+fn attribute_name(attribute: &Attribute) -> &str {
     match attribute {
         Attribute::Ident { ident, .. } => ident.as_str(),
         Attribute::Function { name, .. } => name.as_str(),
@@ -1724,7 +1710,7 @@ fn attribute_description(name: &str) -> Option<&'static str> {
 }
 
 /// The source text covered by `span` (single line only).
-fn span_text(content: &str, span: &pyxis::span::Span) -> Option<String> {
+fn span_text(content: &str, span: &Span) -> Option<String> {
     if span.start.line != span.end.line {
         return None;
     }
@@ -1737,11 +1723,11 @@ fn span_text(content: &str, span: &pyxis::span::Span) -> Option<String> {
 /// Find an attribute whose span contains `loc`, anywhere in the module (type /
 /// field / vftable / enum-variant / impl / function attributes).
 fn attribute_at<'a>(
-    module: &'a pyxis::grammar::Module,
-    loc: &pyxis::span::Location,
-) -> Option<(&'a pyxis::grammar::Attribute, pyxis::span::Span)> {
-    use pyxis::grammar::{ImplItem, ItemDefinitionInner, ModuleItem, TypeField};
-    let find = |attrs: &'a pyxis::grammar::Attributes| {
+    module: &'a Module,
+    loc: &Location,
+) -> Option<(&'a Attribute, Span)> {
+    use pyxis::grammar::{ImplItem, ItemDefinitionInner};
+    let find = |attrs: &'a Attributes| {
         attrs
             .0
             .iter()
@@ -1812,8 +1798,8 @@ fn attribute_at<'a>(
 
 /// Hover markdown for an attribute under the cursor.
 fn format_attribute_hover(
-    attribute: &pyxis::grammar::Attribute,
-    span: &pyxis::span::Span,
+    attribute: &Attribute,
+    span: &Span,
     content: &str,
 ) -> String {
     // The attribute span covers the inner content (`size(0x10)`); re-wrap it as
@@ -1829,8 +1815,7 @@ fn format_attribute_hover(
 }
 
 /// Render a single attribute as Pyxis source (without code fencing).
-fn render_attribute(attribute: &pyxis::grammar::Attribute) -> String {
-    use pyxis::grammar::Attribute;
+fn render_attribute(attribute: &Attribute) -> String {
     match attribute {
         Attribute::Ident { ident, .. } => format!("#[{}]", ident.as_str()),
         Attribute::Function { name, .. } => format!("#[{}(…)]", name.as_str()),
@@ -1840,8 +1825,8 @@ fn render_attribute(attribute: &pyxis::grammar::Attribute) -> String {
 }
 
 /// Render a function signature as Pyxis source (e.g. `pub fn foo(&mut self, x: u32) -> bool`).
-fn render_fn_signature(f: &pyxis::grammar::Function) -> String {
-    use pyxis::grammar::{Argument, Visibility};
+fn render_fn_signature(f: &Function) -> String {
+    use pyxis::grammar::Argument;
     let mut s = String::new();
     if matches!(f.visibility, Visibility::Public) {
         s.push_str("pub ");
@@ -1870,19 +1855,19 @@ fn render_fn_signature(f: &pyxis::grammar::Function) -> String {
 /// type size) scoped to the argument name. The argument *type* is handled by
 /// `find_reference_at`, so this only fires on the name.
 fn named_arg_hover(
-    f: &pyxis::grammar::Function,
-    loc: &pyxis::span::Location,
-    content: &str,
-    type_registry: &pyxis::semantic::type_registry::TypeRegistry,
+    f: &Function,
+    loc: &Location,
+    tokens: &[Token],
+    type_registry: &TypeRegistry,
     scope: &[ItemPath],
-    decl_registry: &pyxis::semantic::declaration_registry::DeclarationRegistry,
+    decl_registry: &DeclarationRegistry,
     pointer_size: usize,
-) -> Option<(String, pyxis::span::Span)> {
+) -> Option<(String, Span)> {
     use pyxis::grammar::Argument;
     for arg in &f.arguments {
         if let Argument::Named { ident, type_, location } = arg {
             if location.span.contains(loc) {
-                let span = name_span_after(content, &location.span.start, ident.as_str())
+                let span = name_token_span(tokens, &location.span.start, ident.as_str())
                     .unwrap_or(location.span);
                 let mut md = format!("**arg** `{}`\n\n", ident.as_str());
                 md.push_str(&format!("```pyxis\n{}: {}\n```\n", ident.as_str(), type_));
@@ -1901,9 +1886,9 @@ fn named_arg_hover(
 /// The span of a `self`/`&self`/`&mut self` receiver of `f` if the cursor is on
 /// it (so a `self` hover can show the containing type, scoped to `self`).
 fn self_arg_span(
-    f: &pyxis::grammar::Function,
-    loc: &pyxis::span::Location,
-) -> Option<pyxis::span::Span> {
+    f: &Function,
+    loc: &Location,
+) -> Option<Span> {
     use pyxis::grammar::Argument;
     for arg in &f.arguments {
         match arg {
@@ -1923,7 +1908,7 @@ fn format_variant_hover(
     kind: &str,
     name: &str,
     value: Option<i128>,
-    attributes: &pyxis::grammar::Attributes,
+    attributes: &Attributes,
     doc: &[String],
 ) -> String {
     let mut md = format!("**{kind}** `{name}`\n");
@@ -1946,7 +1931,7 @@ fn format_variant_hover(
 }
 
 /// Hover markdown for a function (vftable entry or impl method).
-fn format_function_hover(f: &pyxis::grammar::Function) -> String {
+fn format_function_hover(f: &Function) -> String {
     let mut md = format!("**fn** `{}`\n\n", f.name.as_str());
     md.push_str(&format!("```pyxis\n{}\n```\n", render_fn_signature(f)));
     let attrs = render_attributes(&f.attributes);
@@ -1961,14 +1946,14 @@ fn format_function_hover(f: &pyxis::grammar::Function) -> String {
 
 /// Hover markdown for a struct field.
 fn format_field_hover(
-    vis: &pyxis::grammar::Visibility,
+    vis: &Visibility,
     name: &pyxis::grammar::Ident,
-    type_: &pyxis::grammar::Type,
-    attributes: &pyxis::grammar::Attributes,
+    type_: &Type,
+    attributes: &Attributes,
     type_size: Option<usize>,
     offset: Option<usize>,
 ) -> String {
-    let vis_str = if matches!(vis, pyxis::grammar::Visibility::Public) {
+    let vis_str = if matches!(vis, Visibility::Public) {
         "pub "
     } else {
         ""
@@ -1996,7 +1981,7 @@ fn format_field_hover(
 fn field_offset(
     parent_resolved: &pyxis::semantic::types::ItemStateResolved,
     field_name: &str,
-    type_registry: &pyxis::semantic::type_registry::TypeRegistry,
+    type_registry: &TypeRegistry,
 ) -> Option<usize> {
     let pyxis::semantic::types::ItemDefinitionInner::Type(td) = &parent_resolved.inner else {
         return None;
@@ -2015,14 +2000,13 @@ fn field_offset(
 /// inner pointee/element, which is handled as a type reference), return a
 /// hover describing the shape. Recurses through nested pointers/arrays.
 fn type_shell_at(
-    type_: &pyxis::grammar::Type,
-    loc: &pyxis::span::Location,
-    type_registry: &pyxis::semantic::type_registry::TypeRegistry,
+    type_: &Type,
+    loc: &Location,
+    type_registry: &TypeRegistry,
     scope: &[ItemPath],
-    decl_registry: &pyxis::semantic::declaration_registry::DeclarationRegistry,
+    decl_registry: &DeclarationRegistry,
     pointer_size: usize,
-) -> Option<(String, pyxis::span::Span)> {
-    use pyxis::grammar::Type;
+) -> Option<(String, Span)> {
     if !type_.location().span.contains(loc) {
         return None;
     }
@@ -2076,13 +2060,12 @@ fn type_shell_at(
 /// Best-effort alignment of a type: pointer → pointer size, array → element
 /// alignment, named type → its resolved alignment.
 fn type_align_of(
-    type_: &pyxis::grammar::Type,
-    type_registry: &pyxis::semantic::type_registry::TypeRegistry,
+    type_: &Type,
+    type_registry: &TypeRegistry,
     scope: &[ItemPath],
-    decl_registry: &pyxis::semantic::declaration_registry::DeclarationRegistry,
+    decl_registry: &DeclarationRegistry,
     pointer_size: usize,
 ) -> Option<usize> {
-    use pyxis::grammar::Type;
     match type_ {
         Type::ConstPointer { .. } | Type::MutPointer { .. } => Some(pointer_size),
         Type::Array { element, .. } => {
@@ -2092,7 +2075,7 @@ fn type_align_of(
         Type::Ident { path, .. } => {
             let resolved = resolve_type_path(path, scope, decl_registry)?;
             type_registry
-                .get(&resolved, &pyxis::span::ItemLocation::internal())
+                .get(&resolved, &ItemLocation::internal())
                 .ok()?
                 .resolved()
                 .map(|r| r.alignment)
@@ -2103,13 +2086,12 @@ fn type_align_of(
 /// Best-effort size of a field type: pointer → pointer size, array →
 /// element × count, `unknown<N>` → N, named type → its resolved size.
 fn type_size_of(
-    type_: &pyxis::grammar::Type,
-    type_registry: &pyxis::semantic::type_registry::TypeRegistry,
+    type_: &Type,
+    type_registry: &TypeRegistry,
     scope: &[ItemPath],
-    decl_registry: &pyxis::semantic::declaration_registry::DeclarationRegistry,
+    decl_registry: &DeclarationRegistry,
     pointer_size: usize,
 ) -> Option<usize> {
-    use pyxis::grammar::Type;
     match type_ {
         Type::ConstPointer { .. } | Type::MutPointer { .. } => Some(pointer_size),
         Type::Array { element, size, .. } => {
@@ -2120,7 +2102,7 @@ fn type_size_of(
         Type::Ident { path, .. } => {
             let resolved = resolve_type_path(path, scope, decl_registry)?;
             type_registry
-                .get(&resolved, &pyxis::span::ItemLocation::internal())
+                .get(&resolved, &ItemLocation::internal())
                 .ok()?
                 .resolved()
                 .map(|r| r.size)
