@@ -186,10 +186,45 @@ impl ServerState {
                             }
                         }
                     }
-                    // Anywhere else inside the definition's body (enum/bitflags
-                    // variants, blank lines) → show the containing type, but
-                    // keep the highlight scoped to its name rather than the
-                    // whole definition.
+                    // Enum / bitflags variants → the variant and its value.
+                    if let pyxis::grammar::ItemDefinitionInner::Enum(e) = &definition.inner {
+                        for statement in e.statements() {
+                            if statement.location.span.contains(&loc) {
+                                let span = name_span_after(
+                                    content, &statement.location.span.start, statement.name.as_str(),
+                                )
+                                .unwrap_or(statement.location.span);
+                                let value = self
+                                    .variant_value(uri, definition, statement.name.as_str(), source_set, pointer_size);
+                                let md = format_variant_hover(
+                                    "variant", statement.name.as_str(), value,
+                                    &statement.attributes, &statement.doc_comments,
+                                );
+                                return hover_response(req.id, md, content, &span);
+                            }
+                        }
+                    }
+                    if let pyxis::grammar::ItemDefinitionInner::Bitflags(b) = &definition.inner {
+                        for statement in b.statements() {
+                            if statement.location.span.contains(&loc) {
+                                let span = name_span_after(
+                                    content, &statement.location.span.start, statement.name.as_str(),
+                                )
+                                .unwrap_or(statement.location.span);
+                                let value = self
+                                    .variant_value(uri, definition, statement.name.as_str(), source_set, pointer_size);
+                                let md = format_variant_hover(
+                                    "flag", statement.name.as_str(), value,
+                                    &statement.attributes, &statement.doc_comments,
+                                );
+                                return hover_response(req.id, md, content, &span);
+                            }
+                        }
+                    }
+                    // Anywhere else inside the definition's body (blank lines,
+                    // the base type) → show the containing type, but keep the
+                    // highlight scoped to its name rather than the whole
+                    // definition.
                     if definition.location.span.contains(&loc) {
                         if let Some(span) = name_span_after(
                             content,
@@ -830,6 +865,36 @@ impl ServerState {
             .and_then(|i| i.resolved())
             .map(|r| (r.size, r.alignment));
         Some(ResolvedDefinition { def, uri, name_span, size_align })
+    }
+
+    /// Resolved value of an enum variant / bitflags flag named `variant_name`
+    /// within `definition` (auto-incremented values are only known post-resolve).
+    fn variant_value(
+        &self,
+        uri: &Uri,
+        definition: &pyxis::grammar::ItemDefinition,
+        variant_name: &str,
+        source_set: semantic::SourceSet,
+        pointer_size: usize,
+    ) -> Option<i128> {
+        let path = match self.module_path_for(uri) {
+            Some(mp) => mp.join(definition.name.as_str().into()),
+            None => ItemPath::from(definition.name.as_str()),
+        };
+        let resolved = resolve_item(&self.db, source_set, pointer_size, path);
+        match &resolved.item(&self.db).resolved()?.inner {
+            pyxis::semantic::types::ItemDefinitionInner::Enum(e) => e
+                .variants
+                .iter()
+                .find(|v| v.name == variant_name)
+                .map(|v| v.value as i128),
+            pyxis::semantic::types::ItemDefinitionInner::Bitflags(b) => b
+                .flags
+                .iter()
+                .find(|f| f.name == variant_name)
+                .map(|f| f.value as i128),
+            _ => None,
+        }
     }
 
     /// Hover markdown for a resolved item path: a user-defined type located in
@@ -1522,6 +1587,33 @@ fn self_arg_span(
         }
     }
     None
+}
+
+/// Hover markdown for an enum variant / bitflags flag, including its value.
+fn format_variant_hover(
+    kind: &str,
+    name: &str,
+    value: Option<i128>,
+    attributes: &pyxis::grammar::Attributes,
+    doc: &[String],
+) -> String {
+    let mut md = format!("**{kind}** `{name}`\n");
+    if !doc.is_empty() {
+        md.push_str(&format!("\n{}\n", doc.join("\n")));
+    }
+    let attrs = render_attributes(attributes);
+    if !attrs.is_empty() {
+        md.push_str(&format!("\n**Attributes:** {attrs}\n"));
+    }
+    if let Some(v) = value {
+        let value = if v >= 0 {
+            format!("`{v}` (`0x{v:X}`)")
+        } else {
+            format!("`{v}`")
+        };
+        push_facts(&mut md, &[("value", value)]);
+    }
+    md
 }
 
 /// Hover markdown for a function (vftable entry or impl method).

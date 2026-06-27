@@ -162,3 +162,20 @@ fn function_args_and_self() {
     assert!(hover_text(&st, &uri, 3, l.find("count").unwrap() as u32 + 1).contains("**arg** `count`"));
     assert!(hover_text(&st, &uri, 3, l.find("self").unwrap() as u32 + 1).contains("**type** `Foo`"));
 }
+
+#[test]
+fn enum_variant_shows_value() {
+    let base = std::env::temp_dir().join(format!("pyxis-en-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    write(&base.join("pyxis.toml"), "[project]\nname = \"t\"\npointer_size = 8\n");
+    let src = "pub enum E: u32 {\n    A,\n    B = 5,\n    C,\n}\n";
+    write(&base.join("e.pyxis"), src);
+    let init = serde_json::json!({ "rootUri": format!("file://{}", base.display()), "capabilities": {} });
+    let st = ServerState::new(&init).unwrap();
+    let uri: lsp_types::Uri = format!("file://{}", base.join("e.pyxis").display()).parse().unwrap();
+    // auto-incremented after B=5 → C=6
+    let cc = src.lines().nth(3).unwrap().find('C').unwrap() as u32;
+    let h = hover_text(&st, &uri, 3, cc);
+    assert!(h.contains("**variant** `C`"), "should describe the variant, not the enum: {h}");
+    assert!(h.contains("value `6`"), "auto-incremented value should be 6: {h}");
+}
