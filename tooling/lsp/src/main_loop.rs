@@ -54,9 +54,9 @@ pub fn run_with_connection(connection: Connection) -> Result<(), Box<dyn std::er
     };
 
     let initialize_value = serde_json::to_value(initialize_result)?;
-    let _initialize_id = connection.initialize(initialize_value)?;
+    let initialize_params = connection.initialize(initialize_value)?;
 
-    let mut state = ServerState::new();
+    let mut state = ServerState::new(&initialize_params)?;
     main_loop(&connection, &mut state)?;
 
     Ok(())

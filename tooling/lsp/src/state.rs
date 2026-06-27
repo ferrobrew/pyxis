@@ -1,6 +1,6 @@
 //! Server state — holds the Salsa database, FileStore, and open documents.
 
-use std::collections::HashMap;
+use std::{collections::HashMap, str::FromStr};
 
 use lsp_server::Notification;
 use lsp_types::{Diagnostic, PublishDiagnosticsParams, Uri};
@@ -29,13 +29,136 @@ pub(crate) struct Document {
 }
 
 impl ServerState {
-    pub fn new() -> Self {
-        Self {
+    pub fn new(initialize_params: &serde_json::Value) -> Result<Self, Box<dyn std::error::Error>> {
+        let params: lsp_types::InitializeParams =
+            serde_json::from_value(initialize_params.clone())?;
+
+        // Determine workspace root paths
+        let root_paths = Self::extract_root_paths(&params);
+
+        // Read pointer_size from pyxis.toml if available
+        let mut pointer_size = 4;
+        for root in &root_paths {
+            let config_path = root.join("pyxis.toml");
+            if config_path.exists() {
+                if let Ok(config) = pyxis::config::Config::load(&config_path) {
+                    pointer_size = config.project.pointer_size;
+                    break;
+                }
+            }
+        }
+
+        let mut state = Self {
             db: PyxisDatabaseImpl::default(),
             file_store: FileStore::new(),
             documents: HashMap::new(),
             file_id_to_uri: HashMap::new(),
-            pointer_size: 4,
+            pointer_size,
+        };
+
+        // Discover and register all .pyxis files in the workspace
+        for root in &root_paths {
+            state.discover_files(root);
+        }
+
+        Ok(state)
+    }
+
+    /// Extract workspace root paths from initialize params.
+    /// Checks workspace_folders first, then falls back to root_uri.
+    fn extract_root_paths(params: &lsp_types::InitializeParams) -> Vec<std::path::PathBuf> {
+        let mut roots = Vec::new();
+
+        if let Some(folders) = &params.workspace_folders {
+            for folder in folders {
+                if let Some(path) = uri_to_file_path(&folder.uri) {
+                    roots.push(path);
+                }
+            }
+        }
+
+        if roots.is_empty() {
+            if let Some(root_uri) = &params.root_uri {
+                if let Some(path) = uri_to_file_path(root_uri) {
+                    roots.push(path);
+                }
+            }
+        }
+
+        roots
+    }
+
+    /// Scan a directory recursively for .pyxis files and register them in the Salsa db.
+    fn discover_files(&mut self, root: &std::path::Path) {
+        let mut files = Vec::new();
+        Self::collect_pyxis_files(root, &mut files);
+        for path in files {
+            let source = match std::fs::read_to_string(&path) {
+                Ok(s) => s,
+                Err(_) => continue,
+            };
+
+            let relative_path = path
+                .strip_prefix(root)
+                .unwrap_or(&path)
+                .display()
+                .to_string();
+
+            // Skip if already registered (e.g. opened via didOpen)
+            if self
+                .documents
+                .values()
+                .any(|d| self.file_store.filename(d.file_id).ends_with(&relative_path))
+            {
+                continue;
+            }
+
+            let file_id = self
+                .file_store
+                .register_in_memory(relative_path.clone(), source.clone());
+            let source_file = SourceFile::new(
+                &self.db,
+                relative_path.clone(),
+                file_id.as_u32(),
+                source.clone(),
+            );
+
+            let uri = file_path_to_uri(&path)
+                .unwrap_or_else(|| {
+                    let uri_str = format!("file:///{}", relative_path.clone());
+                    Uri::from_str(&uri_str).unwrap()
+                });
+
+            self.documents.insert(
+                uri.clone(),
+                Document {
+                    source_file,
+                    file_id,
+                    content: source,
+                },
+            );
+            self.file_id_to_uri.insert(file_id, uri);
+        }
+    }
+
+    /// Recursively collect all .pyxis file paths under a directory.
+    fn collect_pyxis_files(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
+        let entries = match std::fs::read_dir(dir) {
+            Ok(e) => e,
+            Err(_) => return,
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                // Skip hidden directories (e.g. .git) and build artifacts
+                let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                if name.starts_with('.') || name == "target" || name == "node_modules" {
+                    continue;
+                }
+                Self::collect_pyxis_files(&path, out);
+            } else if path.extension().and_then(|e| e.to_str()) == Some("pyxis") {
+                out.push(path);
+            }
         }
     }
 
@@ -45,25 +168,35 @@ impl ServerState {
             serde_json::from_value(notif.params)?;
         let uri = params.text_document.uri.clone();
         let text = params.text_document.text;
-        let filename = uri_to_filename(&uri);
-        let file_id = self.file_store.register_in_memory(filename, text.clone());
 
-        let source_file = SourceFile::new(
-            &self.db,
-            uri_to_filename(&uri),
-            file_id.as_u32(),
-            text.clone(),
-        );
+        if let Some(doc) = self.documents.get_mut(&uri) {
+            // File was already discovered during workspace scan — update its
+            // content in place (the editor's version may differ from disk).
+            use pyxis::semantic::Setter;
+            doc.source_file.set_contents(&mut self.db).to(text.clone());
+            doc.content = text;
+            self.file_store.update_in_memory(doc.file_id, doc.content.clone());
+        } else {
+            let filename = uri_to_filename(&uri);
+            let file_id = self.file_store.register_in_memory(filename, text.clone());
 
-        self.documents.insert(
-            uri.clone(),
-            Document {
-                source_file,
-                file_id,
-                content: text,
-            },
-        );
-        self.file_id_to_uri.insert(file_id, uri);
+            let source_file = SourceFile::new(
+                &self.db,
+                uri_to_filename(&uri),
+                file_id.as_u32(),
+                text.clone(),
+            );
+
+            self.documents.insert(
+                uri.clone(),
+                Document {
+                    source_file,
+                    file_id,
+                    content: text,
+                },
+            );
+            self.file_id_to_uri.insert(file_id, uri);
+        }
         Ok(())
     }
 
@@ -212,4 +345,76 @@ fn uri_to_filename(uri: &Uri) -> String {
     let path = s.strip_prefix("file://").unwrap_or(s);
     // For test URIs like "file:///test.pyxis", return just "test.pyxis"
     path.rsplit('/').next().unwrap_or(path).to_string()
+}
+
+/// Convert a `file://` URI to a filesystem path.
+fn uri_to_file_path(uri: &Uri) -> Option<std::path::PathBuf> {
+    let s = uri.as_str();
+    let path_str = s.strip_prefix("file://")?;
+    // On Unix, the path is already absolute (e.g. /home/user/project)
+    // On Windows, file:// URIs use /C:/... format
+    let path_str = if path_str.starts_with('/') && path_str.len() > 2 && path_str.as_bytes()[2] == b':' {
+        // Windows: /C:/... → C:/...
+        &path_str[1..]
+    } else {
+        path_str
+    };
+    // Decode percent-encoding for spaces etc.
+    let decoded = percent_decode(path_str);
+    let path = std::path::PathBuf::from(decoded);
+    if path.exists() || path.parent().is_some() {
+        Some(path)
+    } else {
+        None
+    }
+}
+
+/// Convert a filesystem path to a `file://` URI.
+fn file_path_to_uri(path: &std::path::Path) -> Option<Uri> {
+    let absolute = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+    let s = absolute.to_string_lossy();
+    let encoded = percent_encode(&s);
+    let uri_str = format!("file://{}", encoded);
+    Uri::from_str(&uri_str).ok()
+}
+
+/// Simple percent-decoding for file paths.
+fn percent_decode(s: &str) -> String {
+    let mut result = String::with_capacity(s.len());
+    let mut chars = s.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '%' {
+            let h1 = chars.next();
+            let h2 = chars.next();
+            if let (Some(h1), Some(h2)) = (h1, h2) {
+                if let Ok(byte) = u8::from_str_radix(&format!("{h1}{h2}"), 16) {
+                    result.push(byte as char);
+                    continue;
+                }
+                result.push('%');
+                result.push(h1);
+                result.push(h2);
+            } else {
+                result.push('%');
+            }
+        } else {
+            result.push(c);
+        }
+    }
+    result
+}
+
+/// Simple percent-encoding for file paths.
+fn percent_encode(s: &str) -> String {
+    let mut result = String::with_capacity(s.len());
+    for byte in s.bytes() {
+        match byte {
+            b' ' | b'<' | b'>' | b'#' | b'%' | b'"' | b'{' | b'}' | b'|' | b'\\' | b'^' | b'['
+            | b']' | b'`' => {
+                result.push_str(&format!("%{:02X}", byte));
+            }
+            _ => result.push(byte as char),
+        }
+    }
+    result
 }
