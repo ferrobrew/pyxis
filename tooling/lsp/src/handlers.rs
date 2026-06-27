@@ -239,16 +239,18 @@ impl ServerState {
                                                 );
                                             }
                                         }
-                                        // …or the function itself.
+                                        // …or the function itself, annotated with
+                                        // its vftable slot index and byte offset.
                                         let span = name_token_span(
                                             tokens,
                                             &f.location.span.start,
                                             f.name.as_str(),
                                         )
                                         .unwrap_or(f.location.span);
+                                        let index = vftable_index_of(fns, f);
                                         return hover_response(
                                             req.id,
-                                            format_function_hover(f),
+                                            format_vftable_fn_hover(f, index, pointer_size),
                                             content,
                                             &span,
                                         );
@@ -2291,6 +2293,49 @@ fn format_function_hover(f: &Function) -> String {
     if !f.doc_comments.is_empty() {
         md.push_str(&format!("\n{}\n", f.doc_comments.join("\n")));
     }
+    md
+}
+
+/// An explicit `#[index(N)]` on a vftable function, if present.
+fn explicit_vftable_index(f: &Function) -> Option<usize> {
+    f.attributes.iter().find_map(|attr| match attr {
+        Attribute::Function { name, items, .. } if name.as_str() == "index" => items
+            .exprs()
+            .next()
+            .and_then(|e| e.int_literal())
+            .map(|v| v as usize),
+        _ => None,
+    })
+}
+
+/// The slot index of `target` within a vftable's function list. Indices run
+/// sequentially but an `#[index(N)]` resets the running counter (the compiler
+/// pads the gap with `_vfunc_*` entries), so this mirrors that assignment.
+fn vftable_index_of(fns: &[Function], target: &Function) -> usize {
+    let mut idx = 0;
+    for func in fns {
+        if let Some(n) = explicit_vftable_index(func) {
+            idx = n;
+        }
+        if std::ptr::eq(func, target) {
+            return idx;
+        }
+        idx += 1;
+    }
+    idx
+}
+
+/// Hover for a vftable entry: the function signature plus its slot index and
+/// byte offset from the base of the generated vftable struct.
+fn format_vftable_fn_hover(f: &Function, index: usize, pointer_size: usize) -> String {
+    let mut md = format_function_hover(f);
+    push_facts(
+        &mut md,
+        &[
+            ("index", format!("`{index}`")),
+            ("vftable offset", fmt_bytes(index * pointer_size)),
+        ],
+    );
     md
 }
 

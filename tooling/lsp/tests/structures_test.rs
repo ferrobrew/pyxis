@@ -813,3 +813,38 @@ fn rename_rewrites_every_occurrence() {
     assert!(changes[&shared].iter().all(|e| e.new_text == "Bar"));
     assert!(changes.contains_key(&consumer) && changes.contains_key(&shared));
 }
+
+#[test]
+fn vftable_function_hover_shows_index_and_offset() {
+    let base = std::env::temp_dir().join(format!("pyxis-vfi-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    write(
+        &base.join("pyxis.toml"),
+        "[project]\nname = \"t\"\npointer_size = 8\n",
+    );
+    let src = "pub type Foo {\n    vftable {\n        pub fn a(&mut self);\n        pub fn b(&mut self);\n        #[index(5)]\n        pub fn c(&mut self);\n    },\n}\n";
+    write(&base.join("m.pyxis"), src);
+    let init =
+        serde_json::json!({ "rootUri": format!("file://{}", base.display()), "capabilities": {} });
+    let st = ServerState::new(&init).unwrap();
+    let uri: lsp_types::Uri = format!("file://{}", base.join("m.pyxis").display())
+        .parse()
+        .unwrap();
+    let col = |l: usize, n: &str| src.lines().nth(l).unwrap().find(n).unwrap() as u32;
+    let a = hover_text(&st, &uri, 2, col(2, "a"));
+    assert!(
+        a.contains("index `0`") && a.contains("vftable offset `0x0`"),
+        "{a}"
+    );
+    let b = hover_text(&st, &uri, 3, col(3, "b"));
+    assert!(
+        b.contains("index `1`") && b.contains("vftable offset `0x8`"),
+        "{b}"
+    );
+    // #[index(5)] resets the running counter → offset 5 * 8 = 0x28.
+    let c = hover_text(&st, &uri, 5, col(5, "c"));
+    assert!(
+        c.contains("index `5`") && c.contains("vftable offset `0x28`"),
+        "{c}"
+    );
+}
