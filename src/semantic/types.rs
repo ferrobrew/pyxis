@@ -458,6 +458,21 @@ pub struct ItemDefinition {
     /// Position of the declaration itself, used for documentation source links.
     pub declaration_location: ItemLocation,
 }
+impl Default for ItemDefinition {
+    fn default() -> Self {
+        ItemDefinition {
+            visibility: Visibility::Public,
+            path: ItemPath::empty(),
+            type_parameters: vec![],
+            state: ItemState::Unresolved(grammar::ItemDefinition::default()),
+            category: ItemCategory::Defined,
+            predefined: None,
+            cfg: None,
+            location: ItemLocation::internal(),
+            declaration_location: ItemLocation::internal(),
+        }
+    }
+}
 impl ItemDefinition {
     /// Test-only constructor for category_resolved that uses a synthetic location
     #[cfg(test)]

@@ -122,33 +122,28 @@ pub(super) fn build_item(
 }
 
 pub(super) fn register_predefined(type_registry: &mut TypeRegistry) {
-    for predefined in crate::semantic::types::PredefinedItem::ALL {
-        let path = ItemPath::from(predefined.name());
+    use crate::semantic::types::{
+        ItemCategory, ItemDefinition, ItemState, ItemStateResolved, PredefinedItem, TypeDefinition,
+    };
+    for predefined in PredefinedItem::ALL {
         let size = predefined.size();
         let alignment = size.max(1);
-        let location = crate::span::ItemLocation::internal();
-        type_registry.add(crate::semantic::types::ItemDefinition {
-            visibility: crate::semantic::types::Visibility::Public,
-            path,
-            type_parameters: vec![],
-            state: crate::semantic::types::ItemState::Resolved(
-                crate::semantic::types::ItemStateResolved {
-                    size,
-                    alignment,
-                    inner: crate::semantic::types::TypeDefinition {
-                        copyable: true,
-                        cloneable: true,
-                        defaultable: true,
-                        ..Default::default()
-                    }
-                    .into(),
-                },
-            ),
-            category: crate::semantic::types::ItemCategory::Predefined,
+        type_registry.add(ItemDefinition {
+            path: ItemPath::from(predefined.name()),
+            state: ItemState::Resolved(ItemStateResolved {
+                size,
+                alignment,
+                inner: TypeDefinition {
+                    copyable: true,
+                    cloneable: true,
+                    defaultable: true,
+                    ..Default::default()
+                }
+                .into(),
+            }),
+            category: ItemCategory::Predefined,
             predefined: Some(*predefined),
-            cfg: None,
-            location,
-            declaration_location: location,
+            ..Default::default()
         });
     }
 }
@@ -158,6 +153,7 @@ pub(super) fn register_unresolved(
     path: &ItemPath,
     definition: &crate::grammar::ItemDefinition,
 ) {
+    use crate::semantic::types::{ItemDefinition, ItemState};
     let type_parameters: Vec<String> = definition
         .type_parameters
         .iter()
@@ -169,52 +165,24 @@ pub(super) fn register_unresolved(
         ItemDefinitionInner::Bitflags(b) => b.attributes.cfg(),
         ItemDefinitionInner::TypeAlias(ta) => ta.attributes.cfg(),
     };
-    type_registry.add(crate::semantic::types::ItemDefinition {
+    type_registry.add(ItemDefinition {
         visibility: definition.visibility.into(),
         path: path.clone(),
         type_parameters,
-        state: crate::semantic::types::ItemState::Unresolved(definition.clone()),
-        category: crate::semantic::types::ItemCategory::Defined,
-        predefined: None,
+        state: ItemState::Unresolved(definition.clone()),
         cfg,
         location: definition.location,
         declaration_location: definition.declaration_location,
+        ..Default::default()
     });
 }
 
 pub(super) fn make_unresolved_definition(
     path: &ItemPath,
 ) -> crate::semantic::types::ItemDefinition {
-    use crate::{
-        grammar::{Ident, ItemDefinition as GrammarDef, ItemDefinitionInner, TypeDefinition},
-        span::ItemLocation,
-    };
-
-    let grammar_def = GrammarDef {
-        visibility: crate::grammar::Visibility::Private,
-        name: Ident::from(""),
-        type_parameters: vec![],
-        inner: ItemDefinitionInner::Type(TypeDefinition {
-            items: vec![],
-            attributes: Default::default(),
-            inline_trailing_comments: vec![],
-            following_comments: vec![],
-        }),
-        doc_comments: vec![],
-        location: ItemLocation::internal(),
-        declaration_location: ItemLocation::internal(),
-    };
-
     crate::semantic::types::ItemDefinition {
-        visibility: crate::semantic::types::Visibility::Public,
         path: path.clone(),
-        type_parameters: vec![],
-        state: crate::semantic::types::ItemState::Unresolved(grammar_def),
-        category: crate::semantic::types::ItemCategory::Defined,
-        predefined: None,
-        cfg: None,
-        location: ItemLocation::internal(),
-        declaration_location: ItemLocation::internal(),
+        ..Default::default()
     }
 }
 
@@ -223,28 +191,24 @@ pub(super) fn make_predefined_definition(
     size: usize,
     alignment: usize,
 ) -> crate::semantic::types::ItemDefinition {
-    crate::semantic::types::ItemDefinition {
-        visibility: crate::semantic::types::Visibility::Public,
+    use crate::semantic::types::{
+        ItemCategory, ItemDefinition, ItemState, ItemStateResolved, TypeDefinition,
+    };
+    ItemDefinition {
         path: path.clone(),
-        type_parameters: vec![],
-        state: crate::semantic::types::ItemState::Resolved(
-            crate::semantic::types::ItemStateResolved {
-                size,
-                alignment,
-                inner: crate::semantic::types::TypeDefinition {
-                    copyable: true,
-                    cloneable: true,
-                    defaultable: true,
-                    ..Default::default()
-                }
-                .into(),
-            },
-        ),
-        category: crate::semantic::types::ItemCategory::Predefined,
-        predefined: None,
-        cfg: None,
-        location: crate::span::ItemLocation::internal(),
-        declaration_location: crate::span::ItemLocation::internal(),
+        state: ItemState::Resolved(ItemStateResolved {
+            size,
+            alignment,
+            inner: TypeDefinition {
+                copyable: true,
+                cloneable: true,
+                defaultable: true,
+                ..Default::default()
+            }
+            .into(),
+        }),
+        category: ItemCategory::Predefined,
+        ..Default::default()
     }
 }
 
@@ -252,26 +216,25 @@ pub(super) fn make_extern_definition(
     path: &ItemPath,
     info: &crate::semantic::declaration_registry::ExternTypeInfo,
 ) -> crate::semantic::types::ItemDefinition {
-    crate::semantic::types::ItemDefinition {
-        visibility: crate::semantic::types::Visibility::Public,
+    use crate::semantic::types::{
+        ItemCategory, ItemDefinition, ItemState, ItemStateResolved, TypeDefinition,
+    };
+    ItemDefinition {
         path: path.clone(),
-        type_parameters: vec![],
-        state: crate::semantic::types::ItemState::Resolved(
-            crate::semantic::types::ItemStateResolved {
-                size: info.size,
-                alignment: info.alignment,
-                inner: crate::semantic::types::TypeDefinition {
-                    doc: info.doc_comments.clone(),
-                    ..Default::default()
-                }
-                .into(),
-            },
-        ),
-        category: crate::semantic::types::ItemCategory::Extern,
-        predefined: None,
+        state: ItemState::Resolved(ItemStateResolved {
+            size: info.size,
+            alignment: info.alignment,
+            inner: TypeDefinition {
+                doc: info.doc_comments.clone(),
+                ..Default::default()
+            }
+            .into(),
+        }),
+        category: ItemCategory::Extern,
         cfg: info.cfg.clone(),
         location: info.location,
         declaration_location: info.declaration_location,
+        ..Default::default()
     }
 }
 
@@ -285,15 +248,13 @@ pub(super) fn make_placeholder(
     arity: usize,
 ) -> crate::semantic::types::ItemDefinition {
     use crate::{
-        grammar::{
-            Ident, ItemDefinition as GrammarDef, ItemDefinitionInner, TypeDefinition, TypeParameter,
-        },
+        grammar::{Ident, ItemDefinition as GrammarDef, TypeParameter, Visibility},
         span::ItemLocation,
     };
 
     let type_param_names: Vec<String> = (0..arity).map(|i| format!("T{i}")).collect();
     let grammar_def = GrammarDef {
-        visibility: crate::grammar::Visibility::Public,
+        visibility: Visibility::Public,
         name: Ident::from(path.last().map(|s| s.as_str()).unwrap_or("")),
         type_parameters: type_param_names
             .iter()
@@ -302,27 +263,14 @@ pub(super) fn make_placeholder(
                 location: ItemLocation::internal(),
             })
             .collect(),
-        inner: ItemDefinitionInner::Type(TypeDefinition {
-            items: vec![],
-            attributes: Default::default(),
-            inline_trailing_comments: vec![],
-            following_comments: vec![],
-        }),
-        doc_comments: vec![],
-        location: ItemLocation::internal(),
-        declaration_location: ItemLocation::internal(),
+        ..Default::default()
     };
 
     crate::semantic::types::ItemDefinition {
-        visibility: crate::semantic::types::Visibility::Public,
         path: path.clone(),
         type_parameters: type_param_names,
         state: crate::semantic::types::ItemState::Unresolved(grammar_def),
-        category: crate::semantic::types::ItemCategory::Defined,
-        predefined: None,
-        cfg: None,
-        location: ItemLocation::internal(),
-        declaration_location: ItemLocation::internal(),
+        ..Default::default()
     }
 }
 
