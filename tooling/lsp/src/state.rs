@@ -660,50 +660,88 @@ fn file_path_to_uri(path: &std::path::Path) -> Option<Uri> {
     Uri::from_str(&uri_str).ok()
 }
 
-/// The `file://` URI for a path, with a raw fallback for paths that can't be
-/// encoded (e.g. a synthetic in-memory test path that doesn't exist on disk).
+/// The `file://` URI for a path. Never panics: `percent_encode` guarantees
+/// ASCII output, so the formatted string always parses as a `Uri`. The
+/// fallback covers synthetic in-memory test paths that don't canonicalize.
 fn file_uri(path: &std::path::Path) -> Uri {
-    file_path_to_uri(path)
-        .unwrap_or_else(|| Uri::from_str(&format!("file:///{}", path.display())).unwrap())
+    if let Some(uri) = file_path_to_uri(path) {
+        return uri;
+    }
+    let encoded = percent_encode(&path.display().to_string());
+    let uri_str = format!("file:///{}", encoded.trim_start_matches('/'));
+    Uri::from_str(&uri_str)
+        .unwrap_or_else(|_| Uri::from_str("file:///").expect("`file:///` is a valid URI"))
 }
 
-/// Simple percent-decoding for file paths.
+/// Percent-decoding for file paths. Decodes `%XX` escapes to raw bytes and
+/// reassembles them as UTF-8 — accumulating bytes (not chars) so a multi-byte
+/// sequence like `%C3%A9` round-trips to `é` rather than mojibake.
 fn percent_decode(s: &str) -> String {
-    let mut result = String::with_capacity(s.len());
-    let mut chars = s.chars().peekable();
-    while let Some(c) = chars.next() {
-        if c == '%' {
-            let h1 = chars.next();
-            let h2 = chars.next();
-            if let (Some(h1), Some(h2)) = (h1, h2) {
-                if let Ok(byte) = u8::from_str_radix(&format!("{h1}{h2}"), 16) {
-                    result.push(byte as char);
-                    continue;
-                }
-                result.push('%');
-                result.push(h1);
-                result.push(h2);
-            } else {
-                result.push('%');
-            }
+    let bytes = s.as_bytes();
+    let mut out: Vec<u8> = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%'
+            && i + 2 < bytes.len()
+            && let Ok(decoded) = std::str::from_utf8(&bytes[i + 1..i + 3])
+                .ok()
+                .and_then(|hex| u8::from_str_radix(hex, 16).ok())
+                .ok_or(())
+        {
+            out.push(decoded);
+            i += 3;
         } else {
-            result.push(c);
+            out.push(bytes[i]);
+            i += 1;
         }
     }
-    result
+    String::from_utf8_lossy(&out).into_owned()
 }
 
-/// Simple percent-encoding for file paths.
+/// Percent-encoding for file paths. Always produces ASCII output: besides the
+/// reserved/unsafe ASCII characters, every control byte and every non-ASCII
+/// (UTF-8 continuation/lead) byte is encoded. This is essential — a `Uri` must
+/// be ASCII, and emitting `byte as char` for a multi-byte UTF-8 sequence would
+/// both corrupt the path and produce a string `Uri::from_str` rejects.
 fn percent_encode(s: &str) -> String {
     let mut result = String::with_capacity(s.len());
     for byte in s.bytes() {
         match byte {
             b' ' | b'<' | b'>' | b'#' | b'%' | b'"' | b'{' | b'}' | b'|' | b'\\' | b'^' | b'['
-            | b']' | b'`' => {
-                result.push_str(&format!("%{:02X}", byte));
-            }
+            | b']' | b'`' => result.push_str(&format!("%{byte:02X}")),
+            // Control bytes (incl. DEL) and all non-ASCII bytes.
+            0x00..=0x1F | 0x7F..=0xFF => result.push_str(&format!("%{byte:02X}")),
             _ => result.push(byte as char),
         }
     }
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn percent_encode_is_ascii_and_encodes_non_ascii() {
+        let encoded = percent_encode("/tmp/café/日本語.pyxis");
+        assert!(
+            encoded.is_ascii(),
+            "encoded output must be ASCII: {encoded}"
+        );
+        assert!(
+            encoded.contains("%C3%A9"),
+            "é should be percent-encoded UTF-8"
+        );
+        // Round-trips back to the original bytes.
+        assert_eq!(percent_decode(&encoded), "/tmp/café/日本語.pyxis");
+    }
+
+    #[test]
+    fn file_uri_does_not_panic_on_non_ascii_paths() {
+        // Regression: file_uri previously panicked (Uri::from_str(...).unwrap())
+        // for any path with a non-ASCII component.
+        let uri = file_uri(std::path::Path::new("/tmp/工程/café.pyxis"));
+        assert!(uri.as_str().starts_with("file:///"));
+        assert!(uri.as_str().is_ascii());
+    }
 }
