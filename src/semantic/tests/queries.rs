@@ -174,3 +174,27 @@ fn resolve_item_incremental_on_change() {
         "B should now be 8 bytes (2x u32)"
     );
 }
+
+#[test]
+fn extern_value_without_address_is_an_error() {
+    // Regression: a missing `#[address]` on an extern value must surface as a
+    // diagnostic. Previously analyze() logged "DEBUG: ..." and dropped the
+    // whole module, silently losing every type it declared.
+    let db = PyxisDatabaseImpl::default();
+    let source = SourceFile::new(
+        &db,
+        "test.pyxis".to_string(),
+        1,
+        "extern thing: *mut u32;".to_string(),
+    );
+    let source_set = SourceSet::new(&db, vec![source]);
+    let analysis = analyze(&db, 4, source_set);
+    assert!(
+        analysis.parse_errors(&db).is_empty(),
+        "extern value should parse"
+    );
+    assert!(
+        !analysis.errors(&db).is_empty(),
+        "extern value without #[address] should produce a diagnostic"
+    );
+}

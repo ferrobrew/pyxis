@@ -432,6 +432,11 @@ pub fn analyze<'db>(
     let mut modules: BTreeMap<ItemPath, SemanticModule> = BTreeMap::new();
     modules.insert(ItemPath::empty(), SemanticModule::default());
 
+    // Errors from building module scopes (missing `#[address]` on an extern
+    // value, malformed module) — collected and returned as diagnostics rather
+    // than dropped, so the offending module isn't silently elided.
+    let mut module_errors: Vec<crate::semantic::SemanticError> = Vec::new();
+
     for (source, module) in &parsed_modules {
         let path_str = source.path(db);
         let module_path = ItemPath::from_path(std::path::Path::new(path_str.as_str()));
@@ -485,16 +490,22 @@ pub fn analyze<'db>(
                     Ok(m) => {
                         modules.insert(module_path, m);
                     }
-                    Err(e) => {
-                        // Will be reported as a semantic error below
-                        eprintln!("DEBUG: module build error: {e}");
-                    }
+                    Err(e) => module_errors.push(e),
                 }
             }
-            Err(e) => {
-                eprintln!("DEBUG: extern value error: {e}");
-            }
+            Err(e) => module_errors.push(e),
         }
+    }
+
+    if !module_errors.is_empty() {
+        return SemanticAnalysis::new(
+            db,
+            Arc::new(type_registry.clone()),
+            Arc::new(modules.clone()),
+            Arc::new(build_doc_link_resolver(&type_registry, &modules)),
+            Arc::new(module_errors),
+            Arc::new(vec![]),
+        );
     }
 
     // Synthesize ancestor modules: ensure every folder that contains .pyxis
