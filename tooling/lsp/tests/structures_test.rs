@@ -6,12 +6,6 @@ use lsp_server::{Request, RequestId};
 use lsp_types::{Position, TextDocumentIdentifier, TextDocumentPositionParams};
 use pyxis_lsp::state::ServerState;
 
-fn write(p: &std::path::Path, c: &str) {
-    if let Some(d) = p.parent() {
-        std::fs::create_dir_all(d).unwrap();
-    }
-    std::fs::write(p, c).unwrap();
-}
 fn hover_text(s: &ServerState, u: &lsp_types::Uri, line: u32, ch: u32) -> String {
     let r = Request::new(
         RequestId::from(1),
@@ -56,28 +50,18 @@ impl GameObject {
 "#;
 
 fn project() -> (ServerState, lsp_types::Uri) {
-    // Unique per call: `structural_hovers` and `references_resolve_despite_size_error`
-    // both call this and run in parallel, so a dir keyed only by pid would race
-    // (one test's remove_dir_all + rewrite clobbering the other's file scan).
-    static COUNTER: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-    let n = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    let base = std::env::temp_dir().join(format!("pyxis-structs-{}-{}", std::process::id(), n));
-    let _ = std::fs::remove_dir_all(&base);
-    write(
-        &base.join("pyxis.toml"),
-        "[project]\nname = \"t\"\npointer_size = 8\n",
-    );
-    write(
-        &base.join("types/math.pyxis"),
-        "pub type Matrix4 {\n    pub data: [f32; 16],\n}\n",
-    );
-    write(&base.join("game.pyxis"), SRC);
-    let init =
-        serde_json::json!({ "rootUri": format!("file://{}", base.display()), "capabilities": {} });
-    let state = ServerState::new(&init).unwrap();
-    let uri = format!("file://{}", base.join("game.pyxis").display())
-        .parse()
-        .unwrap();
+    let state = ServerState::in_memory(&[(
+        "/proj",
+        8,
+        &[
+            (
+                "types/math.pyxis",
+                "pub type Matrix4 {\n    pub data: [f32; 16],\n}\n",
+            ),
+            ("game.pyxis", SRC),
+        ],
+    )]);
+    let uri = ServerState::document_uri("/proj", "game.pyxis");
     (state, uri)
 }
 
@@ -137,20 +121,9 @@ fn references_resolve_despite_size_error() {
 fn field_hover_shows_offset() {
     // All-u64 fields lay out with no implicit padding, so the type resolves
     // and field offsets are available.
-    let base = std::env::temp_dir().join(format!("pyxis-off-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&base);
-    write(
-        &base.join("pyxis.toml"),
-        "[project]\nname = \"t\"\npointer_size = 8\n",
-    );
     let src = "pub type S {\n    pub a: u64,\n    pub b: u64,\n    pub c: u64,\n}\n";
-    write(&base.join("s.pyxis"), src);
-    let init =
-        serde_json::json!({ "rootUri": format!("file://{}", base.display()), "capabilities": {} });
-    let st = ServerState::new(&init).unwrap();
-    let uri: lsp_types::Uri = format!("file://{}", base.join("s.pyxis").display())
-        .parse()
-        .unwrap();
+    let st = ServerState::in_memory(&[("/proj", 8, &[("s.pyxis", src)])]);
+    let uri = ServerState::document_uri("/proj", "s.pyxis");
     let c = src.lines().nth(2).unwrap().find('b').unwrap() as u32 + 1;
     let h = hover_text(&st, &uri, 2, c);
     assert!(
@@ -161,24 +134,19 @@ fn field_hover_shows_offset() {
 
 #[test]
 fn backend_for_type_navigates() {
-    let base = std::env::temp_dir().join(format!("pyxis-bf-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&base);
-    write(
-        &base.join("pyxis.toml"),
-        "[project]\nname = \"t\"\npointer_size = 8\n",
-    );
-    write(
-        &base.join("types/shared.pyxis"),
-        "pub type SharedPtr {\n    pub ptr: u64,\n}\n",
-    );
     let main = "use types::shared::SharedPtr;\n\nbackend cpp {\n    epilogue for SharedPtr r#\"// code\"#;\n}\n";
-    write(&base.join("m.pyxis"), main);
-    let init =
-        serde_json::json!({ "rootUri": format!("file://{}", base.display()), "capabilities": {} });
-    let st = ServerState::new(&init).unwrap();
-    let uri: lsp_types::Uri = format!("file://{}", base.join("m.pyxis").display())
-        .parse()
-        .unwrap();
+    let st = ServerState::in_memory(&[(
+        "/proj",
+        8,
+        &[
+            (
+                "types/shared.pyxis",
+                "pub type SharedPtr {\n    pub ptr: u64,\n}\n",
+            ),
+            ("m.pyxis", main),
+        ],
+    )]);
+    let uri = ServerState::document_uri("/proj", "m.pyxis");
     let c = main.lines().nth(3).unwrap().find("SharedPtr").unwrap() as u32 + 2;
     assert!(
         hover_text(&st, &uri, 3, c).contains("**type** `SharedPtr`"),
@@ -188,20 +156,9 @@ fn backend_for_type_navigates() {
 
 #[test]
 fn predefined_field_type_hovers_the_type() {
-    let base = std::env::temp_dir().join(format!("pyxis-bi-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&base);
-    write(
-        &base.join("pyxis.toml"),
-        "[project]\nname = \"t\"\npointer_size = 8\n",
-    );
     let src = "pub type S {\n    pub flag: bool,\n}\n";
-    write(&base.join("s.pyxis"), src);
-    let init =
-        serde_json::json!({ "rootUri": format!("file://{}", base.display()), "capabilities": {} });
-    let st = ServerState::new(&init).unwrap();
-    let uri: lsp_types::Uri = format!("file://{}", base.join("s.pyxis").display())
-        .parse()
-        .unwrap();
+    let st = ServerState::in_memory(&[("/proj", 8, &[("s.pyxis", src)])]);
+    let uri = ServerState::document_uri("/proj", "s.pyxis");
     let c = src.lines().nth(1).unwrap().find("bool").unwrap() as u32 + 1;
     let h = hover_text(&st, &uri, 1, c);
     assert!(
@@ -212,20 +169,9 @@ fn predefined_field_type_hovers_the_type() {
 
 #[test]
 fn function_args_and_self() {
-    let base = std::env::temp_dir().join(format!("pyxis-arg-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&base);
-    write(
-        &base.join("pyxis.toml"),
-        "[project]\nname = \"t\"\npointer_size = 8\n",
-    );
     let src = "pub type Foo {\n    pub x: u64,\n    vftable {\n        pub fn doit(&mut self, count: u32);\n    },\n}\n";
-    write(&base.join("foo.pyxis"), src);
-    let init =
-        serde_json::json!({ "rootUri": format!("file://{}", base.display()), "capabilities": {} });
-    let st = ServerState::new(&init).unwrap();
-    let uri: lsp_types::Uri = format!("file://{}", base.join("foo.pyxis").display())
-        .parse()
-        .unwrap();
+    let st = ServerState::in_memory(&[("/proj", 8, &[("foo.pyxis", src)])]);
+    let uri = ServerState::document_uri("/proj", "foo.pyxis");
     let l = src.lines().nth(3).unwrap();
     assert!(
         hover_text(&st, &uri, 3, l.find("count").unwrap() as u32 + 1).contains("**arg** `count`")
@@ -237,20 +183,9 @@ fn function_args_and_self() {
 
 #[test]
 fn enum_variant_shows_value() {
-    let base = std::env::temp_dir().join(format!("pyxis-en-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&base);
-    write(
-        &base.join("pyxis.toml"),
-        "[project]\nname = \"t\"\npointer_size = 8\n",
-    );
     let src = "pub enum E: u32 {\n    A,\n    B = 5,\n    C,\n}\n";
-    write(&base.join("e.pyxis"), src);
-    let init =
-        serde_json::json!({ "rootUri": format!("file://{}", base.display()), "capabilities": {} });
-    let st = ServerState::new(&init).unwrap();
-    let uri: lsp_types::Uri = format!("file://{}", base.join("e.pyxis").display())
-        .parse()
-        .unwrap();
+    let st = ServerState::in_memory(&[("/proj", 8, &[("e.pyxis", src)])]);
+    let uri = ServerState::document_uri("/proj", "e.pyxis");
     // auto-incremented after B=5 → C=6
     let cc = src.lines().nth(3).unwrap().find('C').unwrap() as u32;
     let h = hover_text(&st, &uri, 3, cc);
@@ -266,20 +201,9 @@ fn enum_variant_shows_value() {
 
 #[test]
 fn attribute_hover_describes_attribute() {
-    let base = std::env::temp_dir().join(format!("pyxis-attr-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&base);
-    write(
-        &base.join("pyxis.toml"),
-        "[project]\nname = \"t\"\npointer_size = 8\n",
-    );
     let src = "#[size(0x10)]\npub type Foo {\n    #[base]\n    pub p: u64,\n}\n";
-    write(&base.join("foo.pyxis"), src);
-    let init =
-        serde_json::json!({ "rootUri": format!("file://{}", base.display()), "capabilities": {} });
-    let st = ServerState::new(&init).unwrap();
-    let uri: lsp_types::Uri = format!("file://{}", base.join("foo.pyxis").display())
-        .parse()
-        .unwrap();
+    let st = ServerState::in_memory(&[("/proj", 8, &[("foo.pyxis", src)])]);
+    let uri = ServerState::document_uri("/proj", "foo.pyxis");
     let h = hover_text(&st, &uri, 0, 3); // #[size(0x10)]
     assert!(
         h.contains("**attribute**") && h.contains("#[size(0x10)]"),
@@ -294,20 +218,9 @@ fn attribute_hover_describes_attribute() {
 
 #[test]
 fn free_functions_hover() {
-    let base = std::env::temp_dir().join(format!("pyxis-ff-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&base);
-    write(
-        &base.join("pyxis.toml"),
-        "[project]\nname = \"t\"\npointer_size = 8\n",
-    );
     let src = "pub type T {\n    pub x: u64,\n}\nfn free_fn(item: *const T) -> bool;\n";
-    write(&base.join("m.pyxis"), src);
-    let init =
-        serde_json::json!({ "rootUri": format!("file://{}", base.display()), "capabilities": {} });
-    let st = ServerState::new(&init).unwrap();
-    let uri: lsp_types::Uri = format!("file://{}", base.join("m.pyxis").display())
-        .parse()
-        .unwrap();
+    let st = ServerState::in_memory(&[("/proj", 8, &[("m.pyxis", src)])]);
+    let uri = ServerState::document_uri("/proj", "m.pyxis");
     let l = src.lines().nth(3).unwrap();
     assert!(
         hover_text(&st, &uri, 3, l.find("free_fn").unwrap() as u32 + 1)
@@ -321,21 +234,10 @@ fn free_functions_hover() {
 
 #[test]
 fn extern_value_and_type_hover() {
-    let base = std::env::temp_dir().join(format!("pyxis-ex-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&base);
-    write(
-        &base.join("pyxis.toml"),
-        "[project]\nname = \"t\"\npointer_size = 8\n",
-    );
     // extern value references a type defined later (forward ref).
     let src = "#[address(0x100)]\nextern foo: Bar;\n\npub type Bar {\n    pub x: u64,\n}\n";
-    write(&base.join("m.pyxis"), src);
-    let init =
-        serde_json::json!({ "rootUri": format!("file://{}", base.display()), "capabilities": {} });
-    let st = ServerState::new(&init).unwrap();
-    let uri: lsp_types::Uri = format!("file://{}", base.join("m.pyxis").display())
-        .parse()
-        .unwrap();
+    let st = ServerState::in_memory(&[("/proj", 8, &[("m.pyxis", src)])]);
+    let uri = ServerState::document_uri("/proj", "m.pyxis");
     let l = src.lines().nth(1).unwrap();
     assert!(
         hover_text(&st, &uri, 1, l.find("foo").unwrap() as u32 + 1)
@@ -349,20 +251,9 @@ fn extern_value_and_type_hover() {
 
 #[test]
 fn pointer_and_array_shells() {
-    let base = std::env::temp_dir().join(format!("pyxis-pa-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&base);
-    write(
-        &base.join("pyxis.toml"),
-        "[project]\nname = \"t\"\npointer_size = 8\n",
-    );
     let src = "pub type Foo {\n    pub x: u64,\n}\npub type T {\n    pub p: *mut Foo,\n    pub arr: [Foo; 4],\n}\n";
-    write(&base.join("m.pyxis"), src);
-    let init =
-        serde_json::json!({ "rootUri": format!("file://{}", base.display()), "capabilities": {} });
-    let st = ServerState::new(&init).unwrap();
-    let uri: lsp_types::Uri = format!("file://{}", base.join("m.pyxis").display())
-        .parse()
-        .unwrap();
+    let st = ServerState::in_memory(&[("/proj", 8, &[("m.pyxis", src)])]);
+    let uri = ServerState::document_uri("/proj", "m.pyxis");
     let l4 = src.lines().nth(4).unwrap();
     assert!(hover_text(&st, &uri, 4, l4.find('*').unwrap() as u32).contains("**pointer**"));
     assert!(hover_text(&st, &uri, 4, l4.find("Foo").unwrap() as u32).contains("**type** `Foo`"));
@@ -373,20 +264,9 @@ fn pointer_and_array_shells() {
 
 #[test]
 fn backend_terms_hover() {
-    let base = std::env::temp_dir().join(format!("pyxis-bt-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&base);
-    write(
-        &base.join("pyxis.toml"),
-        "[project]\nname = \"t\"\npointer_size = 8\n",
-    );
     let src = "pub type Foo {\n    pub x: u64,\n}\nbackend rust {\n    epilogue for Foo r#\"\n    for x in 0..3 {}\n\"#;\n}\n";
-    write(&base.join("m.pyxis"), src);
-    let init =
-        serde_json::json!({ "rootUri": format!("file://{}", base.display()), "capabilities": {} });
-    let st = ServerState::new(&init).unwrap();
-    let uri: lsp_types::Uri = format!("file://{}", base.join("m.pyxis").display())
-        .parse()
-        .unwrap();
+    let st = ServerState::in_memory(&[("/proj", 8, &[("m.pyxis", src)])]);
+    let uri = ServerState::document_uri("/proj", "m.pyxis");
     assert!(
         hover_text(
             &st,
@@ -426,20 +306,9 @@ fn backend_terms_hover() {
 
 #[test]
 fn vftable_keyword_describes_struct() {
-    let base = std::env::temp_dir().join(format!("pyxis-vf-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&base);
-    write(
-        &base.join("pyxis.toml"),
-        "[project]\nname = \"t\"\npointer_size = 8\n",
-    );
     let src = "pub type Foo {\n    vftable {\n        pub fn a(&mut self);\n        pub fn b(&mut self);\n    },\n}\n";
-    write(&base.join("m.pyxis"), src);
-    let init =
-        serde_json::json!({ "rootUri": format!("file://{}", base.display()), "capabilities": {} });
-    let st = ServerState::new(&init).unwrap();
-    let uri: lsp_types::Uri = format!("file://{}", base.join("m.pyxis").display())
-        .parse()
-        .unwrap();
+    let st = ServerState::in_memory(&[("/proj", 8, &[("m.pyxis", src)])]);
+    let uri = ServerState::document_uri("/proj", "m.pyxis");
     let c = src.lines().nth(1).unwrap().find("vftable").unwrap() as u32 + 2;
     let h = hover_text(&st, &uri, 1, c);
     assert!(
@@ -450,20 +319,9 @@ fn vftable_keyword_describes_struct() {
 
 #[test]
 fn pointer_shell_in_function_signature() {
-    let base = std::env::temp_dir().join(format!("pyxis-cps-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&base);
-    write(
-        &base.join("pyxis.toml"),
-        "[project]\nname = \"t\"\npointer_size = 8\n",
-    );
     let src = "pub type Foo {\n    vftable {\n        pub fn f(&mut self, mat: *const f32) -> *const u32;\n    },\n}\n";
-    write(&base.join("m.pyxis"), src);
-    let init =
-        serde_json::json!({ "rootUri": format!("file://{}", base.display()), "capabilities": {} });
-    let st = ServerState::new(&init).unwrap();
-    let uri: lsp_types::Uri = format!("file://{}", base.join("m.pyxis").display())
-        .parse()
-        .unwrap();
+    let st = ServerState::in_memory(&[("/proj", 8, &[("m.pyxis", src)])]);
+    let uri = ServerState::document_uri("/proj", "m.pyxis");
     let l = src.lines().nth(2).unwrap();
     // the `*const` of the argument and of the return type both describe the pointer
     assert!(hover_text(&st, &uri, 2, l.find("*const f32").unwrap() as u32).contains("**pointer**"));
@@ -475,20 +333,9 @@ fn pointer_shell_in_function_signature() {
 fn shell_in_type_alias_target() {
     // Hovering the `*const` shell of a type-alias target describes the pointer,
     // while the pointee still resolves to its type.
-    let base = std::env::temp_dir().join(format!("pyxis-alias-shell-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&base);
-    write(
-        &base.join("pyxis.toml"),
-        "[project]\nname = \"t\"\npointer_size = 8\n",
-    );
     let src = "pub type Foo {\n    pub x: u64,\n}\npub type Alias = *const Foo;\n";
-    write(&base.join("m.pyxis"), src);
-    let init =
-        serde_json::json!({ "rootUri": format!("file://{}", base.display()), "capabilities": {} });
-    let st = ServerState::new(&init).unwrap();
-    let uri: lsp_types::Uri = format!("file://{}", base.join("m.pyxis").display())
-        .parse()
-        .unwrap();
+    let st = ServerState::in_memory(&[("/proj", 8, &[("m.pyxis", src)])]);
+    let uri = ServerState::document_uri("/proj", "m.pyxis");
     let l = src.lines().nth(3).unwrap();
     assert!(
         hover_text(&st, &uri, 3, l.find('*').unwrap() as u32).contains("**pointer**"),
@@ -503,20 +350,9 @@ fn shell_in_type_alias_target() {
 #[test]
 fn shell_in_extern_value_type() {
     // Hovering the `*const` shell of an extern value's type describes the pointer.
-    let base = std::env::temp_dir().join(format!("pyxis-extern-shell-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&base);
-    write(
-        &base.join("pyxis.toml"),
-        "[project]\nname = \"t\"\npointer_size = 8\n",
-    );
     let src = "pub type Foo {\n    pub x: u64,\n}\n#[address(0x100)]\nextern p: *const Foo;\n";
-    write(&base.join("m.pyxis"), src);
-    let init =
-        serde_json::json!({ "rootUri": format!("file://{}", base.display()), "capabilities": {} });
-    let st = ServerState::new(&init).unwrap();
-    let uri: lsp_types::Uri = format!("file://{}", base.join("m.pyxis").display())
-        .parse()
-        .unwrap();
+    let st = ServerState::in_memory(&[("/proj", 8, &[("m.pyxis", src)])]);
+    let uri = ServerState::document_uri("/proj", "m.pyxis");
     let l = src.lines().nth(4).unwrap();
     assert!(
         hover_text(&st, &uri, 4, l.find('*').unwrap() as u32).contains("**pointer**"),
@@ -532,20 +368,9 @@ fn shell_in_extern_value_type() {
 fn shell_in_generic_argument() {
     // Hovering the `*const` shell *inside* a generic argument describes the
     // inner pointer, not the outer generic type.
-    let base = std::env::temp_dir().join(format!("pyxis-generic-shell-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&base);
-    write(
-        &base.join("pyxis.toml"),
-        "[project]\nname = \"t\"\npointer_size = 8\n",
-    );
     let src = "pub type Foo {\n    pub x: u64,\n}\npub type SharedPtr<T> {\n    pub ptr: *mut T,\n}\npub type Holder {\n    pub h: SharedPtr<*const Foo>,\n}\n";
-    write(&base.join("m.pyxis"), src);
-    let init =
-        serde_json::json!({ "rootUri": format!("file://{}", base.display()), "capabilities": {} });
-    let st = ServerState::new(&init).unwrap();
-    let uri: lsp_types::Uri = format!("file://{}", base.join("m.pyxis").display())
-        .parse()
-        .unwrap();
+    let st = ServerState::in_memory(&[("/proj", 8, &[("m.pyxis", src)])]);
+    let uri = ServerState::document_uri("/proj", "m.pyxis");
     let l = src.lines().nth(7).unwrap(); // `    pub h: SharedPtr<*const Foo>,`
     // The `*const` inside the generic arg is a pointer shell, not SharedPtr.
     let star = l.find('*').unwrap() as u32;
@@ -569,21 +394,10 @@ fn shell_in_generic_argument() {
 
 #[test]
 fn attribute_hover_on_free_function_and_extern() {
-    let base = std::env::temp_dir().join(format!("pyxis-fa-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&base);
-    write(
-        &base.join("pyxis.toml"),
-        "[project]\nname = \"t\"\npointer_size = 8\n",
-    );
     let src =
         "#[address(0x100)]\nfn do_thing(x: u32) -> bool;\n\n#[address(0x200)]\nextern foo: u32;\n";
-    write(&base.join("m.pyxis"), src);
-    let init =
-        serde_json::json!({ "rootUri": format!("file://{}", base.display()), "capabilities": {} });
-    let st = ServerState::new(&init).unwrap();
-    let uri: lsp_types::Uri = format!("file://{}", base.join("m.pyxis").display())
-        .parse()
-        .unwrap();
+    let st = ServerState::in_memory(&[("/proj", 8, &[("m.pyxis", src)])]);
+    let uri = ServerState::document_uri("/proj", "m.pyxis");
     assert!(
         hover_text(&st, &uri, 0, 3).contains("**attribute**"),
         "free-function attribute"
@@ -620,43 +434,26 @@ fn def_uri(s: &ServerState, u: &lsp_types::Uri, line: u32, ch: u32) -> Option<St
 // sibling project (the JustCause2/MadMax `physics_game_object` bug).
 #[test]
 fn cross_project_resolution_stays_in_project() {
-    let base = std::env::temp_dir().join(format!("pyxis-xproj-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&base);
     // projA defines Foo at world/shared.pyxis; the decoys have world/shared.pyxis
     // too, with the same module path but WITHOUT Foo.
-    write(
-        &base.join("projA/pyxis.toml"),
-        "[project]\nname = \"a\"\npointer_size = 8\n",
-    );
-    write(
-        &base.join("projA/world/shared.pyxis"),
-        "pub type Foo {\n    pub x: u64,\n}\n",
-    );
-    write(
-        &base.join("projA/consumer.pyxis"),
-        "use world::shared::Foo;\n\npub type C {\n    pub f: Foo,\n}\n",
-    );
-    for decoy in ["projB", "projC", "projD"] {
-        write(
-            &base.join(decoy).join("pyxis.toml"),
-            "[project]\nname = \"d\"\npointer_size = 8\n",
-        );
-        write(
-            &base.join(decoy).join("world/shared.pyxis"),
-            "pub type Bar {\n    pub y: u64,\n}\n",
-        );
-    }
-
-    let init =
-        serde_json::json!({ "rootUri": format!("file://{}", base.display()), "capabilities": {} });
-    let st = ServerState::new(&init).unwrap();
-    let consumer: lsp_types::Uri =
-        format!("file://{}", base.join("projA/consumer.pyxis").display())
-            .parse()
-            .unwrap();
+    let consumer_src = "use world::shared::Foo;\n\npub type C {\n    pub f: Foo,\n}\n";
+    let decoy: &[(&str, &str)] = &[("world/shared.pyxis", "pub type Bar {\n    pub y: u64,\n}\n")];
+    let st = ServerState::in_memory(&[
+        (
+            "/projA",
+            8,
+            &[
+                ("world/shared.pyxis", "pub type Foo {\n    pub x: u64,\n}\n"),
+                ("consumer.pyxis", consumer_src),
+            ],
+        ),
+        ("/projB", 8, decoy),
+        ("/projC", 8, decoy),
+        ("/projD", 8, decoy),
+    ]);
+    let consumer = ServerState::document_uri("/projA", "consumer.pyxis");
     // `pub f: Foo,` is line 3 (0-indexed).
-    let src = std::fs::read_to_string(base.join("projA/consumer.pyxis")).unwrap();
-    let col = src.lines().nth(3).unwrap().find("Foo").unwrap() as u32;
+    let col = consumer_src.lines().nth(3).unwrap().find("Foo").unwrap() as u32;
 
     // Resolves to projA's Foo — would be <none> if it picked a decoy's shared.pyxis.
     assert!(
@@ -706,33 +503,19 @@ fn references(
 // A two-file project: `world/shared.pyxis` defines Foo; `consumer.pyxis` imports
 // and uses it twice. Exercises the shared symbol-occurrences engine.
 fn occ_project() -> (ServerState, lsp_types::Uri, lsp_types::Uri, u32) {
-    let base = std::env::temp_dir().join(format!(
-        "pyxis-occ-{}-{:?}",
-        std::process::id(),
-        std::thread::current().id()
-    ));
-    let _ = std::fs::remove_dir_all(&base);
-    write(
-        &base.join("pyxis.toml"),
-        "[project]\nname = \"o\"\npointer_size = 8\n",
-    );
-    write(
-        &base.join("world/shared.pyxis"),
-        "pub type Foo {\n    pub x: u64,\n}\n",
-    );
-    write(
-        &base.join("consumer.pyxis"),
-        "use world::shared::Foo;\n\npub type C {\n    pub f: Foo,\n    pub g: Foo,\n}\n",
-    );
-    let init =
-        serde_json::json!({ "rootUri": format!("file://{}", base.display()), "capabilities": {} });
-    let st = ServerState::new(&init).unwrap();
-    let consumer: lsp_types::Uri = format!("file://{}", base.join("consumer.pyxis").display())
-        .parse()
-        .unwrap();
-    let shared: lsp_types::Uri = format!("file://{}", base.join("world/shared.pyxis").display())
-        .parse()
-        .unwrap();
+    let st = ServerState::in_memory(&[(
+        "/proj",
+        8,
+        &[
+            ("world/shared.pyxis", "pub type Foo {\n    pub x: u64,\n}\n"),
+            (
+                "consumer.pyxis",
+                "use world::shared::Foo;\n\npub type C {\n    pub f: Foo,\n    pub g: Foo,\n}\n",
+            ),
+        ],
+    )]);
+    let consumer = ServerState::document_uri("/proj", "consumer.pyxis");
+    let shared = ServerState::document_uri("/proj", "world/shared.pyxis");
     // column of the first `Foo` field reference (line 3: "    pub f: Foo,")
     let col = "    pub f: ".len() as u32;
     (st, consumer, shared, col)
@@ -816,20 +599,9 @@ fn rename_rewrites_every_occurrence() {
 
 #[test]
 fn vftable_function_hover_shows_index_and_offset() {
-    let base = std::env::temp_dir().join(format!("pyxis-vfi-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&base);
-    write(
-        &base.join("pyxis.toml"),
-        "[project]\nname = \"t\"\npointer_size = 8\n",
-    );
     let src = "pub type Foo {\n    vftable {\n        pub fn a(&mut self);\n        pub fn b(&mut self);\n        #[index(5)]\n        pub fn c(&mut self);\n    },\n}\n";
-    write(&base.join("m.pyxis"), src);
-    let init =
-        serde_json::json!({ "rootUri": format!("file://{}", base.display()), "capabilities": {} });
-    let st = ServerState::new(&init).unwrap();
-    let uri: lsp_types::Uri = format!("file://{}", base.join("m.pyxis").display())
-        .parse()
-        .unwrap();
+    let st = ServerState::in_memory(&[("/proj", 8, &[("m.pyxis", src)])]);
+    let uri = ServerState::document_uri("/proj", "m.pyxis");
     let col = |l: usize, n: &str| src.lines().nth(l).unwrap().find(n).unwrap() as u32;
     let a = hover_text(&st, &uri, 2, col(2, "a"));
     assert!(
@@ -897,32 +669,23 @@ fn action_new_text(a: &serde_json::Value) -> String {
 }
 
 fn import_project() -> (ServerState, lsp_types::Uri, String) {
-    // Unique per call — the import tests run in parallel and would otherwise
-    // race on a shared pid-keyed dir.
-    static COUNTER: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-    let n = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    let base = std::env::temp_dir().join(format!("pyxis-imp-{}-{}", std::process::id(), n));
-    let _ = std::fs::remove_dir_all(&base);
-    write(
-        &base.join("pyxis.toml"),
-        "[project]\nname = \"t\"\npointer_size = 8\n",
-    );
-    write(
-        &base.join("rendering/render_block.pyxis"),
-        "pub type RenderBlock {\n    pub x: u64,\n}\npub type GenericRenderBlock {\n    pub y: u64,\n}\n",
-    );
-    write(
-        &base.join("gui/widget.pyxis"),
-        "pub type Widget {\n    pub z: u64,\n}\n",
-    );
     let consumer = "use rendering::render_block::RenderBlock;\n\npub type C {\n    pub a: RenderBlock,\n    pub b: GenericRenderBlock,\n    pub c: Widget,\n}\n";
-    write(&base.join("consumer.pyxis"), consumer);
-    let init =
-        serde_json::json!({ "rootUri": format!("file://{}", base.display()), "capabilities": {} });
-    let st = ServerState::new(&init).unwrap();
-    let uri: lsp_types::Uri = format!("file://{}", base.join("consumer.pyxis").display())
-        .parse()
-        .unwrap();
+    let st = ServerState::in_memory(&[(
+        "/proj",
+        8,
+        &[
+            (
+                "rendering/render_block.pyxis",
+                "pub type RenderBlock {\n    pub x: u64,\n}\npub type GenericRenderBlock {\n    pub y: u64,\n}\n",
+            ),
+            (
+                "gui/widget.pyxis",
+                "pub type Widget {\n    pub z: u64,\n}\n",
+            ),
+            ("consumer.pyxis", consumer),
+        ],
+    )]);
+    let uri = ServerState::document_uri("/proj", "consumer.pyxis");
     (st, uri, consumer.to_string())
 }
 
@@ -952,31 +715,27 @@ fn auto_import_extends_matching_use() {
 fn auto_import_merges_into_nested_group() {
     // A multi-prefix group must absorb the new type under its own sub-group,
     // not spawn a duplicate `use` line.
-    let base = std::env::temp_dir().join(format!("pyxis-mg-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&base);
-    write(
-        &base.join("pyxis.toml"),
-        "[project]\nname = \"t\"\npointer_size = 8\n",
-    );
-    write(
-        &base.join("types/math.pyxis"),
-        "pub type Aabb {\n    pub a: u64,\n}\npub type Vector3 {\n    pub b: u64,\n}\n",
-    );
-    write(
-        &base.join("types/shared_ptr.pyxis"),
-        "pub type WeakPtr {\n    pub c: u64,\n}\n",
-    );
     for existing in [
         "use types::{math::Aabb, shared_ptr::WeakPtr};",
         "use types::{math::{Aabb}, shared_ptr::WeakPtr};",
     ] {
         let consumer = format!("{existing}\n\npub type C {{\n    pub v: Vector3,\n}}\n");
-        write(&base.join("consumer.pyxis"), &consumer);
-        let init = serde_json::json!({ "rootUri": format!("file://{}", base.display()), "capabilities": {} });
-        let st = ServerState::new(&init).unwrap();
-        let uri: lsp_types::Uri = format!("file://{}", base.join("consumer.pyxis").display())
-            .parse()
-            .unwrap();
+        let st = ServerState::in_memory(&[(
+            "/proj",
+            8,
+            &[
+                (
+                    "types/math.pyxis",
+                    "pub type Aabb {\n    pub a: u64,\n}\npub type Vector3 {\n    pub b: u64,\n}\n",
+                ),
+                (
+                    "types/shared_ptr.pyxis",
+                    "pub type WeakPtr {\n    pub c: u64,\n}\n",
+                ),
+                ("consumer.pyxis", &consumer),
+            ],
+        )]);
+        let uri = ServerState::document_uri("/proj", "consumer.pyxis");
         let col = consumer.lines().nth(3).unwrap().find("Vector3").unwrap() as u32;
         let acts = import_actions(&st, &uri, 3, col);
         let a = acts

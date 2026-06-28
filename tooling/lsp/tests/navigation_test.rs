@@ -10,13 +10,6 @@ use lsp_server::{Request, RequestId};
 use lsp_types::{Position, TextDocumentIdentifier, TextDocumentPositionParams};
 use pyxis_lsp::state::ServerState;
 
-fn write(path: &std::path::Path, contents: &str) {
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).unwrap();
-    }
-    std::fs::write(path, contents).unwrap();
-}
-
 fn def(state: &ServerState, uri: &lsp_types::Uri, line: u32, ch: u32) -> serde_json::Value {
     request(state, "textDocument/definition", uri, line, ch)
 }
@@ -57,57 +50,30 @@ fn hover_text(v: &serde_json::Value) -> Option<&str> {
     v.get("contents")?.get("value")?.as_str()
 }
 
-struct Project {
-    state: ServerState,
-    base: std::path::PathBuf,
-}
-impl Project {
-    fn uri(&self, rel: &str) -> lsp_types::Uri {
-        format!("file://{}", self.base.join(rel).display())
-            .parse()
-            .unwrap()
-    }
-}
-
-fn setup(tag: &str) -> Project {
-    let base = std::env::temp_dir().join(format!("pyxis-nav-{}-{}", tag, std::process::id()));
-    let _ = std::fs::remove_dir_all(&base);
-    write(
-        &base.join("pyxis.toml"),
-        "[project]\nname = \"t\"\npointer_size = 8\n",
-    );
-    write(
-        &base.join("game/event_handler.pyxis"),
-        "pub type EventHandler {\n    pub id: u32,\n}\n",
-    );
-    write(&base.join("game/mod.pyxis"), "// game module root\n");
-    let init =
-        serde_json::json!({ "rootUri": format!("file://{}", base.display()), "capabilities": {} });
-    let state = ServerState::new(&init).unwrap();
-    Project { state, base }
-}
+const ROOT: &str = "/proj";
+const EVENT_HANDLER: (&str, &str) = (
+    "game/event_handler.pyxis",
+    "pub type EventHandler {\n    pub id: u32,\n}\n",
+);
+const MOD: (&str, &str) = ("game/mod.pyxis", "// game module root\n");
 
 #[test]
 fn field_type_via_use_resolves_to_type() {
-    let mut p = setup("use");
     let player = "use game::event_handler::EventHandler;\n\npub type Player {\n    pub event_handler: EventHandler,\n}\n";
-    write(&p.base.join("player.pyxis"), player);
-    // Re-discover the new file by re-creating state (discovery happens in new()).
-    let init = serde_json::json!({ "rootUri": format!("file://{}", p.base.display()), "capabilities": {} });
-    p.state = ServerState::new(&init).unwrap();
-    let uri = p.uri("player.pyxis");
+    let st = ServerState::in_memory(&[(ROOT, 8, &[EVENT_HANDLER, MOD, ("player.pyxis", player)])]);
+    let uri = ServerState::document_uri(ROOT, "player.pyxis");
 
     let line = player.lines().nth(3).unwrap();
     let ty = line.find("EventHandler").unwrap() as u32 + 2;
 
-    let d = def(&p.state, &uri, 3, ty);
+    let d = def(&st, &uri, 3, ty);
     assert_eq!(
         def_uri(&d),
-        Some(p.uri("game/event_handler.pyxis").as_str()),
+        Some(ServerState::document_uri(ROOT, "game/event_handler.pyxis").as_str()),
         "field type should jump to EventHandler's file, got {d}"
     );
 
-    let h = hover(&p.state, &uri, 3, ty);
+    let h = hover(&st, &uri, 3, ty);
     assert!(
         hover_text(&h).unwrap_or("").contains("`EventHandler`"),
         "hover should describe EventHandler, got {h}"
@@ -116,12 +82,9 @@ fn field_type_via_use_resolves_to_type() {
 
 #[test]
 fn fqn_segments_resolve_independently() {
-    let mut p = setup("fqn");
     let main = "pub type Game {\n    pub handler: game::event_handler::EventHandler,\n}\n";
-    write(&p.base.join("main.pyxis"), main);
-    let init = serde_json::json!({ "rootUri": format!("file://{}", p.base.display()), "capabilities": {} });
-    p.state = ServerState::new(&init).unwrap();
-    let uri = p.uri("main.pyxis");
+    let st = ServerState::in_memory(&[(ROOT, 8, &[EVENT_HANDLER, MOD, ("main.pyxis", main)])]);
+    let uri = ServerState::document_uri(ROOT, "main.pyxis");
 
     let l = main.lines().nth(1).unwrap();
     let game = l.find("game").unwrap() as u32 + 1;
@@ -129,29 +92,29 @@ fn fqn_segments_resolve_independently() {
     let eh = l.find("EventHandler").unwrap() as u32 + 1;
 
     assert_eq!(
-        def_uri(&def(&p.state, &uri, 1, game)),
-        Some(p.uri("game/mod.pyxis").as_str()),
+        def_uri(&def(&st, &uri, 1, game)),
+        Some(ServerState::document_uri(ROOT, "game/mod.pyxis").as_str()),
         "`game` segment should jump to game/mod.pyxis"
     );
     assert_eq!(
-        def_uri(&def(&p.state, &uri, 1, evh)),
-        Some(p.uri("game/event_handler.pyxis").as_str()),
+        def_uri(&def(&st, &uri, 1, evh)),
+        Some(ServerState::document_uri(ROOT, "game/event_handler.pyxis").as_str()),
         "`event_handler` segment should jump to its module file"
     );
     assert_eq!(
-        def_uri(&def(&p.state, &uri, 1, eh)),
-        Some(p.uri("game/event_handler.pyxis").as_str()),
+        def_uri(&def(&st, &uri, 1, eh)),
+        Some(ServerState::document_uri(ROOT, "game/event_handler.pyxis").as_str()),
         "`EventHandler` segment should jump to the type's file"
     );
 
     assert!(
-        hover_text(&hover(&p.state, &uri, 1, game))
+        hover_text(&hover(&st, &uri, 1, game))
             .unwrap_or("")
             .contains("module"),
         "hover on `game` should describe a module"
     );
     assert!(
-        hover_text(&hover(&p.state, &uri, 1, eh))
+        hover_text(&hover(&st, &uri, 1, eh))
             .unwrap_or("")
             .contains("`EventHandler`"),
         "hover on `EventHandler` should describe the type"
@@ -160,30 +123,22 @@ fn fqn_segments_resolve_independently() {
 
 #[test]
 fn braced_import_segments_resolve() {
-    let base = std::env::temp_dir().join(format!("pyxis-braced-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&base);
-    write(
-        &base.join("pyxis.toml"),
-        "[project]\nname = \"t\"\npointer_size = 8\n",
-    );
-    write(
-        &base.join("types/shared_ptr.pyxis"),
-        "pub type SharedPtr {\n    pub p: u64,\n}\npub type WeakPtr {\n    pub w: u64,\n}\n",
-    );
-    write(
-        &base.join("x.pyxis"),
-        "use types::shared_ptr::{SharedPtr, WeakPtr};\n",
-    );
-    let init =
-        serde_json::json!({ "rootUri": format!("file://{}", base.display()), "capabilities": {} });
-    let st = ServerState::new(&init).unwrap();
-    let uri: lsp_types::Uri = format!("file://{}", base.join("x.pyxis").display())
-        .parse()
-        .unwrap();
+    let st = ServerState::in_memory(&[(
+        ROOT,
+        8,
+        &[
+            (
+                "types/shared_ptr.pyxis",
+                "pub type SharedPtr {\n    pub p: u64,\n}\npub type WeakPtr {\n    pub w: u64,\n}\n",
+            ),
+            ("x.pyxis", "use types::shared_ptr::{SharedPtr, WeakPtr};\n"),
+        ],
+    )]);
+    let uri = ServerState::document_uri(ROOT, "x.pyxis");
     let l = "use types::shared_ptr::{SharedPtr, WeakPtr};";
     let sp = l.find("SharedPtr").unwrap() as u32 + 1;
     let wp = l.find("WeakPtr").unwrap() as u32 + 1;
-    let target = p_uri(&base, "types/shared_ptr.pyxis");
+    let target = ServerState::document_uri(ROOT, "types/shared_ptr.pyxis");
     assert_eq!(
         def_uri(&def(&st, &uri, 0, sp)),
         Some(target.as_str()),
@@ -200,10 +155,4 @@ fn braced_import_segments_resolve() {
         hover(&st, &uri, 0, sh).get("contents").is_some(),
         "braced-import prefix segment should resolve"
     );
-}
-
-fn p_uri(base: &std::path::Path, rel: &str) -> lsp_types::Uri {
-    format!("file://{}", base.join(rel).display())
-        .parse()
-        .unwrap()
 }

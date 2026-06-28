@@ -126,20 +126,29 @@ impl ServerState {
 
     /// Register a discovered .pyxis file in the Salsa db.
     fn register_discovered_file(&mut self, path: &std::path::Path, project_root: &std::path::Path) {
-        let source = match std::fs::read_to_string(path) {
-            Ok(s) => s,
-            Err(_) => return,
+        let Ok(source) = std::fs::read_to_string(path) else {
+            return;
         };
+        self.register_file(path.to_path_buf(), project_root.to_path_buf(), source);
+    }
 
-        let relative_path = path
-            .strip_prefix(project_root)
-            .unwrap_or(path)
+    /// Register a file's content into the db and document map. The single
+    /// registration path shared by filesystem discovery and the in-memory
+    /// (test) constructor — nothing here touches the disk.
+    fn register_file(
+        &mut self,
+        abs_path: std::path::PathBuf,
+        project_root: std::path::PathBuf,
+        source: String,
+    ) {
+        let relative_path = abs_path
+            .strip_prefix(&project_root)
+            .unwrap_or(&abs_path)
             .display()
             .to_string();
 
         // Skip if already registered (dedup by absolute path, not relative —
         // different projects can have the same relative path e.g. "types/math.pyxis")
-        let abs_path = path.to_path_buf();
         if self
             .documents
             .values()
@@ -153,11 +162,7 @@ impl ServerState {
             .register_in_memory(relative_path.clone(), source.clone());
         let source_file =
             SourceFile::new(&self.db, relative_path, file_id.as_u32(), source.clone());
-
-        let uri = file_path_to_uri(path).unwrap_or_else(|| {
-            let uri_str = format!("file:///{}", path.display());
-            Uri::from_str(&uri_str).unwrap()
-        });
+        let uri = file_uri(&abs_path);
 
         self.documents.insert(
             uri.clone(),
@@ -165,11 +170,41 @@ impl ServerState {
                 source_file,
                 file_id,
                 content: source,
-                project_root: Some(project_root.to_path_buf()),
+                project_root: Some(project_root),
                 abs_path: Some(abs_path),
             },
         );
         self.file_id_to_uri.insert(file_id, uri);
+    }
+
+    /// Build a server entirely from in-memory project files — no filesystem
+    /// access, for tests. Each project is `(root, pointer_size, files)` where
+    /// `files` are `(relative_path, content)` pairs. Use [`ServerState::document_uri`]
+    /// to address a registered file.
+    #[allow(clippy::type_complexity)] // compact tuple shape is clearer than a named alias here
+    pub fn in_memory(projects: &[(&str, usize, &[(&str, &str)])]) -> Self {
+        let mut state = Self {
+            db: PyxisDatabaseImpl::default(),
+            file_store: FileStore::new(),
+            documents: HashMap::new(),
+            file_id_to_uri: HashMap::new(),
+            projects: HashMap::new(),
+        };
+        for (root, pointer_size, files) in projects {
+            let root_path = std::path::PathBuf::from(root);
+            state.projects.insert(root_path.clone(), *pointer_size);
+            for (rel, content) in *files {
+                let abs = root_path.join(rel);
+                state.register_file(abs, root_path.clone(), content.to_string());
+            }
+        }
+        state
+    }
+
+    /// The URI a file registered via [`ServerState::in_memory`] (a project root
+    /// plus a relative path) maps to.
+    pub fn document_uri(root: &str, rel: &str) -> Uri {
+        file_uri(&std::path::PathBuf::from(root).join(rel))
     }
 
     /// Find the project root for a file by walking up the directory tree
@@ -557,6 +592,13 @@ fn file_path_to_uri(path: &std::path::Path) -> Option<Uri> {
     let encoded = percent_encode(&s);
     let uri_str = format!("file://{}", encoded);
     Uri::from_str(&uri_str).ok()
+}
+
+/// The `file://` URI for a path, with a raw fallback for paths that can't be
+/// encoded (e.g. a synthetic in-memory test path that doesn't exist on disk).
+fn file_uri(path: &std::path::Path) -> Uri {
+    file_path_to_uri(path)
+        .unwrap_or_else(|| Uri::from_str(&format!("file:///{}", path.display())).unwrap())
 }
 
 /// Simple percent-decoding for file paths.

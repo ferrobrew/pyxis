@@ -32,8 +32,7 @@ fn has_error(notifs: &[Notification]) -> bool {
 
 #[test]
 fn save_does_not_clear_parse_error() {
-    let init = serde_json::json!({ "capabilities": {} });
-    let mut state = ServerState::new(&init).unwrap();
+    let mut state = ServerState::in_memory(&[]);
 
     let uri: lsp_types::Uri = URI.parse().unwrap();
 
