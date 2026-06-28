@@ -42,6 +42,17 @@ pub struct NameIndexSet<'db> {
     pub index: Arc<crate::semantic::name_index::NameIndex>,
 }
 
+/// Per-file source map: the source span of every named type reference in a file
+/// paired with the `ItemPath` it resolves to. A single, incrementally-cached
+/// source of truth for "what type is referenced at this position", so the LSP
+/// can answer cursor→path with a lookup instead of re-walking the AST. Per-file
+/// and dependent on `name_index`, so it recomputes only for the edited file.
+#[salsa::tracked]
+pub struct FileTypeReferences<'db> {
+    #[returns(ref)]
+    pub references: Arc<Vec<(crate::span::Span, crate::grammar::ItemPath)>>,
+}
+
 /// A resolved item (type/enum/bitflags/type-alias) — the result of
 /// per-type resolution via resolve_item.
 #[salsa::tracked]

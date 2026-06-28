@@ -32,7 +32,8 @@ use crate::span::FileId;
 use super::db::Db;
 use super::inputs::{SourceFile, SourceSet};
 use super::ir::{
-    DeclarationSet, NameIndexSet, ParsedFile, ResolvedItem, SemanticAnalysis, TokenizedFile,
+    DeclarationSet, FileTypeReferences, NameIndexSet, ParsedFile, ResolvedItem, SemanticAnalysis,
+    TokenizedFile,
 };
 
 /// Parse a single file. Leaf query — re-runs only when that file's content changes.
@@ -111,6 +112,33 @@ pub fn name_index<'db>(
     }
 
     NameIndexSet::new(db, Arc::new(index))
+}
+
+/// Per-file source map of named type references → resolved `ItemPath`. Depends
+/// on this file's `parse_file` and `name_index` (whose output backdates), so it
+/// recomputes only for the edited file — the LSP gets an incremental O(1)-ish
+/// cursor→path lookup instead of re-walking the AST and re-resolving per request.
+#[salsa::tracked]
+pub fn file_type_references<'db>(
+    db: &'db dyn Db,
+    source: SourceFile,
+    sources: SourceSet<'db>,
+    pointer_size: usize,
+) -> FileTypeReferences<'db> {
+    let index = name_index(db, sources, pointer_size).index(db);
+    let parsed = parse_file(db, source);
+    let path_str = source.path(db);
+    let module_path = ItemPath::from_path(std::path::Path::new(path_str.as_str()));
+    let scope = index
+        .module_scope(&module_path)
+        .map(<[ItemPath]>::to_vec)
+        .unwrap_or_default();
+
+    let mut references = Vec::new();
+    for definition in parsed.module(db).definitions() {
+        collect_type_ref_spans(definition, &scope, index, &mut references);
+    }
+    FileTypeReferences::new(db, Arc::new(references))
 }
 
 /// Resolve a single item — the incremental core.

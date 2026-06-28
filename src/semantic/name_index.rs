@@ -182,6 +182,11 @@ impl NameIndex {
         self.module_scopes.get(&parent).map(|s| s.as_slice())
     }
 
+    /// The resolution scope of a module path directly.
+    pub fn module_scope(&self, module_path: &ItemPath) -> Option<&[ItemPath]> {
+        self.module_scopes.get(module_path).map(|s| s.as_slice())
+    }
+
     /// Resolve a type name in the given scope. Mirrors
     /// `DeclarationRegistry::resolve_name` but over the stable index.
     pub fn resolve_name(&self, scope: &[ItemPath], name: &str) -> NameResolution {

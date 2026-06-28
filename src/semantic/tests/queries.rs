@@ -316,3 +316,58 @@ fn resolve_item_is_incremental_across_files() {
         "resolve_item must not re-execute for an item in an unrelated file; got: {log:?}"
     );
 }
+
+#[test]
+fn file_type_references_indexes_and_is_incremental() {
+    use crate::semantic::queries::file_type_references;
+    use std::sync::{Arc, Mutex};
+
+    let executed: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+    let sink = executed.clone();
+    let mut db = PyxisDatabaseImpl::with_event_logger(Box::new(move |event| {
+        if let salsa::EventKind::WillExecute { database_key } = event.kind {
+            sink.lock().unwrap().push(format!("{database_key:?}"));
+        }
+    }));
+    let a = SourceFile::new(
+        &db,
+        "a.pyxis".to_string(),
+        1,
+        "pub type Bar { pub n: u32, }\npub type Foo { pub b: *mut Bar, }".to_string(),
+    );
+    let b = SourceFile::new(
+        &db,
+        "b.pyxis".to_string(),
+        2,
+        "pub type B { pub y: u32, }".to_string(),
+    );
+
+    // The source map for a.pyxis resolves the `Bar` reference inside Foo.
+    {
+        let sources = SourceSet::new(&db, vec![a, b]);
+        let map = file_type_references(&db, a, sources, 4);
+        let refs = map.references(&db);
+        assert!(
+            refs.iter().any(|(_, path)| path.to_string() == "a::Bar"),
+            "source map should resolve the *mut Bar reference; got {refs:?}"
+        );
+    }
+
+    // Editing an unrelated file must not recompute a.pyxis's source map.
+    b.set_contents(&mut db)
+        .to("pub type B { pub y: u64, }".to_string());
+    executed.lock().unwrap().clear();
+    {
+        let sources = SourceSet::new(&db, vec![a, b]);
+        let _ = file_type_references(&db, a, sources, 4);
+    }
+    assert!(
+        !executed
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|k| k.contains("file_type_references")),
+        "file_type_references must not recompute for an unrelated edit; got {:?}",
+        executed.lock().unwrap()
+    );
+}

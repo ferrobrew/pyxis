@@ -395,3 +395,69 @@ fn collect_value_refs(
         Type::Unknown { .. } => {}
     }
 }
+
+/// Collect `(span, resolved path)` for every named type reference in a
+/// definition — fields, vftable signatures, bases/aliases, recursing through
+/// pointers, arrays, and generic arguments. Powers the per-file source map.
+pub(super) fn collect_type_ref_spans(
+    definition: &crate::grammar::ItemDefinition,
+    scope: &[ItemPath],
+    index: &NameIndex,
+    out: &mut Vec<(crate::span::Span, ItemPath)>,
+) {
+    use crate::grammar::TypeField;
+    match &definition.inner {
+        ItemDefinitionInner::Type(td) => {
+            for statement in td.statements() {
+                match &statement.field {
+                    TypeField::Field(_, _, type_) => type_ref_spans(type_, scope, index, out),
+                    TypeField::Vftable(functions) => {
+                        for function in functions {
+                            for argument in &function.arguments {
+                                if let crate::grammar::Argument::Named { type_, .. } = argument {
+                                    type_ref_spans(type_, scope, index, out);
+                                }
+                            }
+                            if let Some(return_type) = &function.return_type {
+                                type_ref_spans(return_type, scope, index, out);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        ItemDefinitionInner::Enum(e) => type_ref_spans(&e.type_, scope, index, out),
+        ItemDefinitionInner::Bitflags(b) => type_ref_spans(&b.type_, scope, index, out),
+        ItemDefinitionInner::TypeAlias(ta) => type_ref_spans(&ta.target, scope, index, out),
+    }
+}
+
+fn type_ref_spans(
+    type_: &crate::grammar::Type,
+    scope: &[ItemPath],
+    index: &NameIndex,
+    out: &mut Vec<(crate::span::Span, ItemPath)>,
+) {
+    use crate::grammar::Type;
+    use crate::span::HasLocation;
+    match type_ {
+        Type::Ident {
+            path, generic_args, ..
+        } => {
+            let name = path.last().map(|s| s.as_str()).unwrap_or("");
+            if let NameResolution::Found(p) | NameResolution::FoundExtern(p) =
+                index.resolve_name(scope, name)
+            {
+                out.push((type_.location().span, p));
+            }
+            for arg in generic_args {
+                type_ref_spans(arg, scope, index, out);
+            }
+        }
+        Type::ConstPointer { pointee, .. } | Type::MutPointer { pointee, .. } => {
+            type_ref_spans(pointee, scope, index, out)
+        }
+        Type::Array { element, .. } => type_ref_spans(element, scope, index, out),
+        Type::Unknown { .. } => {}
+    }
+}
