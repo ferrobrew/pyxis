@@ -10,12 +10,34 @@ namespace math {
 } // namespace math
 
 namespace generics {
+    struct BoxedHolder;
+    struct BoxedRegistry;
+    struct BoxedRegistryVftable;
     struct Container;
     struct GenericArray;
     struct GenericPointer;
+    struct Payload;
     template <class K, class V> struct MapEntry;
+    template <class T> struct Boxed;
     template <class T> struct Shared;
     template <class T> struct WeakPtr;
+
+    /// A concrete (non-generic) payload embedded *by value* inside a generic.
+    struct alignas(4) Payload {
+        ::std::uint32_t tag;
+    };
+    static_assert(sizeof(Payload) == 0x4);
+    static_assert(alignof(Payload) == 4);
+
+    /// Generic that embeds a concrete type by value (not behind a pointer), so
+    /// instantiating it by value must re-resolve `Payload` — the transitive value
+    /// dependency through a generic instantiation.
+    template <class T>
+    struct Boxed {
+        T* value;
+        Payload payload;
+        ::std::uint8_t _field_c[4];
+    };
 
     /// A key-value map entry.
     template <class K, class V>
@@ -37,6 +59,32 @@ namespace generics {
     struct WeakPtr {
         const T* ptr;
     };
+
+    /// Holds a generic instantiation by value. Regression guard:
+    /// `resolve_item` must resolve `Boxed`'s concrete field types, not just `Boxed`.
+    struct alignas(8) BoxedHolder {
+        Boxed<::math::Vector3> boxed;
+    };
+    static_assert(sizeof(BoxedHolder) == 0x10);
+    static_assert(alignof(BoxedHolder) == 8);
+
+    /// A vftable method takes a generic by value. Regression guard: a generic
+    /// referenced *only* in a vftable signature must still be resolved to build the
+    /// vftable.
+    struct alignas(8) BoxedRegistry {
+        const BoxedRegistryVftable* vftable;
+
+        const BoxedRegistryVftable* _vftable_ptr() const;
+        void add(Boxed<::math::Vector3> boxed);
+    };
+    static_assert(sizeof(BoxedRegistry) == 0x8);
+    static_assert(alignof(BoxedRegistry) == 8);
+
+    struct alignas(8) BoxedRegistryVftable {
+        void (*add)(void*, Boxed<::math::Vector3>);
+    };
+    static_assert(sizeof(BoxedRegistryVftable) == 0x8);
+    static_assert(alignof(BoxedRegistryVftable) == 8);
 
     /// Container using generic types
     struct alignas(8) Container {
