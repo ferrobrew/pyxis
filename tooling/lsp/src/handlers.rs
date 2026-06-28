@@ -74,11 +74,10 @@ impl ServerState {
 
         let pointer_size = self.pointer_size_for(uri);
 
-        // 0. A doc-comment cross-reference link → describe the referenced item.
-        if let Some((target, span)) = self.doc_link_at(uri, &loc)
-            && let Some(value) = self.type_hover_text(&target, type_registry, decl_registry, uri)
-        {
-            return hover_response(req.id, value, content, &span);
+        // 0. A doc-comment cross-reference link → describe the referenced member
+        //    (or type), over the whole link.
+        if let Some((span, _location, hover)) = self.doc_link_at(uri, &loc) {
+            return hover_response(req.id, hover, content, &span);
         }
 
         // 1. Cursor on a type or import reference (e.g. a field's type, or a
@@ -538,15 +537,9 @@ impl ServerState {
 
         let pointer_size = self.pointer_size_for(uri);
 
-        // 0. A doc-comment cross-reference link → jump to the referenced item.
-        if let Some((target, _)) = self.doc_link_at(uri, &loc)
-            && let Some(rd) = self.resolved_definition(&target, type_registry, uri)
-            && let Some(target_content) = self.get_content(&rd.uri)
-        {
-            let location = lsp_types::Location {
-                uri: rd.uri,
-                range: pyxis_span_to_lsp_range(target_content, &rd.name_span),
-            };
+        // 0. A doc-comment cross-reference link → jump to the referenced member
+        //    (impl/vftable method, field) or type.
+        if let Some((_span, location, _hover)) = self.doc_link_at(uri, &loc) {
             return Response {
                 id: req.id,
                 result: Some(
@@ -1326,11 +1319,119 @@ impl ServerState {
         links
     }
 
+    /// Locate a member (`Type::member`) referenced by a doc link: its file, the
+    /// name span to jump to, and hover markdown. Covers impl methods (possibly
+    /// in another file), vftable methods, and fields. `None` for members it
+    /// can't pin down (callers fall back to the owning type).
+    fn resolve_doc_member(
+        &self,
+        item: &ItemPath,
+        name: &str,
+        from_uri: &Uri,
+    ) -> Option<(Uri, Span, String)> {
+        use pyxis::grammar::{ImplItem, ItemDefinitionInner};
+
+        let from_root = self
+            .documents
+            .get(from_uri)
+            .and_then(|d| d.project_root.clone());
+        let pointer_size = self.pointer_size_for(from_uri);
+        let source_set = semantic::SourceSet::new(&self.db, self.sources_for(from_uri));
+        let decl_set = semantic::collect_declarations(&self.db, source_set, pointer_size);
+        let decl_registry = decl_set.registry(&self.db);
+
+        let uris: Vec<Uri> = self
+            .documents
+            .iter()
+            .filter(|(_, d)| d.project_root == from_root)
+            .map(|(u, _)| u.clone())
+            .collect();
+
+        for uri in &uris {
+            let Some(module) = self.get_parsed_module(uri) else {
+                continue;
+            };
+            let tokens_arc = self.tokens_for(uri);
+            let tokens: &[Token] = tokens_arc.as_deref().map(Vec::as_slice).unwrap_or(&[]);
+            let scope = self.scope_for(uri);
+            let module_path = self.module_path_for(uri);
+            let fn_hit = |f: &Function| -> (Uri, Span, String) {
+                let span = name_token_span(tokens, &f.location.span.start, name)
+                    .unwrap_or(f.location.span);
+                (uri.clone(), span, format_function_hover(f))
+            };
+            for node in &module.items {
+                match node {
+                    // Impl methods — the impl block may live in a different file.
+                    ModuleItem::Impl { impl_block } => {
+                        let target = ItemPath::from(impl_block.name.as_str());
+                        if resolve_type_path(&target, &scope, decl_registry).as_ref() == Some(item)
+                        {
+                            for impl_item in &impl_block.items {
+                                if let ImplItem::Function(f) = impl_item
+                                    && f.name.as_str() == name
+                                {
+                                    return Some(fn_hit(f));
+                                }
+                            }
+                        }
+                    }
+                    // The type's own body: vftable methods and fields.
+                    ModuleItem::Definition { definition } => {
+                        let def_path = match &module_path {
+                            Some(m) => m.join(definition.name.as_str().into()),
+                            None => ItemPath::from(definition.name.as_str()),
+                        };
+                        if &def_path != item {
+                            continue;
+                        }
+                        if let ItemDefinitionInner::Type(td) = &definition.inner {
+                            for statement in td.statements() {
+                                match &statement.field {
+                                    TypeField::Vftable(fns) => {
+                                        for f in fns {
+                                            if f.name.as_str() == name {
+                                                return Some(fn_hit(f));
+                                            }
+                                        }
+                                    }
+                                    TypeField::Field(_, field_name, _) => {
+                                        if field_name.as_str() == name {
+                                            let span = name_token_span(
+                                                tokens,
+                                                &statement.location.span.start,
+                                                name,
+                                            )
+                                            .unwrap_or(statement.location.span);
+                                            return Some((
+                                                uri.clone(),
+                                                span,
+                                                format!("**field** `{name}`"),
+                                            ));
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        None
+    }
+
     /// If `loc` sits on a doc-comment cross-reference (`[Foo]`, [`Foo`],
-    /// `[label](path)`), the referenced item's path and the label's source span.
-    /// Lets hover and go-to-definition follow doc links — Zed (like most editors
-    /// other than via documentLink) navigates doc links through go-to-definition.
-    fn doc_link_at(&self, uri: &Uri, loc: &Location) -> Option<(ItemPath, Span)> {
+    /// `[label](Type::method)`), returns the whole link's source span, the
+    /// resolved target's location, and hover markdown. `Type::member` links
+    /// resolve to the member itself (the impl/vftable method or field), not just
+    /// the owning type. Lets hover and go-to-definition follow doc links — Zed
+    /// navigates them through go-to-definition, not documentLink.
+    fn doc_link_at(
+        &self,
+        uri: &Uri,
+        loc: &Location,
+    ) -> Option<(Span, lsp_types::Location, String)> {
         use pyxis::semantic::doc_links::DocLinkTarget;
         let content = self.get_content(uri)?;
         let tokens_arc = self.tokens_for(uri);
@@ -1348,19 +1449,51 @@ impl ServerState {
         let source_set = semantic::SourceSet::new(&self.db, self.sources_for(uri));
         let analysis = semantic::analyze(&self.db, pointer_size, source_set);
         let resolver = analysis.doc_link_resolver(&self.db);
+        let type_registry = analysis.type_registry(&self.db);
+        let decl_set = semantic::collect_declarations(&self.db, source_set, pointer_size);
+        let decl_registry = decl_set.registry(&self.db);
+
+        let to_type = |this: &Self, item: &ItemPath| -> Option<(lsp_types::Location, String)> {
+            let rd = this.resolved_definition(item, type_registry, uri)?;
+            let target_content = this.get_content(&rd.uri)?;
+            let hover = this.type_hover_text(item, type_registry, decl_registry, uri)?;
+            Some((
+                lsp_types::Location {
+                    uri: rd.uri.clone(),
+                    range: pyxis_span_to_lsp_range(target_content, &rd.name_span),
+                },
+                hover,
+            ))
+        };
+
         for (start_byte, end_byte, path_str) in scan_doc_links(line) {
-            if col >= start_byte && col < end_byte {
-                let item = match resolver.resolve(&scope, &path_str) {
-                    Some(DocLinkTarget::Item(p)) => p,
-                    Some(DocLinkTarget::Member { item, .. }) => item,
-                    _ => continue,
-                };
-                let span = Span::new(
-                    Location::new(loc.line, start_byte + 1),
-                    Location::new(loc.line, end_byte + 1),
-                );
-                return Some((item, span));
+            if col < start_byte || col >= end_byte {
+                continue;
             }
+            let link_span = Span::new(
+                Location::new(loc.line, start_byte + 1),
+                Location::new(loc.line, end_byte + 1),
+            );
+            let (location, hover) = match resolver.resolve(&scope, &path_str)? {
+                DocLinkTarget::Item(p) => to_type(self, &p)?,
+                DocLinkTarget::Member { item, name, .. } => {
+                    match self.resolve_doc_member(&item, &name, uri) {
+                        Some((muri, mspan, mhover)) => {
+                            let mcontent = self.get_content(&muri)?;
+                            (
+                                lsp_types::Location {
+                                    uri: muri.clone(),
+                                    range: pyxis_span_to_lsp_range(mcontent, &mspan),
+                                },
+                                mhover,
+                            )
+                        }
+                        None => to_type(self, &item)?,
+                    }
+                }
+                _ => return None,
+            };
+            return Some((link_span, location, hover));
         }
         None
     }
@@ -3173,9 +3306,10 @@ fn body_fold(tokens: &[Token], span: &Span) -> Option<FoldingRange> {
 }
 
 /// Find Markdown cross-reference links in one doc-comment line, returning
-/// `(label_start_byte, label_end_byte, path)` for each: `[Foo]`, [`Foo`] and
-/// `[label](path::To)` (the label is what becomes clickable; the path is what
-/// resolves). Non-path targets (e.g. URLs) simply fail to resolve later.
+/// `(link_start_byte, link_end_byte, path)` for each: `[Foo]`, [`Foo`] and
+/// `[label](path::To)`. The span covers the *entire* link (brackets, label, and
+/// any `(target)`); the path is what resolves. Non-path targets (e.g. URLs)
+/// simply fail to resolve later.
 fn scan_doc_links(line: &str) -> Vec<(usize, usize, String)> {
     let mut out = Vec::new();
     let mut i = 0;
@@ -3187,23 +3321,27 @@ fn scan_doc_links(line: &str) -> Vec<(usize, usize, String)> {
         let close = open + 1 + rel_close;
         let inner = &line[open + 1..close];
         let after = close + 1;
-        // `[label](path)` → path is the URL; otherwise the bracket content is it.
-        let path_raw = if line[after..].starts_with('(') {
+        // `[label](path)` → path is the URL and the link extends through `)`;
+        // otherwise the bracket content is the path and the link ends at `]`.
+        let (path_raw, link_end) = if line[after..].starts_with('(') {
             match line[after + 1..].find(')') {
-                Some(rp) => line[after + 1..after + 1 + rp].to_string(),
+                Some(rp) => (
+                    line[after + 1..after + 1 + rp].to_string(),
+                    after + 1 + rp + 1,
+                ),
                 None => {
                     i = close + 1;
                     continue;
                 }
             }
         } else {
-            inner.to_string()
+            (inner.to_string(), close + 1)
         };
         let path = path_raw.trim().trim_matches('`').trim().to_string();
         if !path.is_empty() {
-            out.push((open + 1, close, path));
+            out.push((open, link_end, path));
         }
-        i = close + 1;
+        i = link_end;
     }
     out
 }

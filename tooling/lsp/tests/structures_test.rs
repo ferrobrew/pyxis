@@ -1120,9 +1120,38 @@ fn doc_links_to_impl_methods_resolve_despite_project_errors() {
     let st = ServerState::in_memory(&[("/p", 8, &[("m.pyxis", m), ("bad.pyxis", errored)])]);
     let uri = ServerState::document_uri("/p", "m.pyxis");
     let col = m.lines().next().unwrap().find("Add").unwrap() as u32 + 1;
+    // Resolves to the impl method itself (not just the owning type), even with
+    // an errored sibling.
     assert!(
-        hover_text(&st, &uri, 0, col).contains("**type** `RBILists`"),
-        "impl-method doc link must resolve even with an errored sibling type"
+        hover_text(&st, &uri, 0, col).contains("**fn** `Add`"),
+        "impl-method doc link must resolve to the method despite an errored sibling"
     );
-    assert!(def_uri(&st, &uri, 0, col).is_some(), "and go-to-def too");
+    let def = def_uri(&st, &uri, 0, col).expect("go-to-def");
+    assert!(
+        def.ends_with("m.pyxis"),
+        "jumps to where Add is defined: {def}"
+    );
+}
+
+#[test]
+fn doc_link_covers_whole_link_and_targets_member() {
+    let m = "/// see [`Add`](Foo::Add) here.\npub type Foo {\n    pub x: u64,\n}\nimpl Foo {\n    #[address(0x10)]\n    pub fn Add(&mut self);\n}\n";
+    let st = ServerState::in_memory(&[("/p", 8, &[("m.pyxis", m)])]);
+    let uri = ServerState::document_uri("/p", "m.pyxis");
+    let line = m.lines().next().unwrap();
+    // hover/def land on the whole link: the `[` at the start and inside `(Foo::Add)` both work
+    let open = line.find("[`Add`]").unwrap() as u32;
+    let in_path = line.find("Foo::Add").unwrap() as u32 + 1;
+    assert!(
+        hover_text(&st, &uri, 0, open).contains("**fn** `Add`"),
+        "hover at link start"
+    );
+    assert!(
+        hover_text(&st, &uri, 0, in_path).contains("**fn** `Add`"),
+        "hover inside (target)"
+    );
+    assert!(
+        def_uri(&st, &uri, 0, in_path).is_some(),
+        "def from inside (target)"
+    );
 }
