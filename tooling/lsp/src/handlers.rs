@@ -1318,19 +1318,33 @@ impl ServerState {
                     {
                         continue;
                     }
-                    // Rewrite the name wherever it appears in the link — both
-                    // the `(path)` and a label that echoes it (`[`Add`]`).
-                    let (region_start, region_end) = dl.link;
-                    for off in whole_word_offsets(&line[region_start..region_end], &name) {
-                        let start = region_start + off;
-                        let span = Span::new(
-                            Location::new(line_no, start + 1),
-                            Location::new(line_no, start + name.len() + 1),
-                        );
-                        out.push(lsp_types::Location {
-                            uri: uri.clone(),
-                            range: pyxis_span_to_lsp_range(content, &span),
-                        });
+                    let mut push_region = |(region_start, region_end): (usize, usize)| {
+                        for off in whole_word_offsets(&line[region_start..region_end], &name) {
+                            let start = region_start + off;
+                            let span = Span::new(
+                                Location::new(line_no, start + 1),
+                                Location::new(line_no, start + name.len() + 1),
+                            );
+                            out.push(lsp_types::Location {
+                                uri: uri.clone(),
+                                range: pyxis_span_to_lsp_range(content, &span),
+                            });
+                        }
+                    };
+                    // Always rewrite the name in the path. Rewrite the bracket
+                    // label only when it's an exact echo of the name (`[Foo]` /
+                    // [`Foo`]) — never arbitrary prose like `[the Foo struct]`.
+                    // (For a shortcut link the two regions coincide; guard so we
+                    // don't double-count.)
+                    push_region(dl.path_region);
+                    if dl.label_region != dl.path_region {
+                        let label = line[dl.label_region.0..dl.label_region.1]
+                            .trim()
+                            .trim_matches('`')
+                            .trim();
+                        if label == name {
+                            push_region(dl.label_region);
+                        }
                     }
                 }
             }
@@ -3498,6 +3512,13 @@ struct DocLink {
     link: (usize, usize),
     /// Resolved path text (backticks/whitespace trimmed) — what resolves.
     path: String,
+    /// Byte range of the path *text* in the line: the `(...)` content for an
+    /// inline link, or the bracket content for a shortcut (`[Foo]`).
+    path_region: (usize, usize),
+    /// Byte range of the bracket label `[...]`. Equals `path_region` for a
+    /// shortcut link. Distinguished so a rename rewrites the path but only an
+    /// echoing label — never prose.
+    label_region: (usize, usize),
 }
 
 /// Find Markdown cross-reference links in one doc-comment line: `[Foo]`,
@@ -3514,27 +3535,30 @@ fn scan_doc_links(line: &str) -> Vec<DocLink> {
         let close = open + 1 + rel_close;
         let inner = &line[open + 1..close];
         let after = close + 1;
+        let label_region = (open + 1, close);
         // `[label](path)` → path is the URL and the link extends through `)`;
         // otherwise the bracket content is the path and the link ends at `]`.
-        let (path_raw, link_end) = if line[after..].starts_with('(') {
+        let (path_raw, link_end, path_region) = if line[after..].starts_with('(') {
             match line[after + 1..].find(')') {
-                Some(rp) => (
-                    line[after + 1..after + 1 + rp].to_string(),
-                    after + 1 + rp + 1,
-                ),
+                Some(rp) => {
+                    let region = (after + 1, after + 1 + rp);
+                    (line[region.0..region.1].to_string(), region.1 + 1, region)
+                }
                 None => {
                     i = close + 1;
                     continue;
                 }
             }
         } else {
-            (inner.to_string(), close + 1)
+            (inner.to_string(), close + 1, label_region)
         };
         let path = path_raw.trim().trim_matches('`').trim().to_string();
         if !path.is_empty() {
             out.push(DocLink {
                 link: (open, link_end),
                 path,
+                path_region,
+                label_region,
             });
         }
         i = link_end;

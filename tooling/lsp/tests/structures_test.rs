@@ -1262,3 +1262,45 @@ fn rename_reaches_doc_comment_links() {
         "impl method rename reaches doc links"
     );
 }
+
+#[test]
+fn rename_does_not_corrupt_doc_link_prose_labels() {
+    // A label that merely *contains* the name (prose) must not be rewritten;
+    // only the (path) and an exact-echo label should change.
+    let src = "/// [the Foo struct](Foo) and [`Foo`](Foo).\npub type Foo {\n    pub x: u64,\n}\n";
+    let st = ServerState::in_memory(&[("/p", 8, &[("a.pyxis", src)])]);
+    let uri = ServerState::document_uri("/p", "a.pyxis");
+    let lf = src.lines().position(|l| l.contains("pub type")).unwrap() as u32;
+    let col = src.lines().nth(lf as usize).unwrap().find("Foo").unwrap() as u32;
+    let r = Request::new(
+        RequestId::from(1),
+        "textDocument/rename".into(),
+        serde_json::to_value(lsp_types::RenameParams {
+            text_document_position: TextDocumentPositionParams {
+                text_document: TextDocumentIdentifier { uri: uri.clone() },
+                position: Position {
+                    line: lf,
+                    character: col,
+                },
+            },
+            new_name: "Bar".to_string(),
+            work_done_progress_params: Default::default(),
+        })
+        .unwrap(),
+    );
+    let we: lsp_types::WorkspaceEdit =
+        serde_json::from_value(st.handle_rename(r).result.unwrap()).unwrap();
+    let cols: Vec<u32> = we
+        .changes
+        .unwrap()
+        .values()
+        .flatten()
+        .filter(|e| e.range.start.line == 0)
+        .map(|e| e.range.start.character)
+        .collect();
+    // The "Foo" inside "the Foo struct" is at column 9 — it must NOT be edited.
+    assert!(
+        !cols.contains(&9),
+        "prose label 'the Foo struct' must not be rewritten"
+    );
+}
