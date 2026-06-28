@@ -10,5 +10,7 @@ name = "Pyxis Language Server"
 languages = ["Pyxis"]
 
 [grammars.pyxis]
-repository = "file://../tree-sitter-pyxis"
-commit = "HEAD"
+repository = "https://github.com/ferrobrew/tree-sitter-pyxis"
+# Track `main` (a branch ref, which Zed's fetcher resolves — unlike "HEAD").
+# Grammar changes must be pushed to this repo before a rebuild picks them up.
+commit = "main"
