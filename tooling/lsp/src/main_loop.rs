@@ -104,6 +104,10 @@ pub fn run_with_connection(connection: Connection) -> Result<(), Box<dyn std::er
     let (initialize_id, initialize_params) = connection.initialize_start()?;
     connection.initialize_finish(initialize_id, initialize_value)?;
 
+    // Ask the client to watch .pyxis / pyxis.toml so on-disk edits (e.g. by an
+    // agent rewriting files) reach us as didChangeWatchedFiles.
+    register_file_watchers(&connection)?;
+
     let mut state = ServerState::new(&initialize_params)?;
     main_loop(&connection, &mut state)?;
 
@@ -204,6 +208,37 @@ fn handle_request(
     Ok(())
 }
 
+/// Register dynamic file watchers for `.pyxis` and `pyxis.toml` so the client
+/// reports on-disk changes via `workspace/didChangeWatchedFiles`.
+fn register_file_watchers(connection: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+    use lsp_types::{
+        DidChangeWatchedFilesRegistrationOptions, FileSystemWatcher, GlobPattern, Registration,
+        RegistrationParams,
+    };
+    let watcher = |glob: &str| FileSystemWatcher {
+        glob_pattern: GlobPattern::String(glob.to_string()),
+        kind: None,
+    };
+    let registration = Registration {
+        id: "pyxis-watch-files".to_string(),
+        method: "workspace/didChangeWatchedFiles".to_string(),
+        register_options: Some(serde_json::to_value(
+            DidChangeWatchedFilesRegistrationOptions {
+                watchers: vec![watcher("**/*.pyxis"), watcher("**/pyxis.toml")],
+            },
+        )?),
+    };
+    let req = Request::new(
+        lsp_server::RequestId::from("pyxis/registerWatchers".to_string()),
+        "client/registerCapability".to_string(),
+        RegistrationParams {
+            registrations: vec![registration],
+        },
+    );
+    connection.sender.send(Message::Request(req))?;
+    Ok(())
+}
+
 fn handle_notification(
     connection: &Connection,
     state: &mut ServerState,
@@ -229,6 +264,12 @@ fn handle_notification(
         "textDocument/didClose" => {
             state.handle_did_close(notif)?;
             NotificationAction::None
+        }
+        "workspace/didChangeWatchedFiles" => {
+            state.handle_did_change_watched_files(notif)?;
+            // Re-publish for all tracked files so cross-file effects show up.
+            publish_diagnostics(connection, state)?;
+            NotificationAction::DiagnosticsPublished
         }
         _ => NotificationAction::None,
     };

@@ -392,6 +392,72 @@ impl ServerState {
         Ok(())
     }
 
+    /// React to on-disk changes the editor reports (created/changed/deleted
+    /// `.pyxis` files and `pyxis.toml`). Important for agent-driven edits, where
+    /// files are rewritten on disk outside the editor's open buffers.
+    pub fn handle_did_change_watched_files(
+        &mut self,
+        notif: Notification,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        use lsp_types::FileChangeType;
+        let params: lsp_types::DidChangeWatchedFilesParams = serde_json::from_value(notif.params)?;
+        for change in params.changes {
+            let Some(path) = uri_to_file_path(&change.uri) else {
+                continue;
+            };
+            let is_toml = path.file_name().and_then(|n| n.to_str()) == Some("pyxis.toml");
+            let is_pyxis = path.extension().and_then(|e| e.to_str()) == Some("pyxis");
+            if !is_toml && !is_pyxis {
+                continue;
+            }
+
+            // Locate any document we already track for this path (match by
+            // absolute path; the client's URI form may differ from our key).
+            let existing = self
+                .documents
+                .iter()
+                .find(|(_, d)| d.abs_path.as_deref() == Some(path.as_path()))
+                .map(|(u, _)| u.clone());
+
+            if change.typ == FileChangeType::DELETED {
+                if let Some(uri) = existing
+                    && let Some(doc) = self.documents.remove(&uri)
+                {
+                    self.file_id_to_uri.remove(&doc.file_id);
+                }
+                continue;
+            }
+
+            // CREATED or CHANGED.
+            if is_toml {
+                // A new/changed project config — (re)discover its project.
+                if let Some(dir) = path.parent() {
+                    self.discover_projects(dir);
+                }
+                continue;
+            }
+
+            let Ok(source) = std::fs::read_to_string(&path) else {
+                continue;
+            };
+            if let Some(uri) = existing {
+                if let Some(doc) = self.documents.get_mut(&uri)
+                    && doc.content != source
+                {
+                    use pyxis::semantic::Setter;
+                    doc.source_file
+                        .set_contents(&mut self.db)
+                        .to(source.clone());
+                    doc.content = source.clone();
+                    self.file_store.update_in_memory(doc.file_id, source);
+                }
+            } else if let Some(root) = self.find_project_root(&path) {
+                self.register_file(path, root, source);
+            }
+        }
+        Ok(())
+    }
+
     /// Collect sources belonging to the same project as the given URI.
     /// This ensures cross-module features (hover, go-to-def, etc.) only
     /// analyze files within the same project — important for monorepos
