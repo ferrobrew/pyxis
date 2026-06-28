@@ -1,10 +1,16 @@
 //! Salsa tracked functions — the query graph.
 //!
 //! The pipeline:
-//!   `parse_file` (per-file leaf query)
-//!   → `collect_declarations` (builds DeclarationRegistry)
-//!   → `resolve_item` (per-item, calls resolve_item on dependencies)
-//!   → `analyze` (root query, assembles full resolved state)
+//!   `tokenize_file` → `parse_file` (per-file leaf queries)
+//!   → `collect_declarations` (builds the whole-program DeclarationRegistry)
+//!   → `analyze` (root query: iteratively resolves every item, then runs the
+//!      post-resolution passes — extern values, functions, associated
+//!      functions, doc links)
+//!
+//! `resolve_item` is a tracked wrapper used by the LSP for single-item queries
+//! (hover, go-to-definition). Resolution is currently whole-program (an edit
+//! re-runs the loop); see `resolve_item` for the granularity needed to make it
+//! genuinely per-item incremental.
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -73,39 +79,20 @@ pub fn collect_declarations<'db>(
     DeclarationSet::new(db, Arc::new(registry))
 }
 
-/// Resolve a single item (type/enum/bitflags/type-alias).
+/// Try to resolve a single item (type/enum/bitflags/type-alias) given the
+/// current declarations and the items resolved so far.
 ///
-/// This is the per-type query — the core of incremental type resolution.
-/// It builds a TypeRegistry with the target item's dependencies resolved
-/// (via recursive resolve_item calls that Salsa memoizes), then resolves
-/// the target item.
+/// A plain function (not a tracked query): it builds a fresh `TypeRegistry`
+/// (predefined + extern + every declared item as `Unresolved`), injects the
+/// already-`resolved_items`, then builds the target. Dependencies that aren't
+/// resolved yet surface as `Deferred`; the iterative loop in `analyze` (and in
+/// the `resolve_item` wrapper) retries until a fixpoint.
 ///
-/// When type A references type B, resolve_item(A) calls resolve_item(B).
-/// Salsa tracks this dependency. If B changes, only A (and its dependents)
-/// re-resolve.
-///
-/// Dependencies are resolved iteratively: when type_definition::build
-/// returns Deferred (because a referenced type isn't resolved), we find
-/// the unresolved dependency, call resolve_item on it, insert the result
-/// into the registry, and retry. Salsa memoizes each resolve_item call.
-///
-/// Cycle recovery: when resolve_item(A) calls resolve_item(B) which calls
-/// resolve_item(A) (mutual recursion), Salsa detects the cycle and uses
-/// the cycle_result function to return a placeholder. The Fixpoint strategy
-/// iterates: it starts with the cycle_result, then re-runs the query to
-/// see if it converges (the dependency may have been resolved by the time
-/// the cycle unwinds).
-/// Resolve a single item (type/enum/bitflags/type-alias).
-///
-/// This is NOT a Salsa tracked function — it's a plain function that tries
-/// to resolve the item given the current state of the type registry. The
-/// iterative resolution loop in `analyze` calls this repeatedly until all
-/// items are resolved or no progress can be made.
-///
-/// Salsa incrementality is preserved at the `parse_file` level — when a
-/// file changes, `parse_file` re-runs, `collect_declarations` re-runs, and
-/// `analyze` re-runs the iterative loop from scratch. Per-item caching is
-/// lost, but correctness is maintained.
+/// Incrementality today lives at the `parse_file` / `collect_declarations`
+/// level: an edit re-runs the whole-program resolution loop. Per-item
+/// incremental resolution would require granular per-item declaration queries
+/// (so `resolve_item` could depend on just an item's slice of declarations
+/// rather than the monolithic registry) — see the note on `resolve_item`.
 fn try_resolve_item(
     registry: &DeclarationRegistry,
     pointer_size: usize,
@@ -251,9 +238,16 @@ fn try_resolve_item(
     (item_def, errors, generated_items)
 }
 
-/// Salsa tracked wrapper for the LSP. Resolves a single item, caching
-/// the result. Uses cycle_result to handle mutually recursive types.
-#[salsa::tracked(cycle_result=cycle_result_fn)]
+/// Salsa tracked wrapper for the LSP (hover, go-to-definition). Resolves a
+/// single item and caches the result keyed on `(sources, pointer_size, path)`.
+///
+/// NOTE: this is non-recursive — it runs a whole-program resolution loop and
+/// returns the target item, so it depends on `collect_declarations` in full.
+/// An edit to any file therefore invalidates every `resolve_item`. Making this
+/// genuinely per-item incremental would require splitting `collect_declarations`
+/// into granular per-item declaration queries so resolution could depend only
+/// on the items it actually reads.
+#[salsa::tracked]
 pub fn resolve_item<'db>(
     db: &'db dyn Db,
     sources: SourceSet<'db>,
@@ -335,33 +329,12 @@ pub fn analyze<'db>(
     // type registry, so `Type::method` links resolve even on the error paths
     // below where analyze bails out before the normal merge. Without this, any
     // single semantic error in a project breaks every impl-method doc link
-    // across it (common for in-progress reverse-engineering definitions). A
-    // closure (not a free fn) so it can capture `db` without fighting salsa's
-    // single-lifetime rule.
+    // across it (common for in-progress reverse-engineering definitions).
     let build_doc_link_resolver = |type_registry: &TypeRegistry,
                                    modules: &BTreeMap<ItemPath, crate::semantic::Module>|
      -> doc_links::DocLinkResolver {
-        let initial = SemanticAnalysis::new(
-            db,
-            Arc::new(type_registry.clone()),
-            Arc::new(modules.clone()),
-            Arc::new(doc_links::DocLinkResolver::build(
-                &TypeRegistry::new(pointer_size),
-                &BTreeMap::new(),
-            )),
-            Arc::new(vec![]),
-            Arc::new(vec![]),
-        );
-        let af = compute_associated_functions(db, initial);
         let mut merged = type_registry.clone();
-        for (path, fns) in af.functions.iter() {
-            if let Ok(item) = merged.get_mut(path, &crate::span::ItemLocation::internal())
-                && let crate::semantic::types::ItemState::Resolved(state) = &mut item.state
-                && let crate::semantic::types::ItemDefinitionInner::Type(td) = &mut state.inner
-            {
-                td.associated_functions = fns.clone();
-            }
-        }
+        let _ = merge_associated_functions(db, pointer_size, &mut merged, modules);
         doc_links::DocLinkResolver::build(&merged, modules)
     };
 
@@ -703,51 +676,20 @@ pub fn analyze<'db>(
         );
     }
 
-    // Associated functions are computed lazily by compute_associated_functions
-    // (a tracked query). We need them merged into the type registry before
-    // building the doc link resolver (which reads associated_functions for
-    // method links). So we construct the analysis, compute AF, merge, and
-    // rebuild the analysis with the merged registry.
-
-    // Construct the initial analysis (without AF merged)
-    let initial_analysis = SemanticAnalysis::new(
-        db,
-        Arc::new(type_registry.clone()),
-        Arc::new(modules.clone()),
-        // Placeholder doc link resolver — will be rebuilt after AF merge
-        Arc::new(doc_links::DocLinkResolver::build(
-            &TypeRegistry::new(pointer_size),
-            &BTreeMap::new(),
-        )),
-        Arc::new(vec![]),
-        Arc::new(vec![]),
-    );
-
-    // Compute associated functions and merge into the type registry
-    let af_result = compute_associated_functions(db, initial_analysis);
-
-    // If there are AF errors, include them
-    if !af_result.errors.is_empty() {
+    // Associated functions (own impl methods + inherited) are computed by the
+    // compute_associated_functions tracked query and merged into the registry
+    // in place, so backends and the doc-link resolver see methods.
+    let af_errors = merge_associated_functions(db, pointer_size, &mut type_registry, &modules);
+    if !af_errors.is_empty() {
         let doc_link_resolver = doc_links::DocLinkResolver::build(&type_registry, &modules);
         return SemanticAnalysis::new(
             db,
             Arc::new(type_registry),
             Arc::new(modules),
             Arc::new(doc_link_resolver),
-            Arc::new(af_result.errors.clone()),
+            Arc::new(af_errors),
             Arc::new(vec![]),
         );
-    }
-
-    // Merge associated functions into type definitions
-    for (path, fns) in af_result.functions.iter() {
-        if let Ok(item) = type_registry.get_mut(path, &crate::span::ItemLocation::internal()) {
-            if let crate::semantic::types::ItemState::Resolved(state) = &mut item.state {
-                if let crate::semantic::types::ItemDefinitionInner::Type(td) = &mut state.inner {
-                    td.associated_functions = fns.clone();
-                }
-            }
-        }
     }
 
     // Doc link resolution (now with associated functions in the registry)
@@ -1089,26 +1031,40 @@ pub struct AssociatedFunctionsResult {
 
 // --- Helpers ---
 
-/// Cycle recovery: when resolve_item(A) calls resolve_item(B) which calls
-/// resolve_item(A) (mutual recursion), return an unresolved placeholder.
-/// The iterative loop in resolve_item handles convergence by resolving
-/// dependencies one at a time — when the cycle unwinds, the placeholder
-/// causes build_item to return Deferred, and the loop resolves the
-/// dependency via the unresolved() list instead of recursing.
-fn cycle_result_fn<'db>(
-    db: &'db dyn Db,
-    _id: salsa::Id,
-    _sources: SourceSet<'db>,
-    _pointer_size: usize,
-    item_path: ItemPath,
-) -> ResolvedItem<'db> {
-    ResolvedItem::new(
+/// Compute associated functions (own impl methods + inherited from base types)
+/// and merge them into `registry` in place, returning any errors. Shared by
+/// `analyze`'s success path (so backends and the doc-link resolver see methods)
+/// and its error paths (so `Type::method` doc links still resolve when analysis
+/// bails out early).
+fn merge_associated_functions(
+    db: &dyn Db,
+    pointer_size: usize,
+    registry: &mut TypeRegistry,
+    modules: &BTreeMap<ItemPath, crate::semantic::Module>,
+) -> Vec<crate::semantic::SemanticError> {
+    use crate::semantic::doc_links;
+    let initial = SemanticAnalysis::new(
         db,
-        item_path.clone(),
-        Arc::new(make_unresolved_definition(&item_path)),
+        Arc::new(registry.clone()),
+        Arc::new(modules.clone()),
+        // Placeholder resolver — callers build the real one from the merged registry.
+        Arc::new(doc_links::DocLinkResolver::build(
+            &TypeRegistry::new(pointer_size),
+            &BTreeMap::new(),
+        )),
         Arc::new(vec![]),
         Arc::new(vec![]),
-    )
+    );
+    let af = compute_associated_functions(db, initial);
+    for (path, fns) in af.functions.iter() {
+        if let Ok(item) = registry.get_mut(path, &crate::span::ItemLocation::internal())
+            && let crate::semantic::types::ItemState::Resolved(state) = &mut item.state
+            && let crate::semantic::types::ItemDefinitionInner::Type(td) = &mut state.inner
+        {
+            td.associated_functions = fns.clone();
+        }
+    }
+    af.errors.clone()
 }
 
 /// Build a single item using the existing type_definition/enum/bitflags/type_alias

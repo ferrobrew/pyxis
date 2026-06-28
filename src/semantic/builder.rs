@@ -133,30 +133,6 @@ impl SemanticBuilder {
         Ok(())
     }
 
-    /// Add a file from disk, reading and parsing it.
-    /// Used by the batch compiler (`build_with_store_and_options`).
-    #[allow(dead_code)]
-    pub fn add_file(
-        &mut self,
-        file_store: &mut crate::source_store::FileStore,
-        base_path: &std::path::Path,
-        path: &std::path::Path,
-    ) -> std::result::Result<(), crate::BuildError> {
-        let source = std::fs::read_to_string(path).map_err(|e| crate::BuildError::Io {
-            error: e,
-            context: format!("reading file {}", path.display()),
-        })?;
-        let relative_path = path.strip_prefix(base_path).unwrap_or(path);
-        let filename = relative_path.display().to_string();
-        let _file_id = file_store.register_path(filename.clone(), path.to_path_buf());
-        self.pending.push(PendingSource {
-            path: filename,
-            source,
-        });
-        self.file_id_counter += 1;
-        Ok(())
-    }
-
     /// Run the Salsa-backed analysis and return the resolved semantic state.
     ///
     /// Returns the first error (if any) to preserve the `Result` contract
@@ -227,22 +203,5 @@ impl SemanticBuilder {
         } else {
             Err(first_other.unwrap_or_else(|| errors[0].clone()))
         }
-    }
-
-    /// Consume the builder and return the underlying Salsa database + sources.
-    /// Used by callers that need direct access to the query graph (e.g. the LSP).
-    #[allow(dead_code)]
-    pub fn into_db(self) -> (PyxisDatabaseImpl, Vec<SourceFile>) {
-        let db = PyxisDatabaseImpl::default();
-        let sources: Vec<SourceFile> = self
-            .pending
-            .into_iter()
-            .enumerate()
-            .map(|(i, ps)| {
-                let file_id = (i as u32) + 2;
-                SourceFile::new(&db, ps.path, file_id, ps.source)
-            })
-            .collect();
-        (db, sources)
     }
 }
