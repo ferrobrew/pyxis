@@ -53,6 +53,17 @@ pub struct FileTypeReferences<'db> {
     pub references: Arc<Vec<(crate::span::Span, crate::grammar::ItemPath)>>,
 }
 
+/// The memoized placeholder base: a `TypeRegistry` of predefined + extern types
+/// plus every declared item as an `Unresolved` placeholder. Built once per
+/// `(sources, pointer_size)` and shared (overlaid) by every `resolve_item`, so a
+/// whole-program analyze stays O(edges) instead of O(n²). Depends only on
+/// `name_index`, so it's rebuilt only when the project's shape changes.
+#[salsa::tracked]
+pub struct PlaceholderBase<'db> {
+    #[returns(ref)]
+    pub registry: Arc<crate::semantic::TypeRegistry>,
+}
+
 /// A resolved item (type/enum/bitflags/type-alias) — the result of
 /// per-type resolution via resolve_item.
 #[salsa::tracked]

@@ -4,20 +4,23 @@
 //!   `tokenize_file` → `parse_file` (per-file leaf queries)
 //!   → `name_index` (body/location-free index of names, scopes, and arity — its
 //!      output backdates across edits that don't change the project's shape)
+//!   → `placeholder_base` (predefined + extern + every item as a placeholder,
+//!      built once and shared via `TypeRegistry::with_base`)
 //!   → `resolve_item` (per-item, **incremental**: depends on `name_index`, the
-//!      single file that declares the item, and `resolve_item` for the item's
-//!      value dependencies — an edit to an unrelated file leaves it cached)
-//!   → `analyze` (root query for diagnostics + the batch compiler: resolves the
-//!      whole program in one shared registry, then runs the post-resolution
-//!      passes — extern values, functions, associated functions, doc links)
+//!      single file that declares the item, `placeholder_base`, and
+//!      `resolve_item` for the item's value dependencies — an edit to an
+//!      unrelated file leaves it cached)
+//!   → `analyze` (root query for diagnostics + the batch compiler: drives
+//!      resolution through `resolve_item` (so it too is incremental — only the
+//!      edited items and their dependents re-resolve), then runs the
+//!      post-resolution passes — extern values, functions, associated
+//!      functions, doc links)
 //!
-//! `collect_declarations` builds the location-full `DeclarationRegistry` the LSP
-//! uses for per-request name resolution (and `analyze` uses for its loop).
-//! `resolve_item` deliberately depends on the leaner `name_index` instead —
-//! that's what makes it incremental. `analyze` keeps its own shared-registry
-//! loop (O(n²), not O(n³)) rather than calling `resolve_item` per item, so a
-//! clean batch build stays fast; the LSP gets per-item incrementality through
-//! `resolve_item` directly (hover, go-to-definition).
+//! `resolve_item` depends on the leaner, body/location-free `name_index` rather
+//! than the full `DeclarationRegistry` — that's what makes it incremental.
+//! Overlaying the shared `placeholder_base` keeps a clean whole-program analyze
+//! O(edges), not O(n²). `collect_declarations` still builds the location-full
+//! registry the LSP uses for per-request name resolution.
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -32,8 +35,8 @@ use crate::span::FileId;
 use super::db::Db;
 use super::inputs::{SourceFile, SourceSet};
 use super::ir::{
-    DeclarationSet, FileTypeReferences, NameIndexSet, ParsedFile, ResolvedItem, SemanticAnalysis,
-    TokenizedFile,
+    DeclarationSet, FileTypeReferences, NameIndexSet, ParsedFile, PlaceholderBase, ResolvedItem,
+    SemanticAnalysis, TokenizedFile,
 };
 
 /// Parse a single file. Leaf query — re-runs only when that file's content changes.
@@ -114,6 +117,30 @@ pub fn name_index<'db>(
     NameIndexSet::new(db, Arc::new(index))
 }
 
+/// Build the memoized placeholder base — predefined + extern + every declared
+/// item as an `Unresolved` placeholder — shared by every `resolve_item` via
+/// `TypeRegistry::with_base`. Depends only on `name_index`, so it's rebuilt only
+/// when the project's shape changes, and computed once per `(sources, ptr)`
+/// rather than per item.
+#[salsa::tracked]
+pub fn placeholder_base<'db>(
+    db: &'db dyn Db,
+    sources: SourceSet<'db>,
+    pointer_size: usize,
+) -> PlaceholderBase<'db> {
+    let index = name_index(db, sources, pointer_size).index(db);
+    let mut registry = TypeRegistry::new(pointer_size);
+    register_predefined(&mut registry);
+    for (path, sig) in index.extern_paths() {
+        registry.add(make_extern_from_sig(path, sig));
+    }
+    for path in index.item_paths() {
+        let arity = index.item_sig(path).map(|s| s.arity).unwrap_or(0);
+        registry.add(make_placeholder(path, arity));
+    }
+    PlaceholderBase::new(db, Arc::new(registry))
+}
+
 /// Per-file source map of named type references → resolved `ItemPath`. Depends
 /// on this file's `parse_file` and `name_index` (whose output backdates), so it
 /// recomputes only for the edited file — the LSP gets an incremental O(1)-ish
@@ -139,6 +166,24 @@ pub fn file_type_references<'db>(
         collect_type_ref_spans(definition, &scope, index, &mut references);
     }
     FileTypeReferences::new(db, Arc::new(references))
+}
+
+/// Fetch one item's grammar definition by path, via the file that declares it.
+fn grammar_def_for<'db>(
+    db: &'db dyn Db,
+    sources: SourceSet<'db>,
+    index: &NameIndex,
+    path: &ItemPath,
+) -> Option<crate::grammar::ItemDefinition> {
+    let source = index
+        .file_of(path)
+        .and_then(|i| sources.sources(db).get(i).copied())?;
+    let module_path = ItemPath::from_path(std::path::Path::new(source.path(db).as_str()));
+    parse_file(db, source)
+        .module(db)
+        .definitions()
+        .find(|d| module_path.join(d.name.as_str().into()) == *path)
+        .cloned()
 }
 
 /// Resolve a single item — the incremental core.
@@ -219,35 +264,49 @@ pub fn resolve_item<'db>(
         return unresolved(db);
     };
 
-    // Base registry: predefined + extern (from sigs) + every declared item as an
-    // Unresolved placeholder (enough for references to it).
-    let mut type_registry = TypeRegistry::new(pointer_size);
-    register_predefined(&mut type_registry);
-    for (path, sig) in index.extern_paths() {
-        type_registry.add(make_extern_from_sig(path, sig));
-    }
-    for path in index.item_paths() {
-        let arity = index.item_sig(path).map(|s| s.arity).unwrap_or(0);
-        type_registry.add(make_placeholder(path, arity));
-    }
+    // Overlay the shared, memoized placeholder base (predefined + extern + all
+    // declared items as placeholders). Sharing it — rather than rebuilding the n
+    // placeholders per call — is what keeps a whole-program analyze O(edges)
+    // instead of O(n²), while still giving every reference (including those
+    // reached transitively through a type alias) something to resolve against.
+    let base = placeholder_base(db, sources, pointer_size)
+        .registry(db)
+        .clone();
+    let mut type_registry = TypeRegistry::with_base(base);
 
     // Resolve this item's value dependencies (recursively, memoized) and inject
-    // them as Resolved so the build sees their layout.
+    // them as Resolved so the build sees their layout. A type alias is followed
+    // transitively: its resolved form is the *unexpanded* generic, so resolving
+    // `VecEntry = Entry<u32, Vector3>` (where `Entry<K,V> = MapEntry<K,V>`) also
+    // needs `MapEntry` itself resolved to compute the instantiation's layout.
     let scope = index
         .scope_of(&item_path)
         .map(<[ItemPath]>::to_vec)
         .unwrap_or_default();
-    for dep in value_referenced_types(&definition, &scope, index) {
-        if dep == item_path {
+    let mut seen: std::collections::BTreeSet<ItemPath> = std::collections::BTreeSet::new();
+    let mut worklist = value_referenced_types(&definition, &scope, index);
+    while let Some(dep) = worklist.pop() {
+        if dep == item_path || !seen.insert(dep.clone()) {
             continue;
         }
-        let resolved = resolve_item(db, sources, pointer_size, dep);
+        let resolved = resolve_item(db, sources, pointer_size, dep.clone());
         let dep_item = resolved.item(db);
         if dep_item.is_resolved() {
             type_registry.add((**dep_item).clone());
         }
         for generated in resolved.generated_items(db).iter() {
             type_registry.add(generated.clone());
+        }
+        // Follow type aliases to their target's value deps.
+        if index.item_sig(&dep).map(|s| s.kind)
+            == Some(crate::semantic::name_index::SigKind::TypeAlias)
+            && let Some(alias_def) = grammar_def_for(db, sources, index, &dep)
+        {
+            let alias_scope = index
+                .scope_of(&dep)
+                .map(<[ItemPath]>::to_vec)
+                .unwrap_or_default();
+            worklist.extend(value_referenced_types(&alias_def, &alias_scope, index));
         }
     }
 
@@ -596,109 +655,44 @@ pub fn analyze<'db>(
         );
     }
 
-    // Resolve all declared items by building each against the single shared
-    // `type_registry`, iterating until a fixpoint: an item that references a
-    // not-yet-resolved type defers and is retried once that type resolves.
-    // Building in place — rather than reconstructing the registry per item, as
-    // the old try_resolve_item did — keeps this O(n^2) instead of O(n^3).
-    // build_item adds any generated items (e.g. vftable structs) and their
-    // module `definition_paths` directly to the shared registry/modules.
-    use crate::semantic::error::BuildOutcome;
+    // Resolve every declared item through the per-item `resolve_item` query, so
+    // resolution is cached per item: an incremental edit re-resolves only the
+    // affected items (and their dependents), not the whole project. Each
+    // `resolve_item` overlays the shared, memoized placeholder base, so this
+    // stays O(edges), not O(n²). Resolved items and their generated types
+    // (vftables) are merged into the registry; generated items' module
+    // definition_paths are folded in just below.
     let mut semantic_errors: Vec<crate::semantic::SemanticError> = Vec::new();
     let item_paths: Vec<ItemPath> = decl_registry.item_paths().cloned().collect();
-    let max_iterations = item_paths.len() + 1;
-    // Items that are finished — resolved or errored (errored items aren't retried).
-    let mut done: std::collections::BTreeSet<ItemPath> = std::collections::BTreeSet::new();
-
-    for _iteration in 0..max_iterations {
-        let mut made_progress = false;
-
-        for item_path in &item_paths {
-            if done.contains(item_path) {
-                continue;
-            }
-            let Some(definition) = decl_registry.get_definition(item_path) else {
-                done.insert(item_path.clone());
-                continue;
-            };
-
-            let visibility: crate::semantic::types::Visibility = definition.visibility.into();
-            let def_location = definition.location;
-            let type_param_names: Vec<String> = definition
-                .type_parameters
-                .iter()
-                .map(|tp| tp.name.clone())
-                .collect();
-
-            let outcome = build_item(
-                definition,
-                item_path,
-                visibility,
-                &def_location,
-                &definition.doc_comments,
-                &type_param_names,
-                &mut type_registry,
-                &mut modules,
-            );
-
-            match outcome {
-                Ok(BuildOutcome::Resolved(item)) => {
-                    let cfg = match &definition.inner {
-                        ItemDefinitionInner::Type(td) => td.attributes.cfg(),
-                        ItemDefinitionInner::Enum(e) => e.attributes.cfg(),
-                        ItemDefinitionInner::Bitflags(b) => b.attributes.cfg(),
-                        ItemDefinitionInner::TypeAlias(ta) => ta.attributes.cfg(),
-                    };
-                    type_registry.add(crate::semantic::types::ItemDefinition {
-                        visibility,
-                        path: item_path.clone(),
-                        type_parameters: type_param_names,
-                        state: crate::semantic::types::ItemState::Resolved(item),
-                        category: crate::semantic::types::ItemCategory::Defined,
-                        predefined: None,
-                        cfg,
-                        location: def_location,
-                        declaration_location: definition.declaration_location,
-                    });
-                    done.insert(item_path.clone());
-                    made_progress = true;
-                }
-                // Deferred — retried next iteration once dependencies resolve.
-                Ok(BuildOutcome::Deferred) => {}
-                Ok(BuildOutcome::NotFoundType(unresolved_ref)) => {
-                    semantic_errors.push(crate::semantic::SemanticError::TypeResolutionStalled {
-                        unresolved_types: vec![item_path.to_string()],
-                        resolved_types: vec![],
-                        unresolved_references: vec![unresolved_ref],
-                    });
-                    done.insert(item_path.clone());
-                    made_progress = true;
-                }
-                Err(e) => {
-                    semantic_errors.push(e);
-                    done.insert(item_path.clone());
-                    made_progress = true;
-                }
-            }
+    for item_path in &item_paths {
+        let resolved = resolve_item(db, sources, pointer_size, item_path.clone());
+        semantic_errors.extend(resolved.errors(db).iter().cloned());
+        let item = resolved.item(db);
+        if item.is_resolved() {
+            type_registry.add((**item).clone());
+        } else if resolved.errors(db).is_empty() {
+            // Unresolved with no error of its own → stalled (mutual by-value
+            // recursion or a missing type).
+            semantic_errors.push(crate::semantic::SemanticError::TypeResolutionStalled {
+                unresolved_types: vec![item_path.to_string()],
+                resolved_types: vec![],
+                unresolved_references: vec![],
+            });
         }
-
-        if !made_progress {
-            // Remaining items are stalled (mutual recursion or missing types).
-            for item_path in &item_paths {
-                if !done.contains(item_path) {
-                    semantic_errors.push(crate::semantic::SemanticError::TypeResolutionStalled {
-                        unresolved_types: vec![item_path.to_string()],
-                        resolved_types: vec![],
-                        unresolved_references: vec![],
-                    });
-                }
-            }
-            break;
+        for generated in resolved.generated_items(db).iter() {
+            definition_paths.insert(generated.path.clone());
+            type_registry.add(generated.clone());
         }
+    }
 
-        if item_paths.iter().all(|p| done.contains(p)) {
-            break;
-        }
+    // Generated items (vftables) are created inside resolve_item's own modules,
+    // so re-assign module definition_paths here to include them.
+    for (module_path, module) in modules.iter_mut() {
+        module.definition_paths = definition_paths
+            .iter()
+            .filter(|p| p.parent().is_some_and(|parent| &parent == module_path))
+            .cloned()
+            .collect();
     }
 
     if !semantic_errors.is_empty() {

@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use crate::{
     SemanticError,
@@ -33,6 +34,10 @@ pub enum TypeLookupResult {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TypeRegistry {
     types: BTreeMap<ItemPath, ItemDefinition>,
+    /// Optional shared read-only base consulted for any path not in `types`.
+    /// Lets `resolve_item` overlay just its own resolved dependencies on top
+    /// of a memoized placeholder base instead of cloning all n placeholders.
+    base: Option<Arc<TypeRegistry>>,
     pointer_size: usize,
 }
 
@@ -40,8 +45,32 @@ impl TypeRegistry {
     pub(crate) fn new(pointer_size: usize) -> TypeRegistry {
         TypeRegistry {
             types: BTreeMap::new(),
+            base: None,
             pointer_size,
         }
+    }
+
+    /// A registry that overlays `base`: own additions shadow it, and any
+    /// lookup for a path not added here falls through to `base`.
+    pub(crate) fn with_base(base: Arc<TypeRegistry>) -> TypeRegistry {
+        let pointer_size = base.pointer_size;
+        TypeRegistry {
+            types: BTreeMap::new(),
+            base: Some(base),
+            pointer_size,
+        }
+    }
+
+    /// Look up an item — own additions first, then the base.
+    fn lookup(&self, path: &ItemPath) -> Option<&ItemDefinition> {
+        self.types
+            .get(path)
+            .or_else(|| self.base.as_ref().and_then(|b| b.lookup(path)))
+    }
+
+    /// Whether an item exists in own additions or the base.
+    fn has(&self, path: &ItemPath) -> bool {
+        self.types.contains_key(path) || self.base.as_ref().is_some_and(|b| b.has(path))
     }
 
     pub fn pointer_size(&self) -> usize {
@@ -50,7 +79,7 @@ impl TypeRegistry {
 
     /// Check if a type exists in the registry
     pub fn contains(&self, item_path: &ItemPath) -> bool {
-        self.types.contains_key(item_path)
+        self.has(item_path)
     }
 
     /// Check if a module can access an item based on visibility rules.
@@ -58,7 +87,7 @@ impl TypeRegistry {
     /// - The same module
     /// - Child modules (descendants)
     fn can_access(&self, from_module: &ItemPath, item_path: &ItemPath) -> bool {
-        if let Some(item_def) = self.types.get(item_path) {
+        if let Some(item_def) = self.lookup(item_path) {
             // Public items are always accessible
             if item_def.visibility == Visibility::Public {
                 return true;
@@ -89,8 +118,7 @@ impl TypeRegistry {
         item_path: &ItemPath,
         from_location: &ItemLocation,
     ) -> Result<&ItemDefinition> {
-        self.types
-            .get(item_path)
+        self.lookup(item_path)
             .ok_or_else(|| SemanticError::TypeNotFound {
                 path: item_path.clone(),
                 location: *from_location,
@@ -139,7 +167,7 @@ impl TypeRegistry {
         match &type_ {
             Type::Raw(path) => {
                 // Check if this path refers to a non-generic type alias
-                if let Some(item_def) = self.types.get(path) {
+                if let Some(item_def) = self.lookup(path) {
                     // Only follow non-generic type aliases
                     if item_def.type_parameters.is_empty() {
                         if let Some(resolved) = item_def.resolved() {
@@ -167,7 +195,7 @@ impl TypeRegistry {
         Vec<String>,
         crate::semantic::type_alias_definition::TypeAliasDefinition,
     )> {
-        if let Some(item_def) = self.types.get(path) {
+        if let Some(item_def) = self.lookup(path) {
             if !item_def.type_parameters.is_empty() {
                 if let Some(resolved) = item_def.resolved() {
                     if let Some(type_alias) = resolved.inner.as_type_alias() {
@@ -242,7 +270,7 @@ impl TypeRegistry {
     where
         F: FnMut(T, &Type, &TypeRegistry) -> Option<T>,
     {
-        let item_def = self.types.get(base)?;
+        let item_def = self.lookup(base)?;
         let resolved = item_def.resolved()?;
         let type_def = resolved.inner.as_type()?;
         let param_names = &item_def.type_parameters;
@@ -284,7 +312,7 @@ impl TypeRegistry {
     pub(crate) fn resolve_string(&self, scope: &[ItemPath], name: &str) -> TypeLookupResult {
         let from_module = Self::get_from_module(scope);
         let (scope_types, scope_modules): (Vec<&ItemPath>, Vec<&ItemPath>) =
-            scope.iter().partition(|ip| self.types.contains_key(ip));
+            scope.iter().partition(|ip| self.has(ip));
 
         // If we find the relevant type within our scope, take the last one
         // Types in scope_types were explicitly imported via `use`, so they're already visibility-checked
@@ -300,7 +328,7 @@ impl TypeRegistry {
                     .chain(scope_modules.iter().copied())
                     .map(|ip| ip.join(name.into()))
                     .find(|ip| {
-                        if self.types.contains_key(ip) {
+                        if self.has(ip) {
                             // Check visibility - skip private types from other modules
                             if let Some(from) = from_module {
                                 self.can_access(from, ip)
@@ -316,7 +344,7 @@ impl TypeRegistry {
         match found_path {
             Some(path) => {
                 // Check if the type is resolved
-                if let Some(item_def) = self.types.get(&path) {
+                if let Some(item_def) = self.lookup(&path) {
                     if item_def.is_resolved() {
                         TypeLookupResult::Found(self.resolve_type_alias(Type::Raw(path)))
                     } else {
@@ -340,7 +368,7 @@ impl TypeRegistry {
     /// Returns Some(path) if the type exists (resolved or not), None if not found.
     fn find_type_path(&self, scope: &[ItemPath], name: &str) -> Option<ItemPath> {
         let (scope_types, scope_modules): (Vec<&ItemPath>, Vec<&ItemPath>) =
-            scope.iter().partition(|ip| self.types.contains_key(ip));
+            scope.iter().partition(|ip| self.has(ip));
 
         // If we find the relevant type within our scope, take the last one
         scope_types
@@ -353,7 +381,7 @@ impl TypeRegistry {
                 std::iter::once(&ItemPath::empty())
                     .chain(scope_modules.iter().copied())
                     .map(|ip| ip.join(name.into()))
-                    .find(|ip| self.types.contains_key(ip))
+                    .find(|ip| self.has(ip))
             })
     }
 
@@ -374,7 +402,7 @@ impl TypeRegistry {
             self.find_type_path(scope, name)?
         } else {
             // Multi-segment path - check if it exists
-            if self.types.contains_key(path) {
+            if self.has(path) {
                 path.clone()
             } else {
                 return None;
@@ -443,7 +471,7 @@ impl TypeRegistry {
 
         // If path has multiple segments, try to resolve it directly first
         if path.len() > 1 {
-            if let Some(item_def) = self.types.get(path) {
+            if let Some(item_def) = self.lookup(path) {
                 // Check visibility for directly resolved paths
                 if let Some(from) = from_module {
                     if !self.can_access(from, path) {
@@ -589,7 +617,7 @@ impl TypeRegistry {
                                 // No exact match, proceed with generic resolution below
                             }
                         }
-                    } else if let Some(item_def) = self.types.get(&exact_match_path) {
+                    } else if let Some(item_def) = self.lookup(&exact_match_path) {
                         if item_def.is_resolved() {
                             return TypeLookupResult::Found(
                                 self.resolve_type_alias(Type::Raw(exact_match_path)),
@@ -645,7 +673,7 @@ impl TypeRegistry {
                             // Types with #[size(...)] don't depend on their type parameters for size/alignment.
                             if has_unresolved_args {
                                 // Check if the base type is resolved and has a fixed size
-                                if let Some(item_def) = self.types.get(&base_path) {
+                                if let Some(item_def) = self.lookup(&base_path) {
                                     if !item_def.is_resolved() {
                                         // Base type isn't resolved yet, can't proceed
                                         return TypeLookupResult::NotYetResolved;

@@ -371,3 +371,69 @@ fn file_type_references_indexes_and_is_incremental() {
         executed.lock().unwrap()
     );
 }
+
+#[test]
+fn resolve_item_resolves_aliased_generic_instantiations() {
+    // Regression: resolving `VecEntry = Entry<u32, V>` where `Entry<K,V> =
+    // MapEntry<K,V>` needs MapEntry resolved (reached transitively through the
+    // alias), not just registered as a placeholder.
+    let db = PyxisDatabaseImpl::default();
+    let src = "pub type MapEntry<K, V> { pub k: *mut K, pub v: *mut V, }\n\
+               pub type Entry<K, V> = MapEntry<K, V>;\n\
+               pub type VecEntry = Entry<u32, u32>;\n\
+               pub type Holder { pub e: VecEntry, }";
+    let source = SourceFile::new(&db, "m.pyxis".to_string(), 1, src.to_string());
+    let sources = SourceSet::new(&db, vec![source]);
+    let holder = resolve_item(&db, sources, 4, crate::grammar::ItemPath::from("m::Holder"));
+    assert!(
+        holder.item(&db).resolved().is_some(),
+        "Holder (via alias-of-generic field) should resolve; got {:?}",
+        holder.item(&db).state
+    );
+}
+
+#[test]
+fn analyze_is_incremental_per_item() {
+    // analyze drives resolution through resolve_item, so editing one file must
+    // not re-resolve an item in an unrelated file even when analyze re-runs.
+    use std::sync::{Arc, Mutex};
+    let executed: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+    let sink = executed.clone();
+    let mut db = PyxisDatabaseImpl::with_event_logger(Box::new(move |event| {
+        if let salsa::EventKind::WillExecute { database_key } = event.kind {
+            sink.lock().unwrap().push(format!("{database_key:?}"));
+        }
+    }));
+    let a = SourceFile::new(
+        &db,
+        "a.pyxis".to_string(),
+        1,
+        "pub type A { pub x: u32, }".to_string(),
+    );
+    let b = SourceFile::new(
+        &db,
+        "b.pyxis".to_string(),
+        2,
+        "pub type B { pub y: u32, }".to_string(),
+    );
+
+    {
+        let sources = SourceSet::new(&db, vec![a, b]);
+        let _ = analyze(&db, 4, sources);
+    }
+    b.set_contents(&mut db)
+        .to("pub type B { pub y: u64, }".to_string());
+    executed.lock().unwrap().clear();
+    {
+        let sources = SourceSet::new(&db, vec![a, b]);
+        let _ = analyze(&db, 4, sources);
+    }
+    // resolve_item for a::A (unaffected) must not re-execute. (resolve_item for
+    // b::B will, and analyze itself re-runs — that's expected.)
+    let log = executed.lock().unwrap();
+    let resolve_item_runs = log.iter().filter(|k| k.contains("resolve_item")).count();
+    assert_eq!(
+        resolve_item_runs, 1,
+        "exactly one resolve_item (for the edited b::B) should re-run; got {resolve_item_runs}: {log:?}"
+    );
+}
