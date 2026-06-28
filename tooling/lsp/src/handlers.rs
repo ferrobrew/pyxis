@@ -74,6 +74,13 @@ impl ServerState {
 
         let pointer_size = self.pointer_size_for(uri);
 
+        // 0. A doc-comment cross-reference link → describe the referenced item.
+        if let Some((target, span)) = self.doc_link_at(uri, &loc)
+            && let Some(value) = self.type_hover_text(&target, type_registry, decl_registry, uri)
+        {
+            return hover_response(req.id, value, content, &span);
+        }
+
         // 1. Cursor on a type or import reference (e.g. a field's type, or a
         //    segment of a `use`/FQN path) → hover the *referenced* item, not the
         //    enclosing definition. For an intermediate FQN segment, show the
@@ -530,6 +537,25 @@ impl ServerState {
         let decl_registry = decl_set.registry(&self.db);
 
         let pointer_size = self.pointer_size_for(uri);
+
+        // 0. A doc-comment cross-reference link → jump to the referenced item.
+        if let Some((target, _)) = self.doc_link_at(uri, &loc)
+            && let Some(rd) = self.resolved_definition(&target, type_registry, uri)
+            && let Some(target_content) = self.get_content(&rd.uri)
+        {
+            let location = lsp_types::Location {
+                uri: rd.uri,
+                range: pyxis_span_to_lsp_range(target_content, &rd.name_span),
+            };
+            return Response {
+                id: req.id,
+                result: Some(
+                    serde_json::to_value(lsp_types::GotoDefinitionResponse::Scalar(location))
+                        .unwrap(),
+                ),
+                error: None,
+            };
+        }
 
         // 1. Cursor on a type or import reference (e.g. `Camera` in
         //    `pub field: Camera`, `*mut Camera`, or a name in a `use`
@@ -1298,6 +1324,45 @@ impl ServerState {
             }
         }
         links
+    }
+
+    /// If `loc` sits on a doc-comment cross-reference (`[Foo]`, [`Foo`],
+    /// `[label](path)`), the referenced item's path and the label's source span.
+    /// Lets hover and go-to-definition follow doc links — Zed (like most editors
+    /// other than via documentLink) navigates doc links through go-to-definition.
+    fn doc_link_at(&self, uri: &Uri, loc: &Location) -> Option<(ItemPath, Span)> {
+        use pyxis::semantic::doc_links::DocLinkTarget;
+        let content = self.get_content(uri)?;
+        let tokens_arc = self.tokens_for(uri);
+        let tokens: &[Token] = tokens_arc.as_deref().map(Vec::as_slice).unwrap_or(&[]);
+        // Only act inside a doc comment.
+        if !tokens.iter().any(|t| {
+            matches!(t.kind, TokenKind::DocOuter(_)) && t.location.span.start.line == loc.line
+        }) {
+            return None;
+        }
+        let line = content.lines().nth(loc.line - 1)?;
+        let col = loc.column.saturating_sub(1); // 0-indexed byte column
+        let scope = self.scope_for(uri);
+        let pointer_size = self.pointer_size_for(uri);
+        let source_set = semantic::SourceSet::new(&self.db, self.sources_for(uri));
+        let analysis = semantic::analyze(&self.db, pointer_size, source_set);
+        let resolver = analysis.doc_link_resolver(&self.db);
+        for (start_byte, end_byte, path_str) in scan_doc_links(line) {
+            if col >= start_byte && col < end_byte {
+                let item = match resolver.resolve(&scope, &path_str) {
+                    Some(DocLinkTarget::Item(p)) => p,
+                    Some(DocLinkTarget::Member { item, .. }) => item,
+                    _ => continue,
+                };
+                let span = Span::new(
+                    Location::new(loc.line, start_byte + 1),
+                    Location::new(loc.line, end_byte + 1),
+                );
+                return Some((item, span));
+            }
+        }
+        None
     }
 
     /// textDocument/implementation — from a type (its name or any reference),

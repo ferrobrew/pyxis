@@ -1085,3 +1085,26 @@ fn type_hierarchy_via_base_fields() {
         ["PhysicsGameObject"]
     );
 }
+
+#[test]
+fn doc_links_navigate_via_hover_and_definition() {
+    // Doc-comment cross-references resolve through hover + go-to-definition,
+    // since Zed (and most editors) navigate doc links that way, not documentLink.
+    let src = "/// See [Bar] and [docs](Bar).\npub type Foo {\n    pub x: u64,\n}\npub type Bar {\n    pub y: u64,\n}\n";
+    let st = ServerState::in_memory(&[("/p", 8, &[("m.pyxis", src)])]);
+    let uri = ServerState::document_uri("/p", "m.pyxis");
+    let in_bracket = src.lines().next().unwrap().find("Bar").unwrap() as u32 + 1;
+
+    assert!(
+        hover_text(&st, &uri, 0, in_bracket).contains("**type** `Bar`"),
+        "hover on a doc link"
+    );
+    let def = def_uri(&st, &uri, 0, in_bracket);
+    assert!(def.is_some(), "go-to-def on a doc link resolves");
+    // the `[docs](Bar)` form resolves via its label (`docs`), the clickable part
+    let in_label = src.lines().next().unwrap().find("docs").unwrap() as u32 + 1;
+    assert!(
+        hover_text(&st, &uri, 0, in_label).contains("**type** `Bar`"),
+        "hover on [label](Bar) label"
+    );
+}
