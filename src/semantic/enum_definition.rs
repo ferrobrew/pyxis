@@ -9,6 +9,7 @@ use crate::{
             UnresolvedTypeReference,
         },
         function,
+        resolution_context::ResolutionContextRef,
         type_registry::TypeLookupResult,
         types::{Function, ItemStateResolved, Type},
     },
@@ -99,7 +100,7 @@ impl EnumDefinition {
 }
 
 pub fn build(
-    semantic: &crate::semantic::resolution_context::ResolutionContextRef<'_>,
+    semantic: &ResolutionContextRef<'_>,
     resolvee_path: &ItemPath,
     definition: &grammar::EnumDefinition,
     location: &ItemLocation,

@@ -15,7 +15,9 @@ use std::collections::BTreeMap;
 
 use crate::{
     grammar::{self, ItemPath},
-    span::HasLocation,
+    parser::cfg::CfgPredicate,
+    semantic::attribute,
+    span::{HasLocation, ItemLocation},
 };
 
 /// A read-only registry of all declared items.
@@ -46,10 +48,10 @@ pub struct ModuleInfo {
 pub struct ExternTypeInfo {
     pub size: usize,
     pub alignment: usize,
-    pub location: crate::span::ItemLocation,
-    pub declaration_location: crate::span::ItemLocation,
+    pub location: ItemLocation,
+    pub declaration_location: ItemLocation,
     pub doc_comments: Vec<String>,
-    pub cfg: Option<crate::parser::cfg::CfgPredicate>,
+    pub cfg: Option<CfgPredicate>,
 }
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
@@ -119,11 +121,9 @@ impl DeclarationRegistry {
                         continue;
                     };
                     let loc = attribute.location();
-                    if let Ok(Some(s)) = crate::semantic::attribute::parse_size(ident, items, loc) {
+                    if let Ok(Some(s)) = attribute::parse_size(ident, items, loc) {
                         size = Some(s);
-                    } else if let Ok(Some(a)) =
-                        crate::semantic::attribute::parse_align(ident, items, loc)
-                    {
+                    } else if let Ok(Some(a)) = attribute::parse_align(ident, items, loc) {
                         alignment = Some(a);
                     }
                 }

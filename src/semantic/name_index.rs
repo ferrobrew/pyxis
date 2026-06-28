@@ -14,7 +14,11 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::grammar::{self, ItemPath};
+use crate::{
+    grammar::{self, ItemPath},
+    semantic::attribute,
+    span::HasLocation,
+};
 
 /// What kind of item a name denotes (no body, no location).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -128,12 +132,10 @@ impl NameIndex {
                     let Some((ident, items)) = attribute.function() else {
                         continue;
                     };
-                    let loc = crate::span::HasLocation::location(attribute);
-                    if let Ok(Some(s)) = crate::semantic::attribute::parse_size(ident, items, loc) {
+                    let loc = HasLocation::location(attribute);
+                    if let Ok(Some(s)) = attribute::parse_size(ident, items, loc) {
                         size = Some(s);
-                    } else if let Ok(Some(a)) =
-                        crate::semantic::attribute::parse_align(ident, items, loc)
-                    {
+                    } else if let Ok(Some(a)) = attribute::parse_align(ident, items, loc) {
                         alignment = Some(a);
                     }
                 }

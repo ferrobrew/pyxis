@@ -6,6 +6,7 @@ use crate::{
             BitflagsExpectedType, BuildOutcome, Result, SemanticError, TypeResolutionContext,
             UnresolvedTypeContext, UnresolvedTypeReference,
         },
+        resolution_context::ResolutionContextRef,
         type_registry::TypeLookupResult,
         types::{ItemStateResolved, Type},
     },
@@ -89,7 +90,7 @@ impl BitflagsDefinition {
 }
 
 pub fn build(
-    semantic: &crate::semantic::resolution_context::ResolutionContextRef<'_>,
+    semantic: &ResolutionContextRef<'_>,
     resolvee_path: &ItemPath,
     definition: &grammar::BitflagsDefinition,
     location: &ItemLocation,

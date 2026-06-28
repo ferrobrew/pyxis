@@ -5,6 +5,7 @@ use crate::{
         error::{Result, SemanticError},
         function,
         module::Module,
+        resolution_context::ResolutionContext,
         type_definition::get_region_name_and_type_definition,
         type_registry::TypeRegistry,
         types::{
@@ -14,6 +15,9 @@ use crate::{
     },
     span::{EqualsIgnoringLocations as _, HasLocation, ItemLocation},
 };
+
+#[cfg(test)]
+use crate::span::StripLocations;
 
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]
 pub struct TypeVftable {
@@ -37,7 +41,7 @@ impl TypeVftable {
 }
 
 #[cfg(test)]
-impl crate::span::StripLocations for TypeVftable {
+impl StripLocations for TypeVftable {
     fn strip_locations(&self) -> Self {
         TypeVftable {
             functions: self.functions.strip_locations(),
@@ -119,7 +123,7 @@ pub fn convert_grammar_functions_to_semantic_functions(
 }
 
 pub fn build(
-    semantic: &mut crate::semantic::resolution_context::ResolutionContext<'_>,
+    semantic: &mut ResolutionContext<'_>,
     resolvee_path: &ItemPath,
     visibility: Visibility,
     first_base: Option<&Region>,

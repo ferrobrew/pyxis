@@ -5,6 +5,7 @@ use crate::{
     grammar::{self, ItemPath},
     semantic::{
         error::Result,
+        type_alias_definition::TypeAliasDefinition,
         types::{ItemDefinition, Type, Visibility},
     },
     span::ItemLocation,
@@ -190,10 +191,7 @@ impl TypeRegistry {
     fn get_generic_type_alias(
         &self,
         path: &ItemPath,
-    ) -> Option<(
-        Vec<String>,
-        crate::semantic::type_alias_definition::TypeAliasDefinition,
-    )> {
+    ) -> Option<(Vec<String>, TypeAliasDefinition)> {
         if let Some(item_def) = self.lookup(path) {
             if !item_def.type_parameters.is_empty() {
                 if let Some(resolved) = item_def.resolved() {

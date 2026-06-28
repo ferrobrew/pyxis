@@ -1,6 +1,7 @@
 #![allow(clippy::result_large_err)]
 
 use crate::{
+    Backend,
     grammar::{self, ItemPath},
     semantic::types::{
         CallingConvention, ItemDefinitionInner, ItemStateResolved, PredefinedItem,
@@ -381,7 +382,7 @@ pub enum SemanticError {
     /// backend. Only cpp distinguishes a header from a source file, so the
     /// modifier is meaningless elsewhere.
     BackendDefinitionNotSupported {
-        backend: crate::Backend,
+        backend: Backend,
         location: ItemLocation,
     },
     /// `prologue for <Type>` / `epilogue for <Type>` referenced a type that

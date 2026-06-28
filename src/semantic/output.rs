@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 
 use crate::{
     grammar::ItemPath,
-    semantic::{Module, type_registry::TypeRegistry},
+    semantic::{Module, doc_links::DocLinkResolver, type_registry::TypeRegistry},
 };
 
 /// The output of semantic analysis, projected from `SemanticAnalysis`.
@@ -18,7 +18,7 @@ use crate::{
 pub struct SemanticOutput {
     type_registry: TypeRegistry,
     modules: BTreeMap<ItemPath, Module>,
-    doc_link_resolver: crate::semantic::doc_links::DocLinkResolver,
+    doc_link_resolver: DocLinkResolver,
 }
 
 impl SemanticOutput {
@@ -30,7 +30,7 @@ impl SemanticOutput {
         &self.modules
     }
 
-    pub fn doc_link_resolver(&self) -> &crate::semantic::doc_links::DocLinkResolver {
+    pub fn doc_link_resolver(&self) -> &DocLinkResolver {
         &self.doc_link_resolver
     }
 
@@ -39,7 +39,7 @@ impl SemanticOutput {
     pub(crate) fn from_parts(
         type_registry: TypeRegistry,
         modules: BTreeMap<ItemPath, Module>,
-        doc_link_resolver: crate::semantic::doc_links::DocLinkResolver,
+        doc_link_resolver: DocLinkResolver,
     ) -> Self {
         Self {
             type_registry,

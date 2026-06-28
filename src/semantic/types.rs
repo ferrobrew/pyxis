@@ -2,6 +2,7 @@ use std::fmt;
 
 use crate::{
     grammar::{self, ItemPath},
+    parser::cfg::CfgPredicate,
     semantic::type_registry,
     span::{EqualsIgnoringLocations, HasLocation, ItemLocation},
 };
@@ -452,7 +453,7 @@ pub struct ItemDefinition {
     pub predefined: Option<PredefinedItem>,
     /// `#[cfg(...)]` predicate. `None` means "always emit"; otherwise each
     /// backend evaluates against its own context.
-    pub cfg: Option<crate::parser::cfg::CfgPredicate>,
+    pub cfg: Option<CfgPredicate>,
     /// Full span (incl. doc comments / attributes), used for diagnostics.
     pub location: ItemLocation,
     /// Position of the declaration itself, used for documentation source links.
@@ -477,7 +478,7 @@ impl ItemDefinition {
     /// Test-only constructor for category_resolved that uses a synthetic location
     #[cfg(test)]
     pub fn category_resolved(
-        (visibility, path): (Visibility, impl Into<crate::grammar::ItemPath>),
+        (visibility, path): (Visibility, impl Into<ItemPath>),
         resolved: ItemStateResolved,
         category: ItemCategory,
     ) -> Self {
@@ -497,7 +498,7 @@ impl ItemDefinition {
     /// Test-only constructor for defined_resolved that uses a synthetic location
     #[cfg(test)]
     pub fn defined_resolved(
-        (visibility, path): (Visibility, impl Into<crate::grammar::ItemPath>),
+        (visibility, path): (Visibility, impl Into<ItemPath>),
         resolved: ItemStateResolved,
     ) -> Self {
         ItemDefinition {
@@ -516,7 +517,7 @@ impl ItemDefinition {
     /// Test-only constructor for generic defined_resolved that uses a synthetic location
     #[cfg(test)]
     pub fn generic_defined_resolved(
-        (visibility, path): (Visibility, impl Into<crate::grammar::ItemPath>),
+        (visibility, path): (Visibility, impl Into<ItemPath>),
         type_params: impl IntoIterator<Item = impl Into<String>>,
         resolved: ItemStateResolved,
     ) -> Self {
@@ -592,7 +593,7 @@ pub struct Backend {
     /// block, flattened to absolute item paths. The cpp backend
     /// promotes these to `#include`s; other backends are free to use
     /// (or ignore) them as they see fit.
-    pub uses: Vec<crate::grammar::ItemPath>,
+    pub uses: Vec<ItemPath>,
     pub location: ItemLocation,
 }
 #[cfg(test)]
@@ -629,7 +630,7 @@ impl Backend {
         self.epilogue.for_type = Some(for_type.into());
         self
     }
-    pub fn with_uses(mut self, uses: impl IntoIterator<Item = crate::grammar::ItemPath>) -> Self {
+    pub fn with_uses(mut self, uses: impl IntoIterator<Item = ItemPath>) -> Self {
         self.uses = uses.into_iter().collect();
         self
     }
