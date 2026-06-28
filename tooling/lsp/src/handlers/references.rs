@@ -378,8 +378,9 @@ pub(crate) fn resolve_type_path(
 /// Grammar `Ident`s don't carry their own span, so name spans (type names,
 /// field names, function names) are recovered from the compiler's cached token
 /// stream: the first token at/after the declaration's start point whose text
-/// matches `name`. The `"vftable"` keyword lexes as `TokenKind::Vftable` rather
-/// than an `Ident`, so it's matched specially. Working off real tokens (rather
+/// matches `name`. Keyword spellings (e.g. `vftable` → `TokenKind::Vftable`)
+/// lex as their own token rather than an `Ident`, so they're matched via
+/// [`TokenKind::keyword_str`]. Working off real tokens (rather
 /// than a text scan) means occurrences inside comments or `r#"…"#` splices —
 /// which lex as comment/string tokens, not `Ident`s — are correctly ignored.
 pub(crate) fn name_token_span(tokens: &[Token], from: &Location, name: &str) -> Option<Span> {
@@ -391,9 +392,8 @@ pub(crate) fn name_token_span(tokens: &[Token], from: &Location, name: &str) -> 
         .find(|t| {
             t.location.span.start >= *from
                 && match &t.kind {
-                    TokenKind::Vftable => name == "vftable",
                     TokenKind::Ident(s) => s == name,
-                    _ => false,
+                    kind => kind.keyword_str() == Some(name),
                 }
         })
         .map(|t| t.location.span)

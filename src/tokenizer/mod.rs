@@ -68,6 +68,43 @@ pub enum TokenKind {
     Eof,
 }
 
+/// Canonical table of keyword spellings and the token each lexes to. The single
+/// source of truth for keyword spellings: both the lexer and [`TokenKind::keyword_str`]
+/// derive from it, so consumers (e.g. editor tooling) never duplicate the spellings.
+pub const KEYWORDS: &[(&str, TokenKind)] = &[
+    ("pub", TokenKind::Pub),
+    ("type", TokenKind::Type),
+    ("enum", TokenKind::Enum),
+    ("bitflags", TokenKind::Bitflags),
+    ("impl", TokenKind::Impl),
+    ("fn", TokenKind::Fn),
+    ("extern", TokenKind::Extern),
+    ("use", TokenKind::Use),
+    ("backend", TokenKind::Backend),
+    ("meta", TokenKind::Meta),
+    ("functions", TokenKind::Functions),
+    ("vftable", TokenKind::Vftable),
+    ("unknown", TokenKind::Unknown),
+    ("prologue", TokenKind::Prologue),
+    ("epilogue", TokenKind::Epilogue),
+    ("mut", TokenKind::Mut),
+    ("const", TokenKind::Const),
+    ("self", TokenKind::SelfValue),
+    ("Self", TokenKind::SelfType),
+    ("_", TokenKind::Underscore),
+];
+
+impl TokenKind {
+    /// The canonical source spelling for a keyword token (e.g. `Pub` → `"pub"`),
+    /// or `None` for non-keyword tokens.
+    pub fn keyword_str(&self) -> Option<&'static str> {
+        KEYWORDS
+            .iter()
+            .find(|(_, kind)| kind == self)
+            .map(|(spelling, _)| *spelling)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Token {
     pub kind: TokenKind,
@@ -645,29 +682,11 @@ impl Lexer {
         let end = self.current_location();
         let text: String = self.chars[start_pos..self.pos].iter().collect();
 
-        let kind = match text.as_str() {
-            "pub" => TokenKind::Pub,
-            "type" => TokenKind::Type,
-            "enum" => TokenKind::Enum,
-            "bitflags" => TokenKind::Bitflags,
-            "impl" => TokenKind::Impl,
-            "fn" => TokenKind::Fn,
-            "extern" => TokenKind::Extern,
-            "use" => TokenKind::Use,
-            "backend" => TokenKind::Backend,
-            "meta" => TokenKind::Meta,
-            "functions" => TokenKind::Functions,
-            "vftable" => TokenKind::Vftable,
-            "unknown" => TokenKind::Unknown,
-            "prologue" => TokenKind::Prologue,
-            "epilogue" => TokenKind::Epilogue,
-            "mut" => TokenKind::Mut,
-            "const" => TokenKind::Const,
-            "self" => TokenKind::SelfValue,
-            "Self" => TokenKind::SelfType,
-            "_" => TokenKind::Underscore,
-            _ => TokenKind::Ident(text.clone()),
-        };
+        let kind = KEYWORDS
+            .iter()
+            .find(|(spelling, _)| *spelling == text)
+            .map(|(_, kind)| kind.clone())
+            .unwrap_or_else(|| TokenKind::Ident(text.clone()));
 
         Ok(Token::new(
             kind,

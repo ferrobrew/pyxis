@@ -7,9 +7,32 @@ impl ServerState {
             .ok()
             .map(|p| p.text_document_position.text_document.uri);
 
+        // Keyword spellings come from the tokenizer's canonical table (no
+        // duplicated literals); `as` is a contextual keyword with no token, so
+        // it stays inline.
+        use TokenKind::{
+            Backend, Bitflags, Const, Enum, Epilogue, Extern, Fn, Impl, Mut, Prologue, Pub,
+            SelfType, SelfValue, Type, Use, Vftable,
+        };
+        let kw = |k: TokenKind| k.keyword_str().expect("keyword token");
         let mut items: Vec<CompletionItem> = [
-            "pub", "type", "enum", "bitflags", "impl", "fn", "extern", "use", "backend", "vftable",
-            "const", "mut", "as", "prologue", "epilogue", "self", "Self",
+            kw(Pub),
+            kw(Type),
+            kw(Enum),
+            kw(Bitflags),
+            kw(Impl),
+            kw(Fn),
+            kw(Extern),
+            kw(Use),
+            kw(Backend),
+            kw(Vftable),
+            kw(Const),
+            kw(Mut),
+            "as",
+            kw(Prologue),
+            kw(Epilogue),
+            kw(SelfValue),
+            kw(SelfType),
         ]
         .iter()
         .map(|kw| CompletionItem {
