@@ -1,6 +1,9 @@
 use super::*;
 
-use pyxis::grammar::Argument;
+use pyxis::{
+    grammar::{Argument, Backend, Ident, ItemDefinitionInner},
+    semantic::types::{ItemDefinitionInner as ResolvedInner, ItemStateResolved},
+};
 
 /// Hover for a predefined (`bool`, `u32`, …) or extern type — these have no
 /// source definition but a known size/alignment.
@@ -65,10 +68,10 @@ pub(crate) fn format_type_hover_with_size(
 pub(crate) fn format_type_hover(definition: &ItemDefinition) -> String {
     let name = definition.name.as_str();
     let kind = match &definition.inner {
-        pyxis::grammar::ItemDefinitionInner::Type(_) => "type",
-        pyxis::grammar::ItemDefinitionInner::Enum(_) => "enum",
-        pyxis::grammar::ItemDefinitionInner::Bitflags(_) => "bitflags",
-        pyxis::grammar::ItemDefinitionInner::TypeAlias(_) => "type alias",
+        ItemDefinitionInner::Type(_) => "type",
+        ItemDefinitionInner::Enum(_) => "enum",
+        ItemDefinitionInner::Bitflags(_) => "bitflags",
+        ItemDefinitionInner::TypeAlias(_) => "type alias",
     };
     let mut md = format!("**{}** `{}`\n\n", kind, name);
 
@@ -77,7 +80,7 @@ pub(crate) fn format_type_hover(definition: &ItemDefinition) -> String {
         md.push_str("\n\n");
     }
 
-    if let pyxis::grammar::ItemDefinitionInner::Type(td) = &definition.inner {
+    if let ItemDefinitionInner::Type(td) = &definition.inner {
         md.push_str("**Fields:**\n");
         for statement in td.statements() {
             if let TypeField::Field(vis, name, type_) = &statement.field {
@@ -99,8 +102,8 @@ pub(crate) fn format_type_hover(definition: &ItemDefinition) -> String {
 /// so we tokenize and match the token directly. A `r#"…"#` splice lexes as a
 /// single token, so keywords inside the spliced code can never match.
 pub(crate) fn backend_term_at(
-    tokens: &[pyxis::tokenizer::Token],
-    backend: &pyxis::grammar::Backend,
+    tokens: &[Token],
+    backend: &Backend,
     loc: &Location,
 ) -> Option<(String, Span)> {
     use pyxis::tokenizer::TokenKind;
@@ -185,7 +188,7 @@ pub(crate) fn attribute_at<'a>(
     module: &'a Module,
     loc: &Location,
 ) -> Option<(&'a Attribute, Span)> {
-    use pyxis::grammar::{ImplItem, ItemDefinitionInner};
+    use pyxis::grammar::ImplItem;
     let find = |attrs: &'a Attributes| {
         attrs
             .0
@@ -459,7 +462,7 @@ pub(crate) fn format_vftable_fn_hover(f: &Function, index: usize, pointer_size: 
 /// Hover markdown for a struct field.
 pub(crate) fn format_field_hover(
     vis: &Visibility,
-    name: &pyxis::grammar::Ident,
+    name: &Ident,
     type_: &Type,
     attributes: &Attributes,
     type_size: Option<usize>,
@@ -491,11 +494,11 @@ pub(crate) fn format_field_hover(
 /// sizes of preceding layout regions. The resolver inserts explicit padding
 /// regions, so the running total is the true offset.
 pub(crate) fn field_offset(
-    parent_resolved: &pyxis::semantic::types::ItemStateResolved,
+    parent_resolved: &ItemStateResolved,
     field_name: &str,
     type_registry: &TypeRegistry,
 ) -> Option<usize> {
-    let pyxis::semantic::types::ItemDefinitionInner::Type(td) = &parent_resolved.inner else {
+    let ResolvedInner::Type(td) = &parent_resolved.inner else {
         return None;
     };
     let mut offset = 0usize;

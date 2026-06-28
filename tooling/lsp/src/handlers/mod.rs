@@ -198,15 +198,16 @@ impl ServerState {
         source_set: semantic::SourceSet,
         pointer_size: usize,
     ) -> Option<i128> {
+        use pyxis::semantic::types::ItemDefinitionInner;
         let path = self.definition_path(uri, definition.name.as_str());
         let resolved = resolve_item(&self.db, source_set, pointer_size, path);
         match &resolved.item(&self.db).resolved()?.inner {
-            pyxis::semantic::types::ItemDefinitionInner::Enum(e) => e
+            ItemDefinitionInner::Enum(e) => e
                 .variants
                 .iter()
                 .find(|v| v.name == variant_name)
                 .map(|v| v.value as i128),
-            pyxis::semantic::types::ItemDefinitionInner::Bitflags(b) => b
+            ItemDefinitionInner::Bitflags(b) => b
                 .flags
                 .iter()
                 .find(|f| f.name == variant_name)

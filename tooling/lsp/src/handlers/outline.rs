@@ -1,5 +1,7 @@
 use super::*;
 
+use pyxis::grammar::ItemDefinitionInner;
+
 impl ServerState {
     /// textDocument/documentSymbol
     pub fn handle_document_symbols(&self, req: Request) -> Response {
@@ -226,7 +228,7 @@ impl ServerState {
 
         for definition in module.definitions() {
             // For each field, show its type size as an inlay hint
-            if let pyxis::grammar::ItemDefinitionInner::Type(td) = &definition.inner {
+            if let ItemDefinitionInner::Type(td) = &definition.inner {
                 for statement in td.statements() {
                     if let TypeField::Field(_, _name, type_) = &statement.field {
                         let path = type_.as_path();
@@ -407,7 +409,7 @@ impl ServerState {
             match item {
                 ModuleItem::Definition { definition } => {
                     push(definition.location.span);
-                    if let pyxis::grammar::ItemDefinitionInner::Type(td) = &definition.inner {
+                    if let ItemDefinitionInner::Type(td) = &definition.inner {
                         for statement in td.statements() {
                             if matches!(statement.field, TypeField::Vftable(_)) {
                                 push(statement.location.span);
@@ -431,10 +433,10 @@ pub(crate) fn module_item_to_symbol(item: &ModuleItem, source: &str) -> Option<D
     let (name, kind, range_span) = match item {
         ModuleItem::Definition { definition } => {
             let kind = match &definition.inner {
-                pyxis::grammar::ItemDefinitionInner::Type(_) => SymbolKind::STRUCT,
-                pyxis::grammar::ItemDefinitionInner::Enum(_) => SymbolKind::ENUM,
-                pyxis::grammar::ItemDefinitionInner::Bitflags(_) => SymbolKind::ENUM,
-                pyxis::grammar::ItemDefinitionInner::TypeAlias(_) => SymbolKind::TYPE_PARAMETER,
+                ItemDefinitionInner::Type(_) => SymbolKind::STRUCT,
+                ItemDefinitionInner::Enum(_) => SymbolKind::ENUM,
+                ItemDefinitionInner::Bitflags(_) => SymbolKind::ENUM,
+                ItemDefinitionInner::TypeAlias(_) => SymbolKind::TYPE_PARAMETER,
             };
             (
                 definition.name.as_str().to_string(),
