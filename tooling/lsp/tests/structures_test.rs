@@ -1355,3 +1355,39 @@ fn rename_type_updates_use_leaf_and_field_across_files() {
         "both b.pyxis occurrences"
     );
 }
+
+#[test]
+#[allow(clippy::mutable_key_type)] // lsp_types::Uri map key is fine here
+fn rename_type_updates_backend_for_clause() {
+    // Regression guard: a type referenced in a backend `for <Type>` splice must
+    // be renamed (source map must cover backend blocks, like find_reference_at).
+    let src =
+        "pub type Widget {\n    pub id: u32,\n}\nbackend rust epilogue for Widget r#\"x\"#;\n";
+    let st = ServerState::in_memory(&[("/p", 8, &[("a.pyxis", src)])]);
+    let uri = ServerState::document_uri("/p", "a.pyxis");
+    let col = "pub type ".len() as u32;
+    let r = Request::new(
+        RequestId::from(1),
+        "textDocument/rename".into(),
+        serde_json::to_value(lsp_types::RenameParams {
+            text_document_position: TextDocumentPositionParams {
+                text_document: TextDocumentIdentifier { uri: uri.clone() },
+                position: Position {
+                    line: 0,
+                    character: col,
+                },
+            },
+            new_name: "Gadget".to_string(),
+            work_done_progress_params: Default::default(),
+        })
+        .unwrap(),
+    );
+    let we: lsp_types::WorkspaceEdit =
+        serde_json::from_value(st.handle_rename(r).result.unwrap()).unwrap();
+    let total: usize = we.changes.unwrap().values().map(|v| v.len()).sum();
+    // Definition + the `for Widget` clause = 2.
+    assert_eq!(
+        total, 2,
+        "rename should update def + backend `for` clause; got {total}"
+    );
+}

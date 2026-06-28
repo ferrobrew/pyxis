@@ -210,6 +210,29 @@ pub fn file_type_references<'db>(
             ModuleItem::ExternValue { extern_value } => {
                 type_ref_spans(&extern_value.type_, &scope, index, tokens, &mut references)
             }
+            // `backend` blocks: their `use` trees and `for <Type>` clauses.
+            ModuleItem::Backend { backend } => {
+                for tree in &backend.uses {
+                    for (leaf_path, location) in tree.flatten_with_locations() {
+                        if let Some(resolved) = index.resolve_path(&scope, &leaf_path)
+                            && let Some(leaf) =
+                                last_ident_span(tokens, location.span.start, location.span.end)
+                        {
+                            references.push((leaf, resolved));
+                        }
+                    }
+                }
+                for for_type in [&backend.prologue.for_type, &backend.epilogue.for_type]
+                    .into_iter()
+                    .flatten()
+                {
+                    if let Some(resolved) = index.resolve_path(&scope, for_type)
+                        && let Some(span) = for_type_span(tokens, &backend.location.span, for_type)
+                    {
+                        references.push((span, resolved));
+                    }
+                }
+            }
             _ => {}
         }
     }

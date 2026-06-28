@@ -456,6 +456,47 @@ pub(super) fn fn_sig_type_spans(
     }
 }
 
+/// The leaf-segment span of a `for <path>` clause (backend prologue/epilogue)
+/// inside `block_span`. Finds the `for` keyword (which lexes as `Ident("for")`),
+/// the run of `Ident`/`::` after it, and returns the last identifier's span when
+/// its leaf matches `for_type`.
+pub(super) fn for_type_span(
+    tokens: &[crate::tokenizer::Token],
+    block_span: &crate::span::Span,
+    for_type: &ItemPath,
+) -> Option<crate::span::Span> {
+    use crate::tokenizer::TokenKind;
+    let leaf = for_type.last()?.as_str();
+    let mut i = 0;
+    while i < tokens.len() {
+        if block_span.contains(&tokens[i].location.span.start)
+            && matches!(&tokens[i].kind, TokenKind::Ident(s) if s == "for")
+        {
+            let mut j = i + 1;
+            let mut last_ident: Option<&crate::tokenizer::Token> = None;
+            while j < tokens.len() {
+                match &tokens[j].kind {
+                    TokenKind::Ident(_) => {
+                        last_ident = Some(&tokens[j]);
+                        j += 1;
+                    }
+                    TokenKind::ColonColon => j += 1,
+                    _ => break,
+                }
+            }
+            if let Some(last) = last_ident
+                && matches!(&last.kind, TokenKind::Ident(s) if s == leaf)
+            {
+                return Some(last.location.span);
+            }
+            i = j;
+        } else {
+            i += 1;
+        }
+    }
+    None
+}
+
 /// The span of the first identifier token at or after `from` whose text is
 /// `name` — used to locate an `impl <Type>` target name.
 pub(super) fn first_ident_span(
