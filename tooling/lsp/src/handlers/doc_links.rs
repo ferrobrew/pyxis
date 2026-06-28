@@ -1,5 +1,7 @@
 use super::*;
 
+use pyxis::semantic::doc_links::DocLinkTarget;
+
 impl ServerState {
     /// Doc-comment links that reference `symbol`, returning the span of the
     /// symbol's name within each link's path (a type's name segment, or a
@@ -9,7 +11,6 @@ impl ServerState {
         symbol: &Symbol,
         from_uri: &Uri,
     ) -> Vec<lsp_types::Location> {
-        use pyxis::semantic::doc_links::DocLinkTarget;
         let name = match symbol {
             Symbol::Type(p) => match p.last() {
                 Some(s) => s.as_str().to_string(),
@@ -119,8 +120,6 @@ impl ServerState {
     }
 
     fn doc_links(&self, uri: &Uri) -> Vec<DocumentLink> {
-        use pyxis::semantic::doc_links::DocLinkTarget;
-
         let Some(ctx) = self.analysis_ctx(uri) else {
             return vec![];
         };
@@ -287,7 +286,6 @@ impl ServerState {
         uri: &Uri,
         loc: &Location,
     ) -> Option<(Span, lsp_types::Location, String)> {
-        use pyxis::semantic::doc_links::DocLinkTarget;
         let AnalysisCtx {
             content,
             scope,

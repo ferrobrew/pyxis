@@ -784,7 +784,6 @@ impl ServerState {
         type_registry: &TypeRegistry,
         decl_registry: &DeclarationRegistry,
     ) -> Option<TypeHierarchyItem> {
-        use pyxis::grammar::ItemDefinitionInner;
         let rd = self.resolved_definition(path, type_registry, from_uri)?;
         let content = self.get_content(&rd.uri)?;
         let kind = match decl_registry.get_definition(path).map(|d| &d.inner) {
@@ -883,7 +882,6 @@ pub(crate) fn base_field_targets(
     path: &ItemPath,
     decl_registry: &DeclarationRegistry,
 ) -> Option<Vec<ItemPath>> {
-    use pyxis::grammar::ItemDefinitionInner;
     let def = decl_registry.get_definition(path)?;
     let ItemDefinitionInner::Type(td) = &def.inner else {
         return Some(vec![]);

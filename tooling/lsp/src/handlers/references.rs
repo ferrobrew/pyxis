@@ -1,5 +1,7 @@
 use super::*;
 
+use pyxis::grammar::Argument;
+
 pub(crate) enum Ref {
     Item {
         /// Resolved concrete item path, if this segment names a type/extern/predefined.
@@ -181,7 +183,6 @@ pub(crate) fn segment_at(
 /// Find a type hit (argument or return type) under the cursor in a function
 /// signature — a named ident or a pointer/array/unknown shell.
 pub(crate) fn fn_signature_type_ref<'a>(f: &'a Function, loc: &Location) -> Option<TypeHit<'a>> {
-    use pyxis::grammar::Argument;
     for arg in &f.arguments {
         if let Argument::Named { type_, .. } = arg
             && let Some(found) = type_hit_at(type_, loc)
@@ -201,7 +202,7 @@ pub(crate) fn find_type_ref_in_definition<'a>(
     definition: &'a ItemDefinition,
     loc: &Location,
 ) -> Option<TypeHit<'a>> {
-    use pyxis::grammar::{Argument, ItemDefinitionInner};
+    use pyxis::grammar::ItemDefinitionInner;
 
     match &definition.inner {
         ItemDefinitionInner::Type(td) => {

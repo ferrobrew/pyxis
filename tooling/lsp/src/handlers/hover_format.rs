@@ -1,5 +1,7 @@
 use super::*;
 
+use pyxis::grammar::Argument;
+
 /// Hover for a predefined (`bool`, `u32`, …) or extern type — these have no
 /// source definition but a known size/alignment.
 pub(crate) fn builtin_hover(
@@ -294,7 +296,6 @@ pub(crate) fn render_attribute(attribute: &Attribute) -> String {
 
 /// Render a function signature as Pyxis source (e.g. `pub fn foo(&mut self, x: u32) -> bool`).
 pub(crate) fn render_fn_signature(f: &Function) -> String {
-    use pyxis::grammar::Argument;
     let mut s = String::new();
     if matches!(f.visibility, Visibility::Public) {
         s.push_str("pub ");
@@ -331,26 +332,26 @@ pub(crate) fn named_arg_hover(
     decl_registry: &DeclarationRegistry,
     pointer_size: usize,
 ) -> Option<(String, Span)> {
-    use pyxis::grammar::Argument;
     for arg in &f.arguments {
-        if let Argument::Named {
+        let Argument::Named {
             ident,
             type_,
             location,
         } = arg
-            && location.span.contains(loc)
-        {
-            let span = name_token_span(tokens, &location.span.start, ident.as_str())
-                .unwrap_or(location.span);
-            let mut md = format!("**arg** `{}`\n\n", ident.as_str());
-            md.push_str(&format!("```pyxis\n{}: {}\n```\n", ident.as_str(), type_));
-            if let Some(size) =
-                type_size_of(type_, type_registry, scope, decl_registry, pointer_size)
-            {
-                push_facts(&mut md, &[("type size", fmt_bytes(size))]);
-            }
-            return Some((md, span));
+        else {
+            continue;
+        };
+        if !location.span.contains(loc) {
+            continue;
         }
+        let span =
+            name_token_span(tokens, &location.span.start, ident.as_str()).unwrap_or(location.span);
+        let mut md = format!("**arg** `{}`\n\n", ident.as_str());
+        md.push_str(&format!("```pyxis\n{}: {}\n```\n", ident.as_str(), type_));
+        if let Some(size) = type_size_of(type_, type_registry, scope, decl_registry, pointer_size) {
+            push_facts(&mut md, &[("type size", fmt_bytes(size))]);
+        }
+        return Some((md, span));
     }
     None
 }
@@ -358,7 +359,6 @@ pub(crate) fn named_arg_hover(
 /// The span of a `self`/`&self`/`&mut self` receiver of `f` if the cursor is on
 /// it (so a `self` hover can show the containing type, scoped to `self`).
 pub(crate) fn self_arg_span(f: &Function, loc: &Location) -> Option<Span> {
-    use pyxis::grammar::Argument;
     for arg in &f.arguments {
         match arg {
             Argument::ConstSelf { location } | Argument::MutSelf { location }
