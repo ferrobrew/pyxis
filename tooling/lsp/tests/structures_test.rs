@@ -907,3 +907,71 @@ fn implementation_finds_impl_blocks_across_files() {
             .any(|l| l.uri.as_str().ends_with("other.pyxis") && l.range.start.line == 2)
     );
 }
+
+#[test]
+fn semantic_tokens_classify_types_namespaces_builtins() {
+    let st = ServerState::in_memory(&[(
+        "/p",
+        8,
+        &[
+            (
+                "types/math.pyxis",
+                "pub type Vector3 {\n    pub x: u32,\n}\n",
+            ),
+            (
+                "m.pyxis",
+                "use types::math::Vector3;\n\npub type Foo {\n    pub v: Vector3,\n    pub n: u32,\n}\n",
+            ),
+        ],
+    )]);
+    let uri = ServerState::document_uri("/p", "m.pyxis");
+    let params = lsp_types::SemanticTokensParams {
+        text_document: TextDocumentIdentifier { uri },
+        work_done_progress_params: Default::default(),
+        partial_result_params: Default::default(),
+    };
+    let r = Request::new(
+        RequestId::from(1),
+        "textDocument/semanticTokens/full".into(),
+        serde_json::to_value(params).unwrap(),
+    );
+    let v = st.handle_semantic_tokens_full(r).result.unwrap();
+    let data = v["data"].as_array().unwrap();
+    // decode to (line, char, len, type, mods)
+    let (mut line, mut ch) = (0i64, 0i64);
+    let mut toks = Vec::new();
+    for t in data.chunks(5) {
+        let dl = t[0].as_i64().unwrap();
+        line += dl;
+        if dl != 0 {
+            ch = 0;
+        }
+        ch += t[1].as_i64().unwrap();
+        toks.push((
+            line,
+            ch,
+            t[2].as_i64().unwrap(),
+            t[3].as_i64().unwrap(),
+            t[4].as_i64().unwrap(),
+        ));
+    }
+    // namespace=0, type=1; defaultLibrary modifier = bit 0
+    // `math` segment of the use path → namespace
+    assert!(
+        toks.iter()
+            .any(|&(l, _, len, ty, _)| l == 0 && len == 4 && ty == 0),
+        "math namespace: {toks:?}"
+    );
+    // Vector3 field type → type, no modifier
+    assert!(
+        toks.iter()
+            .any(|&(l, _, len, ty, m)| l == 3 && len == 7 && ty == 1 && m == 0),
+        "Vector3 type: {toks:?}"
+    );
+    // u32 builtin → type + defaultLibrary
+    assert!(
+        toks.iter()
+            .any(|&(l, _, len, ty, m)| l == 4 && len == 3 && ty == 1 && m == 1),
+        "u32 builtin: {toks:?}"
+    );
+}

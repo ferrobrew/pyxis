@@ -1370,6 +1370,116 @@ impl ServerState {
         out
     }
 
+    /// textDocument/semanticTokens/full — resolution-aware tokens layered over
+    /// the tree-sitter grammar: every type-position identifier that resolves is
+    /// a `type` (builtins flagged `defaultLibrary`), and intermediate module
+    /// segments of a path are `namespace`. Unresolved/structural idents are left
+    /// to the grammar.
+    pub fn handle_semantic_tokens_full(&self, req: Request) -> Response {
+        let data = serde_json::from_value::<lsp_types::SemanticTokensParams>(req.params.clone())
+            .ok()
+            .map(|p| self.semantic_tokens(&p.text_document.uri))
+            .unwrap_or_default();
+        let result = lsp_types::SemanticTokens {
+            result_id: None,
+            data,
+        };
+        Response {
+            id: req.id,
+            result: Some(serde_json::to_value(result).unwrap()),
+            error: None,
+        }
+    }
+
+    fn semantic_tokens(&self, uri: &Uri) -> Vec<lsp_types::SemanticToken> {
+        const NAMESPACE: u32 = 0;
+        const TYPE: u32 = 1;
+        const DEFAULT_LIBRARY: u32 = 1; // bit 0
+
+        let Some(content) = self.get_content(uri) else {
+            return vec![];
+        };
+        let Some(module) = self.get_parsed_module(uri) else {
+            return vec![];
+        };
+        let scope = self.scope_for(uri);
+        let pointer_size = self.pointer_size_for(uri);
+        let source_set = semantic::SourceSet::new(&self.db, self.sources_for(uri));
+        let analysis = semantic::analyze(&self.db, pointer_size, source_set);
+        let type_registry = analysis.type_registry(&self.db);
+        let decl_set = semantic::collect_declarations(&self.db, source_set, pointer_size);
+        let decl_registry = decl_set.registry(&self.db);
+        let tokens_arc = self.tokens_for(uri);
+        let tokens: &[Token] = tokens_arc.as_deref().map(Vec::as_slice).unwrap_or(&[]);
+
+        // Collect (line, start_char, length, type, modifiers) for each
+        // type-position identifier, in source order.
+        let mut raw: Vec<(u32, u32, u32, u32, u32)> = Vec::new();
+        for tok in tokens {
+            if !matches!(&tok.kind, TokenKind::Ident(_)) {
+                continue;
+            }
+            let classified = match find_reference_at(
+                &module,
+                &tok.location.span.start,
+                &scope,
+                decl_registry,
+                tokens,
+                type_registry,
+                pointer_size,
+            ) {
+                Some(Ref::Item { item: Some(p), .. }) => {
+                    if decl_registry.get_predefined(&p).is_some() {
+                        Some((TYPE, DEFAULT_LIBRARY))
+                    } else {
+                        Some((TYPE, 0))
+                    }
+                }
+                Some(Ref::Item {
+                    item: None,
+                    module_path,
+                    ..
+                }) if decl_registry.module_paths().any(|m| *m == module_path) => {
+                    Some((NAMESPACE, 0))
+                }
+                _ => None,
+            };
+            let Some((ty, mods)) = classified else {
+                continue;
+            };
+            let range = pyxis_span_to_lsp_range(content, &tok.location.span);
+            if range.start.line != range.end.line {
+                continue; // semantic tokens are single-line
+            }
+            raw.push((
+                range.start.line,
+                range.start.character,
+                range.end.character - range.start.character,
+                ty,
+                mods,
+            ));
+        }
+        raw.sort_by_key(|(l, c, ..)| (*l, *c));
+
+        // Delta-encode.
+        let mut data = Vec::with_capacity(raw.len());
+        let (mut prev_line, mut prev_char) = (0u32, 0u32);
+        for (line, ch, len, ty, mods) in raw {
+            let delta_line = line - prev_line;
+            let delta_start = if delta_line == 0 { ch - prev_char } else { ch };
+            data.push(lsp_types::SemanticToken {
+                delta_line,
+                delta_start,
+                length: len,
+                token_type: ty,
+                token_modifiers_bitset: mods,
+            });
+            prev_line = line;
+            prev_char = ch;
+        }
+        data
+    }
+
     /// textDocument/codeAction — currently: import an unresolved type.
     #[allow(clippy::mutable_key_type)] // lsp_types::Uri key is fine here
     pub fn handle_code_action(&self, req: Request) -> Response {

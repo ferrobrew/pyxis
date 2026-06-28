@@ -54,6 +54,23 @@ pub fn run_with_connection(connection: Connection) -> Result<(), Box<dyn std::er
         references_provider: Some(OneOf::Left(true)),
         document_highlight_provider: Some(OneOf::Left(true)),
         code_action_provider: Some(lsp_types::CodeActionProviderCapability::Simple(true)),
+        semantic_tokens_provider: Some(
+            lsp_types::SemanticTokensServerCapabilities::SemanticTokensOptions(
+                lsp_types::SemanticTokensOptions {
+                    legend: lsp_types::SemanticTokensLegend {
+                        // Order must match the indices emitted in semantic_tokens().
+                        token_types: vec![
+                            lsp_types::SemanticTokenType::NAMESPACE,
+                            lsp_types::SemanticTokenType::TYPE,
+                        ],
+                        token_modifiers: vec![lsp_types::SemanticTokenModifier::DEFAULT_LIBRARY],
+                    },
+                    full: Some(lsp_types::SemanticTokensFullOptions::Bool(true)),
+                    range: Some(false),
+                    work_done_progress_options: Default::default(),
+                },
+            ),
+        ),
         document_link_provider: Some(lsp_types::DocumentLinkOptions {
             resolve_provider: Some(false),
             work_done_progress_options: Default::default(),
@@ -164,6 +181,7 @@ fn handle_request(
         "textDocument/references" => state.handle_references(req),
         "textDocument/documentHighlight" => state.handle_document_highlight(req),
         "textDocument/documentLink" => state.handle_document_link(req),
+        "textDocument/semanticTokens/full" => state.handle_semantic_tokens_full(req),
         "textDocument/codeAction" => state.handle_code_action(req),
         "textDocument/completion" => state.handle_completion(req),
         "textDocument/documentSymbol" => state.handle_document_symbols(req),
