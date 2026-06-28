@@ -1,5 +1,29 @@
 use super::*;
 
+use pyxis::{
+    grammar::{
+        Backend, ExternValue, FunctionBlock, Ident, ImplItem, ItemDefinitionInner, TypeDefinition,
+        TypeStatement,
+    },
+    semantic::types::ItemDefinitionInner as ResolvedInner,
+};
+
+/// Cheaply-copied bundle of the per-file analysis state the hover-target
+/// helpers all need. Lets [`ServerState::hover_at`] dispatch to focused
+/// per-target methods without threading a long parameter list through each.
+#[derive(Clone, Copy)]
+struct HoverCtx<'a> {
+    uri: &'a Uri,
+    content: &'a str,
+    scope: &'a [ItemPath],
+    type_registry: &'a TypeRegistry,
+    decl_registry: &'a DeclarationRegistry,
+    pointer_size: usize,
+    source_set: semantic::SourceSet<'a>,
+    tokens: &'a [Token],
+    loc: Location,
+}
+
 impl ServerState {
     /// textDocument/hover
     pub fn handle_hover(&self, req: Request) -> Response {
@@ -36,10 +60,35 @@ impl ServerState {
 
         let loc = lsp_position_to_pyxis_location(content, position);
 
+        let hctx = HoverCtx {
+            uri,
+            content,
+            scope: &scope,
+            type_registry,
+            decl_registry,
+            pointer_size,
+            source_set,
+            tokens,
+            loc,
+        };
+        match self.hover_at(&hctx, &module) {
+            Some((value, span)) => hover_response(req.id, value, content, &span),
+            None => Response {
+                id: req.id,
+                result: Some(serde_json::Value::Null),
+                error: None,
+            },
+        }
+    }
+
+    /// The hover markdown and highlight span for whatever sits under
+    /// `ctx.loc`, trying each target kind in priority order. `None` if nothing
+    /// hoverable is there.
+    fn hover_at(&self, ctx: &HoverCtx, module: &Module) -> Option<(String, Span)> {
         // 0. A doc-comment cross-reference link → describe the referenced member
         //    (or type), over the whole link.
-        if let Some((span, _location, hover)) = self.doc_link_at(uri, &loc) {
-            return hover_response(req.id, hover, content, &span);
+        if let Some((span, _location, hover)) = self.doc_link_at(ctx.uri, &ctx.loc) {
+            return Some((hover, span));
         }
 
         // 1. Cursor on a type or import reference (e.g. a field's type, or a
@@ -47,50 +96,15 @@ impl ServerState {
         //    enclosing definition. For an intermediate FQN segment, show the
         //    module it names. A pointer/array/unknown *shell* (rather than the
         //    pointee/element) describes the shape — at every type position.
-        if let Some(reference) = find_reference_at(
-            &module,
-            &loc,
-            &scope,
-            decl_registry,
-            tokens,
-            type_registry,
-            pointer_size,
-        ) {
-            match reference {
-                Ref::Item {
-                    item,
-                    module_path,
-                    span,
-                } => {
-                    let hover = item
-                        .as_ref()
-                        .and_then(|item_path| {
-                            self.type_hover_text(item_path, type_registry, decl_registry, uri)
-                        })
-                        .or_else(|| {
-                            self.module_uri(&module_path, uri)
-                                .map(|_| format!("**module** `{module_path}`"))
-                        });
-                    if let Some(value) = hover {
-                        return hover_response(req.id, value, content, &span);
-                    }
-                }
-                Ref::Shell { md, span } => {
-                    return hover_response(req.id, md, content, &span);
-                }
-            }
+        if let Some(hit) = self.hover_reference(ctx, module) {
+            return Some(hit);
         }
 
         // 2. An attribute → describe the attribute itself, not the item it's
         //    attached to. Must precede the structural checks below, since an
         //    attribute's span sits inside its field/type's span.
-        if let Some((attribute, span)) = attribute_at(&module, &loc) {
-            return hover_response(
-                req.id,
-                format_attribute_hover(attribute, &span, content),
-                content,
-                &span,
-            );
+        if let Some((attribute, span)) = attribute_at(module, &ctx.loc) {
+            return Some((format_attribute_hover(attribute, &span, ctx.content), span));
         }
 
         // 3. Structural elements — scoped tightly to what's under the cursor
@@ -99,347 +113,408 @@ impl ServerState {
         //    - a field name → the field (type + attributes + size);
         //    - a vftable entry or an impl method → its signature.
         for item in &module.items {
-            match item {
-                ModuleItem::Definition { definition } => {
-                    // The definition's own name.
-                    if let Some(span) = name_token_span(
-                        tokens,
-                        &definition.declaration_location.span.start,
-                        definition.name.as_str(),
-                    ) && span.contains(&loc)
-                    {
-                        let item_path = self.definition_path(uri, definition.name.as_str());
-                        let resolved = resolve_item(&self.db, source_set, pointer_size, item_path);
-                        let resolved_item = resolved.item(&self.db);
-                        let value = if let Some(rs) = resolved_item.resolved() {
-                            format_type_hover_with_size(definition, rs.size, rs.alignment)
-                        } else {
-                            format_type_hover(definition)
-                        };
-                        return hover_response(req.id, value, content, &span);
-                    }
-                    // Fields and vftable entries of a type definition.
-                    if let pyxis::grammar::ItemDefinitionInner::Type(td) = &definition.inner {
-                        for statement in td.statements() {
-                            if !statement.location.span.contains(&loc) {
-                                continue;
-                            }
-                            match &statement.field {
-                                TypeField::Field(vis, name, type_) => {
-                                    // The pointer/array shell and the pointee/
-                                    // element are both handled as references in
-                                    // branch 1; here we only describe the field.
-                                    let span = name_token_span(
-                                        tokens,
-                                        &statement.location.span.start,
-                                        name.as_str(),
-                                    )
-                                    .unwrap_or(statement.location.span);
-                                    let size = type_size_of(
-                                        type_,
-                                        type_registry,
-                                        &scope,
-                                        decl_registry,
-                                        pointer_size,
-                                    );
-                                    // Offset within the parent type's resolved
-                                    // layout. The parent is resolved via
-                                    // resolve_item (analyze()'s registry leaves
-                                    // composite types unresolved).
-                                    let parent_path =
-                                        self.definition_path(uri, definition.name.as_str());
-                                    let parent = resolve_item(
-                                        &self.db,
-                                        source_set,
-                                        pointer_size,
-                                        parent_path,
-                                    );
-                                    let offset = parent.item(&self.db).resolved().and_then(|rs| {
-                                        field_offset(rs, name.as_str(), type_registry)
-                                    });
-                                    let value = format_field_hover(
-                                        vis,
-                                        name,
-                                        type_,
-                                        &statement.attributes,
-                                        size,
-                                        offset,
-                                    );
-                                    return hover_response(req.id, value, content, &span);
-                                }
-                                TypeField::Vftable(fns) => {
-                                    for f in fns {
-                                        if !f.location.span.contains(&loc) {
-                                            continue;
-                                        }
-                                        // Arg/return *types* (including pointer/
-                                        // array shells) are handled in branch 1.
-                                        // An argument name…
-                                        if let Some((value, span)) = named_arg_hover(
-                                            f,
-                                            &loc,
-                                            tokens,
-                                            type_registry,
-                                            &scope,
-                                            decl_registry,
-                                            pointer_size,
-                                        ) {
-                                            return hover_response(req.id, value, content, &span);
-                                        }
-                                        // …`self`, resolving to the owning type…
-                                        if let Some(span) = self_arg_span(f, &loc) {
-                                            let owner =
-                                                self.definition_path(uri, definition.name.as_str());
-                                            if let Some(value) = self.type_hover_text(
-                                                &owner,
-                                                type_registry,
-                                                decl_registry,
-                                                uri,
-                                            ) {
-                                                return hover_response(
-                                                    req.id, value, content, &span,
-                                                );
-                                            }
-                                        }
-                                        // …or the function itself, annotated with
-                                        // its vftable slot index and byte offset.
-                                        let span = name_token_span(
-                                            tokens,
-                                            &f.location.span.start,
-                                            f.name.as_str(),
-                                        )
-                                        .unwrap_or(f.location.span);
-                                        let index = vftable_index_of(fns, f);
-                                        return hover_response(
-                                            req.id,
-                                            format_vftable_fn_hover(f, index, pointer_size),
-                                            content,
-                                            &span,
-                                        );
-                                    }
-                                    // Cursor on the `vftable` keyword → describe
-                                    // the generated vtable struct (the resolved
-                                    // count includes inherited entries).
-                                    if let Some(span) = name_token_span(
-                                        tokens,
-                                        &statement.location.span.start,
-                                        "vftable",
-                                    ) && span.contains(&loc)
-                                    {
-                                        let owner =
-                                            self.definition_path(uri, definition.name.as_str());
-                                        let resolved =
-                                            resolve_item(&self.db, source_set, pointer_size, owner);
-                                        let count = match resolved.item(&self.db).resolved() {
-                                                Some(rs) => match &rs.inner {
-                                                    pyxis::semantic::types::ItemDefinitionInner::Type(td) => td
-                                                        .vftable
-                                                        .as_ref()
-                                                        .map(|v| v.functions.len())
-                                                        .unwrap_or(fns.len()),
-                                                    _ => fns.len(),
-                                                },
-                                                None => fns.len(),
-                                            };
-                                        let md = format!(
-                                            "**vftable** of `{}`\n\nGenerates a vtable struct with `{count}` virtual function(s).",
-                                            definition.name.as_str(),
-                                        );
-                                        return hover_response(req.id, md, content, &span);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    // Enum / bitflags variants → the variant and its value.
-                    if let pyxis::grammar::ItemDefinitionInner::Enum(e) = &definition.inner {
-                        for statement in e.statements() {
-                            if statement.location.span.contains(&loc) {
-                                let span = name_token_span(
-                                    tokens,
-                                    &statement.location.span.start,
-                                    statement.name.as_str(),
-                                )
-                                .unwrap_or(statement.location.span);
-                                let value = self.variant_value(
-                                    uri,
-                                    definition,
-                                    statement.name.as_str(),
-                                    source_set,
-                                    pointer_size,
-                                );
-                                let md = format_variant_hover(
-                                    "variant",
-                                    statement.name.as_str(),
-                                    value,
-                                    &statement.attributes,
-                                    &statement.doc_comments,
-                                );
-                                return hover_response(req.id, md, content, &span);
-                            }
-                        }
-                    }
-                    if let pyxis::grammar::ItemDefinitionInner::Bitflags(b) = &definition.inner {
-                        for statement in b.statements() {
-                            if statement.location.span.contains(&loc) {
-                                let span = name_token_span(
-                                    tokens,
-                                    &statement.location.span.start,
-                                    statement.name.as_str(),
-                                )
-                                .unwrap_or(statement.location.span);
-                                let value = self.variant_value(
-                                    uri,
-                                    definition,
-                                    statement.name.as_str(),
-                                    source_set,
-                                    pointer_size,
-                                );
-                                let md = format_variant_hover(
-                                    "flag",
-                                    statement.name.as_str(),
-                                    value,
-                                    &statement.attributes,
-                                    &statement.doc_comments,
-                                );
-                                return hover_response(req.id, md, content, &span);
-                            }
-                        }
-                    }
-                    // Deliberately no "anywhere else in the body" fallback: a
-                    // hover must never highlight a token the cursor isn't on, so
-                    // blank space / braces / keywords resolve to nothing rather
-                    // than the (distant) type name.
+            let hit = match item {
+                ModuleItem::Definition { definition } => self.hover_definition(ctx, definition),
+                ModuleItem::Impl { impl_block } => self.hover_impl(ctx, impl_block),
+                ModuleItem::Function { function } if function.location.span.contains(&ctx.loc) => {
+                    self.hover_function(ctx, function)
                 }
-                // Impl methods (including `#[cfg(...)]`-gated blocks).
-                ModuleItem::Impl { impl_block } => {
-                    for impl_item in &impl_block.items {
-                        if let pyxis::grammar::ImplItem::Function(f) = impl_item {
-                            if !f.location.span.contains(&loc) {
-                                continue;
-                            }
-                            // Arg/return *types* (including pointer/array shells)
-                            // are handled in branch 1.
-                            // An argument name…
-                            if let Some((value, span)) = named_arg_hover(
-                                f,
-                                &loc,
-                                tokens,
-                                type_registry,
-                                &scope,
-                                decl_registry,
-                                pointer_size,
-                            ) {
-                                return hover_response(req.id, value, content, &span);
-                            }
-                            // …`self`, resolving to the impl target type…
-                            if let Some(span) = self_arg_span(f, &loc) {
-                                let owner = ItemPath::from(impl_block.name.as_str());
-                                if let Some(resolved) =
-                                    resolve_type_path(&owner, &scope, decl_registry)
-                                    && let Some(value) = self.type_hover_text(
-                                        &resolved,
-                                        type_registry,
-                                        decl_registry,
-                                        uri,
-                                    )
-                                {
-                                    return hover_response(req.id, value, content, &span);
-                                }
-                            }
-                            // …or the function itself.
-                            let span =
-                                name_token_span(tokens, &f.location.span.start, f.name.as_str())
-                                    .unwrap_or(f.location.span);
-                            return hover_response(
-                                req.id,
-                                format_function_hover(f),
-                                content,
-                                &span,
-                            );
-                        }
-                    }
-                }
-                // Free functions: argument names and the function itself.
-                ModuleItem::Function { function } if function.location.span.contains(&loc) => {
-                    // Arg/return types (including shells) → branch 1.
-                    if let Some((value, span)) = named_arg_hover(
-                        function,
-                        &loc,
-                        tokens,
-                        type_registry,
-                        &scope,
-                        decl_registry,
-                        pointer_size,
-                    ) {
-                        return hover_response(req.id, value, content, &span);
-                    }
-                    let span = name_token_span(
-                        tokens,
-                        &function.location.span.start,
-                        function.name.as_str(),
-                    )
-                    .unwrap_or(function.location.span);
-                    return hover_response(req.id, format_function_hover(function), content, &span);
-                }
-                // Extern values: `extern name: Type;` — the value's own name.
                 ModuleItem::ExternValue { extern_value } => {
-                    if let Some(span) = name_token_span(
-                        tokens,
-                        &extern_value.location.span.start,
-                        extern_value.name.as_str(),
-                    ) && span.contains(&loc)
-                    {
-                        let mut md = format!(
-                            "**extern value** `{}`\n\n```pyxis\n{}: {}\n```\n",
-                            extern_value.name.as_str(),
-                            extern_value.name.as_str(),
-                            extern_value.type_,
-                        );
-                        if let Some(size) = type_size_of(
-                            &extern_value.type_,
-                            type_registry,
-                            &scope,
-                            decl_registry,
-                            pointer_size,
-                        ) {
-                            push_facts(&mut md, &[("type size", fmt_bytes(size))]);
-                        }
-                        return hover_response(req.id, md, content, &span);
-                    }
+                    self.hover_extern_value(ctx, extern_value)
                 }
-                // Extern types: `extern type Name;` — the declared name.
                 ModuleItem::ExternType { name, location, .. } => {
-                    if let Some(span) = name_token_span(tokens, &location.span.start, name.as_str())
-                        && span.contains(&loc)
-                    {
-                        let path = match self.module_path_for(uri) {
-                            Some(mp) => mp.join(name.as_str().into()),
-                            None => ItemPath::from(name.as_str()),
-                        };
-                        let value = self
-                            .type_hover_text(&path, type_registry, decl_registry, uri)
-                            .unwrap_or_else(|| format!("**extern type** `{}`", name.as_str()));
-                        return hover_response(req.id, value, content, &span);
-                    }
+                    self.hover_extern_type(ctx, name, location)
                 }
-                // Backend keywords (cpp/rust/prologue/epilogue/definition/for).
-                ModuleItem::Backend { backend } => {
-                    if backend.location.span.contains(&loc)
-                        && let Some((value, span)) = backend_term_at(tokens, backend, &loc)
-                    {
-                        return hover_response(req.id, value, content, &span);
-                    }
-                }
-                _ => {}
+                ModuleItem::Backend { backend } => self.hover_backend(ctx, backend),
+                _ => None,
+            };
+            if hit.is_some() {
+                return hit;
             }
         }
+        None
+    }
 
-        Response {
-            id: req.id,
-            result: Some(serde_json::Value::Null),
-            error: None,
+    /// Branch 1: a type / import / FQN-segment reference, or a pointer/array
+    /// shell. A `Ref::Item` that resolves to neither a type nor a module yields
+    /// `None`, so the caller falls through to the structural checks.
+    fn hover_reference(&self, ctx: &HoverCtx, module: &Module) -> Option<(String, Span)> {
+        match find_reference_at(
+            module,
+            &ctx.loc,
+            ctx.scope,
+            ctx.decl_registry,
+            ctx.tokens,
+            ctx.type_registry,
+            ctx.pointer_size,
+        )? {
+            Ref::Item {
+                item,
+                module_path,
+                span,
+            } => {
+                let hover = item
+                    .as_ref()
+                    .and_then(|item_path| {
+                        self.type_hover_text(
+                            item_path,
+                            ctx.type_registry,
+                            ctx.decl_registry,
+                            ctx.uri,
+                        )
+                    })
+                    .or_else(|| {
+                        self.module_uri(&module_path, ctx.uri)
+                            .map(|_| format!("**module** `{module_path}`"))
+                    })?;
+                Some((hover, span))
+            }
+            Ref::Shell { md, span } => Some((md, span)),
         }
+    }
+
+    /// Branch 3, a type/enum/bitflags definition: its own name, then its body
+    /// (fields / vftable for a type, variants for an enum/bitflags).
+    fn hover_definition(
+        &self,
+        ctx: &HoverCtx,
+        definition: &ItemDefinition,
+    ) -> Option<(String, Span)> {
+        if let Some(hit) = self.hover_definition_name(ctx, definition) {
+            return Some(hit);
+        }
+        match &definition.inner {
+            ItemDefinitionInner::Type(td) => self.hover_type_body(ctx, definition, td),
+            ItemDefinitionInner::Enum(e) => self.hover_variant(
+                ctx,
+                definition,
+                "variant",
+                e.statements().map(|s| {
+                    (
+                        &s.location,
+                        s.name.as_str(),
+                        &s.attributes,
+                        s.doc_comments.as_slice(),
+                    )
+                }),
+            ),
+            ItemDefinitionInner::Bitflags(b) => self.hover_variant(
+                ctx,
+                definition,
+                "flag",
+                b.statements().map(|s| {
+                    (
+                        &s.location,
+                        s.name.as_str(),
+                        &s.attributes,
+                        s.doc_comments.as_slice(),
+                    )
+                }),
+            ),
+            ItemDefinitionInner::TypeAlias(_) => None,
+        }
+    }
+
+    /// The definition's own name → the type's hover (size/align/fields), or its
+    /// declaration form when it doesn't resolve cleanly.
+    fn hover_definition_name(
+        &self,
+        ctx: &HoverCtx,
+        definition: &ItemDefinition,
+    ) -> Option<(String, Span)> {
+        let span = name_token_span(
+            ctx.tokens,
+            &definition.declaration_location.span.start,
+            definition.name.as_str(),
+        )?;
+        if !span.contains(&ctx.loc) {
+            return None;
+        }
+        let item_path = self.definition_path(ctx.uri, definition.name.as_str());
+        let resolved = resolve_item(&self.db, ctx.source_set, ctx.pointer_size, item_path);
+        let value = match resolved.item(&self.db).resolved() {
+            Some(rs) => format_type_hover_with_size(definition, rs.size, rs.alignment),
+            None => format_type_hover(definition),
+        };
+        Some((value, span))
+    }
+
+    /// A type definition's body: a field (type + attributes + size + offset) or
+    /// a vftable entry. Deliberately no "anywhere else in the body" fallback: a
+    /// hover must never highlight a token the cursor isn't on, so blank space /
+    /// braces / keywords resolve to nothing rather than the (distant) type name.
+    fn hover_type_body(
+        &self,
+        ctx: &HoverCtx,
+        definition: &ItemDefinition,
+        td: &TypeDefinition,
+    ) -> Option<(String, Span)> {
+        for statement in td.statements() {
+            if !statement.location.span.contains(&ctx.loc) {
+                continue;
+            }
+            match &statement.field {
+                TypeField::Field(vis, name, type_) => {
+                    // The pointer/array shell and the pointee/element are both
+                    // handled as references in branch 1; here we only describe
+                    // the field.
+                    let span =
+                        name_token_span(ctx.tokens, &statement.location.span.start, name.as_str())
+                            .unwrap_or(statement.location.span);
+                    let size = type_size_of(
+                        type_,
+                        ctx.type_registry,
+                        ctx.scope,
+                        ctx.decl_registry,
+                        ctx.pointer_size,
+                    );
+                    // Offset within the parent type's resolved layout. The parent
+                    // is resolved via resolve_item (analyze()'s registry leaves
+                    // composite types unresolved).
+                    let parent_path = self.definition_path(ctx.uri, definition.name.as_str());
+                    let parent =
+                        resolve_item(&self.db, ctx.source_set, ctx.pointer_size, parent_path);
+                    let offset = parent
+                        .item(&self.db)
+                        .resolved()
+                        .and_then(|rs| field_offset(rs, name.as_str(), ctx.type_registry));
+                    let value =
+                        format_field_hover(vis, name, type_, &statement.attributes, size, offset);
+                    return Some((value, span));
+                }
+                TypeField::Vftable(fns) => {
+                    if let Some(hit) = self.hover_vftable(ctx, definition, statement, fns) {
+                        return Some(hit);
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    /// A vftable statement under the cursor: an entry's argument name, its
+    /// `self` receiver (→ the owning type), the entry itself (with slot index
+    /// and byte offset), or the `vftable` keyword (→ the generated vtable
+    /// struct, whose resolved count includes inherited entries).
+    fn hover_vftable(
+        &self,
+        ctx: &HoverCtx,
+        definition: &ItemDefinition,
+        statement: &TypeStatement,
+        fns: &[Function],
+    ) -> Option<(String, Span)> {
+        for f in fns {
+            if !f.location.span.contains(&ctx.loc) {
+                continue;
+            }
+            // Arg/return *types* (including pointer/array shells) are handled in
+            // branch 1. An argument name…
+            if let Some(hit) = named_arg_hover(
+                f,
+                &ctx.loc,
+                ctx.tokens,
+                ctx.type_registry,
+                ctx.scope,
+                ctx.decl_registry,
+                ctx.pointer_size,
+            ) {
+                return Some(hit);
+            }
+            // …`self`, resolving to the owning type…
+            if let Some(span) = self_arg_span(f, &ctx.loc) {
+                let owner = self.definition_path(ctx.uri, definition.name.as_str());
+                if let Some(value) =
+                    self.type_hover_text(&owner, ctx.type_registry, ctx.decl_registry, ctx.uri)
+                {
+                    return Some((value, span));
+                }
+            }
+            // …or the function itself, annotated with its vftable slot index and
+            // byte offset.
+            let span = name_token_span(ctx.tokens, &f.location.span.start, f.name.as_str())
+                .unwrap_or(f.location.span);
+            let index = vftable_index_of(fns, f);
+            return Some((format_vftable_fn_hover(f, index, ctx.pointer_size), span));
+        }
+        // Cursor on the `vftable` keyword → describe the generated vtable struct.
+        let span = name_token_span(ctx.tokens, &statement.location.span.start, "vftable")?;
+        if !span.contains(&ctx.loc) {
+            return None;
+        }
+        let owner = self.definition_path(ctx.uri, definition.name.as_str());
+        let resolved = resolve_item(&self.db, ctx.source_set, ctx.pointer_size, owner);
+        let count = match resolved.item(&self.db).resolved() {
+            Some(rs) => match &rs.inner {
+                ResolvedInner::Type(td) => td
+                    .vftable
+                    .as_ref()
+                    .map(|v| v.functions.len())
+                    .unwrap_or(fns.len()),
+                _ => fns.len(),
+            },
+            None => fns.len(),
+        };
+        let md = format!(
+            "**vftable** of `{}`\n\nGenerates a vtable struct with `{count}` virtual function(s).",
+            definition.name.as_str(),
+        );
+        Some((md, span))
+    }
+
+    /// An enum variant or bitflags flag under the cursor → the member and its
+    /// resolved value. `statements` yields `(location, name, attributes, doc)`
+    /// so enum and bitflags share one body despite their distinct node types.
+    fn hover_variant<'a>(
+        &self,
+        ctx: &HoverCtx,
+        definition: &ItemDefinition,
+        kind_label: &str,
+        statements: impl Iterator<Item = (&'a ItemLocation, &'a str, &'a Attributes, &'a [String])>,
+    ) -> Option<(String, Span)> {
+        for (location, name, attributes, doc_comments) in statements {
+            if !location.span.contains(&ctx.loc) {
+                continue;
+            }
+            let span =
+                name_token_span(ctx.tokens, &location.span.start, name).unwrap_or(location.span);
+            let value =
+                self.variant_value(ctx.uri, definition, name, ctx.source_set, ctx.pointer_size);
+            let md = format_variant_hover(kind_label, name, value, attributes, doc_comments);
+            return Some((md, span));
+        }
+        None
+    }
+
+    /// Branch 3, an `impl` block (including `#[cfg(...)]`-gated ones): a method's
+    /// argument name, its `self` receiver (→ the impl target type), or the
+    /// method itself.
+    fn hover_impl(&self, ctx: &HoverCtx, impl_block: &FunctionBlock) -> Option<(String, Span)> {
+        for impl_item in &impl_block.items {
+            let ImplItem::Function(f) = impl_item else {
+                continue;
+            };
+            if !f.location.span.contains(&ctx.loc) {
+                continue;
+            }
+            // Arg/return *types* (including pointer/array shells) are handled in
+            // branch 1. An argument name…
+            if let Some(hit) = named_arg_hover(
+                f,
+                &ctx.loc,
+                ctx.tokens,
+                ctx.type_registry,
+                ctx.scope,
+                ctx.decl_registry,
+                ctx.pointer_size,
+            ) {
+                return Some(hit);
+            }
+            // …`self`, resolving to the impl target type…
+            if let Some(span) = self_arg_span(f, &ctx.loc) {
+                let owner = ItemPath::from(impl_block.name.as_str());
+                if let Some(resolved) = resolve_type_path(&owner, ctx.scope, ctx.decl_registry)
+                    && let Some(value) = self.type_hover_text(
+                        &resolved,
+                        ctx.type_registry,
+                        ctx.decl_registry,
+                        ctx.uri,
+                    )
+                {
+                    return Some((value, span));
+                }
+            }
+            // …or the function itself.
+            let span = name_token_span(ctx.tokens, &f.location.span.start, f.name.as_str())
+                .unwrap_or(f.location.span);
+            return Some((format_function_hover(f), span));
+        }
+        None
+    }
+
+    /// Branch 3, a free function under the cursor: an argument name, else the
+    /// function itself.
+    fn hover_function(&self, ctx: &HoverCtx, function: &Function) -> Option<(String, Span)> {
+        // Arg/return types (including shells) → branch 1.
+        if let Some(hit) = named_arg_hover(
+            function,
+            &ctx.loc,
+            ctx.tokens,
+            ctx.type_registry,
+            ctx.scope,
+            ctx.decl_registry,
+            ctx.pointer_size,
+        ) {
+            return Some(hit);
+        }
+        let span = name_token_span(
+            ctx.tokens,
+            &function.location.span.start,
+            function.name.as_str(),
+        )
+        .unwrap_or(function.location.span);
+        Some((format_function_hover(function), span))
+    }
+
+    /// Branch 3, `extern name: Type;` → the value's own name.
+    fn hover_extern_value(
+        &self,
+        ctx: &HoverCtx,
+        extern_value: &ExternValue,
+    ) -> Option<(String, Span)> {
+        let span = name_token_span(
+            ctx.tokens,
+            &extern_value.location.span.start,
+            extern_value.name.as_str(),
+        )?;
+        if !span.contains(&ctx.loc) {
+            return None;
+        }
+        let mut md = format!(
+            "**extern value** `{}`\n\n```pyxis\n{}: {}\n```\n",
+            extern_value.name.as_str(),
+            extern_value.name.as_str(),
+            extern_value.type_,
+        );
+        if let Some(size) = type_size_of(
+            &extern_value.type_,
+            ctx.type_registry,
+            ctx.scope,
+            ctx.decl_registry,
+            ctx.pointer_size,
+        ) {
+            push_facts(&mut md, &[("type size", fmt_bytes(size))]);
+        }
+        Some((md, span))
+    }
+
+    /// Branch 3, `extern type Name;` → the declared name.
+    fn hover_extern_type(
+        &self,
+        ctx: &HoverCtx,
+        name: &Ident,
+        location: &ItemLocation,
+    ) -> Option<(String, Span)> {
+        let span = name_token_span(ctx.tokens, &location.span.start, name.as_str())?;
+        if !span.contains(&ctx.loc) {
+            return None;
+        }
+        let path = match self.module_path_for(ctx.uri) {
+            Some(mp) => mp.join(name.as_str().into()),
+            None => ItemPath::from(name.as_str()),
+        };
+        let value = self
+            .type_hover_text(&path, ctx.type_registry, ctx.decl_registry, ctx.uri)
+            .unwrap_or_else(|| format!("**extern type** `{}`", name.as_str()));
+        Some((value, span))
+    }
+
+    /// Branch 3, a backend block: its keywords
+    /// (cpp/rust/prologue/epilogue/definition/for).
+    fn hover_backend(&self, ctx: &HoverCtx, backend: &Backend) -> Option<(String, Span)> {
+        if !backend.location.span.contains(&ctx.loc) {
+            return None;
+        }
+        backend_term_at(ctx.tokens, backend, &ctx.loc)
     }
 
     /// textDocument/definition
