@@ -6,9 +6,10 @@ use lsp_server::{Request, Response};
 use lsp_types::{
     CodeAction, CodeActionKind, CodeActionOrCommand, CodeActionParams, CodeLens, CompletionItem,
     CompletionItemKind, CompletionParams, DocumentLink, DocumentLinkParams, DocumentSymbol,
-    DocumentSymbolParams, DocumentSymbolResponse, Hover, HoverContents, InlayHint, InlayHintLabel,
-    MarkupContent, MarkupKind, Position, Range, SymbolInformation, SymbolKind,
-    TextDocumentPositionParams, TextEdit, Uri, WorkspaceEdit, WorkspaceSymbolParams,
+    DocumentSymbolParams, DocumentSymbolResponse, FoldingRange, FoldingRangeParams, Hover,
+    HoverContents, InlayHint, InlayHintLabel, MarkupContent, MarkupKind, Position, Range,
+    SymbolInformation, SymbolKind, TextDocumentPositionParams, TextEdit, Uri, WorkspaceEdit,
+    WorkspaceSymbolParams,
 };
 
 use pyxis::grammar::{
@@ -1480,6 +1481,55 @@ impl ServerState {
         data
     }
 
+    /// textDocument/foldingRange — fold the body of each type/enum/bitflags/
+    /// impl/backend block (and nested vftable blocks): from the `{` line to the
+    /// `}` line, keeping the signature line visible.
+    pub fn handle_folding_range(&self, req: Request) -> Response {
+        let ranges = serde_json::from_value::<FoldingRangeParams>(req.params.clone())
+            .ok()
+            .map(|p| self.folding_ranges(&p.text_document.uri))
+            .unwrap_or_default();
+        Response {
+            id: req.id,
+            result: Some(serde_json::to_value(ranges).unwrap()),
+            error: None,
+        }
+    }
+
+    fn folding_ranges(&self, uri: &Uri) -> Vec<FoldingRange> {
+        let Some(module) = self.get_parsed_module(uri) else {
+            return vec![];
+        };
+        let tokens_arc = self.tokens_for(uri);
+        let tokens: &[Token] = tokens_arc.as_deref().map(Vec::as_slice).unwrap_or(&[]);
+
+        let mut out = Vec::new();
+        let mut push = |span: Span| {
+            if let Some(fr) = body_fold(tokens, &span) {
+                out.push(fr);
+            }
+        };
+        for item in &module.items {
+            match item {
+                ModuleItem::Definition { definition } => {
+                    push(definition.location.span);
+                    if let pyxis::grammar::ItemDefinitionInner::Type(td) = &definition.inner {
+                        for statement in td.statements() {
+                            if matches!(statement.field, TypeField::Vftable(_)) {
+                                push(statement.location.span);
+                            }
+                        }
+                    }
+                }
+                ModuleItem::Impl { impl_block } => push(impl_block.location.span),
+                ModuleItem::Backend { backend } => push(backend.location.span),
+                ModuleItem::Use { location, .. } => push(location.span),
+                _ => {}
+            }
+        }
+        out
+    }
+
     /// textDocument/codeAction — currently: import an unresolved type.
     #[allow(clippy::mutable_key_type)] // lsp_types::Uri key is fine here
     pub fn handle_code_action(&self, req: Request) -> Response {
@@ -2862,6 +2912,26 @@ fn format_function_hover(f: &Function) -> String {
         md.push_str(&format!("\n{}\n", f.doc_comments.join("\n")));
     }
     md
+}
+
+/// A folding range for the brace-delimited body within `span`: from the line of
+/// the first `{` (the body opener, kept visible) to the span's closing line.
+/// `None` for single-line or brace-less spans.
+fn body_fold(tokens: &[Token], span: &Span) -> Option<FoldingRange> {
+    let open = tokens
+        .iter()
+        .find(|t| matches!(t.kind, TokenKind::LBrace) && span.contains(&t.location.span.start))?;
+    let start = open.location.span.start.line;
+    let end = span.end.line;
+    if end <= start {
+        return None;
+    }
+    Some(FoldingRange {
+        // Pyxis lines are 1-indexed; LSP folding ranges are 0-indexed.
+        start_line: start as u32 - 1,
+        end_line: end as u32 - 1,
+        ..Default::default()
+    })
 }
 
 /// Find Markdown cross-reference links in one doc-comment line, returning

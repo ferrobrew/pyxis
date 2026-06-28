@@ -1005,3 +1005,31 @@ fn prepare_rename_validates_target() {
     assert!(pr(2, 11).is_null(), "u32 builtin must not be renameable");
     assert!(pr(1, 2).is_null(), "whitespace must not be renameable");
 }
+
+#[test]
+fn folding_ranges_cover_bodies_and_use_groups() {
+    let src = "use types::math::{\n    Vector3,\n    Aabb,\n};\n\npub type Foo {\n    vftable {\n        pub fn a(&mut self);\n    },\n    pub x: u64,\n}\nimpl Foo {\n    pub fn b(&mut self);\n}\n";
+    let st = ServerState::in_memory(&[("/p", 8, &[("m.pyxis", src)])]);
+    let uri = ServerState::document_uri("/p", "m.pyxis");
+    let r = Request::new(
+        RequestId::from(1),
+        "textDocument/foldingRange".into(),
+        serde_json::to_value(lsp_types::FoldingRangeParams {
+            text_document: TextDocumentIdentifier { uri },
+            work_done_progress_params: Default::default(),
+            partial_result_params: Default::default(),
+        })
+        .unwrap(),
+    );
+    let ranges: Vec<serde_json::Value> =
+        serde_json::from_value(st.handle_folding_range(r).result.unwrap()).unwrap();
+    let has = |s: i64, e: i64| {
+        ranges
+            .iter()
+            .any(|x| x["startLine"] == s && x["endLine"] == e)
+    };
+    assert!(has(0, 3), "multi-line use group: {ranges:?}");
+    assert!(has(5, 10), "type body");
+    assert!(has(6, 8), "nested vftable block");
+    assert!(has(11, 13), "impl body");
+}

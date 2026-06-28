@@ -76,6 +76,7 @@ pub fn run_with_connection(connection: Connection) -> Result<(), Box<dyn std::er
             work_done_progress_options: Default::default(),
         }),
         document_formatting_provider: Some(OneOf::Left(true)),
+        folding_range_provider: Some(lsp_types::FoldingRangeProviderCapability::Simple(true)),
         code_lens_provider: Some(CodeLensOptions {
             resolve_provider: Some(false),
         }),
@@ -189,6 +190,7 @@ fn handle_request(
         "textDocument/documentHighlight" => state.handle_document_highlight(req),
         "textDocument/documentLink" => state.handle_document_link(req),
         "textDocument/semanticTokens/full" => state.handle_semantic_tokens_full(req),
+        "textDocument/foldingRange" => state.handle_folding_range(req),
         "textDocument/codeAction" => state.handle_code_action(req),
         "textDocument/completion" => state.handle_completion(req),
         "textDocument/documentSymbol" => state.handle_document_symbols(req),
