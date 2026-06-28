@@ -198,3 +198,121 @@ fn extern_value_without_address_is_an_error() {
         "extern value without #[address] should produce a diagnostic"
     );
 }
+
+#[test]
+fn name_index_is_stable_across_body_edits() {
+    // The whole incremental story rests on this: editing a field's type (not
+    // any name/scope/arity) must leave the NameIndex byte-for-byte equal, so
+    // the name_index query backdates and dependent resolve_item stays cached.
+    use crate::semantic::queries::name_index;
+    let mut db = PyxisDatabaseImpl::default();
+    let a = SourceFile::new(
+        &db,
+        "a.pyxis".to_string(),
+        1,
+        "pub type A { pub x: u32, }".to_string(),
+    );
+    let b = SourceFile::new(
+        &db,
+        "b.pyxis".to_string(),
+        2,
+        "pub type B { pub y: u32, }".to_string(),
+    );
+    // SourceSet<'db> borrows db, so recreate it after each &mut edit.
+    let index_now = |db: &PyxisDatabaseImpl| {
+        let sources = SourceSet::new(db, vec![a, b]);
+        (**name_index(db, sources, 4).index(db)).clone()
+    };
+
+    let index1 = index_now(&db);
+
+    // Edit B's body — change the field type, keep the name/kind/arity.
+    b.set_contents(&mut db)
+        .to("pub type B { pub y: u64, }".to_string());
+    let index2 = index_now(&db);
+    assert_eq!(
+        index1, index2,
+        "NameIndex must be unchanged by a body-only edit"
+    );
+
+    // Sanity: a structural edit (new type) DOES change it.
+    b.set_contents(&mut db)
+        .to("pub type B { pub y: u64, } pub type C { pub z: u32, }".to_string());
+    let index3 = index_now(&db);
+    assert_ne!(index2, index3, "adding a type must change the NameIndex");
+}
+
+#[test]
+fn resolve_item_is_incremental_across_files() {
+    // The payoff: editing one file must NOT re-execute resolve_item for an item
+    // in a different, unrelated file. We log salsa's WillExecute events and
+    // assert resolve_item doesn't fire for the untouched item.
+    use std::sync::{Arc, Mutex};
+
+    let executed: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+    let sink = executed.clone();
+    let mut db = PyxisDatabaseImpl::with_event_logger(Box::new(move |event| {
+        if let salsa::EventKind::WillExecute { database_key } = event.kind {
+            sink.lock().unwrap().push(format!("{database_key:?}"));
+        }
+    }));
+
+    let a = SourceFile::new(
+        &db,
+        "a.pyxis".to_string(),
+        1,
+        "pub type A { pub x: u32, }".to_string(),
+    );
+    let b = SourceFile::new(
+        &db,
+        "b.pyxis".to_string(),
+        2,
+        "pub type B { pub y: u32, }".to_string(),
+    );
+    let path_a = crate::grammar::ItemPath::from("a::A");
+    let path_b = crate::grammar::ItemPath::from("b::B");
+
+    // Resolve both items once (warms the cache).
+    {
+        let sources = SourceSet::new(&db, vec![a, b]);
+        assert!(
+            resolve_item(&db, sources, 4, path_a.clone())
+                .item(&db)
+                .resolved()
+                .is_some()
+        );
+        assert!(
+            resolve_item(&db, sources, 4, path_b.clone())
+                .item(&db)
+                .resolved()
+                .is_some()
+        );
+    }
+    // Sanity: the warm-up DID execute resolve_item (so the key format we match
+    // on is real, and the post-edit assertion isn't vacuously true).
+    assert!(
+        executed
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|k| k.contains("resolve_item")),
+        "expected resolve_item to execute during warm-up; keys: {:?}",
+        executed.lock().unwrap()
+    );
+
+    // Edit B's body — A does not reference B, so A's resolution must stand.
+    b.set_contents(&mut db)
+        .to("pub type B { pub y: u64, }".to_string());
+
+    executed.lock().unwrap().clear();
+    {
+        let sources = SourceSet::new(&db, vec![a, b]);
+        let _ = resolve_item(&db, sources, 4, path_a.clone());
+    }
+
+    let log = executed.lock().unwrap();
+    assert!(
+        !log.iter().any(|k| k.contains("resolve_item")),
+        "resolve_item must not re-execute for an item in an unrelated file; got: {log:?}"
+    );
+}

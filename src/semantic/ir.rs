@@ -33,6 +33,15 @@ pub struct DeclarationSet<'db> {
     pub registry: Arc<DeclarationRegistry>,
 }
 
+/// The body- and location-free name index — the stable foundation for
+/// incremental resolution. Backdates across body/location edits so
+/// `resolve_item` is invalidated only by edits that change names/scopes/arity.
+#[salsa::tracked]
+pub struct NameIndexSet<'db> {
+    #[returns(ref)]
+    pub index: Arc<crate::semantic::name_index::NameIndex>,
+}
+
 /// A resolved item (type/enum/bitflags/type-alias) — the result of
 /// per-type resolution via resolve_item.
 #[salsa::tracked]

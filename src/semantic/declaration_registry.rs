@@ -5,9 +5,11 @@
 //! resolution (finding an `ItemPath` for a name in a scope) is a pure
 //! function of this data.
 //!
-//! In the Salsa query graph, `collect_declarations` produces this, and
-//! `resolve_item` uses it for name resolution, then calls `resolve_item`
-//! on referenced types to get their resolved state.
+//! In the Salsa query graph, `collect_declarations` produces this; `analyze`
+//! and the LSP read it for name resolution and item lookup. (Per-item
+//! incremental resolution uses the leaner, location-free `name_index` instead —
+//! this registry carries full definitions and locations, so it changes on every
+//! edit and would defeat backdating.)
 
 use std::collections::BTreeMap;
 
@@ -18,9 +20,8 @@ use crate::{
 
 /// A read-only registry of all declared items.
 ///
-/// This is built once from all parsed files and used by `resolve_item`
-/// for name resolution. It does NOT track resolution state — that's
-/// the job of the Salsa `resolve_item` query.
+/// Built once from all parsed files and used for name resolution. It does NOT
+/// track resolution state — that's the job of `analyze` / `resolve_item`.
 #[derive(Debug, Clone, Default, Hash, PartialEq, Eq)]
 pub struct DeclarationRegistry {
     /// All declared items: path → grammar definition

@@ -12,6 +12,7 @@ pub(crate) mod function;
 pub mod inputs;
 pub mod ir;
 pub mod module;
+pub mod name_index;
 pub mod output;
 pub mod queries;
 pub mod resolution_context;
