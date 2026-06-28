@@ -4,10 +4,11 @@ use std::collections::HashMap;
 
 use lsp_server::{Request, Response};
 use lsp_types::{
-    CodeLens, CompletionItem, CompletionItemKind, DocumentSymbol, DocumentSymbolParams,
-    DocumentSymbolResponse, Hover, HoverContents, InlayHint, InlayHintLabel, MarkupContent,
-    MarkupKind, Position, Range, SymbolInformation, SymbolKind, TextDocumentPositionParams,
-    TextEdit, Uri, WorkspaceEdit, WorkspaceSymbolParams,
+    CodeAction, CodeActionKind, CodeActionOrCommand, CodeActionParams, CodeLens, CompletionItem,
+    CompletionItemKind, DocumentSymbol, DocumentSymbolParams, DocumentSymbolResponse, Hover,
+    HoverContents, InlayHint, InlayHintLabel, MarkupContent, MarkupKind, Position, Range,
+    SymbolInformation, SymbolKind, TextDocumentPositionParams, TextEdit, Uri, WorkspaceEdit,
+    WorkspaceSymbolParams,
 };
 
 use pyxis::grammar::{
@@ -1116,6 +1117,157 @@ impl ServerState {
             result: Some(serde_json::to_value(highlights).unwrap()),
             error: None,
         }
+    }
+
+    /// textDocument/codeAction — currently: import an unresolved type.
+    #[allow(clippy::mutable_key_type)] // lsp_types::Uri key is fine here
+    pub fn handle_code_action(&self, req: Request) -> Response {
+        let params: CodeActionParams = match serde_json::from_value(req.params.clone()) {
+            Ok(p) => p,
+            Err(e) => return error_response(req.id, e),
+        };
+        let uri = &params.text_document.uri;
+
+        let actions = self.import_actions(uri, params.range);
+        Response {
+            id: req.id,
+            result: Some(serde_json::to_value(actions).unwrap()),
+            error: None,
+        }
+    }
+
+    /// "Import `path`" quick-fixes for an unresolved type reference under the
+    /// cursor: each declared item across the project whose name matches the
+    /// unresolved ident becomes one action, adding (or extending) a `use`.
+    #[allow(clippy::mutable_key_type)] // lsp_types::Uri key is fine here
+    fn import_actions(&self, uri: &Uri, range: Range) -> Vec<CodeActionOrCommand> {
+        let Some(content) = self.get_content(uri) else {
+            return vec![];
+        };
+        let Some(module) = self.get_parsed_module(uri) else {
+            return vec![];
+        };
+        let loc = lsp_position_to_pyxis_location(content, range.start);
+        let tokens_arc = self.tokens_for(uri);
+        let tokens: &[Token] = tokens_arc.as_deref().map(Vec::as_slice).unwrap_or(&[]);
+        let scope = self.scope_for(uri);
+        let pointer_size = self.pointer_size_for(uri);
+        let sources = self.sources_for(uri);
+        let source_set = semantic::SourceSet::new(&self.db, sources);
+        let analysis = semantic::analyze(&self.db, pointer_size, source_set);
+        let type_registry = analysis.type_registry(&self.db);
+        let decl_set = semantic::collect_declarations(&self.db, source_set, pointer_size);
+        let decl_registry = decl_set.registry(&self.db);
+
+        // Only act on a *bare, unresolved* type reference under the cursor.
+        let name = match find_reference_at(
+            &module,
+            &loc,
+            &scope,
+            decl_registry,
+            tokens,
+            type_registry,
+            pointer_size,
+        ) {
+            Some(Ref::Item {
+                item: None,
+                module_path,
+                ..
+            }) if module_path.len() == 1 => module_path.last().map(|s| s.as_str().to_string()),
+            _ => None,
+        };
+        let Some(name) = name else {
+            return vec![];
+        };
+
+        let own_module = self.module_path_for(uri);
+
+        // Declared items elsewhere in the project whose name matches — each a
+        // candidate import. Deduplicate and sort for stable ordering.
+        let mut candidates: Vec<ItemPath> = decl_registry
+            .item_paths()
+            .filter(|p| {
+                p.len() > 1
+                    && p.last().map(|s| s.as_str()) == Some(name.as_str())
+                    && p.parent().as_ref() != own_module.as_ref()
+            })
+            .cloned()
+            .collect();
+        candidates.sort_by_key(|p| p.to_string());
+        candidates.dedup();
+
+        candidates
+            .into_iter()
+            .filter_map(|cand| {
+                let (range, new_text) = self.import_edit(&module, content, &cand)?;
+                let mut changes = HashMap::new();
+                changes.insert(uri.clone(), vec![TextEdit { range, new_text }]);
+                Some(CodeActionOrCommand::CodeAction(CodeAction {
+                    title: format!("Import `{cand}`"),
+                    kind: Some(CodeActionKind::QUICKFIX),
+                    edit: Some(WorkspaceEdit {
+                        changes: Some(changes),
+                        document_changes: None,
+                        change_annotations: None,
+                    }),
+                    ..Default::default()
+                }))
+            })
+            .collect()
+    }
+
+    /// The edit that imports `candidate`: extend an existing `use` that shares
+    /// the same module prefix into a braced group, else insert a new `use` line
+    /// after the last existing one.
+    fn import_edit(
+        &self,
+        module: &Module,
+        content: &str,
+        candidate: &ItemPath,
+    ) -> Option<(Range, String)> {
+        let prefix = candidate.parent()?;
+        let leaf = candidate.last()?.as_str().to_string();
+
+        // Extend an existing `use` whose every imported path sits directly under
+        // `prefix` (covers `use prefix::Leaf;` and `use prefix::{A, B};`).
+        for item in &module.items {
+            if let ModuleItem::Use { tree, location } = item {
+                let flat = tree.flatten();
+                if !flat.is_empty() && flat.iter().all(|p| p.parent().as_ref() == Some(&prefix)) {
+                    let mut leaves: Vec<String> = flat
+                        .iter()
+                        .filter_map(|p| p.last().map(|s| s.as_str().to_string()))
+                        .collect();
+                    if leaves.contains(&leaf) {
+                        return None; // already imported
+                    }
+                    leaves.push(leaf);
+                    let new_text = format!("use {prefix}::{{{}}};", leaves.join(", "));
+                    return Some((pyxis_span_to_lsp_range(content, &location.span), new_text));
+                }
+            }
+        }
+
+        // Otherwise, a fresh `use` line after the last existing one (or the top).
+        let after = module
+            .items
+            .iter()
+            .filter_map(|item| match item {
+                ModuleItem::Use { location, .. } => Some(location.span.end.line as u32),
+                _ => None,
+            })
+            .max();
+        let pos = Position {
+            line: after.unwrap_or(0),
+            character: 0,
+        };
+        Some((
+            Range {
+                start: pos,
+                end: pos,
+            },
+            format!("use {candidate};\n"),
+        ))
     }
 
     /// textDocument/rename

@@ -848,3 +848,121 @@ fn vftable_function_hover_shows_index_and_offset() {
         "{c}"
     );
 }
+
+fn import_actions(
+    s: &ServerState,
+    u: &lsp_types::Uri,
+    line: u32,
+    ch: u32,
+) -> Vec<serde_json::Value> {
+    let params = lsp_types::CodeActionParams {
+        text_document: TextDocumentIdentifier { uri: u.clone() },
+        range: Position {
+            line,
+            character: ch,
+        }
+        .into_range(),
+        context: lsp_types::CodeActionContext::default(),
+        work_done_progress_params: Default::default(),
+        partial_result_params: Default::default(),
+    };
+    let r = Request::new(
+        RequestId::from(1),
+        "textDocument/codeAction".into(),
+        serde_json::to_value(params).unwrap(),
+    );
+    serde_json::from_value(s.handle_code_action(r).result.unwrap()).unwrap()
+}
+trait IntoRange {
+    fn into_range(self) -> lsp_types::Range;
+}
+impl IntoRange for Position {
+    fn into_range(self) -> lsp_types::Range {
+        lsp_types::Range {
+            start: self,
+            end: self,
+        }
+    }
+}
+fn action_new_text(a: &serde_json::Value) -> String {
+    a["edit"]["changes"]
+        .as_object()
+        .unwrap()
+        .values()
+        .next()
+        .unwrap()[0]["newText"]
+        .as_str()
+        .unwrap()
+        .to_string()
+}
+
+fn import_project() -> (ServerState, lsp_types::Uri, String) {
+    // Unique per call — the import tests run in parallel and would otherwise
+    // race on a shared pid-keyed dir.
+    static COUNTER: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    let n = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let base = std::env::temp_dir().join(format!("pyxis-imp-{}-{}", std::process::id(), n));
+    let _ = std::fs::remove_dir_all(&base);
+    write(
+        &base.join("pyxis.toml"),
+        "[project]\nname = \"t\"\npointer_size = 8\n",
+    );
+    write(
+        &base.join("rendering/render_block.pyxis"),
+        "pub type RenderBlock {\n    pub x: u64,\n}\npub type GenericRenderBlock {\n    pub y: u64,\n}\n",
+    );
+    write(
+        &base.join("gui/widget.pyxis"),
+        "pub type Widget {\n    pub z: u64,\n}\n",
+    );
+    let consumer = "use rendering::render_block::RenderBlock;\n\npub type C {\n    pub a: RenderBlock,\n    pub b: GenericRenderBlock,\n    pub c: Widget,\n}\n";
+    write(&base.join("consumer.pyxis"), consumer);
+    let init =
+        serde_json::json!({ "rootUri": format!("file://{}", base.display()), "capabilities": {} });
+    let st = ServerState::new(&init).unwrap();
+    let uri: lsp_types::Uri = format!("file://{}", base.join("consumer.pyxis").display())
+        .parse()
+        .unwrap();
+    (st, uri, consumer.to_string())
+}
+
+#[test]
+fn auto_import_extends_matching_use() {
+    let (st, uri, src) = import_project();
+    let col = src
+        .lines()
+        .nth(4)
+        .unwrap()
+        .find("GenericRenderBlock")
+        .unwrap() as u32;
+    let acts = import_actions(&st, &uri, 4, col);
+    let a = acts
+        .iter()
+        .find(|a| a["title"].as_str().unwrap().contains("GenericRenderBlock"))
+        .expect("import action");
+    // The existing `use rendering::render_block::RenderBlock;` is folded into a group.
+    assert_eq!(
+        action_new_text(a),
+        "use rendering::render_block::{RenderBlock, GenericRenderBlock};"
+    );
+}
+
+#[test]
+fn auto_import_adds_new_use_when_no_prefix_matches() {
+    let (st, uri, src) = import_project();
+    let col = src.lines().nth(5).unwrap().find("Widget").unwrap() as u32;
+    let acts = import_actions(&st, &uri, 5, col);
+    let a = acts
+        .iter()
+        .find(|a| a["title"].as_str().unwrap().contains("Widget"))
+        .expect("import action");
+    assert_eq!(action_new_text(a), "use gui::widget::Widget;\n");
+}
+
+#[test]
+fn no_import_action_for_resolved_type() {
+    let (st, uri, src) = import_project();
+    // RenderBlock IS imported → no import action offered.
+    let col = src.lines().nth(3).unwrap().find("RenderBlock").unwrap() as u32;
+    assert!(import_actions(&st, &uri, 3, col).is_empty());
+}
