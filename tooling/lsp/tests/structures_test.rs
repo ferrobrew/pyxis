@@ -1108,3 +1108,21 @@ fn doc_links_navigate_via_hover_and_definition() {
         "hover on [label](Bar) label"
     );
 }
+
+#[test]
+fn doc_links_to_impl_methods_resolve_despite_project_errors() {
+    // Regression: a doc link to an impl method (Type::method) must resolve even
+    // when another type in the project has a semantic error — analyze() bails
+    // out early there, and previously built the doc-link resolver without the
+    // associated-function merge, breaking every impl-method link project-wide.
+    let m = "/// [`Add`](RBILists::Add) appends.\npub type RBILists {\n    pub x: u64,\n}\nimpl RBILists {\n    #[address(0x1000)]\n    pub fn Add(&mut self);\n}\n";
+    let errored = "#[size(0x99)]\npub type Broken {\n    pub a: u64,\n}\n";
+    let st = ServerState::in_memory(&[("/p", 8, &[("m.pyxis", m), ("bad.pyxis", errored)])]);
+    let uri = ServerState::document_uri("/p", "m.pyxis");
+    let col = m.lines().next().unwrap().find("Add").unwrap() as u32 + 1;
+    assert!(
+        hover_text(&st, &uri, 0, col).contains("**type** `RBILists`"),
+        "impl-method doc link must resolve even with an errored sibling type"
+    );
+    assert!(def_uri(&st, &uri, 0, col).is_some(), "and go-to-def too");
+}

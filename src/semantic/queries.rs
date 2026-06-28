@@ -331,6 +331,40 @@ pub fn analyze<'db>(
     };
     use crate::span::HasLocation;
 
+    // Build a doc-link resolver with associated (impl) functions merged into the
+    // type registry, so `Type::method` links resolve even on the error paths
+    // below where analyze bails out before the normal merge. Without this, any
+    // single semantic error in a project breaks every impl-method doc link
+    // across it (common for in-progress reverse-engineering definitions). A
+    // closure (not a free fn) so it can capture `db` without fighting salsa's
+    // single-lifetime rule.
+    let build_doc_link_resolver = |type_registry: &TypeRegistry,
+                                   modules: &BTreeMap<ItemPath, crate::semantic::Module>|
+     -> doc_links::DocLinkResolver {
+        let initial = SemanticAnalysis::new(
+            db,
+            Arc::new(type_registry.clone()),
+            Arc::new(modules.clone()),
+            Arc::new(doc_links::DocLinkResolver::build(
+                &TypeRegistry::new(pointer_size),
+                &BTreeMap::new(),
+            )),
+            Arc::new(vec![]),
+            Arc::new(vec![]),
+        );
+        let af = compute_associated_functions(db, initial);
+        let mut merged = type_registry.clone();
+        for (path, fns) in af.functions.iter() {
+            if let Ok(item) = merged.get_mut(path, &crate::span::ItemLocation::internal())
+                && let crate::semantic::types::ItemState::Resolved(state) = &mut item.state
+                && let crate::semantic::types::ItemDefinitionInner::Type(td) = &mut state.inner
+            {
+                td.associated_functions = fns.clone();
+            }
+        }
+        doc_links::DocLinkResolver::build(&merged, modules)
+    };
+
     // Collect parse results and errors.
     let mut parse_errors: Vec<ParseError> = Vec::new();
     let mut parsed_modules: Vec<(SourceFile, Arc<Module>)> = Vec::new();
@@ -496,7 +530,7 @@ pub fn analyze<'db>(
             db,
             Arc::new(type_registry.clone()),
             Arc::new(modules.clone()),
-            Arc::new(doc_links::DocLinkResolver::build(&type_registry, &modules)),
+            Arc::new(build_doc_link_resolver(&type_registry, &modules)),
             Arc::new(vec![e]),
             Arc::new(vec![]),
         );
@@ -510,7 +544,7 @@ pub fn analyze<'db>(
             db,
             Arc::new(type_registry.clone()),
             Arc::new(modules.clone()),
-            Arc::new(doc_links::DocLinkResolver::build(&type_registry, &modules)),
+            Arc::new(build_doc_link_resolver(&type_registry, &modules)),
             Arc::new(vec![e]),
             Arc::new(vec![]),
         );
@@ -614,7 +648,7 @@ pub fn analyze<'db>(
             db,
             Arc::new(type_registry.clone()),
             Arc::new(modules.clone()),
-            Arc::new(doc_links::DocLinkResolver::build(&type_registry, &modules)),
+            Arc::new(build_doc_link_resolver(&type_registry, &modules)),
             Arc::new(semantic_errors),
             Arc::new(vec![]),
         );
@@ -639,7 +673,7 @@ pub fn analyze<'db>(
             db,
             Arc::new(type_registry.clone()),
             Arc::new(modules.clone()),
-            Arc::new(doc_links::DocLinkResolver::build(&type_registry, &modules)),
+            Arc::new(build_doc_link_resolver(&type_registry, &modules)),
             Arc::new(semantic_errors),
             Arc::new(vec![]),
         );
@@ -652,7 +686,7 @@ pub fn analyze<'db>(
             db,
             Arc::new(type_registry.clone()),
             Arc::new(modules.clone()),
-            Arc::new(doc_links::DocLinkResolver::build(&type_registry, &modules)),
+            Arc::new(build_doc_link_resolver(&type_registry, &modules)),
             Arc::new(vec![e]),
             Arc::new(vec![]),
         );
