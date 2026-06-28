@@ -105,9 +105,15 @@ pub fn run_with_connection(connection: Connection) -> Result<(), Box<dyn std::er
     let (initialize_id, initialize_params) = connection.initialize_start()?;
     connection.initialize_finish(initialize_id, initialize_value)?;
 
-    // Ask the client to watch .pyxis / pyxis.toml so on-disk edits (e.g. by an
-    // agent rewriting files) reach us as didChangeWatchedFiles.
-    register_file_watchers(&connection)?;
+    // Dynamic registrations: file watchers (so on-disk edits reach us) and type
+    // hierarchy (which lsp_types has no static ServerCapabilities field for).
+    // Only registered if the client advertised dynamic-registration support.
+    let client_capabilities: lsp_types::ClientCapabilities = initialize_params
+        .get("capabilities")
+        .cloned()
+        .and_then(|c| serde_json::from_value(c).ok())
+        .unwrap_or_default();
+    register_dynamic_capabilities(&connection, &client_capabilities)?;
 
     let mut state = ServerState::new(&initialize_params)?;
     main_loop(&connection, &mut state)?;
@@ -191,6 +197,9 @@ fn handle_request(
         "textDocument/documentLink" => state.handle_document_link(req),
         "textDocument/semanticTokens/full" => state.handle_semantic_tokens_full(req),
         "textDocument/foldingRange" => state.handle_folding_range(req),
+        "textDocument/prepareTypeHierarchy" => state.handle_prepare_type_hierarchy(req),
+        "typeHierarchy/supertypes" => state.handle_type_hierarchy_supertypes(req),
+        "typeHierarchy/subtypes" => state.handle_type_hierarchy_subtypes(req),
         "textDocument/codeAction" => state.handle_code_action(req),
         "textDocument/completion" => state.handle_completion(req),
         "textDocument/documentSymbol" => state.handle_document_symbols(req),
@@ -210,32 +219,69 @@ fn handle_request(
     Ok(())
 }
 
-/// Register dynamic file watchers for `.pyxis` and `pyxis.toml` so the client
-/// reports on-disk changes via `workspace/didChangeWatchedFiles`.
-fn register_file_watchers(connection: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+/// Register dynamic capabilities: file watchers for `.pyxis`/`pyxis.toml` (so
+/// on-disk edits arrive as `workspace/didChangeWatchedFiles`) and type
+/// hierarchy (no static `ServerCapabilities` field exists for it in lsp_types).
+fn register_dynamic_capabilities(
+    connection: &Connection,
+    caps: &lsp_types::ClientCapabilities,
+) -> Result<(), Box<dyn std::error::Error>> {
     use lsp_types::{
         DidChangeWatchedFilesRegistrationOptions, FileSystemWatcher, GlobPattern, Registration,
-        RegistrationParams,
+        RegistrationParams, TextDocumentRegistrationOptions, TypeHierarchyRegistrationOptions,
     };
-    let watcher = |glob: &str| FileSystemWatcher {
-        glob_pattern: GlobPattern::String(glob.to_string()),
-        kind: None,
-    };
-    let registration = Registration {
-        id: "pyxis-watch-files".to_string(),
-        method: "workspace/didChangeWatchedFiles".to_string(),
-        register_options: Some(serde_json::to_value(
-            DidChangeWatchedFilesRegistrationOptions {
-                watchers: vec![watcher("**/*.pyxis"), watcher("**/pyxis.toml")],
-            },
-        )?),
-    };
+
+    let mut registrations = Vec::new();
+
+    let watch_supported = caps
+        .workspace
+        .as_ref()
+        .and_then(|w| w.did_change_watched_files.as_ref())
+        .and_then(|d| d.dynamic_registration)
+        .unwrap_or(false);
+    if watch_supported {
+        let watcher = |glob: &str| FileSystemWatcher {
+            glob_pattern: GlobPattern::String(glob.to_string()),
+            kind: None,
+        };
+        registrations.push(Registration {
+            id: "pyxis-watch-files".to_string(),
+            method: "workspace/didChangeWatchedFiles".to_string(),
+            register_options: Some(serde_json::to_value(
+                DidChangeWatchedFilesRegistrationOptions {
+                    watchers: vec![watcher("**/*.pyxis"), watcher("**/pyxis.toml")],
+                },
+            )?),
+        });
+    }
+
+    let type_hierarchy_supported = caps
+        .text_document
+        .as_ref()
+        .and_then(|t| t.type_hierarchy.as_ref())
+        .and_then(|d| d.dynamic_registration)
+        .unwrap_or(false);
+    if type_hierarchy_supported {
+        registrations.push(Registration {
+            id: "pyxis-type-hierarchy".to_string(),
+            method: "textDocument/prepareTypeHierarchy".to_string(),
+            register_options: Some(serde_json::to_value(TypeHierarchyRegistrationOptions {
+                text_document_registration_options: TextDocumentRegistrationOptions {
+                    document_selector: None,
+                },
+                type_hierarchy_options: Default::default(),
+                static_registration_options: Default::default(),
+            })?),
+        });
+    }
+
+    if registrations.is_empty() {
+        return Ok(());
+    }
     let req = Request::new(
-        lsp_server::RequestId::from("pyxis/registerWatchers".to_string()),
+        lsp_server::RequestId::from("pyxis/registerCapabilities".to_string()),
         "client/registerCapability".to_string(),
-        RegistrationParams {
-            registrations: vec![registration],
-        },
+        RegistrationParams { registrations },
     );
     connection.sender.send(Message::Request(req))?;
     Ok(())

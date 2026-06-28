@@ -1033,3 +1033,55 @@ fn folding_ranges_cover_bodies_and_use_groups() {
     assert!(has(6, 8), "nested vftable block");
     assert!(has(11, 13), "impl body");
 }
+
+#[test]
+fn type_hierarchy_via_base_fields() {
+    let src = "pub type PfxGameObject {\n    pub a: u64,\n}\npub type GameObject {\n    pub b: u64,\n}\npub type PhysicsGameObject {\n    #[base]\n    pub pfx: PfxGameObject,\n    #[base]\n    pub go: GameObject,\n}\n";
+    let st = ServerState::in_memory(&[("/p", 8, &[("m.pyxis", src)])]);
+    let uri = ServerState::document_uri("/p", "m.pyxis");
+    let prepare = |line: u32| -> Vec<lsp_types::TypeHierarchyItem> {
+        let r = Request::new(
+            RequestId::from(1),
+            "textDocument/prepareTypeHierarchy".into(),
+            serde_json::json!({"textDocument": {"uri": uri.as_str()}, "position": {"line": line, "character": 11}}),
+        );
+        serde_json::from_value(st.handle_prepare_type_hierarchy(r).result.unwrap()).unwrap()
+    };
+    let names = |v: serde_json::Value| -> Vec<String> {
+        let items: Vec<serde_json::Value> = serde_json::from_value(v).unwrap();
+        items
+            .iter()
+            .map(|i| i["name"].as_str().unwrap().to_string())
+            .collect()
+    };
+
+    let physics = prepare(6)
+        .into_iter()
+        .next()
+        .expect("prepare PhysicsGameObject");
+    assert_eq!(physics.name, "PhysicsGameObject");
+    // supertypes = the #[base] fields, in declaration order
+    let sup = Request::new(
+        RequestId::from(2),
+        "typeHierarchy/supertypes".into(),
+        serde_json::json!({"item": physics}),
+    );
+    assert_eq!(
+        names(st.handle_type_hierarchy_supertypes(sup).result.unwrap()),
+        ["PfxGameObject", "GameObject"]
+    );
+    // subtypes of a base = types that list it as #[base]
+    let pfx = prepare(0)
+        .into_iter()
+        .next()
+        .expect("prepare PfxGameObject");
+    let sub = Request::new(
+        RequestId::from(3),
+        "typeHierarchy/subtypes".into(),
+        serde_json::json!({"item": pfx}),
+    );
+    assert_eq!(
+        names(st.handle_type_hierarchy_subtypes(sub).result.unwrap()),
+        ["PhysicsGameObject"]
+    );
+}
