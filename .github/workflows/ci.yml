@@ -17,6 +17,8 @@ jobs:
           toolchain: stable
 
       - run: rustup component add clippy
+      # Nightly rustfmt for the unstable imports_granularity option (rustfmt.toml).
+      - run: rustup toolchain install nightly --profile minimal --component rustfmt
 
       - name: Set up Python
         uses: actions/setup-python@v5
