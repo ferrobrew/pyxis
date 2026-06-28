@@ -230,6 +230,136 @@ fn snapshot_completion() {
           {
             "kind": 14,
             "label": "Self"
+          },
+          {
+            "detail": "builtin",
+            "kind": 22,
+            "label": "void"
+          },
+          {
+            "detail": "builtin",
+            "kind": 22,
+            "label": "bool"
+          },
+          {
+            "detail": "builtin",
+            "kind": 22,
+            "label": "u8"
+          },
+          {
+            "detail": "builtin",
+            "kind": 22,
+            "label": "u16"
+          },
+          {
+            "detail": "builtin",
+            "kind": 22,
+            "label": "u32"
+          },
+          {
+            "detail": "builtin",
+            "kind": 22,
+            "label": "u64"
+          },
+          {
+            "detail": "builtin",
+            "kind": 22,
+            "label": "u128"
+          },
+          {
+            "detail": "builtin",
+            "kind": 22,
+            "label": "i8"
+          },
+          {
+            "detail": "builtin",
+            "kind": 22,
+            "label": "i16"
+          },
+          {
+            "detail": "builtin",
+            "kind": 22,
+            "label": "i32"
+          },
+          {
+            "detail": "builtin",
+            "kind": 22,
+            "label": "i64"
+          },
+          {
+            "detail": "builtin",
+            "kind": 22,
+            "label": "i128"
+          },
+          {
+            "detail": "builtin",
+            "kind": 22,
+            "label": "f32"
+          },
+          {
+            "detail": "builtin",
+            "kind": 22,
+            "label": "f64"
+          },
+          {
+            "detail": "builtin",
+            "kind": 22,
+            "label": "c_char"
+          },
+          {
+            "detail": "builtin",
+            "kind": 22,
+            "label": "AtomicBool"
+          },
+          {
+            "detail": "builtin",
+            "kind": 22,
+            "label": "AtomicU8"
+          },
+          {
+            "detail": "builtin",
+            "kind": 22,
+            "label": "AtomicU16"
+          },
+          {
+            "detail": "builtin",
+            "kind": 22,
+            "label": "AtomicU32"
+          },
+          {
+            "detail": "builtin",
+            "kind": 22,
+            "label": "AtomicU64"
+          },
+          {
+            "detail": "builtin",
+            "kind": 22,
+            "label": "AtomicI8"
+          },
+          {
+            "detail": "builtin",
+            "kind": 22,
+            "label": "AtomicI16"
+          },
+          {
+            "detail": "builtin",
+            "kind": 22,
+            "label": "AtomicI32"
+          },
+          {
+            "detail": "builtin",
+            "kind": 22,
+            "label": "AtomicI64"
+          },
+          {
+            "detail": "this module",
+            "kind": 13,
+            "label": "Color"
+          },
+          {
+            "detail": "this module",
+            "kind": 22,
+            "label": "Foo"
           }
         ]"#]]
     .assert_eq(&formatted);

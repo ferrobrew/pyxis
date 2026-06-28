@@ -769,3 +769,73 @@ fn no_import_action_for_resolved_type() {
     let col = src.lines().nth(3).unwrap().find("RenderBlock").unwrap() as u32;
     assert!(import_actions(&st, &uri, 3, col).is_empty());
 }
+
+fn completions(s: &ServerState, u: &lsp_types::Uri, line: u32, ch: u32) -> Vec<serde_json::Value> {
+    let params = lsp_types::CompletionParams {
+        text_document_position: TextDocumentPositionParams {
+            text_document: TextDocumentIdentifier { uri: u.clone() },
+            position: Position {
+                line,
+                character: ch,
+            },
+        },
+        work_done_progress_params: Default::default(),
+        partial_result_params: Default::default(),
+        context: None,
+    };
+    let r = Request::new(
+        RequestId::from(1),
+        "textDocument/completion".into(),
+        serde_json::to_value(params).unwrap(),
+    );
+    serde_json::from_value(s.handle_completion(r).result.unwrap()).unwrap()
+}
+
+#[test]
+fn completion_offers_types_and_imports() {
+    let st = ServerState::in_memory(&[(
+        "/p",
+        8,
+        &[
+            (
+                "types/math.pyxis",
+                "pub type Vector3 {\n    pub x: u32,\n}\npub type Aabb {\n    pub y: u32,\n}\n",
+            ),
+            ("flags.pyxis", "pub enum Color: u32 {\n    Red,\n}\n"),
+            (
+                "consumer.pyxis",
+                "use types::math::Vector3;\n\npub type Local {\n    pub a: u32,\n}\npub type C {\n    pub v: Vector3,\n}\n",
+            ),
+        ],
+    )]);
+    let uri = ServerState::document_uri("/p", "consumer.pyxis");
+    let items = completions(&st, &uri, 6, 11);
+    let get = |label: &str| {
+        items
+            .iter()
+            .find(|i| i["label"] == label)
+            .unwrap_or_else(|| panic!("missing {label}"))
+    };
+    let edit_of = |i: &serde_json::Value| {
+        i.get("additionalTextEdits")
+            .and_then(|e| e[0]["newText"].as_str().map(str::to_string))
+    };
+
+    // keyword + builtin are present
+    assert!(items.iter().any(|i| i["label"] == "type"));
+    assert!(edit_of(get("u32")).is_none());
+    // in-scope (imported) and same-module types carry no edit
+    assert!(edit_of(get("Vector3")).is_none());
+    assert_eq!(get("Local")["detail"], "this module");
+    // out-of-scope type merges into the existing `use types::math::Vector3;`
+    assert_eq!(
+        edit_of(get("Aabb")).as_deref(),
+        Some("use types::math::{Aabb, Vector3};")
+    );
+    // out-of-scope enum gets a new `use` and an ENUM kind
+    assert_eq!(
+        edit_of(get("Color")).as_deref(),
+        Some("use flags::Color;\n")
+    );
+    assert_eq!(get("Color")["kind"], serde_json::json!(13)); // CompletionItemKind::ENUM
+}
