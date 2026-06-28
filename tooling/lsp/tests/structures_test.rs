@@ -940,11 +940,55 @@ fn auto_import_extends_matching_use() {
         .iter()
         .find(|a| a["title"].as_str().unwrap().contains("GenericRenderBlock"))
         .expect("import action");
-    // The existing `use rendering::render_block::RenderBlock;` is folded into a group.
+    // The existing `use rendering::render_block::RenderBlock;` is folded into a
+    // group; entries are sorted.
     assert_eq!(
         action_new_text(a),
-        "use rendering::render_block::{RenderBlock, GenericRenderBlock};"
+        "use rendering::render_block::{GenericRenderBlock, RenderBlock};"
     );
+}
+
+#[test]
+fn auto_import_merges_into_nested_group() {
+    // A multi-prefix group must absorb the new type under its own sub-group,
+    // not spawn a duplicate `use` line.
+    let base = std::env::temp_dir().join(format!("pyxis-mg-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    write(
+        &base.join("pyxis.toml"),
+        "[project]\nname = \"t\"\npointer_size = 8\n",
+    );
+    write(
+        &base.join("types/math.pyxis"),
+        "pub type Aabb {\n    pub a: u64,\n}\npub type Vector3 {\n    pub b: u64,\n}\n",
+    );
+    write(
+        &base.join("types/shared_ptr.pyxis"),
+        "pub type WeakPtr {\n    pub c: u64,\n}\n",
+    );
+    for existing in [
+        "use types::{math::Aabb, shared_ptr::WeakPtr};",
+        "use types::{math::{Aabb}, shared_ptr::WeakPtr};",
+    ] {
+        let consumer = format!("{existing}\n\npub type C {{\n    pub v: Vector3,\n}}\n");
+        write(&base.join("consumer.pyxis"), &consumer);
+        let init = serde_json::json!({ "rootUri": format!("file://{}", base.display()), "capabilities": {} });
+        let st = ServerState::new(&init).unwrap();
+        let uri: lsp_types::Uri = format!("file://{}", base.join("consumer.pyxis").display())
+            .parse()
+            .unwrap();
+        let col = consumer.lines().nth(3).unwrap().find("Vector3").unwrap() as u32;
+        let acts = import_actions(&st, &uri, 3, col);
+        let a = acts
+            .iter()
+            .find(|a| a["title"].as_str().unwrap().contains("Vector3"))
+            .expect("import action");
+        assert_eq!(
+            action_new_text(a),
+            "use types::{math::{Aabb, Vector3}, shared_ptr::WeakPtr};",
+            "from existing: {existing}"
+        );
+    }
 }
 
 #[test]

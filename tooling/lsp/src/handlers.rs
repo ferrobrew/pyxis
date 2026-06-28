@@ -1225,27 +1225,32 @@ impl ServerState {
         content: &str,
         candidate: &ItemPath,
     ) -> Option<(Range, String)> {
-        let prefix = candidate.parent()?;
-        let leaf = candidate.last()?.as_str().to_string();
-
-        // Extend an existing `use` whose every imported path sits directly under
-        // `prefix` (covers `use prefix::Leaf;` and `use prefix::{A, B};`).
+        // Merge into the existing `use` that shares the longest prefix with the
+        // candidate, re-rendering its whole path set (so nested/multi-prefix
+        // groups like `use types::{math::Aabb, shared_ptr::WeakPtr};` correctly
+        // absorb a `types::math::Vector3` as `…math::{Aabb, Vector3}…`).
+        let mut best: Option<(usize, &ItemLocation, Vec<ItemPath>)> = None;
         for item in &module.items {
-            if let ModuleItem::Use { tree, location } = item {
-                let flat = tree.flatten();
-                if !flat.is_empty() && flat.iter().all(|p| p.parent().as_ref() == Some(&prefix)) {
-                    let mut leaves: Vec<String> = flat
-                        .iter()
-                        .filter_map(|p| p.last().map(|s| s.as_str().to_string()))
-                        .collect();
-                    if leaves.contains(&leaf) {
-                        return None; // already imported
-                    }
-                    leaves.push(leaf);
-                    let new_text = format!("use {prefix}::{{{}}};", leaves.join(", "));
-                    return Some((pyxis_span_to_lsp_range(content, &location.span), new_text));
-                }
+            let ModuleItem::Use { tree, location } = item else {
+                continue;
+            };
+            let flat = tree.flatten();
+            if flat.iter().any(|p| p == candidate) {
+                return None; // already imported
             }
+            let common = flat
+                .iter()
+                .map(|p| common_prefix_len(candidate, p))
+                .max()
+                .unwrap_or(0);
+            if common >= 1 && best.as_ref().is_none_or(|(c, _, _)| common > *c) {
+                best = Some((common, location, flat));
+            }
+        }
+        if let Some((_, location, mut flat)) = best {
+            flat.push(candidate.clone());
+            let new_text = format!("use {};", render_use_tree(&flat));
+            return Some((pyxis_span_to_lsp_range(content, &location.span), new_text));
         }
 
         // Otherwise, a fresh `use` line after the last existing one (or the top).
@@ -2446,6 +2451,53 @@ fn format_function_hover(f: &Function) -> String {
         md.push_str(&format!("\n{}\n", f.doc_comments.join("\n")));
     }
     md
+}
+
+/// Number of leading path segments `a` and `b` share.
+fn common_prefix_len(a: &ItemPath, b: &ItemPath) -> usize {
+    a.iter().zip(b.iter()).take_while(|(x, y)| x == y).count()
+}
+
+/// Render a set of full import paths as a compact `use`-tree body (the text
+/// between `use ` and `;`), grouping shared prefixes: `types::math::Aabb`,
+/// `types::math::Vector3` and `types::shared_ptr::WeakPtr` together render as
+/// `types::{math::{Aabb, Vector3}, shared_ptr::WeakPtr}`. Paths are sorted and
+/// de-duplicated for a stable result.
+fn render_use_tree(paths: &[ItemPath]) -> String {
+    let mut full: Vec<Vec<String>> = paths
+        .iter()
+        .map(|p| p.iter().map(|s| s.as_str().to_string()).collect())
+        .collect();
+    full.sort();
+    full.dedup();
+    let slices: Vec<&[String]> = full.iter().map(|v| v.as_slice()).collect();
+    render_use_group(&slices)
+}
+
+fn render_use_group(paths: &[&[String]]) -> String {
+    use std::collections::BTreeMap;
+    let mut groups: BTreeMap<&str, Vec<&[String]>> = BTreeMap::new();
+    for p in paths {
+        if let Some((first, rest)) = p.split_first() {
+            groups.entry(first.as_str()).or_default().push(rest);
+        }
+    }
+    let entries: Vec<String> = groups
+        .iter()
+        .map(|(seg, subs)| {
+            let nested: Vec<&[String]> = subs.iter().filter(|s| !s.is_empty()).copied().collect();
+            if nested.is_empty() {
+                seg.to_string()
+            } else {
+                format!("{seg}::{}", render_use_group(&nested))
+            }
+        })
+        .collect();
+    if entries.len() == 1 {
+        entries.into_iter().next().unwrap()
+    } else {
+        format!("{{{}}}", entries.join(", "))
+    }
 }
 
 /// An explicit `#[index(N)]` on a vftable function, if present.
