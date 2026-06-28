@@ -573,7 +573,11 @@ pub fn extract_links(doc: &[String]) -> Vec<String> {
     links
 }
 
-fn is_path(s: &str) -> bool {
+/// Whether `s` is a valid intra-doc link target: a `::`-separated path of
+/// identifier segments (e.g. `Type`, `module::Type::method`), as opposed to
+/// arbitrary prose or a URL. Shared with editor tooling so the LSP's link
+/// scanner recognises the same targets the compiler resolves.
+pub fn is_path(s: &str) -> bool {
     !s.is_empty()
         && s.split("::").all(|seg| {
             let mut chars = seg.chars();

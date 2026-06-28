@@ -370,9 +370,11 @@ pub(crate) struct DocLink {
 }
 
 /// Find Markdown cross-reference links in one doc-comment line: `[Foo]`,
-/// [`Foo`], and `[label](path::To)`. Non-path targets (e.g. URLs) simply fail
-/// to resolve later.
+/// [`Foo`], and `[label](path::To)`. Only `::`-path targets are kept (per the
+/// compiler's [`is_path`](pyxis::semantic::doc_links::is_path)); prose and URLs
+/// are skipped.
 pub(crate) fn scan_doc_links(line: &str) -> Vec<DocLink> {
+    use pyxis::semantic::doc_links::is_path;
     let mut out = Vec::new();
     let mut i = 0;
     while let Some(rel_open) = line[i..].find('[') {
@@ -401,7 +403,9 @@ pub(crate) fn scan_doc_links(line: &str) -> Vec<DocLink> {
             (inner.to_string(), close + 1, label_region)
         };
         let path = path_raw.trim().trim_matches('`').trim().to_string();
-        if !path.is_empty() {
+        // Defer to the compiler's notion of a link target so we recognise the
+        // same paths it resolves (and skip prose / URLs up-front).
+        if is_path(&path) {
             out.push(DocLink {
                 link: (open, link_end),
                 path,
