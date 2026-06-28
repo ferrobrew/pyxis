@@ -865,3 +865,45 @@ fn document_link_resolves_doc_cross_references() {
         assert_eq!(l["range"]["start"]["line"], 0);
     }
 }
+
+#[test]
+fn implementation_finds_impl_blocks_across_files() {
+    let st = ServerState::in_memory(&[(
+        "/p",
+        8,
+        &[
+            (
+                "game.pyxis",
+                "pub type GameObject {\n    pub x: u64,\n}\nimpl GameObject {\n    pub fn a(&mut self);\n}\n",
+            ),
+            (
+                "other.pyxis",
+                "use game::GameObject;\n\nimpl GameObject {\n    pub fn b(&mut self);\n}\n",
+            ),
+        ],
+    )]);
+    let uri = ServerState::document_uri("/p", "game.pyxis");
+    let r = Request::new(
+        RequestId::from(1),
+        "textDocument/implementation".into(),
+        serde_json::to_value(TextDocumentPositionParams {
+            text_document: TextDocumentIdentifier { uri },
+            position: Position {
+                line: 0,
+                character: 10,
+            }, // on `GameObject`
+        })
+        .unwrap(),
+    );
+    let locs: Vec<lsp_types::Location> =
+        serde_json::from_value(st.handle_implementation(r).result.unwrap()).unwrap();
+    assert_eq!(locs.len(), 2, "{locs:#?}");
+    assert!(
+        locs.iter()
+            .any(|l| l.uri.as_str().ends_with("game.pyxis") && l.range.start.line == 3)
+    );
+    assert!(
+        locs.iter()
+            .any(|l| l.uri.as_str().ends_with("other.pyxis") && l.range.start.line == 2)
+    );
+}

@@ -47,6 +47,7 @@ pub fn run_with_connection(connection: Connection) -> Result<(), Box<dyn std::er
         )),
         hover_provider: Some(HoverProviderCapability::Simple(true)),
         definition_provider: Some(OneOf::Left(true)),
+        implementation_provider: Some(lsp_types::ImplementationProviderCapability::Simple(true)),
         completion_provider: Some(CompletionOptions::default()),
         document_symbol_provider: Some(OneOf::Left(true)),
         workspace_symbol_provider: Some(OneOf::Left(true)),
@@ -159,6 +160,7 @@ fn handle_request(
     let response = match req.method.as_str() {
         "textDocument/hover" => state.handle_hover(req),
         "textDocument/definition" => state.handle_definition(req),
+        "textDocument/implementation" => state.handle_implementation(req),
         "textDocument/references" => state.handle_references(req),
         "textDocument/documentHighlight" => state.handle_document_highlight(req),
         "textDocument/documentLink" => state.handle_document_link(req),

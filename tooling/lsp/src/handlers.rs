@@ -1298,6 +1298,78 @@ impl ServerState {
         links
     }
 
+    /// textDocument/implementation — from a type (its name or any reference),
+    /// the `impl` block(s) targeting it across the project.
+    pub fn handle_implementation(&self, req: Request) -> Response {
+        let locations = serde_json::from_value::<TextDocumentPositionParams>(req.params.clone())
+            .ok()
+            .and_then(|p| {
+                let uri = p.text_document.uri;
+                let content = self.get_content(&uri)?;
+                let loc = lsp_position_to_pyxis_location(content, p.position);
+                let target = self.symbol_at(&uri, &loc)?;
+                Some(self.impl_locations(&target, &uri))
+            })
+            .unwrap_or_default();
+        Response {
+            id: req.id,
+            result: Some(serde_json::to_value(locations).unwrap()),
+            error: None,
+        }
+    }
+
+    /// Locations of every `impl` block whose target resolves to `target`,
+    /// within the requesting file's project.
+    fn impl_locations(&self, target: &ItemPath, from_uri: &Uri) -> Vec<lsp_types::Location> {
+        let from_root = self
+            .documents
+            .get(from_uri)
+            .and_then(|d| d.project_root.clone());
+        let pointer_size = self.pointer_size_for(from_uri);
+        let source_set = semantic::SourceSet::new(&self.db, self.sources_for(from_uri));
+        let decl_set = semantic::collect_declarations(&self.db, source_set, pointer_size);
+        let decl_registry = decl_set.registry(&self.db);
+
+        let uris: Vec<Uri> = self
+            .documents
+            .iter()
+            .filter(|(_, d)| d.project_root == from_root)
+            .map(|(u, _)| u.clone())
+            .collect();
+
+        let mut out = Vec::new();
+        for uri in &uris {
+            let Some(module) = self.get_parsed_module(uri) else {
+                continue;
+            };
+            let Some(content) = self.get_content(uri) else {
+                continue;
+            };
+            let scope = self.scope_for(uri);
+            let tokens_arc = self.tokens_for(uri);
+            let tokens: &[Token] = tokens_arc.as_deref().map(Vec::as_slice).unwrap_or(&[]);
+            for item in &module.items {
+                if let ModuleItem::Impl { impl_block } = item {
+                    let name_path = ItemPath::from(impl_block.name.as_str());
+                    if resolve_type_path(&name_path, &scope, decl_registry).as_ref() == Some(target)
+                    {
+                        let span = name_token_span(
+                            tokens,
+                            &impl_block.location.span.start,
+                            impl_block.name.as_str(),
+                        )
+                        .unwrap_or(impl_block.location.span);
+                        out.push(lsp_types::Location {
+                            uri: uri.clone(),
+                            range: pyxis_span_to_lsp_range(content, &span),
+                        });
+                    }
+                }
+            }
+        }
+        out
+    }
+
     /// textDocument/codeAction — currently: import an unresolved type.
     #[allow(clippy::mutable_key_type)] // lsp_types::Uri key is fine here
     pub fn handle_code_action(&self, req: Request) -> Response {
