@@ -5,7 +5,15 @@
 
 use std::sync::Arc;
 
-use crate::{grammar::ItemPath, semantic::name_index::NameIndex};
+use crate::{
+    grammar::{
+        Argument, Function, ImplItem, ItemDefinition, ItemDefinitionInner, ItemPath, ModuleItem,
+        Type, TypeField,
+    },
+    semantic::name_index::NameIndex,
+    span::{HasLocation, Location, Span},
+    tokenizer::{Token, TokenKind},
+};
 
 use super::{
     super::{
@@ -40,11 +48,10 @@ pub fn file_type_references<'db>(
         .module_scope(&module_path)
         .map(<[ItemPath]>::to_vec)
         .unwrap_or_default();
-    let tokens: &[crate::tokenizer::Token] = tokenize_file(db, source).tokens(db);
+    let tokens: &[Token] = tokenize_file(db, source).tokens(db);
 
     // Every place a type can be referenced — mirrors the LSP's find_reference_at
     // so this is a faithful, precomputed source of truth.
-    use crate::grammar::{ImplItem, ModuleItem};
     let mut references = Vec::new();
     for item in &module.items {
         match item {
@@ -121,13 +128,12 @@ pub fn file_type_references<'db>(
 /// identifier (`Foo` in `a::b::Foo`, `Map` in `Map<Foo>`) so rename rewrites
 /// exactly that token. Powers the per-file source map.
 fn collect_type_ref_spans(
-    definition: &crate::grammar::ItemDefinition,
+    definition: &ItemDefinition,
     scope: &[ItemPath],
     index: &NameIndex,
-    tokens: &[crate::tokenizer::Token],
-    out: &mut Vec<(crate::span::Span, ItemPath)>,
+    tokens: &[Token],
+    out: &mut Vec<(Span, ItemPath)>,
 ) {
-    use crate::grammar::{ItemDefinitionInner, TypeField};
     match &definition.inner {
         ItemDefinitionInner::Type(td) => {
             for statement in td.statements() {
@@ -138,7 +144,7 @@ fn collect_type_ref_spans(
                     TypeField::Vftable(functions) => {
                         for function in functions {
                             for argument in &function.arguments {
-                                if let crate::grammar::Argument::Named { type_, .. } = argument {
+                                if let Argument::Named { type_, .. } = argument {
                                     type_ref_spans(type_, scope, index, tokens, out);
                                 }
                             }
@@ -159,14 +165,14 @@ fn collect_type_ref_spans(
 /// Collect `(leaf span, resolved path)` for the argument and return types of a
 /// function signature (impl method or free function).
 fn fn_sig_type_spans(
-    function: &crate::grammar::Function,
+    function: &Function,
     scope: &[ItemPath],
     index: &NameIndex,
-    tokens: &[crate::tokenizer::Token],
-    out: &mut Vec<(crate::span::Span, ItemPath)>,
+    tokens: &[Token],
+    out: &mut Vec<(Span, ItemPath)>,
 ) {
     for argument in &function.arguments {
-        if let crate::grammar::Argument::Named { type_, .. } = argument {
+        if let Argument::Named { type_, .. } = argument {
             type_ref_spans(type_, scope, index, tokens, out);
         }
     }
@@ -179,12 +185,7 @@ fn fn_sig_type_spans(
 /// inside `block_span`. Finds the `for` keyword (which lexes as `Ident("for")`),
 /// the run of `Ident`/`::` after it, and returns the last identifier's span when
 /// its leaf matches `for_type`.
-fn for_type_span(
-    tokens: &[crate::tokenizer::Token],
-    block_span: &crate::span::Span,
-    for_type: &ItemPath,
-) -> Option<crate::span::Span> {
-    use crate::tokenizer::TokenKind;
+fn for_type_span(tokens: &[Token], block_span: &Span, for_type: &ItemPath) -> Option<Span> {
     let leaf = for_type.last()?.as_str();
     let mut i = 0;
     while i < tokens.len() {
@@ -192,7 +193,7 @@ fn for_type_span(
             && matches!(&tokens[i].kind, TokenKind::Ident(s) if s == "for")
         {
             let mut j = i + 1;
-            let mut last_ident: Option<&crate::tokenizer::Token> = None;
+            let mut last_ident: Option<&Token> = None;
             while j < tokens.len() {
                 match &tokens[j].kind {
                     TokenKind::Ident(_) => {
@@ -218,28 +219,22 @@ fn for_type_span(
 
 /// The span of the first identifier token at or after `from` whose text is
 /// `name` — used to locate an `impl <Type>` target name.
-fn first_ident_span(
-    tokens: &[crate::tokenizer::Token],
-    from: crate::span::Location,
-    name: &str,
-) -> Option<crate::span::Span> {
+fn first_ident_span(tokens: &[Token], from: Location, name: &str) -> Option<Span> {
     tokens
         .iter()
         .find(|t| {
-            t.location.span.start >= from
-                && matches!(&t.kind, crate::tokenizer::TokenKind::Ident(s) if s == name)
+            t.location.span.start >= from && matches!(&t.kind, TokenKind::Ident(s) if s == name)
         })
         .map(|t| t.location.span)
 }
 
 fn type_ref_spans(
-    type_: &crate::grammar::Type,
+    type_: &Type,
     scope: &[ItemPath],
     index: &NameIndex,
-    tokens: &[crate::tokenizer::Token],
-    out: &mut Vec<(crate::span::Span, ItemPath)>,
+    tokens: &[Token],
+    out: &mut Vec<(Span, ItemPath)>,
 ) {
-    use crate::{grammar::Type, span::HasLocation};
     match type_ {
         Type::Ident {
             path, generic_args, ..
@@ -270,15 +265,11 @@ fn type_ref_spans(
 
 /// The span of the last identifier token in `[start, end)` — the leaf segment of
 /// a (possibly qualified) path.
-fn last_ident_span(
-    tokens: &[crate::tokenizer::Token],
-    start: crate::span::Location,
-    end: crate::span::Location,
-) -> Option<crate::span::Span> {
+fn last_ident_span(tokens: &[Token], start: Location, end: Location) -> Option<Span> {
     tokens
         .iter()
         .rfind(|t| {
-            matches!(t.kind, crate::tokenizer::TokenKind::Ident(_))
+            matches!(t.kind, TokenKind::Ident(_))
                 && t.location.span.start >= start
                 && t.location.span.start < end
         })

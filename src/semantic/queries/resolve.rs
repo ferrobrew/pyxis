@@ -6,8 +6,13 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use crate::{
-    grammar::{ItemDefinitionInner, ItemPath},
-    semantic::{TypeRegistry, name_index::NameIndex},
+    grammar::{self, ItemDefinitionInner, ItemPath},
+    semantic::{
+        Module, SemanticError, TypeRegistry,
+        error::BuildOutcome,
+        name_index::{NameIndex, SigKind},
+        types::{ItemCategory, ItemDefinition, ItemState, PredefinedItem, Visibility},
+    },
 };
 
 use super::{
@@ -26,7 +31,7 @@ pub(super) fn grammar_def_for<'db>(
     sources: SourceSet<'db>,
     index: &NameIndex,
     path: &ItemPath,
-) -> Option<crate::grammar::ItemDefinition> {
+) -> Option<grammar::ItemDefinition> {
     let source = index
         .file_of(path)
         .and_then(|i| sources.sources(db).get(i).copied())?;
@@ -62,7 +67,7 @@ pub fn resolve_item<'db>(
 
     // Predefined / extern: resolved purely from the signature.
     if index.is_predefined(&item_path)
-        && let Some(p) = crate::semantic::types::PredefinedItem::ALL
+        && let Some(p) = PredefinedItem::ALL
             .iter()
             .find(|p| ItemPath::from(p.name()) == item_path)
     {
@@ -155,9 +160,10 @@ pub fn resolve_item<'db>(
         // re-lays-out `Map`'s fields. So their own value deps (e.g. a concrete
         // field type of a generic struct) must be resolved here too, not just
         // the alias/generic itself.
-        if index.item_sig(&dep).is_some_and(|s| {
-            s.kind == crate::semantic::name_index::SigKind::TypeAlias || s.arity > 0
-        }) && let Some(dep_def) = grammar_def_for(db, sources, index, &dep)
+        if index
+            .item_sig(&dep)
+            .is_some_and(|s| s.kind == SigKind::TypeAlias || s.arity > 0)
+            && let Some(dep_def) = grammar_def_for(db, sources, index, &dep)
         {
             let dep_scope = index
                 .scope_of(&dep)
@@ -170,11 +176,11 @@ pub fn resolve_item<'db>(
     // Modules map for name resolution: the item's own module (its scope, impls)
     // plus the root. build_item reads module.scope() and may add generated items
     // to the item's module.
-    let mut modules: BTreeMap<ItemPath, crate::semantic::Module> = BTreeMap::new();
-    modules.insert(ItemPath::empty(), crate::semantic::Module::default());
+    let mut modules: BTreeMap<ItemPath, Module> = BTreeMap::new();
+    modules.insert(ItemPath::empty(), Module::default());
     let impls: Vec<_> = module_ast.impls().cloned().collect();
     let backends: Vec<_> = module_ast.backends().cloned().collect();
-    if let Ok(m) = crate::semantic::Module::new(
+    if let Ok(m) = Module::new(
         module_path.clone(),
         module_ast.as_ref().clone(),
         vec![],
@@ -185,7 +191,7 @@ pub fn resolve_item<'db>(
     }
 
     // Build the item.
-    let visibility: crate::semantic::types::Visibility = definition.visibility.into();
+    let visibility: Visibility = definition.visibility.into();
     let def_location = definition.location;
     let type_param_names: Vec<String> = definition
         .type_parameters
@@ -204,7 +210,7 @@ pub fn resolve_item<'db>(
     );
 
     let (item_def, errors) = match outcome {
-        Ok(crate::semantic::error::BuildOutcome::Resolved(item)) => {
+        Ok(BuildOutcome::Resolved(item)) => {
             let cfg = match &definition.inner {
                 ItemDefinitionInner::Type(td) => td.attributes.cfg(),
                 ItemDefinitionInner::Enum(e) => e.attributes.cfg(),
@@ -212,12 +218,12 @@ pub fn resolve_item<'db>(
                 ItemDefinitionInner::TypeAlias(ta) => ta.attributes.cfg(),
             };
             (
-                crate::semantic::types::ItemDefinition {
+                ItemDefinition {
                     visibility,
                     path: item_path.clone(),
                     type_parameters: type_param_names,
-                    state: crate::semantic::types::ItemState::Resolved(item),
-                    category: crate::semantic::types::ItemCategory::Defined,
+                    state: ItemState::Resolved(item),
+                    category: ItemCategory::Defined,
                     predefined: None,
                     cfg,
                     location: def_location,
@@ -226,12 +232,10 @@ pub fn resolve_item<'db>(
                 Vec::new(),
             )
         }
-        Ok(crate::semantic::error::BuildOutcome::Deferred) => {
-            (make_unresolved_definition(&item_path), vec![])
-        }
-        Ok(crate::semantic::error::BuildOutcome::NotFoundType(unresolved_ref)) => (
+        Ok(BuildOutcome::Deferred) => (make_unresolved_definition(&item_path), vec![]),
+        Ok(BuildOutcome::NotFoundType(unresolved_ref)) => (
             make_unresolved_definition(&item_path),
-            vec![crate::semantic::SemanticError::TypeResolutionStalled {
+            vec![SemanticError::TypeResolutionStalled {
                 unresolved_types: vec![item_path.to_string()],
                 resolved_types: vec![],
                 unresolved_references: vec![unresolved_ref],

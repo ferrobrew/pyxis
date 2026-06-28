@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use crate::{grammar::Module, span::FileId};
+use crate::{grammar::Module, parser::Parser, span::FileId, tokenizer::tokenize_with_file_id};
 
 use super::super::{
     db::Db,
@@ -18,7 +18,7 @@ use super::super::{
 pub fn tokenize_file(db: &dyn Db, source: SourceFile) -> TokenizedFile<'_> {
     let contents = source.contents(db);
     let file_id = FileId::new(source.file_id(db));
-    match crate::tokenizer::tokenize_with_file_id(contents.to_string(), file_id) {
+    match tokenize_with_file_id(contents.to_string(), file_id) {
         Ok(tokens) => TokenizedFile::new(db, Arc::new(tokens), Arc::new(vec![])),
         Err(e) => TokenizedFile::new(db, Arc::new(vec![]), Arc::new(vec![e.into()])),
     }
@@ -35,7 +35,7 @@ pub fn parse_file(db: &dyn Db, source: SourceFile) -> ParsedFile<'_> {
     let contents = source.contents(db);
     let file_id = FileId::new(source.file_id(db));
     let tokens = (**tokenized.tokens(db)).clone();
-    let mut parser = crate::parser::Parser::new(tokens, file_id, contents.to_string());
+    let mut parser = Parser::new(tokens, file_id, contents.to_string());
     match parser.parse_module() {
         Ok(module) => ParsedFile::new(db, source, Arc::new(module), Arc::new(vec![])),
         Err(e) => ParsedFile::new(db, source, Arc::new(Module::default()), Arc::new(vec![e])),

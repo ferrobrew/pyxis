@@ -4,14 +4,24 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use crate::{
-    grammar::{ItemDefinitionInner, ItemPath},
+    grammar::{self, Argument, Ident, ItemDefinitionInner, ItemPath, TypeField, TypeParameter},
     semantic::{
-        TypeRegistry,
+        Module, SemanticError, TypeRegistry, bitflags_definition,
+        db::Db,
+        declaration_registry::ExternTypeInfo,
+        doc_links, enum_definition,
+        error::{BuildOutcome, Result},
+        ir::SemanticAnalysis,
         name_index::{ExternSig, NameIndex, NameResolution},
+        resolution_context::{ResolutionContext, ResolutionContextRef},
+        type_alias_definition, type_definition,
+        types::{
+            self, ItemCategory, ItemDefinition, ItemState, ItemStateResolved, PredefinedItem,
+            TypeDefinition, Visibility,
+        },
     },
+    span::ItemLocation,
 };
-
-use crate::semantic::{db::Db, ir::SemanticAnalysis};
 
 use super::compute_associated_functions;
 
@@ -24,9 +34,8 @@ pub(super) fn merge_associated_functions(
     db: &dyn Db,
     pointer_size: usize,
     registry: &mut TypeRegistry,
-    modules: &BTreeMap<ItemPath, crate::semantic::Module>,
-) -> Vec<crate::semantic::SemanticError> {
-    use crate::semantic::doc_links;
+    modules: &BTreeMap<ItemPath, Module>,
+) -> Vec<SemanticError> {
     let initial = SemanticAnalysis::new(
         db,
         Arc::new(registry.clone()),
@@ -41,9 +50,9 @@ pub(super) fn merge_associated_functions(
     );
     let af = compute_associated_functions(db, initial);
     for (path, fns) in af.functions.iter() {
-        if let Ok(item) = registry.get_mut(path, &crate::span::ItemLocation::internal())
-            && let crate::semantic::types::ItemState::Resolved(state) = &mut item.state
-            && let crate::semantic::types::ItemDefinitionInner::Type(td) = &mut state.inner
+        if let Ok(item) = registry.get_mut(path, &ItemLocation::internal())
+            && let ItemState::Resolved(state) = &mut item.state
+            && let types::ItemDefinitionInner::Type(td) = &mut state.inner
         {
             td.associated_functions = fns.clone();
         }
@@ -55,20 +64,19 @@ pub(super) fn merge_associated_functions(
 /// build functions, with the given registry and modules.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn build_item(
-    definition: &crate::grammar::ItemDefinition,
+    definition: &grammar::ItemDefinition,
     item_path: &ItemPath,
-    visibility: crate::semantic::types::Visibility,
-    def_location: &crate::span::ItemLocation,
+    visibility: Visibility,
+    def_location: &ItemLocation,
     doc_comments: &[String],
     type_param_names: &[String],
     type_registry: &mut TypeRegistry,
-    modules: &mut BTreeMap<ItemPath, crate::semantic::Module>,
-) -> crate::semantic::error::Result<crate::semantic::error::BuildOutcome> {
+    modules: &mut BTreeMap<ItemPath, Module>,
+) -> Result<BuildOutcome> {
     match &definition.inner {
         ItemDefinitionInner::Type(ty) => {
-            let mut ctx =
-                crate::semantic::resolution_context::ResolutionContext::new(type_registry, modules);
-            crate::semantic::type_definition::build(
+            let mut ctx = ResolutionContext::new(type_registry, modules);
+            type_definition::build(
                 &mut ctx,
                 item_path,
                 visibility,
@@ -79,37 +87,16 @@ pub(super) fn build_item(
             )
         }
         ItemDefinitionInner::Enum(e) => {
-            let ctx_ref = crate::semantic::resolution_context::ResolutionContextRef::new(
-                type_registry,
-                modules,
-            );
-            crate::semantic::enum_definition::build(
-                &ctx_ref,
-                item_path,
-                e,
-                def_location,
-                doc_comments,
-            )
+            let ctx_ref = ResolutionContextRef::new(type_registry, modules);
+            enum_definition::build(&ctx_ref, item_path, e, def_location, doc_comments)
         }
         ItemDefinitionInner::Bitflags(b) => {
-            let ctx_ref = crate::semantic::resolution_context::ResolutionContextRef::new(
-                type_registry,
-                modules,
-            );
-            crate::semantic::bitflags_definition::build(
-                &ctx_ref,
-                item_path,
-                b,
-                def_location,
-                doc_comments,
-            )
+            let ctx_ref = ResolutionContextRef::new(type_registry, modules);
+            bitflags_definition::build(&ctx_ref, item_path, b, def_location, doc_comments)
         }
         ItemDefinitionInner::TypeAlias(ta) => {
-            let ctx_ref = crate::semantic::resolution_context::ResolutionContextRef::new(
-                type_registry,
-                modules,
-            );
-            crate::semantic::type_alias_definition::build(
+            let ctx_ref = ResolutionContextRef::new(type_registry, modules);
+            type_alias_definition::build(
                 &ctx_ref,
                 item_path,
                 ta,
@@ -122,9 +109,6 @@ pub(super) fn build_item(
 }
 
 pub(super) fn register_predefined(type_registry: &mut TypeRegistry) {
-    use crate::semantic::types::{
-        ItemCategory, ItemDefinition, ItemState, ItemStateResolved, PredefinedItem, TypeDefinition,
-    };
     for predefined in PredefinedItem::ALL {
         let size = predefined.size();
         let alignment = size.max(1);
@@ -151,9 +135,8 @@ pub(super) fn register_predefined(type_registry: &mut TypeRegistry) {
 pub(super) fn register_unresolved(
     type_registry: &mut TypeRegistry,
     path: &ItemPath,
-    definition: &crate::grammar::ItemDefinition,
+    definition: &grammar::ItemDefinition,
 ) {
-    use crate::semantic::types::{ItemDefinition, ItemState};
     let type_parameters: Vec<String> = definition
         .type_parameters
         .iter()
@@ -177,10 +160,8 @@ pub(super) fn register_unresolved(
     });
 }
 
-pub(super) fn make_unresolved_definition(
-    path: &ItemPath,
-) -> crate::semantic::types::ItemDefinition {
-    crate::semantic::types::ItemDefinition {
+pub(super) fn make_unresolved_definition(path: &ItemPath) -> ItemDefinition {
+    ItemDefinition {
         path: path.clone(),
         ..Default::default()
     }
@@ -190,10 +171,7 @@ pub(super) fn make_predefined_definition(
     path: &ItemPath,
     size: usize,
     alignment: usize,
-) -> crate::semantic::types::ItemDefinition {
-    use crate::semantic::types::{
-        ItemCategory, ItemDefinition, ItemState, ItemStateResolved, TypeDefinition,
-    };
+) -> ItemDefinition {
     ItemDefinition {
         path: path.clone(),
         state: ItemState::Resolved(ItemStateResolved {
@@ -212,13 +190,7 @@ pub(super) fn make_predefined_definition(
     }
 }
 
-pub(super) fn make_extern_definition(
-    path: &ItemPath,
-    info: &crate::semantic::declaration_registry::ExternTypeInfo,
-) -> crate::semantic::types::ItemDefinition {
-    use crate::semantic::types::{
-        ItemCategory, ItemDefinition, ItemState, ItemStateResolved, TypeDefinition,
-    };
+pub(super) fn make_extern_definition(path: &ItemPath, info: &ExternTypeInfo) -> ItemDefinition {
     ItemDefinition {
         path: path.clone(),
         state: ItemState::Resolved(ItemStateResolved {
@@ -243,18 +215,10 @@ pub(super) fn make_extern_definition(
 /// while building another: a pointer needs only the path to exist, and a
 /// generic needs the arity. Value references inject the fully-resolved form
 /// instead, so the placeholder's emptiness is never observed for them.
-pub(super) fn make_placeholder(
-    path: &ItemPath,
-    arity: usize,
-) -> crate::semantic::types::ItemDefinition {
-    use crate::{
-        grammar::{Ident, ItemDefinition as GrammarDef, TypeParameter, Visibility},
-        span::ItemLocation,
-    };
-
+pub(super) fn make_placeholder(path: &ItemPath, arity: usize) -> ItemDefinition {
     let type_param_names: Vec<String> = (0..arity).map(|i| format!("T{i}")).collect();
-    let grammar_def = GrammarDef {
-        visibility: Visibility::Public,
+    let grammar_def = grammar::ItemDefinition {
+        visibility: grammar::Visibility::Public,
         name: Ident::from(path.last().map(|s| s.as_str()).unwrap_or("")),
         type_parameters: type_param_names
             .iter()
@@ -266,24 +230,21 @@ pub(super) fn make_placeholder(
         ..Default::default()
     };
 
-    crate::semantic::types::ItemDefinition {
+    ItemDefinition {
         path: path.clone(),
         type_parameters: type_param_names,
-        state: crate::semantic::types::ItemState::Unresolved(grammar_def),
+        state: ItemState::Unresolved(grammar_def),
         ..Default::default()
     }
 }
 
 /// A resolved extern-type entry from its stable size/alignment signature.
-pub(super) fn make_extern_from_sig(
-    path: &ItemPath,
-    sig: &ExternSig,
-) -> crate::semantic::types::ItemDefinition {
-    let info = crate::semantic::declaration_registry::ExternTypeInfo {
+pub(super) fn make_extern_from_sig(path: &ItemPath, sig: &ExternSig) -> ItemDefinition {
+    let info = ExternTypeInfo {
         size: sig.size,
         alignment: sig.alignment,
-        location: crate::span::ItemLocation::internal(),
-        declaration_location: crate::span::ItemLocation::internal(),
+        location: ItemLocation::internal(),
+        declaration_location: ItemLocation::internal(),
         doc_comments: vec![],
         cfg: None,
     };
@@ -296,11 +257,10 @@ pub(super) fn make_extern_from_sig(
 /// placeholders provide that), so excluding them keeps resolution acyclic for
 /// the common mutually-pointing types and bounds each item's dependency set.
 pub(super) fn value_referenced_types(
-    definition: &crate::grammar::ItemDefinition,
+    definition: &grammar::ItemDefinition,
     scope: &[ItemPath],
     index: &NameIndex,
 ) -> Vec<ItemPath> {
-    use crate::grammar::TypeField;
     let mut refs = Vec::new();
     match &definition.inner {
         ItemDefinitionInner::Type(td) => {
@@ -315,7 +275,7 @@ pub(super) fn value_referenced_types(
                     TypeField::Vftable(functions) => {
                         for function in functions {
                             for argument in &function.arguments {
-                                if let crate::grammar::Argument::Named { type_, .. } = argument {
+                                if let Argument::Named { type_, .. } = argument {
                                     collect_value_refs(type_, scope, index, &mut refs);
                                 }
                             }
@@ -337,12 +297,12 @@ pub(super) fn value_referenced_types(
 }
 
 fn collect_value_refs(
-    type_: &crate::grammar::Type,
+    type_: &grammar::Type,
     scope: &[ItemPath],
     index: &NameIndex,
     refs: &mut Vec<ItemPath>,
 ) {
-    use crate::grammar::Type;
+    use grammar::Type;
     match type_ {
         Type::Ident {
             path, generic_args, ..

@@ -10,7 +10,7 @@ use std::{collections::BTreeMap, sync::Arc};
 use crate::{
     grammar::{ItemPath, Module},
     parser::ParseError,
-    semantic::TypeRegistry,
+    semantic::{SemanticError, TypeRegistry, types::Function},
 };
 
 use super::{
@@ -42,9 +42,10 @@ pub fn analyze<'db>(
     use crate::{
         semantic::{
             attribute, doc_links,
-            error::{AttributeName, ExternKind},
+            error::{AttributeName, ExternKind, Result},
             module::Module as SemanticModule,
-            types::{ExternValue, Type, Visibility},
+            types::{ExternValue, PredefinedItem, Type, Visibility},
+            validation,
         },
         span::HasLocation,
     };
@@ -59,8 +60,8 @@ pub fn analyze<'db>(
     // any single semantic error in a project breaks every impl-method doc link
     // across it (common for in-progress reverse-engineering definitions).
     let bail = |type_registry: &TypeRegistry,
-                modules: &BTreeMap<ItemPath, crate::semantic::Module>,
-                errors: Vec<crate::semantic::SemanticError>|
+                modules: &BTreeMap<ItemPath, SemanticModule>,
+                errors: Vec<SemanticError>|
      -> SemanticAnalysis<'db> {
         let mut merged = type_registry.clone();
         let _ = merge_associated_functions(db, pointer_size, &mut merged, modules);
@@ -79,9 +80,9 @@ pub fn analyze<'db>(
     // (the success path and the two passes that build it themselves); it takes
     // the parts by value rather than cloning.
     let finish = |type_registry: TypeRegistry,
-                  modules: BTreeMap<ItemPath, crate::semantic::Module>,
+                  modules: BTreeMap<ItemPath, SemanticModule>,
                   doc_link_resolver: doc_links::DocLinkResolver,
-                  errors: Vec<crate::semantic::SemanticError>|
+                  errors: Vec<SemanticError>|
      -> SemanticAnalysis<'db> {
         SemanticAnalysis::new(
             db,
@@ -135,7 +136,7 @@ pub fn analyze<'db>(
 
     // Predefined types live in the root module; add them to definition_paths
     // so the JSON backend (which iterates module.definitions) includes them.
-    for predefined in crate::semantic::types::PredefinedItem::ALL {
+    for predefined in PredefinedItem::ALL {
         definition_paths.insert(ItemPath::from(predefined.name()));
     }
 
@@ -163,14 +164,14 @@ pub fn analyze<'db>(
     // Errors from building module scopes (missing `#[address]` on an extern
     // value, malformed module) — collected and returned as diagnostics rather
     // than dropped, so the offending module isn't silently elided.
-    let mut module_errors: Vec<crate::semantic::SemanticError> = Vec::new();
+    let mut module_errors: Vec<SemanticError> = Vec::new();
 
     for (source, module) in &parsed_modules {
         let path_str = source.path(db);
         let module_path = ItemPath::from_path(std::path::Path::new(path_str.as_str()));
 
         // Parse extern values
-        let extern_values: crate::semantic::error::Result<Vec<ExternValue>> = module
+        let extern_values: Result<Vec<ExternValue>> = module
             .extern_values()
             .map(|ev| {
                 let name = &ev.name;
@@ -185,13 +186,12 @@ pub fn analyze<'db>(
                         address = Some(attr_address);
                     }
                 }
-                let address =
-                    address.ok_or_else(|| crate::semantic::SemanticError::MissingAttribute {
-                        attribute_name: AttributeName::Address,
-                        extern_kind: ExternKind::Value,
-                        item_path: module_path.join(name.as_str().into()),
-                        location: ev.location,
-                    })?;
+                let address = address.ok_or_else(|| SemanticError::MissingAttribute {
+                    attribute_name: AttributeName::Address,
+                    extern_kind: ExternKind::Value,
+                    item_path: module_path.join(name.as_str().into()),
+                    location: ev.location,
+                })?;
                 Ok(ExternValue {
                     visibility: Visibility::from(ev.visibility),
                     name: name.as_str().to_owned(),
@@ -257,14 +257,12 @@ pub fn analyze<'db>(
     // Run validate_uses BEFORE type resolution. This catches private access
     // and nonexistent imports before resolve_item tries to resolve types
     // that reference them.
-    if let Err(e) = crate::semantic::validation::validate_uses(&type_registry, &modules) {
+    if let Err(e) = validation::validate_uses(&type_registry, &modules) {
         return bail(&type_registry, &modules, vec![e]);
     }
     // validate_backend_for_targets also needs to run before type resolution
     // so that for_type paths are resolved before backends read them.
-    if let Err(e) =
-        crate::semantic::validation::validate_backend_for_targets(&type_registry, &mut modules)
-    {
+    if let Err(e) = validation::validate_backend_for_targets(&type_registry, &mut modules) {
         return bail(&type_registry, &modules, vec![e]);
     }
 
@@ -275,7 +273,7 @@ pub fn analyze<'db>(
     // stays O(edges), not O(n²). Resolved items and their generated types
     // (vftables) are merged into the registry; generated items' module
     // definition_paths are folded in just below.
-    let mut semantic_errors: Vec<crate::semantic::SemanticError> = Vec::new();
+    let mut semantic_errors: Vec<SemanticError> = Vec::new();
     let item_paths: Vec<ItemPath> = decl_registry.item_paths().cloned().collect();
     for item_path in &item_paths {
         let resolved = resolve_item(db, sources, pointer_size, item_path.clone());
@@ -286,7 +284,7 @@ pub fn analyze<'db>(
         } else if resolved.errors(db).is_empty() {
             // Unresolved with no error of its own → stalled (mutual by-value
             // recursion or a missing type).
-            semantic_errors.push(crate::semantic::SemanticError::TypeResolutionStalled {
+            semantic_errors.push(SemanticError::TypeResolutionStalled {
                 unresolved_types: vec![item_path.to_string()],
                 resolved_types: vec![],
                 unresolved_references: vec![],
@@ -332,7 +330,7 @@ pub fn analyze<'db>(
 
     // validate_backend_definitions rejects `prologue definition`/`epilogue definition`
     // on non-cpp backends.
-    if let Err(e) = crate::semantic::validation::validate_backend_definitions(&modules) {
+    if let Err(e) = validation::validate_backend_definitions(&modules) {
         return bail(&type_registry, &modules, vec![e]);
     }
 
@@ -366,17 +364,22 @@ pub fn compute_associated_functions<'db>(
     db: &'db dyn Db,
     analysis: SemanticAnalysis<'db>,
 ) -> Arc<AssociatedFunctionsResult> {
-    use crate::semantic::{
-        SemanticError,
-        error::DuplicateDefinitionKind,
-        function::{self, FunctionBuildOutcome},
-        types::{Function, FunctionBody, ItemDefinitionInner, Type},
+    use crate::{
+        grammar,
+        parser::cfg::CfgPredicate,
+        semantic::{
+            SemanticError,
+            error::DuplicateDefinitionKind,
+            function::{self, FunctionBuildOutcome},
+            types::{Function, FunctionBody, ItemDefinitionInner, Type},
+        },
+        span::ItemLocation,
     };
     use std::collections::{BTreeMap as BTree, BTreeSet, HashMap, HashSet};
 
     let type_registry = analysis.type_registry(db);
     let modules = analysis.modules(db);
-    let location = crate::span::ItemLocation::internal();
+    let location = ItemLocation::internal();
 
     // Build a map from each type-with-regions to its base parents.
     let mut bases_of: BTree<ItemPath, Vec<(String, ItemPath)>> = BTree::new();
@@ -461,9 +464,9 @@ pub fn compute_associated_functions<'db>(
 
         // Collect impl functions for this type
         struct ImplFunc {
-            func: crate::grammar::Function,
+            func: grammar::Function,
             impl_type_parameters: Vec<String>,
-            impl_cfg: Option<crate::parser::cfg::CfgPredicate>,
+            impl_cfg: Option<CfgPredicate>,
         }
         let impl_funcs: Vec<ImplFunc> = module
             .impls
@@ -517,8 +520,8 @@ pub fn compute_associated_functions<'db>(
                     let has_self = function.arguments.iter().any(|a| {
                         matches!(
                             a,
-                            crate::semantic::function::Argument::ConstSelf { .. }
-                                | crate::semantic::function::Argument::MutSelf { .. }
+                            function::Argument::ConstSelf { .. }
+                                | function::Argument::MutSelf { .. }
                         )
                     });
                     if !has_self {
@@ -560,8 +563,7 @@ pub fn compute_associated_functions<'db>(
 
         // Build own impl methods
         let reserved = used_names.clone();
-        let mut own_method_cfgs: HashMap<String, Vec<Option<crate::parser::cfg::CfgPredicate>>> =
-            HashMap::new();
+        let mut own_method_cfgs: HashMap<String, Vec<Option<CfgPredicate>>> = HashMap::new();
 
         for ImplFunc {
             func: grammar_fn,
@@ -603,7 +605,7 @@ pub fn compute_associated_functions<'db>(
                 (None, None) => None,
                 (Some(b), None) => Some(b),
                 (None, Some(f)) => Some(f),
-                (Some(b), Some(f)) => Some(crate::parser::cfg::CfgPredicate::All {
+                (Some(b), Some(f)) => Some(CfgPredicate::All {
                     predicates: vec![b, f],
                     location: item_location,
                 }),
@@ -622,12 +624,8 @@ pub fn compute_associated_functions<'db>(
             let disjoint_with_existing = own_method_cfgs
                 .get(&name)
                 .map(|cfgs| {
-                    cfgs.iter().all(|e| {
-                        crate::parser::cfg::CfgPredicate::provably_disjoint(
-                            e.as_ref(),
-                            function.cfg.as_ref(),
-                        )
-                    })
+                    cfgs.iter()
+                        .all(|e| CfgPredicate::provably_disjoint(e.as_ref(), function.cfg.as_ref()))
                 })
                 .unwrap_or(true);
             if !disjoint_with_existing {
@@ -663,7 +661,7 @@ pub fn compute_associated_functions<'db>(
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AssociatedFunctionsResult {
     /// Map from type path to associated functions (own + inherited).
-    pub functions: BTreeMap<ItemPath, Vec<crate::semantic::types::Function>>,
+    pub functions: BTreeMap<ItemPath, Vec<Function>>,
     /// Errors encountered during computation (e.g., duplicate method names).
-    pub errors: Vec<crate::semantic::SemanticError>,
+    pub errors: Vec<SemanticError>,
 }
