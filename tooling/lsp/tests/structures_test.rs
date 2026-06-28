@@ -839,3 +839,29 @@ fn completion_offers_types_and_imports() {
     );
     assert_eq!(get("Color")["kind"], serde_json::json!(13)); // CompletionItemKind::ENUM
 }
+
+#[test]
+fn document_link_resolves_doc_cross_references() {
+    let src = "/// See [Bar] and [the docs](Bar).\npub type Foo {\n    pub x: u64,\n}\npub type Bar {\n    pub y: u64,\n}\n";
+    let st = ServerState::in_memory(&[("/p", 8, &[("m.pyxis", src)])]);
+    let uri = ServerState::document_uri("/p", "m.pyxis");
+    let params = lsp_types::DocumentLinkParams {
+        text_document: TextDocumentIdentifier { uri },
+        work_done_progress_params: Default::default(),
+        partial_result_params: Default::default(),
+    };
+    let r = Request::new(
+        RequestId::from(1),
+        "textDocument/documentLink".into(),
+        serde_json::to_value(params).unwrap(),
+    );
+    let links: Vec<serde_json::Value> =
+        serde_json::from_value(st.handle_document_link(r).result.unwrap()).unwrap();
+    // both [Bar] and the (Bar) target resolve to Bar's definition (line 5, 1-indexed).
+    assert_eq!(links.len(), 2, "{links:#?}");
+    for l in &links {
+        assert!(l["target"].as_str().unwrap().ends_with("m.pyxis#L5"), "{l}");
+        assert_eq!(l["tooltip"], "m::Bar");
+        assert_eq!(l["range"]["start"]["line"], 0);
+    }
+}

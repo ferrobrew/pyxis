@@ -53,6 +53,10 @@ pub fn run_with_connection(connection: Connection) -> Result<(), Box<dyn std::er
         references_provider: Some(OneOf::Left(true)),
         document_highlight_provider: Some(OneOf::Left(true)),
         code_action_provider: Some(lsp_types::CodeActionProviderCapability::Simple(true)),
+        document_link_provider: Some(lsp_types::DocumentLinkOptions {
+            resolve_provider: Some(false),
+            work_done_progress_options: Default::default(),
+        }),
         document_formatting_provider: Some(OneOf::Left(true)),
         code_lens_provider: Some(CodeLensOptions {
             resolve_provider: Some(false),
@@ -157,6 +161,7 @@ fn handle_request(
         "textDocument/definition" => state.handle_definition(req),
         "textDocument/references" => state.handle_references(req),
         "textDocument/documentHighlight" => state.handle_document_highlight(req),
+        "textDocument/documentLink" => state.handle_document_link(req),
         "textDocument/codeAction" => state.handle_code_action(req),
         "textDocument/completion" => state.handle_completion(req),
         "textDocument/documentSymbol" => state.handle_document_symbols(req),

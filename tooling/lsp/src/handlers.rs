@@ -5,10 +5,10 @@ use std::collections::HashMap;
 use lsp_server::{Request, Response};
 use lsp_types::{
     CodeAction, CodeActionKind, CodeActionOrCommand, CodeActionParams, CodeLens, CompletionItem,
-    CompletionItemKind, CompletionParams, DocumentSymbol, DocumentSymbolParams,
-    DocumentSymbolResponse, Hover, HoverContents, InlayHint, InlayHintLabel, MarkupContent,
-    MarkupKind, Position, Range, SymbolInformation, SymbolKind, TextDocumentPositionParams,
-    TextEdit, Uri, WorkspaceEdit, WorkspaceSymbolParams,
+    CompletionItemKind, CompletionParams, DocumentLink, DocumentLinkParams, DocumentSymbol,
+    DocumentSymbolParams, DocumentSymbolResponse, Hover, HoverContents, InlayHint, InlayHintLabel,
+    MarkupContent, MarkupKind, Position, Range, SymbolInformation, SymbolKind,
+    TextDocumentPositionParams, TextEdit, Uri, WorkspaceEdit, WorkspaceSymbolParams,
 };
 
 use pyxis::grammar::{
@@ -1224,6 +1224,78 @@ impl ServerState {
             result: Some(serde_json::to_value(highlights).unwrap()),
             error: None,
         }
+    }
+
+    /// textDocument/documentLink — make doc-comment cross-references
+    /// (`[Foo]`, [`Foo`], `[label](path::To)`) clickable, targeting the
+    /// referenced item's file and line.
+    pub fn handle_document_link(&self, req: Request) -> Response {
+        let links = serde_json::from_value::<DocumentLinkParams>(req.params.clone())
+            .ok()
+            .map(|p| self.doc_links(&p.text_document.uri))
+            .unwrap_or_default();
+        Response {
+            id: req.id,
+            result: Some(serde_json::to_value(links).unwrap()),
+            error: None,
+        }
+    }
+
+    fn doc_links(&self, uri: &Uri) -> Vec<DocumentLink> {
+        use pyxis::semantic::doc_links::DocLinkTarget;
+
+        let Some(content) = self.get_content(uri) else {
+            return vec![];
+        };
+        let scope = self.scope_for(uri);
+        let pointer_size = self.pointer_size_for(uri);
+        let source_set = semantic::SourceSet::new(&self.db, self.sources_for(uri));
+        let analysis = semantic::analyze(&self.db, pointer_size, source_set);
+        let type_registry = analysis.type_registry(&self.db);
+        let resolver = analysis.doc_link_resolver(&self.db);
+        let tokens_arc = self.tokens_for(uri);
+        let tokens: &[Token] = tokens_arc.as_deref().map(Vec::as_slice).unwrap_or(&[]);
+
+        // Source lines (1-indexed) that are doc comments.
+        let doc_lines: std::collections::HashSet<usize> = tokens
+            .iter()
+            .filter_map(|t| match &t.kind {
+                TokenKind::DocOuter(_) => Some(t.location.span.start.line),
+                _ => None,
+            })
+            .collect();
+
+        let lines: Vec<&str> = content.lines().collect();
+        let mut links = Vec::new();
+        for &line_no in &doc_lines {
+            let Some(line) = lines.get(line_no - 1) else {
+                continue;
+            };
+            for (start_byte, end_byte, path_str) in scan_doc_links(line) {
+                let item_path = match resolver.resolve(&scope, &path_str) {
+                    Some(DocLinkTarget::Item(p)) => p,
+                    Some(DocLinkTarget::Member { item, .. }) => item,
+                    _ => continue,
+                };
+                let Some(rd) = self.resolved_definition(&item_path, type_registry, uri) else {
+                    continue;
+                };
+                let span = Span::new(
+                    Location::new(line_no, start_byte + 1),
+                    Location::new(line_no, end_byte + 1),
+                );
+                let target = format!("{}#L{}", rd.uri.as_str(), rd.name_span.start.line)
+                    .parse()
+                    .unwrap_or(rd.uri);
+                links.push(DocumentLink {
+                    range: pyxis_span_to_lsp_range(content, &span),
+                    target: Some(target),
+                    tooltip: Some(item_path.to_string()),
+                    data: None,
+                });
+            }
+        }
+        links
     }
 
     /// textDocument/codeAction — currently: import an unresolved type.
@@ -2558,6 +2630,42 @@ fn format_function_hover(f: &Function) -> String {
         md.push_str(&format!("\n{}\n", f.doc_comments.join("\n")));
     }
     md
+}
+
+/// Find Markdown cross-reference links in one doc-comment line, returning
+/// `(label_start_byte, label_end_byte, path)` for each: `[Foo]`, [`Foo`] and
+/// `[label](path::To)` (the label is what becomes clickable; the path is what
+/// resolves). Non-path targets (e.g. URLs) simply fail to resolve later.
+fn scan_doc_links(line: &str) -> Vec<(usize, usize, String)> {
+    let mut out = Vec::new();
+    let mut i = 0;
+    while let Some(rel_open) = line[i..].find('[') {
+        let open = i + rel_open;
+        let Some(rel_close) = line[open + 1..].find(']') else {
+            break;
+        };
+        let close = open + 1 + rel_close;
+        let inner = &line[open + 1..close];
+        let after = close + 1;
+        // `[label](path)` → path is the URL; otherwise the bracket content is it.
+        let path_raw = if line[after..].starts_with('(') {
+            match line[after + 1..].find(')') {
+                Some(rp) => line[after + 1..after + 1 + rp].to_string(),
+                None => {
+                    i = close + 1;
+                    continue;
+                }
+            }
+        } else {
+            inner.to_string()
+        };
+        let path = path_raw.trim().trim_matches('`').trim().to_string();
+        if !path.is_empty() {
+            out.push((open + 1, close, path));
+        }
+        i = close + 1;
+    }
+    out
 }
 
 /// Number of leading path segments `a` and `b` share.
