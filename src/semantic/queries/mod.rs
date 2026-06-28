@@ -368,16 +368,21 @@ pub fn resolve_item<'db>(
         for generated in resolved.generated_items(db).iter() {
             type_registry.add(generated.clone());
         }
-        // Follow type aliases to their target's value deps.
-        if index.item_sig(&dep).map(|s| s.kind)
-            == Some(crate::semantic::name_index::SigKind::TypeAlias)
-            && let Some(alias_def) = grammar_def_for(db, sources, index, &dep)
+        // A type alias or a *generic* type, when referenced by value, has its
+        // fields re-folded against this item's registry at instantiation —
+        // `VecEntry = Entry<u32, V>` expands its alias target, and `Map<u32>`
+        // re-lays-out `Map`'s fields. So their own value deps (e.g. a concrete
+        // field type of a generic struct) must be resolved here too, not just
+        // the alias/generic itself.
+        if index.item_sig(&dep).is_some_and(|s| {
+            s.kind == crate::semantic::name_index::SigKind::TypeAlias || s.arity > 0
+        }) && let Some(dep_def) = grammar_def_for(db, sources, index, &dep)
         {
-            let alias_scope = index
+            let dep_scope = index
                 .scope_of(&dep)
                 .map(<[ItemPath]>::to_vec)
                 .unwrap_or_default();
-            worklist.extend(value_referenced_types(&alias_def, &alias_scope, index));
+            worklist.extend(value_referenced_types(&dep_def, &dep_scope, index));
         }
     }
 

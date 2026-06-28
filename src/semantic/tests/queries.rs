@@ -437,3 +437,37 @@ fn analyze_is_incremental_per_item() {
         "exactly one resolve_item (for the edited b::B) should re-run; got {resolve_item_runs}: {log:?}"
     );
 }
+
+#[test]
+fn resolve_item_resolves_generic_instantiated_by_value() {
+    // Regression (JC2 AirVehicle): a type that holds `Map<u32>` by value needs
+    // Map's concrete field types resolved too — instantiation re-lays-out Map's
+    // fields against this item's registry, not just Map's precomputed size.
+    let db = PyxisDatabaseImpl::default();
+    let src = "pub type Bar {\n    pub x: u64,\n}\npub type Map<T> {\n    pub k: *mut T,\n    pub b: Bar,\n}\npub type X {\n    pub f: Map<u32>,\n}";
+    let source = SourceFile::new(&db, "m.pyxis".to_string(), 1, src.to_string());
+    let sources = SourceSet::new(&db, vec![source]);
+    let x = resolve_item(&db, sources, 8, crate::grammar::ItemPath::from("m::X"));
+    assert!(
+        x.item(&db).resolved().is_some(),
+        "X holding Map<u32> by value should resolve; got {:?}",
+        x.item(&db).state
+    );
+}
+
+#[test]
+fn resolve_item_resolves_generic_in_vftable_signature() {
+    // Regression (JC2 GameWorld): a type whose only references to a generic are
+    // in vftable method signatures (`fn add(&mut self, item: Map<u32>)`) must
+    // still resolve that generic — value deps include vftable signatures.
+    let db = PyxisDatabaseImpl::default();
+    let src = "pub type Bar {\n    pub x: u64,\n}\npub type Map<T> {\n    pub k: *mut T,\n    pub b: Bar,\n}\npub type World {\n    vftable {\n        pub fn add(&mut self, item: Map<u32>);\n    },\n}";
+    let source = SourceFile::new(&db, "m.pyxis".to_string(), 1, src.to_string());
+    let sources = SourceSet::new(&db, vec![source]);
+    let world = resolve_item(&db, sources, 8, crate::grammar::ItemPath::from("m::World"));
+    assert!(
+        world.item(&db).resolved().is_some(),
+        "World with a generic-typed vftable arg should resolve; got {:?}",
+        world.item(&db).state
+    );
+}

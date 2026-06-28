@@ -353,8 +353,25 @@ pub(super) fn value_referenced_types(
     match &definition.inner {
         ItemDefinitionInner::Type(td) => {
             for statement in td.statements() {
-                if let TypeField::Field(_, _, type_) = &statement.field {
-                    collect_value_refs(type_, scope, index, &mut refs);
+                match &statement.field {
+                    TypeField::Field(_, _, type_) => {
+                        collect_value_refs(type_, scope, index, &mut refs)
+                    }
+                    // vftable function signatures resolve their by-value arg /
+                    // return types too — a generic like `WeakPtr<GameObject>` in
+                    // a method signature must be resolved to build the vftable.
+                    TypeField::Vftable(functions) => {
+                        for function in functions {
+                            for argument in &function.arguments {
+                                if let crate::grammar::Argument::Named { type_, .. } = argument {
+                                    collect_value_refs(type_, scope, index, &mut refs);
+                                }
+                            }
+                            if let Some(return_type) = &function.return_type {
+                                collect_value_refs(return_type, scope, index, &mut refs);
+                            }
+                        }
+                    }
                 }
             }
         }
