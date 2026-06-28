@@ -143,9 +143,14 @@ pub(crate) fn attribute_name(attribute: &Attribute) -> &str {
     }
 }
 
-/// A one-line description of a known Pyxis attribute.
-pub(crate) fn attribute_description(name: &str) -> Option<&'static str> {
-    Some(match name {
+/// A one-line description of a known Pyxis attribute, derived from its
+/// structured form: `#[cfg(...)]` is recognised by its own variant; the rest
+/// are keyed by their attribute name (the only data distinguishing them).
+pub(crate) fn attribute_description(attribute: &Attribute) -> Option<&'static str> {
+    if let Attribute::Cfg { .. } = attribute {
+        return Some("Conditional-compilation predicate; each backend evaluates it independently.");
+    }
+    Some(match attribute_name(attribute) {
         "size" => "Asserts/overrides the type's total size in bytes.",
         "align" => "Overrides the type's alignment in bytes.",
         "packed" => "Removes inter-field padding (alignment 1).",
@@ -156,7 +161,6 @@ pub(crate) fn attribute_description(name: &str) -> Option<&'static str> {
         "copyable" => "Marks the type as trivially copyable.",
         "cloneable" => "Marks the type as cloneable.",
         "defaultable" | "default" => "Marks the type/variant as the default.",
-        "cfg" => "Conditional-compilation predicate; each backend evaluates it independently.",
         "calling_convention" => "Sets the function's calling convention.",
         _ => return None,
     })
@@ -272,7 +276,7 @@ pub(crate) fn format_attribute_hover(attribute: &Attribute, span: &Span, content
         .map(|s| format!("#[{s}]"))
         .unwrap_or_else(|| render_attribute(attribute));
     let mut md = format!("**attribute**\n\n```pyxis\n{src}\n```\n");
-    if let Some(desc) = attribute_description(attribute_name(attribute)) {
+    if let Some(desc) = attribute_description(attribute) {
         md.push_str(&format!("\n{desc}\n"));
     }
     md
