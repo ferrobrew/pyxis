@@ -10,6 +10,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive # tooling/tree-sitter-pyxis grammar
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
@@ -31,6 +33,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           path: pyxis
+          submodules: recursive # tooling/tree-sitter-pyxis grammar
 
       - name: Checkout pyxis-defs
         uses: actions/checkout@v4
