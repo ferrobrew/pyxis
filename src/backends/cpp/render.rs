@@ -937,12 +937,11 @@ fn render_path(path: &ItemPath, ctx: RenderCtx) -> String {
         // Externs with a #[cpp_name] binding: substitute the C++ name
         // verbatim (the pyxis leaf is allowed to contain generic syntax
         // that can't be a C++ identifier).
-        if matches!(item.category, crate::semantic::types::ItemCategory::Extern) {
-            if let Some(binding) = ctx.bindings.get(path) {
-                if let Some(name) = &binding.name {
-                    return name.clone();
-                }
-            }
+        if matches!(item.category, crate::semantic::types::ItemCategory::Extern)
+            && let Some(binding) = ctx.bindings.get(path)
+            && let Some(name) = &binding.name
+        {
+            return name.clone();
         }
     }
     // Same-module: bare name.

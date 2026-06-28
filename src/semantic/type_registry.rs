@@ -166,17 +166,14 @@ impl TypeRegistry {
     fn resolve_type_alias(&self, type_: Type) -> Type {
         match &type_ {
             Type::Raw(path) => {
-                // Check if this path refers to a non-generic type alias
-                if let Some(item_def) = self.lookup(path) {
-                    // Only follow non-generic type aliases
-                    if item_def.type_parameters.is_empty() {
-                        if let Some(resolved) = item_def.resolved() {
-                            if let Some(type_alias) = resolved.inner.as_type_alias() {
-                                // Return the target type (which is already resolved)
-                                return type_alias.target.clone();
-                            }
-                        }
-                    }
+                // Only follow non-generic type aliases; return their (already
+                // resolved) target type.
+                if let Some(item_def) = self.lookup(path)
+                    && item_def.type_parameters.is_empty()
+                    && let Some(resolved) = item_def.resolved()
+                    && let Some(type_alias) = resolved.inner.as_type_alias()
+                {
+                    return type_alias.target.clone();
                 }
                 type_
             }
@@ -192,14 +189,12 @@ impl TypeRegistry {
         &self,
         path: &ItemPath,
     ) -> Option<(Vec<String>, TypeAliasDefinition)> {
-        if let Some(item_def) = self.lookup(path) {
-            if !item_def.type_parameters.is_empty() {
-                if let Some(resolved) = item_def.resolved() {
-                    if let Some(type_alias) = resolved.inner.as_type_alias() {
-                        return Some((item_def.type_parameters.clone(), type_alias.clone()));
-                    }
-                }
-            }
+        if let Some(item_def) = self.lookup(path)
+            && !item_def.type_parameters.is_empty()
+            && let Some(resolved) = item_def.resolved()
+            && let Some(type_alias) = resolved.inner.as_type_alias()
+        {
+            return Some((item_def.type_parameters.clone(), type_alias.clone()));
         }
         None
     }
@@ -522,12 +517,12 @@ impl TypeRegistry {
                 {
                     if generic_args.is_empty() {
                         // Non-generic type reference - just find its path
-                        if let Some(last) = path.last() {
-                            if let Some(full_path) = self.find_type_path(scope, last.as_str()) {
-                                return TypeLookupResult::Found(wrap_pointer(Box::new(Type::Raw(
-                                    full_path,
-                                ))));
-                            }
+                        if let Some(last) = path.last()
+                            && let Some(full_path) = self.find_type_path(scope, last.as_str())
+                        {
+                            return TypeLookupResult::Found(wrap_pointer(Box::new(Type::Raw(
+                                full_path,
+                            ))));
                         }
                     } else {
                         // Generic type with potentially unresolved arguments.

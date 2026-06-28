@@ -544,20 +544,17 @@ pub fn compute_associated_functions<'db>(
             add_functions(base_fns, &mut associated_functions, &mut used_names);
 
             // For multiple inheritance, also inherit vftable functions from bases after the first
-            if i > 0 {
-                if let Ok(base_item) = type_registry.get(base_path, &location) {
-                    if let Some(base_resolved) = base_item.resolved() {
-                        if let ItemDefinitionInner::Type(base_td) = &base_resolved.inner {
-                            if let Some(vftable) = &base_td.vftable {
-                                add_functions(
-                                    &vftable.functions,
-                                    &mut associated_functions,
-                                    &mut used_names,
-                                );
-                            }
-                        }
-                    }
-                }
+            if i > 0
+                && let Ok(base_item) = type_registry.get(base_path, &location)
+                && let Some(base_resolved) = base_item.resolved()
+                && let ItemDefinitionInner::Type(base_td) = &base_resolved.inner
+                && let Some(vftable) = &base_td.vftable
+            {
+                add_functions(
+                    &vftable.functions,
+                    &mut associated_functions,
+                    &mut used_names,
+                );
             }
         }
 

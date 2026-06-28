@@ -171,16 +171,15 @@ impl DocLinkResolver {
             return Some(DocLinkTarget::Item(item_path));
         }
         // 2. `Type::member`.
-        if let Some((prefix, member)) = path_str.rsplit_once("::") {
-            if let Some(item_path) = self.find_item(scope, prefix) {
-                if let Some(kind) = self.find_member(&item_path, member) {
-                    return Some(DocLinkTarget::Member {
-                        item: item_path,
-                        name: member.to_string(),
-                        kind,
-                    });
-                }
-            }
+        if let Some((prefix, member)) = path_str.rsplit_once("::")
+            && let Some(item_path) = self.find_item(scope, prefix)
+            && let Some(kind) = self.find_member(&item_path, member)
+        {
+            return Some(DocLinkTarget::Member {
+                item: item_path,
+                name: member.to_string(),
+                kind,
+            });
         }
         // 3/4. A module-level freestanding function or extern value — the
         //      current module first, then any module in the crate (the backend
