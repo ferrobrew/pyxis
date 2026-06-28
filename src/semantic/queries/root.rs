@@ -49,17 +49,48 @@ pub fn analyze<'db>(
         span::HasLocation,
     };
 
-    // Build a doc-link resolver with associated (impl) functions merged into the
-    // type registry, so `Type::method` links resolve even on the error paths
-    // below where analyze bails out before the normal merge. Without this, any
-    // single semantic error in a project breaks every impl-method doc link
+    // Every result of `analyze` is a `SemanticAnalysis` with empty `parse_errors`
+    // (parse errors take the dedicated early return below) — these two helpers
+    // build one so each call site states only what differs.
+    //
+    // `bail` is for the error paths that exit before the final doc-link merge: it
+    // builds a doc-link resolver with associated (impl) functions merged into a
+    // clone of the registry, so `Type::method` links still resolve. Without this,
+    // any single semantic error in a project breaks every impl-method doc link
     // across it (common for in-progress reverse-engineering definitions).
-    let build_doc_link_resolver = |type_registry: &TypeRegistry,
-                                   modules: &BTreeMap<ItemPath, crate::semantic::Module>|
-     -> doc_links::DocLinkResolver {
+    let bail = |type_registry: &TypeRegistry,
+                modules: &BTreeMap<ItemPath, crate::semantic::Module>,
+                errors: Vec<crate::semantic::SemanticError>|
+     -> SemanticAnalysis<'db> {
         let mut merged = type_registry.clone();
         let _ = merge_associated_functions(db, pointer_size, &mut merged, modules);
-        doc_links::DocLinkResolver::build(&merged, modules)
+        let doc_link_resolver = doc_links::DocLinkResolver::build(&merged, modules);
+        SemanticAnalysis::new(
+            db,
+            Arc::new(type_registry.clone()),
+            Arc::new(modules.clone()),
+            Arc::new(doc_link_resolver),
+            Arc::new(errors),
+            Arc::new(vec![]),
+        )
+    };
+
+    // `finish` is for the paths that already hold the final doc-link resolver
+    // (the success path and the two passes that build it themselves); it takes
+    // the parts by value rather than cloning.
+    let finish = |type_registry: TypeRegistry,
+                  modules: BTreeMap<ItemPath, crate::semantic::Module>,
+                  doc_link_resolver: doc_links::DocLinkResolver,
+                  errors: Vec<crate::semantic::SemanticError>|
+     -> SemanticAnalysis<'db> {
+        SemanticAnalysis::new(
+            db,
+            Arc::new(type_registry),
+            Arc::new(modules),
+            Arc::new(doc_link_resolver),
+            Arc::new(errors),
+            Arc::new(vec![]),
+        )
     };
 
     // Collect parse results and errors.
@@ -195,14 +226,7 @@ pub fn analyze<'db>(
     }
 
     if !module_errors.is_empty() {
-        return SemanticAnalysis::new(
-            db,
-            Arc::new(type_registry.clone()),
-            Arc::new(modules.clone()),
-            Arc::new(build_doc_link_resolver(&type_registry, &modules)),
-            Arc::new(module_errors),
-            Arc::new(vec![]),
-        );
+        return bail(&type_registry, &modules, module_errors);
     }
 
     // Synthesize ancestor modules: ensure every folder that contains .pyxis
@@ -234,28 +258,14 @@ pub fn analyze<'db>(
     // and nonexistent imports before resolve_item tries to resolve types
     // that reference them.
     if let Err(e) = crate::semantic::validation::validate_uses(&type_registry, &modules) {
-        return SemanticAnalysis::new(
-            db,
-            Arc::new(type_registry.clone()),
-            Arc::new(modules.clone()),
-            Arc::new(build_doc_link_resolver(&type_registry, &modules)),
-            Arc::new(vec![e]),
-            Arc::new(vec![]),
-        );
+        return bail(&type_registry, &modules, vec![e]);
     }
     // validate_backend_for_targets also needs to run before type resolution
     // so that for_type paths are resolved before backends read them.
     if let Err(e) =
         crate::semantic::validation::validate_backend_for_targets(&type_registry, &mut modules)
     {
-        return SemanticAnalysis::new(
-            db,
-            Arc::new(type_registry.clone()),
-            Arc::new(modules.clone()),
-            Arc::new(build_doc_link_resolver(&type_registry, &modules)),
-            Arc::new(vec![e]),
-            Arc::new(vec![]),
-        );
+        return bail(&type_registry, &modules, vec![e]);
     }
 
     // Resolve every declared item through the per-item `resolve_item` query, so
@@ -299,14 +309,7 @@ pub fn analyze<'db>(
     }
 
     if !semantic_errors.is_empty() {
-        return SemanticAnalysis::new(
-            db,
-            Arc::new(type_registry.clone()),
-            Arc::new(modules.clone()),
-            Arc::new(build_doc_link_resolver(&type_registry, &modules)),
-            Arc::new(semantic_errors),
-            Arc::new(vec![]),
-        );
+        return bail(&type_registry, &modules, semantic_errors);
     }
 
     // 1. Resolve extern values
@@ -324,27 +327,13 @@ pub fn analyze<'db>(
     }
 
     if !semantic_errors.is_empty() {
-        return SemanticAnalysis::new(
-            db,
-            Arc::new(type_registry.clone()),
-            Arc::new(modules.clone()),
-            Arc::new(build_doc_link_resolver(&type_registry, &modules)),
-            Arc::new(semantic_errors),
-            Arc::new(vec![]),
-        );
+        return bail(&type_registry, &modules, semantic_errors);
     }
 
     // validate_backend_definitions rejects `prologue definition`/`epilogue definition`
     // on non-cpp backends.
     if let Err(e) = crate::semantic::validation::validate_backend_definitions(&modules) {
-        return SemanticAnalysis::new(
-            db,
-            Arc::new(type_registry.clone()),
-            Arc::new(modules.clone()),
-            Arc::new(build_doc_link_resolver(&type_registry, &modules)),
-            Arc::new(vec![e]),
-            Arc::new(vec![]),
-        );
+        return bail(&type_registry, &modules, vec![e]);
     }
 
     // Associated functions (own impl methods + inherited) are computed by the
@@ -353,37 +342,16 @@ pub fn analyze<'db>(
     let af_errors = merge_associated_functions(db, pointer_size, &mut type_registry, &modules);
     if !af_errors.is_empty() {
         let doc_link_resolver = doc_links::DocLinkResolver::build(&type_registry, &modules);
-        return SemanticAnalysis::new(
-            db,
-            Arc::new(type_registry),
-            Arc::new(modules),
-            Arc::new(doc_link_resolver),
-            Arc::new(af_errors),
-            Arc::new(vec![]),
-        );
+        return finish(type_registry, modules, doc_link_resolver, af_errors);
     }
 
     // Doc link resolution (now with associated functions in the registry)
     let doc_link_resolver = doc_links::DocLinkResolver::build(&type_registry, &modules);
     if let Err(e) = doc_links::validate(&doc_link_resolver, &type_registry, &modules) {
-        return SemanticAnalysis::new(
-            db,
-            Arc::new(type_registry),
-            Arc::new(modules),
-            Arc::new(doc_link_resolver),
-            Arc::new(vec![e]),
-            Arc::new(vec![]),
-        );
+        return finish(type_registry, modules, doc_link_resolver, vec![e]);
     }
 
-    SemanticAnalysis::new(
-        db,
-        Arc::new(type_registry),
-        Arc::new(modules),
-        Arc::new(doc_link_resolver),
-        Arc::new(vec![]),
-        Arc::new(vec![]),
-    )
+    finish(type_registry, modules, doc_link_resolver, vec![])
 }
 
 /// Compute associated functions (own impl methods + inherited from base types)
