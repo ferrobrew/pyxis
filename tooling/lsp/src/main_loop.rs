@@ -80,7 +80,10 @@ pub fn run_with_connection(connection: Connection) -> Result<(), Box<dyn std::er
             resolve_provider: Some(false),
         }),
         inlay_hint_provider: Some(OneOf::Left(true)),
-        rename_provider: Some(OneOf::Left(true)),
+        rename_provider: Some(OneOf::Right(lsp_types::RenameOptions {
+            prepare_provider: Some(true),
+            work_done_progress_options: Default::default(),
+        })),
         ..Default::default()
     };
 
@@ -189,6 +192,7 @@ fn handle_request(
         "textDocument/formatting" => state.handle_formatting(req),
         "textDocument/codeLens" => state.handle_code_lens(req),
         "textDocument/inlayHint" => state.handle_inlay_hints(req),
+        "textDocument/prepareRename" => state.handle_prepare_rename(req),
         "textDocument/rename" => state.handle_rename(req),
         _ => Response {
             id: req.id,

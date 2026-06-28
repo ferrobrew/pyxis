@@ -975,3 +975,33 @@ fn semantic_tokens_classify_types_namespaces_builtins() {
         "u32 builtin: {toks:?}"
     );
 }
+
+#[test]
+fn prepare_rename_validates_target() {
+    let src = "pub type Foo {\n    pub v: Foo,\n    pub n: u32,\n}\n";
+    let st = ServerState::in_memory(&[("/p", 8, &[("m.pyxis", src)])]);
+    let uri = ServerState::document_uri("/p", "m.pyxis");
+    let pr = |l: u32, c: u32| {
+        let r = Request::new(
+            RequestId::from(1),
+            "textDocument/prepareRename".into(),
+            serde_json::to_value(TextDocumentPositionParams {
+                text_document: TextDocumentIdentifier { uri: uri.clone() },
+                position: Position {
+                    line: l,
+                    character: c,
+                },
+            })
+            .unwrap(),
+        );
+        st.handle_prepare_rename(r).result.unwrap()
+    };
+    // definition name and a reference are renameable, with the identifier range + placeholder
+    let def = pr(0, 10);
+    assert_eq!(def["placeholder"], "Foo");
+    assert_eq!(def["range"]["start"]["character"], 9);
+    assert_eq!(pr(1, 11)["placeholder"], "Foo");
+    // builtins and non-identifier positions are not renameable
+    assert!(pr(2, 11).is_null(), "u32 builtin must not be renameable");
+    assert!(pr(1, 2).is_null(), "whitespace must not be renameable");
+}

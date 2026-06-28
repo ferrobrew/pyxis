@@ -1636,6 +1636,56 @@ impl ServerState {
         ))
     }
 
+    /// textDocument/prepareRename — validate the cursor is on a renameable
+    /// identifier (a user-defined type/reference/use-leaf, not a builtin) and
+    /// return its range + current text.
+    pub fn handle_prepare_rename(&self, req: Request) -> Response {
+        let result = self
+            .prepare_rename(&req)
+            .map(|r| serde_json::to_value(r).unwrap());
+        Response {
+            id: req.id,
+            result: Some(result.unwrap_or(serde_json::Value::Null)),
+            error: None,
+        }
+    }
+
+    fn prepare_rename(&self, req: &Request) -> Option<lsp_types::PrepareRenameResponse> {
+        let params: TextDocumentPositionParams = serde_json::from_value(req.params.clone()).ok()?;
+        let uri = &params.text_document.uri;
+        let content = self.get_content(uri)?;
+        let loc = lsp_position_to_pyxis_location(content, params.position);
+        let target = self.symbol_at(uri, &loc)?;
+
+        // Builtins resolve but must not be renamed.
+        let pointer_size = self.pointer_size_for(uri);
+        let source_set = semantic::SourceSet::new(&self.db, self.sources_for(uri));
+        let decl_set = semantic::collect_declarations(&self.db, source_set, pointer_size);
+        if decl_set
+            .registry(&self.db)
+            .get_predefined(&target)
+            .is_some()
+        {
+            return None;
+        }
+
+        // The identifier token under the cursor is what gets rewritten.
+        let tokens_arc = self.tokens_for(uri);
+        let tokens: &[Token] = tokens_arc.as_deref().map(Vec::as_slice).unwrap_or(&[]);
+        let tok = tokens.iter().find(|t| {
+            t.location.span.contains(&loc)
+                && matches!(&t.kind, TokenKind::Ident(_) | TokenKind::Vftable)
+        })?;
+        let placeholder = match &tok.kind {
+            TokenKind::Ident(s) => s.clone(),
+            _ => target.last()?.as_str().to_string(),
+        };
+        Some(lsp_types::PrepareRenameResponse::RangeWithPlaceholder {
+            range: pyxis_span_to_lsp_range(content, &tok.location.span),
+            placeholder,
+        })
+    }
+
     /// textDocument/rename
     #[allow(clippy::mutable_key_type)] // lsp_types::Uri key is fine here
     pub fn handle_rename(&self, req: Request) -> Response {
