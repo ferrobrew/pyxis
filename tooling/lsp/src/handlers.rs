@@ -1052,20 +1052,21 @@ impl ServerState {
     /// Resolve the cursor to the canonical path of the symbol it names — a type
     /// reference, a `use` leaf, or a definition's own name. The anchor for
     /// find-references / document-highlight / rename.
-    fn symbol_at(&self, uri: &Uri, loc: &Location) -> Option<ItemPath> {
+    fn symbol_at(&self, uri: &Uri, loc: &Location) -> Option<Symbol> {
+        use pyxis::grammar::{ImplItem, ItemDefinitionInner};
         let module = self.get_parsed_module(uri)?;
         let tokens_arc = self.tokens_for(uri);
         let tokens: &[Token] = tokens_arc.as_deref().map(Vec::as_slice).unwrap_or(&[]);
         let scope = self.scope_for(uri);
         let pointer_size = self.pointer_size_for(uri);
-        let sources = self.sources_for(uri);
-        let source_set = semantic::SourceSet::new(&self.db, sources);
+        let source_set = semantic::SourceSet::new(&self.db, self.sources_for(uri));
         let analysis = semantic::analyze(&self.db, pointer_size, source_set);
         let type_registry = analysis.type_registry(&self.db);
         let decl_set = semantic::collect_declarations(&self.db, source_set, pointer_size);
         let decl_registry = decl_set.registry(&self.db);
+        let own_module = self.module_path_for(uri);
 
-        // A reference (type position or `use` leaf) → its resolved item.
+        // 1. A type reference (type position or `use` leaf) → the type it names.
         if let Some(Ref::Item { item: Some(p), .. }) = find_reference_at(
             &module,
             loc,
@@ -1075,20 +1076,71 @@ impl ServerState {
             type_registry,
             pointer_size,
         ) {
-            return Some(p);
+            return Some(Symbol::Type(p));
         }
-        // A definition's own name → the definition's own path.
-        for def in module.definitions() {
-            if let Some(span) = name_token_span(
-                tokens,
-                &def.declaration_location.span.start,
-                def.name.as_str(),
-            ) && span.contains(loc)
-            {
-                return Some(match self.module_path_for(uri) {
-                    Some(mp) => mp.join(def.name.as_str().into()),
-                    None => ItemPath::from(def.name.as_str()),
-                });
+
+        // 2/3. A definition's own name (→ Type) or a member declaration within
+        //      it / an impl block (→ Member).
+        let on_name = |from: &Location, name: &str| {
+            name_token_span(tokens, from, name).is_some_and(|s| s.contains(loc))
+        };
+        for item in &module.items {
+            match item {
+                ModuleItem::Definition { definition } => {
+                    let owner = || match &own_module {
+                        Some(mp) => mp.join(definition.name.as_str().into()),
+                        None => ItemPath::from(definition.name.as_str()),
+                    };
+                    if on_name(
+                        &definition.declaration_location.span.start,
+                        definition.name.as_str(),
+                    ) {
+                        return Some(Symbol::Type(owner()));
+                    }
+                    if let ItemDefinitionInner::Type(td) = &definition.inner {
+                        for statement in td.statements() {
+                            let member = match &statement.field {
+                                TypeField::Field(_, field_name, _)
+                                    if on_name(
+                                        &statement.location.span.start,
+                                        field_name.as_str(),
+                                    ) =>
+                                {
+                                    Some(field_name.as_str().to_string())
+                                }
+                                TypeField::Vftable(fns) => fns
+                                    .iter()
+                                    .find(|f| on_name(&f.location.span.start, f.name.as_str()))
+                                    .map(|f| f.name.as_str().to_string()),
+                                _ => None,
+                            };
+                            if let Some(name) = member {
+                                return Some(Symbol::Member {
+                                    owner: owner(),
+                                    name,
+                                });
+                            }
+                        }
+                    }
+                }
+                ModuleItem::Impl { impl_block } => {
+                    for impl_item in &impl_block.items {
+                        if let ImplItem::Function(f) = impl_item
+                            && on_name(&f.location.span.start, f.name.as_str())
+                        {
+                            let owner = resolve_type_path(
+                                &ItemPath::from(impl_block.name.as_str()),
+                                &scope,
+                                decl_registry,
+                            )?;
+                            return Some(Symbol::Member {
+                                owner,
+                                name: f.name.as_str().to_string(),
+                            });
+                        }
+                    }
+                }
+                _ => {}
             }
         }
         None
@@ -1097,7 +1149,25 @@ impl ServerState {
     /// Every occurrence — definition name, type references, and `use` leaves —
     /// of the resolved symbol `target`, across the requesting file's project.
     /// The shared engine behind find-references, document-highlight, and rename.
-    fn symbol_occurrences(&self, target: &ItemPath, from_uri: &Uri) -> Vec<lsp_types::Location> {
+    fn symbol_occurrences(&self, symbol: &Symbol, from_uri: &Uri) -> Vec<lsp_types::Location> {
+        // A member (field/method) has no source cross-references beyond its
+        // declaration — return just that.
+        let target = match symbol {
+            Symbol::Type(p) => p,
+            Symbol::Member { owner, name } => {
+                return self
+                    .resolve_doc_member(owner, name, from_uri)
+                    .and_then(|(uri, span, _)| {
+                        let content = self.get_content(&uri)?;
+                        Some(lsp_types::Location {
+                            uri: uri.clone(),
+                            range: pyxis_span_to_lsp_range(content, &span),
+                        })
+                    })
+                    .into_iter()
+                    .collect();
+            }
+        };
         let mut out: Vec<lsp_types::Location> = Vec::new();
         let Some(name) = target.last().map(|s| s.as_str().to_string()) else {
             return out;
@@ -1181,6 +1251,27 @@ impl ServerState {
         out
     }
 
+    /// The declaration site of a symbol — the type's own name, or the member's
+    /// declaration. Used to honour `includeDeclaration: false`.
+    fn symbol_declaration(&self, symbol: &Symbol, from_uri: &Uri) -> Option<lsp_types::Location> {
+        let (uri, span) = match symbol {
+            Symbol::Type(p) => {
+                let (type_registry, _) = self.registries_for(from_uri);
+                let rd = self.resolved_definition(p, type_registry, from_uri)?;
+                (rd.uri, rd.name_span)
+            }
+            Symbol::Member { owner, name } => {
+                let (uri, span, _) = self.resolve_doc_member(owner, name, from_uri)?;
+                (uri, span)
+            }
+        };
+        let content = self.get_content(&uri)?;
+        Some(lsp_types::Location {
+            range: pyxis_span_to_lsp_range(content, &span),
+            uri,
+        })
+    }
+
     /// textDocument/references
     pub fn handle_references(&self, req: Request) -> Response {
         let params: lsp_types::ReferenceParams = match serde_json::from_value(req.params.clone()) {
@@ -1194,19 +1285,11 @@ impl ServerState {
             .map(|content| {
                 lsp_position_to_pyxis_location(content, params.text_document_position.position)
             })
-            .and_then(|loc| self.symbol_at(uri, &loc).map(|target| (target, loc)))
-            .map(|(target, _)| {
-                let mut locs = self.symbol_occurrences(&target, uri);
-                if !include_decl {
-                    // Drop the definition site (the name at the type's own module).
-                    if let Some(decl_uri) =
-                        self.module_uri(&target.parent().unwrap_or(target.clone()), uri)
-                    {
-                        let decl_module = target.parent();
-                        locs.retain(|l| {
-                            !(l.uri == decl_uri && self.module_path_for(&l.uri) == decl_module)
-                        });
-                    }
+            .and_then(|loc| self.symbol_at(uri, &loc))
+            .map(|symbol| {
+                let mut locs = self.symbol_occurrences(&symbol, uri);
+                if !include_decl && let Some(decl) = self.symbol_declaration(&symbol, uri) {
+                    locs.retain(|l| !(l.uri == decl.uri && l.range == decl.range));
                 }
                 locs
             })
@@ -1507,8 +1590,8 @@ impl ServerState {
                 let uri = p.text_document.uri;
                 let content = self.get_content(&uri)?;
                 let loc = lsp_position_to_pyxis_location(content, p.position);
-                let target = self.symbol_at(&uri, &loc)?;
-                Some(self.impl_locations(&target, &uri))
+                let symbol = self.symbol_at(&uri, &loc)?;
+                Some(self.impl_locations(symbol.type_path()?, &uri))
             })
             .unwrap_or_default();
         Response {
@@ -1741,9 +1824,10 @@ impl ServerState {
                 content,
                 params.text_document_position_params.position,
             );
-            let target = self.symbol_at(&uri, &loc)?;
+            let symbol = self.symbol_at(&uri, &loc)?;
             let (type_registry, decl_registry) = self.registries_for(&uri);
-            let item = self.type_hierarchy_item(&target, &uri, type_registry, decl_registry)?;
+            let item =
+                self.type_hierarchy_item(symbol.type_path()?, &uri, type_registry, decl_registry)?;
             Some(vec![item])
         })();
         Response {
@@ -2042,34 +2126,31 @@ impl ServerState {
         let uri = &params.text_document.uri;
         let content = self.get_content(uri)?;
         let loc = lsp_position_to_pyxis_location(content, params.position);
-        let target = self.symbol_at(uri, &loc)?;
+        // Renameable iff the cursor is on a type or member symbol.
+        let symbol = self.symbol_at(uri, &loc)?;
 
-        // Builtins resolve but must not be renamed.
-        let pointer_size = self.pointer_size_for(uri);
-        let source_set = semantic::SourceSet::new(&self.db, self.sources_for(uri));
-        let decl_set = semantic::collect_declarations(&self.db, source_set, pointer_size);
-        if decl_set
-            .registry(&self.db)
-            .get_predefined(&target)
-            .is_some()
-        {
-            return None;
+        // A builtin type resolves but must not be renamed.
+        if let Some(p) = symbol.type_path() {
+            let pointer_size = self.pointer_size_for(uri);
+            let source_set = semantic::SourceSet::new(&self.db, self.sources_for(uri));
+            let decl_set = semantic::collect_declarations(&self.db, source_set, pointer_size);
+            if decl_set.registry(&self.db).get_predefined(p).is_some() {
+                return None;
+            }
         }
 
         // The identifier token under the cursor is what gets rewritten.
         let tokens_arc = self.tokens_for(uri);
         let tokens: &[Token] = tokens_arc.as_deref().map(Vec::as_slice).unwrap_or(&[]);
-        let tok = tokens.iter().find(|t| {
-            t.location.span.contains(&loc)
-                && matches!(&t.kind, TokenKind::Ident(_) | TokenKind::Vftable)
-        })?;
-        let placeholder = match &tok.kind {
-            TokenKind::Ident(s) => s.clone(),
-            _ => target.last()?.as_str().to_string(),
+        let tok = tokens
+            .iter()
+            .find(|t| t.location.span.contains(&loc) && matches!(&t.kind, TokenKind::Ident(_)))?;
+        let TokenKind::Ident(name) = &tok.kind else {
+            return None;
         };
         Some(lsp_types::PrepareRenameResponse::RangeWithPlaceholder {
             range: pyxis_span_to_lsp_range(content, &tok.location.span),
-            placeholder,
+            placeholder: name.clone(),
         })
     }
 
@@ -2480,6 +2561,25 @@ fn error_response(id: lsp_server::RequestId, e: serde_json::Error) -> Response {
 /// A reference found under the cursor. Either a *named* reference (a type/import
 /// segment, resolved to a concrete item or module) or a pointer/array/unknown
 /// *shell* whose pre-rendered hover markdown describes its shape.
+/// What the cursor resolves to for navigation/rename: a type, or a member of
+/// one (a field or method). Members have no cross-references in pyxis source
+/// beyond their declaration.
+enum Symbol {
+    Type(ItemPath),
+    Member { owner: ItemPath, name: String },
+}
+
+impl Symbol {
+    /// The type path, if this symbol is a type (not a member). Used by features
+    /// that only apply to types — go-to-implementation, type hierarchy.
+    fn type_path(&self) -> Option<&ItemPath> {
+        match self {
+            Symbol::Type(p) => Some(p),
+            Symbol::Member { .. } => None,
+        }
+    }
+}
+
 enum Ref {
     Item {
         /// Resolved concrete item path, if this segment names a type/extern/predefined.

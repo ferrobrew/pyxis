@@ -1155,3 +1155,58 @@ fn doc_link_covers_whole_link_and_targets_member() {
         "def from inside (target)"
     );
 }
+
+#[test]
+fn rename_members_fields_and_methods() {
+    let src = "pub type Foo {\n    pub bar: u64,\n    vftable {\n        pub fn vf(&mut self);\n    },\n}\nimpl Foo {\n    pub fn doit(&mut self);\n}\n";
+    let st = ServerState::in_memory(&[("/p", 8, &[("m.pyxis", src)])]);
+    let uri = ServerState::document_uri("/p", "m.pyxis");
+    let col = |l: usize, n: &str| src.lines().nth(l).unwrap().find(n).unwrap() as u32;
+    let edits = |l: u32, c: u32, name: &str| -> usize {
+        let r = Request::new(
+            RequestId::from(1),
+            "textDocument/rename".into(),
+            serde_json::to_value(lsp_types::RenameParams {
+                text_document_position: TextDocumentPositionParams {
+                    text_document: TextDocumentIdentifier { uri: uri.clone() },
+                    position: Position {
+                        line: l,
+                        character: c,
+                    },
+                },
+                new_name: name.to_string(),
+                work_done_progress_params: Default::default(),
+            })
+            .unwrap(),
+        );
+        let we: lsp_types::WorkspaceEdit =
+            serde_json::from_value(st.handle_rename(r).result.unwrap()).unwrap();
+        we.changes
+            .map(|c| c.values().map(|v| v.len()).sum())
+            .unwrap_or(0)
+    };
+    let prepare = |l: u32, c: u32| {
+        let r = Request::new(
+            RequestId::from(1),
+            "textDocument/prepareRename".into(),
+            serde_json::to_value(TextDocumentPositionParams {
+                text_document: TextDocumentIdentifier { uri: uri.clone() },
+                position: Position {
+                    line: l,
+                    character: c,
+                },
+            })
+            .unwrap(),
+        );
+        st.handle_prepare_rename(r).result.unwrap()
+    };
+
+    // A field is renameable (prepare returns its name) and rewrites its single declaration.
+    assert_eq!(prepare(1, col(1, "bar"))["placeholder"], "bar");
+    assert_eq!(edits(1, col(1, "bar"), "baz"), 1, "field rename");
+    // vftable and impl methods too.
+    assert!(!prepare(3, col(3, "vf")).is_null());
+    assert_eq!(edits(3, col(3, "vf"), "vf2"), 1, "vftable method rename");
+    assert!(!prepare(7, col(7, "doit")).is_null());
+    assert_eq!(edits(7, col(7, "doit"), "doit2"), 1, "impl method rename");
+}
