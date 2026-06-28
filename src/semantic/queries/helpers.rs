@@ -396,13 +396,16 @@ fn collect_value_refs(
     }
 }
 
-/// Collect `(span, resolved path)` for every named type reference in a
-/// definition — fields, vftable signatures, bases/aliases, recursing through
-/// pointers, arrays, and generic arguments. Powers the per-file source map.
+/// Collect `(leaf-segment span, resolved path)` for every named type reference
+/// in a definition — fields, vftable signatures, bases/aliases, recursing
+/// through pointers, arrays, and generic arguments. The span is the *leaf*
+/// identifier (`Foo` in `a::b::Foo`, `Map` in `Map<Foo>`) so rename rewrites
+/// exactly that token. Powers the per-file source map.
 pub(super) fn collect_type_ref_spans(
     definition: &crate::grammar::ItemDefinition,
     scope: &[ItemPath],
     index: &NameIndex,
+    tokens: &[crate::tokenizer::Token],
     out: &mut Vec<(crate::span::Span, ItemPath)>,
 ) {
     use crate::grammar::TypeField;
@@ -410,32 +413,70 @@ pub(super) fn collect_type_ref_spans(
         ItemDefinitionInner::Type(td) => {
             for statement in td.statements() {
                 match &statement.field {
-                    TypeField::Field(_, _, type_) => type_ref_spans(type_, scope, index, out),
+                    TypeField::Field(_, _, type_) => {
+                        type_ref_spans(type_, scope, index, tokens, out)
+                    }
                     TypeField::Vftable(functions) => {
                         for function in functions {
                             for argument in &function.arguments {
                                 if let crate::grammar::Argument::Named { type_, .. } = argument {
-                                    type_ref_spans(type_, scope, index, out);
+                                    type_ref_spans(type_, scope, index, tokens, out);
                                 }
                             }
                             if let Some(return_type) = &function.return_type {
-                                type_ref_spans(return_type, scope, index, out);
+                                type_ref_spans(return_type, scope, index, tokens, out);
                             }
                         }
                     }
                 }
             }
         }
-        ItemDefinitionInner::Enum(e) => type_ref_spans(&e.type_, scope, index, out),
-        ItemDefinitionInner::Bitflags(b) => type_ref_spans(&b.type_, scope, index, out),
-        ItemDefinitionInner::TypeAlias(ta) => type_ref_spans(&ta.target, scope, index, out),
+        ItemDefinitionInner::Enum(e) => type_ref_spans(&e.type_, scope, index, tokens, out),
+        ItemDefinitionInner::Bitflags(b) => type_ref_spans(&b.type_, scope, index, tokens, out),
+        ItemDefinitionInner::TypeAlias(ta) => type_ref_spans(&ta.target, scope, index, tokens, out),
     }
 }
 
-fn type_ref_spans(
+/// Collect `(leaf span, resolved path)` for the argument and return types of a
+/// function signature (impl method or free function).
+pub(super) fn fn_sig_type_spans(
+    function: &crate::grammar::Function,
+    scope: &[ItemPath],
+    index: &NameIndex,
+    tokens: &[crate::tokenizer::Token],
+    out: &mut Vec<(crate::span::Span, ItemPath)>,
+) {
+    for argument in &function.arguments {
+        if let crate::grammar::Argument::Named { type_, .. } = argument {
+            type_ref_spans(type_, scope, index, tokens, out);
+        }
+    }
+    if let Some(return_type) = &function.return_type {
+        type_ref_spans(return_type, scope, index, tokens, out);
+    }
+}
+
+/// The span of the first identifier token at or after `from` whose text is
+/// `name` — used to locate an `impl <Type>` target name.
+pub(super) fn first_ident_span(
+    tokens: &[crate::tokenizer::Token],
+    from: crate::span::Location,
+    name: &str,
+) -> Option<crate::span::Span> {
+    tokens
+        .iter()
+        .find(|t| {
+            t.location.span.start >= from
+                && matches!(&t.kind, crate::tokenizer::TokenKind::Ident(s) if s == name)
+        })
+        .map(|t| t.location.span)
+}
+
+pub(super) fn type_ref_spans(
     type_: &crate::grammar::Type,
     scope: &[ItemPath],
     index: &NameIndex,
+    tokens: &[crate::tokenizer::Token],
     out: &mut Vec<(crate::span::Span, ItemPath)>,
 ) {
     use crate::grammar::Type;
@@ -444,20 +485,43 @@ fn type_ref_spans(
         Type::Ident {
             path, generic_args, ..
         } => {
-            let name = path.last().map(|s| s.as_str()).unwrap_or("");
-            if let NameResolution::Found(p) | NameResolution::FoundExtern(p) =
-                index.resolve_name(scope, name)
+            let span = type_.location().span;
+            // The outer name ends where the generic args begin, so a generic
+            // argument's leaf isn't mistaken for the outer type's.
+            let outer_end = generic_args
+                .first()
+                .map(|a| a.location().span.start)
+                .unwrap_or(span.end);
+            if let Some(resolved) = index.resolve_path(scope, path)
+                && let Some(leaf) = last_ident_span(tokens, span.start, outer_end)
             {
-                out.push((type_.location().span, p));
+                out.push((leaf, resolved));
             }
             for arg in generic_args {
-                type_ref_spans(arg, scope, index, out);
+                type_ref_spans(arg, scope, index, tokens, out);
             }
         }
         Type::ConstPointer { pointee, .. } | Type::MutPointer { pointee, .. } => {
-            type_ref_spans(pointee, scope, index, out)
+            type_ref_spans(pointee, scope, index, tokens, out)
         }
-        Type::Array { element, .. } => type_ref_spans(element, scope, index, out),
+        Type::Array { element, .. } => type_ref_spans(element, scope, index, tokens, out),
         Type::Unknown { .. } => {}
     }
+}
+
+/// The span of the last identifier token in `[start, end)` — the leaf segment of
+/// a (possibly qualified) path.
+pub(super) fn last_ident_span(
+    tokens: &[crate::tokenizer::Token],
+    start: crate::span::Location,
+    end: crate::span::Location,
+) -> Option<crate::span::Span> {
+    tokens
+        .iter()
+        .rfind(|t| {
+            matches!(t.kind, crate::tokenizer::TokenKind::Ident(_))
+                && t.location.span.start >= start
+                && t.location.span.start < end
+        })
+        .map(|t| t.location.span)
 }

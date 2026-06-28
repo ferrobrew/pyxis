@@ -1304,3 +1304,54 @@ fn rename_does_not_corrupt_doc_link_prose_labels() {
         "prose label 'the Foo struct' must not be rewritten"
     );
 }
+
+#[test]
+#[allow(clippy::mutable_key_type)] // lsp_types::Uri map key is fine here
+fn rename_type_updates_use_leaf_and_field_across_files() {
+    // Exercises the source-map-backed symbol_occurrences: a use-statement leaf
+    // and a field reference in another file must both be renamed.
+    let st = ServerState::in_memory(&[(
+        "/p",
+        8,
+        &[
+            ("a.pyxis", "pub type Foo {\n    pub x: u64,\n}\n"),
+            (
+                "b.pyxis",
+                "use a::Foo;\npub type Bar {\n    pub f: Foo,\n}\n",
+            ),
+        ],
+    )]);
+    let a = ServerState::document_uri("/p", "a.pyxis");
+    let col = "pub type ".len() as u32; // the `Foo` in a.pyxis
+    let r = Request::new(
+        RequestId::from(1),
+        "textDocument/rename".into(),
+        serde_json::to_value(lsp_types::RenameParams {
+            text_document_position: TextDocumentPositionParams {
+                text_document: TextDocumentIdentifier { uri: a.clone() },
+                position: Position {
+                    line: 0,
+                    character: col,
+                },
+            },
+            new_name: "Renamed".to_string(),
+            work_done_progress_params: Default::default(),
+        })
+        .unwrap(),
+    );
+    let we: lsp_types::WorkspaceEdit =
+        serde_json::from_value(st.handle_rename(r).result.unwrap()).unwrap();
+    let changes = we.changes.unwrap();
+    let total: usize = changes.values().map(|v| v.len()).sum();
+    // Definition (a.pyxis) + use leaf (b.pyxis) + field type (b.pyxis) = 3.
+    assert_eq!(
+        total, 3,
+        "rename should touch def + use leaf + field ref; got {total}: {changes:?}"
+    );
+    let b = ServerState::document_uri("/p", "b.pyxis");
+    assert_eq!(
+        changes.get(&b).map(|v| v.len()),
+        Some(2),
+        "both b.pyxis occurrences"
+    );
+}

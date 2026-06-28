@@ -187,6 +187,22 @@ impl NameIndex {
         self.module_scopes.get(module_path).map(|s| s.as_slice())
     }
 
+    /// Resolve a (possibly multi-segment) type path in a scope to its canonical
+    /// `ItemPath`. Mirrors the LSP's `resolve_type_path`: a multi-segment path is
+    /// likely absolute, else the leaf name is resolved through the scope.
+    pub fn resolve_path(&self, scope: &[ItemPath], path: &ItemPath) -> Option<ItemPath> {
+        if path.len() > 1 && (self.items.contains_key(path) || self.extern_types.contains_key(path))
+        {
+            return Some(path.clone());
+        }
+        match self.resolve_name(scope, path.last()?.as_str()) {
+            NameResolution::Found(p)
+            | NameResolution::FoundExtern(p)
+            | NameResolution::FoundPredefined(p) => Some(p),
+            NameResolution::NotFound => None,
+        }
+    }
+
     /// Resolve a type name in the given scope. Mirrors
     /// `DeclarationRegistry::resolve_name` but over the stable index.
     pub fn resolve_name(&self, scope: &[ItemPath], name: &str) -> NameResolution {

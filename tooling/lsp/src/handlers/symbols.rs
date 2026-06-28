@@ -132,7 +132,6 @@ impl ServerState {
             .and_then(|d| d.project_root.clone());
 
         let pointer_size = self.pointer_size_for(from_uri);
-        let (type_registry, decl_registry) = self.registries_for(from_uri);
 
         // Files in the same project (same relative path across projects shares a
         // module path, so we must not cross the project boundary).
@@ -152,28 +151,20 @@ impl ServerState {
             };
             let tokens_arc = self.tokens_for(uri);
             let tokens: &[Token] = tokens_arc.as_deref().map(Vec::as_slice).unwrap_or(&[]);
-            let scope = self.scope_for(uri);
 
-            // References + `use` leaves: each ident token spelled like the target,
-            // confirmed by resolving it back to the target path.
-            for tok in tokens.iter() {
-                if !matches!(&tok.kind, TokenKind::Ident(s) if *s == name) {
-                    continue;
-                }
-                if let Some(Ref::Item { item: Some(p), .. }) = find_reference_at(
-                    &module,
-                    &tok.location.span.start,
-                    &scope,
-                    decl_registry,
-                    tokens,
-                    type_registry,
-                    pointer_size,
-                ) && p == *target
-                {
-                    out.push(lsp_types::Location {
-                        uri: uri.clone(),
-                        range: pyxis_span_to_lsp_range(content, &tok.location.span),
-                    });
+            // References + `use`-tree leaves: from the per-file, incrementally
+            // cached source map (leaf span → resolved path), filtered to target.
+            if let Some(source_file) = self.documents.get(uri).map(|d| d.source_file) {
+                let source_set = semantic::SourceSet::new(&self.db, self.sources_for(uri));
+                let references =
+                    semantic::file_type_references(&self.db, source_file, source_set, pointer_size);
+                for (span, path) in references.references(&self.db).iter() {
+                    if path == target {
+                        out.push(lsp_types::Location {
+                            uri: uri.clone(),
+                            range: pyxis_span_to_lsp_range(content, span),
+                        });
+                    }
                 }
             }
 

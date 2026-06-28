@@ -141,10 +141,13 @@ pub fn placeholder_base<'db>(
     PlaceholderBase::new(db, Arc::new(registry))
 }
 
-/// Per-file source map of named type references → resolved `ItemPath`. Depends
-/// on this file's `parse_file` and `name_index` (whose output backdates), so it
-/// recomputes only for the edited file — the LSP gets an incremental O(1)-ish
-/// cursor→path lookup instead of re-walking the AST and re-resolving per request.
+/// Per-file source map: the leaf-segment span of every type reference in a file
+/// (in type positions *and* `use` trees) paired with the `ItemPath` it resolves
+/// to — a single, incrementally-cached source of truth for "what type is
+/// referenced at this position". Depends on this file's `parse_file`/
+/// `tokenize_file` and `name_index` (whose output backdates), so it recomputes
+/// only for the edited file. The LSP uses it to find references / drive rename
+/// without re-walking and re-resolving every file per request.
 #[salsa::tracked]
 pub fn file_type_references<'db>(
     db: &'db dyn Db,
@@ -154,16 +157,61 @@ pub fn file_type_references<'db>(
 ) -> FileTypeReferences<'db> {
     let index = name_index(db, sources, pointer_size).index(db);
     let parsed = parse_file(db, source);
+    let module = parsed.module(db);
     let path_str = source.path(db);
     let module_path = ItemPath::from_path(std::path::Path::new(path_str.as_str()));
     let scope = index
         .module_scope(&module_path)
         .map(<[ItemPath]>::to_vec)
         .unwrap_or_default();
+    let tokens: &[crate::tokenizer::Token] = tokenize_file(db, source).tokens(db);
 
+    // Every place a type can be referenced — mirrors the LSP's find_reference_at
+    // so this is a faithful, precomputed source of truth.
+    use crate::grammar::{ImplItem, ModuleItem};
     let mut references = Vec::new();
-    for definition in parsed.module(db).definitions() {
-        collect_type_ref_spans(definition, &scope, index, &mut references);
+    for item in &module.items {
+        match item {
+            // Definitions: field types, vftable signatures, bases, aliases.
+            ModuleItem::Definition { definition } => {
+                collect_type_ref_spans(definition, &scope, index, tokens, &mut references)
+            }
+            // `use`-tree leaves.
+            ModuleItem::Use { tree, .. } => {
+                for (leaf_path, location) in tree.flatten_with_locations() {
+                    if let Some(resolved) = index.resolve_path(&scope, &leaf_path)
+                        && let Some(leaf) =
+                            last_ident_span(tokens, location.span.start, location.span.end)
+                    {
+                        references.push((leaf, resolved));
+                    }
+                }
+            }
+            // `impl <Type>` target name + each method signature's types.
+            ModuleItem::Impl { impl_block } => {
+                let name = impl_block.name.as_str();
+                if let Some(resolved) = index.resolve_path(&scope, &ItemPath::from(name))
+                    && let Some(span) =
+                        first_ident_span(tokens, impl_block.location.span.start, name)
+                {
+                    references.push((span, resolved));
+                }
+                for impl_item in &impl_block.items {
+                    if let ImplItem::Function(f) = impl_item {
+                        fn_sig_type_spans(f, &scope, index, tokens, &mut references);
+                    }
+                }
+            }
+            // Free-function signature types.
+            ModuleItem::Function { function } => {
+                fn_sig_type_spans(function, &scope, index, tokens, &mut references)
+            }
+            // `extern name: Type;` — the referenced type.
+            ModuleItem::ExternValue { extern_value } => {
+                type_ref_spans(&extern_value.type_, &scope, index, tokens, &mut references)
+            }
+            _ => {}
+        }
     }
     FileTypeReferences::new(db, Arc::new(references))
 }
