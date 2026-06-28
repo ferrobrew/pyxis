@@ -71,7 +71,7 @@ CI doesn't need xwin.
 
 ## Editor tooling
 
-Pyxis ships a tree-sitter grammar, Zed/VSCode extensions, and a language
+Pyxis ships a tree-sitter grammar, a Zed extension, and a language
 server. All live under `tooling/`.
 
 The tree-sitter grammar lives in its own repository,
@@ -99,7 +99,6 @@ and the LSP server call the same Salsa queries — there is no separate
 - `src/salsa/` — Salsa database, inputs, IR, and tracked functions
 - `tooling/tree-sitter-pyxis/` — tree-sitter grammar for syntax highlighting (a submodule → [`ferrobrew/tree-sitter-pyxis`](https://github.com/ferrobrew/tree-sitter-pyxis))
 - `tooling/zed-pyxis/` — Zed extension
-- `tooling/vscode-pyxis/` — VSCode extension (TextMate + LSP client)
 - `tooling/lsp/` — LSP server binary (`pyxis-lsp`)
 
 ### Running the LSP
@@ -108,6 +107,5 @@ and the LSP server call the same Salsa queries — there is no separate
 cargo build -p pyxis-lsp --release
 ```
 
-The `pyxis-lsp` binary communicates over stdio. The Zed and VSCode
-extensions spawn it automatically (see their respective READMEs for
-installation instructions).
+The `pyxis-lsp` binary communicates over stdio. The Zed extension spawns it
+automatically (see its README for installation instructions).
