@@ -816,12 +816,15 @@ impl ServerState {
     /// workspace/symbol
     #[allow(deprecated)] // SymbolInformation::deprecated field
     pub fn handle_workspace_symbols(&self, req: Request) -> Response {
-        let _params: WorkspaceSymbolParams = match serde_json::from_value(req.params.clone()) {
+        let params: WorkspaceSymbolParams = match serde_json::from_value(req.params.clone()) {
             Ok(p) => p,
             Err(e) => return error_response(req.id, e),
         };
+        // Honour the query: a case-insensitive substring filter (empty query
+        // returns everything, per the LSP spec).
+        let query = params.query.to_lowercase();
 
-        // Collect all symbols across all open documents
+        // Collect matching symbols across all open documents.
         let mut symbols: Vec<SymbolInformation> = Vec::new();
 
         for (uri, doc) in &self.documents {
@@ -831,6 +834,9 @@ impl ServerState {
 
             for item in &module.items {
                 if let Some(symbol) = module_item_to_symbol(item, content) {
+                    if !query.is_empty() && !symbol.name.to_lowercase().contains(&query) {
+                        continue;
+                    }
                     symbols.push(SymbolInformation {
                         name: symbol.name,
                         kind: symbol.kind,
@@ -2652,7 +2658,9 @@ fn error_response(id: lsp_server::RequestId, e: serde_json::Error) -> Response {
         id,
         result: None,
         error: Some(lsp_server::ResponseError {
-            code: 0,
+            // JSON-RPC InvalidParams — these only fire on params that fail to
+            // deserialize. (0 is not a valid JSON-RPC error code.)
+            code: lsp_server::ErrorCode::InvalidParams as i32,
             message: e.to_string(),
             data: None,
         }),

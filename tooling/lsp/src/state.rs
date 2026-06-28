@@ -210,11 +210,17 @@ impl ServerState {
     /// Find the project root for a file by walking up the directory tree
     /// looking for a pyxis.toml file.
     fn find_project_root(&self, path: &std::path::Path) -> Option<std::path::PathBuf> {
-        // First check if any known project root is an ancestor of this path
-        for project_root in self.projects.keys() {
-            if path.starts_with(project_root) {
-                return Some(project_root.clone());
-            }
+        // Pick the *innermost* known project root that is an ancestor of this
+        // path — i.e. the longest matching prefix. `self.projects` is a HashMap,
+        // so iterating without this would non-deterministically return an outer
+        // project for nested layouts.
+        if let Some(best) = self
+            .projects
+            .keys()
+            .filter(|root| path.starts_with(root))
+            .max_by_key(|root| root.components().count())
+        {
+            return Some(best.clone());
         }
 
         // Walk up the directory tree looking for pyxis.toml
