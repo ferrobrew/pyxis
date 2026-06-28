@@ -1223,8 +1223,7 @@ backend rust prologue "
     // Use statement error tests
     // ========================================================================
 
-    use crate::span::ItemLocation;
-    use crate::tokenizer::TokenKind;
+    use crate::{span::ItemLocation, tokenizer::TokenKind};
 
     #[test]
     fn use_empty_path_parses_ok() {

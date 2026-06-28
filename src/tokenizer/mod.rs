@@ -1,5 +1,7 @@
-use crate::source_store::FileStore;
-use crate::span::{self, FileId, ItemLocation, Location, Span};
+use crate::{
+    source_store::FileStore,
+    span::{self, FileId, ItemLocation, Location, Span},
+};
 use ariadne::{Color, Label, Report, ReportKind, Source};
 
 #[cfg(test)]

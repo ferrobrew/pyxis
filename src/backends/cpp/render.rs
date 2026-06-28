@@ -4,12 +4,13 @@
 //! aliases, vftables, generics, extern bindings) into the textual output for
 //! `.hpp` and `.cpp` files.
 
-use std::borrow::Cow;
-use std::collections::BTreeMap;
-use std::fmt::Write;
+use std::{borrow::Cow, collections::BTreeMap, fmt::Write};
 
 use crate::{
-    backends::{Result, cpp::extern_bindings::CppExternBinding, cpp::runtime},
+    backends::{
+        Result,
+        cpp::{extern_bindings::CppExternBinding, runtime},
+    },
     grammar::ItemPath,
     semantic::{
         TypeRegistry,

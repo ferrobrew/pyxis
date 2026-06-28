@@ -22,21 +22,22 @@
 //! O(edges), not O(n²). `collect_declarations` still builds the location-full
 //! registry the LSP uses for per-request name resolution.
 
-use std::collections::BTreeMap;
-use std::sync::Arc;
+use std::{collections::BTreeMap, sync::Arc};
 
-use crate::grammar::{ItemDefinitionInner, ItemPath, Module};
-use crate::parser::ParseError;
-use crate::semantic::TypeRegistry;
-use crate::semantic::declaration_registry::DeclarationRegistry;
-use crate::semantic::name_index::NameIndex;
-use crate::span::FileId;
+use crate::{
+    grammar::{ItemDefinitionInner, ItemPath, Module},
+    parser::ParseError,
+    semantic::{TypeRegistry, declaration_registry::DeclarationRegistry, name_index::NameIndex},
+    span::FileId,
+};
 
-use super::db::Db;
-use super::inputs::{SourceFile, SourceSet};
-use super::ir::{
-    DeclarationSet, FileTypeReferences, NameIndexSet, ParsedFile, PlaceholderBase, ResolvedItem,
-    SemanticAnalysis, TokenizedFile,
+use super::{
+    db::Db,
+    inputs::{SourceFile, SourceSet},
+    ir::{
+        DeclarationSet, FileTypeReferences, NameIndexSet, ParsedFile, PlaceholderBase,
+        ResolvedItem, SemanticAnalysis, TokenizedFile,
+    },
 };
 
 /// Parse a single file. Leaf query — re-runs only when that file's content changes.
@@ -514,13 +515,15 @@ pub fn analyze<'db>(
     pointer_size: usize,
     sources: SourceSet<'db>,
 ) -> SemanticAnalysis<'db> {
-    use crate::semantic::{
-        attribute, doc_links,
-        error::{AttributeName, ExternKind},
-        module::Module as SemanticModule,
-        types::{ExternValue, Type, Visibility},
+    use crate::{
+        semantic::{
+            attribute, doc_links,
+            error::{AttributeName, ExternKind},
+            module::Module as SemanticModule,
+            types::{ExternValue, Type, Visibility},
+        },
+        span::HasLocation,
     };
-    use crate::span::HasLocation;
 
     // Build a doc-link resolver with associated (impl) functions merged into the
     // type registry, so `Type::method` links resolve even on the error paths

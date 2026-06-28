@@ -4,10 +4,11 @@ use std::{collections::HashMap, str::FromStr};
 
 use lsp_server::Notification;
 use lsp_types::{Diagnostic, PublishDiagnosticsParams, Uri};
-use pyxis::semantic::{self, PyxisDatabaseImpl, SourceFile};
-use pyxis::source_store::FileStore;
-use pyxis::span::FileId;
-use pyxis::span::HasLocation;
+use pyxis::{
+    semantic::{self, PyxisDatabaseImpl, SourceFile},
+    source_store::FileStore,
+    span::{FileId, HasLocation},
+};
 
 pub struct ServerState {
     /// Salsa database — the query graph

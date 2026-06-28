@@ -9,8 +9,10 @@
 //! functions, generics, externs, per-module prologue/epilogue, and CMake
 //! generation are filled in by later phases.
 
-use std::fmt::Write as _;
-use std::path::{Path, PathBuf};
+use std::{
+    fmt::Write as _,
+    path::{Path, PathBuf},
+};
 
 use crate::{
     backends::{BackendError, Result},

@@ -935,8 +935,7 @@ impl PfxInstance {
     // ========================================================================
 
     use super::ParseError;
-    use crate::span::ItemLocation;
-    use crate::tokenizer::TokenKind;
+    use crate::{span::ItemLocation, tokenizer::TokenKind};
 
     #[test]
     fn unexpected_token_at_module_level_errors() {

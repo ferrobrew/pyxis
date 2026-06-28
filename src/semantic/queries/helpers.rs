@@ -1,15 +1,17 @@
 //! Resolution helpers for the query graph: per-item building and the
 //! TypeRegistry/ItemDefinition construction used by `analyze` and `resolve_item`.
 
-use std::collections::BTreeMap;
-use std::sync::Arc;
+use std::{collections::BTreeMap, sync::Arc};
 
-use crate::grammar::{ItemDefinitionInner, ItemPath};
-use crate::semantic::TypeRegistry;
-use crate::semantic::name_index::{ExternSig, NameIndex, NameResolution};
+use crate::{
+    grammar::{ItemDefinitionInner, ItemPath},
+    semantic::{
+        TypeRegistry,
+        name_index::{ExternSig, NameIndex, NameResolution},
+    },
+};
 
-use crate::semantic::db::Db;
-use crate::semantic::ir::SemanticAnalysis;
+use crate::semantic::{db::Db, ir::SemanticAnalysis};
 
 use super::compute_associated_functions;
 
@@ -183,10 +185,10 @@ pub(super) fn register_unresolved(
 pub(super) fn make_unresolved_definition(
     path: &ItemPath,
 ) -> crate::semantic::types::ItemDefinition {
-    use crate::grammar::{
-        Ident, ItemDefinition as GrammarDef, ItemDefinitionInner, TypeDefinition,
+    use crate::{
+        grammar::{Ident, ItemDefinition as GrammarDef, ItemDefinitionInner, TypeDefinition},
+        span::ItemLocation,
     };
-    use crate::span::ItemLocation;
 
     let grammar_def = GrammarDef {
         visibility: crate::grammar::Visibility::Private,
@@ -282,10 +284,12 @@ pub(super) fn make_placeholder(
     path: &ItemPath,
     arity: usize,
 ) -> crate::semantic::types::ItemDefinition {
-    use crate::grammar::{
-        Ident, ItemDefinition as GrammarDef, ItemDefinitionInner, TypeDefinition, TypeParameter,
+    use crate::{
+        grammar::{
+            Ident, ItemDefinition as GrammarDef, ItemDefinitionInner, TypeDefinition, TypeParameter,
+        },
+        span::ItemLocation,
     };
-    use crate::span::ItemLocation;
 
     let type_param_names: Vec<String> = (0..arity).map(|i| format!("T{i}")).collect();
     let grammar_def = GrammarDef {
@@ -537,8 +541,7 @@ pub(super) fn type_ref_spans(
     tokens: &[crate::tokenizer::Token],
     out: &mut Vec<(crate::span::Span, ItemPath)>,
 ) {
-    use crate::grammar::Type;
-    use crate::span::HasLocation;
+    use crate::{grammar::Type, span::HasLocation};
     match type_ {
         Type::Ident {
             path, generic_args, ..

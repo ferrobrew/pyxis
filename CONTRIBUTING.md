@@ -69,6 +69,13 @@ through every backend and rebuilds the emitted output. The cpp test
 corpus uses a regular host C++17 compiler (no MSVC ABI required) so
 CI doesn't need xwin.
 
+Formatting relies on a nightly-only rustfmt feature (`imports_granularity`,
+configured in `rustfmt.toml`), so check it with nightly:
+
+```sh
+cargo +nightly fmt --all -- --check
+```
+
 ## Editor tooling
 
 Pyxis ships a tree-sitter grammar, a Zed extension, and a language

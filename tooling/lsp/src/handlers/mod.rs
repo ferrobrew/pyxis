@@ -13,18 +13,21 @@ pub(crate) use lsp_types::{
     WorkspaceEdit, WorkspaceSymbolParams,
 };
 
-pub(crate) use pyxis::grammar::{
-    Attribute, Attributes, Function, ItemDefinition, ItemPath, Module, ModuleItem, Type, TypeField,
-    UseTree, Visibility,
+pub(crate) use pyxis::{
+    grammar::{
+        Attribute, Attributes, Function, ItemDefinition, ItemPath, Module, ModuleItem, Type,
+        TypeField, UseTree, Visibility,
+    },
+    semantic,
+    semantic::{declaration_registry::DeclarationRegistry, type_registry::TypeRegistry},
+    span::{FileId, HasLocation, ItemLocation, Location, Span},
+    tokenizer::{Token, TokenKind},
 };
-pub(crate) use pyxis::semantic;
-pub(crate) use pyxis::semantic::declaration_registry::DeclarationRegistry;
-pub(crate) use pyxis::semantic::type_registry::TypeRegistry;
-pub(crate) use pyxis::span::{FileId, HasLocation, ItemLocation, Location, Span};
-pub(crate) use pyxis::tokenizer::{Token, TokenKind};
 
-pub(crate) use crate::span::{lsp_position_to_pyxis_location, pyxis_span_to_lsp_range};
-pub(crate) use crate::state::ServerState;
+pub(crate) use crate::{
+    span::{lsp_position_to_pyxis_location, pyxis_span_to_lsp_range},
+    state::ServerState,
+};
 
 pub(crate) use pyxis::semantic::resolve_item;
 
