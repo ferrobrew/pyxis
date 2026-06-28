@@ -534,66 +534,96 @@ pub fn analyze<'db>(
         );
     }
 
-    // Resolve all declared items iteratively. try_resolve_item resolves a
-    // single item given the current state of already-resolved dependencies.
-    // We iterate until no progress is made (mutually-recursive or stalled
-    // types) or all items resolve. This replaces the old recursive resolve_item
-    // — Salsa incrementality is preserved at the parse_file level.
+    // Resolve all declared items by building each against the single shared
+    // `type_registry`, iterating until a fixpoint: an item that references a
+    // not-yet-resolved type defers and is retried once that type resolves.
+    // Building in place — rather than reconstructing the registry per item, as
+    // the old try_resolve_item did — keeps this O(n^2) instead of O(n^3).
+    // build_item adds any generated items (e.g. vftable structs) and their
+    // module `definition_paths` directly to the shared registry/modules.
+    use crate::semantic::error::BuildOutcome;
     let mut semantic_errors: Vec<crate::semantic::SemanticError> = Vec::new();
-
-    // Items resolved so far, keyed by path. Fed back into try_resolve_item so
-    // that dependent items see resolved dependencies without recursion.
-    let mut resolved_items: BTreeMap<ItemPath, crate::semantic::types::ItemDefinition> =
-        BTreeMap::new();
-
-    // Collect generated items (e.g., vftable struct types) to add to the
-    // final registry. Their module definition_paths are registered below.
-    let mut generated_items: Vec<crate::semantic::types::ItemDefinition> = Vec::new();
-
     let item_paths: Vec<ItemPath> = decl_registry.item_paths().cloned().collect();
     let max_iterations = item_paths.len() + 1;
+    // Items that are finished — resolved or errored (errored items aren't retried).
+    let mut done: std::collections::BTreeSet<ItemPath> = std::collections::BTreeSet::new();
 
     for _iteration in 0..max_iterations {
         let mut made_progress = false;
 
         for item_path in &item_paths {
-            // Skip already-resolved items
-            if resolved_items.contains_key(item_path) {
+            if done.contains(item_path) {
                 continue;
             }
-
-            let (item_def, errors, gen_items) =
-                try_resolve_item(decl_registry, pointer_size, item_path, &resolved_items);
-
-            if !errors.is_empty() {
-                semantic_errors.extend(errors.iter().cloned());
-                // Mark as resolved-with-error so we don't retry it
-                resolved_items.insert(item_path.clone(), item_def);
-                made_progress = true;
+            let Some(definition) = decl_registry.get_definition(item_path) else {
+                done.insert(item_path.clone());
                 continue;
-            }
+            };
 
-            if item_def.is_resolved() {
-                resolved_items.insert(item_path.clone(), item_def);
-                made_progress = true;
-                // Collect generated items from this resolution
-                for gen_item in gen_items {
-                    let gen_path = gen_item.path.clone();
-                    definition_paths.insert(gen_path);
-                    generated_items.push(gen_item);
+            let visibility: crate::semantic::types::Visibility = definition.visibility.into();
+            let def_location = definition.location;
+            let type_param_names: Vec<String> = definition
+                .type_parameters
+                .iter()
+                .map(|tp| tp.name.clone())
+                .collect();
+
+            let outcome = build_item(
+                definition,
+                item_path,
+                visibility,
+                &def_location,
+                &definition.doc_comments,
+                &type_param_names,
+                &mut type_registry,
+                &mut modules,
+            );
+
+            match outcome {
+                Ok(BuildOutcome::Resolved(item)) => {
+                    let cfg = match &definition.inner {
+                        ItemDefinitionInner::Type(td) => td.attributes.cfg(),
+                        ItemDefinitionInner::Enum(e) => e.attributes.cfg(),
+                        ItemDefinitionInner::Bitflags(b) => b.attributes.cfg(),
+                        ItemDefinitionInner::TypeAlias(ta) => ta.attributes.cfg(),
+                    };
+                    type_registry.add(crate::semantic::types::ItemDefinition {
+                        visibility,
+                        path: item_path.clone(),
+                        type_parameters: type_param_names,
+                        state: crate::semantic::types::ItemState::Resolved(item),
+                        category: crate::semantic::types::ItemCategory::Defined,
+                        predefined: None,
+                        cfg,
+                        location: def_location,
+                        declaration_location: definition.declaration_location,
+                    });
+                    done.insert(item_path.clone());
+                    made_progress = true;
+                }
+                // Deferred — retried next iteration once dependencies resolve.
+                Ok(BuildOutcome::Deferred) => {}
+                Ok(BuildOutcome::NotFoundType(unresolved_ref)) => {
+                    semantic_errors.push(crate::semantic::SemanticError::TypeResolutionStalled {
+                        unresolved_types: vec![item_path.to_string()],
+                        resolved_types: vec![],
+                        unresolved_references: vec![unresolved_ref],
+                    });
+                    done.insert(item_path.clone());
+                    made_progress = true;
+                }
+                Err(e) => {
+                    semantic_errors.push(e);
+                    done.insert(item_path.clone());
+                    made_progress = true;
                 }
             }
-            // else: Deferred — will be retried in the next iteration once
-            // more dependencies are resolved.
         }
 
         if !made_progress {
-            // No item resolved this iteration — remaining items are stalled
-            // (mutual recursion or missing types). Emit a TypeResolutionStalled
-            // error for each remaining unresolved item, matching the old
-            // batch-compiler behavior.
+            // Remaining items are stalled (mutual recursion or missing types).
             for item_path in &item_paths {
-                if !resolved_items.contains_key(item_path) {
+                if !done.contains(item_path) {
                     semantic_errors.push(crate::semantic::SemanticError::TypeResolutionStalled {
                         unresolved_types: vec![item_path.to_string()],
                         resolved_types: vec![],
@@ -604,27 +634,9 @@ pub fn analyze<'db>(
             break;
         }
 
-        // If all items are resolved, we're done
-        if item_paths.iter().all(|p| resolved_items.contains_key(p)) {
+        if item_paths.iter().all(|p| done.contains(p)) {
             break;
         }
-    }
-
-    // Merge resolved items + generated items into the type registry
-    for item_def in resolved_items.values() {
-        type_registry.add(item_def.clone());
-    }
-    for gen_item in &generated_items {
-        type_registry.add(gen_item.clone());
-    }
-
-    // Re-assign definition_paths to include generated items (vftables etc.)
-    for (module_path, module) in modules.iter_mut() {
-        module.definition_paths = definition_paths
-            .iter()
-            .filter(|p| p.parent().is_some_and(|parent| &parent == module_path))
-            .cloned()
-            .collect();
     }
 
     if !semantic_errors.is_empty() {
