@@ -4,6 +4,7 @@
 use std::collections::BTreeMap;
 
 use crate::{
+    Backend,
     grammar::{self, ItemPath},
     semantic::{
         Module, TypeRegistry,
@@ -35,36 +36,28 @@ pub fn validate_uses(
 
         for tree in trees {
             for (path, location) in tree.flatten_with_locations() {
-                let is_type = type_registry.contains(&path);
-                let is_module = modules.contains_key(&path);
-
-                if is_type {
-                    if let Ok(item_def) = type_registry.get(&path, &ItemLocation::internal()) {
-                        if item_def.visibility == Visibility::Private {
-                            if let Some(item_module) = path.parent() {
-                                if !can_access_private(&module.path, &item_module) {
-                                    return Err(SemanticError::PrivateItemAccess {
-                                        item_path: path,
-                                        from_module: module.path.clone(),
-                                        location,
-                                    });
-                                }
-                            }
-                        }
+                if type_registry.contains(&path) {
+                    // A `use` of an existing type is fine unless it's private and
+                    // the importing module can't see it.
+                    if let Ok(item_def) = type_registry.get(&path, &ItemLocation::internal())
+                        && item_def.visibility == Visibility::Private
+                        && let Some(item_module) = path.parent()
+                        && !can_access_private(&module.path, &item_module)
+                    {
+                        return Err(SemanticError::PrivateItemAccess {
+                            item_path: path,
+                            from_module: module.path.clone(),
+                            location,
+                        });
                     }
                     continue;
                 }
 
-                if is_module {
+                if modules.contains_key(&path) {
                     continue;
                 }
 
-                if let Some(parent) = path.parent() {
-                    if !modules.contains_key(&parent) {
-                        return Err(SemanticError::UseItemNotFound { path, location });
-                    }
-                }
-
+                // Not a known type or module — the import doesn't resolve.
                 return Err(SemanticError::UseItemNotFound { path, location });
             }
         }
@@ -78,13 +71,13 @@ pub fn validate_uses(
 /// json emit single-output-per-module), so the modifier on those is
 /// almost certainly a typo or copy-paste error.
 pub fn validate_backend_definitions(modules: &BTreeMap<ItemPath, Module>) -> Result<()> {
-    fn supports_definition(backend: crate::Backend) -> bool {
+    fn supports_definition(backend: Backend) -> bool {
         match backend {
-            crate::Backend::Rust => false,
+            Backend::Rust => false,
             #[cfg(feature = "json")]
-            crate::Backend::Json => false,
+            Backend::Json => false,
             #[cfg(feature = "cpp")]
-            crate::Backend::Cpp => true,
+            Backend::Cpp => true,
         }
     }
     for module in modules.values() {
