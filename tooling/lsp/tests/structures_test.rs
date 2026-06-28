@@ -1210,3 +1210,55 @@ fn rename_members_fields_and_methods() {
     assert!(!prepare(7, col(7, "doit")).is_null());
     assert_eq!(edits(7, col(7, "doit"), "doit2"), 1, "impl method rename");
 }
+
+#[test]
+fn rename_reaches_doc_comment_links() {
+    let src = "/// See [Foo], [`DoDraw`](Foo::DoDraw) and [`Add`](Foo::Add).\npub type Foo {\n    vftable {\n        pub fn DoDraw(&mut self);\n    },\n}\nimpl Foo {\n    #[address(0x10)] pub fn Add(&mut self);\n}\n";
+    let st = ServerState::in_memory(&[("/p", 8, &[("a.pyxis", src)])]);
+    let uri = ServerState::document_uri("/p", "a.pyxis");
+    let line = |n: &str| src.lines().position(|l| l.contains(n)).unwrap() as u32;
+    let col = |l: u32, n: &str| src.lines().nth(l as usize).unwrap().find(n).unwrap() as u32;
+    let count = |l: u32, c: u32, name: &str| -> usize {
+        let r = Request::new(
+            RequestId::from(1),
+            "textDocument/rename".into(),
+            serde_json::to_value(lsp_types::RenameParams {
+                text_document_position: TextDocumentPositionParams {
+                    text_document: TextDocumentIdentifier { uri: uri.clone() },
+                    position: Position {
+                        line: l,
+                        character: c,
+                    },
+                },
+                new_name: name.to_string(),
+                work_done_progress_params: Default::default(),
+            })
+            .unwrap(),
+        );
+        let we: lsp_types::WorkspaceEdit =
+            serde_json::from_value(st.handle_rename(r).result.unwrap()).unwrap();
+        we.changes
+            .map(|c| c.values().map(|v| v.len()).sum())
+            .unwrap_or(0)
+    };
+    // Type: def + impl target + three doc-link refs ([Foo], Foo::DoDraw, Foo::Add).
+    let lf = line("pub type");
+    assert_eq!(
+        count(lf, col(lf, "Foo"), "Bar"),
+        5,
+        "type rename reaches doc links"
+    );
+    // Member: declaration + the doc-link's label and path.
+    let ld = line("pub fn DoDraw");
+    assert_eq!(
+        count(ld, col(ld, "DoDraw"), "DoDraw2"),
+        3,
+        "vftable rename reaches doc links"
+    );
+    let la = line("pub fn Add");
+    assert_eq!(
+        count(la, col(la, "Add"), "Add2"),
+        3,
+        "impl method rename reaches doc links"
+    );
+}

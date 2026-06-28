@@ -1151,11 +1151,11 @@ impl ServerState {
     /// The shared engine behind find-references, document-highlight, and rename.
     fn symbol_occurrences(&self, symbol: &Symbol, from_uri: &Uri) -> Vec<lsp_types::Location> {
         // A member (field/method) has no source cross-references beyond its
-        // declaration — return just that.
+        // declaration plus any doc-comment links to it.
         let target = match symbol {
             Symbol::Type(p) => p,
             Symbol::Member { owner, name } => {
-                return self
+                let mut out: Vec<lsp_types::Location> = self
                     .resolve_doc_member(owner, name, from_uri)
                     .and_then(|(uri, span, _)| {
                         let content = self.get_content(&uri)?;
@@ -1166,6 +1166,8 @@ impl ServerState {
                     })
                     .into_iter()
                     .collect();
+                out.extend(self.doc_link_occurrences(symbol, from_uri));
+                return out;
             }
         };
         let mut out: Vec<lsp_types::Location> = Vec::new();
@@ -1240,6 +1242,91 @@ impl ServerState {
                         && let Some(span) =
                             name_token_span(tokens, &def.declaration_location.span.start, &name)
                     {
+                        out.push(lsp_types::Location {
+                            uri: uri.clone(),
+                            range: pyxis_span_to_lsp_range(content, &span),
+                        });
+                    }
+                }
+            }
+        }
+        out.extend(self.doc_link_occurrences(symbol, from_uri));
+        out
+    }
+
+    /// Doc-comment links that reference `symbol`, returning the span of the
+    /// symbol's name within each link's path (a type's name segment, or a
+    /// member's leaf) so rename/find-references reach into doc comments too.
+    fn doc_link_occurrences(&self, symbol: &Symbol, from_uri: &Uri) -> Vec<lsp_types::Location> {
+        use pyxis::semantic::doc_links::DocLinkTarget;
+        let name = match symbol {
+            Symbol::Type(p) => match p.last() {
+                Some(s) => s.as_str().to_string(),
+                None => return Vec::new(),
+            },
+            Symbol::Member { name, .. } => name.clone(),
+        };
+        let matches = |target: &DocLinkTarget| match (symbol, target) {
+            (Symbol::Type(p), DocLinkTarget::Item(q)) => q == p,
+            (Symbol::Type(p), DocLinkTarget::Member { item, .. }) => item == p,
+            (Symbol::Member { owner, name: n }, DocLinkTarget::Member { item, name: m, .. }) => {
+                item == owner && m == n
+            }
+            _ => false,
+        };
+
+        let from_root = self
+            .documents
+            .get(from_uri)
+            .and_then(|d| d.project_root.clone());
+        let pointer_size = self.pointer_size_for(from_uri);
+        let source_set = semantic::SourceSet::new(&self.db, self.sources_for(from_uri));
+        let analysis = semantic::analyze(&self.db, pointer_size, source_set);
+        let resolver = analysis.doc_link_resolver(&self.db);
+
+        let uris: Vec<Uri> = self
+            .documents
+            .iter()
+            .filter(|(_, d)| d.project_root == from_root)
+            .map(|(u, _)| u.clone())
+            .collect();
+
+        let mut out = Vec::new();
+        for uri in &uris {
+            let Some(content) = self.get_content(uri) else {
+                continue;
+            };
+            let tokens_arc = self.tokens_for(uri);
+            let tokens: &[Token] = tokens_arc.as_deref().map(Vec::as_slice).unwrap_or(&[]);
+            let scope = self.scope_for(uri);
+            let doc_lines: std::collections::HashSet<usize> = tokens
+                .iter()
+                .filter_map(|t| match &t.kind {
+                    TokenKind::DocOuter(_) => Some(t.location.span.start.line),
+                    _ => None,
+                })
+                .collect();
+            let lines: Vec<&str> = content.lines().collect();
+            for &line_no in &doc_lines {
+                let Some(line) = lines.get(line_no - 1) else {
+                    continue;
+                };
+                for dl in scan_doc_links(line) {
+                    if !resolver
+                        .resolve(&scope, &dl.path)
+                        .is_some_and(|t| matches(&t))
+                    {
+                        continue;
+                    }
+                    // Rewrite the name wherever it appears in the link — both
+                    // the `(path)` and a label that echoes it (`[`Add`]`).
+                    let (region_start, region_end) = dl.link;
+                    for off in whole_word_offsets(&line[region_start..region_end], &name) {
+                        let start = region_start + off;
+                        let span = Span::new(
+                            Location::new(line_no, start + 1),
+                            Location::new(line_no, start + name.len() + 1),
+                        );
                         out.push(lsp_types::Location {
                             uri: uri.clone(),
                             range: pyxis_span_to_lsp_range(content, &span),
@@ -1375,8 +1462,8 @@ impl ServerState {
             let Some(line) = lines.get(line_no - 1) else {
                 continue;
             };
-            for (start_byte, end_byte, path_str) in scan_doc_links(line) {
-                let item_path = match resolver.resolve(&scope, &path_str) {
+            for dl in scan_doc_links(line) {
+                let item_path = match resolver.resolve(&scope, &dl.path) {
                     Some(DocLinkTarget::Item(p)) => p,
                     Some(DocLinkTarget::Member { item, .. }) => item,
                     _ => continue,
@@ -1385,8 +1472,8 @@ impl ServerState {
                     continue;
                 };
                 let span = Span::new(
-                    Location::new(line_no, start_byte + 1),
-                    Location::new(line_no, end_byte + 1),
+                    Location::new(line_no, dl.link.0 + 1),
+                    Location::new(line_no, dl.link.1 + 1),
                 );
                 let target = format!("{}#L{}", rd.uri.as_str(), rd.name_span.start.line)
                     .parse()
@@ -1549,15 +1636,15 @@ impl ServerState {
             ))
         };
 
-        for (start_byte, end_byte, path_str) in scan_doc_links(line) {
-            if col < start_byte || col >= end_byte {
+        for dl in scan_doc_links(line) {
+            if col < dl.link.0 || col >= dl.link.1 {
                 continue;
             }
             let link_span = Span::new(
-                Location::new(loc.line, start_byte + 1),
-                Location::new(loc.line, end_byte + 1),
+                Location::new(loc.line, dl.link.0 + 1),
+                Location::new(loc.line, dl.link.1 + 1),
             );
-            let (location, hover) = match resolver.resolve(&scope, &path_str)? {
+            let (location, hover) = match resolver.resolve(&scope, &dl.path)? {
                 DocLinkTarget::Item(p) => to_type(self, &p)?,
                 DocLinkTarget::Member { item, name, .. } => {
                     match self.resolve_doc_member(&item, &name, uri) {
@@ -3405,12 +3492,18 @@ fn body_fold(tokens: &[Token], span: &Span) -> Option<FoldingRange> {
     })
 }
 
-/// Find Markdown cross-reference links in one doc-comment line, returning
-/// `(link_start_byte, link_end_byte, path)` for each: `[Foo]`, [`Foo`] and
-/// `[label](path::To)`. The span covers the *entire* link (brackets, label, and
-/// any `(target)`); the path is what resolves. Non-path targets (e.g. URLs)
-/// simply fail to resolve later.
-fn scan_doc_links(line: &str) -> Vec<(usize, usize, String)> {
+/// A Markdown cross-reference link found in a doc-comment line.
+struct DocLink {
+    /// Byte range of the whole link (`[Foo]` / [`Foo`] / `[label](path)`).
+    link: (usize, usize),
+    /// Resolved path text (backticks/whitespace trimmed) — what resolves.
+    path: String,
+}
+
+/// Find Markdown cross-reference links in one doc-comment line: `[Foo]`,
+/// [`Foo`], and `[label](path::To)`. Non-path targets (e.g. URLs) simply fail
+/// to resolve later.
+fn scan_doc_links(line: &str) -> Vec<DocLink> {
     let mut out = Vec::new();
     let mut i = 0;
     while let Some(rel_open) = line[i..].find('[') {
@@ -3439,9 +3532,34 @@ fn scan_doc_links(line: &str) -> Vec<(usize, usize, String)> {
         };
         let path = path_raw.trim().trim_matches('`').trim().to_string();
         if !path.is_empty() {
-            out.push((open, link_end, path));
+            out.push(DocLink {
+                link: (open, link_end),
+                path,
+            });
         }
         i = link_end;
+    }
+    out
+}
+
+/// Byte offsets of every whole-word (identifier-boundary) occurrence of `word`
+/// within `text`.
+fn whole_word_offsets(text: &str, word: &str) -> Vec<usize> {
+    if word.is_empty() {
+        return Vec::new();
+    }
+    let is_ident = |c: char| c.is_ascii_alphanumeric() || c == '_';
+    let mut out = Vec::new();
+    let mut from = 0;
+    while let Some(rel) = text[from..].find(word) {
+        let start = from + rel;
+        let before_ok = start == 0 || !text[..start].chars().next_back().is_some_and(is_ident);
+        let after = start + word.len();
+        let after_ok = after >= text.len() || !text[after..].chars().next().is_some_and(is_ident);
+        if before_ok && after_ok {
+            out.push(start);
+        }
+        from = start + word.len();
     }
     out
 }
