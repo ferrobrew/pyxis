@@ -138,12 +138,6 @@ impl TypeRegistry {
             })
     }
 
-    /// Replace an existing item definition with a new one (used by the
-    /// Salsa resolve_item query to update dependencies).
-    pub fn update_item(&mut self, path: ItemPath, item: ItemDefinition) {
-        self.types.insert(path, item);
-    }
-
     pub(crate) fn resolved(&self) -> Vec<ItemPath> {
         self.types
             .iter()
