@@ -352,13 +352,9 @@ pub fn build_with_store_and_options(
         return Err(BuildError::Semantic(first_semantic_err.clone()));
     }
 
-    let resolved_semantic_state = analysis.to_semantic_output(&db).ok_or_else(|| {
-        BuildError::Semantic(SemanticError::TypeResolutionStalled {
-            unresolved_types: vec![],
-            resolved_types: vec![],
-            unresolved_references: vec![],
-        })
-    })?;
+    let resolved_semantic_state = analysis
+        .to_semantic_output(&db)
+        .expect("to_semantic_output returns Some when there are no parse or semantic errors");
 
     match backend {
         Backend::Rust => {
