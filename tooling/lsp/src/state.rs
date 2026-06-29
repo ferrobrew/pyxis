@@ -149,12 +149,9 @@ impl ServerState {
             .to_string();
 
         // Skip if already registered (dedup by absolute path, not relative —
-        // different projects can have the same relative path e.g. "types/math.pyxis")
-        if self
-            .documents
-            .values()
-            .any(|d| d.abs_path.as_ref() == Some(&abs_path))
-        {
+        // different projects can have the same relative path e.g. "types/math.pyxis").
+        // Compared canonically so symlinked roots / `..` don't register a file twice.
+        if self.find_document_by_abs_path(&abs_path).is_some() {
             return;
         }
 
@@ -206,6 +203,25 @@ impl ServerState {
     /// plus a relative path) maps to.
     pub fn document_uri(root: &str, rel: &str) -> Uri {
         file_uri(&std::path::PathBuf::from(root).join(rel))
+    }
+
+    /// Find an already-tracked document whose absolute path refers to the same
+    /// physical file as `abs_path`, comparing canonically. Discovery keys
+    /// documents by a canonicalized URI, so a client's verbatim didOpen URI
+    /// (symlinked root, `..`, different percent-encoding) may not match the key
+    /// even though it's the same file — this dedup prevents a duplicate
+    /// Document/FileId/SourceFile (and the spurious duplicate-definition errors
+    /// that would follow).
+    fn find_document_by_abs_path(&self, abs_path: &std::path::Path) -> Option<Uri> {
+        let target = canonical_path(abs_path);
+        self.documents
+            .iter()
+            .find(|(_, d)| {
+                d.abs_path
+                    .as_deref()
+                    .is_some_and(|p| canonical_path(p) == target)
+            })
+            .map(|(uri, _)| uri.clone())
     }
 
     /// Find the project root for a file by walking up the directory tree
@@ -284,17 +300,33 @@ impl ServerState {
         let uri = params.text_document.uri.clone();
         let text = params.text_document.text;
 
-        if let Some(doc) = self.documents.get_mut(&uri) {
-            // File was already discovered during workspace scan — update its
-            // content in place (the editor's version may differ from disk).
+        let fs_path = uri_to_file_path(&uri);
+
+        // The file may already be tracked under a different URI key — discovery
+        // canonicalizes paths, so the client's verbatim URI can differ. Match by
+        // exact URI first, then by canonical absolute path, to avoid inserting a
+        // duplicate Document/FileId/SourceFile for the same physical file.
+        let existing_uri = if self.documents.contains_key(&uri) {
+            Some(uri.clone())
+        } else {
+            fs_path
+                .as_deref()
+                .and_then(|path| self.find_document_by_abs_path(path))
+        };
+
+        if let Some(doc_uri) = existing_uri {
+            // File was already discovered/opened — update its content in place
+            // (the editor's version may differ from disk).
+            let doc = self
+                .documents
+                .get_mut(&doc_uri)
+                .expect("existing_uri came from documents");
             use pyxis::semantic::Setter;
             doc.source_file.set_contents(&mut self.db).to(text.clone());
             doc.content = text;
             self.file_store
                 .update_in_memory(doc.file_id, doc.content.clone());
         } else {
-            let fs_path = uri_to_file_path(&uri);
-
             // Try to find the project root for this file
             let project_root = fs_path
                 .as_ref()
@@ -655,6 +687,13 @@ fn uri_to_filename(uri: &Uri) -> String {
     let path = s.strip_prefix("file://").unwrap_or(s);
     // For test URIs like "file:///test.pyxis", return just "test.pyxis"
     path.rsplit('/').next().unwrap_or(path).to_string()
+}
+
+/// Canonicalize a path for dedup comparison, falling back to the path itself
+/// when it can't be canonicalized (e.g. synthetic in-memory test paths that
+/// don't exist on disk).
+fn canonical_path(path: &std::path::Path) -> std::path::PathBuf {
+    path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
 }
 
 /// Convert a `file://` URI to a filesystem path.
