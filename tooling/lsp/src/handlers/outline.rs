@@ -304,10 +304,35 @@ impl ServerState {
             type_registry,
             decl_registry,
             pointer_size,
+            source_set,
             tokens_arc,
             ..
         } = ctx;
         let tokens: &[Token] = tokens_arc.as_deref().map(Vec::as_slice).unwrap_or(&[]);
+
+        // Resolved type references for this file, precomputed once and
+        // incrementally cached by Salsa: a `leaf-span.start → resolved path` map
+        // covering every type-position leaf identifier. This is the same source
+        // of truth `find_reference_at` produces for those leaves, so we can
+        // classify the common case (a resolved type leaf) in O(1) per token
+        // instead of re-walking every module item per identifier. Positions the
+        // map doesn't cover (namespace segments, and any leaf the source map
+        // doesn't record) fall back to the original per-token resolution, so the
+        // emitted classification is identical to before.
+        let type_refs = self
+            .documents
+            .get(uri)
+            .map(|d| d.source_file)
+            .map(|sf| semantic::file_type_references(&self.db, sf, source_set, pointer_size));
+        let type_ref_at: std::collections::HashMap<Location, &ItemPath> = type_refs
+            .as_ref()
+            .map(|r| {
+                r.references(&self.db)
+                    .iter()
+                    .map(|(span, path)| (span.start, path))
+                    .collect()
+            })
+            .unwrap_or_default();
 
         // Collect (line, start_char, length, type, modifiers) for each
         // type-position identifier, in source order.
@@ -316,30 +341,40 @@ impl ServerState {
             if !matches!(&tok.kind, TokenKind::Ident(_)) {
                 continue;
             }
-            let classified = match find_reference_at(
-                &module,
-                &tok.location.span.start,
-                &scope,
-                decl_registry,
-                tokens,
-                type_registry,
-                pointer_size,
-            ) {
-                Some(Ref::Item { item: Some(p), .. }) => {
-                    if decl_registry.get_predefined(&p).is_some() {
-                        Some((TYPE, DEFAULT_LIBRARY))
-                    } else {
-                        Some((TYPE, 0))
+            let classified = if let Some(p) = type_ref_at.get(&tok.location.span.start) {
+                // A resolved type leaf (cached): `type`, builtins flagged
+                // `defaultLibrary` — identical to the `Ref::Item { Some }` arm.
+                if decl_registry.get_predefined(p).is_some() {
+                    Some((TYPE, DEFAULT_LIBRARY))
+                } else {
+                    Some((TYPE, 0))
+                }
+            } else {
+                match find_reference_at(
+                    &module,
+                    &tok.location.span.start,
+                    &scope,
+                    decl_registry,
+                    tokens,
+                    type_registry,
+                    pointer_size,
+                ) {
+                    Some(Ref::Item { item: Some(p), .. }) => {
+                        if decl_registry.get_predefined(&p).is_some() {
+                            Some((TYPE, DEFAULT_LIBRARY))
+                        } else {
+                            Some((TYPE, 0))
+                        }
                     }
+                    Some(Ref::Item {
+                        item: None,
+                        module_path,
+                        ..
+                    }) if decl_registry.module_paths().any(|m| *m == module_path) => {
+                        Some((NAMESPACE, 0))
+                    }
+                    _ => None,
                 }
-                Some(Ref::Item {
-                    item: None,
-                    module_path,
-                    ..
-                }) if decl_registry.module_paths().any(|m| *m == module_path) => {
-                    Some((NAMESPACE, 0))
-                }
-                _ => None,
             };
             let Some((ty, mods)) = classified else {
                 continue;
@@ -449,11 +484,9 @@ pub(crate) fn module_item_to_symbol(item: &ModuleItem, source: &str) -> Option<D
             SymbolKind::FUNCTION,
             function.location.span,
         ),
-        ModuleItem::ExternType { name, location, .. } => (
-            name.as_str().to_string(),
-            SymbolKind::STRUCT,
-            location.span,
-        ),
+        ModuleItem::ExternType { name, location, .. } => {
+            (name.as_str().to_string(), SymbolKind::STRUCT, location.span)
+        }
         ModuleItem::ExternValue { extern_value } => (
             extern_value.name.as_str().to_string(),
             SymbolKind::VARIABLE,
