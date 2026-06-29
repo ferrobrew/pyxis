@@ -520,7 +520,14 @@ impl ServerState {
             }
         }
 
-        let mut notifications = Vec::new();
+        // Accumulate every diagnostic by URI across all projects. `publishDiagnostics`
+        // replaces the whole set for a URI, so we must aggregate per file rather than
+        // emit one notification per error (which would only show the last one) and
+        // would leave already-fixed files showing stale squiggles.
+        // (`Uri`'s interior mutability is a cache that doesn't affect hashing, so
+        // it's a sound map key — same as the `documents` field above.)
+        #[allow(clippy::mutable_key_type)]
+        let mut by_uri: HashMap<Uri, Vec<Diagnostic>> = HashMap::new();
 
         for (_project_root, (sources, pointer_size)) in project_groups {
             if sources.is_empty() {
@@ -532,8 +539,8 @@ impl ServerState {
             // Collect parse errors
             for parse_err in analysis.parse_errors(&self.db).iter() {
                 let loc = parse_err.location();
-                if let Some(notif) = self.error_to_notification(loc, &parse_err.to_string()) {
-                    notifications.push(notif);
+                if let Some((uri, diag)) = self.error_to_diagnostic(loc, &parse_err.to_string()) {
+                    by_uri.entry(uri).or_default().push(diag);
                 }
             }
 
@@ -548,34 +555,49 @@ impl ServerState {
                 {
                     for r in unresolved_references {
                         let msg = format!("{}: Type not found: `{}`", r.location, r.type_name);
-                        if let Some(notif) = self.error_to_notification(&r.location, &msg) {
-                            notifications.push(notif);
+                        if let Some((uri, diag)) = self.error_to_diagnostic(&r.location, &msg) {
+                            by_uri.entry(uri).or_default().push(diag);
                         }
                     }
                 } else if let Some(loc) = sem_err.location()
-                    && let Some(notif) = self.error_to_notification(loc, &sem_err.to_string())
+                    && let Some((uri, diag)) = self.error_to_diagnostic(loc, &sem_err.to_string())
                 {
-                    notifications.push(notif);
+                    by_uri.entry(uri).or_default().push(diag);
                 }
             }
         }
 
-        // If no errors, publish empty diagnostics for all open documents
-        if notifications.is_empty() {
-            for uri in self.documents.keys() {
-                notifications.push(make_publish_diagnostics(uri.clone(), vec![]));
-            }
+        // Emit exactly one publishDiagnostics per tracked document — including
+        // documents with no diagnostics, so a now-clean file's stale squiggles
+        // are cleared. Sort documents by URI and each file's diagnostics by range
+        // so the output is deterministic for tests/snapshots.
+        let mut uris: Vec<&Uri> = self.documents.keys().collect();
+        uris.sort_by(|a, b| a.as_str().cmp(b.as_str()));
+
+        let mut notifications = Vec::with_capacity(uris.len());
+        for uri in uris {
+            let mut diagnostics = by_uri.remove(uri).unwrap_or_default();
+            diagnostics.sort_by_key(|d| {
+                (
+                    d.range.start.line,
+                    d.range.start.character,
+                    d.range.end.line,
+                    d.range.end.character,
+                )
+            });
+            notifications.push(make_publish_diagnostics(uri.clone(), diagnostics));
         }
 
         notifications
     }
 
-    /// Convert a Pyxis error location to an LSP publishDiagnostics notification
-    fn error_to_notification(
+    /// Convert a Pyxis error location to a `(Uri, Diagnostic)` pair so the caller
+    /// can aggregate multiple diagnostics per URI before publishing.
+    fn error_to_diagnostic(
         &self,
         location: &pyxis::span::ItemLocation,
         message: &str,
-    ) -> Option<Notification> {
+    ) -> Option<(Uri, Diagnostic)> {
         let uri = self.file_id_to_uri.get(&location.file_id)?;
         let content = self.documents.get(uri)?.content.clone();
         let range = crate::span::pyxis_span_to_lsp_range(&content, &location.span);
@@ -589,7 +611,7 @@ impl ServerState {
             source: Some("pyxis".to_string()),
             ..Default::default()
         };
-        Some(make_publish_diagnostics(uri.clone(), vec![diagnostic]))
+        Some((uri.clone(), diagnostic))
     }
 
     /// Get the document content for a URI
