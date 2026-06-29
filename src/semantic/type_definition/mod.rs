@@ -416,8 +416,8 @@ pub fn build(
     let module = semantic.get_module_for_path(resolvee_path, location)?;
 
     // Associated-function resolution (own impl block + inheritance from base
-    // types) is deferred to `compute_associated_functions` (a Salsa tracked
-    // query) after every type has fully resolved. This prevents the resolver from defer-looping
+    // types) is deferred to `compute_associated_functions` after every type has
+    // fully resolved. This prevents the resolver from defer-looping
     // when an impl method's signature references its own enclosing type
     // (`impl Foo { fn make() -> Foo; }`).
     let associated_functions: Vec<Function> = Vec::new();
