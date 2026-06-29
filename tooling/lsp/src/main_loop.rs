@@ -4,10 +4,13 @@
 //! multiplexes between incoming LSP messages and a debounce timer for
 //! diagnostics.
 
-use std::time::Duration;
+use std::{
+    panic::AssertUnwindSafe,
+    time::{Duration, Instant},
+};
 
 use crossbeam_channel::{after, never, select};
-use lsp_server::{Connection, Message, Notification, Request, Response};
+use lsp_server::{Connection, ErrorCode, Message, Notification, Request, Response, ResponseError};
 use lsp_types::{
     CodeLensOptions, CompletionOptions, HoverProviderCapability, InitializeResult, OneOf,
     ServerCapabilities, TextDocumentSyncCapability, TextDocumentSyncKind,
@@ -188,7 +191,37 @@ fn handle_request(
     state: &mut ServerState,
     req: Request,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let response = match req.method.as_str() {
+    // Preserve the id/method before dispatch so a panicking handler can still be
+    // answered. A handler panic must not unwind through main_loop and kill the
+    // server, and every request must still get exactly one response.
+    let id = req.id.clone();
+    let method = req.method.clone();
+
+    let response = match std::panic::catch_unwind(AssertUnwindSafe(|| dispatch_request(state, req)))
+    {
+        Ok(response) => response,
+        Err(panic) => {
+            let detail = panic_message(panic.as_ref());
+            eprintln!("pyxis-lsp: request handler for `{method}` panicked: {detail}");
+            Response {
+                id,
+                result: None,
+                error: Some(ResponseError {
+                    code: ErrorCode::InternalError as i32,
+                    message: format!("internal error handling `{method}`: {detail}"),
+                    data: None,
+                }),
+            }
+        }
+    };
+    connection.sender.send(Message::Response(response))?;
+    Ok(())
+}
+
+/// Dispatch a request to its handler. Factored out of [`handle_request`] so the
+/// whole dispatch can run inside `catch_unwind`.
+fn dispatch_request(state: &mut ServerState, req: Request) -> Response {
+    match req.method.as_str() {
         "textDocument/hover" => state.handle_hover(req),
         "textDocument/definition" => state.handle_definition(req),
         "textDocument/implementation" => state.handle_implementation(req),
@@ -214,9 +247,18 @@ fn handle_request(
             result: Some(serde_json::Value::Null),
             error: None,
         },
-    };
-    connection.sender.send(Message::Response(response))?;
-    Ok(())
+    }
+}
+
+/// Extract a human-readable message from a `catch_unwind` panic payload.
+fn panic_message(panic: &(dyn std::any::Any + Send)) -> String {
+    if let Some(s) = panic.downcast_ref::<&str>() {
+        (*s).to_string()
+    } else if let Some(s) = panic.downcast_ref::<String>() {
+        s.clone()
+    } else {
+        "unknown panic".to_string()
+    }
 }
 
 /// Register dynamic capabilities: file watchers for `.pyxis`/`pyxis.toml` (so
