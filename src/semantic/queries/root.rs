@@ -166,9 +166,31 @@ pub fn analyze<'db>(
     // than dropped, so the offending module isn't silently elided.
     let mut module_errors: Vec<SemanticError> = Vec::new();
 
+    // Track module paths produced by the parsed source files so that two
+    // distinct files reducing to the same module path (e.g. `world.pyxis` and
+    // `world/mod.pyxis` -> `world`) surface a hard `DuplicateModule` error
+    // rather than silently overwriting each other. The root module
+    // (`ItemPath::empty()`, inserted above) and the synthesized ancestor
+    // modules (added below) are deliberately excluded.
+    let mut seen_module_paths: std::collections::BTreeSet<ItemPath> =
+        std::collections::BTreeSet::new();
+
     for (source, module) in &parsed_modules {
         let path_str = source.path(db);
         let module_path = ItemPath::from_path(std::path::Path::new(path_str.as_str()));
+
+        if !module_path.is_empty() && !seen_module_paths.insert(module_path.clone()) {
+            let location = module
+                .items
+                .first()
+                .map(|item| *item.location())
+                .unwrap_or_else(crate::span::ItemLocation::internal);
+            module_errors.push(SemanticError::DuplicateModule {
+                path: module_path,
+                location,
+            });
+            continue;
+        }
 
         // Parse extern values
         let extern_values: Result<Vec<ExternValue>> = module

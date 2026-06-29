@@ -4,7 +4,10 @@
 
 use crate::{
     grammar::test_aliases::*,
-    semantic::{builder::SemanticBuilder, error::SemanticError},
+    semantic::{
+        PyxisDatabaseImpl, SourceFile, SourceSet, analyze, builder::SemanticBuilder,
+        error::SemanticError,
+    },
 };
 
 /// A folder that contains `.pyxis` files but has no `mod.pyxis` should still
@@ -50,4 +53,33 @@ fn rejects_two_files_mapping_to_the_same_module() {
         .unwrap_err();
 
     assert!(matches!(err, SemanticError::DuplicateModule { .. }));
+}
+
+/// The same collision must also be caught on the real, file-based compile
+/// path (`analyze`), not just through `SemanticBuilder`: `world.pyxis` and
+/// `world/mod.pyxis` both reduce to the `world` module.
+#[test]
+fn analyze_rejects_two_files_mapping_to_the_same_module() {
+    let db = PyxisDatabaseImpl::default();
+    let folder = SourceFile::new(
+        &db,
+        "world/mod.pyxis".to_string(),
+        1,
+        "pub type World { pub id: u32, }".to_string(),
+    );
+    let sibling = SourceFile::new(
+        &db,
+        "world.pyxis".to_string(),
+        2,
+        "pub type Other { pub id: u32, }".to_string(),
+    );
+    let source_set = SourceSet::new(&db, vec![folder, sibling]);
+    let analysis = analyze(&db, 4, source_set);
+    let errors = analysis.errors(&db);
+    assert!(
+        errors
+            .iter()
+            .any(|e| matches!(e, SemanticError::DuplicateModule { .. })),
+        "expected a DuplicateModule error, got: {errors:?}"
+    );
 }
