@@ -287,6 +287,13 @@ pub fn analyze<'db>(
     if let Err(e) = validation::validate_backend_for_targets(&type_registry, &mut modules) {
         return bail(&type_registry, &modules, vec![e]);
     }
+    // validate_backend_definitions rejects `prologue definition`/`epilogue definition`
+    // on non-cpp backends. It inspects only backend prologue/epilogue definitions
+    // (no resolved-type dependency), so it runs before item resolution to keep its
+    // diagnostic ahead of resolution errors — matching the pre-rewrite ordering.
+    if let Err(e) = validation::validate_backend_definitions(&modules) {
+        return bail(&type_registry, &modules, vec![e]);
+    }
 
     // Resolve every declared item through the per-item `resolve_item` query, so
     // resolution is cached per item: an incremental edit re-resolves only the
@@ -348,12 +355,6 @@ pub fn analyze<'db>(
 
     if !semantic_errors.is_empty() {
         return bail(&type_registry, &modules, semantic_errors);
-    }
-
-    // validate_backend_definitions rejects `prologue definition`/`epilogue definition`
-    // on non-cpp backends.
-    if let Err(e) = validation::validate_backend_definitions(&modules) {
-        return bail(&type_registry, &modules, vec![e]);
     }
 
     // Associated functions (own impl methods + inherited) are computed by
