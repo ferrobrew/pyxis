@@ -1,17 +1,15 @@
 //! Resolution helpers for the query graph: per-item building and the
 //! TypeRegistry/ItemDefinition construction used by `analyze` and `resolve_item`.
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::collections::BTreeMap;
 
 use crate::{
     grammar::{self, Argument, Ident, ItemDefinitionInner, ItemPath, TypeField, TypeParameter},
     semantic::{
         Module, SemanticError, TypeRegistry, bitflags_definition,
-        db::Db,
         declaration_registry::ExternTypeInfo,
-        doc_links, enum_definition,
+        enum_definition,
         error::{BuildOutcome, Result},
-        ir::SemanticAnalysis,
         name_index::{ExternSig, NameIndex, NameResolution},
         resolution_context::{ResolutionContext, ResolutionContextRef},
         type_alias_definition, type_definition,
@@ -23,7 +21,7 @@ use crate::{
     span::ItemLocation,
 };
 
-use super::compute_associated_functions;
+use super::root::compute_associated_functions;
 
 /// Compute associated functions (own impl methods + inherited from base types)
 /// and merge them into `registry` in place, returning any errors. Shared by
@@ -31,24 +29,10 @@ use super::compute_associated_functions;
 /// and its error paths (so `Type::method` doc links still resolve when analysis
 /// bails out early).
 pub(super) fn merge_associated_functions(
-    db: &dyn Db,
-    pointer_size: usize,
     registry: &mut TypeRegistry,
     modules: &BTreeMap<ItemPath, Module>,
 ) -> Vec<SemanticError> {
-    let initial = SemanticAnalysis::new(
-        db,
-        Arc::new(registry.clone()),
-        Arc::new(modules.clone()),
-        // Placeholder resolver — callers build the real one from the merged registry.
-        Arc::new(doc_links::DocLinkResolver::build(
-            &TypeRegistry::new(pointer_size),
-            &BTreeMap::new(),
-        )),
-        Arc::new(vec![]),
-        Arc::new(vec![]),
-    );
-    let af = compute_associated_functions(db, initial);
+    let af = compute_associated_functions(registry, modules);
     for (path, fns) in af.functions.iter() {
         if let Ok(item) = registry.get_mut(path, &ItemLocation::internal())
             && let ItemState::Resolved(state) = &mut item.state

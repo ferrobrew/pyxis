@@ -2,7 +2,7 @@
 //! (so it stays incremental) and then runs the post-resolution passes — extern
 //! values, functions, associated functions, doc links — producing the
 //! `SemanticAnalysis` that both the batch compiler and the LSP consume.
-//! `compute_associated_functions` is the derived query that folds inherited and
+//! `compute_associated_functions` is a plain helper that folds inherited and
 //! own impl methods into each type.
 
 use std::{collections::BTreeMap, sync::Arc};
@@ -64,7 +64,7 @@ pub fn analyze<'db>(
                 errors: Vec<SemanticError>|
      -> SemanticAnalysis<'db> {
         let mut merged = type_registry.clone();
-        let _ = merge_associated_functions(db, pointer_size, &mut merged, modules);
+        let _ = merge_associated_functions(&mut merged, modules);
         let doc_link_resolver = doc_links::DocLinkResolver::build(&merged, modules);
         SemanticAnalysis::new(
             db,
@@ -356,10 +356,10 @@ pub fn analyze<'db>(
         return bail(&type_registry, &modules, vec![e]);
     }
 
-    // Associated functions (own impl methods + inherited) are computed by the
-    // compute_associated_functions tracked query and merged into the registry
-    // in place, so backends and the doc-link resolver see methods.
-    let af_errors = merge_associated_functions(db, pointer_size, &mut type_registry, &modules);
+    // Associated functions (own impl methods + inherited) are computed by
+    // compute_associated_functions and merged into the registry in place, so
+    // backends and the doc-link resolver see methods.
+    let af_errors = merge_associated_functions(&mut type_registry, &modules);
     if !af_errors.is_empty() {
         let doc_link_resolver = doc_links::DocLinkResolver::build(&type_registry, &modules);
         return finish(type_registry, modules, doc_link_resolver, af_errors);
@@ -378,13 +378,13 @@ pub fn analyze<'db>(
 /// for all resolved types. Returns a map from type path to associated functions,
 /// plus any errors (e.g., duplicate method names).
 ///
-/// This is a derived query — it reads the resolved type registry and modules
-/// from `SemanticAnalysis` and produces a new result without mutating the
-/// registry. The map is merged into type definitions by `to_semantic_output`.
-#[salsa::tracked]
-pub fn compute_associated_functions<'db>(
-    db: &'db dyn Db,
-    analysis: SemanticAnalysis<'db>,
+/// A plain function over the resolved type registry and modules: it reads them
+/// and produces a new result without mutating the registry, and calls no other
+/// db query, so it needs no Salsa indirection. The map is merged into type
+/// definitions by `merge_associated_functions`.
+pub fn compute_associated_functions(
+    type_registry: &TypeRegistry,
+    modules: &BTreeMap<ItemPath, crate::semantic::Module>,
 ) -> Arc<AssociatedFunctionsResult> {
     use crate::{
         grammar,
@@ -399,8 +399,6 @@ pub fn compute_associated_functions<'db>(
     };
     use std::collections::{BTreeMap as BTree, BTreeSet, HashMap, HashSet};
 
-    let type_registry = analysis.type_registry(db);
-    let modules = analysis.modules(db);
     let location = ItemLocation::internal();
 
     // Build a map from each type-with-regions to its base parents.

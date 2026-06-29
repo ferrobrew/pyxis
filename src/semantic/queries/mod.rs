@@ -27,7 +27,7 @@
 //!   - `index` — `collect_declarations` / `name_index` / `placeholder_base`
 //!   - `source_map` — `file_type_references` and its span helpers
 //!   - `resolve` — `resolve_item` (+ `grammar_def_for`)
-//!   - `root` — `analyze` / `compute_associated_functions` + post-resolution passes
+//!   - `root` — `analyze` + post-resolution passes (incl. `compute_associated_functions`)
 //!   - `helpers` — shared `TypeRegistry`/`ItemDefinition` construction
 
 mod helpers;
@@ -40,5 +40,5 @@ mod source_map;
 pub use index::{collect_declarations, name_index, placeholder_base};
 pub use leaf::{parse_file, tokenize_file};
 pub use resolve::resolve_item;
-pub use root::{AssociatedFunctionsResult, analyze, compute_associated_functions};
+pub use root::{AssociatedFunctionsResult, analyze};
 pub use source_map::file_type_references;
