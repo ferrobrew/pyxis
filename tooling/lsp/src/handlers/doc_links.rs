@@ -422,7 +422,10 @@ pub(crate) fn whole_word_offsets(text: &str, word: &str) -> Vec<usize> {
     if word.is_empty() {
         return Vec::new();
     }
-    let is_ident = |c: char| c.is_ascii_alphanumeric() || c == '_';
+    // Match `is_valid_identifier`'s Unicode notion of an identifier char, so
+    // boundaries are correct next to non-ASCII letters (pyxis identifiers are
+    // Unicode), not just ASCII.
+    let is_ident = |c: char| c.is_alphanumeric() || c == '_';
     let mut out = Vec::new();
     let mut from = 0;
     while let Some(rel) = text[from..].find(word) {
@@ -436,4 +439,29 @@ pub(crate) fn whole_word_offsets(text: &str, word: &str) -> Vec<usize> {
         from = start + word.len();
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::whole_word_offsets;
+
+    #[test]
+    fn whole_word_offsets_respects_ascii_boundaries() {
+        // Standalone occurrence matches; substring within a larger word doesn't.
+        assert_eq!(whole_word_offsets("Foo and Foobar", "Foo"), vec![0]);
+        assert_eq!(whole_word_offsets("a_Foo Foo", "Foo"), vec![6]);
+        assert_eq!(whole_word_offsets("Foo, Foo", "Foo"), vec![0, 5]);
+    }
+
+    #[test]
+    fn whole_word_offsets_respects_unicode_boundaries() {
+        // A non-ASCII letter directly abutting the word forms one identifier, so
+        // the embedded occurrence must NOT match (the old ASCII-only predicate
+        // treated `é`/`ä` as a boundary and rewrote the substring incorrectly).
+        assert!(whole_word_offsets("café_Foo", "Foo").is_empty());
+        assert!(whole_word_offsets("Fooä", "Foo").is_empty());
+        assert!(whole_word_offsets("πFoo", "Foo").is_empty());
+        // A standalone Unicode identifier still matches whole-word.
+        assert_eq!(whole_word_offsets("café Δσ café", "café"), vec![0, 11]);
+    }
 }
