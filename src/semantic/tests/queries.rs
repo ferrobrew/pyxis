@@ -96,9 +96,19 @@ fn resolve_item_returns_resolved_type() {
 
 #[test]
 fn resolve_item_caches_unchanged_results() {
-    // AC.9: calling resolve_item twice with the same inputs should
-    // return the same cached result (Salsa memoization).
-    let db = PyxisDatabaseImpl::default();
+    // AC.9: calling resolve_item twice with no input change must NOT re-execute
+    // the query the second time — Salsa returns the memoized result. We assert
+    // on the actual WillExecute events, not just value-equality (which would hold
+    // even if nothing were cached).
+    use std::sync::{Arc, Mutex};
+
+    let executed: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+    let sink = executed.clone();
+    let db = PyxisDatabaseImpl::with_event_logger(Box::new(move |event| {
+        if let salsa::EventKind::WillExecute { database_key } = event.kind {
+            sink.lock().unwrap().push(format!("{database_key:?}"));
+        }
+    }));
     let source = SourceFile::new(
         &db,
         "test.pyxis".to_string(),
@@ -108,24 +118,47 @@ fn resolve_item_caches_unchanged_results() {
     let source_set = SourceSet::new(&db, vec![source]);
     let path = crate::grammar::ItemPath::from("test::Foo");
 
-    let resolved1 = resolve_item(&db, source_set, 4, path.clone());
-    let item1 = resolved1.item(&db).clone();
+    // First call warms the cache and must execute resolve_item.
+    let item1 = resolve_item(&db, source_set, 4, path.clone())
+        .item(&db)
+        .clone();
+    assert!(
+        executed
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|k| k.contains("resolve_item")),
+        "expected resolve_item to execute during warm-up; keys: {:?}",
+        executed.lock().unwrap()
+    );
 
-    // Call again — Salsa should return the cached result
-    let resolved2 = resolve_item(&db, source_set, 4, path);
-    let item2 = resolved2.item(&db).clone();
+    // Second call with no input change: Salsa must serve it from cache and not
+    // re-execute resolve_item.
+    executed.lock().unwrap().clear();
+    let item2 = resolve_item(&db, source_set, 4, path).item(&db).clone();
 
+    let log = executed.lock().unwrap();
+    assert!(
+        !log.iter().any(|k| k.contains("resolve_item")),
+        "resolve_item must not re-execute when nothing changed; got: {log:?}"
+    );
     assert_eq!(item1, item2, "cached result should be equal");
 }
 
 #[test]
 fn resolve_item_incremental_on_change() {
-    // AC.9: When one file changes, only that file's items + dependents
-    // should re-resolve. We verify this by checking that after changing
-    // a file, resolve_item for an unchanged item returns the same result.
-    use salsa::Setter;
+    // AC.9: editing one file must re-execute resolve_item only for that file's
+    // item; an unchanged item in another file must stay cached (no WillExecute).
+    // We assert on the actual events, not just value-equality.
+    use std::sync::{Arc, Mutex};
 
-    let mut db = PyxisDatabaseImpl::default();
+    let executed: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+    let sink = executed.clone();
+    let mut db = PyxisDatabaseImpl::with_event_logger(Box::new(move |event| {
+        if let salsa::EventKind::WillExecute { database_key } = event.kind {
+            sink.lock().unwrap().push(format!("{database_key:?}"));
+        }
+    }));
     let source1 = SourceFile::new(
         &db,
         "a.pyxis".to_string(),
@@ -138,41 +171,51 @@ fn resolve_item_incremental_on_change() {
         11,
         "pub type B { pub y: u64, }".to_string(),
     );
-    let source_set = SourceSet::new(&db, vec![source1, source2]);
-
-    // Resolve both items
     let path_a = crate::grammar::ItemPath::from("a::A");
     let path_b = crate::grammar::ItemPath::from("b::B");
 
-    let resolved_a1 = resolve_item(&db, source_set, 4, path_a.clone());
-    let _resolved_b1 = resolve_item(&db, source_set, 4, path_b.clone());
-
-    let item_a1 = resolved_a1.item(&db).clone();
+    // Resolve both items (warms the cache).
+    let item_a1 = {
+        let source_set = SourceSet::new(&db, vec![source1, source2]);
+        let item_a1 = resolve_item(&db, source_set, 4, path_a.clone())
+            .item(&db)
+            .clone();
+        let _ = resolve_item(&db, source_set, 4, path_b.clone());
+        item_a1
+    };
 
     // Change source2 (type B). Type A doesn't depend on B.
     source2
         .set_contents(&mut db)
         .to("pub type B { pub y: u32, pub z: u32, }".to_string());
 
-    // Resolve A again — should return the cached result (unchanged)
-    let source_set2 = SourceSet::new(&db, vec![source1, source2]);
-    let resolved_a2 = resolve_item(&db, source_set2, 4, path_a);
-    let item_a2 = resolved_a2.item(&db).clone();
+    // Re-resolve both. A must come from cache (no WillExecute); B must re-execute.
+    executed.lock().unwrap().clear();
+    let (item_a2, item_b2_size) = {
+        let source_set2 = SourceSet::new(&db, vec![source1, source2]);
+        let item_a2 = resolve_item(&db, source_set2, 4, path_a).item(&db).clone();
+        let item_b2 = resolve_item(&db, source_set2, 4, path_b);
+        (item_a2, item_b2.item(&db).resolved().unwrap().size)
+    };
 
-    // A should be unchanged because it doesn't depend on B
+    // The Salsa key prints as `resolve_item(Id(..))` with no path, so we can't
+    // match items by name — but exactly one resolve_item should re-run, and it
+    // must be the edited b::B (a::A stays cached). The value-equality check below
+    // confirms A itself is unchanged.
+    let log = executed.lock().unwrap();
+    let resolve_item_runs = log.iter().filter(|k| k.contains("resolve_item")).count();
+    assert_eq!(
+        resolve_item_runs, 1,
+        "exactly one resolve_item (for the edited b::B) should re-run; got {resolve_item_runs}: {log:?}"
+    );
+
+    // A should be unchanged because it doesn't depend on B.
     assert_eq!(
         item_a1, item_a2,
         "item A should be unchanged when B changes"
     );
-
-    // B should have changed (different size)
-    let resolved_b2 = resolve_item(&db, source_set2, 4, path_b);
-    let item_b2 = resolved_b2.item(&db);
-    assert_eq!(
-        item_b2.resolved().unwrap().size,
-        8,
-        "B should now be 8 bytes (2x u32)"
-    );
+    // B should have changed (different size).
+    assert_eq!(item_b2_size, 8, "B should now be 8 bytes (2x u32)");
 }
 
 #[test]
