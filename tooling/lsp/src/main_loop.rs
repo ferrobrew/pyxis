@@ -128,14 +128,19 @@ fn main_loop(
     connection: &Connection,
     state: &mut ServerState,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    // Whether there's a pending diagnostics request after a didChange.
-    let mut pending_diagnostics = false;
+    // Deadline at which debounced diagnostics should be published, anchored to a
+    // fixed Instant set when a didChange arrives. Computing the timeout from this
+    // stored Instant (rather than a fresh `after(DEBOUNCE_MS)` every iteration)
+    // means unrelated messages — hover, inlayHint, codeLens — no longer restart
+    // the window and delay the post-edit publish past DEBOUNCE_MS.
+    let mut deadline: Option<Instant> = None;
 
     loop {
-        let timeout = if pending_diagnostics {
-            after(Duration::from_millis(DEBOUNCE_MS))
-        } else {
-            never()
+        // Recompute the remaining time from the stored deadline each iteration,
+        // so non-change messages don't push it out.
+        let timeout = match deadline {
+            Some(at) => after(at.saturating_duration_since(Instant::now())),
+            None => never(),
         };
 
         select! {
@@ -156,10 +161,14 @@ fn main_loop(
                         let action = handle_notification(connection, state, notif)?;
                         match action {
                             NotificationAction::DiagnosticsPublished => {
-                                pending_diagnostics = false;
+                                deadline = None;
                             }
                             NotificationAction::DebounceDiagnostics => {
-                                pending_diagnostics = true;
+                                // Trailing-edge debounce: publish DEBOUNCE_MS after
+                                // the latest change, so reset the deadline on each
+                                // change (but always relative to a stored Instant).
+                                deadline =
+                                    Some(Instant::now() + Duration::from_millis(DEBOUNCE_MS));
                             }
                             NotificationAction::None => {}
                         }
@@ -167,9 +176,9 @@ fn main_loop(
                 }
             }
             recv(timeout) -> _ => {
-                // Debounce timer fired — publish diagnostics now
+                // Debounce deadline reached — publish diagnostics now
                 publish_diagnostics(connection, state)?;
-                pending_diagnostics = false;
+                deadline = None;
             }
         }
     }
