@@ -1,3 +1,5 @@
+use std::{collections::HashMap, sync::LazyLock};
+
 use crate::{
     source_store::FileStore,
     span::{self, FileId, ItemLocation, Location, Span},
@@ -93,6 +95,12 @@ pub const KEYWORDS: &[(&str, TokenKind)] = &[
     ("Self", TokenKind::SelfType),
     ("_", TokenKind::Underscore),
 ];
+
+/// O(1) spelling → keyword token lookup, built once from [`KEYWORDS`] (still the
+/// single source of truth). Avoids the per-identifier linear scan on the hot
+/// tokenization path.
+static KEYWORD_MAP: LazyLock<HashMap<&'static str, TokenKind>> =
+    LazyLock::new(|| KEYWORDS.iter().map(|(s, k)| (*s, k.clone())).collect());
 
 impl TokenKind {
     /// The canonical source spelling for a keyword token (e.g. `Pub` → `"pub"`),
@@ -682,10 +690,9 @@ impl Lexer {
         let end = self.current_location();
         let text: String = self.chars[start_pos..self.pos].iter().collect();
 
-        let kind = KEYWORDS
-            .iter()
-            .find(|(spelling, _)| *spelling == text)
-            .map(|(_, kind)| kind.clone())
+        let kind = KEYWORD_MAP
+            .get(text.as_str())
+            .cloned()
             .unwrap_or_else(|| TokenKind::Ident(text.clone()));
 
         Ok(Token::new(
