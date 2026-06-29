@@ -190,6 +190,18 @@ pub fn resolve_item<'db>(
         modules.insert(module_path, m);
     }
 
+    // Snapshot the overlay paths present *before* the build. `iter()` walks only
+    // this registry's own additions (the overlay), not the shared base — so this
+    // captures exactly the resolved value-dependencies and their own generated
+    // items injected above. A base-membership check is insufficient: a
+    // dependency's generated vftable lives in *this* overlay (added at the value-
+    // dep loop), not in `placeholder_base`, so it would slip past such a check
+    // and be misattributed to this item. Anything appearing in `iter()` after the
+    // build that is *not* in this snapshot was generated during this item's own
+    // `build_item` call.
+    let pre_build_overlay: std::collections::BTreeSet<ItemPath> =
+        type_registry.iter().map(|(path, _)| path.clone()).collect();
+
     // Build the item.
     let visibility: Visibility = definition.visibility.into();
     let def_location = definition.location;
@@ -249,6 +261,7 @@ pub fn resolve_item<'db>(
     let mut generated_items = Vec::new();
     for (path, item) in type_registry.iter() {
         if path == &item_path
+            || pre_build_overlay.contains(path)
             || index.item_sig(path).is_some()
             || index.is_predefined(path)
             || index.extern_sig(path).is_some()
