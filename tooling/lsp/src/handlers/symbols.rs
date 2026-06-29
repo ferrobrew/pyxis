@@ -107,18 +107,34 @@ impl ServerState {
         let target = match symbol {
             Symbol::Type(p) => p,
             Symbol::Member { owner, name } => {
+                // A member can be declared in several places — every impl block
+                // (including `#[cfg]`-gated ones, possibly across files), the
+                // vftable, or a field — so collect *all* declarations, not just
+                // the first. Each gets a rename edit / reference / highlight.
                 let mut out: Vec<lsp_types::Location> = self
-                    .resolve_doc_member(owner, name, from_uri)
-                    .and_then(|(uri, span, _)| {
+                    .resolve_doc_members(owner, name, from_uri)
+                    .into_iter()
+                    .filter_map(|(uri, span, _)| {
                         let content = self.get_content(&uri)?;
                         Some(lsp_types::Location {
-                            uri: uri.clone(),
+                            uri,
                             range: pyxis_span_to_lsp_range(content, &span),
                         })
                     })
-                    .into_iter()
                     .collect();
                 out.extend(self.doc_link_occurrences(symbol, from_uri));
+                // Guard against emitting the same span twice (a declaration that
+                // also surfaced as a doc link). Counts are tiny, so an O(n²)
+                // pass is fine and keeps source order stable.
+                let mut seen: Vec<lsp_types::Location> = Vec::with_capacity(out.len());
+                out.retain(|l| {
+                    if seen.iter().any(|s| s.uri == l.uri && s.range == l.range) {
+                        false
+                    } else {
+                        seen.push(l.clone());
+                        true
+                    }
+                });
                 return out;
             }
         };
@@ -134,13 +150,15 @@ impl ServerState {
         let pointer_size = self.pointer_size_for(from_uri);
 
         // Files in the same project (same relative path across projects shares a
-        // module path, so we must not cross the project boundary).
-        let uris: Vec<Uri> = self
+        // module path, so we must not cross the project boundary). Sorted by URI
+        // for deterministic output regardless of `HashMap` iteration order.
+        let mut uris: Vec<Uri> = self
             .documents
             .iter()
             .filter(|(_, d)| d.project_root == from_root)
             .map(|(u, _)| u.clone())
             .collect();
+        uris.sort_by(|a, b| a.as_str().cmp(b.as_str()));
 
         for uri in &uris {
             let Some(module) = self.get_parsed_module(uri) else {
@@ -192,25 +210,35 @@ impl ServerState {
         out
     }
 
-    /// The declaration site of a symbol — the type's own name, or the member's
-    /// declaration. Used to honour `includeDeclaration: false`.
-    fn symbol_declaration(&self, symbol: &Symbol, from_uri: &Uri) -> Option<lsp_types::Location> {
-        let (uri, span) = match symbol {
+    /// The declaration site(s) of a symbol — the type's own name, or the
+    /// member's declaration(s). A member can be declared in several impl blocks
+    /// (incl. `#[cfg]`-gated ones), so all of them count as "the declaration"
+    /// for `includeDeclaration: false`.
+    fn symbol_declarations(&self, symbol: &Symbol, from_uri: &Uri) -> Vec<lsp_types::Location> {
+        let spans: Vec<(Uri, Span)> = match symbol {
             Symbol::Type(p) => {
                 let (type_registry, _) = self.registries_for(from_uri);
-                let rd = self.resolved_definition(p, type_registry, from_uri)?;
-                (rd.uri, rd.name_span)
+                self.resolved_definition(p, type_registry, from_uri)
+                    .map(|rd| (rd.uri, rd.name_span))
+                    .into_iter()
+                    .collect()
             }
-            Symbol::Member { owner, name } => {
-                let (uri, span, _) = self.resolve_doc_member(owner, name, from_uri)?;
-                (uri, span)
-            }
+            Symbol::Member { owner, name } => self
+                .resolve_doc_members(owner, name, from_uri)
+                .into_iter()
+                .map(|(uri, span, _)| (uri, span))
+                .collect(),
         };
-        let content = self.get_content(&uri)?;
-        Some(lsp_types::Location {
-            range: pyxis_span_to_lsp_range(content, &span),
-            uri,
-        })
+        spans
+            .into_iter()
+            .filter_map(|(uri, span)| {
+                let content = self.get_content(&uri)?;
+                Some(lsp_types::Location {
+                    range: pyxis_span_to_lsp_range(content, &span),
+                    uri,
+                })
+            })
+            .collect()
     }
 
     /// textDocument/references
@@ -229,8 +257,9 @@ impl ServerState {
             .and_then(|loc| self.symbol_at(uri, &loc))
             .map(|symbol| {
                 let mut locs = self.symbol_occurrences(&symbol, uri);
-                if !include_decl && let Some(decl) = self.symbol_declaration(&symbol, uri) {
-                    locs.retain(|l| !(l.uri == decl.uri && l.range == decl.range));
+                if !include_decl {
+                    let decls = self.symbol_declarations(&symbol, uri);
+                    locs.retain(|l| !decls.iter().any(|d| d.uri == l.uri && d.range == l.range));
                 }
                 locs
             })
@@ -416,5 +445,56 @@ impl Symbol {
             Symbol::Type(p) => Some(p),
             Symbol::Member { .. } => None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::state::ServerState;
+    use lsp_server::{Request, RequestId};
+    use lsp_types::{
+        Position, RenameParams, TextDocumentIdentifier, TextDocumentPositionParams, WorkspaceEdit,
+    };
+
+    /// Regression: a method declared in *several* impl blocks (here two
+    /// `#[cfg]`-gated ones) must have *every* declaration renamed — not just the
+    /// first one the (previously nondeterministic) `HashMap` iteration reached.
+    #[test]
+    fn rename_member_touches_all_impl_declarations() {
+        let src = "pub type Foo {\n    pub x: u32,\n}\n#[cfg(backend = \"rust\")]\nimpl Foo {\n    pub fn doit(&mut self);\n}\n#[cfg(backend = \"cpp\")]\nimpl Foo {\n    pub fn doit(&mut self);\n}\n";
+        let st = ServerState::in_memory(&[("/p", 8, &[("m.pyxis", src)])]);
+        let uri = ServerState::document_uri("/p", "m.pyxis");
+
+        // Cursor on the first `doit` declaration (line 5, 0-indexed).
+        let line = 5u32;
+        let character = src
+            .lines()
+            .nth(line as usize)
+            .unwrap()
+            .find("doit")
+            .unwrap() as u32;
+        let req = Request::new(
+            RequestId::from(1),
+            "textDocument/rename".into(),
+            serde_json::to_value(RenameParams {
+                text_document_position: TextDocumentPositionParams {
+                    text_document: TextDocumentIdentifier { uri },
+                    position: Position { line, character },
+                },
+                new_name: "did_it".into(),
+                work_done_progress_params: Default::default(),
+            })
+            .unwrap(),
+        );
+        let we: WorkspaceEdit =
+            serde_json::from_value(st.handle_rename(req).result.unwrap()).unwrap();
+        let total: usize = we
+            .changes
+            .map(|c| c.values().map(|v| v.len()).sum())
+            .unwrap_or(0);
+        assert_eq!(
+            total, 2,
+            "both impl-block declarations of `doit` must be renamed"
+        );
     }
 }

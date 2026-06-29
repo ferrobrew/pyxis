@@ -36,12 +36,13 @@ impl ServerState {
         let analysis = semantic::analyze(&self.db, pointer_size, source_set);
         let resolver = analysis.doc_link_resolver(&self.db);
 
-        let uris: Vec<Uri> = self
+        let mut uris: Vec<Uri> = self
             .documents
             .iter()
             .filter(|(_, d)| d.project_root == from_root)
             .map(|(u, _)| u.clone())
             .collect();
+        uris.sort_by(|a, b| a.as_str().cmp(b.as_str()));
 
         let mut out = Vec::new();
         for uri in &uris {
@@ -180,12 +181,36 @@ impl ServerState {
     /// name span to jump to, and hover markdown. Covers impl methods (possibly
     /// in another file), vftable methods, and fields. `None` for members it
     /// can't pin down (callers fall back to the owning type).
+    ///
+    /// Returns the first declaration in deterministic (URI-sorted) order; for
+    /// the *complete* set across every (possibly `#[cfg]`-gated) impl block use
+    /// [`Self::resolve_doc_members`].
     pub(crate) fn resolve_doc_member(
         &self,
         item: &ItemPath,
         name: &str,
         from_uri: &Uri,
     ) -> Option<(Uri, Span, String)> {
+        self.resolve_doc_members(item, name, from_uri)
+            .into_iter()
+            .next()
+    }
+
+    /// Every declaration of a member (`Type::member`) across the project: the
+    /// method in *each* impl block (including separate `#[cfg(...)]`-gated ones,
+    /// possibly in different files), the vftable method, or the field. Each entry
+    /// is `(file, name span, hover markdown)`. Powers find-references / rename /
+    /// highlight, which must touch *all* declarations, not just the first one
+    /// (the `HashMap` iteration order made "first" nondeterministic too).
+    ///
+    /// Iterates files in a stable URI-sorted order so the results — and the
+    /// `resolve_doc_member` "primary" derived from them — are deterministic.
+    pub(crate) fn resolve_doc_members(
+        &self,
+        item: &ItemPath,
+        name: &str,
+        from_uri: &Uri,
+    ) -> Vec<(Uri, Span, String)> {
         use pyxis::grammar::{ImplItem, ItemDefinitionInner};
 
         let from_root = self
@@ -194,13 +219,15 @@ impl ServerState {
             .and_then(|d| d.project_root.clone());
         let decl_registry = self.decl_registry_for(from_uri);
 
-        let uris: Vec<Uri> = self
+        let mut uris: Vec<Uri> = self
             .documents
             .iter()
             .filter(|(_, d)| d.project_root == from_root)
             .map(|(u, _)| u.clone())
             .collect();
+        uris.sort_by(|a, b| a.as_str().cmp(b.as_str()));
 
+        let mut out: Vec<(Uri, Span, String)> = Vec::new();
         for uri in &uris {
             let Some(module) = self.get_parsed_module(uri) else {
                 continue;
@@ -216,7 +243,9 @@ impl ServerState {
             };
             for node in &module.items {
                 match node {
-                    // Impl methods — the impl block may live in a different file.
+                    // Impl methods — the impl block may live in a different file,
+                    // and the same method may be declared in several (e.g.
+                    // `#[cfg]`-gated) impl blocks: collect every one.
                     ModuleItem::Impl { impl_block } => {
                         let target = ItemPath::from(impl_block.name.as_str());
                         if resolve_type_path(&target, &scope, decl_registry).as_ref() == Some(item)
@@ -225,7 +254,7 @@ impl ServerState {
                                 if let ImplItem::Function(f) = impl_item
                                     && f.name.as_str() == name
                                 {
-                                    return Some(fn_hit(f));
+                                    out.push(fn_hit(f));
                                 }
                             }
                         }
@@ -245,7 +274,7 @@ impl ServerState {
                                     TypeField::Vftable(fns) => {
                                         for f in fns {
                                             if f.name.as_str() == name {
-                                                return Some(fn_hit(f));
+                                                out.push(fn_hit(f));
                                             }
                                         }
                                     }
@@ -257,7 +286,7 @@ impl ServerState {
                                                 name,
                                             )
                                             .unwrap_or(statement.location.span);
-                                            return Some((
+                                            out.push((
                                                 uri.clone(),
                                                 span,
                                                 format!("**field** `{name}`"),
@@ -272,7 +301,7 @@ impl ServerState {
                 }
             }
         }
-        None
+        out
     }
 
     /// If `loc` sits on a doc-comment cross-reference (`[Foo]`, [`Foo`],
