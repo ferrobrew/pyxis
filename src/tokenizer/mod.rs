@@ -1,11 +1,15 @@
-use crate::source_store::FileStore;
-use crate::span::{self, FileId, ItemLocation, Location, Span};
+use std::{collections::HashMap, sync::LazyLock};
+
+use crate::{
+    source_store::FileStore,
+    span::{self, FileId, ItemLocation, Location, Span},
+};
 use ariadne::{Color, Label, Report, ReportKind, Source};
 
 #[cfg(test)]
 use crate::span::StripLocations;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(test, derive(StripLocations))]
 pub enum TokenKind {
     // Keywords
@@ -66,7 +70,50 @@ pub enum TokenKind {
     Eof,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// Canonical table of keyword spellings and the token each lexes to. The single
+/// source of truth for keyword spellings: both the lexer and [`TokenKind::keyword_str`]
+/// derive from it, so consumers (e.g. editor tooling) never duplicate the spellings.
+pub const KEYWORDS: &[(&str, TokenKind)] = &[
+    ("pub", TokenKind::Pub),
+    ("type", TokenKind::Type),
+    ("enum", TokenKind::Enum),
+    ("bitflags", TokenKind::Bitflags),
+    ("impl", TokenKind::Impl),
+    ("fn", TokenKind::Fn),
+    ("extern", TokenKind::Extern),
+    ("use", TokenKind::Use),
+    ("backend", TokenKind::Backend),
+    ("meta", TokenKind::Meta),
+    ("functions", TokenKind::Functions),
+    ("vftable", TokenKind::Vftable),
+    ("unknown", TokenKind::Unknown),
+    ("prologue", TokenKind::Prologue),
+    ("epilogue", TokenKind::Epilogue),
+    ("mut", TokenKind::Mut),
+    ("const", TokenKind::Const),
+    ("self", TokenKind::SelfValue),
+    ("Self", TokenKind::SelfType),
+    ("_", TokenKind::Underscore),
+];
+
+/// O(1) spelling → keyword token lookup, built once from [`KEYWORDS`] (still the
+/// single source of truth). Avoids the per-identifier linear scan on the hot
+/// tokenization path.
+static KEYWORD_MAP: LazyLock<HashMap<&'static str, TokenKind>> =
+    LazyLock::new(|| KEYWORDS.iter().map(|(s, k)| (*s, k.clone())).collect());
+
+impl TokenKind {
+    /// The canonical source spelling for a keyword token (e.g. `Pub` → `"pub"`),
+    /// or `None` for non-keyword tokens.
+    pub fn keyword_str(&self) -> Option<&'static str> {
+        KEYWORDS
+            .iter()
+            .find(|(_, kind)| kind == self)
+            .map(|(spelling, _)| *spelling)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Token {
     pub kind: TokenKind,
     pub location: ItemLocation,
@@ -87,7 +134,7 @@ impl Token {
 }
 
 /// Lexer errors
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(test, derive(StripLocations))]
 pub enum LexError {
     /// Unexpected character encountered during tokenization
@@ -216,6 +263,21 @@ impl std::fmt::Display for LexError {
 }
 
 impl std::error::Error for LexError {}
+
+impl crate::span::HasLocation for LexError {
+    fn location(&self) -> &crate::span::ItemLocation {
+        match self {
+            Self::UnexpectedCharacter { location, .. }
+            | Self::UnterminatedMultilineComment { location }
+            | Self::InvalidEscapeSequence { location, .. }
+            | Self::UnexpectedEofInStringLiteral { location }
+            | Self::InvalidRawStringStart { location }
+            | Self::UnterminatedRawString { location }
+            | Self::UnexpectedEofInCharLiteral { location }
+            | Self::UnclosedCharLiteral { location } => location,
+        }
+    }
+}
 
 pub struct Lexer {
     chars: Vec<char>,
@@ -628,29 +690,10 @@ impl Lexer {
         let end = self.current_location();
         let text: String = self.chars[start_pos..self.pos].iter().collect();
 
-        let kind = match text.as_str() {
-            "pub" => TokenKind::Pub,
-            "type" => TokenKind::Type,
-            "enum" => TokenKind::Enum,
-            "bitflags" => TokenKind::Bitflags,
-            "impl" => TokenKind::Impl,
-            "fn" => TokenKind::Fn,
-            "extern" => TokenKind::Extern,
-            "use" => TokenKind::Use,
-            "backend" => TokenKind::Backend,
-            "meta" => TokenKind::Meta,
-            "functions" => TokenKind::Functions,
-            "vftable" => TokenKind::Vftable,
-            "unknown" => TokenKind::Unknown,
-            "prologue" => TokenKind::Prologue,
-            "epilogue" => TokenKind::Epilogue,
-            "mut" => TokenKind::Mut,
-            "const" => TokenKind::Const,
-            "self" => TokenKind::SelfValue,
-            "Self" => TokenKind::SelfType,
-            "_" => TokenKind::Underscore,
-            _ => TokenKind::Ident(text.clone()),
-        };
+        let kind = KEYWORD_MAP
+            .get(text.as_str())
+            .cloned()
+            .unwrap_or_else(|| TokenKind::Ident(text.clone()));
 
         Ok(Token::new(
             kind,

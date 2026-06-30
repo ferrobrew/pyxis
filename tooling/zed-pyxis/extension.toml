@@ -1,0 +1,16 @@
+id = "pyxis"
+name = "Pyxis"
+description = "Language support for the Pyxis DSL: syntax highlighting and language server."
+version = "0.1.0"
+schema_version = 1
+author = "Pyxis Contributors"
+
+[language_servers.pyxis]
+name = "Pyxis Language Server"
+languages = ["Pyxis"]
+
+[grammars.pyxis]
+repository = "https://github.com/ferrobrew/tree-sitter-pyxis"
+# Track `main` (a branch ref, which Zed's fetcher resolves — unlike "HEAD").
+# Grammar changes must be pushed to this repo before a rebuild picks them up.
+commit = "main"

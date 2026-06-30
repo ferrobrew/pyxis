@@ -96,14 +96,14 @@ impl Function {
 }
 
 /// Items in an impl block (preserves ordering and comments)
-#[derive(Debug, Clone, PartialEq, Eq, HasLocation)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, HasLocation)]
 #[cfg_attr(test, derive(StripLocations))]
 pub enum ImplItem {
     Comment(Comment),
     Function(Function),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, HasLocation)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, HasLocation)]
 pub struct FunctionBlock {
     pub name: Ident,
     /// Type parameters declared on the `impl` block (e.g. `T, Y` in

@@ -151,13 +151,6 @@ impl Type {
         }
     }
 
-    pub fn as_path(&self) -> Option<&ItemPath> {
-        match self {
-            Type::Ident { path, .. } => Some(path),
-            _ => None,
-        }
-    }
-
     pub fn const_pointer(self) -> Type {
         Type::ConstPointer {
             pointee: Box::new(self),
@@ -184,6 +177,16 @@ impl Type {
         Type::Unknown {
             size,
             location: ItemLocation::test(),
+        }
+    }
+}
+
+impl Type {
+    /// Returns the item path if this is an `Ident` type, `None` otherwise.
+    pub fn as_path(&self) -> Option<&ItemPath> {
+        match self {
+            Type::Ident { path, .. } => Some(path),
+            _ => None,
         }
     }
 }

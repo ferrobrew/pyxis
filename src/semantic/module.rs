@@ -6,7 +6,7 @@ use crate::{
         error::{Result, SemanticError, TypeResolutionContext},
         function::{self, Function},
         type_registry::{TypeLookupResult, TypeRegistry},
-        types::{Backend, ExternValue, ItemDefinition, Type},
+        types::{Backend, BackendSplice, ExternValue, ItemDefinition, Type},
     },
     span::{HasLocation, ItemLocation},
 };
@@ -31,7 +31,7 @@ fn extern_assign<'a>(attributes: &'a grammar::Attributes, key: &str) -> Option<&
     })
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Module {
     pub(crate) path: ItemPath,
     pub(crate) ast: grammar::Module,
@@ -102,12 +102,12 @@ impl Module {
                 .flat_map(|tree| tree.flatten())
                 .collect();
             backends.entry(backend.name).or_default().push(Backend {
-                prologue: crate::semantic::types::BackendSplice {
+                prologue: BackendSplice {
                     header: backend.prologue.header.clone(),
                     definition: backend.prologue.definition.clone(),
                     for_type: backend.prologue.for_type.clone(),
                 },
-                epilogue: crate::semantic::types::BackendSplice {
+                epilogue: BackendSplice {
                     header: backend.epilogue.header.clone(),
                     definition: backend.epilogue.definition.clone(),
                     for_type: backend.epilogue.for_type.clone(),

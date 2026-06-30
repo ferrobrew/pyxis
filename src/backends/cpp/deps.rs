@@ -715,10 +715,10 @@ fn record_path(
         // emit the corresponding `using` alias from this module's header.
         // The alias itself lives in the defining module's `.hpp`, so we
         // also include that module unless this is the defining module.
-        if let Some(binding) = bindings.get(target) {
-            if let Some(header) = &binding.header {
-                deps.include_headers.insert(header.clone());
-            }
+        if let Some(binding) = bindings.get(target)
+            && let Some(header) = &binding.header
+        {
+            deps.include_headers.insert(header.clone());
         }
         let target_module = target.parent().unwrap_or_else(ItemPath::empty);
         if &target_module != module_path {

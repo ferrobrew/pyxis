@@ -20,7 +20,7 @@ use crate::{
 };
 
 /// A resolved intra-doc link target.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum DocLinkTarget {
     /// A type / enum / bitflags / type alias item.
     Item(ItemPath),
@@ -51,7 +51,7 @@ impl DocLinkTarget {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DocLinkMemberKind {
     Method,
     VftableMethod,
@@ -60,7 +60,7 @@ pub enum DocLinkMemberKind {
     Flag,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 enum ItemMembers {
     Type {
         methods: Vec<String>,
@@ -77,7 +77,7 @@ enum ItemMembers {
     Other,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct ItemInfo {
     visibility: Visibility,
     members: ItemMembers,
@@ -85,7 +85,7 @@ struct ItemInfo {
 
 /// A snapshot of resolvable items/members, decoupled from the registry so doc
 /// links can be resolved while the resolved state is consumed elsewhere.
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DocLinkResolver {
     items: BTreeMap<ItemPath, ItemInfo>,
     module_functions: BTreeMap<ItemPath, Vec<String>>,
@@ -171,16 +171,15 @@ impl DocLinkResolver {
             return Some(DocLinkTarget::Item(item_path));
         }
         // 2. `Type::member`.
-        if let Some((prefix, member)) = path_str.rsplit_once("::") {
-            if let Some(item_path) = self.find_item(scope, prefix) {
-                if let Some(kind) = self.find_member(&item_path, member) {
-                    return Some(DocLinkTarget::Member {
-                        item: item_path,
-                        name: member.to_string(),
-                        kind,
-                    });
-                }
-            }
+        if let Some((prefix, member)) = path_str.rsplit_once("::")
+            && let Some(item_path) = self.find_item(scope, prefix)
+            && let Some(kind) = self.find_member(&item_path, member)
+        {
+            return Some(DocLinkTarget::Member {
+                item: item_path,
+                name: member.to_string(),
+                kind,
+            });
         }
         // 3/4. A module-level freestanding function or extern value — the
         //      current module first, then any module in the crate (the backend
@@ -574,7 +573,11 @@ pub fn extract_links(doc: &[String]) -> Vec<String> {
     links
 }
 
-fn is_path(s: &str) -> bool {
+/// Whether `s` is a valid intra-doc link target: a `::`-separated path of
+/// identifier segments (e.g. `Type`, `module::Type::method`), as opposed to
+/// arbitrary prose or a URL. Shared with editor tooling so the LSP's link
+/// scanner recognises the same targets the compiler resolves.
+pub fn is_path(s: &str) -> bool {
     !s.is_empty()
         && s.split("::").all(|seg| {
             let mut chars = seg.chars();

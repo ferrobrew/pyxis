@@ -4,7 +4,7 @@ use crate::{
     backends::{BackendError, Result},
     grammar::ItemPath,
     semantic::{
-        Module, ResolvedSemanticState, TypeRegistry,
+        Module, SemanticOutput, TypeRegistry,
         types::{
             Argument, BitflagsDefinition, EnumDefinition, ExternValue, Function, FunctionBody,
             ItemCategory, ItemDefinition, ItemDefinitionInner, ItemStateResolved, PredefinedItem,
@@ -33,7 +33,7 @@ const BITFLAGS_MACRO: &str = include_str!("bitflags_impl.rs");
 /// crate. Used to decide whether to emit [`BITFLAGS_MACRO`] into the root
 /// module.
 fn crate_uses_bitflags(
-    semantic_state: &ResolvedSemanticState,
+    semantic_state: &SemanticOutput,
     cfg_ctx: &crate::parser::cfg::CfgContext,
 ) -> bool {
     let cfg_pass = |cfg: &Option<crate::parser::cfg::CfgPredicate>| match cfg {
@@ -55,7 +55,7 @@ fn crate_uses_bitflags(
 pub fn write_module(
     out_dir: &Path,
     key: &ItemPath,
-    semantic_state: &ResolvedSemanticState,
+    semantic_state: &SemanticOutput,
     module: &Module,
     options: &crate::BuildOptions,
 ) -> Result<()> {
@@ -305,7 +305,7 @@ pub fn write_module(
 fn module_has_public_exports(
     path: &ItemPath,
     module: &Module,
-    semantic_state: &ResolvedSemanticState,
+    semantic_state: &SemanticOutput,
 ) -> bool {
     let type_registry = semantic_state.type_registry();
     module

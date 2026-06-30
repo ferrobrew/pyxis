@@ -1,0 +1,24 @@
+[package]
+name = "pyxis-lsp"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "pyxis_lsp"
+path = "src/lib.rs"
+
+[[bin]]
+name = "pyxis-lsp"
+path = "src/main.rs"
+
+[dependencies]
+pyxis = { path = "../..", features = ["json", "cpp"] }
+lsp-server = { workspace = true }
+lsp-types = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+crossbeam-channel = { workspace = true }
+url = { workspace = true }
+
+[dev-dependencies]
+expect-test = { workspace = true }

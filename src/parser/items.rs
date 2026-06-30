@@ -130,7 +130,7 @@ impl TypeStatement {
         self
     }
 }
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub struct TypeDefinition {
     pub items: Vec<TypeDefItem>,
     pub attributes: Attributes,
@@ -503,6 +503,19 @@ pub struct ItemDefinition {
     /// doc comments and attributes. Used for documentation source links so they
     /// point at the definition line rather than its first attribute.
     pub declaration_location: ItemLocation,
+}
+impl Default for ItemDefinition {
+    fn default() -> Self {
+        Self {
+            visibility: Visibility::Private,
+            name: Ident::from(""),
+            type_parameters: vec![],
+            doc_comments: vec![],
+            inner: ItemDefinitionInner::Type(TypeDefinition::default()),
+            location: ItemLocation::internal(),
+            declaration_location: ItemLocation::internal(),
+        }
+    }
 }
 #[cfg(test)]
 impl ItemDefinition {

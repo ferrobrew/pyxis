@@ -9,15 +9,17 @@
 //! functions, generics, externs, per-module prologue/epilogue, and CMake
 //! generation are filled in by later phases.
 
-use std::fmt::Write as _;
-use std::path::{Path, PathBuf};
+use std::{
+    fmt::Write as _,
+    path::{Path, PathBuf},
+};
 
 use crate::{
     backends::{BackendError, Result},
     config::Project,
     grammar::ItemPath,
     semantic::{
-        Module, ResolvedSemanticState, TypeRegistry,
+        Module, SemanticOutput, TypeRegistry,
         types::{ExternValue, Function, ItemDefinitionInner},
     },
 };
@@ -33,11 +35,7 @@ use extern_bindings::{CppExternBinding, build_cpp_extern_bindings};
 /// Top-level C++-backend entry point. Builds the cross-module C++ binding
 /// map once, then emits a `.hpp` (and matching `.cpp` if needed) per module,
 /// the shared `pyxis_runtime.hpp`, and the project-level CMake glue.
-pub fn build(
-    out_dir: &Path,
-    semantic_state: &ResolvedSemanticState,
-    project: &Project,
-) -> Result<()> {
+pub fn build(out_dir: &Path, semantic_state: &SemanticOutput, project: &Project) -> Result<()> {
     let bindings = build_cpp_extern_bindings(semantic_state);
 
     // Pre-flight: detect cross-module FullDef cycles by aggregating each
@@ -337,7 +335,7 @@ fn emit_include(
 #[allow(clippy::too_many_arguments)]
 fn assemble_header(
     key: &ItemPath,
-    semantic_state: &ResolvedSemanticState,
+    semantic_state: &SemanticOutput,
     module: &Module,
     registry: &TypeRegistry,
     ctx: render::RenderCtx,
@@ -589,7 +587,7 @@ fn assemble_source(
 fn write_module(
     out_dir: &Path,
     key: &ItemPath,
-    semantic_state: &ResolvedSemanticState,
+    semantic_state: &SemanticOutput,
     module: &Module,
     bindings: &std::collections::BTreeMap<ItemPath, CppExternBinding>,
 ) -> Result<()> {
@@ -827,7 +825,7 @@ fn parse_include_arg(line: &str) -> Option<&str> {
 /// different underlying type" since `enum class Foo;` defaults to `int`.
 fn forward_decl_line(
     item_path: &ItemPath,
-    semantic_state: &ResolvedSemanticState,
+    semantic_state: &SemanticOutput,
     ctx: render::RenderCtx,
 ) -> String {
     let leaf = render::cpp_ident(item_path.last().map(|s| s.as_str()).unwrap_or(""));

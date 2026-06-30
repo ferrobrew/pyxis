@@ -320,13 +320,41 @@ pub fn build_with_store_and_options(
 ) -> Result<(), BuildError> {
     let config = config::Config::load(&in_dir.join("pyxis.toml"))?;
 
-    let mut semantic_state = semantic::SemanticState::new(config.project.pointer_size);
+    // Build a Salsa database and register all .pyxis source files as inputs.
+    let db = semantic::PyxisDatabaseImpl::default();
+    let mut sources = Vec::new();
 
     for path in glob::glob(&format!("{}/**/*.pyxis", in_dir.display()))?.filter_map(Result::ok) {
-        semantic_state.add_file(file_store, in_dir, &path)?;
+        let source = std::fs::read_to_string(&path).map_err(|e| BuildError::Io {
+            error: e,
+            context: format!("reading file {}", path.display()),
+        })?;
+        let relative_path = path.strip_prefix(in_dir).unwrap_or(&path);
+        let filename = relative_path.display().to_string();
+        let file_id = file_store.register_path(filename.clone(), path.to_path_buf());
+        let file_id_u32 = file_id.index() as u32;
+        let source_file = semantic::SourceFile::new(&db, filename, file_id_u32, source);
+        sources.push(source_file);
     }
 
-    let resolved_semantic_state = semantic_state.build()?;
+    // Create an interned source set for the Salsa query
+    let source_set = semantic::SourceSet::new(&db, sources);
+
+    // Run the Salsa-backed analysis query.
+    let analysis = semantic::analyze(&db, config.project.pointer_size, source_set);
+
+    // Dual-path error model: collect all errors, but return the first as Err
+    // to preserve the existing Result<(), BuildError> contract.
+    if let Some(first_parse_err) = analysis.parse_errors(&db).first() {
+        return Err(BuildError::Parser(first_parse_err.clone()));
+    }
+    if let Some(first_semantic_err) = analysis.errors(&db).first() {
+        return Err(BuildError::Semantic(first_semantic_err.clone()));
+    }
+
+    let resolved_semantic_state = analysis
+        .to_semantic_output(&db)
+        .expect("to_semantic_output returns Some when there are no parse or semantic errors");
 
     match backend {
         Backend::Rust => {

@@ -1,9 +1,7 @@
 use crate::{
     grammar::test_aliases::*,
     semantic::{
-        Module,
-        error::SemanticError,
-        semantic_state::{ResolvedSemanticState, SemanticState},
+        Module, builder::SemanticBuilder, error::SemanticError, output::SemanticOutput,
         types::test_aliases::*,
     },
 };
@@ -23,13 +21,10 @@ pub fn pointer_size() -> usize {
     })
 }
 
-pub fn build_state(
-    module: &M,
-    module_path: &IP,
-) -> crate::semantic::error::Result<ResolvedSemanticState> {
-    let mut semantic_state = SemanticState::new(pointer_size());
-    semantic_state.add_module(module, module_path)?;
-    semantic_state.build()
+pub fn build_state(module: &M, module_path: &IP) -> crate::semantic::error::Result<SemanticOutput> {
+    let mut builder = SemanticBuilder::new(pointer_size());
+    builder.add_module(module, module_path)?;
+    builder.build()
 }
 
 #[track_caller]

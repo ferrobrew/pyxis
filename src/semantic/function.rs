@@ -2,6 +2,7 @@ use std::{fmt, str::FromStr};
 
 use crate::{
     grammar::{self, Expr, ItemPath},
+    parser::cfg::CfgPredicate,
     semantic::{
         attribute,
         error::{
@@ -269,7 +270,7 @@ pub struct Function {
     /// (computed during associated-function resolution). `None` means
     /// "always emit"; otherwise each backend evaluates against its own
     /// `CfgContext` and skips emission when the predicate is false.
-    pub cfg: Option<crate::parser::cfg::CfgPredicate>,
+    pub cfg: Option<CfgPredicate>,
     pub location: ItemLocation,
 }
 impl fmt::Display for Function {

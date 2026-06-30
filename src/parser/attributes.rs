@@ -720,8 +720,7 @@ pub type AnarkGui {
     // ========================================================================
 
     use super::ParseError;
-    use crate::span::ItemLocation;
-    use crate::tokenizer::TokenKind;
+    use crate::{span::ItemLocation, tokenizer::TokenKind};
 
     #[test]
     fn attribute_at_eof_errors() {
@@ -927,12 +926,15 @@ pub type AnarkGui {
     }
 
     mod cfg_attribute {
-        use crate::parser::Parser;
-        use crate::parser::attributes::Attribute;
-        use crate::parser::cfg::{CfgAtom, CfgPredicate};
-        use crate::span::FileId;
-        use crate::span::StripLocations;
-        use crate::tokenizer::tokenize_with_file_id;
+        use crate::{
+            parser::{
+                Parser,
+                attributes::Attribute,
+                cfg::{CfgAtom, CfgPredicate},
+            },
+            span::{FileId, StripLocations},
+            tokenizer::tokenize_with_file_id,
+        };
 
         fn parse_cfg(text: &str) -> CfgPredicate {
             let tokens = tokenize_with_file_id(text.to_string(), FileId::TEST).unwrap();

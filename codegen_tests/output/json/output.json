@@ -2393,6 +2393,286 @@
         "line": 1
       }
     },
+    "generics::Boxed": {
+      "path": "generics::Boxed",
+      "visibility": "public",
+      "type_parameters": [
+        "T"
+      ],
+      "size": 16,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": " Generic that embeds a concrete type by value (not behind a pointer), so\n instantiating it by value must re-resolve `Payload` — the transitive value\n dependency through a generic instantiation.",
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "value",
+            "doc": null,
+            "type_ref": {
+              "type": "mut_pointer",
+              "inner": {
+                "type": "type_parameter",
+                "name": "T"
+              }
+            },
+            "offset": 0,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 15,
+              "line": 55
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "payload",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "generics::Payload"
+            },
+            "offset": 8,
+            "size": 4,
+            "alignment": 4,
+            "is_base": false,
+            "source": {
+              "file_index": 15,
+              "line": 56
+            }
+          },
+          {
+            "visibility": "private",
+            "name": "_field_c",
+            "doc": null,
+            "type_ref": {
+              "type": "array",
+              "inner": {
+                "type": "raw",
+                "path": "u8"
+              },
+              "size": 4
+            },
+            "offset": 12,
+            "size": 4,
+            "alignment": 1,
+            "is_base": false,
+            "source": {
+              "file_index": 15,
+              "line": 50
+            }
+          }
+        ],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false
+      },
+      "source": {
+        "file_index": 15,
+        "line": 54
+      }
+    },
+    "generics::BoxedHolder": {
+      "path": "generics::BoxedHolder",
+      "visibility": "public",
+      "size": 16,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": " Holds a generic instantiation by value. Regression guard:\n `resolve_item` must resolve `Boxed`'s concrete field types, not just `Boxed`.",
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "boxed",
+            "doc": null,
+            "type_ref": {
+              "type": "generic",
+              "base": "generics::Boxed",
+              "args": [
+                {
+                  "type": "raw",
+                  "path": "math::Vector3"
+                }
+              ]
+            },
+            "offset": 0,
+            "size": 16,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 15,
+              "line": 63
+            }
+          }
+        ],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false
+      },
+      "source": {
+        "file_index": 15,
+        "line": 62
+      }
+    },
+    "generics::BoxedRegistry": {
+      "path": "generics::BoxedRegistry",
+      "visibility": "public",
+      "size": 8,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": " A vftable method takes a generic by value. Regression guard: a generic\n referenced *only* in a vftable signature must still be resolved to build the\n vftable.",
+        "fields": [
+          {
+            "visibility": "private",
+            "name": "vftable",
+            "doc": null,
+            "type_ref": {
+              "type": "const_pointer",
+              "inner": {
+                "type": "raw",
+                "path": "generics::BoxedRegistryVftable"
+              }
+            },
+            "offset": 0,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 15,
+              "line": 72
+            }
+          }
+        ],
+        "associated_functions": [],
+        "vftable": {
+          "functions": [
+            {
+              "visibility": "public",
+              "name": "add",
+              "doc": null,
+              "body": {
+                "type": "vftable",
+                "function_name": "add"
+              },
+              "arguments": [
+                {
+                  "type": "mut_self"
+                },
+                {
+                  "type": "field",
+                  "name": "boxed",
+                  "type_ref": {
+                    "type": "generic",
+                    "base": "generics::Boxed",
+                    "args": [
+                      {
+                        "type": "raw",
+                        "path": "math::Vector3"
+                      }
+                    ]
+                  }
+                }
+              ],
+              "return_type": null,
+              "calling_convention": "system",
+              "source": {
+                "file_index": 15,
+                "line": 72
+              }
+            }
+          ]
+        },
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false
+      },
+      "source": {
+        "file_index": 15,
+        "line": 70
+      }
+    },
+    "generics::BoxedRegistryVftable": {
+      "path": "generics::BoxedRegistryVftable",
+      "visibility": "public",
+      "size": 8,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "add",
+            "doc": null,
+            "type_ref": {
+              "type": "function",
+              "calling_convention": "system",
+              "arguments": [
+                {
+                  "name": "this",
+                  "type_ref": {
+                    "type": "mut_pointer",
+                    "inner": {
+                      "type": "raw",
+                      "path": "generics::BoxedRegistry"
+                    }
+                  }
+                },
+                {
+                  "name": "boxed",
+                  "type_ref": {
+                    "type": "generic",
+                    "base": "generics::Boxed",
+                    "args": [
+                      {
+                        "type": "raw",
+                        "path": "math::Vector3"
+                      }
+                    ]
+                  }
+                }
+              ],
+              "return_type": null
+            },
+            "offset": 0,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 15,
+              "line": 72
+            }
+          }
+        ],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false
+      },
+      "source": {
+        "file_index": 15,
+        "line": 72
+      }
+    },
     "generics::Container": {
       "path": "generics::Container",
       "visibility": "public",
@@ -2657,6 +2937,47 @@
       "source": {
         "file_index": 15,
         "line": 19
+      }
+    },
+    "generics::Payload": {
+      "path": "generics::Payload",
+      "visibility": "public",
+      "size": 4,
+      "alignment": 4,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": " A concrete (non-generic) payload embedded *by value* inside a generic.",
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "tag",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "u32"
+            },
+            "offset": 0,
+            "size": 4,
+            "alignment": 4,
+            "is_base": false,
+            "source": {
+              "file_index": 15,
+              "line": 47
+            }
+          }
+        ],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false
+      },
+      "source": {
+        "file_index": 15,
+        "line": 46
       }
     },
     "generics::Shared": {
@@ -7500,10 +7821,15 @@
     "generics": {
       "doc": null,
       "items": [
+        "generics::Boxed",
+        "generics::BoxedHolder",
+        "generics::BoxedRegistry",
+        "generics::BoxedRegistryVftable",
         "generics::Container",
         "generics::GenericArray",
         "generics::GenericPointer",
         "generics::MapEntry",
+        "generics::Payload",
         "generics::Shared",
         "generics::WeakPtr"
       ],

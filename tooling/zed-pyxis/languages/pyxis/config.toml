@@ -1,0 +1,6 @@
+name = "Pyxis"
+grammar = "pyxis"
+path_suffixes = ["pyxis"]
+line_comments = ["// ", "/// "]
+tab_size = 4
+hard_tabs = true

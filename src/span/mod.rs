@@ -43,6 +43,11 @@ impl Span {
         Self { start, end }
     }
 
+    /// Returns true if the given location falls within this span (inclusive of start, exclusive of end).
+    pub fn contains(&self, loc: &Location) -> bool {
+        loc >= &self.start && loc < &self.end
+    }
+
     /// Create a synthetic span (for generated or missing content)
     pub fn synthetic() -> Self {
         Self {
@@ -88,6 +93,20 @@ impl FileId {
     /// Get the raw index of this FileId.
     pub(crate) fn index(self) -> usize {
         self.0 as usize
+    }
+
+    /// Convert this FileId to a `u32` for passing through Salsa query
+    /// parameters (e.g. `SourceFile::file_id`). Used by the LSP crate.
+    pub fn as_u32(self) -> u32 {
+        self.0
+    }
+
+    /// Reconstruct a FileId from a `u32` that was produced by [`as_u32`].
+    /// Used by the LSP crate to stamp `ItemLocation`s for diagnostics.
+    ///
+    /// [`as_u32`]: Self::as_u32
+    pub fn from_u32(index: u32) -> Self {
+        FileId(index)
     }
 }
 

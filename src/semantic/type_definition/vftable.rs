@@ -1,11 +1,11 @@
 use crate::{
     grammar::{self, ItemPath},
     semantic::{
-        SemanticState,
         attribute::parse_index,
         error::{Result, SemanticError},
         function,
         module::Module,
+        resolution_context::ResolutionContext,
         type_definition::get_region_name_and_type_definition,
         type_registry::TypeRegistry,
         types::{
@@ -15,6 +15,9 @@ use crate::{
     },
     span::{EqualsIgnoringLocations as _, HasLocation, ItemLocation},
 };
+
+#[cfg(test)]
+use crate::span::StripLocations;
 
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]
 pub struct TypeVftable {
@@ -38,7 +41,7 @@ impl TypeVftable {
 }
 
 #[cfg(test)]
-impl crate::span::StripLocations for TypeVftable {
+impl StripLocations for TypeVftable {
     fn strip_locations(&self) -> Self {
         TypeVftable {
             functions: self.functions.strip_locations(),
@@ -120,7 +123,7 @@ pub fn convert_grammar_functions_to_semantic_functions(
 }
 
 pub fn build(
-    semantic: &mut SemanticState,
+    semantic: &mut ResolutionContext<'_>,
     resolvee_path: &ItemPath,
     visibility: Visibility,
     first_base: Option<&Region>,
@@ -130,7 +133,7 @@ pub fn build(
     if let Some(vftable_functions) = vftable_functions {
         // There are functions defined for this vftable.
         let vftable_item = build_type(
-            &semantic.type_registry,
+            semantic.type_registry,
             resolvee_path,
             visibility,
             &vftable_functions,
@@ -145,11 +148,9 @@ pub fn build(
         let vftable_pointer_type = Type::ConstPointer(Box::new(Type::Raw(vftable_path)));
         semantic.add_item(vftable_type)?;
 
-        if let Some((base_name, base_vftable)) = get_optional_region_name_and_vftable(
-            &semantic.type_registry,
-            resolvee_path,
-            first_base,
-        )? {
+        if let Some((base_name, base_vftable)) =
+            get_optional_region_name_and_vftable(semantic.type_registry, resolvee_path, first_base)?
+        {
             // There is a base class with a vftable. Let's use its field.
 
             // Ensure that all of the base classes's vfuncs are included in the derived class's vftable
@@ -225,7 +226,7 @@ pub fn build(
             ))
         }
     } else if let Some((base_name, base_vftable)) =
-        get_optional_region_name_and_vftable(&semantic.type_registry, resolvee_path, first_base)?
+        get_optional_region_name_and_vftable(semantic.type_registry, resolvee_path, first_base)?
     {
         // There are no functions defined for this vftable, but there is a base class with a vftable.
         // Let's use its field.

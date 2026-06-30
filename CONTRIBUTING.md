@@ -68,3 +68,51 @@ and `cargo run --example codegen_tests`, which emits the test corpus
 through every backend and rebuilds the emitted output. The cpp test
 corpus uses a regular host C++17 compiler (no MSVC ABI required) so
 CI doesn't need xwin.
+
+Formatting relies on a nightly-only rustfmt feature (`imports_granularity`,
+configured in `rustfmt.toml`), so check it with nightly:
+
+```sh
+cargo +nightly fmt --all -- --check
+```
+
+## Editor tooling
+
+Pyxis ships a tree-sitter grammar, a Zed extension, and a language
+server. All live under `tooling/`.
+
+The tree-sitter grammar lives in its own repository,
+[`ferrobrew/tree-sitter-pyxis`](https://github.com/ferrobrew/tree-sitter-pyxis),
+and is vendored here as a git **submodule** at `tooling/tree-sitter-pyxis`.
+Clone with `git clone --recurse-submodules`, or in an existing checkout run:
+
+```sh
+git submodule update --init
+```
+
+To change the grammar: edit it in `tooling/tree-sitter-pyxis`, run
+`tree-sitter generate`, then commit and **push to the grammar repo's `main`** —
+the Zed extension fetches the grammar from GitHub, so a rebuild only sees
+pushed changes. Optionally bump the submodule pin here
+(`git add tooling/tree-sitter-pyxis && git commit`) for a reproducible build.
+
+### Architecture
+
+The compiler uses a [Salsa](https://github.com/salsa-rs/salsa)-backed query
+graph (`src/salsa/`). Both the batch compilation pipeline (`build_with_store_and_options`)
+and the LSP server call the same Salsa queries — there is no separate
+"imperative pipeline" and "LSP pipeline."
+
+- `src/salsa/` — Salsa database, inputs, IR, and tracked functions
+- `tooling/tree-sitter-pyxis/` — tree-sitter grammar for syntax highlighting (a submodule → [`ferrobrew/tree-sitter-pyxis`](https://github.com/ferrobrew/tree-sitter-pyxis))
+- `tooling/zed-pyxis/` — Zed extension
+- `tooling/lsp/` — LSP server binary (`pyxis-lsp`)
+
+### Running the LSP
+
+```sh
+cargo build -p pyxis-lsp --release
+```
+
+The `pyxis-lsp` binary communicates over stdio. The Zed extension spawns it
+automatically (see its README for installation instructions).

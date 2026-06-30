@@ -30,7 +30,7 @@ use super::attributes::Attribute;
 /// viewer renders it on that type's page instead of the module page.
 /// The path is stored as-written here and resolved to an absolute item
 /// path during semantic analysis.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(test, derive(StripLocations))]
 pub struct BackendSplice {
     pub header: Option<String>,
@@ -59,7 +59,7 @@ impl BackendSplice {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, HasLocation)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, HasLocation)]
 #[cfg_attr(test, derive(StripLocations))]
 pub struct Backend {
     /// Typed backend identity. Validated at parse time - an unknown
@@ -170,7 +170,7 @@ impl Backend {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, HasLocation)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, HasLocation)]
 #[cfg_attr(test, derive(StripLocations))]
 pub struct ExternValue {
     pub visibility: Visibility,
@@ -208,7 +208,7 @@ impl ExternValue {
 /// - `Vector3` → `UseTree::Path { path: ["Vector3"], location }`
 /// - `math::{Vector3, Matrix4}` → `UseTree::Group { prefix: ["math"], items: [Path(...), Path(...)] }`
 /// - `types::{math::{V3, V4}, Game}` → nested groups
-#[derive(Debug, Clone, PartialEq, Eq, HasLocation)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, HasLocation)]
 #[cfg_attr(test, derive(StripLocations))]
 pub enum UseTree {
     /// A leaf path like `Vector3` or `math::Vector3`
@@ -1223,8 +1223,7 @@ backend rust prologue "
     // Use statement error tests
     // ========================================================================
 
-    use crate::span::ItemLocation;
-    use crate::tokenizer::TokenKind;
+    use crate::{span::ItemLocation, tokenizer::TokenKind};
 
     #[test]
     fn use_empty_path_parses_ok() {

@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 
 use crate::{
     grammar::{self, ItemPath},
-    semantic::ResolvedSemanticState,
+    semantic::SemanticOutput,
 };
 
 /// Bindings extracted from a single `extern type` declaration.
@@ -31,7 +31,7 @@ pub struct CppExternBinding {
 /// `#[cpp_header = "..."]` / `#[cpp_name = "..."]` attributes attached to
 /// `extern type` declarations.
 pub fn build_cpp_extern_bindings(
-    semantic_state: &ResolvedSemanticState,
+    semantic_state: &SemanticOutput,
 ) -> BTreeMap<ItemPath, CppExternBinding> {
     let mut out = BTreeMap::new();
     for (module_path, module) in semantic_state.modules() {

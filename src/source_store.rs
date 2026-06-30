@@ -82,6 +82,15 @@ impl FileStore {
         id
     }
 
+    /// Update the content of an in-memory file (for LSP didChange).
+    ///
+    /// If the file was registered as a path entry, it is converted to
+    /// in-memory with the new content.
+    pub fn update_in_memory(&mut self, id: FileId, content: String) {
+        let filename = self.filename(id).to_string();
+        self.files[id.index()] = FileEntry::InMemory { filename, content };
+    }
+
     /// Get the filename for a file ID.
     ///
     /// # Panics

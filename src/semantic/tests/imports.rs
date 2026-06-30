@@ -2,8 +2,8 @@
 
 use crate::{
     grammar::test_aliases::*,
-    semantic::{error::SemanticError, semantic_state::SemanticState, types::test_aliases::*},
-    span::ItemLocation,
+    semantic::{builder::SemanticBuilder, error::SemanticError, types::test_aliases::*},
+    span::{ItemLocation, StripLocations},
 };
 
 use pretty_assertions::assert_eq;
@@ -21,23 +21,19 @@ fn can_use_type_from_another_module() {
         TD::new([TS::field((V::Private, "field"), T::ident("u32"))]),
     )]);
 
-    let mut semantic_state = SemanticState::new(4);
-    semantic_state
-        .add_module(&module1, &IP::from("module1"))
-        .unwrap();
-    semantic_state
-        .add_module(&module2, &IP::from("module2"))
-        .unwrap();
-    let semantic_state = semantic_state.build().unwrap();
+    let mut builder = SemanticBuilder::new(4);
+    builder.add_module(&module1, &IP::from("module1")).unwrap();
+    builder.add_module(&module2, &IP::from("module2")).unwrap();
+    let resolved = builder.build().unwrap();
 
     let path = IP::from("module1::TestType1");
-    let resolved_type = semantic_state
+    let resolved_type = resolved
         .type_registry()
         .get(&path, &ItemLocation::test())
         .cloned()
         .expect("failed to get type");
     assert_eq!(
-        resolved_type,
+        resolved_type.strip_locations(),
         SID::defined_resolved(
             (SV::Public, path.clone(),),
             SISR::new(
@@ -82,24 +78,20 @@ fn can_use_braced_imports_from_another_module() {
         ),
     ]);
 
-    let mut semantic_state = SemanticState::new(4);
-    semantic_state
-        .add_module(&module1, &IP::from("module1"))
-        .unwrap();
-    semantic_state
-        .add_module(&module_math, &IP::from("math"))
-        .unwrap();
-    let semantic_state = semantic_state.build().unwrap();
+    let mut builder = SemanticBuilder::new(4);
+    builder.add_module(&module1, &IP::from("module1")).unwrap();
+    builder.add_module(&module_math, &IP::from("math")).unwrap();
+    let resolved = builder.build().unwrap();
 
     // Verify the Transform type was resolved correctly with both imported types
     let path = IP::from("module1::Transform");
-    let resolved_type = semantic_state
+    let resolved_type = resolved
         .type_registry()
         .get(&path, &ItemLocation::test())
         .cloned()
         .expect("failed to get Transform type");
     assert_eq!(
-        resolved_type,
+        resolved_type.strip_locations(),
         SID::defined_resolved(
             (SV::Public, path.clone(),),
             SISR::new(
@@ -115,8 +107,6 @@ fn can_use_braced_imports_from_another_module() {
 
 #[test]
 fn will_fail_on_use_of_nonexistent_type() {
-    use crate::span::StripLocations;
-
     // Test that using a type that doesn't exist produces an error
     let module1 = M::new()
         .with_uses([IP::from("math::NonExistent")])
@@ -125,12 +115,10 @@ fn will_fail_on_use_of_nonexistent_type() {
             TD::new([TS::field((V::Private, "value"), T::ident("u32"))]),
         )]);
 
-    let mut semantic_state = SemanticState::new(4);
-    semantic_state
-        .add_module(&module1, &IP::from("module1"))
-        .unwrap();
+    let mut builder = SemanticBuilder::new(4);
+    builder.add_module(&module1, &IP::from("module1")).unwrap();
 
-    let err = semantic_state.build().unwrap_err();
+    let err = builder.build().unwrap_err();
     assert_eq!(
         err.strip_locations(),
         SemanticError::UseItemNotFound {
@@ -143,8 +131,6 @@ fn will_fail_on_use_of_nonexistent_type() {
 
 #[test]
 fn will_fail_on_braced_import_with_nonexistent_type() {
-    use crate::span::StripLocations;
-
     // Test that braced imports with a nonexistent type produce an error
     let module1 = M::new()
         .with_use_trees([UT::group(
@@ -160,15 +146,11 @@ fn will_fail_on_braced_import_with_nonexistent_type() {
         TD::new([TS::field((V::Public, "data"), T::ident("f32").array(16))]),
     )]);
 
-    let mut semantic_state = SemanticState::new(4);
-    semantic_state
-        .add_module(&module1, &IP::from("module1"))
-        .unwrap();
-    semantic_state
-        .add_module(&module_math, &IP::from("math"))
-        .unwrap();
+    let mut builder = SemanticBuilder::new(4);
+    builder.add_module(&module1, &IP::from("module1")).unwrap();
+    builder.add_module(&module_math, &IP::from("math")).unwrap();
 
-    let err = semantic_state.build().unwrap_err();
+    let err = builder.build().unwrap_err();
     assert_eq!(
         err.strip_locations(),
         SemanticError::UseItemNotFound {
@@ -181,8 +163,6 @@ fn will_fail_on_braced_import_with_nonexistent_type() {
 
 #[test]
 fn will_fail_on_use_of_nonexistent_module() {
-    use crate::span::StripLocations;
-
     // Test that using a module that doesn't exist produces an error
     let module1 = M::new()
         .with_uses([IP::from("nonexistent::SomeType")])
@@ -191,12 +171,10 @@ fn will_fail_on_use_of_nonexistent_module() {
             TD::new([TS::field((V::Private, "value"), T::ident("u32"))]),
         )]);
 
-    let mut semantic_state = SemanticState::new(4);
-    semantic_state
-        .add_module(&module1, &IP::from("module1"))
-        .unwrap();
+    let mut builder = SemanticBuilder::new(4);
+    builder.add_module(&module1, &IP::from("module1")).unwrap();
 
-    let err = semantic_state.build().unwrap_err();
+    let err = builder.build().unwrap_err();
     assert_eq!(
         err.strip_locations(),
         SemanticError::UseItemNotFound {
@@ -222,14 +200,10 @@ fn can_use_module_in_use_statement() {
         TD::new([TS::field((V::Public, "x"), T::ident("f32"))]),
     )]);
 
-    let mut semantic_state = SemanticState::new(4);
-    semantic_state
-        .add_module(&module1, &IP::from("module1"))
-        .unwrap();
-    semantic_state
-        .add_module(&module_math, &IP::from("math"))
-        .unwrap();
+    let mut builder = SemanticBuilder::new(4);
+    builder.add_module(&module1, &IP::from("module1")).unwrap();
+    builder.add_module(&module_math, &IP::from("math")).unwrap();
 
     // Should succeed because "math" is a valid module
-    semantic_state.build().unwrap();
+    builder.build().unwrap();
 }

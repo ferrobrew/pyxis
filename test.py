@@ -50,10 +50,10 @@ def main():
     # Run clippy (with RUSTFLAGS to treat warnings as errors, matching CI)
     clippy_env = os.environ.copy()
     clippy_env["RUSTFLAGS"] = "-Dwarnings"
-    run_command(["cargo", "clippy", "--all-targets", "--all-features"], env=clippy_env)
+    run_command(["cargo", "clippy", "--all", "--all-targets", "--all-features"], env=clippy_env)
 
-    # Run fmt check
-    run_command(["cargo", "fmt", "--", "--check"])
+    # Run fmt check (nightly — rustfmt.toml uses the unstable imports_granularity)
+    run_command(["cargo", "+nightly", "fmt", "--all", "--", "--check"])
 
     print(f"\n{'=' * 60}")
     print("All checks passed!")

@@ -1,0 +1,1 @@
+../../../tree-sitter-pyxis/queries/highlights.scm
