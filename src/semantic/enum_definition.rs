@@ -37,6 +37,7 @@ pub struct EnumDefinition {
     pub copyable: bool,
     pub cloneable: bool,
     pub default: Option<usize>,
+    pub pinned: bool,
 }
 #[cfg(test)]
 impl EnumDefinition {
@@ -50,6 +51,7 @@ impl EnumDefinition {
             copyable: false,
             cloneable: false,
             default: None,
+            pinned: false,
         }
     }
     pub fn with_doc(mut self, doc: impl IntoIterator<Item = impl Into<String>>) -> Self {
@@ -92,6 +94,10 @@ impl EnumDefinition {
     }
     pub fn with_default(mut self, default: usize) -> Self {
         self.default = Some(default);
+        self
+    }
+    pub fn with_pinned(mut self, pinned: bool) -> Self {
+        self.pinned = pinned;
         self
     }
     pub fn doc(&self) -> &[String] {
@@ -192,6 +198,7 @@ pub fn build(
     let mut copyable = false;
     let mut cloneable = false;
     let mut defaultable = false;
+    let mut pinned = false;
     let doc = doc_comments.to_vec();
     for attribute in &definition.attributes {
         match attribute {
@@ -202,6 +209,7 @@ pub fn build(
                 }
                 "cloneable" => cloneable = true,
                 "defaultable" => defaultable = true,
+                "pinned" => pinned = true,
                 _ => {}
             },
             grammar::Attribute::Function { name, items, .. } => {
@@ -273,6 +281,7 @@ pub fn build(
             copyable,
             cloneable,
             default,
+            pinned,
         }
         .into(),
     }))

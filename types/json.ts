@@ -84,7 +84,11 @@ cloneable: boolean;
 /**
  * Default flag index
  */
-default: number | null };
+default: number | null; 
+/**
+ * Whether the bitflags is pinned (non-relocatable)
+ */
+pinned: boolean };
 
 export type JsonCallingConvention = "c" | "cdecl" | "stdcall" | "fastcall" | "thiscall" | "vectorcall" | "system";
 
@@ -212,7 +216,11 @@ cloneable: boolean;
 /**
  * Default variant index
  */
-default: number | null };
+default: number | null; 
+/**
+ * Whether the enum is pinned (non-relocatable)
+ */
+pinned: boolean };
 
 export type JsonEnumVariant = { 
 /**
@@ -504,7 +512,11 @@ defaultable: boolean;
 /**
  * Whether the type is packed
  */
-packed: boolean };
+packed: boolean; 
+/**
+ * Whether the type is pinned (non-relocatable)
+ */
+pinned: boolean };
 
 export type JsonTypeVftable = { 
 /**

@@ -20,7 +20,8 @@
         "copyable": true,
         "cloneable": true,
         "defaultable": true,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": null
     },
@@ -40,7 +41,8 @@
         "copyable": true,
         "cloneable": true,
         "defaultable": true,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": null
     },
@@ -60,7 +62,8 @@
         "copyable": true,
         "cloneable": true,
         "defaultable": true,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": null
     },
@@ -80,7 +83,8 @@
         "copyable": true,
         "cloneable": true,
         "defaultable": true,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": null
     },
@@ -100,7 +104,8 @@
         "copyable": true,
         "cloneable": true,
         "defaultable": true,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": null
     },
@@ -120,7 +125,8 @@
         "copyable": true,
         "cloneable": true,
         "defaultable": true,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": null
     },
@@ -140,7 +146,8 @@
         "copyable": true,
         "cloneable": true,
         "defaultable": true,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": null
     },
@@ -160,7 +167,8 @@
         "copyable": true,
         "cloneable": true,
         "defaultable": true,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": null
     },
@@ -180,7 +188,8 @@
         "copyable": true,
         "cloneable": true,
         "defaultable": true,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": null
     },
@@ -375,7 +384,8 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
         "file_index": 2,
@@ -438,7 +448,8 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
         "file_index": 3,
@@ -520,7 +531,8 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
         "file_index": 3,
@@ -581,7 +593,8 @@
         "singleton": null,
         "copyable": false,
         "cloneable": false,
-        "default": null
+        "default": null,
+        "pinned": false
       },
       "source": {
         "file_index": 4,
@@ -642,7 +655,8 @@
         "singleton": null,
         "copyable": false,
         "cloneable": false,
-        "default": 2
+        "default": 2,
+        "pinned": false
       },
       "source": {
         "file_index": 4,
@@ -665,7 +679,8 @@
         "copyable": true,
         "cloneable": true,
         "defaultable": true,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": null
     },
@@ -720,7 +735,8 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
         "file_index": 5,
@@ -743,7 +759,8 @@
         "copyable": true,
         "cloneable": true,
         "defaultable": true,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": null
     },
@@ -813,7 +830,8 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
         "file_index": 6,
@@ -854,7 +872,8 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "cfg": {
         "type": "key_value",
@@ -1071,7 +1090,8 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
         "file_index": 7,
@@ -1153,7 +1173,8 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
         "file_index": 8,
@@ -1220,7 +1241,8 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
         "file_index": 9,
@@ -1305,7 +1327,8 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
         "file_index": 9,
@@ -1359,7 +1382,8 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
         "file_index": 9,
@@ -1444,7 +1468,8 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
         "file_index": 9,
@@ -1498,7 +1523,8 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
         "file_index": 9,
@@ -1552,7 +1578,8 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
         "file_index": 9,
@@ -1697,7 +1724,8 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
         "file_index": 9,
@@ -1751,7 +1779,8 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
         "file_index": 9,
@@ -1856,7 +1885,8 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
         "file_index": 10,
@@ -1910,7 +1940,8 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
         "file_index": 10,
@@ -2003,7 +2034,8 @@
         "singleton": null,
         "copyable": false,
         "cloneable": false,
-        "default": 0
+        "default": 0,
+        "pinned": false
       },
       "source": {
         "file_index": 11,
@@ -2028,7 +2060,8 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
         "file_index": 12,
@@ -2069,7 +2102,8 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
         "file_index": 12,
@@ -2173,7 +2207,8 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
         "file_index": 13,
@@ -2294,7 +2329,8 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
         "file_index": 13,
@@ -2317,7 +2353,8 @@
         "copyable": true,
         "cloneable": true,
         "defaultable": true,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": null
     },
@@ -2337,7 +2374,8 @@
         "copyable": true,
         "cloneable": true,
         "defaultable": true,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": null
     },
@@ -2386,7 +2424,8 @@
         "singleton": null,
         "copyable": false,
         "cloneable": false,
-        "default": null
+        "default": null,
+        "pinned": false
       },
       "source": {
         "file_index": 14,
@@ -2471,7 +2510,8 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
         "file_index": 15,
@@ -2518,7 +2558,8 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
         "file_index": 15,
@@ -2599,7 +2640,8 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
         "file_index": 15,
@@ -2666,7 +2708,8 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
         "file_index": 15,
@@ -2763,7 +2806,8 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
         "file_index": 15,
@@ -2814,7 +2858,8 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
         "file_index": 15,
@@ -2864,7 +2909,8 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
         "file_index": 15,
@@ -2932,7 +2978,8 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
         "file_index": 15,
@@ -2973,7 +3020,8 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
         "file_index": 15,
@@ -3020,7 +3068,8 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
         "file_index": 15,
@@ -3067,7 +3116,8 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
         "file_index": 15,
@@ -3125,7 +3175,8 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
         "file_index": 16,
@@ -3176,7 +3227,8 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
         "file_index": 16,
@@ -3229,7 +3281,8 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
         "file_index": 16,
@@ -3276,7 +3329,8 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
         "file_index": 16,
@@ -3323,7 +3377,8 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
         "file_index": 16,
@@ -3346,7 +3401,8 @@
         "copyable": true,
         "cloneable": true,
         "defaultable": true,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": null
     },
@@ -3366,7 +3422,8 @@
         "copyable": true,
         "cloneable": true,
         "defaultable": true,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": null
     },
@@ -3386,7 +3443,8 @@
         "copyable": true,
         "cloneable": true,
         "defaultable": true,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": null
     },
@@ -3406,7 +3464,8 @@
         "copyable": true,
         "cloneable": true,
         "defaultable": true,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": null
     },
@@ -3426,7 +3485,8 @@
         "copyable": true,
         "cloneable": true,
         "defaultable": true,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": null
     },
@@ -3468,7 +3528,8 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
         "file_index": 17,
@@ -3543,7 +3604,8 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
         "file_index": 17,
@@ -3605,7 +3667,8 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
         "file_index": 18,
@@ -3684,7 +3747,8 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
         "file_index": 18,
@@ -3811,7 +3875,8 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
         "file_index": 19,
@@ -3875,7 +3940,8 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
         "file_index": 19,
@@ -4062,7 +4128,8 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
         "file_index": 19,
@@ -4312,7 +4379,8 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
         "file_index": 19,
@@ -4625,7 +4693,8 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
         "file_index": 19,
@@ -4809,7 +4878,8 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
         "file_index": 19,
@@ -4953,7 +5023,8 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
         "file_index": 19,
@@ -5057,11 +5128,185 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
         "file_index": 19,
         "line": 18
+      }
+    },
+    "pinned::PinnedCopyable": {
+      "path": "pinned::PinnedCopyable",
+      "visibility": "public",
+      "size": 4,
+      "alignment": 4,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": " A type that is pinned and copyable (Copy is suppressed in Rust)",
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "value",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "u32"
+            },
+            "offset": 0,
+            "size": 4,
+            "alignment": 4,
+            "is_base": false,
+            "source": {
+              "file_index": 20,
+              "line": 10
+            }
+          }
+        ],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": true,
+        "cloneable": true,
+        "defaultable": false,
+        "packed": false,
+        "pinned": true
+      },
+      "source": {
+        "file_index": 20,
+        "line": 9
+      }
+    },
+    "pinned::PinnedEnum": {
+      "path": "pinned::PinnedEnum",
+      "visibility": "public",
+      "size": 4,
+      "alignment": 4,
+      "category": "defined",
+      "kind": {
+        "type": "enum",
+        "doc": " A pinned enum (IR/JSON-only; no effect on Rust/C++ output)",
+        "underlying_type": {
+          "type": "raw",
+          "path": "u32"
+        },
+        "variants": [
+          {
+            "name": "Option1",
+            "value": 0,
+            "doc": null,
+            "source": {
+              "file_index": 20,
+              "line": 16
+            }
+          },
+          {
+            "name": "Option2",
+            "value": 1,
+            "doc": null,
+            "source": {
+              "file_index": 20,
+              "line": 17
+            }
+          }
+        ],
+        "associated_functions": [],
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "default": null,
+        "pinned": true
+      },
+      "source": {
+        "file_index": 20,
+        "line": 15
+      }
+    },
+    "pinned::PinnedFlags": {
+      "path": "pinned::PinnedFlags",
+      "visibility": "public",
+      "size": 4,
+      "alignment": 4,
+      "category": "defined",
+      "kind": {
+        "type": "bitflags",
+        "doc": " A pinned bitflags (IR/JSON-only; no effect on Rust/C++ output)",
+        "underlying_type": {
+          "type": "raw",
+          "path": "u32"
+        },
+        "flags": [
+          {
+            "name": "Flag1",
+            "value": 1,
+            "doc": null,
+            "source": {
+              "file_index": 20,
+              "line": 23
+            }
+          },
+          {
+            "name": "Flag2",
+            "value": 2,
+            "doc": null,
+            "source": {
+              "file_index": 20,
+              "line": 24
+            }
+          }
+        ],
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "default": null,
+        "pinned": true
+      },
+      "source": {
+        "file_index": 20,
+        "line": 22
+      }
+    },
+    "pinned::PinnedType": {
+      "path": "pinned::PinnedType",
+      "visibility": "public",
+      "size": 4,
+      "alignment": 4,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": " A type that must not be relocated",
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "value",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "u32"
+            },
+            "offset": 0,
+            "size": 4,
+            "alignment": 4,
+            "is_base": false,
+            "source": {
+              "file_index": 20,
+              "line": 4
+            }
+          }
+        ],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false,
+        "pinned": true
+      },
+      "source": {
+        "file_index": 20,
+        "line": 3
       }
     },
     "self_referential_generics::GameObject": {
@@ -5087,7 +5332,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 20,
+              "file_index": 21,
               "line": 20
             }
           },
@@ -5108,7 +5353,7 @@
             "alignment": 1,
             "is_base": false,
             "source": {
-              "file_index": 20,
+              "file_index": 21,
               "line": 23
             }
           },
@@ -5131,7 +5376,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 20,
+              "file_index": 21,
               "line": 23
             }
           },
@@ -5154,7 +5399,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 20,
+              "file_index": 21,
               "line": 24
             }
           },
@@ -5177,7 +5422,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 20,
+              "file_index": 21,
               "line": 25
             }
           },
@@ -5198,7 +5443,7 @@
             "alignment": 1,
             "is_base": false,
             "source": {
-              "file_index": 20,
+              "file_index": 21,
               "line": 13
             }
           }
@@ -5209,10 +5454,11 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
-        "file_index": 20,
+        "file_index": 21,
         "line": 19
       }
     },
@@ -5245,7 +5491,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 20,
+              "file_index": 21,
               "line": 4
             }
           }
@@ -5256,10 +5502,11 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
-        "file_index": 20,
+        "file_index": 21,
         "line": 3
       }
     },
@@ -5286,7 +5533,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 20,
+              "file_index": 21,
               "line": 31
             }
           },
@@ -5307,7 +5554,7 @@
             "alignment": 1,
             "is_base": false,
             "source": {
-              "file_index": 20,
+              "file_index": 21,
               "line": 34
             }
           },
@@ -5330,7 +5577,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 20,
+              "file_index": 21,
               "line": 34
             }
           },
@@ -5353,7 +5600,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 20,
+              "file_index": 21,
               "line": 35
             }
           }
@@ -5364,10 +5611,11 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
-        "file_index": 20,
+        "file_index": 21,
         "line": 30
       }
     },
@@ -5400,7 +5648,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 20,
+              "file_index": 21,
               "line": 10
             }
           }
@@ -5411,10 +5659,11 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
-        "file_index": 20,
+        "file_index": 21,
         "line": 9
       }
     },
@@ -5441,7 +5690,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 21,
+              "file_index": 22,
               "line": 3
             }
           }
@@ -5452,10 +5701,11 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
-        "file_index": 21,
+        "file_index": 22,
         "line": 2
       }
     },
@@ -5485,7 +5735,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 22,
+              "file_index": 23,
               "line": 4
             }
           },
@@ -5502,7 +5752,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 22,
+              "file_index": 23,
               "line": 8
             }
           }
@@ -5535,7 +5785,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 22,
+              "file_index": 23,
               "line": 12
             }
           }
@@ -5569,7 +5819,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 22,
+                "file_index": 23,
                 "line": 4
               }
             }
@@ -5579,10 +5829,11 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
-        "file_index": 22,
+        "file_index": 23,
         "line": 2
       }
     },
@@ -5632,7 +5883,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 22,
+              "file_index": 23,
               "line": 4
             }
           }
@@ -5643,10 +5894,11 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
-        "file_index": 22,
+        "file_index": 23,
         "line": 4
       }
     },
@@ -5676,7 +5928,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 22,
+              "file_index": 23,
               "line": 18
             }
           },
@@ -5693,7 +5945,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 22,
+              "file_index": 23,
               "line": 22
             }
           }
@@ -5726,7 +5978,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 22,
+              "file_index": 23,
               "line": 26
             }
           }
@@ -5760,7 +6012,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 22,
+                "file_index": 23,
                 "line": 18
               }
             }
@@ -5770,10 +6022,11 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
-        "file_index": 22,
+        "file_index": 23,
         "line": 16
       }
     },
@@ -5823,7 +6076,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 22,
+              "file_index": 23,
               "line": 18
             }
           }
@@ -5834,10 +6087,11 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
-        "file_index": 22,
+        "file_index": 23,
         "line": 18
       }
     },
@@ -5864,7 +6118,7 @@
             "alignment": 8,
             "is_base": true,
             "source": {
-              "file_index": 22,
+              "file_index": 23,
               "line": 37
             }
           },
@@ -5881,7 +6135,7 @@
             "alignment": 8,
             "is_base": true,
             "source": {
-              "file_index": 22,
+              "file_index": 23,
               "line": 39
             }
           }
@@ -5915,7 +6169,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 22,
+              "file_index": 23,
               "line": 12
             }
           },
@@ -5947,7 +6201,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 22,
+              "file_index": 23,
               "line": 26
             }
           },
@@ -5979,7 +6233,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 22,
+              "file_index": 23,
               "line": 18
             }
           },
@@ -6010,7 +6264,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 22,
+              "file_index": 23,
               "line": 43
             }
           }
@@ -6044,7 +6298,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 22,
+                "file_index": 23,
                 "line": 32
               }
             },
@@ -6075,7 +6329,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 22,
+                "file_index": 23,
                 "line": 33
               }
             }
@@ -6085,10 +6339,11 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
-        "file_index": 22,
+        "file_index": 23,
         "line": 30
       }
     },
@@ -6138,7 +6393,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 22,
+              "file_index": 23,
               "line": 32
             }
           },
@@ -6178,7 +6433,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 22,
+              "file_index": 23,
               "line": 33
             }
           }
@@ -6189,10 +6444,11 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
-        "file_index": 22,
+        "file_index": 23,
         "line": 32
       }
     },
@@ -6222,7 +6478,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 23,
+              "file_index": 24,
               "line": 9
             }
           }
@@ -6233,10 +6489,11 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
-        "file_index": 23,
+        "file_index": 24,
         "line": 8
       }
     },
@@ -6272,7 +6529,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 24,
+              "file_index": 25,
               "line": 59
             }
           },
@@ -6299,7 +6556,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 24,
+              "file_index": 25,
               "line": 60
             }
           }
@@ -6310,10 +6567,11 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
-        "file_index": 24,
+        "file_index": 25,
         "line": 58
       }
     },
@@ -6338,7 +6596,7 @@
         }
       },
       "source": {
-        "file_index": 24,
+        "file_index": 25,
         "line": 16
       }
     },
@@ -6368,7 +6626,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 24,
+              "file_index": 25,
               "line": 33
             }
           },
@@ -6388,7 +6646,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 24,
+              "file_index": 25,
               "line": 34
             }
           }
@@ -6399,10 +6657,11 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
-        "file_index": 24,
+        "file_index": 25,
         "line": 32
       }
     },
@@ -6435,7 +6694,7 @@
         }
       },
       "source": {
-        "file_index": 24,
+        "file_index": 25,
         "line": 25
       }
     },
@@ -6468,7 +6727,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 24,
+              "file_index": 25,
               "line": 42
             }
           },
@@ -6491,7 +6750,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 24,
+              "file_index": 25,
               "line": 43
             }
           },
@@ -6518,7 +6777,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 24,
+              "file_index": 25,
               "line": 44
             }
           },
@@ -6538,7 +6797,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 24,
+              "file_index": 25,
               "line": 45
             }
           },
@@ -6558,7 +6817,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 24,
+              "file_index": 25,
               "line": 46
             }
           }
@@ -6569,10 +6828,11 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
-        "file_index": 24,
+        "file_index": 25,
         "line": 41
       }
     },
@@ -6594,7 +6854,7 @@
         }
       },
       "source": {
-        "file_index": 24,
+        "file_index": 25,
         "line": 9
       }
     },
@@ -6619,7 +6879,7 @@
         }
       },
       "source": {
-        "file_index": 24,
+        "file_index": 25,
         "line": 13
       }
     },
@@ -6650,7 +6910,7 @@
         }
       },
       "source": {
-        "file_index": 24,
+        "file_index": 25,
         "line": 28
       }
     },
@@ -6678,7 +6938,7 @@
         }
       },
       "source": {
-        "file_index": 24,
+        "file_index": 25,
         "line": 19
       }
     },
@@ -6700,7 +6960,7 @@
         }
       },
       "source": {
-        "file_index": 24,
+        "file_index": 25,
         "line": 6
       }
     },
@@ -6729,7 +6989,7 @@
         }
       },
       "source": {
-        "file_index": 24,
+        "file_index": 25,
         "line": 54
       }
     },
@@ -6757,7 +7017,7 @@
         }
       },
       "source": {
-        "file_index": 24,
+        "file_index": 25,
         "line": 51
       }
     },
@@ -6785,7 +7045,7 @@
         }
       },
       "source": {
-        "file_index": 24,
+        "file_index": 25,
         "line": 22
       }
     },
@@ -6805,7 +7065,8 @@
         "copyable": true,
         "cloneable": true,
         "defaultable": true,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": null
     },
@@ -6825,7 +7086,8 @@
         "copyable": true,
         "cloneable": true,
         "defaultable": true,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": null
     },
@@ -6845,7 +7107,8 @@
         "copyable": true,
         "cloneable": true,
         "defaultable": true,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": null
     },
@@ -6865,7 +7128,8 @@
         "copyable": true,
         "cloneable": true,
         "defaultable": true,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": null
     },
@@ -6885,7 +7149,8 @@
         "copyable": true,
         "cloneable": true,
         "defaultable": true,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": null
     },
@@ -6915,7 +7180,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 25,
+              "file_index": 26,
               "line": 8
             }
           },
@@ -6932,7 +7197,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 25,
+              "file_index": 26,
               "line": 13
             }
           }
@@ -6954,7 +7219,7 @@
             "return_type": null,
             "calling_convention": "system",
             "source": {
-              "file_index": 25,
+              "file_index": 26,
               "line": 20
             }
           }
@@ -6977,7 +7242,7 @@
               "return_type": null,
               "calling_convention": "system",
               "source": {
-                "file_index": 25,
+                "file_index": 26,
                 "line": 8
               }
             }
@@ -6987,10 +7252,11 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
-        "file_index": 25,
+        "file_index": 26,
         "line": 5
       }
     },
@@ -7030,7 +7296,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 25,
+              "file_index": 26,
               "line": 8
             }
           }
@@ -7041,10 +7307,11 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
-        "file_index": 25,
+        "file_index": 26,
         "line": 8
       }
     },
@@ -7064,7 +7331,8 @@
         "copyable": true,
         "cloneable": true,
         "defaultable": true,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": null
     },
@@ -7091,7 +7359,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 28,
+              "file_index": 29,
               "line": 10
             }
           }
@@ -7102,10 +7370,11 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
-        "file_index": 28,
+        "file_index": 29,
         "line": 9
       }
     },
@@ -7135,7 +7404,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 26,
+              "file_index": 27,
               "line": 8
             }
           },
@@ -7152,7 +7421,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 26,
+              "file_index": 27,
               "line": 9
             }
           },
@@ -7169,7 +7438,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 26,
+              "file_index": 27,
               "line": 10
             }
           }
@@ -7180,10 +7449,11 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
-        "file_index": 26,
+        "file_index": 27,
         "line": 7
       }
     },
@@ -7210,7 +7480,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 27,
+              "file_index": 28,
               "line": 6
             }
           }
@@ -7221,10 +7491,11 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
-        "file_index": 27,
+        "file_index": 28,
         "line": 5
       }
     },
@@ -7251,7 +7522,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 29,
+              "file_index": 30,
               "line": 4
             }
           },
@@ -7268,7 +7539,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 29,
+              "file_index": 30,
               "line": 5
             }
           }
@@ -7279,10 +7550,11 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
-        "file_index": 29,
+        "file_index": 30,
         "line": 3
       }
     },
@@ -7312,7 +7584,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 30,
+              "file_index": 31,
               "line": 10
             }
           },
@@ -7332,7 +7604,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 30,
+              "file_index": 31,
               "line": 11
             }
           }
@@ -7343,10 +7615,11 @@
         "copyable": false,
         "cloneable": false,
         "defaultable": false,
-        "packed": false
+        "packed": false,
+        "pinned": false
       },
       "source": {
-        "file_index": 30,
+        "file_index": 31,
         "line": 9
       }
     }
@@ -7911,6 +8184,23 @@
         "line": 1
       }
     },
+    "pinned": {
+      "doc": null,
+      "items": [
+        "pinned::PinnedCopyable",
+        "pinned::PinnedEnum",
+        "pinned::PinnedFlags",
+        "pinned::PinnedType"
+      ],
+      "submodules": {},
+      "extern_values": [],
+      "functions": [],
+      "backends": {},
+      "source": {
+        "file_index": 20,
+        "line": 1
+      }
+    },
     "root": {
       "doc": null,
       "items": [
@@ -7958,7 +8248,7 @@
       "functions": [],
       "backends": {},
       "source": {
-        "file_index": 20,
+        "file_index": 21,
         "line": 1
       }
     },
@@ -7972,7 +8262,7 @@
       "functions": [],
       "backends": {},
       "source": {
-        "file_index": 21,
+        "file_index": 22,
         "line": 1
       }
     },
@@ -7991,7 +8281,7 @@
       "functions": [],
       "backends": {},
       "source": {
-        "file_index": 22,
+        "file_index": 23,
         "line": 1
       }
     },
@@ -8005,7 +8295,7 @@
       "functions": [],
       "backends": {},
       "source": {
-        "file_index": 23,
+        "file_index": 24,
         "line": 1
       }
     },
@@ -8031,7 +8321,7 @@
       "functions": [],
       "backends": {},
       "source": {
-        "file_index": 24,
+        "file_index": 25,
         "line": 1
       }
     },
@@ -8046,7 +8336,7 @@
       "functions": [],
       "backends": {},
       "source": {
-        "file_index": 25,
+        "file_index": 26,
         "line": 3
       }
     },
@@ -8066,7 +8356,7 @@
           "functions": [],
           "backends": {},
           "source": {
-            "file_index": 26,
+            "file_index": 27,
             "line": 1
           }
         },
@@ -8084,7 +8374,7 @@
               "functions": [],
               "backends": {},
               "source": {
-                "file_index": 27,
+                "file_index": 28,
                 "line": 1
               }
             }
@@ -8104,7 +8394,7 @@
           "functions": [],
           "backends": {},
           "source": {
-            "file_index": 29,
+            "file_index": 30,
             "line": 1
           }
         }
@@ -8123,7 +8413,7 @@
         ]
       },
       "source": {
-        "file_index": 28,
+        "file_index": 29,
         "line": 7
       }
     },
@@ -8137,7 +8427,7 @@
       "functions": [],
       "backends": {},
       "source": {
-        "file_index": 30,
+        "file_index": 31,
         "line": 1
       }
     }
@@ -8163,6 +8453,7 @@
     "math.pyxis",
     "min_size.pyxis",
     "multiple_levels.pyxis",
+    "pinned.pyxis",
     "self_referential_generics.pyxis",
     "singleton.pyxis",
     "two_base_classes.pyxis",

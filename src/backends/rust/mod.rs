@@ -430,11 +430,12 @@ fn build_type(
         cloneable,
         defaultable,
         packed,
+        pinned,
     } = type_definition;
 
     let visibility = visibility_to_tokens(visibility);
     let doc = doc_to_tokens(false, doc);
-    let fields = regions
+    let mut fields = regions
         .iter()
         .map(|r| {
             let Region {
@@ -463,6 +464,15 @@ fn build_type(
             })
         })
         .collect::<Result<Vec<_>>>()?;
+
+    // Pinned types get a PhantomPinned marker field, making them !Unpin and
+    // forcing consumers to use Box::pin / Pin<&mut T>.
+    if *pinned {
+        fields.push(quote! {
+            #[doc(hidden)]
+            _pin: ::std::marker::PhantomPinned
+        });
+    }
 
     let name_ident = str_to_ident(name.as_str());
     let size_check_impl = generate_size_check(name.as_str(), size);
@@ -524,7 +534,11 @@ fn build_type(
         .transpose()?
         .unwrap_or_default();
 
-    let extra_derives = build_extra_derives(*copyable, *cloneable, *defaultable);
+    // Pinned types must not be Copy/Clone — that would allow moving out from
+    // behind a Pin. Suppress those derives regardless of copyable/cloneable.
+    let effective_copyable = *copyable && !*pinned;
+    let effective_cloneable = *cloneable && !*pinned;
+    let extra_derives = build_extra_derives(effective_copyable, effective_cloneable, *defaultable);
 
     let derives = if extra_derives.is_empty() {
         quote! {}
@@ -695,6 +709,7 @@ fn build_enum(
         cloneable,
         default,
         associated_functions,
+        pinned,
     } = enum_definition;
 
     let syn_type = sa_type_to_syn_type(type_, prefix)?;
@@ -718,7 +733,13 @@ fn build_enum(
         }
     });
 
-    let extra_derives = build_extra_derives(*copyable, *cloneable, default.is_some());
+    // Pinned enums suppress Copy/Clone (pinned types must not be movable).
+    // Field-less enums can't have a PhantomPinned field, so this is the only
+    // effect of #[pinned] on enums in the Rust backend.
+    let effective_copyable = *copyable && !*pinned;
+    let effective_cloneable = *cloneable && !*pinned;
+    let extra_derives =
+        build_extra_derives(effective_copyable, effective_cloneable, default.is_some());
 
     let syn_fields = variants.iter().enumerate().map(|(idx, variant)| {
         let name_ident = str_to_ident(&variant.name);

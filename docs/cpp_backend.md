@@ -248,7 +248,10 @@ On native Windows no toolchain file is needed; point CMake at MSVC or
 - **No copy/move semantics** — copy/move constructors/assignment are
   implicit defaults. `#[copyable]` / `#[cloneable]` only inform the
   Rust backend; the cpp side is always trivially-copyable when the
-  fields are.
+  fields are. The exception is `#[pinned]`: a pinned type gets deleted
+  copy/move constructors and assignment operators, since pinned types
+  must not be relocated in memory (the target C++ code passes pointers
+  to `this` or its fields around).
 - **No member access control** — pyxis's `pub`/private distinction is
   rust-only. In cpp every method and field is emitted at struct scope
   with default visibility (public for `struct`). Backend epilogues

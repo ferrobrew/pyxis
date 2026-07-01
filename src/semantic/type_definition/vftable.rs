@@ -285,6 +285,7 @@ fn build_type(
                 copyable: false,
                 defaultable: false,
                 packed: false,
+                pinned: false,
             }
             .into(),
         }),

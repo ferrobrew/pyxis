@@ -302,6 +302,8 @@ pub struct JsonTypeDefinition {
     pub defaultable: bool,
     /// Whether the type is packed
     pub packed: bool,
+    /// Whether the type is pinned (non-relocatable)
+    pub pinned: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
@@ -354,6 +356,8 @@ pub struct JsonEnumDefinition {
     pub cloneable: bool,
     /// Default variant index
     pub default: Option<usize>,
+    /// Whether the enum is pinned (non-relocatable)
+    pub pinned: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
@@ -389,6 +393,8 @@ pub struct JsonBitflagsDefinition {
     pub cloneable: bool,
     /// Default flag index
     pub default: Option<usize>,
+    /// Whether the bitflags is pinned (non-relocatable)
+    pub pinned: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
@@ -878,6 +884,7 @@ fn convert_type_definition(
         cloneable: td.cloneable,
         defaultable: td.defaultable,
         packed: td.packed,
+        pinned: td.pinned,
     }
 }
 
@@ -912,6 +919,7 @@ fn convert_enum_definition(ed: &EnumDefinition, cx: &DocCx) -> JsonEnumDefinitio
         copyable: ed.copyable,
         cloneable: ed.cloneable,
         default: ed.default,
+        pinned: ed.pinned,
     }
 }
 
@@ -941,6 +949,7 @@ fn convert_bitflags_definition(bd: &BitflagsDefinition, cx: &DocCx) -> JsonBitfl
         copyable: bd.copyable,
         cloneable: bd.cloneable,
         default: bd.default,
+        pinned: bd.pinned,
     }
 }
 

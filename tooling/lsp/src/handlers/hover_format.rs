@@ -166,6 +166,7 @@ pub(crate) fn attribute_description(attribute: &Attribute) -> Option<&'static st
         "copyable" => "Marks the type as trivially copyable.",
         "cloneable" => "Marks the type as cloneable.",
         "defaultable" | "default" => "Marks the type/variant as the default.",
+        "pinned" => "Marks the type as non-relocatable (must not be moved in memory).",
         "calling_convention" => "Sets the function's calling convention.",
         _ => return None,
     })

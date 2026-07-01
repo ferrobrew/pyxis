@@ -1,0 +1,25 @@
+/// A type that must not be relocated
+#[pinned, align(4)]
+pub type PinnedType {
+    pub value: u32,
+}
+
+/// A type that is pinned and copyable (Copy is suppressed in Rust)
+#[pinned, copyable, align(4)]
+pub type PinnedCopyable {
+    pub value: u32,
+}
+
+/// A pinned enum (IR/JSON-only; no effect on Rust/C++ output)
+#[pinned]
+pub enum PinnedEnum: u32 {
+    Option1 = 0,
+    Option2 = 1,
+}
+
+/// A pinned bitflags (IR/JSON-only; no effect on Rust/C++ output)
+#[pinned]
+pub bitflags PinnedFlags: u32 {
+    Flag1 = 0x1,
+    Flag2 = 0x2,
+}

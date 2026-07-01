@@ -239,6 +239,16 @@ fn render_struct(
         render_method_signature(&mut body, func, ctx)?;
     }
 
+    // Pinned types: delete copy/move constructors and assignment operators so
+    // the type cannot be relocated in memory.
+    if td.pinned {
+        writeln!(body)?;
+        writeln!(body, "    {name}(const {name}&) = delete;")?;
+        writeln!(body, "    {name}({name}&&) = delete;")?;
+        writeln!(body, "    {name}& operator=(const {name}&) = delete;")?;
+        writeln!(body, "    {name}& operator=({name}&&) = delete;")?;
+    }
+
     if body.trim().is_empty() {
         writeln!(out, "{header} {{}};")?;
     } else {

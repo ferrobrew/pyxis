@@ -129,6 +129,12 @@ impl Attribute {
             location: ItemLocation::test(),
         }
     }
+    pub fn pinned() -> Self {
+        Attribute::Ident {
+            ident: "pinned".into(),
+            location: ItemLocation::test(),
+        }
+    }
     pub fn external_body() -> Self {
         Attribute::Ident {
             ident: "external_body".into(),

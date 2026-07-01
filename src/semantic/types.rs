@@ -312,6 +312,14 @@ impl ItemDefinitionInner {
             ItemDefinitionInner::TypeAlias(_) => false, // Type aliases don't have cloneable
         }
     }
+    pub fn pinned(&self) -> bool {
+        match self {
+            ItemDefinitionInner::Type(td) => td.pinned,
+            ItemDefinitionInner::Enum(ed) => ed.pinned,
+            ItemDefinitionInner::Bitflags(bd) => bd.pinned,
+            ItemDefinitionInner::TypeAlias(_) => false, // Type aliases don't have pinned
+        }
+    }
     pub fn as_type(&self) -> Option<&TypeDefinition> {
         match self {
             Self::Type(v) => Some(v),

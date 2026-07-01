@@ -81,6 +81,7 @@ pub struct TypeDefinition {
     pub cloneable: bool,
     pub defaultable: bool,
     pub packed: bool,
+    pub pinned: bool,
 }
 #[cfg(test)]
 impl TypeDefinition {
@@ -124,6 +125,10 @@ impl TypeDefinition {
     }
     pub fn with_packed(mut self, packed: bool) -> Self {
         self.packed = packed;
+        self
+    }
+    pub fn with_pinned(mut self, pinned: bool) -> Self {
+        self.pinned = pinned;
         self
     }
 }
@@ -184,6 +189,7 @@ pub fn build(
     let mut cloneable = false;
     let mut defaultable = false;
     let mut packed = false;
+    let mut pinned = false;
     let mut align = None;
     let doc = doc_comments.to_vec();
     for attribute in &definition.attributes {
@@ -208,6 +214,7 @@ pub fn build(
                 "cloneable" => cloneable = true,
                 "defaultable" => defaultable = true,
                 "packed" => packed = true,
+                "pinned" => pinned = true,
                 _ => {}
             },
             grammar::Attribute::Assign { .. } | grammar::Attribute::Cfg { .. } => {}
@@ -618,6 +625,7 @@ pub fn build(
             cloneable,
             defaultable,
             packed,
+            pinned,
         }
         .into(),
     }))

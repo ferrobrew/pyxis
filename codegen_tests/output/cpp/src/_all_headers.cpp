@@ -17,6 +17,7 @@
 #include "math.hpp"
 #include "min_size.hpp"
 #include "multiple_levels.hpp"
+#include "pinned.hpp"
 #include "pyxis_runtime.hpp"
 #include "self_referential_generics.hpp"
 #include "singleton.hpp"

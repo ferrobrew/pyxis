@@ -131,6 +131,7 @@ export function ItemAttributes({ item, className = '' }: { item: JsonItem; class
     );
     if (kind.copyable) primary.push(<Name>copyable</Name>);
     if (kind.cloneable) primary.push(<Name>cloneable</Name>);
+    if (kind.pinned) primary.push(<Name>pinned</Name>);
   }
   if (kind.type === 'type') {
     if (kind.defaultable) primary.push(<Name>defaultable</Name>);

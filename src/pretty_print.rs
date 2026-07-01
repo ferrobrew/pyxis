@@ -1795,4 +1795,27 @@ pub bitflags TestFlags: u32 {
 
         assert_eq!(printed, expected);
     }
+
+    #[test]
+    fn test_pinned_attribute_round_trips() {
+        let text = r#"
+#[pinned]
+pub type PinnedType {
+    pub value: u32,
+}
+        "#;
+
+        let expected = r#"
+#[pinned]
+pub type PinnedType {
+    pub value: u32,
+}
+        "#
+        .trim();
+
+        let module = parse_str_for_tests(text).unwrap();
+        let printed = pretty_print(&module);
+
+        assert_eq!(printed, expected);
+    }
 }
