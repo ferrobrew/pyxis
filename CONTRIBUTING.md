@@ -57,6 +57,29 @@ debug-info, not CRT.
 On native Windows, no toolchain file is needed — point CMake at a
 regular MSVC install or `clang-cl` and build normally.
 
+## Changing the language
+
+When you change the language (new attributes, syntax, types, etc.), you
+must audit every surface that consumes it — not just the compiler. Most
+surfaces handle attributes generically and need no changes, but you must
+verify each one. Here is the full checklist:
+
+| Surface | Path | When it needs updating |
+|---------|------|----------------------|
+| **Compiler frontend** | `src/` | Always. Parser, semantic IR, and all backends (Rust/C++/JSON). |
+| **Parser test helpers** | `src/parser/attributes.rs` | New `Attribute` variants or test constructors (e.g. `Attribute::pinned()`). The grammar parses `#[ident]` attributes generically, so simple ident attributes need no grammar change. |
+| **`AttributeName` enum** | `src/semantic/error.rs` | Only if the new attribute participates in conflicting-attribute validation (e.g. `#[packed]` + `#[align]`). Most attributes don't need an entry. |
+| **Tree-sitter grammar** | `tooling/tree-sitter-pyxis/grammar.js` | Only for new syntax forms or keywords. Ident attributes (`#[foo]`) are already parsed generically as `attribute_ident → $.identifier`. |
+| **Highlights query** | `tooling/tree-sitter-pyxis/queries/highlights.scm` | Rarely. Attributes are highlighted generically via `(attribute) @attribute`. Only change if a new node type needs a capture. |
+| **Zed extension** | `tooling/zed-pyxis/` | Rarely. It just consumes the grammar and highlights query. No attribute-specific logic. |
+| **LSP hover** | `tooling/lsp/src/handlers/hover_format.rs` | New attributes need a description string in the `attribute_description()` match table so hovering shows documentation. |
+| **LSP completion** | `tooling/lsp/src/handlers/completion.rs` | Only if adding new keywords (not attributes). The completion handler lists keyword tokens, not attribute names. |
+| **JSON types** | `types/json.ts` | After changing JSON backend structs (which derive `specta::Type`). Regenerate with `cargo run -p pyxis-driver -- gen-types`. |
+| **Viewer** | `viewer/src/components/Attributes.tsx` | New attributes need a badge entry in `ItemAttributes` to be visible in the docs viewer. |
+| **Codegen test corpus** | `codegen_tests/input/`, `codegen_tests/output/` | Add a test input exercising the new feature, then regenerate output with `cargo run --example codegen_tests`. |
+| **C++ backend docs** | `docs/cpp_backend.md` | If the attribute affects C++ codegen (most don't — `copyable`/`cloneable` are Rust-only). |
+| **Pretty-printer** | `src/pretty_print.rs` | Usually no change needed (attributes print generically). Add a round-trip test to confirm. |
+
 ## Tests
 
 ```sh
