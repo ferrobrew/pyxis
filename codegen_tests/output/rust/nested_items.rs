@@ -10,9 +10,9 @@ use Outer_InnerType as InnerType;
 #[repr(C, align(4))]
 /// A type with nested declarations.
 ///
-/// See [`InnerEnum`], [`InnerType`], [`InnerFlags`], and [`InnerAlias`].
+/// See [`Outer_InnerEnum`], [`Outer_InnerType`], [`Outer_InnerFlags`], and [`Outer_InnerAlias`].
 ///
-/// You can also qualify them: [`Outer::InnerEnum`], [`Outer::InnerType`].
+/// You can also qualify them: [`Outer_InnerEnum`], [`Outer_InnerType`].
 pub struct Outer {
     pub field: u32,
 }
@@ -39,7 +39,7 @@ pub type Outer_InnerAlias = u32;
 #[derive(PartialEq, Eq, PartialOrd, Ord, Debug)]
 /// An enum nested inside [`Outer`].
 ///
-/// Variants: [`InnerEnum::A`], [`InnerEnum::B`], [`InnerEnum::C`].
+/// Variants: [`Outer_InnerEnum::A`], [`Outer_InnerEnum::B`], [`Outer_InnerEnum::C`].
 pub enum Outer_InnerEnum {
     A = 0isize as _,
     B = 1isize as _,
@@ -53,7 +53,7 @@ fn _Outer_InnerEnum_size_check() {
 }
 crate::__bitflags! {
     #[doc = " Bitflags nested inside [`Outer`]."] #[doc = ""] #[doc =
-    " Members: [`InnerFlags::FLAG_A`], [`InnerFlags::FLAG_B`]."] pub struct
+    " Members: [`Outer_InnerFlags::FLAG_A`], [`Outer_InnerFlags::FLAG_B`]."] pub struct
     Outer_InnerFlags : u32 { const FLAG_A = 1usize as _; const FLAG_B = 2usize as _; }
 }
 fn _Outer_InnerFlags_size_check() {
@@ -65,7 +65,7 @@ fn _Outer_InnerFlags_size_check() {
 #[repr(C, align(2))]
 /// A type nested inside [`Outer`].
 ///
-/// Its field is [`InnerType::inner_field`].
+/// Its field is [`Outer_InnerType::inner_field`].
 pub struct Outer_InnerType {
     pub inner_field: u16,
 }

@@ -25,8 +25,8 @@ namespace self_referential_generics {
 
     /// A game object that contains self-referential generic types.
     /// This tests that the compiler can handle cycles where:
-    /// - GameObject contains SharedPtr<GameObject>
-    /// - SharedPtr<T> contains *mut T
+    /// - `GameObject` contains `SharedPtr<GameObject>`
+    /// - `SharedPtr<T>` contains `*mut T`
     /// - The pointer breaks the cycle, but only after generic substitution
     struct alignas(8) GameObject {
         ::std::uint32_t id;

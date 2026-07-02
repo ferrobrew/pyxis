@@ -3024,7 +3024,7 @@
       "category": "defined",
       "kind": {
         "type": "type",
-        "doc": " Uses Shared<T> from another module with a local type",
+        "doc": " Uses `Shared<T>` from another module with a local type",
         "fields": [
           {
             "visibility": "public",
@@ -3072,7 +3072,7 @@
       "category": "defined",
       "kind": {
         "type": "type",
-        "doc": " Uses WeakPtr<T> from another module",
+        "doc": " Uses `WeakPtr<T>` from another module",
         "fields": [
           {
             "visibility": "public",
@@ -5242,7 +5242,7 @@
       "category": "defined",
       "kind": {
         "type": "type",
-        "doc": " A game object that contains self-referential generic types.\n This tests that the compiler can handle cycles where:\n - GameObject contains SharedPtr<GameObject>\n - SharedPtr<T> contains *mut T\n - The pointer breaks the cycle, but only after generic substitution",
+        "doc": " A game object that contains self-referential generic types.\n This tests that the compiler can handle cycles where:\n - `GameObject` contains `SharedPtr<GameObject>`\n - `SharedPtr<T>` contains `*mut T`\n - The pointer breaks the cycle, but only after generic substitution",
         "fields": [
           {
             "visibility": "public",
@@ -6926,7 +6926,7 @@
       "category": "defined",
       "kind": {
         "type": "type_alias",
-        "doc": " Concrete alias to SharedPtr<Vector3>",
+        "doc": " Concrete alias to `SharedPtr<Vector3>`",
         "target": {
           "type": "mut_pointer",
           "inner": {

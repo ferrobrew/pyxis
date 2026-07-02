@@ -121,7 +121,49 @@ pub fn write_module(
     // per-file, so unlike lint levels this can't live only on the root.)
     // <https://stackoverflow.com/questions/59247458/is-there-a-stable-way-to-tell-rustfmt-to-skip-an-entire-file#comment138279076_75910283>
     writeln!(raw_output, "#![cfg_attr(any(), rustfmt::skip)]")?;
-    writeln!(raw_output, "{}", doc_to_tokens(true, module.doc()))?;
+    // Collect all module paths for flattening nested item names.
+    let module_paths: BTreeSet<ItemPath> = semantic_state.modules().keys().cloned().collect();
+
+    // Compute doc link imports and nested item rewrites before rendering
+    // module docs, so doc link references can be rewritten.
+    let module_scope = module.scope();
+    let doc_imports = semantic_state.doc_link_resolver().module_imports(
+        semantic_state.type_registry(),
+        semantic_state.modules(),
+        key,
+    );
+    let module_path_set: BTreeSet<ItemPath> = semantic_state.modules().keys().cloned().collect();
+    let mut cross_module_imports: Vec<&ItemPath> = Vec::new();
+    let mut same_module_aliases: Vec<(&ItemPath, String)> = Vec::new();
+    for p in &doc_imports {
+        let declaring_len = find_module_prefix_len(p, &module_path_set);
+        let declaring_module: ItemPath = p.iter().take(declaring_len).cloned().collect();
+        if &declaring_module == key {
+            if p.len() > key.len() + 1 {
+                let flat = flatten_type_name(p, &module_path_set);
+                let leaf = p.last().map(|s| s.as_str().to_string()).unwrap_or_default();
+                if flat != leaf {
+                    same_module_aliases.push((p, flat));
+                }
+            }
+        } else {
+            cross_module_imports.push(p);
+        }
+    }
+    let nested_rewrites: std::collections::HashMap<String, String> = {
+        let mut map = std::collections::HashMap::new();
+        for (_, flat) in &same_module_aliases {
+            let leaf = flat.rsplit('_').next().unwrap_or(flat);
+            map.insert(leaf.to_string(), flat.clone());
+        }
+        map
+    };
+
+    writeln!(
+        raw_output,
+        "{}",
+        doc_to_tokens(true, module.doc(), Some(&nested_rewrites))
+    )?;
 
     // Emit the freestanding `__bitflags!` macro definition exactly once, on the
     // crate root, when the crate contains any bitflags. It is
@@ -163,42 +205,6 @@ pub fn write_module(
             && module_has_public_exports(child_path, child_module, semantic_state)
         {
             writeln!(raw_output, "pub use {child}::*;")?;
-        }
-    }
-
-    // Import every item referenced by an intra-doc link in this module's docs
-    // so rustdoc can resolve `[`Type`]` / `[`Type::method`]` style links. The
-    // imports exist purely for the links (the names may otherwise be unused),
-    // hence the `allow`. Items local to this module or already in scope are
-    // skipped, as are paths that aren't plain Rust identifiers.
-    let module_scope = module.scope();
-    let doc_imports = semantic_state.doc_link_resolver().module_imports(
-        semantic_state.type_registry(),
-        semantic_state.modules(),
-        key,
-    );
-    // Separate doc imports into cross-module (need `use`) and same-module
-    // nested items (need `use ... as ...` aliases so rustdoc resolves bare
-    // references like [`InnerEnum`] to the flattened `Outer_InnerEnum`).
-    let module_path_set: BTreeSet<ItemPath> = semantic_state.modules().keys().cloned().collect();
-    let mut cross_module_imports: Vec<&ItemPath> = Vec::new();
-    let mut same_module_aliases: Vec<(&ItemPath, String)> = Vec::new(); // (path, flattened_name)
-    for p in &doc_imports {
-        // Check if the declaring module is the current module
-        let declaring_len = find_module_prefix_len(p, &module_path_set);
-        let declaring_module: ItemPath = p.iter().take(declaring_len).cloned().collect();
-        if &declaring_module == key {
-            // Same module — generate a `use FlatName as LeafName;` alias
-            // only if the flattened name differs from the leaf name.
-            if p.len() > key.len() + 1 {
-                let flat = flatten_type_name(p, &module_path_set);
-                let leaf = p.last().map(|s| s.as_str().to_string()).unwrap_or_default();
-                if flat != leaf {
-                    same_module_aliases.push((p, flat));
-                }
-            }
-        } else {
-            cross_module_imports.push(p);
         }
     }
 
@@ -277,8 +283,6 @@ pub fn write_module(
         .filter(|d| cfg_pass(&d.cfg))
         .collect::<Vec<_>>();
     definitions.sort_by_key(|d| &d.path);
-    // Collect all module paths for flattening nested item names.
-    let module_paths: BTreeSet<ItemPath> = semantic_state.modules().keys().cloned().collect();
     for definition in definitions {
         writeln!(
             raw_output,
@@ -290,6 +294,7 @@ pub fn write_module(
                 options,
                 &extern_rust_names,
                 &module_paths,
+                &nested_rewrites,
             )?
         )?;
     }
@@ -393,6 +398,7 @@ fn build_item(
     options: &crate::BuildOptions,
     extern_rust_names: &HashMap<String, String>,
     module_paths: &BTreeSet<ItemPath>,
+    nested_rewrites: &std::collections::HashMap<String, String>,
 ) -> Result<proc_macro2::TokenStream> {
     let resolved = definition
         .resolved()
@@ -427,6 +433,7 @@ fn build_item(
                 cfg_ctx,
                 options,
                 module_paths,
+                nested_rewrites,
             ),
             IDI::Enum(ed) => build_enum(
                 path,
@@ -437,6 +444,7 @@ fn build_item(
                 cfg_ctx,
                 options,
                 module_paths,
+                nested_rewrites,
             ),
             IDI::Bitflags(bd) => build_bitflags(
                 path,
@@ -446,6 +454,7 @@ fn build_item(
                 location,
                 options.rust_module_prefix.as_ref(),
                 module_paths,
+                nested_rewrites,
             ),
             IDI::TypeAlias(ta) => build_type_alias(
                 type_registry,
@@ -456,6 +465,7 @@ fn build_item(
                 type_parameters,
                 options.rust_module_prefix.as_ref(),
                 module_paths,
+                nested_rewrites,
             ),
         },
         ItemCategory::Predefined => Ok(quote! {}),
@@ -494,6 +504,7 @@ fn build_type(
     cfg_ctx: &crate::parser::cfg::CfgContext,
     options: &crate::BuildOptions,
     module_paths: &BTreeSet<ItemPath>,
+    nested_rewrites: &std::collections::HashMap<String, String>,
 ) -> Result<proc_macro2::TokenStream> {
     let name = flatten_type_name(path, module_paths);
     let name = &name;
@@ -514,7 +525,7 @@ fn build_type(
     } = type_definition;
 
     let visibility = visibility_to_tokens(visibility);
-    let doc = doc_to_tokens(false, doc);
+    let doc = doc_to_tokens(false, doc, Some(nested_rewrites));
     let mut fields = regions
         .iter()
         .map(|r| {
@@ -537,7 +548,7 @@ fn build_type(
             let field_ident = str_to_ident(field_name);
             let visibility = visibility_to_tokens(*visibility);
             let syn_type = sa_type_to_syn_type(type_ref, prefix, Some(module_paths))?;
-            let doc = doc_to_tokens(false, doc);
+            let doc = doc_to_tokens(false, doc, Some(nested_rewrites));
             Ok(quote! {
                 #doc
                 #visibility #field_ident: #syn_type
@@ -686,7 +697,7 @@ fn build_type(
                         .lines()
                         .map(|s| s.to_string())
                         .collect();
-                    let conflicting_impl_doc = doc_to_tokens(false, &conflicting_impl_doc_lines);
+                    let conflicting_impl_doc = doc_to_tokens(false, &conflicting_impl_doc_lines, None);
                     let conflicting_impl_ident = quote::format_ident!(
                         "_CONFLICTING_{}_{}",
                         &name.to_uppercase(),
@@ -778,6 +789,7 @@ fn build_enum(
     cfg_ctx: &crate::parser::cfg::CfgContext,
     options: &crate::BuildOptions,
     module_paths: &BTreeSet<ItemPath>,
+    nested_rewrites: &std::collections::HashMap<String, String>,
 ) -> Result<proc_macro2::TokenStream> {
     let name = flatten_type_name(path, module_paths);
     let name = &name;
@@ -799,7 +811,7 @@ fn build_enum(
     let name_ident = str_to_ident(name.as_str());
 
     let visibility = visibility_to_tokens(visibility);
-    let doc = doc_to_tokens(false, doc);
+    let doc = doc_to_tokens(false, doc, Some(nested_rewrites));
 
     let size_check_impl = generate_size_check(name.as_str(), size);
 
@@ -876,6 +888,7 @@ fn build_enum(
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 fn build_bitflags(
     path: &ItemPath,
     size: usize,
@@ -884,6 +897,7 @@ fn build_bitflags(
     _location: &ItemLocation,
     prefix: Option<&ItemPath>,
     module_paths: &BTreeSet<ItemPath>,
+    nested_rewrites: &std::collections::HashMap<String, String>,
 ) -> Result<proc_macro2::TokenStream> {
     let name = flatten_type_name(path, module_paths);
     let name = &name;
@@ -901,7 +915,7 @@ fn build_bitflags(
     let name_ident = str_to_ident(name.as_str());
 
     let visibility = visibility_to_tokens(visibility);
-    let doc = doc_to_tokens(false, doc);
+    let doc = doc_to_tokens(false, doc, Some(nested_rewrites));
 
     let size_check_impl = generate_size_check(name.as_str(), size);
 
@@ -963,6 +977,7 @@ fn build_type_alias(
     type_parameters: &[String],
     prefix: Option<&ItemPath>,
     module_paths: &BTreeSet<ItemPath>,
+    nested_rewrites: &std::collections::HashMap<String, String>,
 ) -> Result<proc_macro2::TokenStream> {
     let name = flatten_type_name(path, module_paths);
     let name = &name;
@@ -971,7 +986,7 @@ fn build_type_alias(
 
     let name_ident = str_to_ident(name.as_str());
     let visibility = visibility_to_tokens(visibility);
-    let doc = doc_to_tokens(false, doc);
+    let doc = doc_to_tokens(false, doc, Some(nested_rewrites));
     let target_type = sa_type_to_syn_type(target, prefix, Some(module_paths))?;
 
     let generic_params = build_generic_params(type_parameters);
@@ -998,7 +1013,7 @@ fn build_function(
         return Ok(proc_macro2::TokenStream::new());
     }
     let name = str_to_ident(&function.name);
-    let doc = doc_to_tokens(false, &function.doc);
+    let doc = doc_to_tokens(false, &function.doc, None);
 
     let arguments = function
         .arguments
@@ -1404,20 +1419,92 @@ fn visibility_to_tokens(visibility: Visibility) -> proc_macro2::TokenStream {
     }
 }
 
-fn doc_to_tokens(is_module_doc: bool, doc: &[String]) -> proc_macro2::TokenStream {
+fn doc_to_tokens(
+    is_module_doc: bool,
+    doc: &[String],
+    nested_rewrites: Option<&std::collections::HashMap<String, String>>,
+) -> proc_macro2::TokenStream {
     if doc.is_empty() {
         return proc_macro2::TokenStream::new();
     };
     let doc_attrs = doc.iter().map(|line| {
+        let rewritten = rewrite_doc_links(line, nested_rewrites);
         if is_module_doc {
-            quote! { #![doc = #line] }
+            quote! { #![doc = #rewritten] }
         } else {
-            quote! { #[doc = #line] }
+            quote! { #[doc = #rewritten] }
         }
     });
     quote! {
         #(#doc_attrs)*
     }
+}
+
+/// Rewrite intra-doc link references in a doc comment line to use flattened
+/// Rust names for nested items. For example, [`InnerEnum`] becomes
+/// [`Outer_InnerEnum`], and [`InnerEnum::A`] becomes [`Outer_InnerEnum::A`].
+/// The rewriting preserves member-access `::` while flattening type-nesting
+/// segments to `_`.
+fn rewrite_doc_links(
+    line: &str,
+    nested_rewrites: Option<&std::collections::HashMap<String, String>>,
+) -> String {
+    let Some(rewrites) = nested_rewrites else {
+        return line.to_string();
+    };
+    let mut result = String::new();
+    let bytes = line.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        // Look for [` pattern
+        if i + 2 < bytes.len() && bytes[i] == b'[' && bytes[i + 1] == b'`' {
+            // Find the closing `]
+            let content_start = i + 2;
+            if let Some(close) = line[content_start..].find("`]") {
+                let content = &line[content_start..content_start + close];
+                // Split into segments
+                let segments: Vec<&str> = content.split("::").collect();
+                let rewritten = if segments.len() == 1 {
+                    // Bare name: check if it matches a nested item
+                    if let Some(flat) = rewrites.get(segments[0]) {
+                        flat.clone()
+                    } else {
+                        content.to_string()
+                    }
+                } else {
+                    // Qualified path: check if any segment matches a rewrite key.
+                    // When a segment matches, replace it with the flattened name
+                    // and remove all preceding segments (they're the parent type
+                    // prefix that's already baked into the flattened name).
+                    let mut found = None;
+                    for (i, seg) in segments.iter().enumerate() {
+                        if let Some(flat) = rewrites.get(*seg) {
+                            let rest = &segments[i + 1..];
+                            if rest.is_empty() {
+                                found = Some(flat.clone());
+                            } else {
+                                found = Some(format!("{}::{}", flat, rest.join("::")));
+                            }
+                            break;
+                        }
+                    }
+                    found.unwrap_or_else(|| content.to_string())
+                };
+                result.push('[');
+                result.push('`');
+                result.push_str(&rewritten);
+                result.push('`');
+                result.push(']');
+                i = content_start + close + 2;
+                continue;
+            }
+        }
+        // Copy current byte as UTF-8
+        let ch = line[i..].chars().next().unwrap();
+        result.push(ch);
+        i += ch.len_utf8();
+    }
+    result
 }
 
 fn hex_literal(value: impl Into<usize>) -> proc_macro2::Literal {

@@ -69,7 +69,7 @@ impl std::convert::AsMut<NestedShared> for NestedShared {
     }
 }
 #[repr(C, align(8))]
-/// Uses Shared<T> from another module with a local type
+/// Uses `Shared<T>` from another module with a local type
 pub struct SharedEntity {
     pub shared: crate::generics::Shared<crate::generics_cross_module::Entity>,
 }
@@ -91,7 +91,7 @@ impl std::convert::AsMut<SharedEntity> for SharedEntity {
     }
 }
 #[repr(C, align(8))]
-/// Uses WeakPtr<T> from another module
+/// Uses `WeakPtr<T>` from another module
 pub struct WeakEntity {
     pub weak: crate::generics::WeakPtr<crate::generics_cross_module::Entity>,
 }

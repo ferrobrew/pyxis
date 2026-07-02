@@ -2,8 +2,8 @@
 #[repr(C, align(8))]
 /// A game object that contains self-referential generic types.
 /// This tests that the compiler can handle cycles where:
-/// - GameObject contains SharedPtr<GameObject>
-/// - SharedPtr<T> contains *mut T
+/// - `GameObject` contains `SharedPtr<GameObject>`
+/// - `SharedPtr<T>` contains `*mut T`
 /// - The pointer breaks the cycle, but only after generic substitution
 pub struct GameObject {
     pub id: u32,

@@ -88,7 +88,7 @@ pub type SharedRef<T> = crate::generics::Shared<T>;
 pub type Vec3Ptr = *const crate::math::Vector3;
 /// Concrete alias to Entry<u32, Vector3>
 pub type VecEntry = crate::generics::MapEntry<u32, crate::math::Vector3>;
-/// Concrete alias to SharedPtr<Vector3>
+/// Concrete alias to `SharedPtr<Vector3>`
 pub type VecSharedPtr = *mut crate::generics::Shared<crate::math::Vector3>;
 /// Alias for weak pointer to a type
 pub type WeakRef<T> = crate::generics::WeakPtr<T>;

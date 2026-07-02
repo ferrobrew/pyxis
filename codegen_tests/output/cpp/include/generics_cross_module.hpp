@@ -36,14 +36,14 @@ namespace generics_cross_module {
     static_assert(sizeof(NestedShared) == 0x8);
     static_assert(alignof(NestedShared) == 8);
 
-    /// Uses Shared<T> from another module with a local type
+    /// Uses `Shared<T>` from another module with a local type
     struct alignas(8) SharedEntity {
         ::generics::Shared<Entity> shared;
     };
     static_assert(sizeof(SharedEntity) == 0x8);
     static_assert(alignof(SharedEntity) == 8);
 
-    /// Uses WeakPtr<T> from another module
+    /// Uses `WeakPtr<T>` from another module
     struct alignas(8) WeakEntity {
         ::generics::WeakPtr<Entity> weak;
     };
