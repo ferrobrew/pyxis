@@ -1,0 +1,32 @@
+/// A type with nested declarations.
+///
+/// See [`InnerEnum`], [`InnerType`], [`InnerFlags`], and [`InnerAlias`].
+///
+/// You can also qualify them: [`Outer::InnerEnum`], [`Outer::InnerType`].
+pub type Outer {
+    /// An enum nested inside [`Outer`].
+    ///
+    /// Variants: [`InnerEnum::A`], [`InnerEnum::B`], [`InnerEnum::C`].
+    pub enum InnerEnum: u8 {
+        A,
+        B,
+        C,
+    }
+    /// A type nested inside [`Outer`].
+    ///
+    /// Its field is [`InnerType::inner_field`].
+    pub type InnerType {
+        pub inner_field: u16,
+    }
+    /// Bitflags nested inside [`Outer`].
+    ///
+    /// Members: [`InnerFlags::FLAG_A`], [`InnerFlags::FLAG_B`].
+    pub bitflags InnerFlags: u32 {
+        FLAG_A = 1,
+        FLAG_B = 2,
+    }
+    /// A type alias nested inside [`Outer`].
+    pub type InnerAlias = u32;
+
+    pub field: u32,
+}

@@ -50,6 +50,8 @@ pub enum Comment {
 pub enum TypeField {
     Field(Visibility, Ident, Type),
     Vftable(Vec<Function>),
+    /// A nested item declaration (enum, type, bitflags, type alias) inside a `type` body.
+    Item(Box<ItemDefinition>),
 }
 #[cfg(test)]
 impl TypeField {
@@ -63,6 +65,10 @@ impl TypeField {
 
     pub fn vftable(functions: impl IntoIterator<Item = Function>) -> TypeField {
         TypeField::Vftable(functions.into_iter().collect())
+    }
+
+    pub fn item(item: ItemDefinition) -> TypeField {
+        TypeField::Item(Box::new(item))
     }
 }
 impl TypeField {
@@ -106,6 +112,16 @@ impl TypeStatement {
     pub fn vftable(functions: impl IntoIterator<Item = Function>) -> TypeStatement {
         TypeStatement {
             field: TypeField::vftable(functions),
+            attributes: Default::default(),
+            doc_comments: vec![],
+            inline_trailing_comments: Vec::new(),
+            following_comments: Vec::new(),
+            location: ItemLocation::test(),
+        }
+    }
+    pub fn item(item: ItemDefinition) -> TypeStatement {
+        TypeStatement {
+            field: TypeField::item(item),
             attributes: Default::default(),
             doc_comments: vec![],
             inline_trailing_comments: Vec::new(),
@@ -846,6 +862,51 @@ impl Parser {
     }
 
     pub(crate) fn parse_type_statement(&mut self) -> Result<TypeStatement, ParseError> {
+        // Peek ahead past doc comments and attributes to detect nested item
+        // declarations (type, enum, bitflags). If found, delegate to
+        // parse_item_definition which collects its own doc comments/attributes.
+        {
+            let mut pos = self.pos;
+            // Skip doc comments
+            while matches!(self.peek_at(pos), Some(TokenKind::DocOuter(_))) {
+                pos += 1;
+            }
+            // Skip attributes
+            if matches!(self.peek_at(pos), Some(TokenKind::Hash)) {
+                pos = self.skip_attributes_lookahead(pos);
+            }
+            // Skip any comments after attributes
+            while matches!(
+                self.peek_at(pos),
+                Some(
+                    TokenKind::Comment(_) | TokenKind::MultiLineComment(_) | TokenKind::DocOuter(_)
+                )
+            ) {
+                pos += 1;
+            }
+            // Check for nested item keywords: Type, Enum, Bitflags, or Pub followed by one of those
+            let is_nested_item = match self.peek_at(pos) {
+                Some(TokenKind::Type | TokenKind::Enum | TokenKind::Bitflags) => true,
+                Some(TokenKind::Pub) => matches!(
+                    self.peek_at(pos + 1),
+                    Some(TokenKind::Type | TokenKind::Enum | TokenKind::Bitflags)
+                ),
+                _ => false,
+            };
+            if is_nested_item {
+                let inner_def = self.parse_item_definition()?;
+                let location = inner_def.location;
+                return Ok(TypeStatement {
+                    field: TypeField::Item(Box::new(inner_def)),
+                    attributes: Attributes::default(),
+                    doc_comments: Vec::new(),
+                    inline_trailing_comments: Vec::new(),
+                    following_comments: Vec::new(),
+                    location,
+                });
+            }
+        }
+
         let doc_comments = self.collect_doc_comments();
         let attributes = if matches!(self.peek(), TokenKind::Hash) {
             self.parse_attributes()?
@@ -2026,6 +2087,76 @@ mod tests {
     fn empty_bitflags_is_valid() {
         let text = r#"
         bitflags Test: u32 {}
+        "#;
+        assert!(parse_str_for_tests(text).is_ok());
+    }
+
+    #[test]
+    fn can_parse_nested_enum() {
+        let text = r#"
+        pub type Outer {
+            pub field: u32,
+            pub enum InnerEnum: u8 {
+                A,
+                B,
+                C,
+            }
+        }
+        "#;
+        assert!(parse_str_for_tests(text).is_ok());
+    }
+
+    #[test]
+    fn can_parse_nested_type() {
+        let text = r#"
+        pub type Outer {
+            pub field: u32,
+            pub type InnerType {
+                pub inner_field: u16,
+            }
+        }
+        "#;
+        assert!(parse_str_for_tests(text).is_ok());
+    }
+
+    #[test]
+    fn can_parse_nested_bitflags() {
+        let text = r#"
+        pub type Outer {
+            pub field: u32,
+            pub bitflags InnerFlags: u32 {
+                FLAG_A = 1,
+                FLAG_B = 2,
+            }
+        }
+        "#;
+        assert!(parse_str_for_tests(text).is_ok());
+    }
+
+    #[test]
+    fn can_parse_nested_type_alias() {
+        let text = r#"
+        pub type Outer {
+            pub field: u32,
+            pub type InnerAlias = u32;
+        }
+        "#;
+        assert!(parse_str_for_tests(text).is_ok());
+    }
+
+    #[test]
+    fn can_parse_nested_items_and_fields() {
+        let text = r#"
+        pub type Outer {
+            pub field: u32,
+            pub enum InnerEnum: u8 {
+                A,
+                B,
+            }
+            pub type InnerType {
+                pub inner_field: u16,
+            }
+        }
         "#;
         assert!(parse_str_for_tests(text).is_ok());
     }

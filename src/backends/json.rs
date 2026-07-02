@@ -304,6 +304,9 @@ pub struct JsonTypeDefinition {
     pub packed: bool,
     /// Whether the type is pinned (non-relocatable)
     pub pinned: bool,
+    /// Item paths of nested items declared inside this type body
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub nested_items: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
@@ -885,6 +888,7 @@ fn convert_type_definition(
         defaultable: td.defaultable,
         packed: td.packed,
         pinned: td.pinned,
+        nested_items: td.nested_item_paths.iter().map(|p| p.to_string()).collect(),
     }
 }
 
@@ -1057,8 +1061,16 @@ fn build_module_hierarchy(semantic_state: &SemanticOutput) -> BTreeMap<String, J
         // Items, externs, and functions are all emitted regardless of
         // any `#[cfg(...)]` predicate: consumers read the predicate off
         // each item/function and decide for themselves how to render.
+        // Nested items (whose parent is a type, not a module) are excluded
+        // from the top-level items list — they are reachable via their
+        // parent type's `nested_items` field.
         let items: Vec<String> = module
             .definitions(semantic_state.type_registry())
+            .filter(|item| {
+                item.path
+                    .parent()
+                    .is_some_and(|parent| &parent == module_path)
+            })
             .map(|item| item.path.to_string())
             .collect();
         let extern_values: Vec<JsonExternValue> = module

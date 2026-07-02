@@ -260,14 +260,9 @@ impl DocLinkResolver {
         // Qualified path: try it root-relative or relative to a scope module.
         let segments: Vec<ItemPathSegment> =
             path_str.split("::").map(ItemPathSegment::from).collect();
-        let bases = std::iter::once(ItemPath::empty()).chain(
-            scope
-                .iter()
-                .filter(|ip| !self.items.contains_key(ip))
-                .cloned(),
-        );
+        let bases = std::iter::once(ItemPath::empty()).chain(scope.iter().cloned());
         for base in bases {
-            let mut full = base;
+            let mut full = base.clone();
             for seg in &segments {
                 full.push(seg.clone());
             }
@@ -327,16 +322,50 @@ impl DocLinkResolver {
             };
             match &resolved.inner {
                 ItemDefinitionInner::Type(td) => {
-                    self.add_doc_imports(&scope, &td.doc, &mut imports);
+                    // Augment scope with the type's own path so bare
+                    // references to nested items (e.g. [InnerEnum]) resolve.
+                    let type_scope: Vec<ItemPath> = std::iter::once(path.clone())
+                        .chain(scope.iter().cloned())
+                        .collect();
+                    self.add_doc_imports(&type_scope, &td.doc, &mut imports);
                     for r in &td.regions {
-                        self.add_doc_imports(&scope, &r.doc, &mut imports);
+                        self.add_doc_imports(&type_scope, &r.doc, &mut imports);
                     }
                     for f in &td.associated_functions {
-                        self.add_doc_imports(&scope, &f.doc, &mut imports);
+                        self.add_doc_imports(&type_scope, &f.doc, &mut imports);
                     }
                     if let Some(v) = &td.vftable {
                         for f in &v.functions {
-                            self.add_doc_imports(&scope, &f.doc, &mut imports);
+                            self.add_doc_imports(&type_scope, &f.doc, &mut imports);
+                        }
+                    }
+                    // Also scan doc comments on nested items
+                    for nested_path in &td.nested_item_paths {
+                        if let Some(nested_item) = type_registry
+                            .get(nested_path, &ItemLocation::internal())
+                            .ok()
+                            && let Some(nested_resolved) = nested_item.resolved()
+                        {
+                            match &nested_resolved.inner {
+                                ItemDefinitionInner::Type(ntd) => {
+                                    self.add_doc_imports(&type_scope, &ntd.doc, &mut imports);
+                                }
+                                ItemDefinitionInner::Enum(ned) => {
+                                    self.add_doc_imports(&type_scope, &ned.doc, &mut imports);
+                                    for v in &ned.variants {
+                                        self.add_doc_imports(&type_scope, &v.doc, &mut imports);
+                                    }
+                                }
+                                ItemDefinitionInner::Bitflags(nbd) => {
+                                    self.add_doc_imports(&type_scope, &nbd.doc, &mut imports);
+                                    for f in &nbd.flags {
+                                        self.add_doc_imports(&type_scope, &f.doc, &mut imports);
+                                    }
+                                }
+                                ItemDefinitionInner::TypeAlias(nta) => {
+                                    self.add_doc_imports(&type_scope, &nta.doc, &mut imports);
+                                }
+                            }
                         }
                     }
                 }

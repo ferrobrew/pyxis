@@ -293,6 +293,10 @@ impl ServerState {
                                             ));
                                         }
                                     }
+                                    TypeField::Item(_) => {
+                                        // Nested items are handled at the top level;
+                                        // their internal members are not searched here.
+                                    }
                                 }
                             }
                         }

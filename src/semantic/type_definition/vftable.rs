@@ -286,6 +286,7 @@ fn build_type(
                 defaultable: false,
                 packed: false,
                 pinned: false,
+                nested_item_paths: vec![],
             }
             .into(),
         }),

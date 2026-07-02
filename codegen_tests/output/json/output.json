@@ -4,195 +4,6 @@
   "pointer_size": 8,
   "project_name": "test-project",
   "items": {
-    "AtomicBool": {
-      "path": "AtomicBool",
-      "visibility": "public",
-      "size": 1,
-      "alignment": 1,
-      "category": "predefined",
-      "kind": {
-        "type": "type",
-        "doc": null,
-        "fields": [],
-        "associated_functions": [],
-        "vftable": null,
-        "singleton": null,
-        "copyable": true,
-        "cloneable": true,
-        "defaultable": true,
-        "packed": false,
-        "pinned": false
-      },
-      "source": null
-    },
-    "AtomicI16": {
-      "path": "AtomicI16",
-      "visibility": "public",
-      "size": 2,
-      "alignment": 2,
-      "category": "predefined",
-      "kind": {
-        "type": "type",
-        "doc": null,
-        "fields": [],
-        "associated_functions": [],
-        "vftable": null,
-        "singleton": null,
-        "copyable": true,
-        "cloneable": true,
-        "defaultable": true,
-        "packed": false,
-        "pinned": false
-      },
-      "source": null
-    },
-    "AtomicI32": {
-      "path": "AtomicI32",
-      "visibility": "public",
-      "size": 4,
-      "alignment": 4,
-      "category": "predefined",
-      "kind": {
-        "type": "type",
-        "doc": null,
-        "fields": [],
-        "associated_functions": [],
-        "vftable": null,
-        "singleton": null,
-        "copyable": true,
-        "cloneable": true,
-        "defaultable": true,
-        "packed": false,
-        "pinned": false
-      },
-      "source": null
-    },
-    "AtomicI64": {
-      "path": "AtomicI64",
-      "visibility": "public",
-      "size": 8,
-      "alignment": 8,
-      "category": "predefined",
-      "kind": {
-        "type": "type",
-        "doc": null,
-        "fields": [],
-        "associated_functions": [],
-        "vftable": null,
-        "singleton": null,
-        "copyable": true,
-        "cloneable": true,
-        "defaultable": true,
-        "packed": false,
-        "pinned": false
-      },
-      "source": null
-    },
-    "AtomicI8": {
-      "path": "AtomicI8",
-      "visibility": "public",
-      "size": 1,
-      "alignment": 1,
-      "category": "predefined",
-      "kind": {
-        "type": "type",
-        "doc": null,
-        "fields": [],
-        "associated_functions": [],
-        "vftable": null,
-        "singleton": null,
-        "copyable": true,
-        "cloneable": true,
-        "defaultable": true,
-        "packed": false,
-        "pinned": false
-      },
-      "source": null
-    },
-    "AtomicU16": {
-      "path": "AtomicU16",
-      "visibility": "public",
-      "size": 2,
-      "alignment": 2,
-      "category": "predefined",
-      "kind": {
-        "type": "type",
-        "doc": null,
-        "fields": [],
-        "associated_functions": [],
-        "vftable": null,
-        "singleton": null,
-        "copyable": true,
-        "cloneable": true,
-        "defaultable": true,
-        "packed": false,
-        "pinned": false
-      },
-      "source": null
-    },
-    "AtomicU32": {
-      "path": "AtomicU32",
-      "visibility": "public",
-      "size": 4,
-      "alignment": 4,
-      "category": "predefined",
-      "kind": {
-        "type": "type",
-        "doc": null,
-        "fields": [],
-        "associated_functions": [],
-        "vftable": null,
-        "singleton": null,
-        "copyable": true,
-        "cloneable": true,
-        "defaultable": true,
-        "packed": false,
-        "pinned": false
-      },
-      "source": null
-    },
-    "AtomicU64": {
-      "path": "AtomicU64",
-      "visibility": "public",
-      "size": 8,
-      "alignment": 8,
-      "category": "predefined",
-      "kind": {
-        "type": "type",
-        "doc": null,
-        "fields": [],
-        "associated_functions": [],
-        "vftable": null,
-        "singleton": null,
-        "copyable": true,
-        "cloneable": true,
-        "defaultable": true,
-        "packed": false,
-        "pinned": false
-      },
-      "source": null
-    },
-    "AtomicU8": {
-      "path": "AtomicU8",
-      "visibility": "public",
-      "size": 1,
-      "alignment": 1,
-      "category": "predefined",
-      "kind": {
-        "type": "type",
-        "doc": null,
-        "fields": [],
-        "associated_functions": [],
-        "vftable": null,
-        "singleton": null,
-        "copyable": true,
-        "cloneable": true,
-        "defaultable": true,
-        "packed": false,
-        "pinned": false
-      },
-      "source": null
-    },
     "atomics::AtomicCounters": {
       "path": "atomics::AtomicCounters",
       "visibility": "public",
@@ -663,27 +474,6 @@
         "line": 9
       }
     },
-    "bool": {
-      "path": "bool",
-      "visibility": "public",
-      "size": 1,
-      "alignment": 1,
-      "category": "predefined",
-      "kind": {
-        "type": "type",
-        "doc": null,
-        "fields": [],
-        "associated_functions": [],
-        "vftable": null,
-        "singleton": null,
-        "copyable": true,
-        "cloneable": true,
-        "defaultable": true,
-        "packed": false,
-        "pinned": false
-      },
-      "source": null
-    },
     "braced_imports::Transform": {
       "path": "braced_imports::Transform",
       "visibility": "public",
@@ -742,27 +532,6 @@
         "file_index": 5,
         "line": 6
       }
-    },
-    "c_char": {
-      "path": "c_char",
-      "visibility": "public",
-      "size": 1,
-      "alignment": 1,
-      "category": "predefined",
-      "kind": {
-        "type": "type",
-        "doc": null,
-        "fields": [],
-        "associated_functions": [],
-        "vftable": null,
-        "singleton": null,
-        "copyable": true,
-        "cloneable": true,
-        "defaultable": true,
-        "packed": false,
-        "pinned": false
-      },
-      "source": null
     },
     "calling_conventions::Cc": {
       "path": "calling_conventions::Cc",
@@ -2337,48 +2106,6 @@
         "line": 43
       }
     },
-    "f32": {
-      "path": "f32",
-      "visibility": "public",
-      "size": 4,
-      "alignment": 4,
-      "category": "predefined",
-      "kind": {
-        "type": "type",
-        "doc": null,
-        "fields": [],
-        "associated_functions": [],
-        "vftable": null,
-        "singleton": null,
-        "copyable": true,
-        "cloneable": true,
-        "defaultable": true,
-        "packed": false,
-        "pinned": false
-      },
-      "source": null
-    },
-    "f64": {
-      "path": "f64",
-      "visibility": "public",
-      "size": 8,
-      "alignment": 8,
-      "category": "predefined",
-      "kind": {
-        "type": "type",
-        "doc": null,
-        "fields": [],
-        "associated_functions": [],
-        "vftable": null,
-        "singleton": null,
-        "copyable": true,
-        "cloneable": true,
-        "defaultable": true,
-        "packed": false,
-        "pinned": false
-      },
-      "source": null
-    },
     "freestanding_functions::A": {
       "path": "freestanding_functions::A",
       "visibility": "private",
@@ -3384,111 +3111,6 @@
         "file_index": 16,
         "line": 20
       }
-    },
-    "i128": {
-      "path": "i128",
-      "visibility": "public",
-      "size": 16,
-      "alignment": 16,
-      "category": "predefined",
-      "kind": {
-        "type": "type",
-        "doc": null,
-        "fields": [],
-        "associated_functions": [],
-        "vftable": null,
-        "singleton": null,
-        "copyable": true,
-        "cloneable": true,
-        "defaultable": true,
-        "packed": false,
-        "pinned": false
-      },
-      "source": null
-    },
-    "i16": {
-      "path": "i16",
-      "visibility": "public",
-      "size": 2,
-      "alignment": 2,
-      "category": "predefined",
-      "kind": {
-        "type": "type",
-        "doc": null,
-        "fields": [],
-        "associated_functions": [],
-        "vftable": null,
-        "singleton": null,
-        "copyable": true,
-        "cloneable": true,
-        "defaultable": true,
-        "packed": false,
-        "pinned": false
-      },
-      "source": null
-    },
-    "i32": {
-      "path": "i32",
-      "visibility": "public",
-      "size": 4,
-      "alignment": 4,
-      "category": "predefined",
-      "kind": {
-        "type": "type",
-        "doc": null,
-        "fields": [],
-        "associated_functions": [],
-        "vftable": null,
-        "singleton": null,
-        "copyable": true,
-        "cloneable": true,
-        "defaultable": true,
-        "packed": false,
-        "pinned": false
-      },
-      "source": null
-    },
-    "i64": {
-      "path": "i64",
-      "visibility": "public",
-      "size": 8,
-      "alignment": 8,
-      "category": "predefined",
-      "kind": {
-        "type": "type",
-        "doc": null,
-        "fields": [],
-        "associated_functions": [],
-        "vftable": null,
-        "singleton": null,
-        "copyable": true,
-        "cloneable": true,
-        "defaultable": true,
-        "packed": false,
-        "pinned": false
-      },
-      "source": null
-    },
-    "i8": {
-      "path": "i8",
-      "visibility": "public",
-      "size": 1,
-      "alignment": 1,
-      "category": "predefined",
-      "kind": {
-        "type": "type",
-        "doc": null,
-        "fields": [],
-        "associated_functions": [],
-        "vftable": null,
-        "singleton": null,
-        "copyable": true,
-        "cloneable": true,
-        "defaultable": true,
-        "packed": false,
-        "pinned": false
-      },
-      "source": null
     },
     "math::Matrix4": {
       "path": "math::Matrix4",
@@ -5136,6 +4758,309 @@
         "line": 18
       }
     },
+    "nested_items::Outer": {
+      "path": "nested_items::Outer",
+      "visibility": "public",
+      "size": 4,
+      "alignment": 4,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": " A type with nested declarations.\n\n See [`InnerEnum`], [`InnerType`], [`InnerFlags`], and [`InnerAlias`].\n\n You can also qualify them: [`Outer::InnerEnum`], [`Outer::InnerType`].",
+        "doc_links": [
+          {
+            "text": "InnerEnum",
+            "target_kind": "item",
+            "path": "nested_items::Outer::InnerEnum"
+          },
+          {
+            "text": "InnerType",
+            "target_kind": "item",
+            "path": "nested_items::Outer::InnerType"
+          },
+          {
+            "text": "InnerFlags",
+            "target_kind": "item",
+            "path": "nested_items::Outer::InnerFlags"
+          },
+          {
+            "text": "InnerAlias",
+            "target_kind": "item",
+            "path": "nested_items::Outer::InnerAlias"
+          },
+          {
+            "text": "Outer::InnerEnum",
+            "target_kind": "item",
+            "path": "nested_items::Outer::InnerEnum"
+          },
+          {
+            "text": "Outer::InnerType",
+            "target_kind": "item",
+            "path": "nested_items::Outer::InnerType"
+          }
+        ],
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "field",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "u32"
+            },
+            "offset": 0,
+            "size": 4,
+            "alignment": 4,
+            "is_base": false,
+            "source": {
+              "file_index": 20,
+              "line": 31
+            }
+          }
+        ],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false,
+        "pinned": false,
+        "nested_items": [
+          "nested_items::Outer::InnerEnum",
+          "nested_items::Outer::InnerType",
+          "nested_items::Outer::InnerFlags",
+          "nested_items::Outer::InnerAlias"
+        ]
+      },
+      "source": {
+        "file_index": 20,
+        "line": 6
+      }
+    },
+    "nested_items::Outer::InnerAlias": {
+      "path": "nested_items::Outer::InnerAlias",
+      "visibility": "public",
+      "size": 0,
+      "alignment": 1,
+      "category": "defined",
+      "kind": {
+        "type": "type_alias",
+        "doc": " A type alias nested inside [`Outer`].",
+        "doc_links": [
+          {
+            "text": "Outer",
+            "target_kind": "item",
+            "path": "nested_items::Outer"
+          }
+        ],
+        "target": {
+          "type": "raw",
+          "path": "u32"
+        }
+      },
+      "source": {
+        "file_index": 20,
+        "line": 29
+      }
+    },
+    "nested_items::Outer::InnerEnum": {
+      "path": "nested_items::Outer::InnerEnum",
+      "visibility": "public",
+      "size": 1,
+      "alignment": 1,
+      "category": "defined",
+      "kind": {
+        "type": "enum",
+        "doc": " An enum nested inside [`Outer`].\n\n Variants: [`InnerEnum::A`], [`InnerEnum::B`], [`InnerEnum::C`].",
+        "doc_links": [
+          {
+            "text": "Outer",
+            "target_kind": "item",
+            "path": "nested_items::Outer"
+          },
+          {
+            "text": "InnerEnum::A",
+            "target_kind": "item",
+            "path": "nested_items::Outer::InnerEnum",
+            "anchor": "variant-A"
+          },
+          {
+            "text": "InnerEnum::B",
+            "target_kind": "item",
+            "path": "nested_items::Outer::InnerEnum",
+            "anchor": "variant-B"
+          },
+          {
+            "text": "InnerEnum::C",
+            "target_kind": "item",
+            "path": "nested_items::Outer::InnerEnum",
+            "anchor": "variant-C"
+          }
+        ],
+        "underlying_type": {
+          "type": "raw",
+          "path": "u8"
+        },
+        "variants": [
+          {
+            "name": "A",
+            "value": 0,
+            "doc": null,
+            "source": {
+              "file_index": 20,
+              "line": 11
+            }
+          },
+          {
+            "name": "B",
+            "value": 1,
+            "doc": null,
+            "source": {
+              "file_index": 20,
+              "line": 12
+            }
+          },
+          {
+            "name": "C",
+            "value": 2,
+            "doc": null,
+            "source": {
+              "file_index": 20,
+              "line": 13
+            }
+          }
+        ],
+        "associated_functions": [],
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "default": null,
+        "pinned": false
+      },
+      "source": {
+        "file_index": 20,
+        "line": 10
+      }
+    },
+    "nested_items::Outer::InnerFlags": {
+      "path": "nested_items::Outer::InnerFlags",
+      "visibility": "public",
+      "size": 4,
+      "alignment": 4,
+      "category": "defined",
+      "kind": {
+        "type": "bitflags",
+        "doc": " Bitflags nested inside [`Outer`].\n\n Members: [`InnerFlags::FLAG_A`], [`InnerFlags::FLAG_B`].",
+        "doc_links": [
+          {
+            "text": "Outer",
+            "target_kind": "item",
+            "path": "nested_items::Outer"
+          },
+          {
+            "text": "InnerFlags::FLAG_A",
+            "target_kind": "item",
+            "path": "nested_items::Outer::InnerFlags",
+            "anchor": "flag-FLAG_A"
+          },
+          {
+            "text": "InnerFlags::FLAG_B",
+            "target_kind": "item",
+            "path": "nested_items::Outer::InnerFlags",
+            "anchor": "flag-FLAG_B"
+          }
+        ],
+        "underlying_type": {
+          "type": "raw",
+          "path": "u32"
+        },
+        "flags": [
+          {
+            "name": "FLAG_A",
+            "value": 1,
+            "doc": null,
+            "source": {
+              "file_index": 20,
+              "line": 25
+            }
+          },
+          {
+            "name": "FLAG_B",
+            "value": 2,
+            "doc": null,
+            "source": {
+              "file_index": 20,
+              "line": 26
+            }
+          }
+        ],
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "default": null,
+        "pinned": false
+      },
+      "source": {
+        "file_index": 20,
+        "line": 24
+      }
+    },
+    "nested_items::Outer::InnerType": {
+      "path": "nested_items::Outer::InnerType",
+      "visibility": "public",
+      "size": 2,
+      "alignment": 2,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": " A type nested inside [`Outer`].\n\n Its field is [`InnerType::inner_field`].",
+        "doc_links": [
+          {
+            "text": "Outer",
+            "target_kind": "item",
+            "path": "nested_items::Outer"
+          },
+          {
+            "text": "InnerType::inner_field",
+            "target_kind": "item",
+            "path": "nested_items::Outer::InnerType",
+            "anchor": "field-inner_field"
+          }
+        ],
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "inner_field",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "u16"
+            },
+            "offset": 0,
+            "size": 2,
+            "alignment": 2,
+            "is_base": false,
+            "source": {
+              "file_index": 20,
+              "line": 19
+            }
+          }
+        ],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false,
+        "pinned": false
+      },
+      "source": {
+        "file_index": 20,
+        "line": 18
+      }
+    },
     "pinned::PinnedCopyable": {
       "path": "pinned::PinnedCopyable",
       "visibility": "public",
@@ -5159,7 +5084,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 20,
+              "file_index": 21,
               "line": 10
             }
           }
@@ -5174,7 +5099,7 @@
         "pinned": true
       },
       "source": {
-        "file_index": 20,
+        "file_index": 21,
         "line": 9
       }
     },
@@ -5197,7 +5122,7 @@
             "value": 0,
             "doc": null,
             "source": {
-              "file_index": 20,
+              "file_index": 21,
               "line": 16
             }
           },
@@ -5206,7 +5131,7 @@
             "value": 1,
             "doc": null,
             "source": {
-              "file_index": 20,
+              "file_index": 21,
               "line": 17
             }
           }
@@ -5219,7 +5144,7 @@
         "pinned": true
       },
       "source": {
-        "file_index": 20,
+        "file_index": 21,
         "line": 15
       }
     },
@@ -5242,7 +5167,7 @@
             "value": 1,
             "doc": null,
             "source": {
-              "file_index": 20,
+              "file_index": 21,
               "line": 23
             }
           },
@@ -5251,7 +5176,7 @@
             "value": 2,
             "doc": null,
             "source": {
-              "file_index": 20,
+              "file_index": 21,
               "line": 24
             }
           }
@@ -5263,7 +5188,7 @@
         "pinned": true
       },
       "source": {
-        "file_index": 20,
+        "file_index": 21,
         "line": 22
       }
     },
@@ -5290,7 +5215,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 20,
+              "file_index": 21,
               "line": 4
             }
           }
@@ -5305,7 +5230,7 @@
         "pinned": true
       },
       "source": {
-        "file_index": 20,
+        "file_index": 21,
         "line": 3
       }
     },
@@ -5332,7 +5257,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 21,
+              "file_index": 22,
               "line": 20
             }
           },
@@ -5353,7 +5278,7 @@
             "alignment": 1,
             "is_base": false,
             "source": {
-              "file_index": 21,
+              "file_index": 22,
               "line": 23
             }
           },
@@ -5376,7 +5301,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 21,
+              "file_index": 22,
               "line": 23
             }
           },
@@ -5399,7 +5324,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 21,
+              "file_index": 22,
               "line": 24
             }
           },
@@ -5422,7 +5347,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 21,
+              "file_index": 22,
               "line": 25
             }
           },
@@ -5443,7 +5368,7 @@
             "alignment": 1,
             "is_base": false,
             "source": {
-              "file_index": 21,
+              "file_index": 22,
               "line": 13
             }
           }
@@ -5458,7 +5383,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 21,
+        "file_index": 22,
         "line": 19
       }
     },
@@ -5491,7 +5416,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 21,
+              "file_index": 22,
               "line": 4
             }
           }
@@ -5506,7 +5431,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 21,
+        "file_index": 22,
         "line": 3
       }
     },
@@ -5533,7 +5458,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 21,
+              "file_index": 22,
               "line": 31
             }
           },
@@ -5554,7 +5479,7 @@
             "alignment": 1,
             "is_base": false,
             "source": {
-              "file_index": 21,
+              "file_index": 22,
               "line": 34
             }
           },
@@ -5577,7 +5502,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 21,
+              "file_index": 22,
               "line": 34
             }
           },
@@ -5600,7 +5525,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 21,
+              "file_index": 22,
               "line": 35
             }
           }
@@ -5615,7 +5540,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 21,
+        "file_index": 22,
         "line": 30
       }
     },
@@ -5648,7 +5573,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 21,
+              "file_index": 22,
               "line": 10
             }
           }
@@ -5663,7 +5588,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 21,
+        "file_index": 22,
         "line": 9
       }
     },
@@ -5690,7 +5615,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 22,
+              "file_index": 23,
               "line": 3
             }
           }
@@ -5705,7 +5630,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 22,
+        "file_index": 23,
         "line": 2
       }
     },
@@ -5735,7 +5660,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 23,
+              "file_index": 24,
               "line": 4
             }
           },
@@ -5752,7 +5677,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 23,
+              "file_index": 24,
               "line": 8
             }
           }
@@ -5785,7 +5710,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 23,
+              "file_index": 24,
               "line": 12
             }
           }
@@ -5819,7 +5744,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 23,
+                "file_index": 24,
                 "line": 4
               }
             }
@@ -5833,7 +5758,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 23,
+        "file_index": 24,
         "line": 2
       }
     },
@@ -5883,7 +5808,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 23,
+              "file_index": 24,
               "line": 4
             }
           }
@@ -5898,7 +5823,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 23,
+        "file_index": 24,
         "line": 4
       }
     },
@@ -5928,7 +5853,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 23,
+              "file_index": 24,
               "line": 18
             }
           },
@@ -5945,7 +5870,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 23,
+              "file_index": 24,
               "line": 22
             }
           }
@@ -5978,7 +5903,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 23,
+              "file_index": 24,
               "line": 26
             }
           }
@@ -6012,7 +5937,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 23,
+                "file_index": 24,
                 "line": 18
               }
             }
@@ -6026,7 +5951,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 23,
+        "file_index": 24,
         "line": 16
       }
     },
@@ -6076,7 +6001,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 23,
+              "file_index": 24,
               "line": 18
             }
           }
@@ -6091,7 +6016,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 23,
+        "file_index": 24,
         "line": 18
       }
     },
@@ -6118,7 +6043,7 @@
             "alignment": 8,
             "is_base": true,
             "source": {
-              "file_index": 23,
+              "file_index": 24,
               "line": 37
             }
           },
@@ -6135,7 +6060,7 @@
             "alignment": 8,
             "is_base": true,
             "source": {
-              "file_index": 23,
+              "file_index": 24,
               "line": 39
             }
           }
@@ -6169,7 +6094,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 23,
+              "file_index": 24,
               "line": 12
             }
           },
@@ -6201,7 +6126,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 23,
+              "file_index": 24,
               "line": 26
             }
           },
@@ -6233,7 +6158,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 23,
+              "file_index": 24,
               "line": 18
             }
           },
@@ -6264,7 +6189,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 23,
+              "file_index": 24,
               "line": 43
             }
           }
@@ -6298,7 +6223,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 23,
+                "file_index": 24,
                 "line": 32
               }
             },
@@ -6329,7 +6254,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 23,
+                "file_index": 24,
                 "line": 33
               }
             }
@@ -6343,7 +6268,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 23,
+        "file_index": 24,
         "line": 30
       }
     },
@@ -6393,7 +6318,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 23,
+              "file_index": 24,
               "line": 32
             }
           },
@@ -6433,7 +6358,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 23,
+              "file_index": 24,
               "line": 33
             }
           }
@@ -6448,7 +6373,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 23,
+        "file_index": 24,
         "line": 32
       }
     },
@@ -6478,7 +6403,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 24,
+              "file_index": 25,
               "line": 9
             }
           }
@@ -6493,7 +6418,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 24,
+        "file_index": 25,
         "line": 8
       }
     },
@@ -6529,7 +6454,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 25,
+              "file_index": 26,
               "line": 59
             }
           },
@@ -6556,7 +6481,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 25,
+              "file_index": 26,
               "line": 60
             }
           }
@@ -6571,7 +6496,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 25,
+        "file_index": 26,
         "line": 58
       }
     },
@@ -6596,7 +6521,7 @@
         }
       },
       "source": {
-        "file_index": 25,
+        "file_index": 26,
         "line": 16
       }
     },
@@ -6626,7 +6551,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 25,
+              "file_index": 26,
               "line": 33
             }
           },
@@ -6646,7 +6571,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 25,
+              "file_index": 26,
               "line": 34
             }
           }
@@ -6661,7 +6586,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 25,
+        "file_index": 26,
         "line": 32
       }
     },
@@ -6694,7 +6619,7 @@
         }
       },
       "source": {
-        "file_index": 25,
+        "file_index": 26,
         "line": 25
       }
     },
@@ -6727,7 +6652,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 25,
+              "file_index": 26,
               "line": 42
             }
           },
@@ -6750,7 +6675,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 25,
+              "file_index": 26,
               "line": 43
             }
           },
@@ -6777,7 +6702,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 25,
+              "file_index": 26,
               "line": 44
             }
           },
@@ -6797,7 +6722,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 25,
+              "file_index": 26,
               "line": 45
             }
           },
@@ -6817,7 +6742,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 25,
+              "file_index": 26,
               "line": 46
             }
           }
@@ -6832,7 +6757,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 25,
+        "file_index": 26,
         "line": 41
       }
     },
@@ -6854,7 +6779,7 @@
         }
       },
       "source": {
-        "file_index": 25,
+        "file_index": 26,
         "line": 9
       }
     },
@@ -6879,7 +6804,7 @@
         }
       },
       "source": {
-        "file_index": 25,
+        "file_index": 26,
         "line": 13
       }
     },
@@ -6910,7 +6835,7 @@
         }
       },
       "source": {
-        "file_index": 25,
+        "file_index": 26,
         "line": 28
       }
     },
@@ -6938,7 +6863,7 @@
         }
       },
       "source": {
-        "file_index": 25,
+        "file_index": 26,
         "line": 19
       }
     },
@@ -6960,7 +6885,7 @@
         }
       },
       "source": {
-        "file_index": 25,
+        "file_index": 26,
         "line": 6
       }
     },
@@ -6989,7 +6914,7 @@
         }
       },
       "source": {
-        "file_index": 25,
+        "file_index": 26,
         "line": 54
       }
     },
@@ -7017,7 +6942,7 @@
         }
       },
       "source": {
-        "file_index": 25,
+        "file_index": 26,
         "line": 51
       }
     },
@@ -7045,114 +6970,9 @@
         }
       },
       "source": {
-        "file_index": 25,
+        "file_index": 26,
         "line": 22
       }
-    },
-    "u128": {
-      "path": "u128",
-      "visibility": "public",
-      "size": 16,
-      "alignment": 16,
-      "category": "predefined",
-      "kind": {
-        "type": "type",
-        "doc": null,
-        "fields": [],
-        "associated_functions": [],
-        "vftable": null,
-        "singleton": null,
-        "copyable": true,
-        "cloneable": true,
-        "defaultable": true,
-        "packed": false,
-        "pinned": false
-      },
-      "source": null
-    },
-    "u16": {
-      "path": "u16",
-      "visibility": "public",
-      "size": 2,
-      "alignment": 2,
-      "category": "predefined",
-      "kind": {
-        "type": "type",
-        "doc": null,
-        "fields": [],
-        "associated_functions": [],
-        "vftable": null,
-        "singleton": null,
-        "copyable": true,
-        "cloneable": true,
-        "defaultable": true,
-        "packed": false,
-        "pinned": false
-      },
-      "source": null
-    },
-    "u32": {
-      "path": "u32",
-      "visibility": "public",
-      "size": 4,
-      "alignment": 4,
-      "category": "predefined",
-      "kind": {
-        "type": "type",
-        "doc": null,
-        "fields": [],
-        "associated_functions": [],
-        "vftable": null,
-        "singleton": null,
-        "copyable": true,
-        "cloneable": true,
-        "defaultable": true,
-        "packed": false,
-        "pinned": false
-      },
-      "source": null
-    },
-    "u64": {
-      "path": "u64",
-      "visibility": "public",
-      "size": 8,
-      "alignment": 8,
-      "category": "predefined",
-      "kind": {
-        "type": "type",
-        "doc": null,
-        "fields": [],
-        "associated_functions": [],
-        "vftable": null,
-        "singleton": null,
-        "copyable": true,
-        "cloneable": true,
-        "defaultable": true,
-        "packed": false,
-        "pinned": false
-      },
-      "source": null
-    },
-    "u8": {
-      "path": "u8",
-      "visibility": "public",
-      "size": 1,
-      "alignment": 1,
-      "category": "predefined",
-      "kind": {
-        "type": "type",
-        "doc": null,
-        "fields": [],
-        "associated_functions": [],
-        "vftable": null,
-        "singleton": null,
-        "copyable": true,
-        "cloneable": true,
-        "defaultable": true,
-        "packed": false,
-        "pinned": false
-      },
-      "source": null
     },
     "unicode::Unicode": {
       "path": "unicode::Unicode",
@@ -7180,7 +7000,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 26,
+              "file_index": 27,
               "line": 8
             }
           },
@@ -7197,7 +7017,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 26,
+              "file_index": 27,
               "line": 13
             }
           }
@@ -7219,7 +7039,7 @@
             "return_type": null,
             "calling_convention": "system",
             "source": {
-              "file_index": 26,
+              "file_index": 27,
               "line": 20
             }
           }
@@ -7242,7 +7062,7 @@
               "return_type": null,
               "calling_convention": "system",
               "source": {
-                "file_index": 26,
+                "file_index": 27,
                 "line": 8
               }
             }
@@ -7256,7 +7076,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 26,
+        "file_index": 27,
         "line": 5
       }
     },
@@ -7296,7 +7116,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 26,
+              "file_index": 27,
               "line": 8
             }
           }
@@ -7311,30 +7131,9 @@
         "pinned": false
       },
       "source": {
-        "file_index": 26,
+        "file_index": 27,
         "line": 8
       }
-    },
-    "void": {
-      "path": "void",
-      "visibility": "public",
-      "size": 0,
-      "alignment": 1,
-      "category": "predefined",
-      "kind": {
-        "type": "type",
-        "doc": null,
-        "fields": [],
-        "associated_functions": [],
-        "vftable": null,
-        "singleton": null,
-        "copyable": true,
-        "cloneable": true,
-        "defaultable": true,
-        "packed": false,
-        "pinned": false
-      },
-      "source": null
     },
     "world::World": {
       "path": "world::World",
@@ -7359,7 +7158,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 29,
+              "file_index": 30,
               "line": 10
             }
           }
@@ -7374,7 +7173,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 29,
+        "file_index": 30,
         "line": 9
       }
     },
@@ -7404,7 +7203,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 27,
+              "file_index": 28,
               "line": 8
             }
           },
@@ -7421,7 +7220,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 27,
+              "file_index": 28,
               "line": 9
             }
           },
@@ -7438,7 +7237,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 27,
+              "file_index": 28,
               "line": 10
             }
           }
@@ -7453,7 +7252,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 27,
+        "file_index": 28,
         "line": 7
       }
     },
@@ -7480,7 +7279,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 28,
+              "file_index": 29,
               "line": 6
             }
           }
@@ -7495,7 +7294,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 28,
+        "file_index": 29,
         "line": 5
       }
     },
@@ -7522,7 +7321,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 30,
+              "file_index": 31,
               "line": 4
             }
           },
@@ -7539,7 +7338,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 30,
+              "file_index": 31,
               "line": 5
             }
           }
@@ -7554,7 +7353,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 30,
+        "file_index": 31,
         "line": 3
       }
     },
@@ -7584,7 +7383,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 31,
+              "file_index": 32,
               "line": 10
             }
           },
@@ -7604,7 +7403,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 31,
+              "file_index": 32,
               "line": 11
             }
           }
@@ -7619,7 +7418,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 31,
+        "file_index": 32,
         "line": 9
       }
     }
@@ -8184,6 +7983,20 @@
         "line": 1
       }
     },
+    "nested_items": {
+      "doc": null,
+      "items": [
+        "nested_items::Outer"
+      ],
+      "submodules": {},
+      "extern_values": [],
+      "functions": [],
+      "backends": {},
+      "source": {
+        "file_index": 20,
+        "line": 1
+      }
+    },
     "pinned": {
       "doc": null,
       "items": [
@@ -8197,38 +8010,13 @@
       "functions": [],
       "backends": {},
       "source": {
-        "file_index": 20,
+        "file_index": 21,
         "line": 1
       }
     },
     "root": {
       "doc": null,
-      "items": [
-        "AtomicBool",
-        "AtomicI16",
-        "AtomicI32",
-        "AtomicI64",
-        "AtomicI8",
-        "AtomicU16",
-        "AtomicU32",
-        "AtomicU64",
-        "AtomicU8",
-        "bool",
-        "c_char",
-        "f32",
-        "f64",
-        "i128",
-        "i16",
-        "i32",
-        "i64",
-        "i8",
-        "u128",
-        "u16",
-        "u32",
-        "u64",
-        "u8",
-        "void"
-      ],
+      "items": [],
       "submodules": {},
       "extern_values": [],
       "functions": [],
@@ -8248,7 +8036,7 @@
       "functions": [],
       "backends": {},
       "source": {
-        "file_index": 21,
+        "file_index": 22,
         "line": 1
       }
     },
@@ -8262,7 +8050,7 @@
       "functions": [],
       "backends": {},
       "source": {
-        "file_index": 22,
+        "file_index": 23,
         "line": 1
       }
     },
@@ -8281,7 +8069,7 @@
       "functions": [],
       "backends": {},
       "source": {
-        "file_index": 23,
+        "file_index": 24,
         "line": 1
       }
     },
@@ -8295,7 +8083,7 @@
       "functions": [],
       "backends": {},
       "source": {
-        "file_index": 24,
+        "file_index": 25,
         "line": 1
       }
     },
@@ -8321,7 +8109,7 @@
       "functions": [],
       "backends": {},
       "source": {
-        "file_index": 25,
+        "file_index": 26,
         "line": 1
       }
     },
@@ -8336,7 +8124,7 @@
       "functions": [],
       "backends": {},
       "source": {
-        "file_index": 26,
+        "file_index": 27,
         "line": 3
       }
     },
@@ -8356,7 +8144,7 @@
           "functions": [],
           "backends": {},
           "source": {
-            "file_index": 27,
+            "file_index": 28,
             "line": 1
           }
         },
@@ -8374,7 +8162,7 @@
               "functions": [],
               "backends": {},
               "source": {
-                "file_index": 28,
+                "file_index": 29,
                 "line": 1
               }
             }
@@ -8394,7 +8182,7 @@
           "functions": [],
           "backends": {},
           "source": {
-            "file_index": 30,
+            "file_index": 31,
             "line": 1
           }
         }
@@ -8413,7 +8201,7 @@
         ]
       },
       "source": {
-        "file_index": 29,
+        "file_index": 30,
         "line": 7
       }
     },
@@ -8427,7 +8215,7 @@
       "functions": [],
       "backends": {},
       "source": {
-        "file_index": 31,
+        "file_index": 32,
         "line": 1
       }
     }
@@ -8453,6 +8241,7 @@
     "math.pyxis",
     "min_size.pyxis",
     "multiple_levels.pyxis",
+    "nested_items.pyxis",
     "pinned.pyxis",
     "self_referential_generics.pyxis",
     "singleton.pyxis",

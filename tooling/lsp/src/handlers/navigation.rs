@@ -287,6 +287,9 @@ impl ServerState {
                         return Some(hit);
                     }
                 }
+                TypeField::Item(_) => {
+                    // Nested item hover is handled at the top-level item level
+                }
             }
         }
         None

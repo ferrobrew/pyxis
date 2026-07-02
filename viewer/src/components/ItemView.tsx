@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useDocumentation } from '../contexts/DocumentationContext';
 import { getModulePath, findLongestValidAncestor, findModule } from '../utils/pathUtils';
 import { buildModuleUrl, buildItemUrl, buildRootUrl } from '../utils/navigation';
@@ -109,9 +109,40 @@ function FunctionList({ children }: { children: React.ReactNode }) {
 // Type view component
 function TypeView({ def, modulePath }: { def: JsonTypeDefinition; modulePath: string }) {
   const [fieldViewMode, setFieldViewMode] = useState<FieldViewMode>('flat');
+  const { documentation, selectedSource } = useDocumentation();
+
+  const nestedItems = (def.nested_items ?? []).map((path) => ({
+    path,
+    item: documentation?.items[path],
+  })).filter((ni) => ni.item != null);
 
   return (
     <div>
+      {nestedItems.length > 0 && (
+        <div id="nested-items" className="mb-8">
+          <SectionHeader anchor="nested-items">Nested Items</SectionHeader>
+          <div className="overflow-hidden rounded-md border border-edge bg-surface">
+            {nestedItems.map(({ path, item }) => {
+              const name = path.split('::').pop() || path;
+              let itemType: ItemType = 'type';
+              if (item!.kind.type === 'enum') itemType = 'enum';
+              else if (item!.kind.type === 'bitflags') itemType = 'bitflags';
+              else if (item!.kind.type === 'type_alias') itemType = 'type_alias';
+              return (
+                <Link
+                  key={path}
+                  to={buildItemUrl(path, selectedSource)}
+                  className="flex items-center gap-2 border-b border-edge px-4 py-2 text-sm last:border-b-0 hover:bg-accent-soft"
+                >
+                  <span className={`${getItemTypeColor(itemType)}`}>{name}</span>
+                  <span className="text-fg-subtle text-xs">{itemType}</span>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {def.fields.length > 0 && (
         <div id="fields" className="mb-8">
           <div className="group mb-4 flex items-center justify-between border-b border-edge pb-1.5">
@@ -364,6 +395,7 @@ export function ItemView() {
   const toc: TocEntry[] = [];
   const k = item.kind;
   if (k.type === 'type') {
+    if ((k.nested_items ?? []).length > 0) toc.push({ id: 'nested-items', label: 'Nested Items' });
     if (k.fields.length > 0) toc.push({ id: 'fields', label: 'Fields' });
     if (k.vftable && k.vftable.functions.length > 0)
       toc.push({ id: 'virtual-functions', label: 'Virtual Functions' });

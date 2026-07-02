@@ -11,6 +11,7 @@ use super::{
     attributes::{Attributes, Visibility},
     core::Parser,
     items::Comment,
+    paths::{ItemPath, ItemPathSegment},
     types::{Ident, Type},
 };
 
@@ -106,6 +107,9 @@ pub enum ImplItem {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, HasLocation)]
 pub struct FunctionBlock {
     pub name: Ident,
+    /// Qualified path segments after the first name (e.g. `Inner` in
+    /// `impl Outer::Inner`). `None` for simple `impl Foo` blocks.
+    pub name_path: Option<ItemPath>,
     /// Type parameters declared on the `impl` block (e.g. `T, Y` in
     /// `impl<T, Y> Foo<T> { ... }`). Empty for non-generic impls.
     pub type_parameters: Vec<crate::parser::types::TypeParameter>,
@@ -123,6 +127,7 @@ impl StripLocations for FunctionBlock {
     fn strip_locations(&self) -> Self {
         FunctionBlock {
             name: self.name.strip_locations(),
+            name_path: self.name_path.clone(),
             type_parameters: self.type_parameters.strip_locations(),
             type_arguments: self.type_arguments.strip_locations(),
             items: self
@@ -143,6 +148,7 @@ impl FunctionBlock {
     pub fn new(name: impl Into<Ident>, functions: impl IntoIterator<Item = Function>) -> Self {
         Self {
             name: name.into(),
+            name_path: None,
             type_parameters: vec![],
             type_arguments: vec![],
             items: functions.into_iter().map(ImplItem::Function).collect(),
@@ -187,6 +193,20 @@ impl Parser {
         // the `impl<...>` parameters).
         let type_parameters = self.parse_type_parameters()?;
         let (name, _) = self.expect_ident()?;
+
+        // Check for qualified path: impl Outer::Inner { ... }
+        let name_path = if matches!(self.peek(), TokenKind::ColonColon) {
+            let mut segments: Vec<ItemPathSegment> = Vec::new();
+            while matches!(self.peek(), TokenKind::ColonColon) {
+                self.advance(); // consume ::
+                let (seg, _) = self.expect_ident()?;
+                segments.push(seg.as_str().into());
+            }
+            Some(segments.into_iter().collect())
+        } else {
+            None
+        };
+
         let type_arguments = if matches!(self.peek(), TokenKind::Lt) {
             self.parse_type_parameters()?
         } else {
@@ -219,6 +239,7 @@ impl Parser {
         let location = self.item_location_from_locations(start_pos, last_token.end_location());
         Ok(FunctionBlock {
             name,
+            name_path,
             type_parameters,
             type_arguments,
             items,

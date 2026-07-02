@@ -229,6 +229,9 @@ pub(crate) fn find_type_ref_in_definition<'a>(
                             }
                         }
                     }
+                    TypeField::Item(_) => {
+                        // Nested item type references are handled at the top level
+                    }
                 }
             }
         }

@@ -153,6 +153,10 @@ fn collect_type_ref_spans(
                             }
                         }
                     }
+                    TypeField::Item(inner_def) => {
+                        // Collect type reference spans from nested item definitions
+                        collect_type_ref_spans(inner_def, scope, index, tokens, out);
+                    }
                 }
             }
         }

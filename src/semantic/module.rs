@@ -83,10 +83,20 @@ impl Module {
     ) -> Result<Self> {
         let mut impls_map: BTreeMap<ItemPath, Vec<grammar::FunctionBlock>> = BTreeMap::new();
         for fb in impls {
-            impls_map
-                .entry(path.join(fb.name.as_str().into()))
-                .or_default()
-                .push(fb.clone());
+            // For qualified impl names (impl Outer::Inner), build the full path
+            // by joining module_path with the name and all path segments.
+            // For simple impl names (impl Foo), just module_path::name.
+            let impl_key = if let Some(np) = &fb.name_path {
+                let mut key = path.clone();
+                key.push(fb.name.as_str().into());
+                for seg in np.iter() {
+                    key.push(seg.clone());
+                }
+                key
+            } else {
+                path.join(fb.name.as_str().into())
+            };
+            impls_map.entry(impl_key).or_default().push(fb.clone());
         }
         let impls = impls_map;
 

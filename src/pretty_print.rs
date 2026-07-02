@@ -724,17 +724,65 @@ impl PrettyPrinter {
                 } else {
                     writeln!(&mut self.output, "type {}{} {{", def.name, type_params).unwrap();
                     self.indent();
-                    for (i, item) in td.items.iter().enumerate() {
-                        let next_item = td.items.get(i + 1);
+
+                    // Partition items into groups: (comments, statement) pairs.
+                    // Comments attach to the NEXT statement in source order.
+                    // Then split into nested-item groups and other groups.
+                    let mut groups: Vec<(Vec<&Comment>, &TypeDefItem)> = Vec::new();
+                    let mut pending_comments: Vec<&Comment> = Vec::new();
+                    for item in &td.items {
                         match item {
-                            TypeDefItem::Comment(comment) => {
-                                self.print_comment(comment);
+                            TypeDefItem::Comment(c) => {
+                                pending_comments.push(c);
                             }
-                            TypeDefItem::Statement(stmt) => {
-                                self.print_type_statement(stmt, next_item);
+                            TypeDefItem::Statement(_) => {
+                                groups.push((std::mem::take(&mut pending_comments), item));
                             }
                         }
                     }
+
+                    // Partition into nested-item groups and other groups
+                    let (nested_groups, other_groups): (Vec<_>, Vec<_>) = groups
+                        .iter()
+                        .partition(|(_, item)| {
+                            matches!(
+                                item,
+                                TypeDefItem::Statement(stmt) if matches!(stmt.field, TypeField::Item(_))
+                            )
+                        });
+
+                    // Emit nested items first
+                    for (comments, item) in &nested_groups {
+                        for c in comments {
+                            self.print_comment(c);
+                        }
+                        if let TypeDefItem::Statement(stmt) = item {
+                            self.print_type_statement(stmt, None);
+                        }
+                    }
+
+                    // Blank line between groups when both are present
+                    if !nested_groups.is_empty() && !other_groups.is_empty() {
+                        self.writeln("");
+                    }
+
+                    // Emit other items (fields, vftables)
+                    for (idx, (comments, item)) in other_groups.iter().enumerate() {
+                        for c in comments {
+                            self.print_comment(c);
+                        }
+                        if let TypeDefItem::Statement(stmt) = item {
+                            // Pass the next item for vftable blank-line logic
+                            let next_item = other_groups.get(idx + 1).map(|(_, it)| *it);
+                            self.print_type_statement(stmt, next_item);
+                        }
+                    }
+
+                    // Emit any trailing comments (comments after the last statement)
+                    for c in &pending_comments {
+                        self.print_comment(c);
+                    }
+
                     self.dedent();
                     self.write_indent();
                     writeln!(&mut self.output, "}}").unwrap();
@@ -814,10 +862,10 @@ impl PrettyPrinter {
         }
 
         self.print_attributes(&stmt.attributes);
-        self.write_indent();
 
         match &stmt.field {
             TypeField::Field(vis, name, type_) => {
+                self.write_indent();
                 if *vis == Visibility::Public {
                     write!(&mut self.output, "pub ").unwrap();
                 }
@@ -839,6 +887,7 @@ impl PrettyPrinter {
                 }
             }
             TypeField::Vftable(funcs) => {
+                self.write_indent();
                 if funcs.is_empty() {
                     write!(&mut self.output, "vftable {{}},").unwrap();
                 } else {
@@ -876,6 +925,10 @@ impl PrettyPrinter {
                 if let Some(TypeDefItem::Statement(_)) = next_item {
                     self.writeln("");
                 }
+            }
+            TypeField::Item(inner_def) => {
+                // print_item_definition does its own write_indent()
+                self.print_item_definition(inner_def);
             }
         }
     }
@@ -981,8 +1034,20 @@ impl PrettyPrinter {
     fn print_impl_block(&mut self, impl_block: &FunctionBlock) {
         self.print_attributes(&impl_block.attributes);
         self.write_indent();
+        // Build the qualified name string: "Outer::Inner" for qualified impls,
+        // or just "Foo" for simple impls.
+        let name_str = if let Some(np) = &impl_block.name_path {
+            let mut s = impl_block.name.as_str().to_string();
+            for seg in np.iter() {
+                s.push_str("::");
+                s.push_str(seg.as_str());
+            }
+            s
+        } else {
+            impl_block.name.as_str().to_string()
+        };
         if impl_block.type_parameters.is_empty() {
-            writeln!(&mut self.output, "impl {} {{", impl_block.name).unwrap();
+            writeln!(&mut self.output, "impl {name_str} {{").unwrap();
         } else {
             let params = impl_block
                 .type_parameters
@@ -997,14 +1062,9 @@ impl PrettyPrinter {
                 .collect::<Vec<_>>()
                 .join(", ");
             if args.is_empty() {
-                writeln!(&mut self.output, "impl<{}> {} {{", params, impl_block.name).unwrap();
+                writeln!(&mut self.output, "impl<{params}> {name_str} {{").unwrap();
             } else {
-                writeln!(
-                    &mut self.output,
-                    "impl<{}> {}<{}> {{",
-                    params, impl_block.name, args
-                )
-                .unwrap();
+                writeln!(&mut self.output, "impl<{params}> {name_str}<{args}> {{",).unwrap();
             }
         }
         self.indent();
@@ -1817,5 +1877,110 @@ pub type PinnedType {
         let printed = pretty_print(&module);
 
         assert_eq!(printed, expected);
+    }
+
+    #[test]
+    fn test_nested_enum_only_no_blank() {
+        let text = r#"
+        pub type Outer {
+            pub enum InnerEnum: u8 {
+                A,
+                B,
+            }
+        }
+        "#;
+
+        let expected = r#"
+pub type Outer {
+    pub enum InnerEnum: u8 {
+        A,
+        B,
+    }
+}
+        "#
+        .trim();
+
+        let module = parse_str_for_tests(text).unwrap();
+        let printed = pretty_print(&module);
+
+        assert_eq!(printed, expected);
+    }
+
+    #[test]
+    fn test_field_only_no_blank() {
+        let text = r#"
+        pub type Outer {
+            pub field: u32,
+        }
+        "#;
+
+        let expected = r#"
+pub type Outer {
+    pub field: u32,
+}
+        "#
+        .trim();
+
+        let module = parse_str_for_tests(text).unwrap();
+        let printed = pretty_print(&module);
+
+        assert_eq!(printed, expected);
+    }
+
+    #[test]
+    fn test_nested_and_field_one_blank() {
+        let text = r#"
+        pub type Outer {
+            pub field: u32,
+            pub enum InnerEnum: u8 {
+                A,
+                B,
+            }
+        }
+        "#;
+
+        // Nested items should be reordered first, with a blank line between
+        // the nested item group and the field group.
+        let expected = r#"
+pub type Outer {
+    pub enum InnerEnum: u8 {
+        A,
+        B,
+    }
+
+    pub field: u32,
+}
+        "#
+        .trim();
+
+        let module = parse_str_for_tests(text).unwrap();
+        let printed = pretty_print(&module);
+
+        assert_eq!(printed, expected);
+    }
+
+    #[test]
+    fn test_nested_round_trip() {
+        let text = r#"
+pub type Outer {
+    pub field: u32,
+    pub enum InnerEnum: u8 {
+        A,
+        B,
+    }
+    pub type InnerType {
+        pub inner_field: u16,
+    }
+}
+        "#
+        .trim();
+
+        let module = parse_str_for_tests(text).unwrap();
+        let printed = pretty_print(&module);
+        // Round-trip: parse the printed output and print again
+        let module2 = parse_str_for_tests(&printed).unwrap();
+        let printed2 = pretty_print(&module2);
+
+        assert_eq!(printed, printed2);
     }
 }

@@ -65,6 +65,8 @@ pub struct NameIndex {
     module_scopes: BTreeMap<ItemPath, Vec<ItemPath>>,
     /// Item path → index into the query's `sources` list (which file declares it).
     item_files: BTreeMap<ItemPath, usize>,
+    /// Item path → declaring module path (for nested items whose parent is a type, not a module).
+    item_scopes: BTreeMap<ItemPath, ItemPath>,
     /// Pointer size from project config.
     pointer_size: usize,
 }
@@ -118,7 +120,32 @@ impl NameIndex {
                     arity: def.type_parameters.len(),
                 },
             );
-            self.item_files.insert(path, file_index);
+            self.item_files.insert(path.clone(), file_index);
+
+            // Recurse into type bodies to find nested items.
+            // Only read TypeField::Item data (name, kind, arity) to preserve backdating.
+            if let grammar::ItemDefinitionInner::Type(td) = &def.inner {
+                for stmt in td.statements() {
+                    if let grammar::TypeField::Item(inner) = &stmt.field {
+                        let nested_path = path.join(inner.name.as_str().into());
+                        let nested_kind = match &inner.inner {
+                            grammar::ItemDefinitionInner::Type(_) => SigKind::Type,
+                            grammar::ItemDefinitionInner::Enum(_) => SigKind::Enum,
+                            grammar::ItemDefinitionInner::Bitflags(_) => SigKind::Bitflags,
+                            grammar::ItemDefinitionInner::TypeAlias(_) => SigKind::TypeAlias,
+                        };
+                        self.items.insert(
+                            nested_path.clone(),
+                            ItemSig {
+                                kind: nested_kind,
+                                arity: inner.type_parameters.len(),
+                            },
+                        );
+                        self.item_files.insert(nested_path.clone(), file_index);
+                        self.item_scopes.insert(nested_path, module_path.clone());
+                    }
+                }
+            }
         }
 
         for extern_type in module.extern_types() {
@@ -178,8 +205,17 @@ impl NameIndex {
         self.item_files.get(path).copied()
     }
 
-    /// The resolution scope for an item path (its module's scope).
+    /// The resolution scope for an item path (its declaring module's scope).
+    /// For nested items (whose parent is a type, not a module), the scope is
+    /// looked up via `item_scopes` which maps to the declaring module.
     pub fn scope_of(&self, item_path: &ItemPath) -> Option<&[ItemPath]> {
+        // Check item_scopes first (for nested items whose parent is a type)
+        if let Some(declaring_module) = self.item_scopes.get(item_path) {
+            return self
+                .module_scopes
+                .get(declaring_module)
+                .map(|s| s.as_slice());
+        }
         let parent = item_path.parent()?;
         self.module_scopes.get(&parent).map(|s| s.as_slice())
     }

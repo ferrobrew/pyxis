@@ -1,4 +1,10 @@
-use std::{collections::HashMap, fmt::Write as _, path::Path, str::FromStr, sync::LazyLock};
+use std::{
+    collections::{BTreeSet, HashMap},
+    fmt::Write as _,
+    path::Path,
+    str::FromStr,
+    sync::LazyLock,
+};
 
 use crate::{
     backends::{BackendError, Result},
@@ -166,39 +172,94 @@ pub fn write_module(
     // hence the `allow`. Items local to this module or already in scope are
     // skipped, as are paths that aren't plain Rust identifiers.
     let module_scope = module.scope();
-    let mut doc_imports = semantic_state.doc_link_resolver().module_imports(
+    let doc_imports = semantic_state.doc_link_resolver().module_imports(
         semantic_state.type_registry(),
         semantic_state.modules(),
         key,
     );
-    doc_imports.retain(|p| {
-        p.parent().as_ref() != Some(key)
-            && !module_scope.contains(p)
-            && p.iter().all(|s| is_plain_ident(s.as_str()))
+    // Separate doc imports into cross-module (need `use`) and same-module
+    // nested items (need `use ... as ...` aliases so rustdoc resolves bare
+    // references like [`InnerEnum`] to the flattened `Outer_InnerEnum`).
+    let module_path_set: BTreeSet<ItemPath> = semantic_state.modules().keys().cloned().collect();
+    let mut cross_module_imports: Vec<&ItemPath> = Vec::new();
+    let mut same_module_aliases: Vec<(&ItemPath, String)> = Vec::new(); // (path, flattened_name)
+    for p in &doc_imports {
+        // Check if the declaring module is the current module
+        let declaring_len = find_module_prefix_len(p, &module_path_set);
+        let declaring_module: ItemPath = p.iter().take(declaring_len).cloned().collect();
+        if &declaring_module == key {
+            // Same module — generate a `use FlatName as LeafName;` alias
+            // only if the flattened name differs from the leaf name.
+            if p.len() > key.len() + 1 {
+                let flat = flatten_type_name(p, &module_path_set);
+                let leaf = p.last().map(|s| s.as_str().to_string()).unwrap_or_default();
+                if flat != leaf {
+                    same_module_aliases.push((p, flat));
+                }
+            }
+        } else {
+            cross_module_imports.push(p);
+        }
+    }
+
+    // Generate cross-module imports
+    let mut cross_module_imports: Vec<ItemPath> =
+        cross_module_imports.into_iter().cloned().collect();
+    cross_module_imports.retain(|p| {
+        !module_scope.contains(p) && p.last().is_some_and(|s| is_plain_ident(s.as_str()))
     });
     // De-duplicate by leaf name: two different items sharing a leaf can't both
     // be imported unqualified (and the link would be ambiguous anyway).
     {
         let mut seen_leaves = std::collections::HashSet::new();
-        doc_imports.retain(|p| {
+        cross_module_imports.retain(|p| {
             p.last()
                 .map(|s| seen_leaves.insert(s.as_str().to_string()))
                 .unwrap_or(false)
         });
     }
-    if !doc_imports.is_empty() {
+    if !cross_module_imports.is_empty() {
         let prefix = options.rust_module_prefix.as_ref();
         let root = match prefix {
             Some(prefix) => format!("crate::{prefix}"),
             None => "crate".to_string(),
         };
-        let inner = doc_imports
+        let inner = cross_module_imports
             .iter()
-            .map(|p| p.to_string())
+            .map(|p| {
+                // Flatten nested item paths for Rust: e.g.
+                // module::Outer::InnerEnum → module::Outer_InnerEnum
+                if p.len() > key.len() + 1 {
+                    // Find where module segments end and type segments begin
+                    let type_segments: Vec<&str> =
+                        p.iter().skip(key.len()).map(|s| s.as_str()).collect();
+                    let module_part: Vec<&str> =
+                        p.iter().take(key.len()).map(|s| s.as_str()).collect();
+                    let flat_name = type_segments.join("_");
+                    if module_part.is_empty() {
+                        flat_name
+                    } else {
+                        format!("{}::{}", module_part.join("::"), flat_name)
+                    }
+                } else {
+                    p.to_string()
+                }
+            })
             .collect::<Vec<_>>()
             .join(", ");
         writeln!(raw_output, "#[allow(unused_imports)]")?;
         writeln!(raw_output, "use {root}::{{{inner}}};")?;
+    }
+
+    // Generate `use FlatName as LeafName;` aliases for same-module nested
+    // items referenced in doc links, so rustdoc resolves [`LeafName`] to
+    // the flattened Rust identifier.
+    if !same_module_aliases.is_empty() {
+        for (_, flat) in &same_module_aliases {
+            let leaf = flat.rsplit('_').next().unwrap_or(flat);
+            writeln!(raw_output, "#[allow(unused_imports)]")?;
+            writeln!(raw_output, "use {flat} as {leaf};")?;
+        }
     }
 
     let cfg_pass = |cfg: &Option<crate::parser::cfg::CfgPredicate>| match cfg {
@@ -216,6 +277,8 @@ pub fn write_module(
         .filter(|d| cfg_pass(&d.cfg))
         .collect::<Vec<_>>();
     definitions.sort_by_key(|d| &d.path);
+    // Collect all module paths for flattening nested item names.
+    let module_paths: BTreeSet<ItemPath> = semantic_state.modules().keys().cloned().collect();
     for definition in definitions {
         writeln!(
             raw_output,
@@ -226,6 +289,7 @@ pub fn write_module(
                 &cfg_ctx,
                 options,
                 &extern_rust_names,
+                &module_paths,
             )?
         )?;
     }
@@ -236,7 +300,7 @@ pub fn write_module(
         writeln!(
             raw_output,
             "{}",
-            build_extern_value(ev, options.rust_module_prefix.as_ref())?
+            build_extern_value(ev, options.rust_module_prefix.as_ref(), &module_paths)?
         )?;
     }
 
@@ -246,7 +310,7 @@ pub fn write_module(
         .iter()
         .filter(|f| !f.is_internal())
         .filter(|f| cfg_pass(&f.cfg))
-        .map(|f| build_function(f, options, false))
+        .map(|f| build_function(f, options, false, &module_paths))
         .collect::<Result<Vec<_>>>()?;
     for func in freestanding_functions {
         writeln!(raw_output, "{func}")?;
@@ -328,6 +392,7 @@ fn build_item(
     cfg_ctx: &crate::parser::cfg::CfgContext,
     options: &crate::BuildOptions,
     extern_rust_names: &HashMap<String, String>,
+    module_paths: &BTreeSet<ItemPath>,
 ) -> Result<proc_macro2::TokenStream> {
     let resolved = definition
         .resolved()
@@ -361,8 +426,18 @@ fn build_item(
                 type_parameters,
                 cfg_ctx,
                 options,
+                module_paths,
             ),
-            IDI::Enum(ed) => build_enum(path, *size, visibility, ed, location, cfg_ctx, options),
+            IDI::Enum(ed) => build_enum(
+                path,
+                *size,
+                visibility,
+                ed,
+                location,
+                cfg_ctx,
+                options,
+                module_paths,
+            ),
             IDI::Bitflags(bd) => build_bitflags(
                 path,
                 *size,
@@ -370,6 +445,7 @@ fn build_item(
                 bd,
                 location,
                 options.rust_module_prefix.as_ref(),
+                module_paths,
             ),
             IDI::TypeAlias(ta) => build_type_alias(
                 type_registry,
@@ -379,6 +455,7 @@ fn build_item(
                 location,
                 type_parameters,
                 options.rust_module_prefix.as_ref(),
+                module_paths,
             ),
         },
         ItemCategory::Predefined => Ok(quote! {}),
@@ -412,12 +489,14 @@ fn build_type(
     alignment: usize,
     visibility: Visibility,
     type_definition: &TypeDefinition,
-    location: &ItemLocation,
+    _location: &ItemLocation,
     type_parameters: &[String],
     cfg_ctx: &crate::parser::cfg::CfgContext,
     options: &crate::BuildOptions,
+    module_paths: &BTreeSet<ItemPath>,
 ) -> Result<proc_macro2::TokenStream> {
-    let name = get_type_name(path, location)?;
+    let name = flatten_type_name(path, module_paths);
+    let name = &name;
     let prefix = options.rust_module_prefix.as_ref();
 
     let TypeDefinition {
@@ -431,6 +510,7 @@ fn build_type(
         defaultable,
         packed,
         pinned,
+        nested_item_paths: _,
     } = type_definition;
 
     let visibility = visibility_to_tokens(visibility);
@@ -456,7 +536,7 @@ fn build_type(
                 })?;
             let field_ident = str_to_ident(field_name);
             let visibility = visibility_to_tokens(*visibility);
-            let syn_type = sa_type_to_syn_type(type_ref, prefix)?;
+            let syn_type = sa_type_to_syn_type(type_ref, prefix, Some(module_paths))?;
             let doc = doc_to_tokens(false, doc);
             Ok(quote! {
                 #doc
@@ -499,7 +579,7 @@ fn build_type(
             } else {
                 quote! { vftable }
             };
-            let vftable_type = sa_type_to_syn_type(&v.type_, prefix)?;
+            let vftable_type = sa_type_to_syn_type(&v.type_, prefix, Some(module_paths))?;
             Ok(quote! {
                 pub fn vftable(&self) -> #vftable_type {
                     self. #accessor as #vftable_type
@@ -518,7 +598,7 @@ fn build_type(
         .iter()
         .filter(|f| !f.is_internal())
         .filter(|f| cfg_pass(&f.cfg))
-        .map(|f| build_function(f, options, true))
+        .map(|f| build_function(f, options, true, module_paths))
         .collect::<Result<Vec<_>>>()?;
 
     let vftable_function_impl = vftable
@@ -528,7 +608,7 @@ fn build_type(
                 .iter()
                 .filter(|f| !f.is_internal())
                 .filter(|f| cfg_pass(&f.cfg))
-                .map(|f| build_function(f, options, true))
+                .map(|f| build_function(f, options, true, module_paths))
                 .collect::<Result<Vec<_>>>()
         })
         .transpose()?
@@ -563,7 +643,7 @@ fn build_type(
                     .into_iter()
                     .map(|s| str_to_ident(&s))
                     .collect::<Vec<_>>();
-                let type_ = sa_type_to_syn_type(&type_, prefix)?;
+                let type_ = sa_type_to_syn_type(&type_, prefix, Some(module_paths))?;
 
                 Ok((type_, field_path))
             })
@@ -609,7 +689,7 @@ fn build_type(
                     let conflicting_impl_doc = doc_to_tokens(false, &conflicting_impl_doc_lines);
                     let conflicting_impl_ident = quote::format_ident!(
                         "_CONFLICTING_{}_{}",
-                        name.as_str().to_uppercase(),
+                        &name.to_uppercase(),
                         field_path
                             .iter()
                             .map(|f| f.to_string().to_uppercase())
@@ -688,16 +768,19 @@ fn build_type(
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 fn build_enum(
     path: &ItemPath,
     size: usize,
     visibility: Visibility,
     enum_definition: &EnumDefinition,
-    location: &ItemLocation,
+    _location: &ItemLocation,
     cfg_ctx: &crate::parser::cfg::CfgContext,
     options: &crate::BuildOptions,
+    module_paths: &BTreeSet<ItemPath>,
 ) -> Result<proc_macro2::TokenStream> {
-    let name = get_type_name(path, location)?;
+    let name = flatten_type_name(path, module_paths);
+    let name = &name;
     let prefix = options.rust_module_prefix.as_ref();
 
     let EnumDefinition {
@@ -712,7 +795,7 @@ fn build_enum(
         pinned,
     } = enum_definition;
 
-    let syn_type = sa_type_to_syn_type(type_, prefix)?;
+    let syn_type = sa_type_to_syn_type(type_, prefix, Some(module_paths))?;
     let name_ident = str_to_ident(name.as_str());
 
     let visibility = visibility_to_tokens(visibility);
@@ -767,7 +850,7 @@ fn build_enum(
         .iter()
         .filter(|f| !f.is_internal())
         .filter(|f| cfg_pass(&f.cfg))
-        .map(|f| build_function(f, options, true))
+        .map(|f| build_function(f, options, true, module_paths))
         .collect::<Result<Vec<_>>>()?;
 
     let associated_impl = if !associated_functions_impl.is_empty() {
@@ -798,10 +881,12 @@ fn build_bitflags(
     size: usize,
     visibility: Visibility,
     bitflags_definition: &BitflagsDefinition,
-    location: &ItemLocation,
+    _location: &ItemLocation,
     prefix: Option<&ItemPath>,
+    module_paths: &BTreeSet<ItemPath>,
 ) -> Result<proc_macro2::TokenStream> {
-    let name = get_type_name(path, location)?;
+    let name = flatten_type_name(path, module_paths);
+    let name = &name;
 
     let BitflagsDefinition {
         singleton,
@@ -812,7 +897,7 @@ fn build_bitflags(
         ..
     } = bitflags_definition;
 
-    let syn_type = sa_type_to_syn_type(type_, prefix)?;
+    let syn_type = sa_type_to_syn_type(type_, prefix, Some(module_paths))?;
     let name_ident = str_to_ident(name.as_str());
 
     let visibility = visibility_to_tokens(visibility);
@@ -868,23 +953,26 @@ fn build_bitflags(
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 fn build_type_alias(
     _type_registry: &TypeRegistry,
     path: &ItemPath,
     visibility: Visibility,
     type_alias_definition: &TypeAliasDefinition,
-    location: &ItemLocation,
+    _location: &ItemLocation,
     type_parameters: &[String],
     prefix: Option<&ItemPath>,
+    module_paths: &BTreeSet<ItemPath>,
 ) -> Result<proc_macro2::TokenStream> {
-    let name = get_type_name(path, location)?;
+    let name = flatten_type_name(path, module_paths);
+    let name = &name;
 
     let TypeAliasDefinition { target, doc } = type_alias_definition;
 
     let name_ident = str_to_ident(name.as_str());
     let visibility = visibility_to_tokens(visibility);
     let doc = doc_to_tokens(false, doc);
-    let target_type = sa_type_to_syn_type(target, prefix)?;
+    let target_type = sa_type_to_syn_type(target, prefix, Some(module_paths))?;
 
     let generic_params = build_generic_params(type_parameters);
 
@@ -898,6 +986,7 @@ fn build_function(
     function: &Function,
     options: &crate::BuildOptions,
     in_impl: bool,
+    module_paths: &BTreeSet<ItemPath>,
 ) -> Result<proc_macro2::TokenStream> {
     let prefix = options.rust_module_prefix.as_ref();
     // External-body methods declare their existence in pyxis but get their
@@ -920,7 +1009,7 @@ fn build_function(
                 Argument::MutSelf { .. } => quote! { &mut self },
                 Argument::Field { name, type_, .. } => {
                     let name = str_to_ident(name);
-                    let syn_type = sa_type_to_syn_type(type_, prefix)?;
+                    let syn_type = sa_type_to_syn_type(type_, prefix, Some(module_paths))?;
                     quote! {
                         #name: #syn_type
                     }
@@ -938,7 +1027,7 @@ fn build_function(
                 Argument::MutSelf { .. } => quote! { this: *mut Self },
                 Argument::Field { name, type_, .. } => {
                     let name = str_to_ident(name);
-                    let syn_type = sa_type_to_syn_type(type_, prefix)?;
+                    let syn_type = sa_type_to_syn_type(type_, prefix, Some(module_paths))?;
                     quote! {
                         #name: #syn_type
                     }
@@ -967,7 +1056,7 @@ fn build_function(
         .return_type
         .as_ref()
         .map(|type_ref| -> Result<proc_macro2::TokenStream> {
-            let syn_type = sa_type_to_syn_type(type_ref, prefix)?;
+            let syn_type = sa_type_to_syn_type(type_ref, prefix, Some(module_paths))?;
             Ok(quote! { -> #syn_type })
         })
         .transpose()?;
@@ -1041,10 +1130,11 @@ fn build_function(
 fn build_extern_value(
     ev: &ExternValue,
     prefix: Option<&ItemPath>,
+    module_paths: &BTreeSet<ItemPath>,
 ) -> Result<proc_macro2::TokenStream> {
     let visibility = visibility_to_tokens(ev.visibility);
     let function_ident = quote::format_ident!("get_{}", ev.name);
-    let type_ = sa_type_to_syn_type(&ev.type_, prefix)?;
+    let type_ = sa_type_to_syn_type(&ev.type_, prefix, Some(module_paths))?;
     let address = hex_literal(ev.address);
 
     Ok(quote! {
@@ -1068,16 +1158,32 @@ fn is_plain_ident(s: &str) -> bool {
         && chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
 
-/// Extract the type name from an ItemPath, returning an error if the path is empty.
-fn get_type_name<'a>(
-    path: &'a ItemPath,
-    location: &ItemLocation,
-) -> Result<&'a crate::grammar::ItemPathSegment> {
-    path.last().ok_or_else(|| BackendError::TypeCodeGenFailed {
-        type_path: path.clone(),
-        kind: crate::backends::error::TypeCodeGenFailedKind::EmptyItemPath,
-        location: *location,
-    })
+/// Flatten a nested item path to a Rust-safe identifier by joining type-nesting
+/// segments with `_`. Module segments are identified by matching against known
+/// module paths; everything after the module prefix is a type segment.
+///
+/// For `module::Outer`: returns `"Outer"` (same as before).
+/// For `module::Outer::Inner`: returns `"Outer_Inner"`.
+/// For `module::Outer::Inner::DeeplyNested`: returns `"Outer_Inner_DeeplyNested"`.
+fn flatten_type_name(path: &ItemPath, module_paths: &BTreeSet<ItemPath>) -> String {
+    let module_len = find_module_prefix_len(path, module_paths);
+    path.iter()
+        .skip(module_len)
+        .map(|s| s.as_str())
+        .collect::<Vec<_>>()
+        .join("_")
+}
+
+/// Find the length of the longest module path prefix of `path`.
+fn find_module_prefix_len(path: &ItemPath, module_paths: &BTreeSet<ItemPath>) -> usize {
+    let mut module_len = 0;
+    for i in 1..=path.len() {
+        let prefix: ItemPath = path.iter().take(i).cloned().collect();
+        if module_paths.contains(&prefix) {
+            module_len = i;
+        }
+    }
+    module_len
 }
 
 /// Generate a compile-time size check function for a type.
@@ -1131,6 +1237,7 @@ fn fully_qualified_type_ref_impl(
     out: &mut String,
     type_ref: &Type,
     prefix: Option<&ItemPath>,
+    module_paths: Option<&BTreeSet<ItemPath>>,
 ) -> std::result::Result<(), std::fmt::Error> {
     use std::fmt::Write;
 
@@ -1201,7 +1308,24 @@ fn fully_qualified_type_ref_impl(
             if path.len() > 1 {
                 write_crate_qualifier(out, prefix)?;
             }
-            write!(out, "{path}")
+            // For nested items, flatten type-nesting segments with `_`.
+            if let Some(mp) = module_paths {
+                let flat = flatten_type_name(path, mp);
+                if path.len() > 1 {
+                    // Render the module prefix with `::` and the flattened type name
+                    let module_len = find_module_prefix_len(path, mp);
+                    let module_part: Vec<&str> =
+                        path.iter().take(module_len).map(|s| s.as_str()).collect();
+                    if !module_part.is_empty() {
+                        write!(out, "{}::", module_part.join("::"))?;
+                    }
+                    write!(out, "{flat}")
+                } else {
+                    write!(out, "{flat}")
+                }
+            } else {
+                write!(out, "{path}")
+            }
         }
         Type::Generic(base_path, args) => {
             // Generate Rust generic syntax: `Base<Arg1, Arg2>`
@@ -1213,7 +1337,7 @@ fn fully_qualified_type_ref_impl(
                 if i > 0 {
                     write!(out, ", ")?;
                 }
-                fully_qualified_type_ref_impl(out, arg, prefix)?;
+                fully_qualified_type_ref_impl(out, arg, prefix, module_paths)?;
             }
             write!(out, ">")
         }
@@ -1223,28 +1347,28 @@ fn fully_qualified_type_ref_impl(
         }
         Type::ConstPointer(tr) => {
             write!(out, "*const ")?;
-            fully_qualified_type_ref_impl(out, tr.as_ref(), prefix)
+            fully_qualified_type_ref_impl(out, tr.as_ref(), prefix, module_paths)
         }
         Type::MutPointer(tr) => {
             write!(out, "*mut ")?;
-            fully_qualified_type_ref_impl(out, tr.as_ref(), prefix)
+            fully_qualified_type_ref_impl(out, tr.as_ref(), prefix, module_paths)
         }
         Type::Array(tr, size) => {
             write!(out, "[")?;
-            fully_qualified_type_ref_impl(out, tr.as_ref(), prefix)?;
+            fully_qualified_type_ref_impl(out, tr.as_ref(), prefix, module_paths)?;
             write!(out, "; {size}]")
         }
         Type::Function(calling_convention, args, return_type) => {
             write!(out, r#"unsafe extern "{calling_convention}" fn ("#)?;
             for (field, type_ref) in args.iter() {
                 write!(out, "{field}: ")?;
-                fully_qualified_type_ref_impl(out, type_ref, prefix)?;
+                fully_qualified_type_ref_impl(out, type_ref, prefix, module_paths)?;
                 write!(out, ", ")?;
             }
             write!(out, ")")?;
             if let Some(type_ref) = return_type {
                 write!(out, " -> ")?;
-                fully_qualified_type_ref_impl(out, type_ref, prefix)?;
+                fully_qualified_type_ref_impl(out, type_ref, prefix, module_paths)?;
             }
             Ok(())
         }
@@ -1254,15 +1378,22 @@ fn fully_qualified_type_ref_impl(
 fn fully_qualified_type_ref(
     type_ref: &Type,
     prefix: Option<&ItemPath>,
+    module_paths: Option<&BTreeSet<ItemPath>>,
 ) -> std::result::Result<String, std::fmt::Error> {
     let mut out = String::new();
-    fully_qualified_type_ref_impl(&mut out, type_ref, prefix)?;
+    fully_qualified_type_ref_impl(&mut out, type_ref, prefix, module_paths)?;
     Ok(out)
 }
 
-fn sa_type_to_syn_type(type_ref: &Type, prefix: Option<&ItemPath>) -> Result<syn::Type> {
+fn sa_type_to_syn_type(
+    type_ref: &Type,
+    prefix: Option<&ItemPath>,
+    module_paths: Option<&BTreeSet<ItemPath>>,
+) -> Result<syn::Type> {
     Ok(syn::parse_str(&fully_qualified_type_ref(
-        type_ref, prefix,
+        type_ref,
+        prefix,
+        module_paths,
     )?)?)
 }
 

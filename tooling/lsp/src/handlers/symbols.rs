@@ -5,7 +5,7 @@ impl ServerState {
     /// reference, a `use` leaf, or a definition's own name. The anchor for
     /// find-references / document-highlight / rename.
     pub(crate) fn symbol_at(&self, uri: &Uri, loc: &Location) -> Option<Symbol> {
-        use pyxis::grammar::{ImplItem, ItemDefinitionInner};
+        use pyxis::grammar::{ImplItem, ItemDefinitionInner, ItemPathSegment};
         let AnalysisCtx {
             module,
             scope,
@@ -80,11 +80,17 @@ impl ServerState {
                         if let ImplItem::Function(f) = impl_item
                             && on_name(&f.location.span.start, f.name.as_str())
                         {
-                            let owner = resolve_type_path(
-                                &ItemPath::from(impl_block.name.as_str()),
-                                &scope,
-                                decl_registry,
-                            )?;
+                            // For qualified impl names (impl Outer::Inner),
+                            // build the full path from name + name_path segments.
+                            let impl_path = if let Some(np) = &impl_block.name_path {
+                                let mut segs: Vec<ItemPathSegment> =
+                                    vec![impl_block.name.as_str().into()];
+                                segs.extend(np.iter().cloned());
+                                segs.into_iter().collect()
+                            } else {
+                                ItemPath::from(impl_block.name.as_str())
+                            };
+                            let owner = resolve_type_path(&impl_path, &scope, decl_registry)?;
                             return Some(Symbol::Member {
                                 owner,
                                 name: f.name.as_str().to_string(),
