@@ -114,6 +114,7 @@ pub mod generics_cross_module;
 pub mod math;
 pub mod min_size;
 pub mod multiple_levels;
+pub mod nested_items;
 pub mod pinned;
 pub mod self_referential_generics;
 pub mod singleton;

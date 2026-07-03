@@ -34,6 +34,8 @@ pub struct DeclarationRegistry {
     extern_types: BTreeMap<ItemPath, ExternTypeInfo>,
     /// Predefined types (u8, u32, etc.)
     predefined: BTreeMap<ItemPath, PredefinedInfo>,
+    /// Item path → declaring module path (for nested items whose parent is a type, not a module).
+    item_scopes: BTreeMap<ItemPath, ItemPath>,
     /// Pointer size from project config (4 or 8)
     pointer_size: usize,
 }
@@ -102,6 +104,17 @@ impl DeclarationRegistry {
         for def in module.definitions() {
             let item_path = module_path.join(def.name.as_str().into());
             self.items.insert(item_path.clone(), def.clone());
+
+            // Recurse into type bodies to find nested items.
+            if let grammar::ItemDefinitionInner::Type(td) = &def.inner {
+                for stmt in td.statements() {
+                    if let grammar::TypeField::Item(inner) = &stmt.field {
+                        let nested_path = item_path.join(inner.name.as_str().into());
+                        self.items.insert(nested_path.clone(), (**inner).clone());
+                        self.item_scopes.insert(nested_path, module_path.clone());
+                    }
+                }
+            }
         }
 
         // Register extern types
@@ -180,7 +193,16 @@ impl DeclarationRegistry {
     }
 
     /// Get the module scope for an item path (for name resolution).
+    /// For nested items (whose parent is a type, not a module), the scope is
+    /// looked up via `item_scopes` which maps to the declaring module.
     pub fn get_scope(&self, item_path: &ItemPath) -> Option<&[ItemPath]> {
+        // Check item_scopes first (for nested items whose parent is a type)
+        if let Some(declaring_module) = self.item_scopes.get(item_path) {
+            return self
+                .modules
+                .get(declaring_module)
+                .map(|m| m.scope.as_slice());
+        }
         let parent = item_path.parent()?;
         self.modules.get(&parent).map(|m| m.scope.as_slice())
     }
@@ -221,6 +243,21 @@ impl DeclarationRegistry {
     /// Get all extern types as an iterator.
     pub fn extern_types_iter(&self) -> impl Iterator<Item = (&ItemPath, &ExternTypeInfo)> {
         self.extern_types.iter()
+    }
+
+    /// Get the declaring module path for an item path.
+    /// For top-level items, this is the parent. For nested items, it's stored
+    /// in `item_scopes`.
+    pub fn declaring_module(&self, item_path: &ItemPath) -> Option<&ItemPath> {
+        if let Some(dm) = self.item_scopes.get(item_path) {
+            return Some(dm);
+        }
+        let parent = item_path.parent()?;
+        if self.modules.contains_key(&parent) {
+            Some(self.modules.get_key_value(&parent)?.0)
+        } else {
+            None
+        }
     }
 
     /// Get all declared item paths.

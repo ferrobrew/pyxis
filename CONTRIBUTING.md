@@ -99,6 +99,17 @@ configured in `rustfmt.toml`), so check it with nightly:
 cargo +nightly fmt --all -- --check
 ```
 
+The codegen test Rust output should also pass `cargo doc` without warnings
+(doc link references must resolve to real items):
+
+```sh
+cargo doc --no-deps -p codegen_tests
+```
+
+If you see "unresolved link" warnings, the generated doc comments contain
+references that don't match any Rust item — usually because a doc link
+path needs to be wrapped in backticks or a type name was changed.
+
 ## Editor tooling
 
 Pyxis ships a tree-sitter grammar, a Zed extension, and a language

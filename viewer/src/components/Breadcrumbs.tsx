@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { buildModuleUrl, buildRootUrl } from '../utils/navigation';
+import { buildModuleUrl, buildItemUrl, buildRootUrl } from '../utils/navigation';
 import { useDocumentation } from '../contexts/DocumentationContext';
 import type { ItemType } from '../utils/colors';
 
@@ -18,10 +18,10 @@ function Separator() {
 }
 
 export function Breadcrumbs({ path }: BreadcrumbsProps) {
-  const { selectedSource } = useDocumentation();
+  const { documentation, selectedSource } = useDocumentation();
 
   // The current item/module is the page heading, so the trail shows only its
-  // module ancestors — the last path segment is always dropped.
+  // ancestors — the last path segment is always dropped.
   const segments = path ? path.split('::') : [];
   const crumbs = segments.slice(0, -1);
 
@@ -39,10 +39,15 @@ export function Breadcrumbs({ path }: BreadcrumbsProps) {
     <nav className="flex items-center text-sm text-fg-muted">
       {crumbs.map((segment, idx) => {
         const partialPath = crumbs.slice(0, idx + 1).join('::');
+        // Check if this segment is a module or an item (nested type)
+        const isItem = documentation?.items[partialPath] !== undefined;
+        const url = isItem
+          ? buildItemUrl(partialPath, selectedSource)
+          : buildModuleUrl(partialPath, selectedSource);
         return (
           <span key={partialPath} className="flex items-center">
             {idx > 0 && <Separator />}
-            <Link to={buildModuleUrl(partialPath, selectedSource)} className="hover:text-accent">
+            <Link to={url} className="hover:text-accent">
               {segment}
             </Link>
           </span>

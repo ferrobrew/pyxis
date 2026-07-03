@@ -21,6 +21,7 @@ use crate::{
             Visibility,
         },
     },
+    span::ItemLocation,
 };
 
 /// Bundle of state every render call needs: the module being rendered (for
@@ -247,6 +248,75 @@ fn render_struct(
         writeln!(body, "    {name}({name}&&) = delete;")?;
         writeln!(body, "    {name}& operator=(const {name}&) = delete;")?;
         writeln!(body, "    {name}& operator=({name}&&) = delete;")?;
+    }
+
+    // Nested item declarations (enums, types, bitflags, type aliases)
+    // are rendered inside the struct body.
+    if !td.nested_item_paths.is_empty() {
+        for nested_path in &td.nested_item_paths {
+            if let Ok(nested_item) = ctx.registry.get(nested_path, &ItemLocation::internal()) {
+                if let Some(nested_resolved) = nested_item.resolved() {
+                    // Add blank line before nested item if body has content
+                    if !body.trim().is_empty() {
+                        writeln!(body)?;
+                    }
+                    let nested_name = nested_path
+                        .last()
+                        .map(|s| s.as_str().to_string())
+                        .unwrap_or_default();
+                    let nested_name = cpp_ident(&nested_name);
+                    match &nested_resolved.inner {
+                        ItemDefinitionInner::Type(nested_td) => {
+                            render_doc(&mut body, &nested_td.doc, 1)?;
+                            writeln!(body, "    struct {nested_name} {{")?;
+                            for region in &nested_td.regions {
+                                render_field_indented(&mut body, region, ctx, false, 2)?;
+                            }
+                            writeln!(body, "    }};")?;
+                        }
+                        ItemDefinitionInner::Enum(nested_ed) => {
+                            render_doc(&mut body, &nested_ed.doc, 1)?;
+                            writeln!(
+                                body,
+                                "    enum class {nested_name} : {} {{",
+                                render_type(&nested_ed.type_, ctx)?
+                            )?;
+                            for variant in &nested_ed.variants {
+                                writeln!(
+                                    body,
+                                    "        {} = {},",
+                                    cpp_ident(&variant.name),
+                                    variant.value
+                                )?;
+                            }
+                            writeln!(body, "    }};")?;
+                        }
+                        ItemDefinitionInner::Bitflags(nested_bd) => {
+                            render_doc(&mut body, &nested_bd.doc, 1)?;
+                            writeln!(body, "    struct {nested_name} {{")?;
+                            let bf_type = render_type(&nested_bd.type_, ctx)?;
+                            for flag in &nested_bd.flags {
+                                writeln!(
+                                    body,
+                                    "        static constexpr {bf_type} {} = {};",
+                                    cpp_ident(&flag.name),
+                                    flag.value
+                                )?;
+                            }
+                            writeln!(body, "    }};")?;
+                        }
+                        ItemDefinitionInner::TypeAlias(nested_ta) => {
+                            render_doc(&mut body, &nested_ta.doc, 1)?;
+                            writeln!(
+                                body,
+                                "    using {nested_name} = {};",
+                                render_type(&nested_ta.target, ctx)?
+                            )?;
+                        }
+                    }
+                }
+            }
+        }
     }
 
     if body.trim().is_empty() {
@@ -582,10 +652,21 @@ fn render_field(
     ctx: RenderCtx,
     rewrite_self_arg_to_void_ptr: bool,
 ) -> Result<()> {
-    render_doc(out, &region.doc, 1)?;
+    render_field_indented(out, region, ctx, rewrite_self_arg_to_void_ptr, 1)
+}
+
+fn render_field_indented(
+    out: &mut String,
+    region: &Region,
+    ctx: RenderCtx,
+    rewrite_self_arg_to_void_ptr: bool,
+    indent: usize,
+) -> Result<()> {
+    let pad = " ".repeat(indent * 4);
+    render_doc(out, &region.doc, indent)?;
     let Some(field_name) = region.name.as_deref() else {
         // Should not happen post-resolution, but be defensive.
-        writeln!(out, "    // <unnamed region skipped>")?;
+        writeln!(out, "{pad}// <unnamed region skipped>")?;
         return Ok(());
     };
     let field_name = cpp_ident(field_name);
@@ -594,7 +675,7 @@ fn render_field(
     match &region.type_ref {
         Type::Array(inner, n) => {
             let inner_text = render_type(inner, ctx)?;
-            writeln!(out, "    {inner_text} {field_name}[{n}];")?;
+            writeln!(out, "{pad}{inner_text} {field_name}[{n}];")?;
         }
         Type::Function(cc, args, ret) => {
             let decl = render_function_pointer_decl(
@@ -605,11 +686,11 @@ fn render_field(
                 ctx,
                 rewrite_self_arg_to_void_ptr,
             )?;
-            writeln!(out, "    {decl};")?;
+            writeln!(out, "{pad}{decl};")?;
         }
         _ => {
             let ty_text = render_type(&region.type_ref, ctx)?;
-            writeln!(out, "    {ty_text} {field_name};")?;
+            writeln!(out, "{pad}{ty_text} {field_name};")?;
         }
     }
     Ok(())

@@ -9,13 +9,13 @@ pub type Entity {
     pub flags: u32,
 }
 
-/// Uses Shared<T> from another module with a local type
+/// Uses `Shared<T>` from another module with a local type
 #[size(0x8)]
 pub type SharedEntity {
     pub shared: Shared<Entity>,
 }
 
-/// Uses WeakPtr<T> from another module
+/// Uses `WeakPtr<T>` from another module
 #[size(0x8)]
 pub type WeakEntity {
     pub weak: WeakPtr<Entity>,

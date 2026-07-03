@@ -185,6 +185,11 @@ fn render_module_body<'a>(
     let raw_items: Vec<_> = module
         .definitions(registry)
         .filter(|item| ctx.cfg_passes(&item.cfg))
+        .filter(|item| {
+            // Skip nested items (whose parent is a type, not a module).
+            // They are rendered inside their parent type's struct body.
+            item.path.parent().is_some_and(|parent| &parent == key)
+        })
         .collect();
     let sorted_items = deps::topo_sort_module_items(key, raw_items, registry, bindings)?;
     for item in sorted_items {
@@ -263,9 +268,18 @@ fn intra_module_forward_decls(
     ctx: render::RenderCtx,
 ) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
+    let module_path = &module.path;
     for item in module.definitions(registry) {
         if item.is_predefined()
             || matches!(item.category, crate::semantic::types::ItemCategory::Extern)
+        {
+            continue;
+        }
+        // Skip nested items — their parent is a type, not this module.
+        if item
+            .path
+            .parent()
+            .is_some_and(|parent| &parent != module_path)
         {
             continue;
         }

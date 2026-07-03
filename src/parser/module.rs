@@ -228,7 +228,7 @@ impl Module {
 impl Parser {
     /// Skip over attributes during lookahead, returning the position after all attributes.
     /// Uses safe token access that won't panic on out-of-bounds.
-    fn skip_attributes_lookahead(&self, start_pos: usize) -> usize {
+    pub(crate) fn skip_attributes_lookahead(&self, start_pos: usize) -> usize {
         let mut pos = start_pos;
 
         // Skip past attributes
@@ -262,7 +262,7 @@ impl Parser {
     }
 
     /// Get the token kind at a position, returning None if out of bounds.
-    fn peek_at(&self, pos: usize) -> Option<&TokenKind> {
+    pub(crate) fn peek_at(&self, pos: usize) -> Option<&TokenKind> {
         self.tokens.get(pos).map(|t| &t.kind)
     }
 

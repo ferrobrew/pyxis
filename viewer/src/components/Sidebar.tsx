@@ -249,7 +249,8 @@ function ItemTree({ itemPath }: ItemTreeProps) {
     publicVirtualFunctions.length > 0 ||
     publicAssociatedFunctions.length > 0 ||
     variants.length > 0 ||
-    flags.length > 0;
+    flags.length > 0 ||
+    (item.kind.type === 'type' && item.kind.nested_items && item.kind.nested_items.length > 0);
 
   const handleItemClick = () => {
     if (hasMembers) {
@@ -339,6 +340,10 @@ function ItemTree({ itemPath }: ItemTreeProps) {
               active={activeAnchor === `flag-${flag.name}`}
               activeRef={memberRef}
             />
+          ))}
+
+          {item.kind.type === 'type' && item.kind.nested_items && item.kind.nested_items.map((nestedPath) => (
+            <ItemTree key={`nested-${nestedPath}`} itemPath={nestedPath} />
           ))}
         </TreeChildren>
       )}

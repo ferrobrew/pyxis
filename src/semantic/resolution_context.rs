@@ -39,12 +39,19 @@ impl<'a> ResolutionContext<'a> {
         path: &ItemPath,
         from_location: &ItemLocation,
     ) -> Result<&Module> {
-        path.parent()
-            .and_then(|parent| self.modules.get(&parent))
-            .ok_or_else(|| SemanticError::ModuleNotFound {
-                path: path.clone(),
-                location: *from_location,
-            })
+        // For top-level items, parent is the module path.
+        // For nested items, walk up ancestors until we find a module.
+        let mut current = path.parent();
+        while let Some(parent) = current {
+            if let Some(module) = self.modules.get(&parent) {
+                return Ok(module);
+            }
+            current = parent.parent();
+        }
+        Err(SemanticError::ModuleNotFound {
+            path: path.clone(),
+            location: *from_location,
+        })
     }
 
     pub fn add_item(&mut self, item_definition: ItemDefinition) -> Result<()> {
@@ -90,12 +97,19 @@ impl<'a> ResolutionContextRef<'a> {
         path: &ItemPath,
         from_location: &ItemLocation,
     ) -> Result<&Module> {
-        path.parent()
-            .and_then(|parent| self.modules.get(&parent))
-            .ok_or_else(|| SemanticError::ModuleNotFound {
-                path: path.clone(),
-                location: *from_location,
-            })
+        // For top-level items, parent is the module path.
+        // For nested items, walk up ancestors until we find a module.
+        let mut current = path.parent();
+        while let Some(parent) = current {
+            if let Some(module) = self.modules.get(&parent) {
+                return Ok(module);
+            }
+            current = parent.parent();
+        }
+        Err(SemanticError::ModuleNotFound {
+            path: path.clone(),
+            location: *from_location,
+        })
     }
 
     pub fn type_registry(&self) -> &TypeRegistry {

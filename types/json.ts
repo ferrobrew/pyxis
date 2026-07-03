@@ -516,7 +516,11 @@ packed: boolean;
 /**
  * Whether the type is pinned (non-relocatable)
  */
-pinned: boolean };
+pinned: boolean; 
+/**
+ * Item paths of nested items declared inside this type body
+ */
+nested_items?: string[] };
 
 export type JsonTypeVftable = { 
 /**

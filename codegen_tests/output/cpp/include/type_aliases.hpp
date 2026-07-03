@@ -77,6 +77,6 @@ namespace type_aliases {
     /// Concrete alias to Entry<u32, Vector3>
     using VecEntry = ::generics::MapEntry<::std::uint32_t, ::math::Vector3>;
 
-    /// Concrete alias to SharedPtr<Vector3>
+    /// Concrete alias to `SharedPtr<Vector3>`
     using VecSharedPtr = ::generics::Shared<::math::Vector3>*;
 } // namespace type_aliases

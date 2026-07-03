@@ -82,6 +82,8 @@ pub struct TypeDefinition {
     pub defaultable: bool,
     pub packed: bool,
     pub pinned: bool,
+    /// Item paths of items declared inside this type body (nested items).
+    pub nested_item_paths: Vec<ItemPath>,
 }
 #[cfg(test)]
 impl TypeDefinition {
@@ -129,6 +131,10 @@ impl TypeDefinition {
     }
     pub fn with_pinned(mut self, pinned: bool) -> Self {
         self.pinned = pinned;
+        self
+    }
+    pub fn with_nested_item_paths(mut self, paths: impl IntoIterator<Item = ItemPath>) -> Self {
+        self.nested_item_paths = paths.into_iter().collect();
         self
     }
 }
@@ -236,6 +242,7 @@ pub fn build(
     // Handle fields
     let mut pending_regions: Vec<(Option<usize>, Region)> = vec![];
     let mut vftable_functions = None;
+    let mut nested_item_paths: Vec<ItemPath> = Vec::new();
     for (idx, statement) in definition.statements().enumerate() {
         let grammar::TypeStatement {
             field,
@@ -273,8 +280,14 @@ pub fn build(
                 }
 
                 // Push field - use type parameters for resolution inside generic types
+                // Extend the module scope with the parent type's path so bare
+                // references to nested items (e.g. `MyEnum` inside `Outer`)
+                // resolve to `Outer::MyEnum`.
+                let type_body_scope: Vec<ItemPath> = std::iter::once(resolvee_path.clone())
+                    .chain(module.scope())
+                    .collect();
                 let type_ = match semantic.type_registry.resolve_grammar_type(
-                    &module.scope(),
+                    &type_body_scope,
                     type_,
                     type_parameters,
                 ) {
@@ -361,6 +374,13 @@ pub fn build(
                     Some(funcs) => Some(funcs),
                     None => return Ok(BuildOutcome::Deferred),
                 };
+            }
+            grammar::TypeField::Item(inner_def) => {
+                // Compute the nested item's path as Parent::Child
+                let nested_path = resolvee_path.join(inner_def.name.as_str().into());
+                nested_item_paths.push(nested_path);
+                // Nested items are registered by name_index/declaration_registry (Phase 3),
+                // not during build. We only collect the paths here.
             }
         }
     }
@@ -626,6 +646,7 @@ pub fn build(
             defaultable,
             packed,
             pinned,
+            nested_item_paths,
         }
         .into(),
     }))

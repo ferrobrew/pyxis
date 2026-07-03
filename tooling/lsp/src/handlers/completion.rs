@@ -99,8 +99,9 @@ impl ServerState {
         }
 
         // Same-module types — usable without an import.
+        // Include nested items whose declaring module is this module.
         for path in decl_registry.item_paths() {
-            if path.parent().as_ref() == own_module.as_ref()
+            if decl_registry.declaring_module(path) == own_module.as_ref()
                 && let Some(leaf) = path.last()
                 && in_scope_names.insert(leaf.as_str().to_string())
             {
@@ -113,7 +114,7 @@ impl ServerState {
         for path in decl_registry.item_paths() {
             let Some(leaf) = path.last() else { continue };
             let name = leaf.as_str();
-            if path.parent().as_ref() == own_module.as_ref()
+            if decl_registry.declaring_module(path) == own_module.as_ref()
                 || scope.iter().any(|s| s == path)
                 || in_scope_names.contains(name)
             {

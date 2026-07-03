@@ -265,13 +265,20 @@ pub fn analyze<'db>(
         }
     }
 
-    // Assign definition_paths to each module. Items are assigned to the
-    // module whose path is their parent. This includes predefined types
-    // (whose parent is the root module) and generated items (vftables).
+    // Assign definition_paths to each module. Items are assigned to their
+    // declaring module (the module that contains them). For top-level items
+    // this is the parent; for nested items (parent is a type, not a module),
+    // the declaring module is found via `decl_registry.declaring_module`.
+    // This includes predefined types (whose parent is the root module) and
+    // generated items (vftables).
     for (module_path, module) in modules.iter_mut() {
         module.definition_paths = definition_paths
             .iter()
-            .filter(|p| p.parent().is_some_and(|parent| &parent == module_path))
+            .filter(|p| {
+                decl_registry
+                    .declaring_module(p)
+                    .is_some_and(|dm| dm == module_path)
+            })
             .cloned()
             .collect();
     }
@@ -330,7 +337,11 @@ pub fn analyze<'db>(
     for (module_path, module) in modules.iter_mut() {
         module.definition_paths = definition_paths
             .iter()
-            .filter(|p| p.parent().is_some_and(|parent| &parent == module_path))
+            .filter(|p| {
+                decl_registry
+                    .declaring_module(p)
+                    .is_some_and(|dm| dm == module_path)
+            })
             .cloned()
             .collect();
     }

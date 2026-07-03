@@ -36,11 +36,42 @@ pub(super) fn grammar_def_for<'db>(
         .file_of(path)
         .and_then(|i| sources.sources(db).get(i).copied())?;
     let module_path = ItemPath::from_path(std::path::Path::new(source.path(db).as_str()));
-    parse_file(db, source)
-        .module(db)
+    find_grammar_def(parse_file(db, source).module(db), &module_path, path)
+}
+
+/// Find a grammar definition in a module by path. Handles both top-level items
+/// and nested items (declared inside `type` bodies). Recurses through type
+/// nesting: `A::B::C` finds `A` at top level, then `B` inside `A`'s body, then
+/// `C` inside `B`'s body.
+fn find_grammar_def(
+    module: &grammar::Module,
+    module_path: &ItemPath,
+    target_path: &ItemPath,
+) -> Option<grammar::ItemDefinition> {
+    // 1. Try top-level match
+    if let Some(def) = module
         .definitions()
-        .find(|d| module_path.join(d.name.as_str().into()) == *path)
-        .cloned()
+        .find(|d| module_path.join(d.name.as_str().into()) == *target_path)
+    {
+        return Some(def.clone());
+    }
+
+    // 2. Nested-item search: find the parent type's definition, then walk its
+    //    body for a TypeField::Item whose name matches target_path.last().
+    let parent_path = target_path.parent()?;
+    let parent_def = find_grammar_def(module, module_path, &parent_path)?;
+    if let grammar::ItemDefinitionInner::Type(td) = &parent_def.inner {
+        let leaf = target_path.last()?;
+        for stmt in td.statements() {
+            if let grammar::TypeField::Item(inner) = &stmt.field {
+                if inner.name.as_str() == leaf.as_str() {
+                    return Some((**inner).clone());
+                }
+            }
+        }
+    }
+
+    None
 }
 
 /// Resolve a single item — the incremental core.
@@ -113,11 +144,7 @@ pub fn resolve_item<'db>(
     let module_ast = parsed.module(db);
     let path_str = source.path(db);
     let module_path = ItemPath::from_path(std::path::Path::new(path_str.as_str()));
-    let Some(definition) = module_ast
-        .definitions()
-        .find(|d| module_path.join(d.name.as_str().into()) == item_path)
-        .cloned()
-    else {
+    let Some(definition) = find_grammar_def(module_ast, &module_path, &item_path) else {
         return unresolved(db);
     };
 

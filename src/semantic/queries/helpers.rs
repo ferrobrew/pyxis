@@ -268,6 +268,11 @@ pub(super) fn value_referenced_types(
                             }
                         }
                     }
+                    TypeField::Item(inner_def) => {
+                        // Collect value refs from nested item definitions recursively
+                        let nested_refs = value_referenced_types(inner_def, scope, index);
+                        refs.extend(nested_refs);
+                    }
                 }
             }
         }
