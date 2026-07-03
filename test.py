@@ -55,6 +55,10 @@ def main():
     # Run fmt check (nightly — rustfmt.toml uses the unstable imports_granularity)
     run_command(["cargo", "+nightly", "fmt", "--all", "--", "--check"])
 
+    # Run cargo doc on codegen_tests (catches unresolved doc link references
+    # in generated Rust output)
+    run_command(["cargo", "doc", "--no-deps", "-p", "codegen_tests"])
+
     print(f"\n{'=' * 60}")
     print("All checks passed!")
     print(f"{'=' * 60}\n")

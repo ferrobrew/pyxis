@@ -87,8 +87,10 @@ python test.py
 ```
 
 runs the full test suite: clippy, fmt, the parser/semantic unit tests,
-and `cargo run --example codegen_tests`, which emits the test corpus
-through every backend and rebuilds the emitted output. The cpp test
+`cargo run --example codegen_tests` (which emits the test corpus
+through every backend and rebuilds the emitted output), and
+`cargo doc --no-deps -p codegen_tests` (which catches unresolved doc
+link references in the generated Rust output). The cpp test
 corpus uses a regular host C++17 compiler (no MSVC ABI required) so
 CI doesn't need xwin.
 
@@ -98,17 +100,6 @@ configured in `rustfmt.toml`), so check it with nightly:
 ```sh
 cargo +nightly fmt --all -- --check
 ```
-
-The codegen test Rust output should also pass `cargo doc` without warnings
-(doc link references must resolve to real items):
-
-```sh
-cargo doc --no-deps -p codegen_tests
-```
-
-If you see "unresolved link" warnings, the generated doc comments contain
-references that don't match any Rust item — usually because a doc link
-path needs to be wrapped in backticks or a type name was changed.
 
 ## Editor tooling
 
