@@ -226,6 +226,8 @@ function ItemTree({ itemPath }: ItemTreeProps) {
   } else if (item.kind.type === 'bitflags') {
     Icon = BitflagsIcon;
     itemType = 'bitflags';
+  } else if (item.kind.type === 'constant') {
+    itemType = 'constant';
   }
 
   // Get public members for this item
@@ -250,7 +252,9 @@ function ItemTree({ itemPath }: ItemTreeProps) {
     publicAssociatedFunctions.length > 0 ||
     variants.length > 0 ||
     flags.length > 0 ||
-    (item.kind.type === 'type' && item.kind.nested_items && item.kind.nested_items.length > 0);
+    (item.kind.type === 'type' && (item.kind.nested_items ?? []).length > 0) ||
+    (item.kind.type === 'enum' && (item.kind.nested_items ?? []).length > 0) ||
+    (item.kind.type === 'bitflags' && (item.kind.nested_items ?? []).length > 0);
 
   const handleItemClick = () => {
     if (hasMembers) {
@@ -342,9 +346,10 @@ function ItemTree({ itemPath }: ItemTreeProps) {
             />
           ))}
 
-          {item.kind.type === 'type' && item.kind.nested_items && item.kind.nested_items.map((nestedPath) => (
-            <ItemTree key={`nested-${nestedPath}`} itemPath={nestedPath} />
-          ))}
+          {(item.kind.type === 'type' || item.kind.type === 'enum' || item.kind.type === 'bitflags') &&
+            (item.kind.nested_items ?? []).map((nestedPath) => (
+              <ItemTree key={`nested-${nestedPath}`} itemPath={nestedPath} />
+            ))}
         </TreeChildren>
       )}
     </div>

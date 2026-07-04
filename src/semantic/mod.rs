@@ -4,6 +4,7 @@ pub mod types;
 pub(crate) mod attribute;
 pub(crate) mod bitflags_definition;
 pub mod builder;
+pub(crate) mod const_definition;
 pub mod db;
 pub mod declaration_registry;
 pub mod doc_links;

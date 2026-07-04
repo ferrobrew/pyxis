@@ -412,7 +412,9 @@ impl Parser {
                                 .map(|definition| ModuleItem::Definition { definition }),
                         }
                     }
-                    Some(TokenKind::Type | TokenKind::Enum | TokenKind::Bitflags) => self
+                    Some(
+                        TokenKind::Type | TokenKind::Enum | TokenKind::Bitflags | TokenKind::Const,
+                    ) => self
                         .parse_item_definition()
                         .map(|definition| ModuleItem::Definition { definition }),
                     Some(TokenKind::Impl) => self
@@ -477,7 +479,7 @@ impl Parser {
                         .map(|definition| ModuleItem::Definition { definition })
                 }
             }
-            TokenKind::Type | TokenKind::Enum | TokenKind::Bitflags => self
+            TokenKind::Type | TokenKind::Enum | TokenKind::Bitflags | TokenKind::Const => self
                 .parse_item_definition()
                 .map(|definition| ModuleItem::Definition { definition }),
             TokenKind::Impl => self
@@ -955,14 +957,15 @@ impl PfxInstance {
 
     #[test]
     fn unexpected_keyword_at_module_level_errors() {
+        // `self` is a keyword that is not valid at module level.
         let text = r#"
-        const
+        self
         "#;
         let err = parse_str_for_tests(text).unwrap_err();
         assert_eq!(
             err.strip_locations(),
             ParseError::UnexpectedModuleToken {
-                found: TokenKind::Const,
+                found: TokenKind::SelfValue,
                 location: ItemLocation::test(),
             }
             .strip_locations()

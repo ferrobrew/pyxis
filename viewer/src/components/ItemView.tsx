@@ -23,6 +23,7 @@ import type {
   JsonBitflagsDefinition,
   JsonDocLink,
   JsonBackend,
+  JsonItem,
 } from '@pyxis/types';
 
 // Keyword shown in the signature header for each item kind, mirroring how the
@@ -32,6 +33,7 @@ const KIND_KEYWORD: Record<string, string> = {
   enum: 'enum',
   bitflags: 'bitflags',
   type_alias: 'type',
+  constant: 'const',
 };
 
 // Quiet, typographic doc block. Spacing is owned by the header group, so this
@@ -107,41 +109,98 @@ function FunctionList({ children }: { children: React.ReactNode }) {
 }
 
 // Type view component
+// Render an enum-value reference (e.g., `Color::Red`) as clickable links.
+// `Color` links to the enum type, `Red` is shown as the variant name.
+function EnumValueRef({ path, modulePath }: { path: string; modulePath: string }) {
+  const { selectedSource, documentation } = useDocumentation();
+  const segments = path.split('::');
+  if (segments.length < 2) {
+    return <span className="text-fg">{path}</span>;
+  }
+  const enumName = segments[0];
+  const variantName = segments.slice(1).join('::');
+
+  // Resolve the enum path relative to the current module
+  // Try: modulePath::enumName, parent::enumName, then just enumName
+  const candidatePaths = [
+    `${modulePath}::${enumName}`,
+    enumName,
+    modulePath.split('::').slice(0, -1).concat([enumName]).join('::'),
+  ];
+  const resolvedEnumPath = candidatePaths.find((p) => documentation?.items[p]);
+
+  return (
+    <span className="font-mono text-fg">
+      {resolvedEnumPath ? (
+        <Link
+          to={buildItemUrl(resolvedEnumPath, selectedSource)}
+          className="text-kind-module hover:underline"
+        >
+          {enumName}
+        </Link>
+      ) : (
+        <span>{enumName}</span>
+      )}
+      <span className="text-fg-muted">::</span>
+      {resolvedEnumPath ? (
+        <Link
+          to={`${buildItemUrl(resolvedEnumPath, selectedSource)}#variant-${variantName}`}
+          className="text-kind-enum-variant hover:underline"
+        >
+          {variantName}
+        </Link>
+      ) : (
+        <span>{variantName}</span>
+      )}
+    </span>
+  );
+}
+
+function NestedItemsList({ nestedItems }: { nestedItems: { path: string; item: JsonItem | undefined }[] }) {
+  const { selectedSource } = useDocumentation();
+  const validItems = nestedItems.filter((ni) => ni.item != null);
+
+  if (validItems.length === 0) return null;
+
+  return (
+    <div id="nested-items" className="mb-8">
+      <SectionHeader anchor="nested-items">Nested Items</SectionHeader>
+      <div className="overflow-hidden rounded-md border border-edge bg-surface">
+        {validItems.map(({ path, item }) => {
+          const name = path.split('::').pop() || path;
+          let itemType: ItemType = 'type';
+          if (item!.kind.type === 'enum') itemType = 'enum';
+          else if (item!.kind.type === 'bitflags') itemType = 'bitflags';
+          else if (item!.kind.type === 'type_alias') itemType = 'type_alias';
+          else if (item!.kind.type === 'constant') itemType = 'constant';
+          return (
+            <Link
+              key={path}
+              to={buildItemUrl(path, selectedSource)}
+              className="flex items-center gap-2 border-b border-edge px-4 py-2 text-sm last:border-b-0 hover:bg-accent-soft"
+            >
+              <span className={`${getItemTypeColor(itemType)}`}>{name}</span>
+              <span className="text-fg-subtle text-xs">{itemType}</span>
+            </Link>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function TypeView({ def, modulePath }: { def: JsonTypeDefinition; modulePath: string }) {
   const [fieldViewMode, setFieldViewMode] = useState<FieldViewMode>('flat');
-  const { documentation, selectedSource } = useDocumentation();
+  const { documentation } = useDocumentation();
 
   const nestedItems = (def.nested_items ?? []).map((path) => ({
     path,
     item: documentation?.items[path],
-  })).filter((ni) => ni.item != null);
+  }));
 
   return (
     <div>
-      {nestedItems.length > 0 && (
-        <div id="nested-items" className="mb-8">
-          <SectionHeader anchor="nested-items">Nested Items</SectionHeader>
-          <div className="overflow-hidden rounded-md border border-edge bg-surface">
-            {nestedItems.map(({ path, item }) => {
-              const name = path.split('::').pop() || path;
-              let itemType: ItemType = 'type';
-              if (item!.kind.type === 'enum') itemType = 'enum';
-              else if (item!.kind.type === 'bitflags') itemType = 'bitflags';
-              else if (item!.kind.type === 'type_alias') itemType = 'type_alias';
-              return (
-                <Link
-                  key={path}
-                  to={buildItemUrl(path, selectedSource)}
-                  className="flex items-center gap-2 border-b border-edge px-4 py-2 text-sm last:border-b-0 hover:bg-accent-soft"
-                >
-                  <span className={`${getItemTypeColor(itemType)}`}>{name}</span>
-                  <span className="text-fg-subtle text-xs">{itemType}</span>
-                </Link>
-              );
-            })}
-          </div>
-        </div>
-      )}
+      <NestedItemsList nestedItems={nestedItems} />
 
       {def.fields.length > 0 && (
         <div id="fields" className="mb-8">
@@ -199,8 +258,15 @@ function TypeView({ def, modulePath }: { def: JsonTypeDefinition; modulePath: st
 
 // Enum view component
 function EnumView({ def, modulePath }: { def: JsonEnumDefinition; modulePath: string }) {
+  const { documentation } = useDocumentation();
+  const nestedItems = (def.nested_items ?? []).map((path) => ({
+    path,
+    item: documentation?.items[path],
+  }));
+
   return (
     <div>
+      <NestedItemsList nestedItems={nestedItems} />
       <div id="variants" className="mb-8">
         <SectionHeader anchor="variants">Variants</SectionHeader>
         <Table>
@@ -262,8 +328,15 @@ function EnumView({ def, modulePath }: { def: JsonEnumDefinition; modulePath: st
 
 // Bitflags view component
 function BitflagsView({ def }: { def: JsonBitflagsDefinition }) {
+  const { documentation } = useDocumentation();
+  const nestedItems = (def.nested_items ?? []).map((path) => ({
+    path,
+    item: documentation?.items[path],
+  }));
+
   return (
     <div>
+      <NestedItemsList nestedItems={nestedItems} />
       <div id="flags" className="mb-8">
         <SectionHeader anchor="flags">Flags</SectionHeader>
         <Table>
@@ -381,6 +454,7 @@ export function ItemView() {
   if (item.kind.type === 'enum') itemType = 'enum';
   else if (item.kind.type === 'bitflags') itemType = 'bitflags';
   else if (item.kind.type === 'type_alias') itemType = 'type_alias';
+  else if (item.kind.type === 'constant') itemType = 'constant';
 
   const name = decodedPath.split('::').pop() || decodedPath;
   const isExtern = item.category === 'extern';
@@ -390,7 +464,9 @@ export function ItemView() {
   const underlying =
     item.kind.type === 'enum' || item.kind.type === 'bitflags' ? item.kind.underlying_type : null;
   const aliasTarget = item.kind.type === 'type_alias' ? item.kind.target : null;
-  const singleton = item.kind.type !== 'type_alias' ? item.kind.singleton : null;
+  const constValue = item.kind.type === 'constant' ? item.kind.value : null;
+  const constValueType = item.kind.type === 'constant' ? item.kind.value_type : null;
+  const singleton = item.kind.type !== 'type_alias' && item.kind.type !== 'constant' ? item.kind.singleton : null;
 
   const toc: TocEntry[] = [];
   const k = item.kind;
@@ -402,10 +478,12 @@ export function ItemView() {
     if (k.associated_functions.length > 0)
       toc.push({ id: 'associated-functions', label: 'Associated Functions' });
   } else if (k.type === 'enum') {
+    if ((k.nested_items ?? []).length > 0) toc.push({ id: 'nested-items', label: 'Nested Items' });
     toc.push({ id: 'variants', label: 'Variants' });
     if (k.associated_functions.length > 0)
       toc.push({ id: 'associated-functions', label: 'Associated Functions' });
   } else if (k.type === 'bitflags') {
+    if ((k.nested_items ?? []).length > 0) toc.push({ id: 'nested-items', label: 'Nested Items' });
     toc.push({ id: 'flags', label: 'Flags' });
   }
   if (hasBackendProvided) toc.push({ id: 'backend-provided', label: 'Backend-provided' });
@@ -440,6 +518,26 @@ export function ItemView() {
                   <>
                     <span className="text-fg-muted"> = </span>
                     <TypeRef type={aliasTarget} currentModule={modulePath} />
+                    <span className="text-fg-muted">;</span>
+                  </>
+                )}
+                {constValueType && (
+                  <>
+                    <span className="text-fg-muted">: </span>
+                    <TypeRef type={constValueType} currentModule={modulePath} />
+                    <span className="text-fg-muted"> = </span>
+                    {constValue?.kind === 'int' && (
+                      <span className="text-fg">{constValue.value}</span>
+                    )}
+                    {constValue?.kind === 'float' && (
+                      <span className="text-fg">{constValue.value}</span>
+                    )}
+                    {constValue?.kind === 'string' && (
+                      <span className="text-fg">"{constValue.value}"</span>
+                    )}
+                    {constValue?.kind === 'enum_value' && (
+                      <EnumValueRef path={constValue.path} modulePath={modulePath} />
+                    )}
                     <span className="text-fg-muted">;</span>
                   </>
                 )}

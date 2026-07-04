@@ -212,6 +212,7 @@ impl ServerState {
                 }),
             ),
             ItemDefinitionInner::TypeAlias(_) => None,
+            ItemDefinitionInner::Constant(_) => None,
         }
     }
 

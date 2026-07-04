@@ -134,9 +134,21 @@ impl PrettyPrinter {
                 self.writeln("");
             }
             ModuleItem::Definition { definition } => {
-                self.print_item_definition(definition);
-                // Don't add blank line if next item is an impl block
-                if !matches!(next_item, Some(ModuleItem::Impl { .. })) {
+                self.print_item_definition(definition, false);
+                // Add blank line after this item, unless the next item is
+                // another const (group consts together without blank lines)
+                // or an impl block.
+                let is_const = matches!(definition.inner, ItemDefinitionInner::Constant(_));
+                let next_is_const = matches!(
+                    next_item,
+                    Some(ModuleItem::Definition { definition }) if matches!(
+                        definition.inner,
+                        ItemDefinitionInner::Constant(_)
+                    )
+                );
+                if !(matches!(next_item, Some(ModuleItem::Impl { .. }))
+                    || (is_const && next_is_const))
+                {
                     self.writeln("");
                 }
             }
@@ -448,6 +460,12 @@ impl PrettyPrinter {
                 }
             }
             Expr::Ident { ident, .. } => write!(&mut self.output, "{ident}").unwrap(),
+            Expr::FloatLiteral { raw_text, .. } => {
+                write!(&mut self.output, "{raw_text}").unwrap();
+            }
+            Expr::Path { path, .. } => {
+                write!(&mut self.output, "{path}").unwrap();
+            }
         }
     }
 
@@ -656,7 +674,7 @@ impl PrettyPrinter {
         out
     }
 
-    fn print_item_definition(&mut self, def: &ItemDefinition) {
+    fn print_item_definition(&mut self, def: &ItemDefinition, nested: bool) {
         // Print doc comments (they already include the space after ///)
         for doc in &def.doc_comments {
             self.write_indent();
@@ -681,6 +699,7 @@ impl PrettyPrinter {
                 &bf.following_comments,
             ),
             ItemDefinitionInner::TypeAlias(ta) => (&ta.attributes, &Vec::new(), &Vec::new()),
+            ItemDefinitionInner::Constant(cd) => (&cd.attributes, &Vec::new(), &Vec::new()),
         };
 
         // Print attributes with inline trailing comments
@@ -741,18 +760,44 @@ impl PrettyPrinter {
                         }
                     }
 
-                    // Partition into nested-item groups and other groups
-                    let (nested_groups, other_groups): (Vec<_>, Vec<_>) = groups
+                    // Partition into three groups: constants, nested types, and other items
+                    let const_groups: Vec<_> = groups
                         .iter()
-                        .partition(|(_, item)| {
-                            matches!(
-                                item,
-                                TypeDefItem::Statement(stmt) if matches!(stmt.field, TypeField::Item(_))
-                            )
-                        });
+                        .filter(|(_, item)| {
+                            if let TypeDefItem::Statement(stmt) = item {
+                                if let TypeField::Item(inner) = &stmt.field {
+                                    return matches!(inner.inner, ItemDefinitionInner::Constant(_));
+                                }
+                            }
+                            false
+                        })
+                        .collect();
+                    let nested_type_groups: Vec<_> = groups
+                        .iter()
+                        .filter(|(_, item)| {
+                            if let TypeDefItem::Statement(stmt) = item {
+                                if let TypeField::Item(inner) = &stmt.field {
+                                    return !matches!(
+                                        inner.inner,
+                                        ItemDefinitionInner::Constant(_)
+                                    );
+                                }
+                            }
+                            false
+                        })
+                        .collect();
+                    let other_groups: Vec<_> = groups
+                        .iter()
+                        .filter(|(_, item)| {
+                            if let TypeDefItem::Statement(stmt) = item {
+                                return !matches!(stmt.field, TypeField::Item(_));
+                            }
+                            true
+                        })
+                        .collect();
 
-                    // Emit nested items first
-                    for (comments, item) in &nested_groups {
+                    // Emit constants first (no blank lines between them)
+                    for (comments, item) in &const_groups {
                         for c in comments {
                             self.print_comment(c);
                         }
@@ -761,8 +806,25 @@ impl PrettyPrinter {
                         }
                     }
 
-                    // Blank line between groups when both are present
-                    if !nested_groups.is_empty() && !other_groups.is_empty() {
+                    // Blank line between constants and nested types
+                    if !const_groups.is_empty() && !nested_type_groups.is_empty() {
+                        self.writeln("");
+                    }
+
+                    // Emit nested types
+                    for (comments, item) in &nested_type_groups {
+                        for c in comments {
+                            self.print_comment(c);
+                        }
+                        if let TypeDefItem::Statement(stmt) = item {
+                            self.print_type_statement(stmt, None);
+                        }
+                    }
+
+                    // Blank line between nested items and other items
+                    if (!const_groups.is_empty() || !nested_type_groups.is_empty())
+                        && !other_groups.is_empty()
+                    {
                         self.writeln("");
                     }
 
@@ -796,17 +858,46 @@ impl PrettyPrinter {
                 // Set binary literal width based on enum type
                 let old_width = self.binary_literal_width;
                 self.binary_literal_width = self.get_type_bit_width(&ed.type_);
-                for (i, item) in ed.items.iter().enumerate() {
-                    let next_item = ed.items.get(i + 1);
+
+                // Partition: const items first, then other items (variants, comments)
+                let const_items: Vec<&EnumDefItem> = ed
+                    .items
+                    .iter()
+                    .filter(|item| matches!(item, EnumDefItem::Item(inner) if matches!(inner.inner, ItemDefinitionInner::Constant(_))))
+                    .collect();
+                let other_items: Vec<&EnumDefItem> = ed
+                    .items
+                    .iter()
+                    .filter(|item| !matches!(item, EnumDefItem::Item(inner) if matches!(inner.inner, ItemDefinitionInner::Constant(_))))
+                    .collect();
+
+                // Emit constants first
+                for item in &const_items {
+                    if let EnumDefItem::Item(inner) = item {
+                        self.print_item_definition(inner, true);
+                    }
+                }
+
+                // Blank line between constants and other items
+                if !const_items.is_empty() && !other_items.is_empty() {
+                    self.writeln("");
+                }
+
+                // Emit other items (variants, comments, non-const nested items)
+                for item in &other_items {
                     match item {
                         EnumDefItem::Comment(comment) => {
                             self.print_comment(comment);
                         }
                         EnumDefItem::Statement(stmt) => {
-                            self.print_enum_statement(stmt, next_item);
+                            self.print_enum_statement(stmt, None);
+                        }
+                        EnumDefItem::Item(inner) => {
+                            self.print_item_definition(inner, true);
                         }
                     }
                 }
+
                 self.binary_literal_width = old_width;
                 self.dedent();
                 self.write_indent();
@@ -820,17 +911,46 @@ impl PrettyPrinter {
                 // Set binary literal width based on bitflags type
                 let old_width = self.binary_literal_width;
                 self.binary_literal_width = self.get_type_bit_width(&bf.type_);
-                for (i, item) in bf.items.iter().enumerate() {
-                    let next_item = bf.items.get(i + 1);
+
+                // Partition: const items first, then other items (flags, comments)
+                let const_items: Vec<&BitflagsDefItem> = bf
+                    .items
+                    .iter()
+                    .filter(|item| matches!(item, BitflagsDefItem::Item(inner) if matches!(inner.inner, ItemDefinitionInner::Constant(_))))
+                    .collect();
+                let other_items: Vec<&BitflagsDefItem> = bf
+                    .items
+                    .iter()
+                    .filter(|item| !matches!(item, BitflagsDefItem::Item(inner) if matches!(inner.inner, ItemDefinitionInner::Constant(_))))
+                    .collect();
+
+                // Emit constants first
+                for item in &const_items {
+                    if let BitflagsDefItem::Item(inner) = item {
+                        self.print_item_definition(inner, true);
+                    }
+                }
+
+                // Blank line between constants and other items
+                if !const_items.is_empty() && !other_items.is_empty() {
+                    self.writeln("");
+                }
+
+                // Emit other items (flags, comments, non-const nested items)
+                for item in &other_items {
                     match item {
                         BitflagsDefItem::Comment(comment) => {
                             self.print_comment(comment);
                         }
                         BitflagsDefItem::Statement(stmt) => {
-                            self.print_bitflags_statement(stmt, next_item);
+                            self.print_bitflags_statement(stmt, None);
+                        }
+                        BitflagsDefItem::Item(inner) => {
+                            self.print_item_definition(inner, true);
                         }
                     }
                 }
+
                 self.binary_literal_width = old_width;
                 self.dedent();
                 self.write_indent();
@@ -840,6 +960,14 @@ impl PrettyPrinter {
                 write!(&mut self.output, "type {}{} = ", def.name, type_params).unwrap();
                 self.print_type(&ta.target);
                 writeln!(&mut self.output, ";").unwrap();
+            }
+            ItemDefinitionInner::Constant(cd) => {
+                write!(&mut self.output, "const {}: ", def.name).unwrap();
+                self.print_type(&cd.type_);
+                write!(&mut self.output, " = ").unwrap();
+                self.print_expr(&cd.expr);
+                let terminator = if nested { ',' } else { ';' };
+                writeln!(&mut self.output, "{terminator}").unwrap();
             }
         }
     }
@@ -928,7 +1056,16 @@ impl PrettyPrinter {
             }
             TypeField::Item(inner_def) => {
                 // print_item_definition does its own write_indent()
-                self.print_item_definition(inner_def);
+                self.print_item_definition(inner_def, true);
+                // Add trailing comma after nested type/enum/bitflags (consts
+                // already include their own terminator from print_item_definition)
+                if !matches!(inner_def.inner, ItemDefinitionInner::Constant(_)) {
+                    // Replace the trailing newline after `}` with `},\n`
+                    if self.output.ends_with("}\n") {
+                        self.output.pop(); // remove \n
+                        writeln!(&mut self.output, ",").unwrap();
+                    }
+                }
             }
         }
     }
@@ -1895,7 +2032,7 @@ pub type Outer {
     pub enum InnerEnum: u8 {
         A,
         B,
-    }
+    },
 }
         "#
         .trim();
@@ -1946,7 +2083,7 @@ pub type Outer {
     pub enum InnerEnum: u8 {
         A,
         B,
-    }
+    },
 
     pub field: u32,
 }

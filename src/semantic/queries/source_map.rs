@@ -163,6 +163,7 @@ fn collect_type_ref_spans(
         ItemDefinitionInner::Enum(e) => type_ref_spans(&e.type_, scope, index, tokens, out),
         ItemDefinitionInner::Bitflags(b) => type_ref_spans(&b.type_, scope, index, tokens, out),
         ItemDefinitionInner::TypeAlias(ta) => type_ref_spans(&ta.target, scope, index, tokens, out),
+        ItemDefinitionInner::Constant(cd) => type_ref_spans(&cd.type_, scope, index, tokens, out),
     }
 }
 

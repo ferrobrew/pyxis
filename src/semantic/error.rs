@@ -159,6 +159,7 @@ pub enum ItemKind {
     Enum,
     Bitflags,
     TypeAlias,
+    Constant,
 }
 
 impl ItemKind {
@@ -169,6 +170,7 @@ impl ItemKind {
             ItemDefinitionInner::Enum(_) => ItemKind::Enum,
             ItemDefinitionInner::Bitflags(_) => ItemKind::Bitflags,
             ItemDefinitionInner::TypeAlias(_) => ItemKind::TypeAlias,
+            ItemDefinitionInner::Constant(_) => ItemKind::Constant,
         }
     }
 }
@@ -180,6 +182,7 @@ impl fmt::Display for ItemKind {
             ItemKind::Enum => write!(f, "an enum"),
             ItemKind::Bitflags => write!(f, "a bitflags"),
             ItemKind::TypeAlias => write!(f, "a type alias"),
+            ItemKind::Constant => write!(f, "a constant"),
         }
     }
 }
@@ -261,6 +264,8 @@ pub enum UnresolvedTypeContext {
         field_name: String,
         type_path: ItemPath,
     },
+    /// Type annotation of a `const` declaration
+    ConstType { const_path: ItemPath },
 }
 
 impl fmt::Display for UnresolvedTypeContext {
@@ -280,6 +285,9 @@ impl fmt::Display for UnresolvedTypeContext {
                 type_path,
             } => {
                 write!(f, "field `{field_name}` of type `{type_path}`")
+            }
+            UnresolvedTypeContext::ConstType { const_path } => {
+                write!(f, "type annotation of const `{const_path}`")
             }
         }
     }
@@ -646,6 +654,15 @@ pub enum SemanticError {
         from_module: ItemPath,
         location: ItemLocation,
     },
+    /// A const declaration's value type doesn't match its type annotation
+    ConstValueTypeMismatch {
+        item_path: ItemPath,
+        expected: String,
+        found: String,
+        location: ItemLocation,
+    },
+    /// `str` type used in a non-const context (fields, function args, etc.)
+    StrTypeNotConst { location: ItemLocation },
 }
 
 impl SemanticError {
@@ -1000,6 +1017,17 @@ impl SemanticError {
             } => {
                 format!("cannot access private item `{item_path}` from module `{from_module}`")
             }
+            SemanticError::ConstValueTypeMismatch {
+                item_path,
+                expected,
+                found,
+                ..
+            } => {
+                format!("const `{item_path}` expected {expected}, but the value is {found}")
+            }
+            SemanticError::StrTypeNotConst { .. } => {
+                "`str` type is only allowed on `const` declarations".to_string()
+            }
         }
     }
 
@@ -1053,6 +1081,8 @@ impl SemanticError {
             SemanticError::IntegerConversion { location, .. } => Some(location),
             SemanticError::OverlappingRegions { location, .. } => Some(location),
             SemanticError::PrivateItemAccess { location, .. } => Some(location),
+            SemanticError::ConstValueTypeMismatch { location, .. } => Some(location),
+            SemanticError::StrTypeNotConst { location, .. } => Some(location),
         }
     }
 

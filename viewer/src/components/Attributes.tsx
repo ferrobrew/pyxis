@@ -106,7 +106,7 @@ export function ItemAttributes({ item, className = '' }: { item: JsonItem; class
   const primary: ReactNode[] = [];
   const kind = item.kind;
 
-  const singleton = kind.type !== 'type_alias' ? kind.singleton : null;
+  const singleton = kind.type !== 'type_alias' && kind.type !== 'constant' ? kind.singleton : null;
   if (singleton != null) {
     const s = formatHexAddress(singleton);
     primary.push(
@@ -116,8 +116,8 @@ export function ItemAttributes({ item, className = '' }: { item: JsonItem; class
     );
   }
 
-  // Aliases are just `type X = Y;` — no layout/trait attributes.
-  if (kind.type !== 'type_alias') {
+  // Aliases and constants are just declarations — no layout/trait attributes.
+  if (kind.type !== 'type_alias' && kind.type !== 'constant') {
     const sz = formatHexAddress(item.size);
     primary.push(
       <>

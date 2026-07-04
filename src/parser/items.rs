@@ -210,6 +210,8 @@ impl TypeDefinition {
 pub enum EnumDefItem {
     Comment(Comment),
     Statement(EnumStatement),
+    /// A nested item declaration (const, type, enum, etc.) inside an enum body.
+    Item(Box<ItemDefinition>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, HasLocation)]
@@ -280,6 +282,9 @@ impl StripLocations for EnumDefinition {
                 .filter_map(|item| match item {
                     EnumDefItem::Comment(_) => None, // Filter out comments
                     EnumDefItem::Statement(s) => Some(EnumDefItem::Statement(s.strip_locations())),
+                    EnumDefItem::Item(inner) => {
+                        Some(EnumDefItem::Item(Box::new((**inner).strip_locations())))
+                    }
                 })
                 .collect(),
             attributes: self.attributes.strip_locations(),
@@ -332,6 +337,8 @@ impl EnumDefinition {
 pub enum BitflagsDefItem {
     Comment(Comment),
     Statement(BitflagsStatement),
+    /// A nested item declaration (const, type, enum, etc.) inside a bitflags body.
+    Item(Box<ItemDefinition>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, HasLocation)]
@@ -400,6 +407,9 @@ impl StripLocations for BitflagsDefinition {
                     BitflagsDefItem::Comment(_) => None, // Filter out comments
                     BitflagsDefItem::Statement(s) => {
                         Some(BitflagsDefItem::Statement(s.strip_locations()))
+                    }
+                    BitflagsDefItem::Item(inner) => {
+                        Some(BitflagsDefItem::Item(Box::new((**inner).strip_locations())))
                     }
                 })
                 .collect(),
@@ -475,11 +485,37 @@ impl TypeAliasDefinition {
 // items
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(test, derive(StripLocations))]
+pub struct ConstDefinition {
+    pub type_: Type,
+    pub expr: Expr,
+    pub attributes: Attributes,
+    pub location: ItemLocation,
+}
+#[cfg(test)]
+impl ConstDefinition {
+    pub fn new(type_: Type, expr: Expr) -> Self {
+        Self {
+            type_,
+            expr,
+            attributes: Default::default(),
+            location: ItemLocation::test(),
+        }
+    }
+    pub fn with_attributes(mut self, attributes: impl IntoIterator<Item = Attribute>) -> Self {
+        self.attributes = Attributes::from_iter(attributes);
+        self
+    }
+}
+
+// items
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(test, derive(StripLocations))]
 pub enum ItemDefinitionInner {
     Type(TypeDefinition),
     Enum(EnumDefinition),
     Bitflags(BitflagsDefinition),
     TypeAlias(TypeAliasDefinition),
+    Constant(ConstDefinition),
 }
 impl From<TypeDefinition> for ItemDefinitionInner {
     fn from(item: TypeDefinition) -> Self {
@@ -499,6 +535,11 @@ impl From<BitflagsDefinition> for ItemDefinitionInner {
 impl From<TypeAliasDefinition> for ItemDefinitionInner {
     fn from(item: TypeAliasDefinition) -> Self {
         ItemDefinitionInner::TypeAlias(item)
+    }
+}
+impl From<ConstDefinition> for ItemDefinitionInner {
+    fn from(item: ConstDefinition) -> Self {
+        ItemDefinitionInner::Constant(item)
     }
 }
 
@@ -771,6 +812,42 @@ impl Parser {
                     declaration_location,
                 })
             }
+            TokenKind::Const => {
+                self.advance(); // consume `const`
+                let (name, _) = self.expect_ident()?;
+                self.expect(TokenKind::Colon)?;
+                let type_ = self.parse_type()?;
+                self.expect(TokenKind::Eq)?;
+                let expr = self.parse_expr()?;
+                // Module-level consts end with `;`; nested consts (inside
+                // type/enum/bitflags bodies) end with `,`. Accept either so
+                // the same parser works in both contexts.
+                if matches!(self.peek(), TokenKind::Semi | TokenKind::Comma) {
+                    self.advance();
+                }
+
+                let end_pos = if self.pos > 0 {
+                    self.tokens[self.pos - 1].location.span.end
+                } else {
+                    self.current().location.span.end
+                };
+
+                let location = self.item_location_from_locations(start_pos, end_pos);
+                Ok(ItemDefinition {
+                    visibility,
+                    name,
+                    type_parameters: vec![], // Constants don't support type parameters
+                    doc_comments,
+                    inner: ItemDefinitionInner::Constant(ConstDefinition {
+                        type_,
+                        expr,
+                        attributes,
+                        location,
+                    }),
+                    location,
+                    declaration_location,
+                })
+            }
             _ => Err(ParseError::ExpectedItemDefinition {
                 found: self.peek().clone(),
                 location: self.current().location,
@@ -884,12 +961,16 @@ impl Parser {
             ) {
                 pos += 1;
             }
-            // Check for nested item keywords: Type, Enum, Bitflags, or Pub followed by one of those
+            // Check for nested item keywords: Type, Enum, Bitflags, Const, or Pub followed by one of those
             let is_nested_item = match self.peek_at(pos) {
-                Some(TokenKind::Type | TokenKind::Enum | TokenKind::Bitflags) => true,
+                Some(
+                    TokenKind::Type | TokenKind::Enum | TokenKind::Bitflags | TokenKind::Const,
+                ) => true,
                 Some(TokenKind::Pub) => matches!(
                     self.peek_at(pos + 1),
-                    Some(TokenKind::Type | TokenKind::Enum | TokenKind::Bitflags)
+                    Some(
+                        TokenKind::Type | TokenKind::Enum | TokenKind::Bitflags | TokenKind::Const
+                    )
                 ),
                 _ => false,
             };
@@ -980,6 +1061,52 @@ impl Parser {
                 break;
             }
 
+            // Check for nested item declarations (type, enum, bitflags, const)
+            // by peeking ahead past doc comments and attributes.
+            {
+                let mut pos = self.pos;
+                while matches!(self.peek_at(pos), Some(TokenKind::DocOuter(_))) {
+                    pos += 1;
+                }
+                if matches!(self.peek_at(pos), Some(TokenKind::Hash)) {
+                    pos = self.skip_attributes_lookahead(pos);
+                }
+                while matches!(
+                    self.peek_at(pos),
+                    Some(
+                        TokenKind::Comment(_)
+                            | TokenKind::MultiLineComment(_)
+                            | TokenKind::DocOuter(_)
+                    )
+                ) {
+                    pos += 1;
+                }
+                let is_nested_item = match self.peek_at(pos) {
+                    Some(
+                        TokenKind::Type | TokenKind::Enum | TokenKind::Bitflags | TokenKind::Const,
+                    ) => true,
+                    Some(TokenKind::Pub) => matches!(
+                        self.peek_at(pos + 1),
+                        Some(
+                            TokenKind::Type
+                                | TokenKind::Enum
+                                | TokenKind::Bitflags
+                                | TokenKind::Const
+                        )
+                    ),
+                    _ => false,
+                };
+                if is_nested_item {
+                    let inner_def = self.parse_item_definition()?;
+                    // Optional trailing comma after the nested item
+                    if matches!(self.peek(), TokenKind::Comma) {
+                        self.advance();
+                    }
+                    items.push(EnumDefItem::Item(Box::new(inner_def)));
+                    continue;
+                }
+            }
+
             let mut stmt = self.parse_enum_statement()?;
             let statement_line = self.current().location.span.end.line;
 
@@ -1063,6 +1190,52 @@ impl Parser {
 
             if matches!(self.peek(), TokenKind::RBrace) {
                 break;
+            }
+
+            // Check for nested item declarations (type, enum, bitflags, const)
+            // by peeking ahead past doc comments and attributes.
+            {
+                let mut pos = self.pos;
+                while matches!(self.peek_at(pos), Some(TokenKind::DocOuter(_))) {
+                    pos += 1;
+                }
+                if matches!(self.peek_at(pos), Some(TokenKind::Hash)) {
+                    pos = self.skip_attributes_lookahead(pos);
+                }
+                while matches!(
+                    self.peek_at(pos),
+                    Some(
+                        TokenKind::Comment(_)
+                            | TokenKind::MultiLineComment(_)
+                            | TokenKind::DocOuter(_)
+                    )
+                ) {
+                    pos += 1;
+                }
+                let is_nested_item = match self.peek_at(pos) {
+                    Some(
+                        TokenKind::Type | TokenKind::Enum | TokenKind::Bitflags | TokenKind::Const,
+                    ) => true,
+                    Some(TokenKind::Pub) => matches!(
+                        self.peek_at(pos + 1),
+                        Some(
+                            TokenKind::Type
+                                | TokenKind::Enum
+                                | TokenKind::Bitflags
+                                | TokenKind::Const
+                        )
+                    ),
+                    _ => false,
+                };
+                if is_nested_item {
+                    let inner_def = self.parse_item_definition()?;
+                    // Optional trailing comma after the nested item
+                    if matches!(self.peek(), TokenKind::Comma) {
+                        self.advance();
+                    }
+                    items.push(BitflagsDefItem::Item(Box::new(inner_def)));
+                    continue;
+                }
             }
 
             let mut stmt = self.parse_bitflags_statement()?;
@@ -2159,5 +2332,143 @@ mod tests {
         }
         "#;
         assert!(parse_str_for_tests(text).is_ok());
+    }
+
+    #[test]
+    fn can_parse_module_level_const() {
+        let text = r#"
+        pub const MAX_HEALTH: i32 = 100;
+        "#;
+        let ast = parse_str_for_tests(text).unwrap().strip_locations();
+        let module = &ast.items;
+        assert_eq!(module.len(), 1);
+        match &module[0] {
+            crate::grammar::ModuleItem::Definition { definition } => {
+                assert_eq!(definition.name.as_str(), "MAX_HEALTH");
+                assert!(matches!(
+                    &definition.inner,
+                    crate::grammar::ItemDefinitionInner::Constant(_)
+                ));
+            }
+            _ => panic!("Expected Definition, got {:?}", module[0]),
+        }
+    }
+
+    #[test]
+    fn can_parse_const_float_value() {
+        let text = r#"
+        pub const PI: f32 = 3.14159;
+        "#;
+        let ast = parse_str_for_tests(text).unwrap().strip_locations();
+        match &ast.items[0] {
+            crate::grammar::ModuleItem::Definition { definition } => {
+                let crate::grammar::ItemDefinitionInner::Constant(cd) = &definition.inner else {
+                    panic!("Expected Constant");
+                };
+                assert!(cd.expr.float_literal().is_some());
+                assert_eq!(cd.expr.float_literal().unwrap(), "3.14159");
+            }
+            _ => panic!("Expected Definition"),
+        }
+    }
+
+    #[test]
+    fn can_parse_const_string_value() {
+        let text = r#"
+        pub const NAME: str = "Pyxis";
+        "#;
+        let ast = parse_str_for_tests(text).unwrap().strip_locations();
+        match &ast.items[0] {
+            crate::grammar::ModuleItem::Definition { definition } => {
+                let crate::grammar::ItemDefinitionInner::Constant(cd) = &definition.inner else {
+                    panic!("Expected Constant");
+                };
+                assert_eq!(cd.expr.string_literal(), Some("Pyxis"));
+            }
+            _ => panic!("Expected Definition"),
+        }
+    }
+
+    #[test]
+    fn can_parse_const_enum_value() {
+        let text = r#"
+        pub const DEFAULT: Color = Color::Red;
+        "#;
+        let ast = parse_str_for_tests(text).unwrap().strip_locations();
+        match &ast.items[0] {
+            crate::grammar::ModuleItem::Definition { definition } => {
+                let crate::grammar::ItemDefinitionInner::Constant(cd) = &definition.inner else {
+                    panic!("Expected Constant");
+                };
+                assert!(cd.expr.path().is_some());
+                assert_eq!(cd.expr.path().unwrap().to_string(), "Color::Red");
+            }
+            _ => panic!("Expected Definition"),
+        }
+    }
+
+    #[test]
+    fn can_parse_nested_const_in_type() {
+        let text = r#"
+        pub type Player {
+            pub const STARTING_GOLD: u32 = 500,
+            pub health: i32,
+        }
+        "#;
+        let ast = parse_str_for_tests(text).unwrap().strip_locations();
+        match &ast.items[0] {
+            crate::grammar::ModuleItem::Definition { definition } => {
+                let crate::grammar::ItemDefinitionInner::Type(td) = &definition.inner else {
+                    panic!("Expected Type");
+                };
+                let items: Vec<_> = td.items.iter().collect();
+                assert_eq!(items.len(), 2); // const + field
+            }
+            _ => panic!("Expected Definition"),
+        }
+    }
+
+    #[test]
+    fn can_parse_nested_const_in_enum() {
+        let text = r#"
+        pub enum Color: u8 {
+            Red,
+            Green,
+            pub const DEFAULT: Color = Color::Red,
+        }
+        "#;
+        let ast = parse_str_for_tests(text).unwrap().strip_locations();
+        match &ast.items[0] {
+            crate::grammar::ModuleItem::Definition { definition } => {
+                let crate::grammar::ItemDefinitionInner::Enum(ed) = &definition.inner else {
+                    panic!("Expected Enum");
+                };
+                let items: Vec<_> = ed.items.iter().collect();
+                assert_eq!(items.len(), 3); // Red + Green + DEFAULT const
+            }
+            _ => panic!("Expected Definition"),
+        }
+    }
+
+    #[test]
+    fn can_parse_nested_const_in_bitflags() {
+        let text = r#"
+        pub bitflags Flags: u32 {
+            READ = 1,
+            WRITE = 2,
+            pub const DEFAULT_MASK: u32 = 3,
+        }
+        "#;
+        let ast = parse_str_for_tests(text).unwrap().strip_locations();
+        match &ast.items[0] {
+            crate::grammar::ModuleItem::Definition { definition } => {
+                let crate::grammar::ItemDefinitionInner::Bitflags(bd) = &definition.inner else {
+                    panic!("Expected Bitflags");
+                };
+                let items: Vec<_> = bd.items.iter().collect();
+                assert_eq!(items.len(), 3); // READ + WRITE + DEFAULT_MASK const
+            }
+            _ => panic!("Expected Definition"),
+        }
     }
 }

@@ -32,6 +32,7 @@ pub enum TokenKind {
     // Literals
     Ident(String),
     IntLiteral(String),
+    FloatLiteral(String),
     StringLiteral(String), // Already processed, escape sequences resolved
     CharLiteral(char),
 
@@ -771,6 +772,27 @@ impl Lexer {
         let end = self.current_location();
         let text: String = self.chars[start_pos..self.pos].iter().collect();
 
+        // Check for a fractional part: `.` followed by a digit.
+        // Since pyxis has no method-call or field-access syntax that uses `.`
+        // after a number, a `.` here is unambiguously a float decimal point.
+        if self.peek() == Some('.') && self.peek_nth(1).is_some_and(|c| c.is_ascii_digit()) {
+            self.advance(); // consume '.'
+            while let Some(ch) = self.peek() {
+                if ch.is_ascii_digit() || ch == '_' {
+                    self.advance();
+                } else {
+                    break;
+                }
+            }
+
+            let end = self.current_location();
+            let text: String = self.chars[start_pos..self.pos].iter().collect();
+            return Ok(Token::new(
+                TokenKind::FloatLiteral(text.clone()),
+                ItemLocation::new(self.file_id, Span::new(start, end)),
+            ));
+        }
+
         Ok(Token::new(
             TokenKind::IntLiteral(text.clone()),
             ItemLocation::new(self.file_id, Span::new(start, end)),
@@ -1041,6 +1063,29 @@ mod tests {
         assert_eq!(tokens[15].kind, TokenKind::Comma);
         assert_eq!(tokens[16].kind, TokenKind::Bang);
         assert_eq!(tokens[17].kind, TokenKind::Hash);
+    }
+
+    #[test]
+    fn test_float_literals() {
+        let input = "3.14159 0.0 -1.5 42.0".to_string();
+        let tokens = tokenize(input).unwrap();
+        assert_eq!(tokens.len(), 5); // 4 floats + EOF
+        match &tokens[0].kind {
+            TokenKind::FloatLiteral(s) => assert_eq!(s, "3.14159"),
+            _ => panic!("Expected FloatLiteral, got {:?}", tokens[0].kind),
+        }
+        match &tokens[1].kind {
+            TokenKind::FloatLiteral(s) => assert_eq!(s, "0.0"),
+            _ => panic!("Expected FloatLiteral, got {:?}", tokens[1].kind),
+        }
+        match &tokens[2].kind {
+            TokenKind::FloatLiteral(s) => assert_eq!(s, "-1.5"),
+            _ => panic!("Expected FloatLiteral, got {:?}", tokens[2].kind),
+        }
+        match &tokens[3].kind {
+            TokenKind::FloatLiteral(s) => assert_eq!(s, "42.0"),
+            _ => panic!("Expected FloatLiteral, got {:?}", tokens[3].kind),
+        }
     }
 
     #[test]

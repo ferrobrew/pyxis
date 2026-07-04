@@ -12,9 +12,10 @@ use crate::{
     semantic::{
         Module, SemanticOutput, TypeRegistry,
         types::{
-            Argument, BitflagsDefinition, EnumDefinition, ExternValue, Function, FunctionBody,
-            ItemCategory, ItemDefinition, ItemDefinitionInner, ItemStateResolved, PredefinedItem,
-            Region, Type, TypeAliasDefinition, TypeDefinition, Visibility,
+            Argument, BitflagsDefinition, ConstDefinition as SemanticConstDefinition, ConstValue,
+            EnumDefinition, ExternValue, Function, FunctionBody, ItemCategory, ItemDefinition,
+            ItemDefinitionInner, ItemStateResolved, PredefinedItem, Region, Type,
+            TypeAliasDefinition, TypeDefinition, Visibility,
         },
     },
     span::ItemLocation,
@@ -284,6 +285,19 @@ pub fn write_module(
         .collect::<Vec<_>>();
     definitions.sort_by_key(|d| &d.path);
     for definition in definitions {
+        // Skip nested constants — they're emitted inside their parent's
+        // `impl` block by build_type/build_enum/build_bitflags.
+        use ItemDefinitionInner as IDI;
+        if definition
+            .resolved()
+            .is_some_and(|r| matches!(r.inner, IDI::Constant(_)))
+        {
+            if let Some(parent_path) = definition.path.parent() {
+                if semantic_state.type_registry().contains(&parent_path) {
+                    continue;
+                }
+            }
+        }
         writeln!(
             raw_output,
             "{}",
@@ -436,6 +450,7 @@ fn build_item(
                 nested_rewrites,
             ),
             IDI::Enum(ed) => build_enum(
+                type_registry,
                 path,
                 *size,
                 visibility,
@@ -447,6 +462,7 @@ fn build_item(
                 nested_rewrites,
             ),
             IDI::Bitflags(bd) => build_bitflags(
+                type_registry,
                 path,
                 *size,
                 visibility,
@@ -467,6 +483,7 @@ fn build_item(
                 module_paths,
                 nested_rewrites,
             ),
+            IDI::Constant(cd) => build_const(path, visibility, cd, location, module_paths),
         },
         ItemCategory::Predefined => Ok(quote! {}),
         ItemCategory::Extern => {
@@ -761,6 +778,9 @@ fn build_type(
         vec![]
     };
 
+    // Emit nested constants as associated constants in an impl block
+    let nested_const_impls = build_nested_const_impls(type_registry, path, module_paths);
+
     Ok(quote! {
         #derives
         #[repr(C #packed #alignment)]
@@ -775,12 +795,14 @@ fn build_type(
             #(#associated_functions_impl)*
             #(#vftable_function_impl)*
         }
+        #nested_const_impls
         #(#as_ref_conversions)*
     })
 }
 
 #[allow(clippy::too_many_arguments)]
 fn build_enum(
+    type_registry: &TypeRegistry,
     path: &ItemPath,
     size: usize,
     visibility: Visibility,
@@ -875,6 +897,9 @@ fn build_enum(
         None
     };
 
+    // Emit nested constants as associated constants in an impl block
+    let nested_const_impls = build_nested_const_impls(type_registry, path, module_paths);
+
     Ok(quote! {
         #[repr(#syn_type)]
         #[derive(PartialEq, Eq, PartialOrd, Ord, Debug, #(#extra_derives),*)]
@@ -885,11 +910,13 @@ fn build_enum(
         #size_check_impl
         #singleton_impl
         #associated_impl
+        #nested_const_impls
     })
 }
 
 #[allow(clippy::too_many_arguments)]
 fn build_bitflags(
+    type_registry: &TypeRegistry,
     path: &ItemPath,
     size: usize,
     visibility: Visibility,
@@ -954,6 +981,9 @@ fn build_bitflags(
         }
     });
 
+    // Emit nested constants as associated constants in an impl block
+    let nested_const_impls = build_nested_const_impls(type_registry, path, module_paths);
+
     Ok(quote! {
         crate::__bitflags! {
             #doc
@@ -964,6 +994,7 @@ fn build_bitflags(
         #size_check_impl
         #singleton_impl
         #default_impl
+        #nested_const_impls
     })
 }
 
@@ -995,6 +1026,108 @@ fn build_type_alias(
         #doc
         #visibility type #name_ident #generic_params = #target_type;
     })
+}
+
+/// Render a `ConstValue` as a Rust expression token stream. `type_` is the
+/// const's declared type, consulted to pick the right float literal suffix.
+fn const_value_to_tokens(value: &ConstValue, type_: &Type) -> proc_macro2::TokenStream {
+    match value {
+        ConstValue::Int(v) => {
+            let lit = proc_macro2::Literal::i64_unsuffixed(*v as i64);
+            quote! { #lit }
+        }
+        ConstValue::Float(bits) => {
+            let f = f64::from_bits(*bits);
+            // For f32, narrow before rendering; f64 emits bare.
+            if type_.is_f32() {
+                let lit = proc_macro2::Literal::f32_unsuffixed(f as f32);
+                quote! { #lit }
+            } else {
+                let lit = proc_macro2::Literal::f64_unsuffixed(f);
+                quote! { #lit }
+            }
+        }
+        ConstValue::String(s) => {
+            let s = s.as_str();
+            quote! { #s }
+        }
+        ConstValue::EnumValue(p) => {
+            // Build the path as a Rust path expression. We construct it as a
+            // string and parse it to get proper tokenization.
+            let path_str = p.to_string();
+            path_str.parse().unwrap_or_else(|_| quote! { () })
+        }
+    }
+}
+
+fn build_const(
+    path: &ItemPath,
+    visibility: Visibility,
+    const_definition: &SemanticConstDefinition,
+    _location: &ItemLocation,
+    module_paths: &BTreeSet<ItemPath>,
+) -> Result<proc_macro2::TokenStream> {
+    let name = flatten_type_name(path, module_paths);
+    let name_ident = str_to_ident(name.as_str());
+    let visibility = visibility_to_tokens(visibility);
+    let type_ = sa_type_to_syn_type(&const_definition.type_, None, Some(module_paths))?;
+    let doc = doc_to_tokens(false, &const_definition.doc, None);
+    let value_tokens = const_value_to_tokens(&const_definition.value, &const_definition.type_);
+
+    Ok(quote! {
+        #doc
+        #visibility const #name_ident: #type_ = #value_tokens;
+    })
+}
+
+/// Collect nested constants from the type registry for a given parent path
+/// and emit them as associated constants inside an `impl` block.
+fn build_nested_const_impls(
+    type_registry: &TypeRegistry,
+    parent_path: &ItemPath,
+    module_paths: &BTreeSet<ItemPath>,
+) -> Option<proc_macro2::TokenStream> {
+    use ItemDefinitionInner as IDI;
+
+    let parent_name = flatten_type_name(parent_path, module_paths);
+    let parent_ident = str_to_ident(parent_name.as_str());
+
+    let mut const_items: Vec<proc_macro2::TokenStream> = Vec::new();
+
+    // Iterate all items in the registry that are direct children of parent_path
+    for (item_path, item) in type_registry.iter() {
+        if item_path.parent().as_ref() != Some(parent_path) {
+            continue;
+        }
+        let Some(resolved) = item.resolved() else {
+            continue;
+        };
+        if let IDI::Constant(cd) = &resolved.inner {
+            let const_name = item_path.last().map(|s| s.as_str()).unwrap_or_default();
+            let name_ident = str_to_ident(const_name);
+            let type_ = match sa_type_to_syn_type(&cd.type_, None, Some(module_paths)) {
+                Ok(t) => t,
+                Err(_) => continue,
+            };
+            let doc = doc_to_tokens(false, &cd.doc, None);
+            let value_tokens = const_value_to_tokens(&cd.value, &cd.type_);
+
+            const_items.push(quote! {
+                #doc
+                pub const #name_ident: #type_ = #value_tokens;
+            });
+        }
+    }
+
+    if const_items.is_empty() {
+        None
+    } else {
+        Some(quote! {
+            impl #parent_ident {
+                #(#const_items)*
+            }
+        })
+    }
 }
 
 fn build_function(
@@ -1306,6 +1439,7 @@ fn fully_qualified_type_ref_impl(
                     PredefinedItem::AtomicI16 => "::std::sync::atomic::AtomicI16",
                     PredefinedItem::AtomicI32 => "::std::sync::atomic::AtomicI32",
                     PredefinedItem::AtomicI64 => "::std::sync::atomic::AtomicI64",
+                    PredefinedItem::Str => "&str",
                 };
                 (ItemPath::from(p.name()), rust_type)
             })

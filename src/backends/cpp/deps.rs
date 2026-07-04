@@ -289,6 +289,7 @@ fn collect_intra_module_full_deps(
                 out,
             );
         }
+        ItemDefinitionInner::Constant(_) => {}
     }
 }
 
@@ -405,6 +406,7 @@ pub fn collect_module_deps(
             ItemDefinitionInner::TypeAlias(ta) => {
                 walk_type_alias_def(ta, &mut deps, module_path, registry, bindings)
             }
+            ItemDefinitionInner::Constant(_) => {}
         }
     }
 

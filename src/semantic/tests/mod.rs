@@ -22,6 +22,7 @@ mod alignment;
 mod backends;
 mod basic_resolution;
 mod bitflags;
+mod consts;
 mod copyable_cloneable;
 mod defaultable;
 mod doc_comments;

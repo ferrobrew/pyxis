@@ -238,6 +238,7 @@ pub(crate) fn find_type_ref_in_definition<'a>(
         ItemDefinitionInner::Enum(e) => return type_hit_at(&e.type_, loc),
         ItemDefinitionInner::Bitflags(b) => return type_hit_at(&b.type_, loc),
         ItemDefinitionInner::TypeAlias(ta) => return type_hit_at(&ta.target, loc),
+        ItemDefinitionInner::Constant(c) => return type_hit_at(&c.type_, loc),
     }
 
     None

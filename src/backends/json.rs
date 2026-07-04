@@ -12,7 +12,8 @@ use serde::{Deserialize, Serialize};
 use crate::semantic::{
     ExternBindings, SemanticOutput, TypeRegistry,
     types::{
-        Argument, BitflagField, BitflagsDefinition, CallingConvention, EnumDefinition, EnumVariant,
+        Argument, BitflagField, BitflagsDefinition, CallingConvention,
+        ConstDefinition as SemanticConstDefinition, ConstValue, EnumDefinition, EnumVariant,
         ExternValue, Function, FunctionBody, ItemCategory, ItemDefinition, ItemDefinitionInner,
         Region, TypeAliasDefinition, TypeDefinition, TypeVftable, Visibility,
     },
@@ -42,7 +43,9 @@ use crate::semantic::{
 /// - v7: added `for_type` to `JsonBackendSplice` — the resolved absolute item
 ///   path for `prologue/epilogue for <Type>` attribution, so the viewer can
 ///   render the splice on the owning type's page instead of the module page.
-pub const CURRENT_SCHEMA_VERSION: u32 = 7;
+/// - v8: added `Constant` item kind with `JsonConstValue` for int/float/
+///   string/enum-value constants.
+pub const CURRENT_SCHEMA_VERSION: u32 = 8;
 
 /// Top-level JSON documentation structure
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
@@ -268,6 +271,28 @@ pub enum JsonItemKind {
     Enum(JsonEnumDefinition),
     Bitflags(JsonBitflagsDefinition),
     TypeAlias(JsonTypeAliasDefinition),
+    Constant(JsonConstantDefinition),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+pub struct JsonConstantDefinition {
+    /// Documentation
+    pub doc: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub doc_links: Vec<JsonDocLink>,
+    /// The type annotation of the constant
+    pub value_type: JsonType,
+    /// The compile-time value
+    pub value: JsonConstValue,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum JsonConstValue {
+    Int { value: isize },
+    Float { value: f64 },
+    String { value: String },
+    EnumValue { path: String },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
@@ -361,6 +386,9 @@ pub struct JsonEnumDefinition {
     pub default: Option<usize>,
     /// Whether the enum is pinned (non-relocatable)
     pub pinned: bool,
+    /// Item paths of nested items declared inside this enum body
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub nested_items: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
@@ -398,6 +426,9 @@ pub struct JsonBitflagsDefinition {
     pub default: Option<usize>,
     /// Whether the bitflags is pinned (non-relocatable)
     pub pinned: bool,
+    /// Item paths of nested items declared inside this bitflags body
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub nested_items: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
@@ -903,8 +934,18 @@ fn convert_enum_variant(variant: &EnumVariant, cx: &DocCx) -> JsonEnumVariant {
     }
 }
 
-fn convert_enum_definition(ed: &EnumDefinition, cx: &DocCx) -> JsonEnumDefinition {
+fn convert_enum_definition(
+    ed: &EnumDefinition,
+    type_registry: &TypeRegistry,
+    parent_path: &ItemPath,
+    cx: &DocCx,
+) -> JsonEnumDefinition {
     let (doc, doc_links) = cx.convert(&ed.doc);
+    let nested_items: Vec<String> = type_registry
+        .iter()
+        .filter(|(p, _)| p.parent().as_ref() == Some(parent_path))
+        .map(|(p, _)| p.to_string())
+        .collect();
     JsonEnumDefinition {
         doc,
         doc_links,
@@ -924,6 +965,7 @@ fn convert_enum_definition(ed: &EnumDefinition, cx: &DocCx) -> JsonEnumDefinitio
         cloneable: ed.cloneable,
         default: ed.default,
         pinned: ed.pinned,
+        nested_items,
     }
 }
 
@@ -938,8 +980,18 @@ fn convert_bitflag_field(flag: &BitflagField, cx: &DocCx) -> JsonBitflag {
     }
 }
 
-fn convert_bitflags_definition(bd: &BitflagsDefinition, cx: &DocCx) -> JsonBitflagsDefinition {
+fn convert_bitflags_definition(
+    bd: &BitflagsDefinition,
+    type_registry: &TypeRegistry,
+    parent_path: &ItemPath,
+    cx: &DocCx,
+) -> JsonBitflagsDefinition {
     let (doc, doc_links) = cx.convert(&bd.doc);
+    let nested_items: Vec<String> = type_registry
+        .iter()
+        .filter(|(p, _)| p.parent().as_ref() == Some(parent_path))
+        .map(|(p, _)| p.to_string())
+        .collect();
     JsonBitflagsDefinition {
         doc,
         doc_links,
@@ -954,6 +1006,7 @@ fn convert_bitflags_definition(bd: &BitflagsDefinition, cx: &DocCx) -> JsonBitfl
         cloneable: bd.cloneable,
         default: bd.default,
         pinned: bd.pinned,
+        nested_items,
     }
 }
 
@@ -966,6 +1019,26 @@ fn convert_type_alias_definition(ta: &TypeAliasDefinition, cx: &DocCx) -> JsonTy
     }
 }
 
+fn convert_const_definition(cd: &SemanticConstDefinition, cx: &DocCx) -> JsonConstantDefinition {
+    let (doc, doc_links) = cx.convert(&cd.doc);
+    let value = match &cd.value {
+        ConstValue::Int(v) => JsonConstValue::Int { value: *v },
+        ConstValue::Float(bits) => JsonConstValue::Float {
+            value: f64::from_bits(*bits),
+        },
+        ConstValue::String(s) => JsonConstValue::String { value: s.clone() },
+        ConstValue::EnumValue(path) => JsonConstValue::EnumValue {
+            path: path.to_string(),
+        },
+    };
+    JsonConstantDefinition {
+        doc,
+        doc_links,
+        value_type: convert_type(&cd.type_),
+        value,
+    }
+}
+
 fn convert_item(
     item: &ItemDefinition,
     type_registry: &TypeRegistry,
@@ -974,18 +1047,24 @@ fn convert_item(
 ) -> Option<JsonItem> {
     let resolved = item.resolved()?;
 
-    let kind = match &resolved.inner {
-        ItemDefinitionInner::Type(td) => {
-            JsonItemKind::Type(convert_type_definition(td, type_registry, cx))
-        }
-        ItemDefinitionInner::Enum(ed) => JsonItemKind::Enum(convert_enum_definition(ed, cx)),
-        ItemDefinitionInner::Bitflags(bd) => {
-            JsonItemKind::Bitflags(convert_bitflags_definition(bd, cx))
-        }
-        ItemDefinitionInner::TypeAlias(ta) => {
-            JsonItemKind::TypeAlias(convert_type_alias_definition(ta, cx))
-        }
-    };
+    let kind =
+        match &resolved.inner {
+            ItemDefinitionInner::Type(td) => {
+                JsonItemKind::Type(convert_type_definition(td, type_registry, cx))
+            }
+            ItemDefinitionInner::Enum(ed) => {
+                JsonItemKind::Enum(convert_enum_definition(ed, type_registry, &item.path, cx))
+            }
+            ItemDefinitionInner::Bitflags(bd) => JsonItemKind::Bitflags(
+                convert_bitflags_definition(bd, type_registry, &item.path, cx),
+            ),
+            ItemDefinitionInner::TypeAlias(ta) => {
+                JsonItemKind::TypeAlias(convert_type_alias_definition(ta, cx))
+            }
+            ItemDefinitionInner::Constant(cd) => {
+                JsonItemKind::Constant(convert_const_definition(cd, cx))
+            }
+        };
 
     // Build source location for defined items (not predefined/internal)
     let source = convert_location(&item.declaration_location);

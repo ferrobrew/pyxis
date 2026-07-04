@@ -72,6 +72,7 @@ pub(crate) fn format_type_hover(definition: &ItemDefinition) -> String {
         ItemDefinitionInner::Enum(_) => "enum",
         ItemDefinitionInner::Bitflags(_) => "bitflags",
         ItemDefinitionInner::TypeAlias(_) => "type alias",
+        ItemDefinitionInner::Constant(_) => "const",
     };
     let mut md = format!("**{}** `{}`\n\n", kind, name);
 
@@ -205,6 +206,7 @@ pub(crate) fn attribute_at<'a>(
                     ItemDefinitionInner::Enum(e) => &e.attributes,
                     ItemDefinitionInner::Bitflags(b) => &b.attributes,
                     ItemDefinitionInner::TypeAlias(ta) => &ta.attributes,
+                    ItemDefinitionInner::Constant(c) => &c.attributes,
                 };
                 if let Some(hit) = find(inner_attrs) {
                     return Some(hit);
@@ -239,6 +241,7 @@ pub(crate) fn attribute_at<'a>(
                         }
                     }
                     ItemDefinitionInner::TypeAlias(_) => {}
+                    ItemDefinitionInner::Constant(_) => {}
                 }
             }
             ModuleItem::Impl { impl_block } => {

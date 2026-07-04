@@ -5,9 +5,9 @@ pub use crate::parser::{
     external::{Backend, ExternValue, UseTree},
     functions::{Argument, Function, FunctionBlock, ImplItem},
     items::{
-        BitflagsDefItem, BitflagsDefinition, BitflagsStatement, Comment, EnumDefItem,
-        EnumDefinition, EnumStatement, ItemDefinition, ItemDefinitionInner, TypeAliasDefinition,
-        TypeDefItem, TypeDefinition, TypeField, TypeStatement,
+        BitflagsDefItem, BitflagsDefinition, BitflagsStatement, Comment, ConstDefinition,
+        EnumDefItem, EnumDefinition, EnumStatement, ItemDefinition, ItemDefinitionInner,
+        TypeAliasDefinition, TypeDefItem, TypeDefinition, TypeField, TypeStatement,
     },
     module::{Module, ModuleItem},
     paths::{ItemPath, ItemPathSegment},
@@ -27,6 +27,7 @@ pub mod test_aliases {
     pub type BFS = super::BitflagsStatement;
     pub type BFD = super::BitflagsDefinition;
     pub type TAD = super::TypeAliasDefinition;
+    pub type CD = super::ConstDefinition;
     pub type T = super::Type;
     pub type TP = super::TypeParameter;
     pub type A = super::Attribute;
@@ -68,6 +69,18 @@ pub mod test_aliases {
         E::StringLiteral {
             value: value.into(),
             format,
+            location: ItemLocation::test(),
+        }
+    }
+    pub fn float_literal(raw_text: impl Into<String>) -> E {
+        E::FloatLiteral {
+            raw_text: raw_text.into(),
+            location: ItemLocation::test(),
+        }
+    }
+    pub fn path_expr(path: impl Into<super::ItemPath>) -> E {
+        E::Path {
+            path: path.into(),
             location: ItemLocation::test(),
         }
     }

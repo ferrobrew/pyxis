@@ -472,6 +472,7 @@ pub(crate) fn module_item_to_symbol(item: &ModuleItem, source: &str) -> Option<D
                 ItemDefinitionInner::Enum(_) => SymbolKind::ENUM,
                 ItemDefinitionInner::Bitflags(_) => SymbolKind::ENUM,
                 ItemDefinitionInner::TypeAlias(_) => SymbolKind::TYPE_PARAMETER,
+                ItemDefinitionInner::Constant(_) => SymbolKind::CONSTANT,
             };
             (
                 definition.name.as_str().to_string(),

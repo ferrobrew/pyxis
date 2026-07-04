@@ -88,7 +88,11 @@ default: number | null;
 /**
  * Whether the bitflags is pinned (non-relocatable)
  */
-pinned: boolean };
+pinned: boolean; 
+/**
+ * Item paths of nested items declared inside this bitflags body
+ */
+nested_items?: string[] };
 
 export type JsonCallingConvention = "c" | "cdecl" | "stdcall" | "fastcall" | "thiscall" | "vectorcall" | "system";
 
@@ -119,6 +123,22 @@ export type JsonCfg =
  * `not(...)` combinator.
  */
 { type: "not"; predicate: JsonCfg };
+
+export type JsonConstValue = { kind: "int"; value: number } | { kind: "float"; value: number } | { kind: "string"; value: string } | { kind: "enum_value"; path: string };
+
+export type JsonConstantDefinition = { 
+/**
+ * Documentation
+ */
+doc: string | null; doc_links?: JsonDocLink[]; 
+/**
+ * The type annotation of the constant
+ */
+value_type: JsonType; 
+/**
+ * The compile-time value
+ */
+value: JsonConstValue };
 
 /**
  * A resolved rustdoc-style intra-doc link found in a doc comment. Consumers
@@ -220,7 +240,11 @@ default: number | null;
 /**
  * Whether the enum is pinned (non-relocatable)
  */
-pinned: boolean };
+pinned: boolean; 
+/**
+ * Item paths of nested items declared inside this enum body
+ */
+nested_items?: string[] };
 
 export type JsonEnumVariant = { 
 /**
@@ -370,7 +394,7 @@ source: JsonSourceLocation | null };
 
 export type JsonItemCategory = "defined" | "predefined" | "extern";
 
-export type JsonItemKind = ({ type: "type" } & JsonTypeDefinition) | ({ type: "enum" } & JsonEnumDefinition) | ({ type: "bitflags" } & JsonBitflagsDefinition) | ({ type: "type_alias" } & JsonTypeAliasDefinition);
+export type JsonItemKind = ({ type: "type" } & JsonTypeDefinition) | ({ type: "enum" } & JsonEnumDefinition) | ({ type: "bitflags" } & JsonBitflagsDefinition) | ({ type: "type_alias" } & JsonTypeAliasDefinition) | ({ type: "constant" } & JsonConstantDefinition);
 
 /**
  * A module containing items and potentially submodules

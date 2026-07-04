@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use crate::{
     grammar::{self, Argument, Ident, ItemDefinitionInner, ItemPath, TypeField, TypeParameter},
     semantic::{
-        Module, SemanticError, TypeRegistry, bitflags_definition,
+        Module, SemanticError, TypeRegistry, bitflags_definition, const_definition,
         declaration_registry::ExternTypeInfo,
         enum_definition,
         error::{BuildOutcome, Result},
@@ -89,6 +89,10 @@ pub(super) fn build_item(
                 type_param_names,
             )
         }
+        ItemDefinitionInner::Constant(c) => {
+            let ctx_ref = ResolutionContextRef::new(type_registry, modules);
+            const_definition::build(&ctx_ref, item_path, c, def_location, doc_comments)
+        }
     }
 }
 
@@ -131,6 +135,7 @@ pub(super) fn register_unresolved(
         ItemDefinitionInner::Enum(e) => e.attributes.cfg(),
         ItemDefinitionInner::Bitflags(b) => b.attributes.cfg(),
         ItemDefinitionInner::TypeAlias(ta) => ta.attributes.cfg(),
+        ItemDefinitionInner::Constant(c) => c.attributes.cfg(),
     };
     type_registry.add(ItemDefinition {
         visibility: definition.visibility.into(),
@@ -280,6 +285,20 @@ pub(super) fn value_referenced_types(
         ItemDefinitionInner::Bitflags(b) => collect_value_refs(&b.type_, scope, index, &mut refs),
         ItemDefinitionInner::TypeAlias(ta) => {
             collect_value_refs(&ta.target, scope, index, &mut refs)
+        }
+        ItemDefinitionInner::Constant(c) => {
+            // Collect the const's type annotation reference
+            collect_value_refs(&c.type_, scope, index, &mut refs);
+            // If the value is an enum-value reference, collect the enum's path
+            if let grammar::Expr::Path { path, .. } = &c.expr {
+                // The path is `EnumName::VariantName` — the enum is the first segment
+                if !path.is_empty() {
+                    let enum_name = path.iter().next().unwrap().as_str();
+                    if let NameResolution::Found(p) = index.resolve_name(scope, enum_name) {
+                        refs.push(p);
+                    }
+                }
+            }
         }
     }
     refs

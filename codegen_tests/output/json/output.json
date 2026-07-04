@@ -1,5 +1,5 @@
 {
-  "schema_version": 7,
+  "schema_version": 8,
   "pyxis_version": "0.1.0",
   "pointer_size": 8,
   "project_name": "test-project",
@@ -867,6 +867,432 @@
         "line": 7
       }
     },
+    "consts::AccessFlags": {
+      "path": "consts::AccessFlags",
+      "visibility": "public",
+      "size": 4,
+      "alignment": 4,
+      "category": "defined",
+      "kind": {
+        "type": "bitflags",
+        "doc": null,
+        "underlying_type": {
+          "type": "raw",
+          "path": "u32"
+        },
+        "flags": [
+          {
+            "name": "READ",
+            "value": 1,
+            "doc": null,
+            "source": {
+              "file_index": 8,
+              "line": 19
+            }
+          },
+          {
+            "name": "WRITE",
+            "value": 2,
+            "doc": null,
+            "source": {
+              "file_index": 8,
+              "line": 20
+            }
+          }
+        ],
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "default": null,
+        "pinned": false,
+        "nested_items": [
+          "consts::AccessFlags::DEFAULT_MASK"
+        ]
+      },
+      "source": {
+        "file_index": 8,
+        "line": 16
+      }
+    },
+    "consts::AccessFlags::DEFAULT_MASK": {
+      "path": "consts::AccessFlags::DEFAULT_MASK",
+      "visibility": "public",
+      "size": 0,
+      "alignment": 1,
+      "category": "defined",
+      "kind": {
+        "type": "constant",
+        "doc": null,
+        "value_type": {
+          "type": "raw",
+          "path": "u32"
+        },
+        "value": {
+          "kind": "int",
+          "value": 3
+        }
+      },
+      "source": {
+        "file_index": 8,
+        "line": 17
+      }
+    },
+    "consts::Color": {
+      "path": "consts::Color",
+      "visibility": "public",
+      "size": 1,
+      "alignment": 1,
+      "category": "defined",
+      "kind": {
+        "type": "enum",
+        "doc": null,
+        "underlying_type": {
+          "type": "raw",
+          "path": "u8"
+        },
+        "variants": [
+          {
+            "name": "Red",
+            "value": 0,
+            "doc": null,
+            "source": {
+              "file_index": 8,
+              "line": 11
+            }
+          },
+          {
+            "name": "Green",
+            "value": 1,
+            "doc": null,
+            "source": {
+              "file_index": 8,
+              "line": 12
+            }
+          },
+          {
+            "name": "Blue",
+            "value": 2,
+            "doc": null,
+            "source": {
+              "file_index": 8,
+              "line": 13
+            }
+          }
+        ],
+        "associated_functions": [],
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "default": null,
+        "pinned": false,
+        "nested_items": [
+          "consts::Color::DEFAULT"
+        ]
+      },
+      "source": {
+        "file_index": 8,
+        "line": 8
+      }
+    },
+    "consts::Color::DEFAULT": {
+      "path": "consts::Color::DEFAULT",
+      "visibility": "public",
+      "size": 0,
+      "alignment": 1,
+      "category": "defined",
+      "kind": {
+        "type": "constant",
+        "doc": null,
+        "value_type": {
+          "type": "raw",
+          "path": "consts::Color"
+        },
+        "value": {
+          "kind": "enum_value",
+          "path": "Color::Red"
+        }
+      },
+      "source": {
+        "file_index": 8,
+        "line": 9
+      }
+    },
+    "consts::DEFAULT_COLOR": {
+      "path": "consts::DEFAULT_COLOR",
+      "visibility": "public",
+      "size": 0,
+      "alignment": 1,
+      "category": "defined",
+      "kind": {
+        "type": "constant",
+        "doc": null,
+        "value_type": {
+          "type": "raw",
+          "path": "consts::Color"
+        },
+        "value": {
+          "kind": "enum_value",
+          "path": "Color::Red"
+        }
+      },
+      "source": {
+        "file_index": 8,
+        "line": 6
+      }
+    },
+    "consts::GAME_NAME": {
+      "path": "consts::GAME_NAME",
+      "visibility": "public",
+      "size": 0,
+      "alignment": 1,
+      "category": "defined",
+      "kind": {
+        "type": "constant",
+        "doc": null,
+        "value_type": {
+          "type": "raw",
+          "path": "str"
+        },
+        "value": {
+          "kind": "string",
+          "value": "Pyxis"
+        }
+      },
+      "source": {
+        "file_index": 8,
+        "line": 5
+      }
+    },
+    "consts::GRAVITY": {
+      "path": "consts::GRAVITY",
+      "visibility": "public",
+      "size": 0,
+      "alignment": 1,
+      "category": "defined",
+      "kind": {
+        "type": "constant",
+        "doc": null,
+        "value_type": {
+          "type": "raw",
+          "path": "f64"
+        },
+        "value": {
+          "kind": "float",
+          "value": 9.81
+        }
+      },
+      "source": {
+        "file_index": 8,
+        "line": 4
+      }
+    },
+    "consts::MAX_HEALTH": {
+      "path": "consts::MAX_HEALTH",
+      "visibility": "public",
+      "size": 0,
+      "alignment": 1,
+      "category": "defined",
+      "kind": {
+        "type": "constant",
+        "doc": null,
+        "value_type": {
+          "type": "raw",
+          "path": "i32"
+        },
+        "value": {
+          "kind": "int",
+          "value": 100
+        }
+      },
+      "source": {
+        "file_index": 8,
+        "line": 2
+      }
+    },
+    "consts::Player": {
+      "path": "consts::Player",
+      "visibility": "public",
+      "size": 4,
+      "alignment": 4,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "health",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "i32"
+            },
+            "offset": 0,
+            "size": 4,
+            "alignment": 4,
+            "is_base": false,
+            "source": {
+              "file_index": 8,
+              "line": 33
+            }
+          }
+        ],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false,
+        "pinned": false,
+        "nested_items": [
+          "consts::Player::STARTING_GOLD",
+          "consts::Player::SPAWN_X",
+          "consts::Player::Inventory"
+        ]
+      },
+      "source": {
+        "file_index": 8,
+        "line": 23
+      }
+    },
+    "consts::Player::Inventory": {
+      "path": "consts::Player::Inventory",
+      "visibility": "public",
+      "size": 4,
+      "alignment": 4,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "slots",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "u32"
+            },
+            "offset": 0,
+            "size": 4,
+            "alignment": 4,
+            "is_base": false,
+            "source": {
+              "file_index": 8,
+              "line": 30
+            }
+          }
+        ],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false,
+        "pinned": false,
+        "nested_items": [
+          "consts::Player::Inventory::MAX_SLOTS"
+        ]
+      },
+      "source": {
+        "file_index": 8,
+        "line": 27
+      }
+    },
+    "consts::Player::Inventory::MAX_SLOTS": {
+      "path": "consts::Player::Inventory::MAX_SLOTS",
+      "visibility": "public",
+      "size": 0,
+      "alignment": 1,
+      "category": "defined",
+      "kind": {
+        "type": "constant",
+        "doc": null,
+        "value_type": {
+          "type": "raw",
+          "path": "u32"
+        },
+        "value": {
+          "kind": "int",
+          "value": 30
+        }
+      },
+      "source": {
+        "file_index": 8,
+        "line": 28
+      }
+    },
+    "consts::Player::SPAWN_X": {
+      "path": "consts::Player::SPAWN_X",
+      "visibility": "public",
+      "size": 0,
+      "alignment": 1,
+      "category": "defined",
+      "kind": {
+        "type": "constant",
+        "doc": null,
+        "value_type": {
+          "type": "raw",
+          "path": "f32"
+        },
+        "value": {
+          "kind": "float",
+          "value": 0.0
+        }
+      },
+      "source": {
+        "file_index": 8,
+        "line": 25
+      }
+    },
+    "consts::Player::STARTING_GOLD": {
+      "path": "consts::Player::STARTING_GOLD",
+      "visibility": "public",
+      "size": 0,
+      "alignment": 1,
+      "category": "defined",
+      "kind": {
+        "type": "constant",
+        "doc": null,
+        "value_type": {
+          "type": "raw",
+          "path": "u32"
+        },
+        "value": {
+          "kind": "int",
+          "value": 500
+        }
+      },
+      "source": {
+        "file_index": 8,
+        "line": 24
+      }
+    },
+    "consts::SCALE_FACTOR": {
+      "path": "consts::SCALE_FACTOR",
+      "visibility": "public",
+      "size": 0,
+      "alignment": 1,
+      "category": "defined",
+      "kind": {
+        "type": "constant",
+        "doc": null,
+        "value_type": {
+          "type": "raw",
+          "path": "f32"
+        },
+        "value": {
+          "kind": "float",
+          "value": 1.5
+        }
+      },
+      "source": {
+        "file_index": 8,
+        "line": 3
+      }
+    },
     "definition_body::Logger": {
       "path": "definition_body::Logger",
       "visibility": "public",
@@ -890,7 +1316,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 8,
+              "file_index": 9,
               "line": 20
             }
           }
@@ -910,7 +1336,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 8,
+              "file_index": 9,
               "line": 24
             }
           },
@@ -932,7 +1358,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 8,
+              "file_index": 9,
               "line": 26
             }
           }
@@ -946,7 +1372,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 8,
+        "file_index": 9,
         "line": 19
       }
     },
@@ -976,7 +1402,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 9,
+              "file_index": 10,
               "line": 3
             }
           }
@@ -1000,7 +1426,7 @@
               "return_type": null,
               "calling_convention": "system",
               "source": {
-                "file_index": 9,
+                "file_index": 10,
                 "line": 3
               }
             }
@@ -1014,7 +1440,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 9,
+        "file_index": 10,
         "line": 1
       }
     },
@@ -1041,7 +1467,7 @@
             "alignment": 8,
             "is_base": true,
             "source": {
-              "file_index": 9,
+              "file_index": 10,
               "line": 13
             }
           }
@@ -1063,7 +1489,7 @@
             "return_type": null,
             "calling_convention": "system",
             "source": {
-              "file_index": 9,
+              "file_index": 10,
               "line": 17
             }
           }
@@ -1086,7 +1512,7 @@
               "return_type": null,
               "calling_convention": "system",
               "source": {
-                "file_index": 9,
+                "file_index": 10,
                 "line": 9
               }
             }
@@ -1100,7 +1526,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 9,
+        "file_index": 10,
         "line": 7
       }
     },
@@ -1140,7 +1566,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 9,
+              "file_index": 10,
               "line": 9
             }
           }
@@ -1155,7 +1581,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 9,
+        "file_index": 10,
         "line": 9
       }
     },
@@ -1182,7 +1608,7 @@
             "alignment": 8,
             "is_base": true,
             "source": {
-              "file_index": 9,
+              "file_index": 10,
               "line": 26
             }
           }
@@ -1204,7 +1630,7 @@
             "return_type": null,
             "calling_convention": "system",
             "source": {
-              "file_index": 9,
+              "file_index": 10,
               "line": 30
             }
           }
@@ -1227,7 +1653,7 @@
               "return_type": null,
               "calling_convention": "system",
               "source": {
-                "file_index": 9,
+                "file_index": 10,
                 "line": 22
               }
             }
@@ -1241,7 +1667,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 9,
+        "file_index": 10,
         "line": 20
       }
     },
@@ -1281,7 +1707,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 9,
+              "file_index": 10,
               "line": 22
             }
           }
@@ -1296,7 +1722,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 9,
+        "file_index": 10,
         "line": 22
       }
     },
@@ -1336,7 +1762,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 9,
+              "file_index": 10,
               "line": 3
             }
           }
@@ -1351,7 +1777,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 9,
+        "file_index": 10,
         "line": 3
       }
     },
@@ -1378,7 +1804,7 @@
             "alignment": 8,
             "is_base": true,
             "source": {
-              "file_index": 9,
+              "file_index": 10,
               "line": 39
             }
           },
@@ -1395,7 +1821,7 @@
             "alignment": 8,
             "is_base": true,
             "source": {
-              "file_index": 9,
+              "file_index": 10,
               "line": 41
             }
           }
@@ -1418,7 +1844,7 @@
             "return_type": null,
             "calling_convention": "system",
             "source": {
-              "file_index": 9,
+              "file_index": 10,
               "line": 17
             }
           },
@@ -1439,7 +1865,7 @@
             "return_type": null,
             "calling_convention": "system",
             "source": {
-              "file_index": 9,
+              "file_index": 10,
               "line": 30
             }
           },
@@ -1460,7 +1886,7 @@
             "return_type": null,
             "calling_convention": "system",
             "source": {
-              "file_index": 9,
+              "file_index": 10,
               "line": 22
             }
           }
@@ -1483,7 +1909,7 @@
               "return_type": null,
               "calling_convention": "system",
               "source": {
-                "file_index": 9,
+                "file_index": 10,
                 "line": 35
               }
             }
@@ -1497,7 +1923,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 9,
+        "file_index": 10,
         "line": 33
       }
     },
@@ -1537,7 +1963,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 9,
+              "file_index": 10,
               "line": 35
             }
           }
@@ -1552,7 +1978,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 9,
+        "file_index": 10,
         "line": 35
       }
     },
@@ -1582,7 +2008,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 10,
+              "file_index": 11,
               "line": 6
             }
           },
@@ -1599,7 +2025,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 10,
+              "file_index": 11,
               "line": 11
             }
           }
@@ -1621,7 +2047,7 @@
             "return_type": null,
             "calling_convention": "system",
             "source": {
-              "file_index": 10,
+              "file_index": 11,
               "line": 18
             }
           }
@@ -1644,7 +2070,7 @@
               "return_type": null,
               "calling_convention": "system",
               "source": {
-                "file_index": 10,
+                "file_index": 11,
                 "line": 6
               }
             }
@@ -1658,7 +2084,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 10,
+        "file_index": 11,
         "line": 3
       }
     },
@@ -1698,7 +2124,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 10,
+              "file_index": 11,
               "line": 6
             }
           }
@@ -1713,7 +2139,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 10,
+        "file_index": 11,
         "line": 6
       }
     },
@@ -1736,7 +2162,7 @@
             "value": 0,
             "doc": null,
             "source": {
-              "file_index": 11,
+              "file_index": 12,
               "line": 4
             }
           },
@@ -1745,7 +2171,7 @@
             "value": 1,
             "doc": null,
             "source": {
-              "file_index": 11,
+              "file_index": 12,
               "line": 5
             }
           },
@@ -1754,7 +2180,7 @@
             "value": 2,
             "doc": null,
             "source": {
-              "file_index": 11,
+              "file_index": 12,
               "line": 6
             }
           }
@@ -1772,7 +2198,7 @@
             "return_type": null,
             "calling_convention": "system",
             "source": {
-              "file_index": 11,
+              "file_index": 12,
               "line": 10
             }
           },
@@ -1795,7 +2221,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 11,
+              "file_index": 12,
               "line": 13
             }
           }
@@ -1807,7 +2233,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 11,
+        "file_index": 12,
         "line": 2
       }
     },
@@ -1833,7 +2259,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 12,
+        "file_index": 13,
         "line": 7
       }
     },
@@ -1860,7 +2286,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 12,
+              "file_index": 13,
               "line": 10
             }
           }
@@ -1875,7 +2301,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 12,
+        "file_index": 13,
         "line": 9
       }
     },
@@ -1902,7 +2328,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 13,
+              "file_index": 14,
               "line": 6
             }
           }
@@ -1922,7 +2348,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 13,
+              "file_index": 14,
               "line": 10
             }
           },
@@ -1944,7 +2370,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 13,
+              "file_index": 14,
               "line": 12
             }
           },
@@ -1966,7 +2392,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 13,
+              "file_index": 14,
               "line": 14
             }
           }
@@ -1980,7 +2406,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 13,
+        "file_index": 14,
         "line": 5
       }
     },
@@ -2013,7 +2439,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 13,
+              "file_index": 14,
               "line": 44
             }
           },
@@ -2033,7 +2459,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 13,
+              "file_index": 14,
               "line": 45
             }
           }
@@ -2060,7 +2486,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 13,
+              "file_index": 14,
               "line": 49
             }
           },
@@ -2088,7 +2514,7 @@
               "Y"
             ],
             "source": {
-              "file_index": 13,
+              "file_index": 14,
               "line": 56
             }
           }
@@ -2102,7 +2528,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 13,
+        "file_index": 14,
         "line": 43
       }
     },
@@ -2125,7 +2551,7 @@
             "value": 0,
             "doc": null,
             "source": {
-              "file_index": 14,
+              "file_index": 15,
               "line": 2
             }
           }
@@ -2143,7 +2569,7 @@
             "return_type": null,
             "calling_convention": "system",
             "source": {
-              "file_index": 14,
+              "file_index": 15,
               "line": 6
             }
           }
@@ -2155,7 +2581,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 14,
+        "file_index": 15,
         "line": 1
       }
     },
@@ -2188,7 +2614,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 15,
+              "file_index": 16,
               "line": 55
             }
           },
@@ -2205,7 +2631,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 15,
+              "file_index": 16,
               "line": 56
             }
           },
@@ -2226,7 +2652,7 @@
             "alignment": 1,
             "is_base": false,
             "source": {
-              "file_index": 15,
+              "file_index": 16,
               "line": 50
             }
           }
@@ -2241,7 +2667,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 15,
+        "file_index": 16,
         "line": 54
       }
     },
@@ -2274,7 +2700,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 15,
+              "file_index": 16,
               "line": 63
             }
           }
@@ -2289,7 +2715,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 15,
+        "file_index": 16,
         "line": 62
       }
     },
@@ -2319,7 +2745,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 15,
+              "file_index": 16,
               "line": 72
             }
           }
@@ -2357,7 +2783,7 @@
               "return_type": null,
               "calling_convention": "system",
               "source": {
-                "file_index": 15,
+                "file_index": 16,
                 "line": 72
               }
             }
@@ -2371,7 +2797,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 15,
+        "file_index": 16,
         "line": 70
       }
     },
@@ -2424,7 +2850,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 15,
+              "file_index": 16,
               "line": 72
             }
           }
@@ -2439,7 +2865,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 15,
+        "file_index": 16,
         "line": 72
       }
     },
@@ -2472,7 +2898,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 15,
+              "file_index": 16,
               "line": 27
             }
           },
@@ -2495,7 +2921,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 15,
+              "file_index": 16,
               "line": 28
             }
           },
@@ -2522,7 +2948,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 15,
+              "file_index": 16,
               "line": 29
             }
           }
@@ -2537,7 +2963,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 15,
+        "file_index": 16,
         "line": 26
       }
     },
@@ -2574,7 +3000,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 15,
+              "file_index": 16,
               "line": 35
             }
           }
@@ -2589,7 +3015,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 15,
+        "file_index": 16,
         "line": 34
       }
     },
@@ -2625,7 +3051,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 15,
+              "file_index": 16,
               "line": 41
             }
           }
@@ -2640,7 +3066,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 15,
+        "file_index": 16,
         "line": 40
       }
     },
@@ -2674,7 +3100,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 15,
+              "file_index": 16,
               "line": 20
             }
           },
@@ -2694,7 +3120,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 15,
+              "file_index": 16,
               "line": 21
             }
           }
@@ -2709,7 +3135,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 15,
+        "file_index": 16,
         "line": 19
       }
     },
@@ -2736,7 +3162,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 15,
+              "file_index": 16,
               "line": 47
             }
           }
@@ -2751,7 +3177,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 15,
+        "file_index": 16,
         "line": 46
       }
     },
@@ -2784,7 +3210,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 15,
+              "file_index": 16,
               "line": 7
             }
           }
@@ -2799,7 +3225,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 15,
+        "file_index": 16,
         "line": 6
       }
     },
@@ -2832,7 +3258,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 15,
+              "file_index": 16,
               "line": 14
             }
           }
@@ -2847,7 +3273,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 15,
+        "file_index": 16,
         "line": 13
       }
     },
@@ -2874,7 +3300,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 16,
+              "file_index": 17,
               "line": 8
             }
           },
@@ -2891,7 +3317,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 16,
+              "file_index": 17,
               "line": 9
             }
           }
@@ -2906,7 +3332,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 16,
+        "file_index": 17,
         "line": 7
       }
     },
@@ -2943,7 +3369,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 16,
+              "file_index": 17,
               "line": 27
             }
           }
@@ -2958,7 +3384,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 16,
+        "file_index": 17,
         "line": 26
       }
     },
@@ -2997,7 +3423,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 16,
+              "file_index": 17,
               "line": 33
             }
           }
@@ -3012,7 +3438,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 16,
+        "file_index": 17,
         "line": 32
       }
     },
@@ -3045,7 +3471,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 16,
+              "file_index": 17,
               "line": 15
             }
           }
@@ -3060,7 +3486,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 16,
+        "file_index": 17,
         "line": 14
       }
     },
@@ -3093,7 +3519,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 16,
+              "file_index": 17,
               "line": 21
             }
           }
@@ -3108,7 +3534,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 16,
+        "file_index": 17,
         "line": 20
       }
     },
@@ -3139,7 +3565,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 17,
+              "file_index": 18,
               "line": 4
             }
           }
@@ -3154,7 +3580,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 17,
+        "file_index": 18,
         "line": 3
       }
     },
@@ -3181,7 +3607,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 17,
+              "file_index": 18,
               "line": 10
             }
           },
@@ -3198,7 +3624,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 17,
+              "file_index": 18,
               "line": 11
             }
           },
@@ -3215,7 +3641,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 17,
+              "file_index": 18,
               "line": 12
             }
           }
@@ -3230,7 +3656,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 17,
+        "file_index": 18,
         "line": 9
       }
     },
@@ -3257,7 +3683,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 18,
+              "file_index": 19,
               "line": 11
             }
           },
@@ -3278,7 +3704,7 @@
             "alignment": 1,
             "is_base": false,
             "source": {
-              "file_index": 18,
+              "file_index": 19,
               "line": 8
             }
           }
@@ -3293,7 +3719,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 18,
+        "file_index": 19,
         "line": 10
       }
     },
@@ -3320,7 +3746,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 18,
+              "file_index": 19,
               "line": 4
             }
           },
@@ -3337,7 +3763,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 18,
+              "file_index": 19,
               "line": 5
             }
           },
@@ -3358,7 +3784,7 @@
             "alignment": 1,
             "is_base": false,
             "source": {
-              "file_index": 18,
+              "file_index": 19,
               "line": 1
             }
           }
@@ -3373,7 +3799,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 18,
+        "file_index": 19,
         "line": 3
       }
     },
@@ -3403,7 +3829,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 19,
+              "file_index": 20,
               "line": 4
             }
           },
@@ -3420,7 +3846,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 19,
+              "file_index": 20,
               "line": 8
             }
           }
@@ -3453,7 +3879,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 19,
+              "file_index": 20,
               "line": 12
             }
           }
@@ -3487,7 +3913,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 19,
+                "file_index": 20,
                 "line": 4
               }
             }
@@ -3501,7 +3927,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 19,
+        "file_index": 20,
         "line": 2
       }
     },
@@ -3551,7 +3977,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 19,
+              "file_index": 20,
               "line": 4
             }
           }
@@ -3566,7 +3992,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 19,
+        "file_index": 20,
         "line": 4
       }
     },
@@ -3593,7 +4019,7 @@
             "alignment": 8,
             "is_base": true,
             "source": {
-              "file_index": 19,
+              "file_index": 20,
               "line": 23
             }
           },
@@ -3610,7 +4036,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 19,
+              "file_index": 20,
               "line": 24
             }
           }
@@ -3644,7 +4070,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 19,
+              "file_index": 20,
               "line": 12
             }
           },
@@ -3675,7 +4101,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 19,
+              "file_index": 20,
               "line": 28
             }
           }
@@ -3709,7 +4135,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 19,
+                "file_index": 20,
                 "line": 18
               }
             },
@@ -3740,7 +4166,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 19,
+                "file_index": 20,
                 "line": 19
               }
             }
@@ -3754,7 +4180,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 19,
+        "file_index": 20,
         "line": 16
       }
     },
@@ -3781,7 +4207,7 @@
             "alignment": 8,
             "is_base": true,
             "source": {
-              "file_index": 19,
+              "file_index": 20,
               "line": 40
             }
           },
@@ -3798,7 +4224,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 19,
+              "file_index": 20,
               "line": 41
             }
           }
@@ -3832,7 +4258,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 19,
+              "file_index": 20,
               "line": 12
             }
           },
@@ -3864,7 +4290,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 19,
+              "file_index": 20,
               "line": 28
             }
           },
@@ -3895,7 +4321,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 19,
+              "file_index": 20,
               "line": 45
             }
           }
@@ -3929,7 +4355,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 19,
+                "file_index": 20,
                 "line": 34
               }
             },
@@ -3960,7 +4386,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 19,
+                "file_index": 20,
                 "line": 35
               }
             },
@@ -3991,7 +4417,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 19,
+                "file_index": 20,
                 "line": 36
               }
             }
@@ -4005,7 +4431,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 19,
+        "file_index": 20,
         "line": 32
       }
     },
@@ -4032,7 +4458,7 @@
             "alignment": 8,
             "is_base": true,
             "source": {
-              "file_index": 19,
+              "file_index": 20,
               "line": 58
             }
           },
@@ -4049,7 +4475,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 19,
+              "file_index": 20,
               "line": 59
             }
           }
@@ -4083,7 +4509,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 19,
+              "file_index": 20,
               "line": 12
             }
           },
@@ -4115,7 +4541,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 19,
+              "file_index": 20,
               "line": 28
             }
           },
@@ -4147,7 +4573,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 19,
+              "file_index": 20,
               "line": 45
             }
           },
@@ -4178,7 +4604,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 19,
+              "file_index": 20,
               "line": 63
             }
           }
@@ -4212,7 +4638,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 19,
+                "file_index": 20,
                 "line": 51
               }
             },
@@ -4243,7 +4669,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 19,
+                "file_index": 20,
                 "line": 52
               }
             },
@@ -4274,7 +4700,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 19,
+                "file_index": 20,
                 "line": 53
               }
             },
@@ -4305,7 +4731,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 19,
+                "file_index": 20,
                 "line": 54
               }
             }
@@ -4319,7 +4745,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 19,
+        "file_index": 20,
         "line": 49
       }
     },
@@ -4369,7 +4795,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 19,
+              "file_index": 20,
               "line": 51
             }
           },
@@ -4409,7 +4835,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 19,
+              "file_index": 20,
               "line": 52
             }
           },
@@ -4449,7 +4875,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 19,
+              "file_index": 20,
               "line": 53
             }
           },
@@ -4489,7 +4915,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 19,
+              "file_index": 20,
               "line": 54
             }
           }
@@ -4504,7 +4930,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 19,
+        "file_index": 20,
         "line": 51
       }
     },
@@ -4554,7 +4980,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 19,
+              "file_index": 20,
               "line": 34
             }
           },
@@ -4594,7 +5020,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 19,
+              "file_index": 20,
               "line": 35
             }
           },
@@ -4634,7 +5060,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 19,
+              "file_index": 20,
               "line": 36
             }
           }
@@ -4649,7 +5075,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 19,
+        "file_index": 20,
         "line": 34
       }
     },
@@ -4699,7 +5125,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 19,
+              "file_index": 20,
               "line": 18
             }
           },
@@ -4739,7 +5165,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 19,
+              "file_index": 20,
               "line": 19
             }
           }
@@ -4754,7 +5180,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 19,
+        "file_index": 20,
         "line": 18
       }
     },
@@ -4813,7 +5239,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 20,
+              "file_index": 21,
               "line": 31
             }
           }
@@ -4834,7 +5260,7 @@
         ]
       },
       "source": {
-        "file_index": 20,
+        "file_index": 21,
         "line": 6
       }
     },
@@ -4860,7 +5286,7 @@
         }
       },
       "source": {
-        "file_index": 20,
+        "file_index": 21,
         "line": 29
       }
     },
@@ -4908,7 +5334,7 @@
             "value": 0,
             "doc": null,
             "source": {
-              "file_index": 20,
+              "file_index": 21,
               "line": 11
             }
           },
@@ -4917,7 +5343,7 @@
             "value": 1,
             "doc": null,
             "source": {
-              "file_index": 20,
+              "file_index": 21,
               "line": 12
             }
           },
@@ -4926,7 +5352,7 @@
             "value": 2,
             "doc": null,
             "source": {
-              "file_index": 20,
+              "file_index": 21,
               "line": 13
             }
           }
@@ -4939,7 +5365,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 20,
+        "file_index": 21,
         "line": 10
       }
     },
@@ -4981,7 +5407,7 @@
             "value": 1,
             "doc": null,
             "source": {
-              "file_index": 20,
+              "file_index": 21,
               "line": 25
             }
           },
@@ -4990,7 +5416,7 @@
             "value": 2,
             "doc": null,
             "source": {
-              "file_index": 20,
+              "file_index": 21,
               "line": 26
             }
           }
@@ -5002,7 +5428,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 20,
+        "file_index": 21,
         "line": 24
       }
     },
@@ -5042,7 +5468,7 @@
             "alignment": 2,
             "is_base": false,
             "source": {
-              "file_index": 20,
+              "file_index": 21,
               "line": 19
             }
           }
@@ -5057,7 +5483,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 20,
+        "file_index": 21,
         "line": 18
       }
     },
@@ -5084,7 +5510,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 21,
+              "file_index": 22,
               "line": 10
             }
           }
@@ -5099,7 +5525,7 @@
         "pinned": true
       },
       "source": {
-        "file_index": 21,
+        "file_index": 22,
         "line": 9
       }
     },
@@ -5122,7 +5548,7 @@
             "value": 0,
             "doc": null,
             "source": {
-              "file_index": 21,
+              "file_index": 22,
               "line": 16
             }
           },
@@ -5131,7 +5557,7 @@
             "value": 1,
             "doc": null,
             "source": {
-              "file_index": 21,
+              "file_index": 22,
               "line": 17
             }
           }
@@ -5144,7 +5570,7 @@
         "pinned": true
       },
       "source": {
-        "file_index": 21,
+        "file_index": 22,
         "line": 15
       }
     },
@@ -5167,7 +5593,7 @@
             "value": 1,
             "doc": null,
             "source": {
-              "file_index": 21,
+              "file_index": 22,
               "line": 23
             }
           },
@@ -5176,7 +5602,7 @@
             "value": 2,
             "doc": null,
             "source": {
-              "file_index": 21,
+              "file_index": 22,
               "line": 24
             }
           }
@@ -5188,7 +5614,7 @@
         "pinned": true
       },
       "source": {
-        "file_index": 21,
+        "file_index": 22,
         "line": 22
       }
     },
@@ -5215,7 +5641,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 21,
+              "file_index": 22,
               "line": 4
             }
           }
@@ -5230,7 +5656,7 @@
         "pinned": true
       },
       "source": {
-        "file_index": 21,
+        "file_index": 22,
         "line": 3
       }
     },
@@ -5257,7 +5683,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 22,
+              "file_index": 23,
               "line": 20
             }
           },
@@ -5278,7 +5704,7 @@
             "alignment": 1,
             "is_base": false,
             "source": {
-              "file_index": 22,
+              "file_index": 23,
               "line": 23
             }
           },
@@ -5301,7 +5727,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 22,
+              "file_index": 23,
               "line": 23
             }
           },
@@ -5324,7 +5750,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 22,
+              "file_index": 23,
               "line": 24
             }
           },
@@ -5347,7 +5773,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 22,
+              "file_index": 23,
               "line": 25
             }
           },
@@ -5368,7 +5794,7 @@
             "alignment": 1,
             "is_base": false,
             "source": {
-              "file_index": 22,
+              "file_index": 23,
               "line": 13
             }
           }
@@ -5383,7 +5809,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 22,
+        "file_index": 23,
         "line": 19
       }
     },
@@ -5416,7 +5842,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 22,
+              "file_index": 23,
               "line": 4
             }
           }
@@ -5431,7 +5857,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 22,
+        "file_index": 23,
         "line": 3
       }
     },
@@ -5458,7 +5884,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 22,
+              "file_index": 23,
               "line": 31
             }
           },
@@ -5479,7 +5905,7 @@
             "alignment": 1,
             "is_base": false,
             "source": {
-              "file_index": 22,
+              "file_index": 23,
               "line": 34
             }
           },
@@ -5502,7 +5928,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 22,
+              "file_index": 23,
               "line": 34
             }
           },
@@ -5525,7 +5951,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 22,
+              "file_index": 23,
               "line": 35
             }
           }
@@ -5540,7 +5966,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 22,
+        "file_index": 23,
         "line": 30
       }
     },
@@ -5573,7 +5999,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 22,
+              "file_index": 23,
               "line": 10
             }
           }
@@ -5588,7 +6014,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 22,
+        "file_index": 23,
         "line": 9
       }
     },
@@ -5615,7 +6041,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 23,
+              "file_index": 24,
               "line": 3
             }
           }
@@ -5630,7 +6056,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 23,
+        "file_index": 24,
         "line": 2
       }
     },
@@ -5660,7 +6086,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 24,
+              "file_index": 25,
               "line": 4
             }
           },
@@ -5677,7 +6103,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 24,
+              "file_index": 25,
               "line": 8
             }
           }
@@ -5710,7 +6136,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 24,
+              "file_index": 25,
               "line": 12
             }
           }
@@ -5744,7 +6170,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 24,
+                "file_index": 25,
                 "line": 4
               }
             }
@@ -5758,7 +6184,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 24,
+        "file_index": 25,
         "line": 2
       }
     },
@@ -5808,7 +6234,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 24,
+              "file_index": 25,
               "line": 4
             }
           }
@@ -5823,7 +6249,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 24,
+        "file_index": 25,
         "line": 4
       }
     },
@@ -5853,7 +6279,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 24,
+              "file_index": 25,
               "line": 18
             }
           },
@@ -5870,7 +6296,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 24,
+              "file_index": 25,
               "line": 22
             }
           }
@@ -5903,7 +6329,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 24,
+              "file_index": 25,
               "line": 26
             }
           }
@@ -5937,7 +6363,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 24,
+                "file_index": 25,
                 "line": 18
               }
             }
@@ -5951,7 +6377,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 24,
+        "file_index": 25,
         "line": 16
       }
     },
@@ -6001,7 +6427,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 24,
+              "file_index": 25,
               "line": 18
             }
           }
@@ -6016,7 +6442,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 24,
+        "file_index": 25,
         "line": 18
       }
     },
@@ -6043,7 +6469,7 @@
             "alignment": 8,
             "is_base": true,
             "source": {
-              "file_index": 24,
+              "file_index": 25,
               "line": 37
             }
           },
@@ -6060,7 +6486,7 @@
             "alignment": 8,
             "is_base": true,
             "source": {
-              "file_index": 24,
+              "file_index": 25,
               "line": 39
             }
           }
@@ -6094,7 +6520,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 24,
+              "file_index": 25,
               "line": 12
             }
           },
@@ -6126,7 +6552,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 24,
+              "file_index": 25,
               "line": 26
             }
           },
@@ -6158,7 +6584,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 24,
+              "file_index": 25,
               "line": 18
             }
           },
@@ -6189,7 +6615,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 24,
+              "file_index": 25,
               "line": 43
             }
           }
@@ -6223,7 +6649,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 24,
+                "file_index": 25,
                 "line": 32
               }
             },
@@ -6254,7 +6680,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 24,
+                "file_index": 25,
                 "line": 33
               }
             }
@@ -6268,7 +6694,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 24,
+        "file_index": 25,
         "line": 30
       }
     },
@@ -6318,7 +6744,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 24,
+              "file_index": 25,
               "line": 32
             }
           },
@@ -6358,7 +6784,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 24,
+              "file_index": 25,
               "line": 33
             }
           }
@@ -6373,7 +6799,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 24,
+        "file_index": 25,
         "line": 32
       }
     },
@@ -6403,7 +6829,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 25,
+              "file_index": 26,
               "line": 9
             }
           }
@@ -6418,7 +6844,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 25,
+        "file_index": 26,
         "line": 8
       }
     },
@@ -6454,7 +6880,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 26,
+              "file_index": 27,
               "line": 59
             }
           },
@@ -6481,7 +6907,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 26,
+              "file_index": 27,
               "line": 60
             }
           }
@@ -6496,7 +6922,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 26,
+        "file_index": 27,
         "line": 58
       }
     },
@@ -6521,7 +6947,7 @@
         }
       },
       "source": {
-        "file_index": 26,
+        "file_index": 27,
         "line": 16
       }
     },
@@ -6551,7 +6977,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 26,
+              "file_index": 27,
               "line": 33
             }
           },
@@ -6571,7 +6997,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 26,
+              "file_index": 27,
               "line": 34
             }
           }
@@ -6586,7 +7012,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 26,
+        "file_index": 27,
         "line": 32
       }
     },
@@ -6619,7 +7045,7 @@
         }
       },
       "source": {
-        "file_index": 26,
+        "file_index": 27,
         "line": 25
       }
     },
@@ -6652,7 +7078,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 26,
+              "file_index": 27,
               "line": 42
             }
           },
@@ -6675,7 +7101,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 26,
+              "file_index": 27,
               "line": 43
             }
           },
@@ -6702,7 +7128,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 26,
+              "file_index": 27,
               "line": 44
             }
           },
@@ -6722,7 +7148,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 26,
+              "file_index": 27,
               "line": 45
             }
           },
@@ -6742,7 +7168,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 26,
+              "file_index": 27,
               "line": 46
             }
           }
@@ -6757,7 +7183,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 26,
+        "file_index": 27,
         "line": 41
       }
     },
@@ -6779,7 +7205,7 @@
         }
       },
       "source": {
-        "file_index": 26,
+        "file_index": 27,
         "line": 9
       }
     },
@@ -6804,7 +7230,7 @@
         }
       },
       "source": {
-        "file_index": 26,
+        "file_index": 27,
         "line": 13
       }
     },
@@ -6835,7 +7261,7 @@
         }
       },
       "source": {
-        "file_index": 26,
+        "file_index": 27,
         "line": 28
       }
     },
@@ -6863,7 +7289,7 @@
         }
       },
       "source": {
-        "file_index": 26,
+        "file_index": 27,
         "line": 19
       }
     },
@@ -6885,7 +7311,7 @@
         }
       },
       "source": {
-        "file_index": 26,
+        "file_index": 27,
         "line": 6
       }
     },
@@ -6914,7 +7340,7 @@
         }
       },
       "source": {
-        "file_index": 26,
+        "file_index": 27,
         "line": 54
       }
     },
@@ -6942,7 +7368,7 @@
         }
       },
       "source": {
-        "file_index": 26,
+        "file_index": 27,
         "line": 51
       }
     },
@@ -6970,7 +7396,7 @@
         }
       },
       "source": {
-        "file_index": 26,
+        "file_index": 27,
         "line": 22
       }
     },
@@ -7000,7 +7426,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 27,
+              "file_index": 28,
               "line": 8
             }
           },
@@ -7017,7 +7443,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 27,
+              "file_index": 28,
               "line": 13
             }
           }
@@ -7039,7 +7465,7 @@
             "return_type": null,
             "calling_convention": "system",
             "source": {
-              "file_index": 27,
+              "file_index": 28,
               "line": 20
             }
           }
@@ -7062,7 +7488,7 @@
               "return_type": null,
               "calling_convention": "system",
               "source": {
-                "file_index": 27,
+                "file_index": 28,
                 "line": 8
               }
             }
@@ -7076,7 +7502,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 27,
+        "file_index": 28,
         "line": 5
       }
     },
@@ -7116,7 +7542,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 27,
+              "file_index": 28,
               "line": 8
             }
           }
@@ -7131,7 +7557,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 27,
+        "file_index": 28,
         "line": 8
       }
     },
@@ -7158,7 +7584,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 30,
+              "file_index": 31,
               "line": 10
             }
           }
@@ -7173,7 +7599,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 30,
+        "file_index": 31,
         "line": 9
       }
     },
@@ -7203,7 +7629,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 28,
+              "file_index": 29,
               "line": 8
             }
           },
@@ -7220,7 +7646,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 28,
+              "file_index": 29,
               "line": 9
             }
           },
@@ -7237,7 +7663,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 28,
+              "file_index": 29,
               "line": 10
             }
           }
@@ -7252,7 +7678,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 28,
+        "file_index": 29,
         "line": 7
       }
     },
@@ -7279,7 +7705,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 29,
+              "file_index": 30,
               "line": 6
             }
           }
@@ -7294,7 +7720,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 29,
+        "file_index": 30,
         "line": 5
       }
     },
@@ -7321,7 +7747,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 31,
+              "file_index": 32,
               "line": 4
             }
           },
@@ -7338,7 +7764,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 31,
+              "file_index": 32,
               "line": 5
             }
           }
@@ -7353,7 +7779,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 31,
+        "file_index": 32,
         "line": 3
       }
     },
@@ -7383,7 +7809,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 32,
+              "file_index": 33,
               "line": 10
             }
           },
@@ -7403,7 +7829,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 32,
+              "file_index": 33,
               "line": 11
             }
           }
@@ -7418,7 +7844,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 32,
+        "file_index": 33,
         "line": 9
       }
     }
@@ -7645,6 +8071,27 @@
         "line": 1
       }
     },
+    "consts": {
+      "doc": null,
+      "items": [
+        "consts::AccessFlags",
+        "consts::Color",
+        "consts::DEFAULT_COLOR",
+        "consts::GAME_NAME",
+        "consts::GRAVITY",
+        "consts::MAX_HEALTH",
+        "consts::Player",
+        "consts::SCALE_FACTOR"
+      ],
+      "submodules": {},
+      "extern_values": [],
+      "functions": [],
+      "backends": {},
+      "source": {
+        "file_index": 8,
+        "line": 1
+      }
+    },
     "definition_body": {
       "doc": null,
       "items": [
@@ -7681,7 +8128,7 @@
         ]
       },
       "source": {
-        "file_index": 8,
+        "file_index": 9,
         "line": 1
       }
     },
@@ -7702,7 +8149,7 @@
       "functions": [],
       "backends": {},
       "source": {
-        "file_index": 9,
+        "file_index": 10,
         "line": 1
       }
     },
@@ -7717,7 +8164,7 @@
       "functions": [],
       "backends": {},
       "source": {
-        "file_index": 10,
+        "file_index": 11,
         "line": 1
       }
     },
@@ -7731,7 +8178,7 @@
       "functions": [],
       "backends": {},
       "source": {
-        "file_index": 11,
+        "file_index": 12,
         "line": 1
       }
     },
@@ -7746,7 +8193,7 @@
       "functions": [],
       "backends": {},
       "source": {
-        "file_index": 12,
+        "file_index": 13,
         "line": 1
       }
     },
@@ -7773,7 +8220,7 @@
           },
           "calling_convention": "system",
           "source": {
-            "file_index": 13,
+            "file_index": 14,
             "line": 32
           }
         }
@@ -7827,7 +8274,7 @@
         ]
       },
       "source": {
-        "file_index": 13,
+        "file_index": 14,
         "line": 1
       }
     },
@@ -7851,7 +8298,7 @@
           "return_type": null,
           "calling_convention": "system",
           "source": {
-            "file_index": 14,
+            "file_index": 15,
             "line": 13
           }
         },
@@ -7879,14 +8326,14 @@
           },
           "calling_convention": "system",
           "source": {
-            "file_index": 14,
+            "file_index": 15,
             "line": 17
           }
         }
       ],
       "backends": {},
       "source": {
-        "file_index": 14,
+        "file_index": 15,
         "line": 1
       }
     },
@@ -7910,7 +8357,7 @@
       "functions": [],
       "backends": {},
       "source": {
-        "file_index": 15,
+        "file_index": 16,
         "line": 1
       }
     },
@@ -7928,7 +8375,7 @@
       "functions": [],
       "backends": {},
       "source": {
-        "file_index": 16,
+        "file_index": 17,
         "line": 1
       }
     },
@@ -7943,7 +8390,7 @@
       "functions": [],
       "backends": {},
       "source": {
-        "file_index": 17,
+        "file_index": 18,
         "line": 1
       }
     },
@@ -7958,7 +8405,7 @@
       "functions": [],
       "backends": {},
       "source": {
-        "file_index": 18,
+        "file_index": 19,
         "line": 1
       }
     },
@@ -7979,7 +8426,7 @@
       "functions": [],
       "backends": {},
       "source": {
-        "file_index": 19,
+        "file_index": 20,
         "line": 1
       }
     },
@@ -7993,7 +8440,7 @@
       "functions": [],
       "backends": {},
       "source": {
-        "file_index": 20,
+        "file_index": 21,
         "line": 1
       }
     },
@@ -8010,7 +8457,7 @@
       "functions": [],
       "backends": {},
       "source": {
-        "file_index": 21,
+        "file_index": 22,
         "line": 1
       }
     },
@@ -8036,7 +8483,7 @@
       "functions": [],
       "backends": {},
       "source": {
-        "file_index": 22,
+        "file_index": 23,
         "line": 1
       }
     },
@@ -8050,7 +8497,7 @@
       "functions": [],
       "backends": {},
       "source": {
-        "file_index": 23,
+        "file_index": 24,
         "line": 1
       }
     },
@@ -8069,7 +8516,7 @@
       "functions": [],
       "backends": {},
       "source": {
-        "file_index": 24,
+        "file_index": 25,
         "line": 1
       }
     },
@@ -8083,7 +8530,7 @@
       "functions": [],
       "backends": {},
       "source": {
-        "file_index": 25,
+        "file_index": 26,
         "line": 1
       }
     },
@@ -8109,7 +8556,7 @@
       "functions": [],
       "backends": {},
       "source": {
-        "file_index": 26,
+        "file_index": 27,
         "line": 1
       }
     },
@@ -8124,7 +8571,7 @@
       "functions": [],
       "backends": {},
       "source": {
-        "file_index": 27,
+        "file_index": 28,
         "line": 3
       }
     },
@@ -8144,7 +8591,7 @@
           "functions": [],
           "backends": {},
           "source": {
-            "file_index": 28,
+            "file_index": 29,
             "line": 1
           }
         },
@@ -8162,7 +8609,7 @@
               "functions": [],
               "backends": {},
               "source": {
-                "file_index": 29,
+                "file_index": 30,
                 "line": 1
               }
             }
@@ -8182,7 +8629,7 @@
           "functions": [],
           "backends": {},
           "source": {
-            "file_index": 31,
+            "file_index": 32,
             "line": 1
           }
         }
@@ -8201,7 +8648,7 @@
         ]
       },
       "source": {
-        "file_index": 30,
+        "file_index": 31,
         "line": 7
       }
     },
@@ -8215,7 +8662,7 @@
       "functions": [],
       "backends": {},
       "source": {
-        "file_index": 32,
+        "file_index": 33,
         "line": 1
       }
     }
@@ -8229,6 +8676,7 @@
     "braced_imports.pyxis",
     "calling_conventions.pyxis",
     "cfg.pyxis",
+    "consts.pyxis",
     "definition_body.pyxis",
     "diamond_inheritance.pyxis",
     "doc_comments.pyxis",
