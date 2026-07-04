@@ -178,3 +178,21 @@ fn nested_const_name_hovers() {
         "nested const hover should show its value, got {h}"
     );
 }
+
+#[test]
+fn doc_link_to_function_hovers() {
+    // A doc-comment link to a free function used to fall through (only Item /
+    // Member targets were handled), so it produced no hover.
+    let src = "/// See [`GetName`] for the mapping.\npub type Foo {\n    pub x: u32,\n}\n\n#[address(0x456)]\npub fn GetName();\n";
+    let st = ServerState::in_memory(&[(ROOT, 8, &[("f.pyxis", src)])]);
+    let uri = ServerState::document_uri(ROOT, "f.pyxis");
+
+    let line0 = src.lines().next().unwrap();
+    let col = line0.find("GetName").unwrap() as u32 + 2;
+    let h = hover(&st, &uri, 0, col);
+    let text = hover_text(&h).unwrap_or("");
+    assert!(
+        text.contains("GetName") && text.contains("fn"),
+        "doc link to a function should hover as that function, got {h}"
+    );
+}

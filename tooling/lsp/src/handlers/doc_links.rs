@@ -197,6 +197,54 @@ impl ServerState {
             .next()
     }
 
+    /// Locate a module-level free function (`want_function`) or extern value
+    /// named by a doc link — its declaring module plus leaf name — returning the
+    /// leaf's location (for go-to) and hover markdown.
+    fn resolve_doc_module_item(
+        &self,
+        module: &ItemPath,
+        name: &str,
+        from_uri: &Uri,
+        want_function: bool,
+    ) -> Option<(lsp_types::Location, String)> {
+        let uri = self.module_uri(module, from_uri)?;
+        let content = self.get_content(&uri)?;
+        let module_ast = self.get_parsed_module(&uri)?;
+        let tokens_arc = self.tokens_for(&uri);
+        let tokens: &[Token] = tokens_arc.as_deref().map(Vec::as_slice).unwrap_or(&[]);
+        for item in &module_ast.items {
+            let (name_start, hover) = match item {
+                ModuleItem::Function { function }
+                    if want_function && function.name.as_str() == name =>
+                {
+                    (
+                        function.location.span.start,
+                        format_function_hover(function),
+                    )
+                }
+                ModuleItem::ExternValue { extern_value }
+                    if !want_function && extern_value.name.as_str() == name =>
+                {
+                    (
+                        extern_value.location.span.start,
+                        format_extern_value_hover(name, &extern_value.type_),
+                    )
+                }
+                _ => continue,
+            };
+            let span = name_token_span(tokens, &name_start, name)
+                .unwrap_or(Span::new(name_start, name_start));
+            return Some((
+                lsp_types::Location {
+                    uri: uri.clone(),
+                    range: pyxis_span_to_lsp_range(content, &span),
+                },
+                hover,
+            ));
+        }
+        None
+    }
+
     /// Every declaration of a member (`Type::member`) across the project: the
     /// method in *each* impl block (including separate `#[cfg(...)]`-gated ones,
     /// possibly in different files), the vftable method, or the field. Each entry
@@ -378,7 +426,12 @@ impl ServerState {
                         None => to_type(self, &item)?,
                     }
                 }
-                _ => return None,
+                DocLinkTarget::Function { module, name } => {
+                    self.resolve_doc_module_item(&module, &name, uri, true)?
+                }
+                DocLinkTarget::ExternValue { module, name } => {
+                    self.resolve_doc_module_item(&module, &name, uri, false)?
+                }
             };
             return Some((link_span, location, hover));
         }
