@@ -107,6 +107,19 @@ impl ServerState {
             return Some((format_attribute_hover(attribute, &span, ctx.content), span));
         }
 
+        // 2b. A numeric/character literal token → describe the literal value
+        //     (its representations), not the enclosing variant/field/const.
+        //     Precedes the structural checks so an enum variant's value hovers
+        //     as the literal rather than resolving to the variant.
+        if let Some(token) = ctx
+            .tokens
+            .iter()
+            .find(|t| t.location.span.contains(&ctx.loc))
+            && let Some(md) = literal_hover(&token.kind)
+        {
+            return Some((md, token.location.span));
+        }
+
         // 3. Structural elements — scoped tightly to what's under the cursor
         //    rather than the whole enclosing definition:
         //    - a definition's own name → the type (size/align/fields);
@@ -473,12 +486,7 @@ impl ServerState {
         if !span.contains(&ctx.loc) {
             return None;
         }
-        let mut md = format!(
-            "**extern value** `{}`\n\n```pyxis\n{}: {}\n```\n",
-            extern_value.name.as_str(),
-            extern_value.name.as_str(),
-            extern_value.type_,
-        );
+        let mut md = format_extern_value_hover(extern_value.name.as_str(), &extern_value.type_);
         if let Some(size) = type_size_of(
             &extern_value.type_,
             ctx.type_registry,
