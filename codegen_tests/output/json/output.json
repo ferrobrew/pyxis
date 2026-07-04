@@ -8410,6 +8410,132 @@
         "file_index": 33,
         "line": 13
       }
+    },
+    "zero_size_type::Holder": {
+      "path": "zero_size_type::Holder",
+      "visibility": "public",
+      "size": 16,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": " A type that embeds Marker. Both backends must agree on layout:\n marker occupies 8 bytes (min_size, alignment 1).",
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "marker",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "zero_size_type::Marker"
+            },
+            "offset": 0,
+            "size": 8,
+            "alignment": 1,
+            "is_base": false,
+            "source": {
+              "file_index": 34,
+              "line": 10
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "value",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "u32"
+            },
+            "offset": 8,
+            "size": 4,
+            "alignment": 4,
+            "is_base": false,
+            "source": {
+              "file_index": 34,
+              "line": 13
+            }
+          },
+          {
+            "visibility": "private",
+            "name": "_field_c",
+            "doc": null,
+            "type_ref": {
+              "type": "array",
+              "inner": {
+                "type": "raw",
+                "path": "u8"
+              },
+              "size": 4
+            },
+            "offset": 12,
+            "size": 4,
+            "alignment": 1,
+            "is_base": false,
+            "source": {
+              "file_index": 34,
+              "line": 6
+            }
+          }
+        ],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false,
+        "pinned": false
+      },
+      "source": {
+        "file_index": 34,
+        "line": 9
+      }
+    },
+    "zero_size_type::Marker": {
+      "path": "zero_size_type::Marker",
+      "visibility": "public",
+      "size": 8,
+      "alignment": 1,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": " A fieldless type given a nonzero footprint via #[min_size].\n Without this attribute, embedding it would be rejected.",
+        "fields": [
+          {
+            "visibility": "private",
+            "name": "_field_0",
+            "doc": null,
+            "type_ref": {
+              "type": "array",
+              "inner": {
+                "type": "raw",
+                "path": "u8"
+              },
+              "size": 8
+            },
+            "offset": 0,
+            "size": 8,
+            "alignment": 1,
+            "is_base": false,
+            "source": {
+              "file_index": 34,
+              "line": 1
+            }
+          }
+        ],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false,
+        "pinned": false
+      },
+      "source": {
+        "file_index": 34,
+        "line": 4
+      }
     }
   },
   "modules": {
@@ -9228,6 +9354,21 @@
         "file_index": 33,
         "line": 1
       }
+    },
+    "zero_size_type": {
+      "doc": null,
+      "items": [
+        "zero_size_type::Holder",
+        "zero_size_type::Marker"
+      ],
+      "submodules": {},
+      "extern_values": [],
+      "functions": [],
+      "backends": {},
+      "source": {
+        "file_index": 34,
+        "line": 1
+      }
     }
   },
   "source_paths": [
@@ -9264,6 +9405,7 @@
     "world/deep/marker.pyxis",
     "world/mod.pyxis",
     "world/weather.pyxis",
-    "world_consumer.pyxis"
+    "world_consumer.pyxis",
+    "zero_size_type.pyxis"
   ]
 }

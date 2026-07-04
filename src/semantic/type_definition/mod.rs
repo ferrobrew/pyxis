@@ -742,6 +742,28 @@ fn resolve_regions(
             }
         }
 
+        // Reject embedding a zero-size type as a concrete field. A fieldless
+        // type (or a generic instantiation that resolves to size 0, e.g.
+        // `Pair<Empty, Empty>`) has no representable layout in backends that
+        // lack zero-size objects — the member would silently shift every
+        // subsequent field. Pointers, arrays, and type parameters are excluded
+        // — only concrete type references (raw or generic) can trigger this.
+        // Zero-size arrays are excluded explicitly (they're handled by `push`'s
+        // special case) because `Type::Array(T, 0).size()` returns `Some(0)`.
+        if !region.type_ref.is_array()
+            && let Some(0) = region.type_ref.size(semantic.type_registry)
+        {
+            return Err(SemanticError::ZeroSizeFieldEmbedding {
+                field_name: region
+                    .name
+                    .clone()
+                    .unwrap_or_else(|| "<anonymous>".to_string()),
+                item_path: resolvee_path.clone(),
+                field_type: region.type_ref.clone(),
+                location: *region.location(),
+            });
+        }
+
         if resolved.push(semantic.type_registry, region).is_none() {
             return Ok(None);
         }

@@ -663,6 +663,18 @@ pub enum SemanticError {
     },
     /// `str` type used in a non-const context (fields, function args, etc.)
     StrTypeNotConst { location: ItemLocation },
+    /// A field embeds a zero-size type as a concrete member. Backends that
+    /// lack zero-size objects would give the member a nonzero footprint,
+    /// silently disagreeing with the semantic layout assumption and
+    /// shifting every subsequent field. Use `#[min_size(1)]` or an
+    /// explicit `#[size(...)]` on the field's type to give it a nonzero
+    /// footprint.
+    ZeroSizeFieldEmbedding {
+        field_name: String,
+        item_path: ItemPath,
+        field_type: SemanticType,
+        location: ItemLocation,
+    },
 }
 
 impl SemanticError {
@@ -1028,6 +1040,17 @@ impl SemanticError {
             SemanticError::StrTypeNotConst { .. } => {
                 "`str` type is only allowed on `const` declarations".to_string()
             }
+            SemanticError::ZeroSizeFieldEmbedding {
+                field_name,
+                item_path,
+                field_type,
+                ..
+            } => {
+                format!(
+                    "field `{field_name}` in `{item_path}` embeds zero-size type `{field_type}`, \
+                     which has no representable layout in backends that lack zero-size objects"
+                )
+            }
         }
     }
 
@@ -1083,6 +1106,7 @@ impl SemanticError {
             SemanticError::PrivateItemAccess { location, .. } => Some(location),
             SemanticError::ConstValueTypeMismatch { location, .. } => Some(location),
             SemanticError::StrTypeNotConst { location, .. } => Some(location),
+            SemanticError::ZeroSizeFieldEmbedding { location, .. } => Some(location),
         }
     }
 
@@ -1130,6 +1154,14 @@ impl SemanticError {
                     ))
                     .with_note(format!("The type `{found}` is not an unsigned integer"))
             }
+            Self::ZeroSizeFieldEmbedding { field_type, .. } => report_builder
+                .with_help(format!(
+                    "add `#[min_size(1)]` or an explicit `#[size(...)]` to the definition of \
+                     `{field_type}` so it has a nonzero footprint"
+                ))
+                .with_note(
+                    "zero-size types are valid as pointer targets (*const T) but not as embedded fields",
+                ),
             _ => report_builder,
         }
     }

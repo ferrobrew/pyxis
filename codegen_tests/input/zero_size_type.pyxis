@@ -1,0 +1,14 @@
+/// A fieldless type given a nonzero footprint via #[min_size].
+/// Without this attribute, embedding it would be rejected.
+#[min_size(8)]
+pub type Marker;
+
+/// A type that embeds Marker. Both backends must agree on layout:
+/// marker occupies 8 bytes (min_size, alignment 1).
+#[size(0x10)]
+pub type Holder {
+    pub marker: Marker,
+
+    #[address(0x8)]
+    pub value: u32,
+}

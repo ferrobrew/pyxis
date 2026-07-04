@@ -43,3 +43,4 @@ mod type_aliases;
 mod util;
 mod vftable;
 mod visibility;
+mod zero_size_embedding;

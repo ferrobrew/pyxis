@@ -32,3 +32,4 @@
 #include "world/weather.hpp"
 #include "world.hpp"
 #include "world_consumer.hpp"
+#include "zero_size_type.hpp"

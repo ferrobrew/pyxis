@@ -156,7 +156,10 @@ fn will_reject_defaultable_on_non_defaultable_type() {
                 )])
                 .with_attributes([A::defaultable()]),
             ),
-            ID::new((V::Public, "TestNonDefaultable"), TD::new([])),
+            ID::new(
+                (V::Public, "TestNonDefaultable"),
+                TD::new([TS::field((V::Private, "_"), T::ident("u8"))]),
+            ),
         ]),
         SemanticError::DefaultableError {
             field_name: "field_1".to_string(),
