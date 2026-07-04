@@ -34,7 +34,7 @@ function tryPreservePosition(
   pathname: string,
   json: JsonDocumentation,
   source: string,
-  navigate: (path: string) => void,
+  navigate: (path: string) => void
 ): boolean {
   const match = pathname.match(/^\/[^/]+\/(module|item)\/(.+)$/);
   if (!match) return false;

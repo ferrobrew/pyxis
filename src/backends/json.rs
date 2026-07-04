@@ -712,6 +712,32 @@ pub fn build(
         }
     }
 
+    // Predefined types (`f32`, `u32`, `bool`, `void`, `str`, the atomics, ...)
+    // live in the type registry for resolution but aren't attached to any
+    // module, so the loop above never emits them. Add them here so the viewer
+    // can render the builtin types user code references. They carry no source
+    // location (see `ItemDefinition::default`), and are public.
+    let predefined_cx = DocCx {
+        resolver: semantic_state.doc_link_resolver(),
+        scope: Vec::new(),
+    };
+    for (path, item) in type_registry.iter() {
+        if item.category != ItemCategory::Predefined {
+            continue;
+        }
+        if items.contains_key(&path.to_string()) {
+            continue;
+        }
+        if let Some(json_item) = convert_item(
+            item,
+            type_registry,
+            ExternBindings::default(),
+            &predefined_cx,
+        ) {
+            items.insert(json_item.path.clone(), json_item);
+        }
+    }
+
     // Build module hierarchy
     let modules = build_module_hierarchy(semantic_state);
 

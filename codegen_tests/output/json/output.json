@@ -4,6 +4,195 @@
   "pointer_size": 8,
   "project_name": "test-project",
   "items": {
+    "AtomicBool": {
+      "path": "AtomicBool",
+      "visibility": "public",
+      "size": 1,
+      "alignment": 1,
+      "category": "predefined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": true,
+        "cloneable": true,
+        "defaultable": true,
+        "packed": false,
+        "pinned": false
+      },
+      "source": null
+    },
+    "AtomicI16": {
+      "path": "AtomicI16",
+      "visibility": "public",
+      "size": 2,
+      "alignment": 2,
+      "category": "predefined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": true,
+        "cloneable": true,
+        "defaultable": true,
+        "packed": false,
+        "pinned": false
+      },
+      "source": null
+    },
+    "AtomicI32": {
+      "path": "AtomicI32",
+      "visibility": "public",
+      "size": 4,
+      "alignment": 4,
+      "category": "predefined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": true,
+        "cloneable": true,
+        "defaultable": true,
+        "packed": false,
+        "pinned": false
+      },
+      "source": null
+    },
+    "AtomicI64": {
+      "path": "AtomicI64",
+      "visibility": "public",
+      "size": 8,
+      "alignment": 8,
+      "category": "predefined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": true,
+        "cloneable": true,
+        "defaultable": true,
+        "packed": false,
+        "pinned": false
+      },
+      "source": null
+    },
+    "AtomicI8": {
+      "path": "AtomicI8",
+      "visibility": "public",
+      "size": 1,
+      "alignment": 1,
+      "category": "predefined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": true,
+        "cloneable": true,
+        "defaultable": true,
+        "packed": false,
+        "pinned": false
+      },
+      "source": null
+    },
+    "AtomicU16": {
+      "path": "AtomicU16",
+      "visibility": "public",
+      "size": 2,
+      "alignment": 2,
+      "category": "predefined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": true,
+        "cloneable": true,
+        "defaultable": true,
+        "packed": false,
+        "pinned": false
+      },
+      "source": null
+    },
+    "AtomicU32": {
+      "path": "AtomicU32",
+      "visibility": "public",
+      "size": 4,
+      "alignment": 4,
+      "category": "predefined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": true,
+        "cloneable": true,
+        "defaultable": true,
+        "packed": false,
+        "pinned": false
+      },
+      "source": null
+    },
+    "AtomicU64": {
+      "path": "AtomicU64",
+      "visibility": "public",
+      "size": 8,
+      "alignment": 8,
+      "category": "predefined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": true,
+        "cloneable": true,
+        "defaultable": true,
+        "packed": false,
+        "pinned": false
+      },
+      "source": null
+    },
+    "AtomicU8": {
+      "path": "AtomicU8",
+      "visibility": "public",
+      "size": 1,
+      "alignment": 1,
+      "category": "predefined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": true,
+        "cloneable": true,
+        "defaultable": true,
+        "packed": false,
+        "pinned": false
+      },
+      "source": null
+    },
     "atomics::AtomicCounters": {
       "path": "atomics::AtomicCounters",
       "visibility": "public",
@@ -474,6 +663,27 @@
         "line": 9
       }
     },
+    "bool": {
+      "path": "bool",
+      "visibility": "public",
+      "size": 1,
+      "alignment": 1,
+      "category": "predefined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": true,
+        "cloneable": true,
+        "defaultable": true,
+        "packed": false,
+        "pinned": false
+      },
+      "source": null
+    },
     "braced_imports::Transform": {
       "path": "braced_imports::Transform",
       "visibility": "public",
@@ -532,6 +742,27 @@
         "file_index": 5,
         "line": 6
       }
+    },
+    "c_char": {
+      "path": "c_char",
+      "visibility": "public",
+      "size": 1,
+      "alignment": 1,
+      "category": "predefined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": true,
+        "cloneable": true,
+        "defaultable": true,
+        "packed": false,
+        "pinned": false
+      },
+      "source": null
     },
     "calling_conventions::Cc": {
       "path": "calling_conventions::Cc",
@@ -2532,6 +2763,48 @@
         "line": 43
       }
     },
+    "f32": {
+      "path": "f32",
+      "visibility": "public",
+      "size": 4,
+      "alignment": 4,
+      "category": "predefined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": true,
+        "cloneable": true,
+        "defaultable": true,
+        "packed": false,
+        "pinned": false
+      },
+      "source": null
+    },
+    "f64": {
+      "path": "f64",
+      "visibility": "public",
+      "size": 8,
+      "alignment": 8,
+      "category": "predefined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": true,
+        "cloneable": true,
+        "defaultable": true,
+        "packed": false,
+        "pinned": false
+      },
+      "source": null
+    },
     "freestanding_functions::A": {
       "path": "freestanding_functions::A",
       "visibility": "private",
@@ -3537,6 +3810,111 @@
         "file_index": 17,
         "line": 20
       }
+    },
+    "i128": {
+      "path": "i128",
+      "visibility": "public",
+      "size": 16,
+      "alignment": 16,
+      "category": "predefined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": true,
+        "cloneable": true,
+        "defaultable": true,
+        "packed": false,
+        "pinned": false
+      },
+      "source": null
+    },
+    "i16": {
+      "path": "i16",
+      "visibility": "public",
+      "size": 2,
+      "alignment": 2,
+      "category": "predefined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": true,
+        "cloneable": true,
+        "defaultable": true,
+        "packed": false,
+        "pinned": false
+      },
+      "source": null
+    },
+    "i32": {
+      "path": "i32",
+      "visibility": "public",
+      "size": 4,
+      "alignment": 4,
+      "category": "predefined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": true,
+        "cloneable": true,
+        "defaultable": true,
+        "packed": false,
+        "pinned": false
+      },
+      "source": null
+    },
+    "i64": {
+      "path": "i64",
+      "visibility": "public",
+      "size": 8,
+      "alignment": 8,
+      "category": "predefined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": true,
+        "cloneable": true,
+        "defaultable": true,
+        "packed": false,
+        "pinned": false
+      },
+      "source": null
+    },
+    "i8": {
+      "path": "i8",
+      "visibility": "public",
+      "size": 1,
+      "alignment": 1,
+      "category": "predefined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": true,
+        "cloneable": true,
+        "defaultable": true,
+        "packed": false,
+        "pinned": false
+      },
+      "source": null
     },
     "math::Matrix4": {
       "path": "math::Matrix4",
@@ -6060,6 +6438,27 @@
         "line": 2
       }
     },
+    "str": {
+      "path": "str",
+      "visibility": "public",
+      "size": 0,
+      "alignment": 1,
+      "category": "predefined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": true,
+        "cloneable": true,
+        "defaultable": true,
+        "packed": false,
+        "pinned": false
+      },
+      "source": null
+    },
     "two_base_classes::BaseA": {
       "path": "two_base_classes::BaseA",
       "visibility": "private",
@@ -7400,6 +7799,111 @@
         "line": 22
       }
     },
+    "u128": {
+      "path": "u128",
+      "visibility": "public",
+      "size": 16,
+      "alignment": 16,
+      "category": "predefined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": true,
+        "cloneable": true,
+        "defaultable": true,
+        "packed": false,
+        "pinned": false
+      },
+      "source": null
+    },
+    "u16": {
+      "path": "u16",
+      "visibility": "public",
+      "size": 2,
+      "alignment": 2,
+      "category": "predefined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": true,
+        "cloneable": true,
+        "defaultable": true,
+        "packed": false,
+        "pinned": false
+      },
+      "source": null
+    },
+    "u32": {
+      "path": "u32",
+      "visibility": "public",
+      "size": 4,
+      "alignment": 4,
+      "category": "predefined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": true,
+        "cloneable": true,
+        "defaultable": true,
+        "packed": false,
+        "pinned": false
+      },
+      "source": null
+    },
+    "u64": {
+      "path": "u64",
+      "visibility": "public",
+      "size": 8,
+      "alignment": 8,
+      "category": "predefined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": true,
+        "cloneable": true,
+        "defaultable": true,
+        "packed": false,
+        "pinned": false
+      },
+      "source": null
+    },
+    "u8": {
+      "path": "u8",
+      "visibility": "public",
+      "size": 1,
+      "alignment": 1,
+      "category": "predefined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": true,
+        "cloneable": true,
+        "defaultable": true,
+        "packed": false,
+        "pinned": false
+      },
+      "source": null
+    },
     "unicode::Unicode": {
       "path": "unicode::Unicode",
       "visibility": "public",
@@ -7560,6 +8064,27 @@
         "file_index": 28,
         "line": 8
       }
+    },
+    "void": {
+      "path": "void",
+      "visibility": "public",
+      "size": 0,
+      "alignment": 1,
+      "category": "predefined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": true,
+        "cloneable": true,
+        "defaultable": true,
+        "packed": false,
+        "pinned": false
+      },
+      "source": null
     },
     "world::World": {
       "path": "world::World",

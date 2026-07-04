@@ -1,4 +1,6 @@
-on: push
+on:
+  push:
+  workflow_dispatch:
 name: CI
 
 # Make sure CI fails on all warnings, including Clippy lints
@@ -25,7 +27,15 @@ jobs:
         with:
           python-version: "3.x"
 
-      - name: Run tests, clippy, and fmt
+      # test.py lints the viewer (tsc/eslint/prettier) but does not install;
+      # provide the workspace deps here.
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm ci
+
+      - name: Run tests, clippy, fmt, and viewer lint
         run: python test.py
 
   validate-pyxis-defs:
@@ -71,3 +81,69 @@ jobs:
               echo "This may indicate that pyxis-defs needs to be rebuilt and committed."
             fi
           fi
+
+  # Build the viewer, and on main — once the Rust tests and pyxis-defs
+  # validation have passed — deploy it. `needs` keeps the deploy after
+  # everything else is green; the deploy steps are gated on the build above
+  # succeeding (later steps don't run once one fails) and on being on main.
+  viewer:
+    name: Build & deploy viewer
+    needs: [test, validate-pyxis-defs]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - run: npm ci
+
+      - name: Build viewer
+        working-directory: viewer
+        run: npm run build
+
+      - name: Checkout GitHub Pages repository
+        if: github.ref == 'refs/heads/main'
+        uses: actions/checkout@v4
+        with:
+          repository: ferrobrew/ferrobrew.github.io
+          path: pages
+          token: ${{ secrets.PAGES_DEPLOY_TOKEN }}
+
+      - name: Deploy to GitHub Pages
+        if: github.ref == 'refs/heads/main'
+        working-directory: pages
+        run: |
+          # Create target directory if it doesn't exist
+          mkdir -p pyxis
+
+          # Remove old files
+          rm -rf pyxis/*
+
+          # Copy new build
+          cp -r ../viewer/dist/* pyxis/
+
+          # Configure git
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Commit and push
+          git add pyxis
+          if git diff --staged --quiet; then
+            echo "No changes to deploy"
+          else
+            git commit -m "Deploy pyxis viewer
+
+            Automated deployment from ferrobrew/pyxis@${{ github.sha }}"
+            git push
+          fi
+
+      - name: Deployment complete
+        if: github.ref == 'refs/heads/main'
+        run: |
+          echo "✓ Viewer deployed successfully!"
+          echo "🌐 Available at: https://ferrobrew.github.io/pyxis/"
