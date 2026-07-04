@@ -9,14 +9,14 @@ import sys
 import subprocess
 
 
-def run_command(cmd, env=None, cwd=None):
+def run_command(cmd, env=None, cwd=None, shell=False):
     """Run a command and exit if it fails."""
     print(f"\n{'=' * 60}")
     cwd_info = f" (in {cwd})" if cwd else ""
     print(f"Running: {' '.join(cmd)}{cwd_info}")
     print(f"{'=' * 60}\n")
 
-    result = subprocess.run(cmd, env=env, cwd=cwd)
+    result = subprocess.run(cmd, env=env, cwd=cwd, shell=shell)
     if result.returncode != 0:
         print(f"\n[FAIL] Command failed with exit code {result.returncode}")
         sys.exit(result.returncode)
@@ -58,6 +58,16 @@ def main():
     # Run cargo doc on codegen_tests (catches unresolved doc link references
     # in generated Rust output)
     run_command(["cargo", "doc", "--no-deps", "-p", "codegen_tests"])
+
+    # Lint the viewer (tsc + eslint + prettier). This assumes the workspace
+    # deps are already installed — CI runs `npm ci` before test.py, and local
+    # devs are expected to `npm install` themselves. `shell=True` on Windows so
+    # the `npm` shim resolves.
+    run_command(
+        ["npm", "run", "lint"],
+        cwd="viewer",
+        shell=sys.platform == "win32",
+    )
 
     print(f"\n{'=' * 60}")
     print("All checks passed!")
