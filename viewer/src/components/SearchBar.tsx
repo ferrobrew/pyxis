@@ -14,6 +14,7 @@ const KIND_LABEL: Record<SearchKind, string> = {
   'enum-variant': 'variant',
   bitflags: 'bitflags',
   type_alias: 'alias',
+  constant: 'const',
   function: 'fn',
   extern: 'extern',
   field: 'field',

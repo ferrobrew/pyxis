@@ -259,6 +259,38 @@ impl fmt::Display for Type {
     }
 }
 
+/// A compile-time constant value. `Float` stores the bit pattern (`f64::to_bits`)
+/// so that `ConstValue` can derive `Eq`/`Hash` — `f64` does not implement either.
+/// Two NaN values with the same bit pattern compare equal, which is acceptable for
+/// a compile-time constant IR.
+#[derive(PartialEq, Eq, Debug, Clone, Hash)]
+#[cfg_attr(test, derive(StripLocations))]
+pub enum ConstValue {
+    Int(isize),
+    Float(u64),
+    String(String),
+    EnumValue(ItemPath),
+}
+
+impl ConstValue {
+    /// Parse the stored bit pattern back into an `f64`.
+    pub fn as_f64(&self) -> Option<f64> {
+        match self {
+            ConstValue::Float(bits) => Some(f64::from_bits(*bits)),
+            _ => None,
+        }
+    }
+}
+
+/// Semantic representation of a `const` declaration.
+#[derive(PartialEq, Eq, Debug, Clone, Hash)]
+#[cfg_attr(test, derive(StripLocations))]
+pub struct ConstDefinition {
+    pub type_: Type,
+    pub value: ConstValue,
+    pub doc: Vec<String>,
+}
+
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]
 #[cfg_attr(test, derive(StripLocations))]
 pub enum ItemDefinitionInner {
@@ -266,6 +298,7 @@ pub enum ItemDefinitionInner {
     Enum(EnumDefinition),
     Bitflags(BitflagsDefinition),
     TypeAlias(TypeAliasDefinition),
+    Constant(ConstDefinition),
 }
 impl From<TypeDefinition> for ItemDefinitionInner {
     fn from(td: TypeDefinition) -> Self {
@@ -287,6 +320,11 @@ impl From<TypeAliasDefinition> for ItemDefinitionInner {
         ItemDefinitionInner::TypeAlias(ta)
     }
 }
+impl From<ConstDefinition> for ItemDefinitionInner {
+    fn from(cd: ConstDefinition) -> Self {
+        ItemDefinitionInner::Constant(cd)
+    }
+}
 impl ItemDefinitionInner {
     pub fn defaultable(&self) -> bool {
         match self {
@@ -294,6 +332,7 @@ impl ItemDefinitionInner {
             ItemDefinitionInner::Enum(ed) => ed.default.is_some(),
             ItemDefinitionInner::Bitflags(bd) => bd.default.is_some(),
             ItemDefinitionInner::TypeAlias(_) => false, // Type aliases don't have defaultable
+            ItemDefinitionInner::Constant(_) => false,
         }
     }
     pub fn copyable(&self) -> bool {
@@ -302,6 +341,7 @@ impl ItemDefinitionInner {
             ItemDefinitionInner::Enum(ed) => ed.copyable,
             ItemDefinitionInner::Bitflags(bd) => bd.copyable,
             ItemDefinitionInner::TypeAlias(_) => false, // Type aliases don't have copyable
+            ItemDefinitionInner::Constant(_) => false,
         }
     }
     pub fn cloneable(&self) -> bool {
@@ -310,6 +350,7 @@ impl ItemDefinitionInner {
             ItemDefinitionInner::Enum(ed) => ed.cloneable,
             ItemDefinitionInner::Bitflags(bd) => bd.cloneable,
             ItemDefinitionInner::TypeAlias(_) => false, // Type aliases don't have cloneable
+            ItemDefinitionInner::Constant(_) => false,
         }
     }
     pub fn pinned(&self) -> bool {
@@ -318,6 +359,7 @@ impl ItemDefinitionInner {
             ItemDefinitionInner::Enum(ed) => ed.pinned,
             ItemDefinitionInner::Bitflags(bd) => bd.pinned,
             ItemDefinitionInner::TypeAlias(_) => false, // Type aliases don't have pinned
+            ItemDefinitionInner::Constant(_) => false,
         }
     }
     pub fn as_type(&self) -> Option<&TypeDefinition> {
@@ -338,11 +380,18 @@ impl ItemDefinitionInner {
             ItemDefinitionInner::Enum(_) => "an enum",
             ItemDefinitionInner::Bitflags(_) => "a bitflags",
             ItemDefinitionInner::TypeAlias(_) => "a type alias",
+            ItemDefinitionInner::Constant(_) => "a constant",
         }
     }
     pub fn as_type_alias(&self) -> Option<&TypeAliasDefinition> {
         match self {
             Self::TypeAlias(v) => Some(v),
+            _ => None,
+        }
+    }
+    pub fn as_constant(&self) -> Option<&ConstDefinition> {
+        match self {
+            Self::Constant(v) => Some(v),
             _ => None,
         }
     }
@@ -414,6 +463,19 @@ macro_rules! predefined_items {
             pub fn is_unsigned_integer(&self) -> bool {
                 matches!(self, Self::U8 | Self::U16 | Self::U32 | Self::U64 | Self::U128)
             }
+            pub fn is_str(&self) -> bool {
+                matches!(self, Self::Str)
+            }
+            pub fn is_integer(&self) -> bool {
+                self.is_unsigned_integer()
+                    || matches!(
+                        self,
+                        Self::I8 | Self::I16 | Self::I32 | Self::I64 | Self::I128
+                    )
+            }
+            pub fn is_float(&self) -> bool {
+                matches!(self, Self::F32 | Self::F64)
+            }
         }
     }
 }
@@ -447,6 +509,9 @@ predefined_items! {
     (AtomicI16, "AtomicI16", 2),
     (AtomicI32, "AtomicI32", 4),
     (AtomicI64, "AtomicI64", 8),
+    // `str` — const-only string type. Size 0 / alignment 1 are sentinels; it has
+    // no runtime layout because it only appears in `const` declarations.
+    (Str, "str", 0),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, HasLocation)]

@@ -50,7 +50,8 @@ function Panel({ children }: { children: React.ReactNode }) {
 const ROW = 'block p-3 border-b border-edge last:border-0 hover:bg-surface-2 transition-colors';
 
 function kindToItemType(kind: string): ItemType {
-  if (kind === 'enum' || kind === 'bitflags' || kind === 'type_alias') return kind;
+  if (kind === 'enum' || kind === 'bitflags' || kind === 'type_alias' || kind === 'constant')
+    return kind;
   return 'type';
 }
 

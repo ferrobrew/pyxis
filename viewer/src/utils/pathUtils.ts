@@ -43,6 +43,11 @@ export function getRelativePath(
     commonPrefixLength++;
   }
 
+  // If target is the current module itself, return its leaf name
+  if (commonPrefixLength === targetSegments.length && targetSegments.length > 0) {
+    return targetSegments[targetSegments.length - 1];
+  }
+
   // If they share the same module (parent), use relative path
   if (commonPrefixLength === currentSegments.length) {
     // Target is in the same module or a submodule

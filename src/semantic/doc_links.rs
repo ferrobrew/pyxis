@@ -121,6 +121,7 @@ impl DocLinkResolver {
                 Some(ItemDefinitionInner::Bitflags(bd)) => ItemMembers::Bitflags {
                     flags: bd.flags.iter().map(|f| f.name.clone()).collect(),
                 },
+                Some(ItemDefinitionInner::Constant(_)) => ItemMembers::Other,
                 _ => ItemMembers::Other,
             };
             items.insert(
@@ -365,6 +366,9 @@ impl DocLinkResolver {
                                 ItemDefinitionInner::TypeAlias(nta) => {
                                     self.add_doc_imports(&type_scope, &nta.doc, &mut imports);
                                 }
+                                ItemDefinitionInner::Constant(ncd) => {
+                                    self.add_doc_imports(&type_scope, &ncd.doc, &mut imports);
+                                }
                             }
                         }
                     }
@@ -386,6 +390,9 @@ impl DocLinkResolver {
                 }
                 ItemDefinitionInner::TypeAlias(ta) => {
                     self.add_doc_imports(&scope, &ta.doc, &mut imports);
+                }
+                ItemDefinitionInner::Constant(cd) => {
+                    self.add_doc_imports(&scope, &cd.doc, &mut imports);
                 }
             }
         }
@@ -514,6 +521,9 @@ pub fn validate(
             }
             ItemDefinitionInner::TypeAlias(ta) => {
                 check(&ta.doc, &scope, loc)?;
+            }
+            ItemDefinitionInner::Constant(cd) => {
+                check(&cd.doc, &scope, loc)?;
             }
         }
     }

@@ -27,6 +27,7 @@ pub enum SigKind {
     Enum,
     Bitflags,
     TypeAlias,
+    Constant,
 }
 
 /// A declared item's stable signature: its kind and generic arity.
@@ -112,6 +113,7 @@ impl NameIndex {
                 grammar::ItemDefinitionInner::Enum(_) => SigKind::Enum,
                 grammar::ItemDefinitionInner::Bitflags(_) => SigKind::Bitflags,
                 grammar::ItemDefinitionInner::TypeAlias(_) => SigKind::TypeAlias,
+                grammar::ItemDefinitionInner::Constant(_) => SigKind::Constant,
             };
             self.items.insert(
                 path.clone(),
@@ -133,6 +135,7 @@ impl NameIndex {
                             grammar::ItemDefinitionInner::Enum(_) => SigKind::Enum,
                             grammar::ItemDefinitionInner::Bitflags(_) => SigKind::Bitflags,
                             grammar::ItemDefinitionInner::TypeAlias(_) => SigKind::TypeAlias,
+                            grammar::ItemDefinitionInner::Constant(_) => SigKind::Constant,
                         };
                         self.items.insert(
                             nested_path.clone(),
@@ -142,7 +145,152 @@ impl NameIndex {
                             },
                         );
                         self.item_files.insert(nested_path.clone(), file_index);
-                        self.item_scopes.insert(nested_path, module_path.clone());
+                        self.item_scopes
+                            .insert(nested_path.clone(), module_path.clone());
+                        // Recurse into the nested item's body for doubly-nested items
+                        self.register_nested_in_type(
+                            &inner.inner,
+                            &nested_path,
+                            module_path,
+                            file_index,
+                        );
+                        // Also handle enum/bitflags bodies of the nested item
+                        if let grammar::ItemDefinitionInner::Enum(ed) = &inner.inner {
+                            for item in &ed.items {
+                                if let grammar::EnumDefItem::Item(nested2) = item {
+                                    let nested2_path =
+                                        nested_path.join(nested2.name.as_str().into());
+                                    let nested2_kind = match &nested2.inner {
+                                        grammar::ItemDefinitionInner::Type(_) => SigKind::Type,
+                                        grammar::ItemDefinitionInner::Enum(_) => SigKind::Enum,
+                                        grammar::ItemDefinitionInner::Bitflags(_) => {
+                                            SigKind::Bitflags
+                                        }
+                                        grammar::ItemDefinitionInner::TypeAlias(_) => {
+                                            SigKind::TypeAlias
+                                        }
+                                        grammar::ItemDefinitionInner::Constant(_) => {
+                                            SigKind::Constant
+                                        }
+                                    };
+                                    self.items.insert(
+                                        nested2_path.clone(),
+                                        ItemSig {
+                                            kind: nested2_kind,
+                                            arity: nested2.type_parameters.len(),
+                                        },
+                                    );
+                                    self.item_files.insert(nested2_path.clone(), file_index);
+                                    self.item_scopes
+                                        .insert(nested2_path.clone(), module_path.clone());
+                                    self.register_nested_in_type(
+                                        &nested2.inner,
+                                        &nested2_path,
+                                        module_path,
+                                        file_index,
+                                    );
+                                }
+                            }
+                        }
+                        if let grammar::ItemDefinitionInner::Bitflags(bd) = &inner.inner {
+                            for item in &bd.items {
+                                if let grammar::BitflagsDefItem::Item(nested2) = item {
+                                    let nested2_path =
+                                        nested_path.join(nested2.name.as_str().into());
+                                    let nested2_kind = match &nested2.inner {
+                                        grammar::ItemDefinitionInner::Type(_) => SigKind::Type,
+                                        grammar::ItemDefinitionInner::Enum(_) => SigKind::Enum,
+                                        grammar::ItemDefinitionInner::Bitflags(_) => {
+                                            SigKind::Bitflags
+                                        }
+                                        grammar::ItemDefinitionInner::TypeAlias(_) => {
+                                            SigKind::TypeAlias
+                                        }
+                                        grammar::ItemDefinitionInner::Constant(_) => {
+                                            SigKind::Constant
+                                        }
+                                    };
+                                    self.items.insert(
+                                        nested2_path.clone(),
+                                        ItemSig {
+                                            kind: nested2_kind,
+                                            arity: nested2.type_parameters.len(),
+                                        },
+                                    );
+                                    self.item_files.insert(nested2_path.clone(), file_index);
+                                    self.item_scopes
+                                        .insert(nested2_path.clone(), module_path.clone());
+                                    self.register_nested_in_type(
+                                        &nested2.inner,
+                                        &nested2_path,
+                                        module_path,
+                                        file_index,
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            // Recurse into enum bodies to find nested items.
+            if let grammar::ItemDefinitionInner::Enum(ed) = &def.inner {
+                for item in &ed.items {
+                    if let grammar::EnumDefItem::Item(inner) = item {
+                        let nested_path = path.join(inner.name.as_str().into());
+                        let nested_kind = match &inner.inner {
+                            grammar::ItemDefinitionInner::Type(_) => SigKind::Type,
+                            grammar::ItemDefinitionInner::Enum(_) => SigKind::Enum,
+                            grammar::ItemDefinitionInner::Bitflags(_) => SigKind::Bitflags,
+                            grammar::ItemDefinitionInner::TypeAlias(_) => SigKind::TypeAlias,
+                            grammar::ItemDefinitionInner::Constant(_) => SigKind::Constant,
+                        };
+                        self.items.insert(
+                            nested_path.clone(),
+                            ItemSig {
+                                kind: nested_kind,
+                                arity: inner.type_parameters.len(),
+                            },
+                        );
+                        self.item_files.insert(nested_path.clone(), file_index);
+                        self.item_scopes
+                            .insert(nested_path.clone(), module_path.clone());
+                        self.register_nested_in_type(
+                            &inner.inner,
+                            &nested_path,
+                            module_path,
+                            file_index,
+                        );
+                    }
+                }
+            }
+            // Recurse into bitflags bodies to find nested items.
+            if let grammar::ItemDefinitionInner::Bitflags(bd) = &def.inner {
+                for item in &bd.items {
+                    if let grammar::BitflagsDefItem::Item(inner) = item {
+                        let nested_path = path.join(inner.name.as_str().into());
+                        let nested_kind = match &inner.inner {
+                            grammar::ItemDefinitionInner::Type(_) => SigKind::Type,
+                            grammar::ItemDefinitionInner::Enum(_) => SigKind::Enum,
+                            grammar::ItemDefinitionInner::Bitflags(_) => SigKind::Bitflags,
+                            grammar::ItemDefinitionInner::TypeAlias(_) => SigKind::TypeAlias,
+                            grammar::ItemDefinitionInner::Constant(_) => SigKind::Constant,
+                        };
+                        self.items.insert(
+                            nested_path.clone(),
+                            ItemSig {
+                                kind: nested_kind,
+                                arity: inner.type_parameters.len(),
+                            },
+                        );
+                        self.item_files.insert(nested_path.clone(), file_index);
+                        self.item_scopes
+                            .insert(nested_path.clone(), module_path.clone());
+                        self.register_nested_in_type(
+                            &inner.inner,
+                            &nested_path,
+                            module_path,
+                            file_index,
+                        );
                     }
                 }
             }
@@ -171,6 +319,112 @@ impl NameIndex {
                         module_path.join(name.as_str().into()),
                         ExternSig { size, alignment },
                     );
+                }
+            }
+        }
+    }
+
+    /// Recursively register nested items inside a type body.
+    fn register_nested_in_type(
+        &mut self,
+        inner: &grammar::ItemDefinitionInner,
+        parent_path: &ItemPath,
+        module_path: &ItemPath,
+        file_index: usize,
+    ) {
+        if let grammar::ItemDefinitionInner::Type(td) = inner {
+            for stmt in td.statements() {
+                if let grammar::TypeField::Item(nested) = &stmt.field {
+                    let nested_path = parent_path.join(nested.name.as_str().into());
+                    let nested_kind = match &nested.inner {
+                        grammar::ItemDefinitionInner::Type(_) => SigKind::Type,
+                        grammar::ItemDefinitionInner::Enum(_) => SigKind::Enum,
+                        grammar::ItemDefinitionInner::Bitflags(_) => SigKind::Bitflags,
+                        grammar::ItemDefinitionInner::TypeAlias(_) => SigKind::TypeAlias,
+                        grammar::ItemDefinitionInner::Constant(_) => SigKind::Constant,
+                    };
+                    self.items.insert(
+                        nested_path.clone(),
+                        ItemSig {
+                            kind: nested_kind,
+                            arity: nested.type_parameters.len(),
+                        },
+                    );
+                    self.item_files.insert(nested_path.clone(), file_index);
+                    self.item_scopes
+                        .insert(nested_path.clone(), module_path.clone());
+                    // Recurse into the nested item's body too
+                    self.register_nested_in_type(
+                        &nested.inner,
+                        &nested_path,
+                        module_path,
+                        file_index,
+                    );
+                    // Also recurse into enum/bitflags bodies of nested items
+                    if let grammar::ItemDefinitionInner::Enum(ed) = &nested.inner {
+                        for item in &ed.items {
+                            if let grammar::EnumDefItem::Item(nested2) = item {
+                                let nested2_path = nested_path.join(nested2.name.as_str().into());
+                                let nested2_kind = match &nested2.inner {
+                                    grammar::ItemDefinitionInner::Type(_) => SigKind::Type,
+                                    grammar::ItemDefinitionInner::Enum(_) => SigKind::Enum,
+                                    grammar::ItemDefinitionInner::Bitflags(_) => SigKind::Bitflags,
+                                    grammar::ItemDefinitionInner::TypeAlias(_) => {
+                                        SigKind::TypeAlias
+                                    }
+                                    grammar::ItemDefinitionInner::Constant(_) => SigKind::Constant,
+                                };
+                                self.items.insert(
+                                    nested2_path.clone(),
+                                    ItemSig {
+                                        kind: nested2_kind,
+                                        arity: nested2.type_parameters.len(),
+                                    },
+                                );
+                                self.item_files.insert(nested2_path.clone(), file_index);
+                                self.item_scopes
+                                    .insert(nested2_path.clone(), module_path.clone());
+                                self.register_nested_in_type(
+                                    &nested2.inner,
+                                    &nested2_path,
+                                    module_path,
+                                    file_index,
+                                );
+                            }
+                        }
+                    }
+                    if let grammar::ItemDefinitionInner::Bitflags(bd) = &nested.inner {
+                        for item in &bd.items {
+                            if let grammar::BitflagsDefItem::Item(nested2) = item {
+                                let nested2_path = nested_path.join(nested2.name.as_str().into());
+                                let nested2_kind = match &nested2.inner {
+                                    grammar::ItemDefinitionInner::Type(_) => SigKind::Type,
+                                    grammar::ItemDefinitionInner::Enum(_) => SigKind::Enum,
+                                    grammar::ItemDefinitionInner::Bitflags(_) => SigKind::Bitflags,
+                                    grammar::ItemDefinitionInner::TypeAlias(_) => {
+                                        SigKind::TypeAlias
+                                    }
+                                    grammar::ItemDefinitionInner::Constant(_) => SigKind::Constant,
+                                };
+                                self.items.insert(
+                                    nested2_path.clone(),
+                                    ItemSig {
+                                        kind: nested2_kind,
+                                        arity: nested2.type_parameters.len(),
+                                    },
+                                );
+                                self.item_files.insert(nested2_path.clone(), file_index);
+                                self.item_scopes
+                                    .insert(nested2_path.clone(), module_path.clone());
+                                self.register_nested_in_type(
+                                    &nested2.inner,
+                                    &nested2_path,
+                                    module_path,
+                                    file_index,
+                                );
+                            }
+                        }
+                    }
                 }
             }
         }

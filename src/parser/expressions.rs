@@ -6,7 +6,7 @@ use crate::{
 #[cfg(test)]
 use crate::span::StripLocations;
 
-use super::{ParseError, core::Parser, types::Ident};
+use super::{ParseError, core::Parser, paths::ItemPath, types::Ident};
 
 /// Format information for integer literals
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -36,6 +36,15 @@ pub enum Expr {
         format: IntFormat,
         location: ItemLocation,
     },
+    /// A float literal. The raw source text is stored (not an `f64`) so that
+    /// `Expr` can derive `Eq`/`Hash` — `f64` does not implement either. Two
+    /// floats with the same value but different source text (e.g. `3.0` vs
+    /// `3.00`) are therefore not equal as `Expr` variants, which is fine for a
+    /// source-preserving AST.
+    FloatLiteral {
+        raw_text: String,
+        location: ItemLocation,
+    },
     StringLiteral {
         value: String,
         format: StringFormat,
@@ -43,6 +52,12 @@ pub enum Expr {
     },
     Ident {
         ident: Ident,
+        location: ItemLocation,
+    },
+    /// A multi-segment path expression, e.g. `Color::Red` for enum-value
+    /// references in `const` declarations.
+    Path {
+        path: ItemPath,
         location: ItemLocation,
     },
 }
@@ -53,9 +68,29 @@ impl Expr {
             _ => None,
         }
     }
+    pub fn float_literal(&self) -> Option<&str> {
+        match self {
+            Expr::FloatLiteral { raw_text, .. } => Some(raw_text.as_str()),
+            _ => None,
+        }
+    }
+    /// Parse the stored raw text into an `f64`. Returns `None` if the text is
+    /// not a valid float (should not happen for tokens produced by the lexer).
+    pub fn float_value(&self) -> Option<f64> {
+        match self {
+            Expr::FloatLiteral { raw_text, .. } => raw_text.parse().ok(),
+            _ => None,
+        }
+    }
     pub fn string_literal(&self) -> Option<&str> {
         match self {
             Expr::StringLiteral { value, .. } => Some(value.as_str()),
+            _ => None,
+        }
+    }
+    pub fn path(&self) -> Option<&ItemPath> {
+        match self {
+            Expr::Path { path, .. } => Some(path),
             _ => None,
         }
     }
@@ -101,6 +136,16 @@ impl Parser {
                     location,
                 })
             }
+            TokenKind::FloatLiteral(_) => {
+                let token = self.advance();
+                let TokenKind::FloatLiteral(s) = token.kind else {
+                    unreachable!()
+                };
+                Ok(Expr::FloatLiteral {
+                    raw_text: s,
+                    location: token.location,
+                })
+            }
             TokenKind::StringLiteral(_) => {
                 let token = self.current().clone();
                 let (value, location) = self.parse_string_literal()?;
@@ -118,9 +163,16 @@ impl Parser {
                 })
             }
             TokenKind::Ident(_) => {
-                let (ident, ident_span) = self.expect_ident()?;
-                let location = self.item_location_from_span(ident_span);
-                Ok(Expr::Ident { ident, location })
+                // Check if this is a path expression (Ident::Ident...) for
+                // enum-value references like `Color::Red`.
+                if matches!(self.peek_nth(1), TokenKind::ColonColon) {
+                    let (path, location) = self.parse_item_path()?;
+                    Ok(Expr::Path { path, location })
+                } else {
+                    let (ident, ident_span) = self.expect_ident()?;
+                    let location = self.item_location_from_span(ident_span);
+                    Ok(Expr::Ident { ident, location })
+                }
             }
             _ => Err(ParseError::ExpectedExpression {
                 found: self.peek().clone(),

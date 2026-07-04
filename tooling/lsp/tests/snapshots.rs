@@ -352,6 +352,11 @@ fn snapshot_completion() {
             "label": "AtomicI64"
           },
           {
+            "detail": "builtin",
+            "kind": 22,
+            "label": "str"
+          },
+          {
             "detail": "this module",
             "kind": 13,
             "label": "Color"

@@ -15,8 +15,9 @@ use crate::{
     semantic::{
         TypeRegistry,
         types::{
-            Argument, BitflagField, BitflagsDefinition, CallingConvention, EnumDefinition,
-            EnumVariant, ExternValue, Function, FunctionBody, ItemDefinition, ItemDefinitionInner,
+            Argument, BitflagField, BitflagsDefinition, CallingConvention,
+            ConstDefinition as SemanticConstDefinition, ConstValue, EnumDefinition, EnumVariant,
+            ExternValue, Function, FunctionBody, ItemDefinition, ItemDefinitionInner,
             PredefinedItem, Region, Type, TypeAliasDefinition, TypeDefinition, TypeVftable,
             Visibility,
         },
@@ -116,6 +117,10 @@ pub fn render_item(item: &ItemDefinition, ctx: RenderCtx) -> Result<Option<Rende
         )?,
         ItemDefinitionInner::Enum(ed) => {
             let (decl, post_cpp) = render_enum(&name, ed, resolved.size, ctx)?;
+            let mut decl = decl;
+            // Emit nested constants as module-level constexpr declarations
+            // (enums don't have a struct body for static members)
+            render_nested_consts_cpp_flat(&mut decl, ctx, &item.path, &name)?;
             RenderedItem {
                 decl,
                 post_header: String::new(),
@@ -124,6 +129,9 @@ pub fn render_item(item: &ItemDefinition, ctx: RenderCtx) -> Result<Option<Rende
         }
         ItemDefinitionInner::Bitflags(bd) => {
             let (decl, post_cpp) = render_bitflags(&name, bd, resolved.size, ctx)?;
+            let mut decl = decl;
+            // Emit nested constants as module-level constexpr declarations
+            render_nested_consts_cpp_flat(&mut decl, ctx, &item.path, &name)?;
             RenderedItem {
                 decl,
                 post_header: String::new(),
@@ -135,6 +143,7 @@ pub fn render_item(item: &ItemDefinition, ctx: RenderCtx) -> Result<Option<Rende
             post_header: String::new(),
             post_cpp: String::new(),
         },
+        ItemDefinitionInner::Constant(cd) => render_const(&name, cd, ctx)?,
     };
     Ok(Some(rendered))
 }
@@ -272,6 +281,31 @@ fn render_struct(
                             for region in &nested_td.regions {
                                 render_field_indented(&mut body, region, ctx, false, 2)?;
                             }
+                            // Render nested constants inside the nested struct
+                            for nested_nested_path in &nested_td.nested_item_paths {
+                                if let Ok(nested_nested_item) = ctx
+                                    .registry
+                                    .get(nested_nested_path, &ItemLocation::internal())
+                                    && let Some(nested_nested_resolved) =
+                                        nested_nested_item.resolved()
+                                    && let ItemDefinitionInner::Constant(nested_cd) =
+                                        &nested_nested_resolved.inner
+                                {
+                                    let nested_const_name = nested_nested_path
+                                        .last()
+                                        .map(|s| s.as_str().to_string())
+                                        .unwrap_or_default();
+                                    let nested_const_name = cpp_ident(&nested_const_name);
+                                    render_doc(&mut body, &nested_cd.doc, 2)?;
+                                    let bf_type = render_type(&nested_cd.type_, ctx)?;
+                                    let value_str =
+                                        format_const_value(&nested_cd.value, &nested_cd.type_);
+                                    writeln!(
+                                        body,
+                                        "        static constexpr {bf_type} {nested_const_name} = {value_str};"
+                                    )?;
+                                }
+                            }
                             writeln!(body, "    }};")?;
                         }
                         ItemDefinitionInner::Enum(nested_ed) => {
@@ -311,6 +345,15 @@ fn render_struct(
                                 body,
                                 "    using {nested_name} = {};",
                                 render_type(&nested_ta.target, ctx)?
+                            )?;
+                        }
+                        ItemDefinitionInner::Constant(nested_cd) => {
+                            render_doc(&mut body, &nested_cd.doc, 1)?;
+                            let bf_type = render_type(&nested_cd.type_, ctx)?;
+                            let value_str = format_const_value(&nested_cd.value, &nested_cd.type_);
+                            writeln!(
+                                body,
+                                "    static constexpr {bf_type} {nested_name} = {value_str};"
                             )?;
                         }
                     }
@@ -856,6 +899,91 @@ fn render_type_alias(
     Ok(out)
 }
 
+/// Emit nested constants as flat module-level `constexpr` declarations with
+/// the parent name as a prefix (e.g., `Color_DEFAULT`). Used for enums and
+/// bitflags which don't have a struct body for `static constexpr` members.
+fn render_nested_consts_cpp_flat(
+    out: &mut String,
+    ctx: RenderCtx,
+    parent_path: &ItemPath,
+    parent_name: &str,
+) -> Result<()> {
+    for (item_path, item) in ctx.registry.iter() {
+        if item_path.parent().as_ref() != Some(parent_path) {
+            continue;
+        }
+        let Some(resolved) = item.resolved() else {
+            continue;
+        };
+        if let ItemDefinitionInner::Constant(cd) = &resolved.inner {
+            let const_name = item_path.last().map(|s| s.as_str()).unwrap_or_default();
+            let flat_name = format!("{parent_name}_{}", cpp_ident(const_name));
+            let type_str = render_type(&cd.type_, ctx)?;
+            let value_str = format_const_value(&cd.value, &cd.type_);
+            render_doc(out, &cd.doc, 0)?;
+            writeln!(out, "constexpr {type_str} {flat_name} = {value_str};")?;
+        }
+    }
+
+    Ok(())
+}
+
+fn format_const_value(value: &ConstValue, type_: &Type) -> String {
+    match value {
+        ConstValue::Int(v) => v.to_string(),
+        ConstValue::Float(bits) => {
+            let f = f64::from_bits(*bits);
+            let is_f32 = matches!(
+                type_,
+                Type::Raw(p) if p.len() == 1 && p.iter().next().unwrap().as_str() == "f32"
+            );
+            let s = format!("{f}");
+            let has_decimal = s.contains('.') || s.contains('e') || s.contains('E');
+            if is_f32 {
+                if has_decimal {
+                    format!("{s}f")
+                } else {
+                    format!("{s}.0f")
+                }
+            } else if has_decimal {
+                s
+            } else {
+                format!("{s}.0")
+            }
+        }
+        ConstValue::String(s) => {
+            let mut esc = String::from("\"");
+            for ch in s.chars() {
+                match ch {
+                    '"' => esc.push_str("\\\""),
+                    '\\' => esc.push_str("\\\\"),
+                    '\n' => esc.push_str("\\n"),
+                    '\r' => esc.push_str("\\r"),
+                    '\t' => esc.push_str("\\t"),
+                    _ => esc.push(ch),
+                }
+            }
+            esc.push('"');
+            esc
+        }
+        ConstValue::EnumValue(path) => path.to_string(),
+    }
+}
+
+fn render_const(name: &str, cd: &SemanticConstDefinition, ctx: RenderCtx) -> Result<RenderedItem> {
+    let name = &*cpp_ident(name);
+    let mut decl = String::new();
+    render_doc(&mut decl, &cd.doc, 0)?;
+    let type_str = render_type(&cd.type_, ctx)?;
+    let value_str = format_const_value(&cd.value, &cd.type_);
+    writeln!(decl, "constexpr {type_str} {name} = {value_str};")?;
+    Ok(RenderedItem {
+        decl,
+        post_header: String::new(),
+        post_cpp: String::new(),
+    })
+}
+
 /// Render a free function (`fn foo()` at module scope). For `#[address]`
 /// bodies this emits an `extern const fn_t name;` declaration suitable for
 /// the `.hpp`; for `#[external_body]` bodies it emits a plain function
@@ -1227,6 +1355,7 @@ fn predefined_to_cpp(p: PredefinedItem) -> &'static str {
         PredefinedItem::AtomicI16 => "::pyxis::AtomicI16",
         PredefinedItem::AtomicI32 => "::pyxis::AtomicI32",
         PredefinedItem::AtomicI64 => "::pyxis::AtomicI64",
+        PredefinedItem::Str => "const char* const",
     }
 }
 

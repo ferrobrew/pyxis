@@ -5,6 +5,7 @@
 #include "braced_imports.hpp"
 #include "calling_conventions.hpp"
 #include "cfg.hpp"
+#include "consts.hpp"
 #include "definition_body.hpp"
 #include "diamond_inheritance.hpp"
 #include "doc_comments.hpp"

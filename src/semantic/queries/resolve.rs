@@ -57,13 +57,33 @@ fn find_grammar_def(
     }
 
     // 2. Nested-item search: find the parent type's definition, then walk its
-    //    body for a TypeField::Item whose name matches target_path.last().
+    //    body for a nested item whose name matches target_path.last().
     let parent_path = target_path.parent()?;
     let parent_def = find_grammar_def(module, module_path, &parent_path)?;
     if let grammar::ItemDefinitionInner::Type(td) = &parent_def.inner {
         let leaf = target_path.last()?;
         for stmt in td.statements() {
             if let grammar::TypeField::Item(inner) = &stmt.field {
+                if inner.name.as_str() == leaf.as_str() {
+                    return Some((**inner).clone());
+                }
+            }
+        }
+    }
+    if let grammar::ItemDefinitionInner::Enum(ed) = &parent_def.inner {
+        let leaf = target_path.last()?;
+        for item in &ed.items {
+            if let grammar::EnumDefItem::Item(inner) = item {
+                if inner.name.as_str() == leaf.as_str() {
+                    return Some((**inner).clone());
+                }
+            }
+        }
+    }
+    if let grammar::ItemDefinitionInner::Bitflags(bd) = &parent_def.inner {
+        let leaf = target_path.last()?;
+        for item in &bd.items {
+            if let grammar::BitflagsDefItem::Item(inner) = item {
                 if inner.name.as_str() == leaf.as_str() {
                     return Some((**inner).clone());
                 }
@@ -255,6 +275,7 @@ pub fn resolve_item<'db>(
                 ItemDefinitionInner::Enum(e) => e.attributes.cfg(),
                 ItemDefinitionInner::Bitflags(b) => b.attributes.cfg(),
                 ItemDefinitionInner::TypeAlias(ta) => ta.attributes.cfg(),
+                ItemDefinitionInner::Constant(c) => c.attributes.cfg(),
             };
             (
                 ItemDefinition {

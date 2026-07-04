@@ -102,6 +102,7 @@ pub mod bitflags;
 pub mod braced_imports;
 pub mod calling_conventions;
 pub mod cfg;
+pub mod consts;
 pub mod definition_body;
 pub mod diamond_inheritance;
 pub mod doc_comments;

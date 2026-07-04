@@ -8,6 +8,7 @@ export type ItemType =
   | 'enum-variant'
   | 'bitflags'
   | 'type_alias'
+  | 'constant'
   | 'function'
   | 'extern'
   | 'field';
@@ -26,6 +27,8 @@ export function getItemTypeColor(type: ItemType): string {
       return 'text-kind-bitflags';
     case 'type_alias':
       return 'text-kind-alias';
+    case 'constant':
+      return 'text-kind-constant';
     case 'function':
       return 'text-kind-function';
     case 'extern':
@@ -51,6 +54,8 @@ export function getItemTypeHoverColor(type: ItemType): string {
       return 'hover:text-kind-bitflags-hover';
     case 'type_alias':
       return 'hover:text-kind-alias-hover';
+    case 'constant':
+      return 'hover:text-kind-constant-hover';
     case 'function':
       return 'hover:text-kind-function-hover';
     case 'extern':

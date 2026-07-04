@@ -1,0 +1,34 @@
+// Module-level constants
+pub const MAX_HEALTH: i32 = 100;
+pub const SCALE_FACTOR: f32 = 1.5;
+pub const GRAVITY: f64 = 9.81;
+pub const GAME_NAME: str = "Pyxis";
+pub const DEFAULT_COLOR: Color = Color::Red;
+
+pub enum Color: u8 {
+    pub const DEFAULT: Color = Color::Red,
+
+    Red,
+    Green,
+    Blue,
+}
+
+pub bitflags AccessFlags: u32 {
+    pub const DEFAULT_MASK: u32 = 3,
+
+    READ = 1,
+    WRITE = 2,
+}
+
+pub type Player {
+    pub const STARTING_GOLD: u32 = 500,
+    pub const SPAWN_X: f32 = 0.0,
+
+    pub type Inventory {
+        pub const MAX_SLOTS: u32 = 30,
+
+        pub slots: u32,
+    },
+
+    pub health: i32,
+}

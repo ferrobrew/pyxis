@@ -325,6 +325,13 @@ pub fn build(
                     }
                 };
 
+                // `str` type is only allowed on `const` declarations, not on fields.
+                if is_str_type(&type_) {
+                    return Err(SemanticError::StrTypeNotConst {
+                        location: statement.location,
+                    });
+                }
+
                 let ident = (field_ident.0 != "_").then(|| field_ident.0.clone());
                 pending_regions.push((
                     address,
@@ -904,5 +911,13 @@ fn is_type_trait_satisfied(
         Type::TypeParameter(_) => Ok(true),
         // Unresolved: assume ok (will be resolved and checked later)
         Type::Unresolved(_) => Ok(true),
+    }
+}
+
+/// Check if a resolved type is `str`.
+fn is_str_type(type_: &Type) -> bool {
+    match type_ {
+        Type::Raw(path) if path.len() == 1 => path.iter().next().unwrap().as_str() == "str",
+        _ => false,
     }
 }

@@ -319,6 +319,7 @@ fn intra_module_forward_decls(
                 format!("enum class {leaf} : {underlying};")
             }
             ItemDefinitionInner::TypeAlias(_) => continue,
+            ItemDefinitionInner::Constant(_) => continue,
         };
         out.push(line);
     }
@@ -860,6 +861,7 @@ fn forward_decl_line(
                 return format!("enum class {leaf} : {underlying};");
             }
             ItemDefinitionInner::TypeAlias(_) => return format!("struct {leaf};"),
+            ItemDefinitionInner::Constant(_) => return format!("struct {leaf};"),
         }
     }
     format!("struct {leaf};")
