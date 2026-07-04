@@ -156,3 +156,25 @@ fn braced_import_segments_resolve() {
         "braced-import prefix segment should resolve"
     );
 }
+
+#[test]
+fn nested_const_name_hovers() {
+    // A `const` nested inside a type body (note the trailing `,`) must hover on
+    // its name — the body walk previously skipped nested items entirely.
+    let src = "pub type Config {\n    pub const VFTABLE: u64 = 0xF23584,\n    pub value: u32,\n}\n";
+    let st = ServerState::in_memory(&[(ROOT, 8, &[("config.pyxis", src)])]);
+    let uri = ServerState::document_uri(ROOT, "config.pyxis");
+
+    let line = src.lines().nth(1).unwrap();
+    let col = line.find("VFTABLE").unwrap() as u32 + 2;
+    let h = hover(&st, &uri, 1, col);
+    let text = hover_text(&h).unwrap_or("");
+    assert!(
+        text.contains("const") && text.contains("VFTABLE"),
+        "nested const name should hover as a const, got {h}"
+    );
+    assert!(
+        text.contains("0xF23584"),
+        "nested const hover should show its value, got {h}"
+    );
+}
