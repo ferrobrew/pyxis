@@ -458,8 +458,15 @@ export function ItemView() {
 
   const name = decodedPath.split('::').pop() || decodedPath;
   const isExtern = item.category === 'extern';
-  const keyword = isExtern ? 'extern type' : (KIND_KEYWORD[item.kind.type] ?? item.kind.type);
-  const isPublic = item.visibility === 'public';
+  // Predefined types (f32, u32, str, ...) are compiler builtins, not
+  // user-declared items, so don't dress them up as `pub type f32`.
+  const isPredefined = item.category === 'predefined';
+  const keyword = isExtern
+    ? 'extern type'
+    : isPredefined
+      ? 'predefined type'
+      : (KIND_KEYWORD[item.kind.type] ?? item.kind.type);
+  const isPublic = item.visibility === 'public' && !isPredefined;
   const typeParams = item.type_parameters ?? [];
   const underlying =
     item.kind.type === 'enum' || item.kind.type === 'bitflags' ? item.kind.underlying_type : null;
