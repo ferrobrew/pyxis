@@ -102,8 +102,9 @@ pub fn build(
         }
         grammar::Expr::Path { path, .. } => {
             // Enum-value reference: resolve the path against enum variants.
-            // The path should be `EnumName::VariantName`.
-            resolve_enum_value(
+            // The path is `<enum-path>::VariantName`, where `<enum-path>` may be
+            // module-qualified (e.g. `gfx::Color::Red`).
+            let enum_type_path = resolve_enum_value(
                 semantic,
                 &scope,
                 path,
@@ -111,25 +112,11 @@ pub fn build(
                 definition.expr.location(),
             )?;
 
-            // Validate that the const's type annotation matches the enum type.
-            // The path is `EnumName::VariantName`; the enum is the first segment.
-            let enum_name = path.iter().next().unwrap().as_str();
-            let enum_type_path = match semantic.type_registry.resolve_string(&scope, enum_name) {
-                TypeLookupResult::Found(Type::Raw(p)) => p,
-                _ => {
-                    return Err(SemanticError::ConstValueTypeMismatch {
-                        item_path: resolvee_path.clone(),
-                        expected: format!("enum `{enum_name}`"),
-                        found: path.to_string(),
-                        location: *definition.expr.location(),
-                    });
-                }
-            };
-            // The const's type should be the enum type (Type::Raw pointing to the enum)
+            // The const's type should be the enum type (Type::Raw pointing to the enum).
             if resolved_type != Type::Raw(enum_type_path.clone()) {
                 return Err(SemanticError::ConstValueTypeMismatch {
                     item_path: resolvee_path.clone(),
-                    expected: format!("enum `{enum_name}` ({enum_type_path})"),
+                    expected: format!("enum `{enum_type_path}`"),
                     found: format!("{resolved_type}"),
                     location: *definition.expr.location(),
                 });
@@ -188,83 +175,71 @@ fn type_is_predefined_str(type_registry: &TypeRegistry, type_: &Type) -> bool {
     predefined_for_type(type_registry, type_).is_some_and(PredefinedItem::is_str)
 }
 
-/// Resolve an enum-value path (e.g., `Color::Red`) and validate it exists.
+/// Resolve an enum-value path (e.g. `Color::Red`, or module-qualified
+/// `gfx::Color::Red`) and validate that the variant exists. Returns the
+/// resolved absolute path of the enum type on success.
+///
+/// The final segment is the variant name; everything before it is the enum's
+/// path, resolved through the scope (so it may be module-qualified).
 fn resolve_enum_value(
     semantic: &ResolutionContextRef<'_>,
     scope: &[ItemPath],
     path: &ItemPath,
     resolvee_path: &ItemPath,
     expr_location: &ItemLocation,
-) -> Result<()> {
-    let segments: Vec<&str> = path.iter().map(|s| s.as_str()).collect();
-    if segments.len() != 2 {
-        return Err(SemanticError::ConstValueTypeMismatch {
-            item_path: resolvee_path.clone(),
-            expected: "an enum-value reference (EnumName::VariantName)".to_string(),
-            found: path.to_string(),
-            location: *expr_location,
-        });
-    }
+) -> Result<ItemPath> {
+    let mismatch = |expected: String| SemanticError::ConstValueTypeMismatch {
+        item_path: resolvee_path.clone(),
+        expected,
+        found: path.to_string(),
+        location: *expr_location,
+    };
 
-    let enum_name = segments[0];
-    let variant_name = segments[1];
+    // Split into `<enum-path>::<variant>`. Need at least an enum segment and a
+    // variant segment.
+    let variant_name = path
+        .last()
+        .map(|s| s.as_str())
+        .ok_or_else(|| mismatch("an enum-value reference (EnumName::VariantName)".to_string()))?;
+    let enum_grammar_path = path
+        .parent()
+        .filter(|p| !p.is_empty())
+        .ok_or_else(|| mismatch("an enum-value reference (EnumName::VariantName)".to_string()))?;
 
-    // Resolve the enum name through the scope using the type registry
-    let enum_path = match semantic.type_registry.resolve_string(scope, enum_name) {
+    // Resolve the enum path through the scope (handles module-qualified paths).
+    let enum_path = match semantic
+        .type_registry
+        .resolve_path(scope, &enum_grammar_path)
+    {
         TypeLookupResult::Found(Type::Raw(p)) => p,
-        _ => {
-            return Err(SemanticError::ConstValueTypeMismatch {
-                item_path: resolvee_path.clone(),
-                expected: format!("enum `{enum_name}`"),
-                found: path.to_string(),
-                location: *expr_location,
-            });
-        }
+        _ => return Err(mismatch(format!("enum `{enum_grammar_path}`"))),
     };
 
     // Look up the enum in the type registry
     let enum_def = semantic
         .type_registry
         .get(&enum_path, &ItemLocation::internal())
-        .map_err(|_| SemanticError::ConstValueTypeMismatch {
-            item_path: resolvee_path.clone(),
-            expected: format!("enum `{enum_name}`"),
-            found: path.to_string(),
-            location: *expr_location,
-        })?;
+        .map_err(|_| mismatch(format!("enum `{enum_grammar_path}`")))?;
 
     // Check that it's actually an enum and find the variant
     let enum_inner = match enum_def.resolved() {
         Some(r) => match r.inner.as_enum() {
             Some(e) => e,
             None => {
-                return Err(SemanticError::ConstValueTypeMismatch {
-                    item_path: resolvee_path.clone(),
-                    expected: format!("enum `{enum_name}`"),
-                    found: r.inner.human_friendly_type().to_string(),
-                    location: *expr_location,
-                });
+                return Err(mismatch(r.inner.human_friendly_type().to_string()));
             }
         },
         None => {
-            return Err(SemanticError::ConstValueTypeMismatch {
-                item_path: resolvee_path.clone(),
-                expected: format!("enum `{enum_name}` (unresolved)"),
-                found: path.to_string(),
-                location: *expr_location,
-            });
+            return Err(mismatch(format!("enum `{enum_grammar_path}` (unresolved)")));
         }
     };
 
     // Find the matching variant
     if !enum_inner.variants.iter().any(|v| v.name == variant_name) {
-        return Err(SemanticError::ConstValueTypeMismatch {
-            item_path: resolvee_path.clone(),
-            expected: format!("variant `{variant_name}` in enum `{enum_name}`"),
-            found: path.to_string(),
-            location: *expr_location,
-        });
+        return Err(mismatch(format!(
+            "variant `{variant_name}` in enum `{enum_grammar_path}`"
+        )));
     }
 
-    Ok(())
+    Ok(enum_path)
 }
