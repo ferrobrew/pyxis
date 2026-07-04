@@ -7,7 +7,6 @@ use crate::{
 
 use super::util::pointer_size;
 
-#[cfg(feature = "cpp")]
 #[test]
 fn cpp_backend_accepts_definition_modifier() {
     let module = M::new().with_backends([B::new("cpp")
@@ -36,7 +35,6 @@ fn rust_backend_rejects_epilogue_definition() {
     }
 }
 
-#[cfg(feature = "json")]
 #[test]
 fn json_backend_rejects_prologue_definition() {
     let module = M::new().with_backends([B::new("json").with_prologue_definition("// nope")]);

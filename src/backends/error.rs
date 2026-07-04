@@ -73,6 +73,10 @@ pub enum BackendError {
         kind: FieldCodeGenFailedKind,
         location: ItemLocation,
     },
+    /// Generation was requested for a backend whose codegen isn't compiled
+    /// into this build (its cargo feature is off). Parsing defs that mention
+    /// the backend is always fine; only emitting its output needs the feature.
+    BackendNotCompiledIn(crate::Backend),
     /// C++-backend-specific error. Closed-world (not type-erased) so
     /// callers can pattern-match on the exact failure mode; only present
     /// when the `cpp` feature is enabled.
@@ -192,6 +196,12 @@ impl BackendError {
             } => {
                 format!(
                     "Failed to generate code for field `{field_name}` of type `{type_path}`: {kind}"
+                )
+            }
+            BackendError::BackendNotCompiledIn(backend) => {
+                format!(
+                    "the `{backend}` backend is not compiled into this build; \
+                     enable its cargo feature to generate `{backend}` output"
                 )
             }
             #[cfg(feature = "cpp")]

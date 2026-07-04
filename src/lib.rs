@@ -19,12 +19,18 @@ pub(crate) mod util;
 // Re-export semantic error for convenience
 pub use semantic::SemanticError;
 
+/// The set of target languages pyxis knows about. Every variant is always
+/// present in the IR — the enum is the parse-time identity of a `backend foo`
+/// block and a `#[cfg(backend = "foo")]` predicate — so definition files that
+/// name any known backend parse regardless of which cargo features a consumer
+/// enabled. The `json` / `cpp` *features* gate only the codegen modules
+/// (`backends::{json,cpp}`): a block for a backend that isn't compiled in is
+/// carried in the IR and simply never rendered. (A true typo still fails as
+/// `UnknownBackend` — the keyword list here is closed.)
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Backend {
     Rust,
-    #[cfg(feature = "json")]
     Json,
-    #[cfg(feature = "cpp")]
     Cpp,
 }
 
@@ -37,25 +43,27 @@ impl Backend {
     pub const fn name(self) -> &'static str {
         match self {
             Backend::Rust => "rust",
-            #[cfg(feature = "json")]
             Backend::Json => "json",
-            #[cfg(feature = "cpp")]
             Backend::Cpp => "cpp",
         }
     }
 
-    /// All variants in canonical order. Used by parser-error messages
-    /// to enumerate valid backend names. `Json` / `Cpp` are conditional
-    /// on their respective features - without them, parsing
-    /// `backend json { ... }` / `backend cpp { ... }` fails as an
-    /// unknown backend.
-    pub const ALL: &'static [Backend] = &[
-        Backend::Rust,
-        #[cfg(feature = "json")]
-        Backend::Json,
-        #[cfg(feature = "cpp")]
-        Backend::Cpp,
-    ];
+    /// All variants in canonical order. Used by parser-error messages to
+    /// enumerate valid backend names and by cfg evaluation to reason over the
+    /// full backend axis. Unconditional (unlike the codegen modules) so the
+    /// keyword list and `#[cfg(backend = ...)]` evaluation are identical for
+    /// every consumer regardless of features.
+    pub const ALL: &'static [Backend] = &[Backend::Rust, Backend::Json, Backend::Cpp];
+
+    /// Whether this backend's codegen is compiled into this build. Parsing and
+    /// cfg evaluation don't care; only actually *generating* output does.
+    pub const fn is_compiled_in(self) -> bool {
+        match self {
+            Backend::Rust => true,
+            Backend::Json => cfg!(feature = "json"),
+            Backend::Cpp => cfg!(feature = "cpp"),
+        }
+    }
 
     /// Parse a backend keyword. `None` if the input doesn't match any
     /// known backend - callers translate to a typed error appropriate
@@ -136,25 +144,29 @@ mod backend_tests {
     #[test]
     fn known_variants_are_all_in_all() {
         // ALL must be exhaustive over the enum so `from_name` matches
-        // every variant.
+        // every variant. Every known backend name resolves regardless of which
+        // codegen features are compiled in.
         let all_names: Vec<_> = Backend::ALL.iter().map(|b| b.name()).collect();
         assert!(all_names.contains(&"rust"));
-        #[cfg(feature = "cpp")]
         assert!(all_names.contains(&"cpp"));
-        #[cfg(feature = "json")]
         assert!(all_names.contains(&"json"));
     }
 
-    #[cfg(not(feature = "json"))]
     #[test]
-    fn json_excluded_when_feature_disabled() {
-        assert_eq!(Backend::from_name("json"), None);
+    fn all_names_resolve_regardless_of_features() {
+        // Feature selection gates codegen, not parsing: every known backend
+        // name is always recognised (issue #104). Only genuine typos are None.
+        assert_eq!(Backend::from_name("json"), Some(Backend::Json));
+        assert_eq!(Backend::from_name("cpp"), Some(Backend::Cpp));
+        assert_eq!(Backend::from_name("rust"), Some(Backend::Rust));
+        assert_eq!(Backend::from_name("foobar"), None);
     }
 
-    #[cfg(not(feature = "cpp"))]
     #[test]
-    fn cpp_excluded_when_feature_disabled() {
-        assert_eq!(Backend::from_name("cpp"), None);
+    fn is_compiled_in_tracks_features() {
+        assert!(Backend::Rust.is_compiled_in());
+        assert_eq!(Backend::Json.is_compiled_in(), cfg!(feature = "json"));
+        assert_eq!(Backend::Cpp.is_compiled_in(), cfg!(feature = "cpp"));
     }
 }
 
@@ -384,6 +396,14 @@ pub fn build_with_store_and_options(
             backends::cpp::build(out_dir, &resolved_semantic_state, &config.project)?;
             Ok(())
         }
+        // The backend is a valid, parseable target, but its codegen wasn't
+        // compiled into this build. Generating (as opposed to parsing defs that
+        // merely mention it) requires the feature. Unreachable when every
+        // feature is on, hence the allow.
+        #[allow(unreachable_patterns)]
+        other => Err(BuildError::Backend(
+            backends::BackendError::BackendNotCompiledIn(other),
+        )),
     }
 }
 

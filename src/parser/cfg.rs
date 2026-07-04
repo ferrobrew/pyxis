@@ -212,19 +212,16 @@ mod tests {
         CfgContext { backend }
     }
 
-    #[cfg(feature = "cpp")]
     fn cpp() -> CfgContext {
         ctx(crate::Backend::Cpp)
     }
     fn rust() -> CfgContext {
         ctx(crate::Backend::Rust)
     }
-    #[cfg(feature = "json")]
     fn json() -> CfgContext {
         ctx(crate::Backend::Json)
     }
 
-    #[cfg(feature = "cpp")]
     #[test]
     fn atom_backend_match() {
         let p = kv("backend", "cpp");
@@ -239,7 +236,6 @@ mod tests {
         assert!(!kv("unknown_key", "x").evaluate(&rust()));
     }
 
-    #[cfg(all(feature = "cpp", feature = "json"))]
     #[test]
     fn any_short_circuits_on_first_true() {
         let p = any(vec![kv("backend", "rust"), kv("backend", "cpp")]);
@@ -248,7 +244,6 @@ mod tests {
         assert!(!p.evaluate(&json()));
     }
 
-    #[cfg(feature = "cpp")]
     #[test]
     fn all_requires_every_clause() {
         let p = all(vec![kv("backend", "cpp"), ident("test")]);
@@ -256,7 +251,6 @@ mod tests {
         assert!(!p.evaluate(&cpp()));
     }
 
-    #[cfg(all(feature = "cpp", feature = "json"))]
     #[test]
     fn not_inverts() {
         // `not(backend = "rust")` should be true on every non-rust backend,
@@ -268,7 +262,6 @@ mod tests {
         assert!(!p.evaluate(&rust()));
     }
 
-    #[cfg(all(feature = "cpp", feature = "json"))]
     #[test]
     fn nested_combinations() {
         // any(all(backend = "cpp", not(test)), backend = "rust")
@@ -288,7 +281,6 @@ mod tests {
         assert!(all(vec![]).evaluate(&rust()));
     }
 
-    #[cfg(all(feature = "cpp", feature = "json"))]
     #[test]
     fn provably_disjoint_backend_keyvalues() {
         // Different backend values can never both be active → disjoint.
@@ -310,7 +302,6 @@ mod tests {
         assert!(!CfgPredicate::provably_disjoint(None, None));
     }
 
-    #[cfg(all(feature = "cpp", feature = "json"))]
     #[test]
     fn provably_disjoint_overlapping_predicates() {
         // `any(cpp, rust)` overlaps `cpp` (both true under cpp).

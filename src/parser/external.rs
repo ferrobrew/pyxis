@@ -968,7 +968,6 @@ backend rust epilogue r#"
         assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
     }
 
-    #[cfg(feature = "cpp")]
     #[test]
     fn can_parse_backend_with_uses() {
         let text = r##"
@@ -1017,15 +1016,10 @@ backend cpp {
 
     #[test]
     fn known_backend_names_parse() {
-        // Every enabled backend name should round-trip cleanly through
-        // the parser. `cpp` and `json` are feature-gated, so only assert
-        // on them when their feature is on.
-        let mut names: Vec<&'static str> = vec!["rust"];
-        #[cfg(feature = "cpp")]
-        names.push("cpp");
-        #[cfg(feature = "json")]
-        names.push("json");
-        for name in names {
+        // Every known backend name round-trips through the parser regardless of
+        // which codegen features are compiled in (issue #104): parsing defs that
+        // name a backend is independent of being able to *generate* it.
+        for name in ["rust", "cpp", "json"] {
             let text = format!(r##"backend {name} prologue r#""#;"##);
             let module = parse_str_for_tests(&text).unwrap();
             let backends: Vec<_> = module.backends().collect();
@@ -1034,7 +1028,25 @@ backend cpp {
         }
     }
 
-    #[cfg(feature = "cpp")]
+    #[test]
+    fn feature_gated_backend_block_parses_without_its_feature() {
+        // Regression for #104: a `backend cpp { ... }` block in a shared def
+        // file must parse even for a consumer that never enables the `cpp`
+        // feature (e.g. a Rust-only build.rs), so a routine dependency update
+        // doesn't break their build. The block is carried in the IR; only its
+        // codegen is gated.
+        let text = r##"
+backend cpp {
+    prologue definition r#"#include <cstdint>"#;
+    epilogue r#"inline int answer() { return 42; }"#;
+}
+"##;
+        let module = parse_str_for_tests(text).unwrap();
+        let backends: Vec<_> = module.backends().collect();
+        assert_eq!(backends.len(), 1);
+        assert_eq!(backends[0].name, crate::Backend::Cpp);
+    }
+
     #[test]
     fn can_parse_backend_with_definition_modifier() {
         // The `definition` modifier on an epilogue/prologue lands in the
@@ -1125,7 +1137,6 @@ type HandleRaw = *mut u8;
         assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
     }
 
-    #[cfg(feature = "cpp")]
     #[test]
     fn can_parse_backend_for_type_with_definition() {
         // `definition` and `for` are independent modifiers — either order works,
@@ -1171,7 +1182,6 @@ backend cpp epilogue for Probe r#"
         assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
     }
 
-    #[cfg(feature = "cpp")]
     #[test]
     fn can_parse_braced_for_type_with_header_and_definition() {
         // A braced `backend cpp { }` block that has both an `epilogue for T`

@@ -52,6 +52,20 @@ def main():
     clippy_env["RUSTFLAGS"] = "-Dwarnings"
     run_command(["cargo", "clippy", "--all", "--all-targets", "--all-features"], env=clippy_env)
 
+    # The `json` and `cpp` backends are feature-gated, but shared definition
+    # files name backends a given consumer may not compile in (issue #104), so
+    # parsing, validation, and cfg-evaluation must be warning-free and pass
+    # tests in *every* feature combination — not just the `--all-features`
+    # unification above (which the workspace `cargo test` and clippy already
+    # cover). The driver pulls in both features via workspace unification, so we
+    # isolate the core `pyxis` crate with `-p` to exercise each combo honestly.
+    for combo in (["--no-default-features"], ["--features", "json"], ["--features", "cpp"]):
+        run_command(
+            ["cargo", "clippy", "-p", "pyxis", "--all-targets", *combo],
+            env=clippy_env,
+        )
+        run_command(["cargo", "test", "-p", "pyxis", *combo])
+
     # Run fmt check (nightly — rustfmt.toml uses the unstable imports_granularity)
     run_command(["cargo", "+nightly", "fmt", "--all", "--", "--check"])
 

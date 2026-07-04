@@ -73,10 +73,7 @@ pub fn validate_uses(
 pub fn validate_backend_definitions(modules: &BTreeMap<ItemPath, Module>) -> Result<()> {
     fn supports_definition(backend: Backend) -> bool {
         match backend {
-            Backend::Rust => false,
-            #[cfg(feature = "json")]
-            Backend::Json => false,
-            #[cfg(feature = "cpp")]
+            Backend::Rust | Backend::Json => false,
             Backend::Cpp => true,
         }
     }
