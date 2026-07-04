@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useDocumentation } from '../contexts/DocumentationContext';
 import { getModulePath, findLongestValidAncestor, findModule } from '../utils/pathUtils';
+import { useDocumentTitle } from '../utils/title';
 import { buildModuleUrl, buildItemUrl, buildRootUrl } from '../utils/navigation';
 import { getItemTypeColor, type ItemType } from '../utils/colors';
 import { TypeRef } from './TypeRef';
@@ -391,6 +392,8 @@ export function ItemView() {
   const { itemPath = '' } = useParams();
   const { documentation, selectedSource } = useDocumentation();
   const navigate = useNavigate();
+
+  useDocumentTitle(decodeURIComponent(itemPath));
 
   useEffect(() => {
     if (documentation && itemPath) {

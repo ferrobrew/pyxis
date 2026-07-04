@@ -2,6 +2,7 @@ import { useDocumentation } from '../contexts/DocumentationContext';
 import { useNavigate } from 'react-router-dom';
 import { useEffect } from 'react';
 import { buildModuleUrl } from '../utils/navigation';
+import { useDocumentTitle } from '../utils/title';
 
 function Step({ n, children }: { n: number; children: React.ReactNode }) {
   return (
@@ -17,6 +18,8 @@ function Step({ n, children }: { n: number; children: React.ReactNode }) {
 export function WelcomePage() {
   const { documentation, selectedSource } = useDocumentation();
   const navigate = useNavigate();
+
+  useDocumentTitle();
 
   // If documentation is loaded, navigate to the first module
   useEffect(() => {

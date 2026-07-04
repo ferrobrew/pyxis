@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useDocumentation } from '../contexts/DocumentationContext';
 import { findModule, findLongestValidAncestor } from '../utils/pathUtils';
+import { useDocumentTitle } from '../utils/title';
 import { buildModuleUrl, buildItemUrl, buildRootUrl } from '../utils/navigation';
 import { getItemTypeColor, type ItemType } from '../utils/colors';
 import { ExternAttributes } from './Attributes';
@@ -178,6 +179,8 @@ export function ModuleView() {
   const { modulePath = '' } = useParams();
   const { documentation, selectedSource } = useDocumentation();
   const navigate = useNavigate();
+
+  useDocumentTitle(decodeURIComponent(modulePath));
 
   useEffect(() => {
     if (documentation && modulePath !== undefined) {
