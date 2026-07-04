@@ -1028,6 +1028,38 @@ fn build_type_alias(
     })
 }
 
+/// Render a `ConstValue` as a Rust expression token stream. `type_` is the
+/// const's declared type, consulted to pick the right float literal suffix.
+fn const_value_to_tokens(value: &ConstValue, type_: &Type) -> proc_macro2::TokenStream {
+    match value {
+        ConstValue::Int(v) => {
+            let lit = proc_macro2::Literal::i64_unsuffixed(*v as i64);
+            quote! { #lit }
+        }
+        ConstValue::Float(bits) => {
+            let f = f64::from_bits(*bits);
+            // For f32, narrow before rendering; f64 emits bare.
+            if type_.is_f32() {
+                let lit = proc_macro2::Literal::f32_unsuffixed(f as f32);
+                quote! { #lit }
+            } else {
+                let lit = proc_macro2::Literal::f64_unsuffixed(f);
+                quote! { #lit }
+            }
+        }
+        ConstValue::String(s) => {
+            let s = s.as_str();
+            quote! { #s }
+        }
+        ConstValue::EnumValue(p) => {
+            // Build the path as a Rust path expression. We construct it as a
+            // string and parse it to get proper tokenization.
+            let path_str = p.to_string();
+            path_str.parse().unwrap_or_else(|_| quote! { () })
+        }
+    }
+}
+
 fn build_const(
     path: &ItemPath,
     visibility: Visibility,
@@ -1040,39 +1072,7 @@ fn build_const(
     let visibility = visibility_to_tokens(visibility);
     let type_ = sa_type_to_syn_type(&const_definition.type_, None, Some(module_paths))?;
     let doc = doc_to_tokens(false, &const_definition.doc, None);
-
-    let value_tokens = match &const_definition.value {
-        ConstValue::Int(v) => {
-            let lit = proc_macro2::Literal::i64_unsuffixed(*v as i64);
-            quote! { #lit }
-        }
-        ConstValue::Float(bits) => {
-            let f = f64::from_bits(*bits);
-            // For f32, add the `f32` suffix; for f64, emit bare.
-            match &const_definition.type_ {
-                Type::Raw(p) if p.len() == 1 && p.iter().next().unwrap().as_str() == "f32" => {
-                    let lit = proc_macro2::Literal::f32_unsuffixed(f as f32);
-                    quote! { #lit }
-                }
-                _ => {
-                    let lit = proc_macro2::Literal::f64_unsuffixed(f);
-                    quote! { #lit }
-                }
-            }
-        }
-        ConstValue::String(s) => {
-            let s = s.as_str();
-            quote! { #s }
-        }
-        ConstValue::EnumValue(p) => {
-            // Build the path as a Rust path expression.
-            // We construct it as a string and parse it to get proper tokenization.
-            let path_str = p.to_string();
-            let path_tokens: proc_macro2::TokenStream =
-                path_str.parse().unwrap_or_else(|_| quote! { () });
-            path_tokens
-        }
-    };
+    let value_tokens = const_value_to_tokens(&const_definition.value, &const_definition.type_);
 
     Ok(quote! {
         #doc
@@ -1110,35 +1110,7 @@ fn build_nested_const_impls(
                 Err(_) => continue,
             };
             let doc = doc_to_tokens(false, &cd.doc, None);
-
-            let value_tokens = match &cd.value {
-                ConstValue::Int(v) => {
-                    let lit = proc_macro2::Literal::i64_unsuffixed(*v as i64);
-                    quote! { #lit }
-                }
-                ConstValue::Float(bits) => {
-                    let f = f64::from_bits(*bits);
-                    let is_f32 = matches!(
-                        &cd.type_,
-                        Type::Raw(p) if p.len() == 1 && p.iter().next().unwrap().as_str() == "f32"
-                    );
-                    if is_f32 {
-                        let lit = proc_macro2::Literal::f32_unsuffixed(f as f32);
-                        quote! { #lit }
-                    } else {
-                        let lit = proc_macro2::Literal::f64_unsuffixed(f);
-                        quote! { #lit }
-                    }
-                }
-                ConstValue::String(s) => {
-                    let s = s.as_str();
-                    quote! { #s }
-                }
-                ConstValue::EnumValue(p) => {
-                    let path_str = p.to_string();
-                    path_str.parse().unwrap_or_else(|_| quote! { () })
-                }
-            };
+            let value_tokens = const_value_to_tokens(&cd.value, &cd.type_);
 
             const_items.push(quote! {
                 #doc

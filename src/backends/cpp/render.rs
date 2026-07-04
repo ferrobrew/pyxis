@@ -933,10 +933,7 @@ fn format_const_value(value: &ConstValue, type_: &Type) -> String {
         ConstValue::Int(v) => v.to_string(),
         ConstValue::Float(bits) => {
             let f = f64::from_bits(*bits);
-            let is_f32 = matches!(
-                type_,
-                Type::Raw(p) if p.len() == 1 && p.iter().next().unwrap().as_str() == "f32"
-            );
+            let is_f32 = type_.is_f32();
             let s = format!("{f}");
             let has_decimal = s.contains('.') || s.contains('e') || s.contains('E');
             if is_f32 {

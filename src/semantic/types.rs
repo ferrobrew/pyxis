@@ -188,6 +188,12 @@ impl Type {
     pub fn is_array(&self) -> bool {
         matches!(self, Type::Array(_, _))
     }
+    /// Returns `true` if this is the predefined single-segment `f32` type.
+    /// Used by backends to decide float literal suffixing (`f32` vs `f64`)
+    /// without threading the type registry through.
+    pub fn is_f32(&self) -> bool {
+        matches!(self, Type::Raw(p) if p.len() == 1 && p.iter().next().is_some_and(|s| s.as_str() == "f32"))
+    }
     pub fn boxed(self) -> Box<Type> {
         Box::new(self)
     }
