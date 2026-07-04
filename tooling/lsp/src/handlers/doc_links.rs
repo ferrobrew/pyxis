@@ -152,25 +152,52 @@ impl ServerState {
                 continue;
             };
             for dl in scan_doc_links(line) {
-                let item_path = match resolver.resolve(&scope, &dl.path) {
-                    Some(DocLinkTarget::Item(p)) => p,
-                    Some(DocLinkTarget::Member { item, .. }) => item,
-                    _ => continue,
-                };
-                let Some(rd) = self.resolved_definition(&item_path, type_registry, uri) else {
+                // Target file + 1-based line to anchor the link at, and a tooltip.
+                let Some((target_uri, target_line, tooltip)) =
+                    (match resolver.resolve(&scope, &dl.path) {
+                        Some(DocLinkTarget::Item(p)) => self
+                            .resolved_definition(&p, type_registry, uri)
+                            .map(|rd| (rd.uri, rd.name_span.start.line, p.to_string())),
+                        Some(DocLinkTarget::Member { item, name, .. }) => self
+                            .resolve_doc_member(&item, &name, uri)
+                            .map(|(muri, mspan, _)| {
+                                let path = item.join(name.as_str().into());
+                                (muri, mspan.start.line, path.to_string())
+                            })
+                            // Fall back to the owning type if the member's own
+                            // declaration can't be located.
+                            .or_else(|| {
+                                self.resolved_definition(&item, type_registry, uri)
+                                    .map(|rd| (rd.uri, rd.name_span.start.line, item.to_string()))
+                            }),
+                        Some(DocLinkTarget::Function { module, name }) => self
+                            .resolve_doc_module_item(&module, &name, uri, true)
+                            .map(|(loc, _)| {
+                                let path = module.join(name.as_str().into());
+                                (loc.uri, loc.range.start.line as usize + 1, path.to_string())
+                            }),
+                        Some(DocLinkTarget::ExternValue { module, name }) => self
+                            .resolve_doc_module_item(&module, &name, uri, false)
+                            .map(|(loc, _)| {
+                                let path = module.join(name.as_str().into());
+                                (loc.uri, loc.range.start.line as usize + 1, path.to_string())
+                            }),
+                        None => None,
+                    })
+                else {
                     continue;
                 };
                 let span = Span::new(
                     Location::new(line_no, dl.link.0 + 1),
                     Location::new(line_no, dl.link.1 + 1),
                 );
-                let target = format!("{}#L{}", rd.uri.as_str(), rd.name_span.start.line)
+                let target = format!("{}#L{}", target_uri.as_str(), target_line)
                     .parse()
-                    .unwrap_or(rd.uri);
+                    .unwrap_or(target_uri);
                 links.push(DocumentLink {
                     range: pyxis_span_to_lsp_range(content, &span),
                     target: Some(target),
-                    tooltip: Some(item_path.to_string()),
+                    tooltip: Some(tooltip),
                     data: None,
                 });
             }

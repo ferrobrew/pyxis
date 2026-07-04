@@ -867,6 +867,59 @@ fn document_link_resolves_doc_cross_references() {
 }
 
 #[test]
+fn document_link_resolves_to_function() {
+    // A doc link to a freestanding function should be clickable, targeting the
+    // function's declaration line — not just types/members.
+    let src = "/// See [`GetName`].\npub type Foo {\n    pub x: u64,\n}\n\n#[address(0x456)]\npub fn GetName();\n";
+    let st = ServerState::in_memory(&[("/p", 8, &[("m.pyxis", src)])]);
+    let uri = ServerState::document_uri("/p", "m.pyxis");
+    let params = lsp_types::DocumentLinkParams {
+        text_document: TextDocumentIdentifier { uri },
+        work_done_progress_params: Default::default(),
+        partial_result_params: Default::default(),
+    };
+    let r = Request::new(
+        RequestId::from(1),
+        "textDocument/documentLink".into(),
+        serde_json::to_value(params).unwrap(),
+    );
+    let links: Vec<serde_json::Value> =
+        serde_json::from_value(st.handle_document_link(r).result.unwrap()).unwrap();
+    assert_eq!(links.len(), 1, "{links:#?}");
+    let l = &links[0];
+    // `pub fn GetName();` is on line 7 (1-indexed).
+    assert!(l["target"].as_str().unwrap().ends_with("m.pyxis#L7"), "{l}");
+    assert_eq!(l["tooltip"], "m::GetName");
+    assert_eq!(l["range"]["start"]["line"], 0);
+}
+
+#[test]
+fn document_link_to_member_targets_the_member() {
+    // A `Type::method` doc link should target the method's own line, matching
+    // hover / go-to-definition — not the enclosing type's line.
+    let src = "/// See [`Foo::bar`].\npub type Foo {\n    pub x: u64,\n}\nimpl Foo {\n    #[address(0x1)]\n    pub fn bar(&self);\n}\n";
+    let st = ServerState::in_memory(&[("/p", 8, &[("m.pyxis", src)])]);
+    let uri = ServerState::document_uri("/p", "m.pyxis");
+    let params = lsp_types::DocumentLinkParams {
+        text_document: TextDocumentIdentifier { uri },
+        work_done_progress_params: Default::default(),
+        partial_result_params: Default::default(),
+    };
+    let r = Request::new(
+        RequestId::from(1),
+        "textDocument/documentLink".into(),
+        serde_json::to_value(params).unwrap(),
+    );
+    let links: Vec<serde_json::Value> =
+        serde_json::from_value(st.handle_document_link(r).result.unwrap()).unwrap();
+    assert_eq!(links.len(), 1, "{links:#?}");
+    let l = &links[0];
+    // `pub fn bar(&self);` is on line 7 (1-indexed); the type Foo is on line 2.
+    assert!(l["target"].as_str().unwrap().ends_with("m.pyxis#L7"), "{l}");
+    assert_eq!(l["tooltip"], "m::Foo::bar");
+}
+
+#[test]
 fn implementation_finds_impl_blocks_across_files() {
     let st = ServerState::in_memory(&[(
         "/p",
