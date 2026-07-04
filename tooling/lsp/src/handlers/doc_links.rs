@@ -392,8 +392,40 @@ impl ServerState {
 /// backends recognise exactly the same links (only `::`-path targets; prose and
 /// URLs are skipped). Unlike the compiler, the LSP surfaces every syntactic
 /// form — including bare `[Foo]` shortcuts — as navigable.
+///
+/// `line` is a raw source line, so its leading indentation and `///`/`//!`
+/// marker are stripped before scanning: CommonMark treats a line indented ≥4
+/// columns as a code block and does no inline parsing, which would suppress
+/// every link on a doc comment inside a type body (the compiler avoids this by
+/// scanning already-stripped doc text). Offsets are shifted back so they stay
+/// in raw-line byte coordinates.
 pub(crate) fn scan_doc_links(line: &str) -> Vec<ScannedLink> {
-    pyxis::semantic::doc_links::scan_links(line)
+    let Some(off) = doc_content_start(line) else {
+        return Vec::new();
+    };
+    let shift = |(a, b): (usize, usize)| (a + off, b + off);
+    pyxis::semantic::doc_links::scan_links(&line[off..])
+        .into_iter()
+        .map(|l| ScannedLink {
+            link: shift(l.link),
+            path_region: shift(l.path_region),
+            label_region: shift(l.label_region),
+            ..l
+        })
+        .collect()
+}
+
+/// Byte offset where a doc comment's Markdown content begins — past leading
+/// indentation and the `///` (outer) or `//!` (inner) marker. `None` if `line`
+/// isn't a doc comment (no marker after its indentation).
+fn doc_content_start(line: &str) -> Option<usize> {
+    let indent = line.len() - line.trim_start().len();
+    let rest = &line[indent..];
+    if rest.starts_with("///") || rest.starts_with("//!") {
+        Some(indent + 3)
+    } else {
+        None
+    }
 }
 
 /// Byte offsets of every whole-word (identifier-boundary) occurrence of `word`
@@ -423,7 +455,33 @@ pub(crate) fn whole_word_offsets(text: &str, word: &str) -> Vec<usize> {
 
 #[cfg(test)]
 mod tests {
-    use super::whole_word_offsets;
+    use super::{scan_doc_links, whole_word_offsets};
+
+    #[test]
+    fn scans_links_on_indented_doc_lines() {
+        // A doc comment inside a type body is indented; the raw line's leading
+        // whitespace + `///` must not trip CommonMark's indented-code-block rule
+        // (≥4 columns), which would otherwise find no links at all.
+        let indented = "    /// See ([`GetRenderPassName`]) for details.";
+        let links = scan_doc_links(indented);
+        assert_eq!(links.len(), 1, "expected one link in {indented:?}");
+        assert_eq!(links[0].path, "GetRenderPassName");
+        // Offsets stay in raw-line coordinates: the code-span content sits where
+        // it actually appears in the source line.
+        let (s, e) = links[0].path_region;
+        assert_eq!(&indented[s..e], "GetRenderPassName");
+
+        // Same content unindented resolves to the same path (parity check).
+        assert_eq!(
+            scan_doc_links("/// See ([`GetRenderPassName`]).")[0].path,
+            "GetRenderPassName",
+        );
+    }
+
+    #[test]
+    fn ignores_non_doc_lines() {
+        assert!(scan_doc_links("    let x = [0];").is_empty());
+    }
 
     #[test]
     fn whole_word_offsets_respects_ascii_boundaries() {
