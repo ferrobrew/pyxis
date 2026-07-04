@@ -58,6 +58,7 @@ pub enum DocLinkMemberKind {
     Field,
     Variant,
     Flag,
+    Constant,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -66,13 +67,16 @@ enum ItemMembers {
         methods: Vec<String>,
         vftable_methods: Vec<String>,
         fields: Vec<String>,
+        constants: Vec<String>,
     },
     Enum {
         variants: Vec<String>,
         methods: Vec<String>,
+        constants: Vec<String>,
     },
     Bitflags {
         flags: Vec<String>,
+        constants: Vec<String>,
     },
     Other,
 }
@@ -88,14 +92,53 @@ struct ItemInfo {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DocLinkResolver {
     items: BTreeMap<ItemPath, ItemInfo>,
+    /// Paths of constants nested inside a type/enum/bitflags (i.e. whose parent
+    /// is itself a registered item). These register in the type registry as
+    /// full item paths, but must resolve through their parent as a
+    /// [`DocLinkTarget::Member`] rather than a freestanding [`DocLinkTarget::Item`]:
+    /// the Rust backend emits them as associated consts, not flattened free
+    /// items, so importing the full path would name a nonexistent identifier.
+    nested_constant_paths: BTreeSet<ItemPath>,
     module_functions: BTreeMap<ItemPath, Vec<String>>,
     module_extern_values: BTreeMap<ItemPath, Vec<String>>,
 }
 
 impl DocLinkResolver {
     pub fn build(type_registry: &TypeRegistry, modules: &BTreeMap<ItemPath, Module>) -> Self {
+        // Collect the names of constants nested inside another item, keyed by
+        // that parent item's path, plus the set of their full paths.
+        let mut nested_constants_by_parent: BTreeMap<ItemPath, Vec<String>> = BTreeMap::new();
+        let mut nested_constant_paths = BTreeSet::new();
+        for (path, item) in type_registry.iter() {
+            if !matches!(
+                item.resolved().map(|r| &r.inner),
+                Some(ItemDefinitionInner::Constant(_))
+            ) {
+                continue;
+            }
+            let Some(parent) = path.parent() else {
+                continue;
+            };
+            // Only constants whose parent is itself an item (type/enum/bitflags)
+            // are "nested"; module-level constants resolve as their own item.
+            if !type_registry.contains(&parent) {
+                continue;
+            }
+            if let Some(name) = path.last() {
+                nested_constants_by_parent
+                    .entry(parent)
+                    .or_default()
+                    .push(name.as_str().to_string());
+                nested_constant_paths.insert(path.clone());
+            }
+        }
+
         let mut items = BTreeMap::new();
         for (path, item) in type_registry.iter() {
+            let constants = nested_constants_by_parent
+                .get(path)
+                .cloned()
+                .unwrap_or_default();
             let members = match item.resolved().map(|r| &r.inner) {
                 Some(ItemDefinitionInner::Type(td)) => ItemMembers::Type {
                     methods: td
@@ -109,6 +152,7 @@ impl DocLinkResolver {
                         .map(|v| v.functions.iter().map(|f| f.name.clone()).collect())
                         .unwrap_or_default(),
                     fields: td.regions.iter().filter_map(|r| r.name.clone()).collect(),
+                    constants,
                 },
                 Some(ItemDefinitionInner::Enum(ed)) => ItemMembers::Enum {
                     variants: ed.variants.iter().map(|v| v.name.clone()).collect(),
@@ -117,9 +161,11 @@ impl DocLinkResolver {
                         .iter()
                         .map(|f| f.name.clone())
                         .collect(),
+                    constants,
                 },
                 Some(ItemDefinitionInner::Bitflags(bd)) => ItemMembers::Bitflags {
                     flags: bd.flags.iter().map(|f| f.name.clone()).collect(),
+                    constants,
                 },
                 Some(ItemDefinitionInner::Constant(_)) => ItemMembers::Other,
                 _ => ItemMembers::Other,
@@ -159,6 +205,7 @@ impl DocLinkResolver {
 
         DocLinkResolver {
             items,
+            nested_constant_paths,
             module_functions,
             module_extern_values,
         }
@@ -167,8 +214,13 @@ impl DocLinkResolver {
     /// Resolve a written link path (e.g. `Action`, `Type::method`) against a
     /// module scope. Returns `None` if it doesn't resolve to anything.
     pub fn resolve(&self, scope: &[ItemPath], path_str: &str) -> Option<DocLinkTarget> {
-        // 1. The whole path as a type.
-        if let Some(item_path) = self.find_item(scope, path_str) {
+        // 1. The whole path as a type. A nested constant is skipped here so it
+        //    falls through to the `Type::member` branch and resolves as a
+        //    member of its parent — the Rust backend emits it as an associated
+        //    const, so it has no importable free-item path of its own.
+        if let Some(item_path) = self.find_item(scope, path_str)
+            && !self.nested_constant_paths.contains(&item_path)
+        {
             return Some(DocLinkTarget::Item(item_path));
         }
         // 2. `Type::member`.
@@ -419,6 +471,7 @@ impl DocLinkResolver {
                 methods,
                 vftable_methods,
                 fields,
+                constants,
             } => {
                 if methods.iter().any(|n| n == member) {
                     Some(DocLinkMemberKind::Method)
@@ -426,23 +479,36 @@ impl DocLinkResolver {
                     Some(DocLinkMemberKind::VftableMethod)
                 } else if fields.iter().any(|n| n == member) {
                     Some(DocLinkMemberKind::Field)
+                } else if constants.iter().any(|n| n == member) {
+                    Some(DocLinkMemberKind::Constant)
                 } else {
                     None
                 }
             }
-            ItemMembers::Enum { variants, methods } => {
+            ItemMembers::Enum {
+                variants,
+                methods,
+                constants,
+            } => {
                 if variants.iter().any(|n| n == member) {
                     Some(DocLinkMemberKind::Variant)
                 } else if methods.iter().any(|n| n == member) {
                     Some(DocLinkMemberKind::Method)
+                } else if constants.iter().any(|n| n == member) {
+                    Some(DocLinkMemberKind::Constant)
                 } else {
                     None
                 }
             }
-            ItemMembers::Bitflags { flags } => flags
-                .iter()
-                .any(|n| n == member)
-                .then_some(DocLinkMemberKind::Flag),
+            ItemMembers::Bitflags { flags, constants } => {
+                if flags.iter().any(|n| n == member) {
+                    Some(DocLinkMemberKind::Flag)
+                } else if constants.iter().any(|n| n == member) {
+                    Some(DocLinkMemberKind::Constant)
+                } else {
+                    None
+                }
+            }
             ItemMembers::Other => None,
         }
     }

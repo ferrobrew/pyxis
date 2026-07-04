@@ -10,6 +10,7 @@ namespace consts {
     enum class Color : ::std::uint8_t;
     struct Player;
 
+    /// The permissive baseline is [`DEFAULT_MASK`](AccessFlags::DEFAULT_MASK).
     enum class AccessFlags : ::std::uint32_t {
         READ = 0x1,
         WRITE = 0x2,
@@ -29,6 +30,7 @@ namespace consts {
     static_assert(sizeof(AccessFlags) == 0x4);
     constexpr ::std::uint32_t AccessFlags_DEFAULT_MASK = 3;
 
+    /// Defaults to [`DEFAULT`](Color::DEFAULT).
     enum class Color : ::std::uint8_t {
         Red = 0,
         Green = 1,
@@ -46,6 +48,9 @@ namespace consts {
     constexpr ::std::int32_t MAX_HEALTH = 100;
 
     struct alignas(4) Player {
+        /// New players begin with [`STARTING_GOLD`](Player::STARTING_GOLD) gold,
+        /// spawn at x=[`SPAWN_X`](Player::SPAWN_X), and can hold up to
+        /// [`MAX_SLOTS`](Player::Inventory::MAX_SLOTS) items.
         ::std::int32_t health;
 
         static constexpr ::std::uint32_t STARTING_GOLD = 500;

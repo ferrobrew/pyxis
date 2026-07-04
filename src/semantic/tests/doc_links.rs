@@ -118,6 +118,43 @@ fn resolves_every_link_form() {
 }
 
 #[test]
+fn resolves_nested_constant_as_member() {
+    // A constant nested inside a type resolves as a `Constant` *member* of its
+    // parent (issue #103), not as a freestanding item: the Rust backend emits
+    // it as an associated const, so a `Type::CONST` link imports the parent
+    // type and rewrites to the associated-const form rather than importing a
+    // nonexistent flattened free item.
+    let module = M::new().with_definitions([ID::new(
+        (V::Public, "Player"),
+        TD::new([
+            TS::item(ID::new(
+                (V::Public, "STARTING_GOLD"),
+                CD::new(T::ident("u32"), int_literal(500)),
+            )),
+            TS::field((V::Public, "health"), T::ident("i32")).with_attributes([A::address(0)]),
+        ])
+        .with_attributes([A::size(4), A::align(4)]),
+    )]);
+
+    let state = build_state(&module, &IP::from("test")).unwrap();
+    let scope = state.modules().get(&IP::from("test")).unwrap().scope();
+    let resolver = state.doc_link_resolver();
+
+    assert_eq!(
+        resolver.resolve(&scope, "Player::STARTING_GOLD"),
+        Some(DocLinkTarget::Member {
+            item: IP::from("test::Player"),
+            name: "STARTING_GOLD".to_string(),
+            kind: DocLinkMemberKind::Constant,
+        })
+    );
+    // A nested constant has no freestanding path to link to by bare name, so it
+    // must not resolve as an item (which would emit an unresolvable import).
+    assert_eq!(resolver.resolve(&scope, "STARTING_GOLD"), None);
+    assert_eq!(resolver.resolve(&scope, "Player::MISSING"), None);
+}
+
+#[test]
 fn scan_links_tags_syntax_with_precise_regions() {
     // The shared scanner backs the compiler, the Rust backend's link rewriting,
     // and the LSP, so each link's syntax and `path_region` must be exact.

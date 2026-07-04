@@ -153,8 +153,11 @@ pub fn write_module(
     }
     let nested_rewrites: std::collections::HashMap<String, String> = {
         let mut map = std::collections::HashMap::new();
-        for (_, flat) in &same_module_aliases {
-            let leaf = flat.rsplit('_').next().unwrap_or(flat);
+        for (p, flat) in &same_module_aliases {
+            // The unflattened leaf is the item path's last segment — not
+            // `flat.rsplit('_')`, which would truncate an item name that itself
+            // contains an underscore.
+            let leaf = p.last().map(|s| s.as_str()).unwrap_or(flat.as_str());
             map.insert(leaf.to_string(), flat.clone());
         }
         map
@@ -262,8 +265,8 @@ pub fn write_module(
     // items referenced in doc links, so rustdoc resolves [`LeafName`] to
     // the flattened Rust identifier.
     if !same_module_aliases.is_empty() {
-        for (_, flat) in &same_module_aliases {
-            let leaf = flat.rsplit('_').next().unwrap_or(flat);
+        for (p, flat) in &same_module_aliases {
+            let leaf = p.last().map(|s| s.as_str()).unwrap_or(flat.as_str());
             writeln!(raw_output, "#[allow(unused_imports)]")?;
             writeln!(raw_output, "use {flat} as {leaf};")?;
         }

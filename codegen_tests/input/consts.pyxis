@@ -5,6 +5,7 @@ pub const GRAVITY: f64 = 9.81;
 pub const GAME_NAME: str = "Pyxis";
 pub const DEFAULT_COLOR: Color = Color::Red;
 
+/// Defaults to [`DEFAULT`](Color::DEFAULT).
 pub enum Color: u8 {
     pub const DEFAULT: Color = Color::Red,
 
@@ -13,6 +14,7 @@ pub enum Color: u8 {
     Blue,
 }
 
+/// The permissive baseline is [`DEFAULT_MASK`](AccessFlags::DEFAULT_MASK).
 pub bitflags AccessFlags: u32 {
     pub const DEFAULT_MASK: u32 = 3,
 
@@ -30,5 +32,8 @@ pub type Player {
         pub slots: u32,
     },
 
+    /// New players begin with [`STARTING_GOLD`](Player::STARTING_GOLD) gold,
+    /// spawn at x=[`SPAWN_X`](Player::SPAWN_X), and can hold up to
+    /// [`MAX_SLOTS`](Player::Inventory::MAX_SLOTS) items.
     pub health: i32,
 }

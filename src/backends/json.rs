@@ -174,6 +174,21 @@ impl JsonDocLink {
                 path: path.to_string(),
                 anchor: None,
             },
+            // A nested constant is emitted as its own item page in the viewer
+            // (unlike Rust, where it's an associated const), so point the link
+            // at the constant's own path rather than an anchor on its parent.
+            T::Member {
+                item,
+                name,
+                kind: K::Constant,
+            } => JsonDocLink {
+                text,
+                target_kind: JsonDocLinkTargetKind::Item,
+                path: item
+                    .join(crate::grammar::ItemPathSegment::from(name.as_str()))
+                    .to_string(),
+                anchor: None,
+            },
             T::Member { item, name, kind } => {
                 let anchor = match kind {
                     K::Method => format!("func-{name}"),
@@ -181,6 +196,7 @@ impl JsonDocLink {
                     K::Field => format!("field-{name}"),
                     K::Variant => format!("variant-{name}"),
                     K::Flag => format!("flag-{name}"),
+                    K::Constant => unreachable!("handled above"),
                 };
                 JsonDocLink {
                     text,
