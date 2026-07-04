@@ -15,6 +15,10 @@ namespace world::weather {
 namespace world_consumer {
     struct WorldConsumer;
 
+    /// Consumes the world. Doc-links a type from a deeper, un-imported module
+    /// ([`DeepMarker`](world::deep::marker::DeepMarker)) to exercise the
+    /// doc-import path: the emitted `use` must split module and item segments at
+    /// the declaring module's prefix, not this module's depth.
     struct alignas(8) WorldConsumer {
         ::world::weather::Weather* weather;
         ::world::World* world;

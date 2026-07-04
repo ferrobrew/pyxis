@@ -238,13 +238,16 @@ pub fn write_module(
             .iter()
             .map(|p| {
                 // Flatten nested item paths for Rust: e.g.
-                // module::Outer::InnerEnum → module::Outer_InnerEnum
-                if p.len() > key.len() + 1 {
-                    // Find where module segments end and type segments begin
+                // module::Outer::InnerEnum → module::Outer_InnerEnum. The
+                // module/item split must come from the *declaring* module's
+                // prefix — splitting at this module's depth mangles imports
+                // whenever the two depths differ.
+                let module_len = find_module_prefix_len(p, &module_path_set);
+                if p.len() > module_len + 1 {
                     let type_segments: Vec<&str> =
-                        p.iter().skip(key.len()).map(|s| s.as_str()).collect();
+                        p.iter().skip(module_len).map(|s| s.as_str()).collect();
                     let module_part: Vec<&str> =
-                        p.iter().take(key.len()).map(|s| s.as_str()).collect();
+                        p.iter().take(module_len).map(|s| s.as_str()).collect();
                     let flat_name = type_segments.join("_");
                     if module_part.is_empty() {
                         flat_name

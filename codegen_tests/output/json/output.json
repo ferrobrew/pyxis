@@ -8347,7 +8347,14 @@
       "category": "defined",
       "kind": {
         "type": "type",
-        "doc": null,
+        "doc": " Consumes the world. Doc-links a type from a deeper, un-imported module\n ([`DeepMarker`](world::deep::marker::DeepMarker)) to exercise the\n doc-import path: the emitted `use` must split module and item segments at\n the declaring module's prefix, not this module's depth.",
+        "doc_links": [
+          {
+            "text": "world::deep::marker::DeepMarker",
+            "target_kind": "item",
+            "path": "world::deep::marker::DeepMarker"
+          }
+        ],
         "fields": [
           {
             "visibility": "public",
@@ -8366,7 +8373,7 @@
             "is_base": false,
             "source": {
               "file_index": 33,
-              "line": 10
+              "line": 14
             }
           },
           {
@@ -8386,7 +8393,7 @@
             "is_base": false,
             "source": {
               "file_index": 33,
-              "line": 11
+              "line": 15
             }
           }
         ],
@@ -8401,7 +8408,7 @@
       },
       "source": {
         "file_index": 33,
-        "line": 9
+        "line": 13
       }
     }
   },
