@@ -5,8 +5,11 @@ use crate::{
             BuildOutcome, Result, SemanticError, UnresolvedTypeContext, UnresolvedTypeReference,
         },
         resolution_context::ResolutionContextRef,
-        type_registry::TypeLookupResult,
-        types::{ConstDefinition as SemanticConstDefinition, ConstValue, ItemStateResolved, Type},
+        type_registry::{TypeLookupResult, TypeRegistry},
+        types::{
+            ConstDefinition as SemanticConstDefinition, ConstValue, ItemStateResolved,
+            PredefinedItem, Type,
+        },
     },
     span::{HasLocation, ItemLocation},
 };
@@ -57,7 +60,7 @@ pub fn build(
     // Resolve the value expression based on the Expr variant
     let value = match &definition.expr {
         grammar::Expr::IntLiteral { value, .. } => {
-            if !is_integer_type(&resolved_type) {
+            if !type_is_predefined_integer(semantic.type_registry, &resolved_type) {
                 return Err(SemanticError::ConstValueTypeMismatch {
                     item_path: resolvee_path.clone(),
                     expected: "an integer type".to_string(),
@@ -68,7 +71,7 @@ pub fn build(
             ConstValue::Int(*value)
         }
         grammar::Expr::FloatLiteral { raw_text, .. } => {
-            if !is_float_type(&resolved_type) {
+            if !type_is_predefined_float(semantic.type_registry, &resolved_type) {
                 return Err(SemanticError::ConstValueTypeMismatch {
                     item_path: resolvee_path.clone(),
                     expected: "a float type (f32 or f64)".to_string(),
@@ -87,7 +90,7 @@ pub fn build(
             ConstValue::Float(f.to_bits())
         }
         grammar::Expr::StringLiteral { value, .. } => {
-            if !is_str_type(&resolved_type) {
+            if !type_is_predefined_str(semantic.type_registry, &resolved_type) {
                 return Err(SemanticError::ConstValueTypeMismatch {
                     item_path: resolvee_path.clone(),
                     expected: "`str`".to_string(),
@@ -156,37 +159,33 @@ pub fn build(
     }))
 }
 
-/// Check if a resolved type is an integer type by looking up the predefined item.
-fn is_integer_type(type_: &Type) -> bool {
-    match type_ {
-        Type::Raw(path) if path.len() == 1 => {
-            let name = path.iter().next().unwrap().as_str();
-            matches!(
-                name,
-                "u8" | "u16" | "u32" | "u64" | "u128" | "i8" | "i16" | "i32" | "i64" | "i128"
-            )
-        }
-        _ => false,
-    }
+/// Look up a resolved `Type` in the type registry and return its
+/// `PredefinedItem` if it is a predefined type (e.g. `u32`, `f64`, `str`).
+fn predefined_for_type<'a>(
+    type_registry: &'a TypeRegistry,
+    type_: &Type,
+) -> Option<&'a PredefinedItem> {
+    let path = match type_ {
+        Type::Raw(path) => path,
+        _ => return None,
+    };
+    let item_def = type_registry.get(path, &ItemLocation::internal()).ok()?;
+    item_def.predefined.as_ref()
 }
 
-/// Check if a resolved type is a float type (f32 or f64).
-fn is_float_type(type_: &Type) -> bool {
-    match type_ {
-        Type::Raw(path) if path.len() == 1 => {
-            let name = path.iter().next().unwrap().as_str();
-            matches!(name, "f32" | "f64")
-        }
-        _ => false,
-    }
+/// Check if a resolved type is a predefined integer type (u8/i32/…).
+fn type_is_predefined_integer(type_registry: &TypeRegistry, type_: &Type) -> bool {
+    predefined_for_type(type_registry, type_).is_some_and(PredefinedItem::is_integer)
 }
 
-/// Check if a resolved type is `str`.
-fn is_str_type(type_: &Type) -> bool {
-    match type_ {
-        Type::Raw(path) if path.len() == 1 => path.iter().next().unwrap().as_str() == "str",
-        _ => false,
-    }
+/// Check if a resolved type is a predefined float type (f32 or f64).
+fn type_is_predefined_float(type_registry: &TypeRegistry, type_: &Type) -> bool {
+    predefined_for_type(type_registry, type_).is_some_and(PredefinedItem::is_float)
+}
+
+/// Check if a resolved type is the predefined `str` type.
+fn type_is_predefined_str(type_registry: &TypeRegistry, type_: &Type) -> bool {
+    predefined_for_type(type_registry, type_).is_some_and(PredefinedItem::is_str)
 }
 
 /// Resolve an enum-value path (e.g., `Color::Red`) and validate it exists.
