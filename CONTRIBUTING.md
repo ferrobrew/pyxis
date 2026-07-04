@@ -115,11 +115,29 @@ Clone with `git clone --recurse-submodules`, or in an existing checkout run:
 git submodule update --init
 ```
 
-To change the grammar: edit it in `tooling/tree-sitter-pyxis`, run
-`tree-sitter generate`, then commit and **push to the grammar repo's `main`** —
-the Zed extension fetches the grammar from GitHub, so a rebuild only sees
-pushed changes. Optionally bump the submodule pin here
-(`git add tooling/tree-sitter-pyxis && git commit`) for a reproducible build.
+To change the grammar: edit it in `tooling/tree-sitter-pyxis`, then run
+
+```sh
+python tooling/sync-grammar.py -m "Describe the grammar change"
+```
+
+which regenerates the parser, runs the grammar tests, commits and pushes
+to the grammar repo's `main`, and re-pins **both** the submodule and
+`tooling/zed-pyxis/extension.toml` at the resulting commit SHA. It stages
+those two bumps in this repo and leaves the commit to you (pass
+`--commit-parent` to commit them too). Run it with no `-m` any time to
+re-pin against the submodule's current HEAD.
+
+Two invariants the script maintains, which you must preserve if you ever
+touch this by hand:
+
+- `extension.toml` pins the grammar by full commit SHA, never a branch
+  ref — Zed caches its compiled grammar by that string and won't
+  re-resolve a branch.
+- The parser is generated with `--abi 14` (wired into the grammar's
+  `npm run generate`), the ABI Zed's bundled tree-sitter runtime loads.
+
+After syncing, reinstall the Zed dev extension to pick up the new grammar.
 
 ### Architecture
 

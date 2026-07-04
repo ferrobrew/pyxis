@@ -11,6 +11,7 @@ languages = ["Pyxis"]
 
 [grammars.pyxis]
 repository = "https://github.com/ferrobrew/tree-sitter-pyxis"
-# Track `main` (a branch ref, which Zed's fetcher resolves — unlike "HEAD").
-# Grammar changes must be pushed to this repo before a rebuild picks them up.
-commit = "main"
+# Must be a full commit SHA, not a branch name: Zed keys its compiled-grammar
+# cache on this string, so a branch ref is never re-resolved once cached. Bump
+# it (after pushing the grammar) via `python tooling/sync-grammar.py`.
+commit = "d3542112e3d01fc31e39a1957f567ce2d536343c"
