@@ -4,7 +4,7 @@ use crate::{
     grammar::test_aliases::*,
     semantic::{
         SemanticBuilder, SemanticError,
-        doc_links::{DocLinkMemberKind, DocLinkTarget, extract_links},
+        doc_links::{DocLinkMemberKind, DocLinkSyntax, DocLinkTarget, extract_links, scan_links},
     },
 };
 
@@ -115,6 +115,36 @@ fn resolves_every_link_form() {
     );
     assert_eq!(resolver.resolve(&scope, "Nonexistent"), None);
     assert_eq!(resolver.resolve(&scope, "Target::missing"), None);
+}
+
+#[test]
+fn scan_links_tags_syntax_with_precise_regions() {
+    // The shared scanner backs the compiler, the Rust backend's link rewriting,
+    // and the LSP, so each link's syntax and `path_region` must be exact.
+    let line = "a [`Foo::bar`] b [Baz] c [lbl](Qux::quux) d";
+    let links = scan_links(line);
+
+    let summary: Vec<(DocLinkSyntax, &str)> =
+        links.iter().map(|l| (l.syntax, l.path.as_str())).collect();
+    assert_eq!(
+        summary,
+        vec![
+            (DocLinkSyntax::CodeShortcut, "Foo::bar"),
+            (DocLinkSyntax::PlainShortcut, "Baz"),
+            (DocLinkSyntax::Inline, "Qux::quux"),
+        ]
+    );
+
+    // `path_region` slices to exactly the path text (no backticks / label).
+    for l in &links {
+        assert_eq!(&line[l.path_region.0..l.path_region.1], l.path);
+    }
+    // An inline link's label region is the bracket text, distinct from its dest.
+    let inline = links
+        .iter()
+        .find(|l| l.syntax == DocLinkSyntax::Inline)
+        .unwrap();
+    assert_eq!(&line[inline.label_region.0..inline.label_region.1], "lbl");
 }
 
 #[test]

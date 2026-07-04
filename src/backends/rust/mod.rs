@@ -1574,69 +1574,65 @@ fn doc_to_tokens(
     }
 }
 
+/// Rewrite a single `::`-separated intra-doc link path to use flattened Rust
+/// names for nested items. When a segment matches a rewrite key, it's replaced
+/// with the flattened name and all preceding segments are dropped (they're the
+/// parent-type prefix already baked into the flattened name), while trailing
+/// member-access segments are preserved. For example, with `Inner → Outer_Inner`:
+/// `Inner` → `Outer_Inner`, `Inner::A` → `Outer_Inner::A`, and
+/// `Outer::Inner::CONST` → `Outer_Inner::CONST`.
+fn rewrite_doc_link_path(
+    content: &str,
+    rewrites: &std::collections::HashMap<String, String>,
+) -> String {
+    let segments: Vec<&str> = content.split("::").collect();
+    if segments.len() == 1 {
+        return rewrites
+            .get(segments[0])
+            .cloned()
+            .unwrap_or_else(|| content.to_string());
+    }
+    for (i, seg) in segments.iter().enumerate() {
+        if let Some(flat) = rewrites.get(*seg) {
+            let rest = &segments[i + 1..];
+            return if rest.is_empty() {
+                flat.clone()
+            } else {
+                format!("{}::{}", flat, rest.join("::"))
+            };
+        }
+    }
+    content.to_string()
+}
+
 /// Rewrite intra-doc link references in a doc comment line to use flattened
-/// Rust names for nested items. For example, [`InnerEnum`] becomes
-/// [`Outer_InnerEnum`], and [`InnerEnum::A`] becomes [`Outer_InnerEnum::A`].
-/// The rewriting preserves member-access `::` while flattening type-nesting
-/// segments to `_`.
+/// Rust names for nested items. Handles both the shortcut form (`` [`InnerEnum`] ``
+/// → `` [`Outer_InnerEnum`] ``) and the inline form's destination
+/// (`[label](Outer::InnerEnum)` → `[label](Outer_InnerEnum)`) — the latter
+/// matters because rustdoc resolves the destination, not the label, and nested
+/// types are emitted under flattened names.
+///
+/// Link detection is shared with the compiler and LSP via
+/// [`scan_links`](crate::semantic::doc_links::scan_links); each link's precise
+/// `path_region` is substituted in place (right-to-left so earlier offsets stay
+/// valid). Bare `[Path]` shortcuts are left alone — the compiler doesn't import
+/// them, so rustdoc couldn't resolve a rewritten one anyway.
 fn rewrite_doc_links(
     line: &str,
     nested_rewrites: Option<&std::collections::HashMap<String, String>>,
 ) -> String {
+    use crate::semantic::doc_links::DocLinkSyntax;
     let Some(rewrites) = nested_rewrites else {
         return line.to_string();
     };
-    let mut result = String::new();
-    let bytes = line.as_bytes();
-    let mut i = 0;
-    while i < bytes.len() {
-        // Look for [` pattern
-        if i + 2 < bytes.len() && bytes[i] == b'[' && bytes[i + 1] == b'`' {
-            // Find the closing `]
-            let content_start = i + 2;
-            if let Some(close) = line[content_start..].find("`]") {
-                let content = &line[content_start..content_start + close];
-                // Split into segments
-                let segments: Vec<&str> = content.split("::").collect();
-                let rewritten = if segments.len() == 1 {
-                    // Bare name: check if it matches a nested item
-                    if let Some(flat) = rewrites.get(segments[0]) {
-                        flat.clone()
-                    } else {
-                        content.to_string()
-                    }
-                } else {
-                    // Qualified path: check if any segment matches a rewrite key.
-                    // When a segment matches, replace it with the flattened name
-                    // and remove all preceding segments (they're the parent type
-                    // prefix that's already baked into the flattened name).
-                    let mut found = None;
-                    for (i, seg) in segments.iter().enumerate() {
-                        if let Some(flat) = rewrites.get(*seg) {
-                            let rest = &segments[i + 1..];
-                            if rest.is_empty() {
-                                found = Some(flat.clone());
-                            } else {
-                                found = Some(format!("{}::{}", flat, rest.join("::")));
-                            }
-                            break;
-                        }
-                    }
-                    found.unwrap_or_else(|| content.to_string())
-                };
-                result.push('[');
-                result.push('`');
-                result.push_str(&rewritten);
-                result.push('`');
-                result.push(']');
-                i = content_start + close + 2;
-                continue;
-            }
+    let mut result = line.to_string();
+    let mut links = crate::semantic::doc_links::scan_links(line);
+    links.retain(|l| l.syntax != DocLinkSyntax::PlainShortcut);
+    for link in links.into_iter().rev() {
+        let rewritten = rewrite_doc_link_path(&link.path, rewrites);
+        if rewritten != link.path {
+            result.replace_range(link.path_region.0..link.path_region.1, &rewritten);
         }
-        // Copy current byte as UTF-8
-        let ch = line[i..].chars().next().unwrap();
-        result.push(ch);
-        i += ch.len_utf8();
     }
     result
 }

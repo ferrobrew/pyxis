@@ -1,6 +1,6 @@
 use super::*;
 
-use pyxis::semantic::doc_links::DocLinkTarget;
+use pyxis::semantic::doc_links::{DocLinkSyntax, DocLinkTarget, ScannedLink};
 
 impl ServerState {
     /// Doc-comment links that reference `symbol`, returning the span of the
@@ -84,13 +84,14 @@ impl ServerState {
                             });
                         }
                     };
-                    // Always rewrite the name in the path. Rewrite the bracket
-                    // label only when it's an exact echo of the name (`[Foo]` /
-                    // [`Foo`]) — never arbitrary prose like `[the Foo struct]`.
-                    // (For a shortcut link the two regions coincide; guard so we
-                    // don't double-count.)
+                    // Always rewrite the name in the path. For an inline link
+                    // the label is separate from the destination, so rewrite it
+                    // too when it's an exact echo of the name (`` [`Foo`](Foo) ``)
+                    // — never arbitrary prose like `[the Foo struct]`. For a
+                    // shortcut the label *is* the path (already pushed), so
+                    // pushing it again would double-count.
                     push_region(dl.path_region);
-                    if dl.label_region != dl.path_region {
+                    if dl.syntax == DocLinkSyntax::Inline {
                         let label = line[dl.label_region.0..dl.label_region.1]
                             .trim()
                             .trim_matches('`')
@@ -385,68 +386,14 @@ impl ServerState {
     }
 }
 
-/// A Markdown cross-reference link found in a doc-comment line.
-pub(crate) struct DocLink {
-    /// Byte range of the whole link (`[Foo]` / [`Foo`] / `[label](path)`).
-    link: (usize, usize),
-    /// Resolved path text (backticks/whitespace trimmed) — what resolves.
-    path: String,
-    /// Byte range of the path *text* in the line: the `(...)` content for an
-    /// inline link, or the bracket content for a shortcut (`[Foo]`).
-    path_region: (usize, usize),
-    /// Byte range of the bracket label `[...]`. Equals `path_region` for a
-    /// shortcut link. Distinguished so a rename rewrites the path but only an
-    /// echoing label — never prose.
-    label_region: (usize, usize),
-}
-
 /// Find Markdown cross-reference links in one doc-comment line: `[Foo]`,
-/// [`Foo`], and `[label](path::To)`. Only `::`-path targets are kept (per the
-/// compiler's [`is_path`](pyxis::semantic::doc_links::is_path)); prose and URLs
-/// are skipped.
-pub(crate) fn scan_doc_links(line: &str) -> Vec<DocLink> {
-    use pyxis::semantic::doc_links::is_path;
-    let mut out = Vec::new();
-    let mut i = 0;
-    while let Some(rel_open) = line[i..].find('[') {
-        let open = i + rel_open;
-        let Some(rel_close) = line[open + 1..].find(']') else {
-            break;
-        };
-        let close = open + 1 + rel_close;
-        let inner = &line[open + 1..close];
-        let after = close + 1;
-        let label_region = (open + 1, close);
-        // `[label](path)` → path is the URL and the link extends through `)`;
-        // otherwise the bracket content is the path and the link ends at `]`.
-        let (path_raw, link_end, path_region) = if line[after..].starts_with('(') {
-            match line[after + 1..].find(')') {
-                Some(rp) => {
-                    let region = (after + 1, after + 1 + rp);
-                    (line[region.0..region.1].to_string(), region.1 + 1, region)
-                }
-                None => {
-                    i = close + 1;
-                    continue;
-                }
-            }
-        } else {
-            (inner.to_string(), close + 1, label_region)
-        };
-        let path = path_raw.trim().trim_matches('`').trim().to_string();
-        // Defer to the compiler's notion of a link target so we recognise the
-        // same paths it resolves (and skip prose / URLs up-front).
-        if is_path(&path) {
-            out.push(DocLink {
-                link: (open, link_end),
-                path,
-                path_region,
-                label_region,
-            });
-        }
-        i = link_end;
-    }
-    out
+/// `` [`Foo`] ``, and `[label](path::To)`. Backed by the compiler's shared
+/// [`scan_links`](pyxis::semantic::doc_links::scan_links), so the LSP and the
+/// backends recognise exactly the same links (only `::`-path targets; prose and
+/// URLs are skipped). Unlike the compiler, the LSP surfaces every syntactic
+/// form — including bare `[Foo]` shortcuts — as navigable.
+pub(crate) fn scan_doc_links(line: &str) -> Vec<ScannedLink> {
+    pyxis::semantic::doc_links::scan_links(line)
 }
 
 /// Byte offsets of every whole-word (identifier-boundary) occurrence of `word`
