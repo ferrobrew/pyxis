@@ -68,11 +68,7 @@ function intersperse(nodes: ReactNode[]): ReactNode {
 function AttrBracket({ attrs }: { attrs: ReactNode[] }) {
   const oneLine = `#[${attrs.map(nodeText).join(', ')}]`;
   if (oneLine.length <= WRAP_COLUMN) {
-    return (
-      <div>
-        #[{intersperse(attrs)}]
-      </div>
-    );
+    return <div>#[{intersperse(attrs)}]</div>;
   }
   // rustfmt-style: open bracket, one attribute per indented line with a
   // trailing comma, then the closing bracket on its own line.
@@ -93,9 +89,11 @@ function AttrContainer({ groups, className = '' }: { groups: ReactNode[][]; clas
   if (groups.every((g) => g.length === 0)) return null;
   return (
     <div className={`font-mono text-sm text-fg-subtle ${className}`}>
-      {groups.filter((g) => g.length > 0).map((group, i) => (
-        <AttrBracket key={i} attrs={group} />
-      ))}
+      {groups
+        .filter((g) => g.length > 0)
+        .map((group, i) => (
+          <AttrBracket key={i} attrs={group} />
+        ))}
     </div>
   );
 }
@@ -112,7 +110,7 @@ export function ItemAttributes({ item, className = '' }: { item: JsonItem; class
     primary.push(
       <>
         <Name>singleton</Name>({<Num>{s}</Num>})
-      </>,
+      </>
     );
   }
 
@@ -122,12 +120,12 @@ export function ItemAttributes({ item, className = '' }: { item: JsonItem; class
     primary.push(
       <>
         <Name>size</Name>({<Num>{sz}</Num>})
-      </>,
+      </>
     );
     primary.push(
       <>
         <Name>align</Name>({<Num>{String(item.alignment)}</Num>})
-      </>,
+      </>
     );
     if (kind.copyable) primary.push(<Name>copyable</Name>);
     if (kind.cloneable) primary.push(<Name>cloneable</Name>);
@@ -139,36 +137,48 @@ export function ItemAttributes({ item, className = '' }: { item: JsonItem; class
   }
 
   // Backend type bindings (mostly for `extern type`s).
-  if (item.rust_name) primary.push(
-    <>
-      <Name>rust_name</Name> = <Str>{item.rust_name}</Str>
-    </>,
-  );
-  if (item.cpp_name) primary.push(
-    <>
-      <Name>cpp_name</Name> = <Str>{item.cpp_name}</Str>
-    </>,
-  );
-  if (item.cpp_header) primary.push(
-    <>
-      <Name>cpp_header</Name> = <Str>{item.cpp_header}</Str>
-    </>,
-  );
+  if (item.rust_name)
+    primary.push(
+      <>
+        <Name>rust_name</Name> = <Str>{item.rust_name}</Str>
+      </>
+    );
+  if (item.cpp_name)
+    primary.push(
+      <>
+        <Name>cpp_name</Name> = <Str>{item.cpp_name}</Str>
+      </>
+    );
+  if (item.cpp_header)
+    primary.push(
+      <>
+        <Name>cpp_header</Name> = <Str>{item.cpp_header}</Str>
+      </>
+    );
 
   const groups: ReactNode[][] = [primary];
-  if (item.cfg) groups.push([<>
-    <Name>cfg</Name>({renderCfg(item.cfg)})
-  </>]);
+  if (item.cfg)
+    groups.push([
+      <>
+        <Name>cfg</Name>({renderCfg(item.cfg)})
+      </>,
+    ]);
   return <AttrContainer groups={groups} className={className} />;
 }
 
-export function FunctionAttributes({ func, className = '' }: { func: JsonFunction; className?: string }) {
+export function FunctionAttributes({
+  func,
+  className = '',
+}: {
+  func: JsonFunction;
+  className?: string;
+}) {
   const primary: ReactNode[] = [];
   if (func.calling_convention !== 'c') {
     primary.push(
       <>
         <Name>calling_convention</Name>(<Ident>{func.calling_convention}</Ident>)
-      </>,
+      </>
     );
   }
   switch (func.body.type) {
@@ -177,7 +187,7 @@ export function FunctionAttributes({ func, className = '' }: { func: JsonFunctio
       primary.push(
         <>
           <Name>address</Name>({<Num>{a}</Num>})
-        </>,
+        </>
       );
       break;
     }
@@ -185,14 +195,14 @@ export function FunctionAttributes({ func, className = '' }: { func: JsonFunctio
       primary.push(
         <>
           <Name>field</Name>({func.body.field})
-        </>,
+        </>
       );
       break;
     case 'vftable':
       primary.push(
         <>
           <Name>vftable</Name>({func.body.function_name})
-        </>,
+        </>
       );
       break;
     case 'external':
@@ -201,19 +211,32 @@ export function FunctionAttributes({ func, className = '' }: { func: JsonFunctio
   }
 
   const groups: ReactNode[][] = [primary];
-  if (func.cfg) groups.push([<>
-    <Name>cfg</Name>({renderCfg(func.cfg)})
-  </>]);
+  if (func.cfg)
+    groups.push([
+      <>
+        <Name>cfg</Name>({renderCfg(func.cfg)})
+      </>,
+    ]);
   return <AttrContainer groups={groups} className={className} />;
 }
 
-export function ExternAttributes({ ext, className = '' }: { ext: JsonExternValue; className?: string }) {
+export function ExternAttributes({
+  ext,
+  className = '',
+}: {
+  ext: JsonExternValue;
+  className?: string;
+}) {
   const a = formatHexAddress(ext.address);
   return (
     <AttrContainer
-      groups={[[<>
-        <Name>address</Name>({<Num>{a}</Num>})
-      </>]]}
+      groups={[
+        [
+          <>
+            <Name>address</Name>({<Num>{a}</Num>})
+          </>,
+        ],
+      ]}
       className={className}
     />
   );

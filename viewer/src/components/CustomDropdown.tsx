@@ -26,9 +26,7 @@ function TileContent({ label, subtitle }: { label: string; subtitle?: string }) 
   return (
     <div className="flex flex-col min-w-0">
       <span className="text-sm text-fg truncate">{label}</span>
-      {subtitle && (
-        <span className="text-xs text-fg-subtle mt-0.5 truncate">{subtitle}</span>
-      )}
+      {subtitle && <span className="text-xs text-fg-subtle mt-0.5 truncate">{subtitle}</span>}
     </div>
   );
 }
@@ -243,18 +241,14 @@ export function CustomDropdown({ value, onChange, options, disabled }: CustomDro
             if (!group.name || group.options.length === 1) {
               return (
                 <div key={gi}>
-                  {group.options.map(({ option, index }) =>
-                    renderOptionButton(option, index)
-                  )}
+                  {group.options.map(({ option, index }) => renderOptionButton(option, index))}
                 </div>
               );
             }
 
             // Multi-option group: clickable header with chevron, expands
             // to show subitems inline underneath (indented).
-            const hasSelected = group.options.some(
-              ({ option }) => option.value === value,
-            );
+            const hasSelected = group.options.some(({ option }) => option.value === value);
             const isExpanded = expandedGroups.has(gi) || hasSelected;
             const versions = group.options
               .map(({ option }) => {

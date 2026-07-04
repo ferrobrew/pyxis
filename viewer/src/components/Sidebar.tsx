@@ -346,7 +346,9 @@ function ItemTree({ itemPath }: ItemTreeProps) {
             />
           ))}
 
-          {(item.kind.type === 'type' || item.kind.type === 'enum' || item.kind.type === 'bitflags') &&
+          {(item.kind.type === 'type' ||
+            item.kind.type === 'enum' ||
+            item.kind.type === 'bitflags') &&
             (item.kind.nested_items ?? []).map((nestedPath) => (
               <ItemTree key={`nested-${nestedPath}`} itemPath={nestedPath} />
             ))}

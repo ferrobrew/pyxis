@@ -40,13 +40,7 @@ function joinSplicePart(splices: JsonBackendSplice[], part: 'header' | 'definiti
     .join('\n\n');
 }
 
-function SectionHeader({
-  anchor,
-  children,
-}: {
-  anchor?: string;
-  children: React.ReactNode;
-}) {
+function SectionHeader({ anchor, children }: { anchor?: string; children: React.ReactNode }) {
   return (
     <h2 className="group mb-4 flex items-center gap-2 border-b border-edge pb-1.5 text-lg font-semibold text-fg">
       {children}
@@ -74,7 +68,7 @@ interface SpliceBlock {
 function blocksForBackend(
   configs: JsonBackend[],
   slots: SpliceSlot[],
-  filter: (s: JsonBackendSplice) => boolean,
+  filter: (s: JsonBackendSplice) => boolean
 ): SpliceBlock[] {
   const blocks: SpliceBlock[] = [];
   for (const slot of slots) {
@@ -96,15 +90,15 @@ function blocksForBackend(
 function hasAnyMatching(
   backends: { [key: string]: unknown },
   slots: SpliceSlot[],
-  filter: (s: JsonBackendSplice) => boolean,
+  filter: (s: JsonBackendSplice) => boolean
 ): boolean {
   return Object.values(backends).some((configs) =>
     (configs as JsonBackend[]).some((config) =>
       slots.some((slot) => {
         const s = config[slot];
         return s != null && filter(s) && (s.header || s.definition);
-      }),
-    ),
+      })
+    )
   );
 }
 

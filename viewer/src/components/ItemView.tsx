@@ -156,7 +156,11 @@ function EnumValueRef({ path, modulePath }: { path: string; modulePath: string }
   );
 }
 
-function NestedItemsList({ nestedItems }: { nestedItems: { path: string; item: JsonItem | undefined }[] }) {
+function NestedItemsList({
+  nestedItems,
+}: {
+  nestedItems: { path: string; item: JsonItem | undefined }[];
+}) {
   const { selectedSource } = useDocumentation();
   const validItems = nestedItems.filter((ni) => ni.item != null);
 
@@ -438,8 +442,11 @@ export function ItemView() {
   // Backend splices tagged `for <Type>` are stored on the enclosing module;
   // pull them here so the type page can render its own prologue/epilogue.
   const moduleBackends =
-    (findModule(documentation.modules, modulePath) as { backends?: { [key: string]: unknown } } | null)
-      ?.backends ?? {};
+    (
+      findModule(documentation.modules, modulePath) as {
+        backends?: { [key: string]: unknown };
+      } | null
+    )?.backends ?? {};
   const hasBackendProvided = Object.values(moduleBackends).some((configs) =>
     (configs as JsonBackend[]).some((c) =>
       (['prologue', 'epilogue'] as const).some((slot) => {
@@ -473,7 +480,8 @@ export function ItemView() {
   const aliasTarget = item.kind.type === 'type_alias' ? item.kind.target : null;
   const constValue = item.kind.type === 'constant' ? item.kind.value : null;
   const constValueType = item.kind.type === 'constant' ? item.kind.value_type : null;
-  const singleton = item.kind.type !== 'type_alias' && item.kind.type !== 'constant' ? item.kind.singleton : null;
+  const singleton =
+    item.kind.type !== 'type_alias' && item.kind.type !== 'constant' ? item.kind.singleton : null;
 
   const toc: TocEntry[] = [];
   const k = item.kind;
@@ -570,9 +578,7 @@ export function ItemView() {
         {item.kind.type === 'type' && <TypeView def={item.kind} modulePath={modulePath} />}
         {item.kind.type === 'enum' && <EnumView def={item.kind} modulePath={modulePath} />}
         {item.kind.type === 'bitflags' && <BitflagsView def={item.kind} />}
-        {hasBackendProvided && (
-          <TypeBackendCode backends={moduleBackends} itemPath={decodedPath} />
-        )}
+        {hasBackendProvided && <TypeBackendCode backends={moduleBackends} itemPath={decodedPath} />}
       </article>
 
       <OnThisPage entries={toc} />
