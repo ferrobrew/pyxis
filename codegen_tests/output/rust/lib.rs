@@ -123,6 +123,7 @@ pub mod two_base_classes;
 pub mod type_alias_reexport;
 pub mod type_aliases;
 pub mod unicode;
+pub mod vftable_indices;
 pub mod world;
 pub mod world_consumer;
 pub mod zero_size_type;

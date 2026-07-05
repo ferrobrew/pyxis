@@ -56,6 +56,7 @@ impl StripLocations for TypeVftable {
 pub fn convert_grammar_functions_to_semantic_functions(
     type_registry: &TypeRegistry,
     module: &Module,
+    resolvee_path: &ItemPath,
     size: Option<usize>,
     functions: &[grammar::Function],
     location: &ItemLocation,
@@ -78,6 +79,15 @@ pub fn convert_grammar_functions_to_semantic_functions(
         }
 
         if let Some(index) = index {
+            if index < output.len() {
+                return Err(SemanticError::VftableNonAscendingIndex {
+                    item_path: resolvee_path.clone(),
+                    function_name: function.name.as_str().to_string(),
+                    declared_index: index,
+                    min_index: output.len(),
+                    location: function.location,
+                });
+            }
             make_padding_functions(&mut output, index, calling_convention, location);
         }
         match function::build(type_registry, &module.scope(), true, function, &[])? {

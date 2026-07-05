@@ -1,0 +1,24 @@
+//! Vftable with explicit `#[index]` attributes and padding gaps.
+//!
+//! `first` is placed at index 0, `second` jumps to index 2 (leaving a padding
+//! slot at index 1), and `third` continues at index 3. The `#[size(4)]` matches
+//! the total slot count exactly. This verifies that ascending indices with
+//! gaps produce the correct vftable layout.
+
+#[align(8)]
+type IndexedVftable {
+    #[size(4)]
+    vftable {
+        #[index(0)]
+        pub fn first(&self) -> u32;
+
+        #[index(2)]
+        pub fn second(&self, x: i32) -> i32;
+
+        #[index(3)]
+        pub fn third(&self) -> u32;
+    },
+
+    #[address(0x8)]
+    pub field: u64,
+}

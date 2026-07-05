@@ -497,6 +497,14 @@ pub enum SemanticError {
         base_function: String,
         location: ItemLocation,
     },
+    /// Vftable function index is not strictly ascending
+    VftableNonAscendingIndex {
+        item_path: ItemPath,
+        function_name: String,
+        declared_index: usize,
+        min_index: usize,
+        location: ItemLocation,
+    },
     /// Calculated size is below minimum required size
     SizeBelowMinimum {
         minimum_size: usize,
@@ -856,6 +864,17 @@ impl SemanticError {
                     "vftable for `{item_path}` has function `{derived_function}` at index {index} but base class `{base_name}` has function `{base_function}`"
                 )
             }
+            SemanticError::VftableNonAscendingIndex {
+                item_path,
+                function_name,
+                declared_index,
+                min_index,
+                ..
+            } => {
+                format!(
+                    "vftable for `{item_path}`: function `{function_name}` is declared at index {declared_index}, but must be at least {min_index} to avoid overwriting earlier slots (indices must be strictly ascending)"
+                )
+            }
             SemanticError::SizeBelowMinimum {
                 minimum_size,
                 actual_size,
@@ -1079,6 +1098,7 @@ impl SemanticError {
             SemanticError::RegionFieldNotStructType { location, .. } => Some(location),
             SemanticError::VftableMissingFunctions { location, .. } => Some(location),
             SemanticError::VftableFunctionMismatch { location, .. } => Some(location),
+            SemanticError::VftableNonAscendingIndex { location, .. } => Some(location),
             SemanticError::SizeBelowMinimum { location, .. } => Some(location),
             SemanticError::SizeMismatch { location, .. } => Some(location),
             SemanticError::AlignmentBelowMinimum { location, .. } => Some(location),

@@ -1,6 +1,10 @@
 //! Tests for virtual function table (vftable) generation.
 
-use crate::{grammar::test_aliases::*, semantic::types::test_aliases::*};
+use crate::{
+    grammar::test_aliases::*,
+    semantic::{error::SemanticError, types::test_aliases::*},
+    span::ItemLocation,
+};
 
 use super::util::*;
 
@@ -306,6 +310,124 @@ fn will_propagate_calling_convention_for_impl_and_vftable() {
                             ST::raw("i32"),
                         ),
                     )]),
+                ),
+            ),
+        ],
+    );
+}
+
+#[test]
+fn will_reject_descending_vftable_indices() {
+    assert_ast_produces_exact_error(
+        M::new().with_definitions([ID::new(
+            (V::Public, "Widget"),
+            TD::new([TS::vftable([
+                F::new((V::Public, "GetSize"), [Ar::mut_self()])
+                    .with_attributes([A::index(2)])
+                    .with_return_type("u64"),
+                F::new(
+                    (V::Public, "SetFlags"),
+                    [Ar::mut_self(), Ar::named("flags", T::ident("u32"))],
+                )
+                .with_attributes([A::index(4)]),
+                F::new((V::Public, "GetFlags"), [Ar::mut_self()])
+                    .with_attributes([A::index(3)])
+                    .with_return_type("u32"),
+            ])]),
+        )]),
+        SemanticError::VftableNonAscendingIndex {
+            item_path: IP::from("test::Widget"),
+            function_name: "GetFlags".to_string(),
+            declared_index: 3,
+            min_index: 5,
+            location: ItemLocation::test(),
+        },
+    );
+}
+
+#[test]
+fn will_reject_duplicate_vftable_indices() {
+    assert_ast_produces_exact_error(
+        M::new().with_definitions([ID::new(
+            (V::Public, "Widget"),
+            TD::new([TS::vftable([
+                F::new((V::Public, "A"), [Ar::mut_self()]).with_attributes([A::index(2)]),
+                F::new((V::Public, "B"), [Ar::mut_self()]).with_attributes([A::index(2)]),
+            ])]),
+        )]),
+        SemanticError::VftableNonAscendingIndex {
+            item_path: IP::from("test::Widget"),
+            function_name: "B".to_string(),
+            declared_index: 2,
+            min_index: 3,
+            location: ItemLocation::test(),
+        },
+    );
+}
+
+#[test]
+fn will_accept_explicit_index_matching_next_slot() {
+    // index == output.len() is valid (no padding needed, goes to the declared slot)
+    let vftable_type = ST::raw("test::TestTypeVftable").const_pointer();
+    assert_ast_produces_type_definitions(
+        M::new().with_definitions([ID::new(
+            (V::Public, "TestType"),
+            TD::new([TS::vftable([
+                F::new((V::Public, "f0"), [Ar::mut_self()]).with_attributes([A::index(0)]),
+                F::new((V::Public, "f1"), [Ar::mut_self()]).with_attributes([A::index(1)]),
+            ])]),
+        )]),
+        [
+            // TestType
+            SID::defined_resolved(
+                (SV::Public, "test::TestType"),
+                SISR::new(
+                    (pointer_size(), pointer_size()),
+                    STD::new()
+                        .with_regions([SR::field((SV::Private, "vftable"), vftable_type.clone())])
+                        .with_vftable(STV::new(
+                            [
+                                SF::new(
+                                    (SV::Public, "f0"),
+                                    SFB::vftable("f0"),
+                                    SCC::for_member_function(pointer_size()),
+                                )
+                                .with_arguments([SAr::mut_self()]),
+                                SF::new(
+                                    (SV::Public, "f1"),
+                                    SFB::vftable("f1"),
+                                    SCC::for_member_function(pointer_size()),
+                                )
+                                .with_arguments([SAr::mut_self()]),
+                            ],
+                            None,
+                            vftable_type,
+                        )),
+                ),
+            ),
+            // TestTypeVftable
+            SID::defined_resolved(
+                (SV::Public, "test::TestTypeVftable"),
+                SISR::new(
+                    (2 * pointer_size(), pointer_size()),
+                    STD::new().with_regions([
+                        SR::field(
+                            (SV::Public, "f0"),
+                            ST::function(
+                                SCC::for_member_function(pointer_size()),
+                                [("this", ST::raw("test::TestType").mut_pointer())],
+                                None,
+                            ),
+                        ),
+                        SR::field(
+                            (SV::Public, "f1"),
+                            ST::function(
+                                SCC::for_member_function(pointer_size()),
+                                [("this", ST::raw("test::TestType").mut_pointer())],
+                                None,
+                            ),
+                        ),
+                    ]),
                 ),
             ),
         ],

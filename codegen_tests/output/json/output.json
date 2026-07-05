@@ -8096,6 +8096,329 @@
         "line": 8
       }
     },
+    "vftable_indices::IndexedVftable": {
+      "path": "vftable_indices::IndexedVftable",
+      "visibility": "private",
+      "size": 16,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [
+          {
+            "visibility": "private",
+            "name": "vftable",
+            "doc": null,
+            "type_ref": {
+              "type": "const_pointer",
+              "inner": {
+                "type": "raw",
+                "path": "vftable_indices::IndexedVftableVftable"
+              }
+            },
+            "offset": 0,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 29,
+              "line": 13
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "field",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "u64"
+            },
+            "offset": 8,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 29,
+              "line": 23
+            }
+          }
+        ],
+        "associated_functions": [],
+        "vftable": {
+          "functions": [
+            {
+              "visibility": "public",
+              "name": "first",
+              "doc": null,
+              "body": {
+                "type": "vftable",
+                "function_name": "first"
+              },
+              "arguments": [
+                {
+                  "type": "const_self"
+                }
+              ],
+              "return_type": {
+                "type": "raw",
+                "path": "u32"
+              },
+              "calling_convention": "system",
+              "source": {
+                "file_index": 29,
+                "line": 13
+              }
+            },
+            {
+              "visibility": "private",
+              "name": "_vfunc_1",
+              "doc": null,
+              "body": {
+                "type": "vftable",
+                "function_name": "_vfunc_1"
+              },
+              "arguments": [
+                {
+                  "type": "mut_self"
+                }
+              ],
+              "return_type": null,
+              "calling_convention": "system",
+              "source": {
+                "file_index": 29,
+                "line": 11
+              }
+            },
+            {
+              "visibility": "public",
+              "name": "second",
+              "doc": null,
+              "body": {
+                "type": "vftable",
+                "function_name": "second"
+              },
+              "arguments": [
+                {
+                  "type": "const_self"
+                },
+                {
+                  "type": "field",
+                  "name": "x",
+                  "type_ref": {
+                    "type": "raw",
+                    "path": "i32"
+                  }
+                }
+              ],
+              "return_type": {
+                "type": "raw",
+                "path": "i32"
+              },
+              "calling_convention": "system",
+              "source": {
+                "file_index": 29,
+                "line": 16
+              }
+            },
+            {
+              "visibility": "public",
+              "name": "third",
+              "doc": null,
+              "body": {
+                "type": "vftable",
+                "function_name": "third"
+              },
+              "arguments": [
+                {
+                  "type": "const_self"
+                }
+              ],
+              "return_type": {
+                "type": "raw",
+                "path": "u32"
+              },
+              "calling_convention": "system",
+              "source": {
+                "file_index": 29,
+                "line": 19
+              }
+            }
+          ]
+        },
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false,
+        "pinned": false
+      },
+      "source": {
+        "file_index": 29,
+        "line": 9
+      }
+    },
+    "vftable_indices::IndexedVftableVftable": {
+      "path": "vftable_indices::IndexedVftableVftable",
+      "visibility": "private",
+      "size": 32,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "first",
+            "doc": null,
+            "type_ref": {
+              "type": "function",
+              "calling_convention": "system",
+              "arguments": [
+                {
+                  "name": "this",
+                  "type_ref": {
+                    "type": "const_pointer",
+                    "inner": {
+                      "type": "raw",
+                      "path": "vftable_indices::IndexedVftable"
+                    }
+                  }
+                }
+              ],
+              "return_type": {
+                "type": "raw",
+                "path": "u32"
+              }
+            },
+            "offset": 0,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 29,
+              "line": 13
+            }
+          },
+          {
+            "visibility": "private",
+            "name": "_vfunc_1",
+            "doc": null,
+            "type_ref": {
+              "type": "function",
+              "calling_convention": "system",
+              "arguments": [
+                {
+                  "name": "this",
+                  "type_ref": {
+                    "type": "mut_pointer",
+                    "inner": {
+                      "type": "raw",
+                      "path": "vftable_indices::IndexedVftable"
+                    }
+                  }
+                }
+              ],
+              "return_type": null
+            },
+            "offset": 8,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 29,
+              "line": 11
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "second",
+            "doc": null,
+            "type_ref": {
+              "type": "function",
+              "calling_convention": "system",
+              "arguments": [
+                {
+                  "name": "this",
+                  "type_ref": {
+                    "type": "const_pointer",
+                    "inner": {
+                      "type": "raw",
+                      "path": "vftable_indices::IndexedVftable"
+                    }
+                  }
+                },
+                {
+                  "name": "x",
+                  "type_ref": {
+                    "type": "raw",
+                    "path": "i32"
+                  }
+                }
+              ],
+              "return_type": {
+                "type": "raw",
+                "path": "i32"
+              }
+            },
+            "offset": 16,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 29,
+              "line": 16
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "third",
+            "doc": null,
+            "type_ref": {
+              "type": "function",
+              "calling_convention": "system",
+              "arguments": [
+                {
+                  "name": "this",
+                  "type_ref": {
+                    "type": "const_pointer",
+                    "inner": {
+                      "type": "raw",
+                      "path": "vftable_indices::IndexedVftable"
+                    }
+                  }
+                }
+              ],
+              "return_type": {
+                "type": "raw",
+                "path": "u32"
+              }
+            },
+            "offset": 24,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 29,
+              "line": 19
+            }
+          }
+        ],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false,
+        "pinned": false
+      },
+      "source": {
+        "file_index": 29,
+        "line": 13
+      }
+    },
     "void": {
       "path": "void",
       "visibility": "public",
@@ -8140,7 +8463,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 31,
+              "file_index": 32,
               "line": 10
             }
           }
@@ -8155,7 +8478,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 31,
+        "file_index": 32,
         "line": 9
       }
     },
@@ -8185,7 +8508,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 29,
+              "file_index": 30,
               "line": 8
             }
           },
@@ -8202,7 +8525,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 29,
+              "file_index": 30,
               "line": 9
             }
           },
@@ -8219,7 +8542,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 29,
+              "file_index": 30,
               "line": 10
             }
           }
@@ -8234,7 +8557,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 29,
+        "file_index": 30,
         "line": 7
       }
     },
@@ -8261,7 +8584,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 30,
+              "file_index": 31,
               "line": 6
             }
           }
@@ -8276,7 +8599,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 30,
+        "file_index": 31,
         "line": 5
       }
     },
@@ -8303,7 +8626,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 32,
+              "file_index": 33,
               "line": 4
             }
           },
@@ -8320,7 +8643,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 32,
+              "file_index": 33,
               "line": 5
             }
           }
@@ -8335,7 +8658,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 32,
+        "file_index": 33,
         "line": 3
       }
     },
@@ -8372,7 +8695,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 33,
+              "file_index": 34,
               "line": 14
             }
           },
@@ -8392,7 +8715,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 33,
+              "file_index": 34,
               "line": 15
             }
           }
@@ -8407,7 +8730,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 33,
+        "file_index": 34,
         "line": 13
       }
     },
@@ -8434,7 +8757,7 @@
             "alignment": 1,
             "is_base": false,
             "source": {
-              "file_index": 34,
+              "file_index": 35,
               "line": 10
             }
           },
@@ -8451,7 +8774,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 34,
+              "file_index": 35,
               "line": 13
             }
           },
@@ -8472,7 +8795,7 @@
             "alignment": 1,
             "is_base": false,
             "source": {
-              "file_index": 34,
+              "file_index": 35,
               "line": 6
             }
           }
@@ -8487,7 +8810,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 34,
+        "file_index": 35,
         "line": 9
       }
     },
@@ -8518,7 +8841,7 @@
             "alignment": 1,
             "is_base": false,
             "source": {
-              "file_index": 34,
+              "file_index": 35,
               "line": 1
             }
           }
@@ -8533,7 +8856,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 34,
+        "file_index": 35,
         "line": 4
       }
     }
@@ -9264,6 +9587,21 @@
         "line": 3
       }
     },
+    "vftable_indices": {
+      "doc": " Vftable with explicit `#[index]` attributes and padding gaps.\n\n `first` is placed at index 0, `second` jumps to index 2 (leaving a padding\n slot at index 1), and `third` continues at index 3. The `#[size(4)]` matches\n the total slot count exactly. This verifies that ascending indices with\n gaps produce the correct vftable layout.",
+      "items": [
+        "vftable_indices::IndexedVftable",
+        "vftable_indices::IndexedVftableVftable"
+      ],
+      "submodules": {},
+      "extern_values": [],
+      "functions": [],
+      "backends": {},
+      "source": {
+        "file_index": 29,
+        "line": 8
+      }
+    },
     "world": {
       "doc": " The world subsystem.\n This module is backed by a `mod.pyxis`, so it exercises folder-level\n modules: a module doc comment, an item defined directly in the folder\n module, and `backend` glue - all spliced into the generated `mod.rs`\n alongside the auto-generated child `mod` declarations.",
       "items": [
@@ -9280,7 +9618,7 @@
           "functions": [],
           "backends": {},
           "source": {
-            "file_index": 29,
+            "file_index": 30,
             "line": 1
           }
         },
@@ -9298,7 +9636,7 @@
               "functions": [],
               "backends": {},
               "source": {
-                "file_index": 30,
+                "file_index": 31,
                 "line": 1
               }
             }
@@ -9318,7 +9656,7 @@
           "functions": [],
           "backends": {},
           "source": {
-            "file_index": 32,
+            "file_index": 33,
             "line": 1
           }
         }
@@ -9337,7 +9675,7 @@
         ]
       },
       "source": {
-        "file_index": 31,
+        "file_index": 32,
         "line": 7
       }
     },
@@ -9351,7 +9689,7 @@
       "functions": [],
       "backends": {},
       "source": {
-        "file_index": 33,
+        "file_index": 34,
         "line": 1
       }
     },
@@ -9366,7 +9704,7 @@
       "functions": [],
       "backends": {},
       "source": {
-        "file_index": 34,
+        "file_index": 35,
         "line": 1
       }
     }
@@ -9401,6 +9739,7 @@
     "type_alias_reexport.pyxis",
     "type_aliases.pyxis",
     "unicode.pyxis",
+    "vftable_indices.pyxis",
     "world/atmosphere.pyxis",
     "world/deep/marker.pyxis",
     "world/mod.pyxis",

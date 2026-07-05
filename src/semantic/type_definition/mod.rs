@@ -374,6 +374,7 @@ pub fn build(
                 vftable_functions = match vftable::convert_grammar_functions_to_semantic_functions(
                     semantic.type_registry,
                     module,
+                    resolvee_path,
                     size,
                     functions,
                     &statement.location,
