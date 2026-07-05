@@ -1,4 +1,4 @@
-/// A fieldless type given a nonzero footprint via #[min_size].
+/// A fieldless type given a nonzero footprint via `#[min_size]`.
 /// Without this attribute, embedding it would be rejected.
 #[min_size(8)]
 pub type Marker;

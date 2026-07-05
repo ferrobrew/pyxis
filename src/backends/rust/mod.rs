@@ -151,7 +151,7 @@ pub fn write_module(
             cross_module_imports.push(p);
         }
     }
-    let nested_rewrites: std::collections::HashMap<String, String> = {
+    let mut nested_rewrites: std::collections::HashMap<String, String> = {
         let mut map = std::collections::HashMap::new();
         for (p, flat) in &same_module_aliases {
             // The unflattened leaf is the item path's last segment — not
@@ -212,56 +212,35 @@ pub fn write_module(
         }
     }
 
-    // Generate cross-module imports
+    // Rewrite cross-module doc-link destinations to absolute crate paths so
+    // rustdoc resolves them without any `use` imports. The path is flattened
+    // for nested items (e.g. `module::Outer::InnerEnum` →
+    // `crate::module::Outer_InnerEnum`), using the declaring module's prefix.
     let mut cross_module_imports: Vec<ItemPath> =
         cross_module_imports.into_iter().cloned().collect();
     cross_module_imports.retain(|p| {
         !module_scope.contains(p) && p.last().is_some_and(|s| is_plain_ident(s.as_str()))
     });
-    // De-duplicate by leaf name: two different items sharing a leaf can't both
-    // be imported unqualified (and the link would be ambiguous anyway).
-    {
-        let mut seen_leaves = std::collections::HashSet::new();
-        cross_module_imports.retain(|p| {
-            p.last()
-                .map(|s| seen_leaves.insert(s.as_str().to_string()))
-                .unwrap_or(false)
-        });
-    }
-    if !cross_module_imports.is_empty() {
-        let prefix = options.rust_module_prefix.as_ref();
-        let root = match prefix {
-            Some(prefix) => format!("crate::{prefix}"),
-            None => "crate".to_string(),
+    let prefix = options.rust_module_prefix.as_ref();
+    let root = match prefix {
+        Some(prefix) => format!("crate::{prefix}"),
+        None => "crate".to_string(),
+    };
+    for p in &cross_module_imports {
+        let module_len = find_module_prefix_len(p, &module_path_set);
+        let rust_path = if p.len() > module_len + 1 {
+            let type_segments: Vec<&str> = p.iter().skip(module_len).map(|s| s.as_str()).collect();
+            let module_part: Vec<&str> = p.iter().take(module_len).map(|s| s.as_str()).collect();
+            let flat_name = type_segments.join("_");
+            if module_part.is_empty() {
+                format!("{root}::{flat_name}")
+            } else {
+                format!("{root}::{}::{flat_name}", module_part.join("::"))
+            }
+        } else {
+            format!("{root}::{p}")
         };
-        let inner = cross_module_imports
-            .iter()
-            .map(|p| {
-                // Flatten nested item paths for Rust: e.g.
-                // module::Outer::InnerEnum → module::Outer_InnerEnum. The
-                // module/item split must come from the *declaring* module's
-                // prefix — splitting at this module's depth mangles imports
-                // whenever the two depths differ.
-                let module_len = find_module_prefix_len(p, &module_path_set);
-                if p.len() > module_len + 1 {
-                    let type_segments: Vec<&str> =
-                        p.iter().skip(module_len).map(|s| s.as_str()).collect();
-                    let module_part: Vec<&str> =
-                        p.iter().take(module_len).map(|s| s.as_str()).collect();
-                    let flat_name = type_segments.join("_");
-                    if module_part.is_empty() {
-                        flat_name
-                    } else {
-                        format!("{}::{}", module_part.join("::"), flat_name)
-                    }
-                } else {
-                    p.to_string()
-                }
-            })
-            .collect::<Vec<_>>()
-            .join(", ");
-        writeln!(raw_output, "#[allow(unused_imports)]")?;
-        writeln!(raw_output, "use {root}::{{{inner}}};")?;
+        nested_rewrites.insert(p.to_string(), rust_path);
     }
 
     // Generate `use FlatName as LeafName;` aliases for same-module nested
@@ -1587,10 +1566,17 @@ fn doc_to_tokens(
 /// member-access segments are preserved. For example, with `Inner → Outer_Inner`:
 /// `Inner` → `Outer_Inner`, `Inner::A` → `Outer_Inner::A`, and
 /// `Outer::Inner::CONST` → `Outer_Inner::CONST`.
+///
+/// Cross-module paths are rewritten to absolute crate paths via an exact
+/// full-path match before the per-segment loop.
 fn rewrite_doc_link_path(
     content: &str,
     rewrites: &std::collections::HashMap<String, String>,
 ) -> String {
+    // First, try an exact full-path match (for cross-module imports).
+    if let Some(target) = rewrites.get(content) {
+        return target.clone();
+    }
     let segments: Vec<&str> = content.split("::").collect();
     if segments.len() == 1 {
         return rewrites

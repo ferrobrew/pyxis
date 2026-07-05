@@ -8670,7 +8670,7 @@
       "category": "defined",
       "kind": {
         "type": "type",
-        "doc": " Consumes the world. Doc-links a type from a deeper, un-imported module\n ([`DeepMarker`](world::deep::marker::DeepMarker)) to exercise the\n doc-import path: the emitted `use` must split module and item segments at\n the declaring module's prefix, not this module's depth.",
+        "doc": " Consumes the world. Doc-links a type from a deeper, un-imported module\n ([`DeepMarker`](world::deep::marker::DeepMarker)) to exercise cross-module\n doc-link resolution: the link destination must be rewritten to an absolute\n crate path so rustdoc resolves it without a `use` import.",
         "doc_links": [
           {
             "text": "world::deep::marker::DeepMarker",
@@ -8822,7 +8822,7 @@
       "category": "defined",
       "kind": {
         "type": "type",
-        "doc": " A fieldless type given a nonzero footprint via #[min_size].\n Without this attribute, embedding it would be rejected.",
+        "doc": " A fieldless type given a nonzero footprint via `#[min_size]`.\n Without this attribute, embedding it would be rejected.",
         "fields": [
           {
             "visibility": "private",

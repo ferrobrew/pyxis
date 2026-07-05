@@ -1,11 +1,9 @@
 #![cfg_attr(any(), rustfmt::skip)]
-#[allow(unused_imports)]
-use crate::world::deep::marker::DeepMarker;
 #[repr(C, align(8))]
 /// Consumes the world. Doc-links a type from a deeper, un-imported module
-/// ([`DeepMarker`](world::deep::marker::DeepMarker)) to exercise the
-/// doc-import path: the emitted `use` must split module and item segments at
-/// the declaring module's prefix, not this module's depth.
+/// ([`DeepMarker`](crate::world::deep::marker::DeepMarker)) to exercise cross-module
+/// doc-link resolution: the link destination must be rewritten to an absolute
+/// crate path so rustdoc resolves it without a `use` import.
 pub struct WorldConsumer {
     pub weather: *mut crate::world::weather::Weather,
     pub world: *mut crate::world::World,

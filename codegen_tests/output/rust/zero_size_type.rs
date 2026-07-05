@@ -25,7 +25,7 @@ impl std::convert::AsMut<Holder> for Holder {
     }
 }
 #[repr(C, align(1))]
-/// A fieldless type given a nonzero footprint via #[min_size].
+/// A fieldless type given a nonzero footprint via `#[min_size]`.
 /// Without this attribute, embedding it would be rejected.
 pub struct Marker {
     _field_0: [u8; 8],

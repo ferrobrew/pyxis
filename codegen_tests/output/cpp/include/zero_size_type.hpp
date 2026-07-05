@@ -9,7 +9,7 @@ namespace zero_size_type {
     struct Holder;
     struct Marker;
 
-    /// A fieldless type given a nonzero footprint via #[min_size].
+    /// A fieldless type given a nonzero footprint via `#[min_size]`.
     /// Without this attribute, embedding it would be rejected.
     struct alignas(1) Marker {
         ::std::uint8_t _field_0[8];

@@ -70,8 +70,11 @@ def main():
     run_command(["cargo", "+nightly", "fmt", "--all", "--", "--check"])
 
     # Run cargo doc on codegen_tests (catches unresolved doc link references
-    # in generated Rust output)
-    run_command(["cargo", "doc", "--no-deps", "-p", "codegen_tests"])
+    # in generated Rust output). Treat warnings as errors so broken doc links
+    # or other rustdoc issues fail the test suite.
+    doc_env = os.environ.copy()
+    doc_env["RUSTDOCFLAGS"] = "-Dwarnings"
+    run_command(["cargo", "doc", "--no-deps", "-p", "codegen_tests"], env=doc_env)
 
     # Lint the viewer (tsc + eslint + prettier). This assumes the workspace
     # deps are already installed — CI runs `npm ci` before test.py, and local
