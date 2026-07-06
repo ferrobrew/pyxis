@@ -243,7 +243,7 @@ pub fn build(
     let mut pending_regions: Vec<(Option<usize>, Region)> = vec![];
     let mut vftable_functions = None;
     let mut nested_item_paths: Vec<ItemPath> = Vec::new();
-    for (idx, statement) in definition.statements().enumerate() {
+    for statement in definition.statements() {
         let grammar::TypeStatement {
             field,
             attributes,
@@ -348,8 +348,11 @@ pub fn build(
             grammar::TypeField::Vftable(functions) => {
                 // the vftable field is a sentinel field used to ensure that the user has
                 // thought about the presence of vftables in their type. we do not actually
-                // count it as a region; the type will be generated with a vftable field later on
-                if idx != 0 {
+                // count it as a region; the type will be generated with a vftable field later on.
+                // It occupies offset 0, so it must precede every layout field — but nested
+                // items (consts, extern values, nested type/enum/bitflags definitions) carry no
+                // layout and may appear before it.
+                if !pending_regions.is_empty() {
                     return Err(SemanticError::VftableMustBeFirst {
                         item_path: resolvee_path.clone(),
                         location: statement.location,

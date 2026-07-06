@@ -955,7 +955,7 @@ impl SemanticError {
                 )
             }
             SemanticError::VftableMustBeFirst { item_path, .. } => {
-                format!("Vftable field must be the first field in type `{item_path}`")
+                format!("Vftable field must precede all fields in type `{item_path}`")
             }
             SemanticError::DuplicateDefinition {
                 name,

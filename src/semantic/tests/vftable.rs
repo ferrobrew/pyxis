@@ -366,6 +366,45 @@ fn will_reject_duplicate_vftable_indices() {
 }
 
 #[test]
+fn will_accept_nested_value_item_before_vftable() {
+    // A nested `const` carries no layout, so it may precede the vftable (which
+    // occupies offset 0). This mirrors real definitions that declare a vtable
+    // address constant just above the `vftable` block.
+    let module = M::new().with_definitions([ID::new(
+        (V::Public, "Movie"),
+        TD::new([
+            TS::item(ID::new(
+                (V::Public, "VFTABLE"),
+                CD::new(T::ident("u64"), int_literal(0x1000)),
+            )),
+            TS::vftable([F::new((V::Public, "get"), [Ar::mut_self()]).with_return_type("u32")]),
+        ]),
+    )]);
+    assert!(
+        build_state(&module, &IP::from("test")).is_ok(),
+        "a nested const before the vftable should be accepted"
+    );
+}
+
+#[test]
+fn will_reject_field_before_vftable() {
+    // An actual layout field before the vftable is still rejected: the vftable
+    // must sit at offset 0.
+    let module = M::new().with_definitions([ID::new(
+        (V::Public, "Widget"),
+        TD::new([
+            TS::field((V::Public, "count"), T::ident("u32")),
+            TS::vftable([F::new((V::Public, "get"), [Ar::mut_self()])]),
+        ]),
+    )]);
+    let err = build_state(&module, &IP::from("test")).unwrap_err();
+    assert!(
+        matches!(err, SemanticError::VftableMustBeFirst { .. }),
+        "expected VftableMustBeFirst, got {err:?}"
+    );
+}
+
+#[test]
 fn will_accept_explicit_index_matching_next_slot() {
     // index == output.len() is valid (no padding needed, goes to the declared slot)
     let vftable_type = ST::raw("test::TestTypeVftable").const_pointer();
