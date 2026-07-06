@@ -212,6 +212,37 @@ Inside the namespace, every non-alias, non-extern type also gets an
 intra-module forward decl up front so peer items can refer to each
 other regardless of declaration order.
 
+### Type reference qualification
+
+A same-module type reference normally emits the bare leaf name
+(`Viewport`); cross-module references are fully qualified
+(`::ui::scaleform::Viewport`). The one exception: a bare leaf is
+resolved in class scope first, so a struct with a member whose name
+matches a type name — legal in pyxis and Rust, where fields and types
+occupy separate namespaces — poisons that name for the rest of the
+class:
+
+```cpp
+struct MovieImpl {
+    Viewport Viewport;                          // hides the type name
+    void set_viewport(const Viewport* desc);    // C2327: not a type name
+};
+```
+
+To avoid this, `render_struct` (`src/backends/cpp/render.rs`) collects
+the class's member names (fields + methods) up front and threads them
+through `RenderCtx::shadowed_members`. `render_path` qualifies a
+same-module reference only when its leaf is in that set — the qualified
+name is looked up in namespace scope and bypasses the shadowing member.
+Every other reference keeps its bare name, so the fix is local to the
+genuine collision. The scope set covers the out-of-class method
+definitions too (`void MovieImpl::set_viewport(...)`), whose parameter
+types are still looked up in class scope. Predefined primitives and
+`#[cpp_name]` externs are substituted before this point and are
+unaffected. The `field_type_name_collision` corpus input pins the
+behavior — the corpus build compiles the emitted C++ with the host
+compiler, which also rejects the shadowed form.
+
 ### Layout cycle detection
 
 A strongly-connected component on FullDef edges is a real value-cycle

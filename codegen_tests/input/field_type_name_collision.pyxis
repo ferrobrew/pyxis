@@ -1,0 +1,25 @@
+// Regression test: a field whose name matches a type name in scope.
+//
+// Legal in pyxis/Rust -- fields and types live in separate namespaces -- but
+// C++ has no such separation inside a class. The member declaration
+// `Viewport Viewport;` hides the type name for the rest of the class scope,
+// so a later `const Viewport*` parameter fails to resolve to the type (MSVC
+// C2327 and a C4430/C2143/C2511 cascade; also ill-formed under GCC/Clang).
+//
+// The cpp backend fully qualifies type references (`::...::Viewport`), which
+// are looked up in namespace scope and bypass the shadowing member. The
+// corpus build compiles the emitted C++ with the host compiler, so this
+// input fails locally if that qualification regresses.
+
+pub type Viewport {
+    pub width: u32,
+    pub height: u32,
+}
+
+pub type MovieImpl {
+    pub Viewport: Viewport,
+}
+impl MovieImpl {
+    #[address(0x2_000)]
+    pub fn set_viewport(&mut self, desc: *const Viewport);
+}

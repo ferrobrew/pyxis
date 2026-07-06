@@ -4,7 +4,11 @@
 //! aliases, vftables, generics, extern bindings) into the textual output for
 //! `.hpp` and `.cpp` files.
 
-use std::{borrow::Cow, collections::BTreeMap, fmt::Write};
+use std::{
+    borrow::Cow,
+    collections::{BTreeMap, BTreeSet},
+    fmt::Write,
+};
 
 use crate::{
     backends::{
@@ -36,6 +40,11 @@ pub struct RenderCtx<'a> {
     pub registry: &'a TypeRegistry,
     pub bindings: &'a BTreeMap<ItemPath, CppExternBinding>,
     pub cfg_ctx: crate::parser::cfg::CfgContext,
+    /// Member names of the class currently being rendered, if any. A
+    /// same-module type reference whose leaf is in this set collides with a
+    /// member and must be emitted qualified (see [`render_path`]). `None`
+    /// outside a class body.
+    pub shadowed_members: Option<&'a BTreeSet<String>>,
 }
 
 impl<'a> RenderCtx<'a> {
@@ -50,6 +59,17 @@ impl<'a> RenderCtx<'a> {
             registry,
             bindings,
             cfg_ctx,
+            shadowed_members: None,
+        }
+    }
+
+    /// Derive a context whose type references are aware of the enclosing
+    /// class's member names, so leaves that collide with a member get
+    /// qualified.
+    fn with_shadowed_members(self, members: &'a BTreeSet<String>) -> Self {
+        Self {
+            shadowed_members: Some(members),
+            ..self
         }
     }
 
@@ -180,6 +200,26 @@ fn render_struct(
 ) -> Result<RenderedItem> {
     let name = &*cpp_ident(name);
     let is_generic = !type_parameters.is_empty();
+
+    // Names this class introduces into its own scope (data members and
+    // methods). A same-module type reference whose leaf matches one of these
+    // would resolve to the member instead of the type, so `render_path`
+    // qualifies those references. Normalize through `cpp_ident` so the
+    // comparison is against the emitted C++ names.
+    let shadowed_members: BTreeSet<String> = td
+        .regions
+        .iter()
+        .filter_map(|r| r.name.as_deref())
+        .chain(td.associated_functions.iter().map(|f| f.name.as_str()))
+        .chain(
+            td.vftable
+                .iter()
+                .flat_map(|v| v.functions.iter().map(|f| f.name.as_str())),
+        )
+        .map(|n| cpp_ident(n).into_owned())
+        .collect();
+    let ctx = ctx.with_shadowed_members(&shadowed_members);
+
     let mut out = String::new();
     render_doc(&mut out, &td.doc, 0)?;
     if td.packed {
@@ -1243,14 +1283,29 @@ fn render_path(path: &ItemPath, ctx: RenderCtx) -> String {
             return name.clone();
         }
     }
-    // Same-module: bare name.
+    // Same-module: bare name, unless it collides with a member of the class
+    // currently being rendered. A bare leaf resolves in class scope first,
+    // so a struct with a member whose name matches a type -- legal in
+    // pyxis/Rust, where fields and types occupy separate namespaces --
+    // poisons that name for the rest of the class: `Viewport Viewport;`
+    // makes a later `const Viewport*` resolve to the member, not the type
+    // (MSVC C2327 + cascade). When that happens we fall through to the
+    // fully-qualified form, which is looked up in namespace scope and
+    // bypasses the member. References that don't collide keep the bare name.
     let target_module = path.parent().unwrap_or_else(ItemPath::empty);
     let leaf = path.last().map(|s| s.as_str()).unwrap_or("");
     if &target_module == ctx.module_path {
-        return cpp_ident(leaf).into_owned();
+        let leaf_ident = cpp_ident(leaf);
+        let collides = ctx
+            .shadowed_members
+            .is_some_and(|m| m.contains(leaf_ident.as_ref()));
+        if !collides {
+            return leaf_ident.into_owned();
+        }
     }
-    // Cross-module: fully qualified. Module segments are namespaces (escaped
-    // against C-runtime globals too); the leaf is the type name.
+    // Cross-module (or a same-module collision): fully qualified. Module
+    // segments are namespaces (escaped against C-runtime globals too); the
+    // leaf is the type name.
     let mut out = String::new();
     out.push_str("::");
     let last = path.len().saturating_sub(1);

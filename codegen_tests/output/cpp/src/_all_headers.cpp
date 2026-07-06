@@ -13,6 +13,7 @@
 #include "extern_bindings.hpp"
 #include "extern_values.hpp"
 #include "external_body.hpp"
+#include "field_type_name_collision.hpp"
 #include "freestanding_functions.hpp"
 #include "generics.hpp"
 #include "generics_cross_module.hpp"
