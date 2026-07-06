@@ -41,11 +41,7 @@ pub fn analyze<'db>(
 ) -> SemanticAnalysis<'db> {
     use crate::{
         semantic::{
-            attribute, doc_links,
-            error::{AttributeName, ExternKind, Result},
-            module::Module as SemanticModule,
-            types::{ExternValue, PredefinedItem, Type, Visibility},
-            validation,
+            doc_links, module::Module as SemanticModule, types::PredefinedItem, validation,
         },
         span::HasLocation,
     };
@@ -192,56 +188,19 @@ pub fn analyze<'db>(
             continue;
         }
 
-        // Parse extern values
-        let extern_values: Result<Vec<ExternValue>> = module
-            .extern_values()
-            .map(|ev| {
-                let name = &ev.name;
-                let mut address = None;
-                for attribute in &ev.attributes {
-                    let Some((ident, items)) = attribute.function() else {
-                        continue;
-                    };
-                    if let Some(attr_address) =
-                        attribute::parse_address(ident, items, attribute.location())?
-                    {
-                        address = Some(attr_address);
-                    }
-                }
-                let address = address.ok_or_else(|| SemanticError::MissingAttribute {
-                    attribute_name: AttributeName::Address,
-                    extern_kind: ExternKind::Value,
-                    item_path: module_path.join(name.as_str().into()),
-                    location: ev.location,
-                })?;
-                Ok(ExternValue {
-                    visibility: Visibility::from(ev.visibility),
-                    name: name.as_str().to_owned(),
-                    type_: Type::Unresolved(ev.type_.clone()),
-                    address,
-                    doc: ev.doc_comments.clone(),
-                    location: ev.location,
-                })
-            })
-            .collect();
+        // Extern values are ordinary registry items (`ItemDefinitionInner::ExternValue`),
+        // built via the resolution pipeline like any other item; nothing to collect here.
+        let impls: Vec<_> = module.impls().cloned().collect();
+        let backends: Vec<_> = module.backends().cloned().collect();
 
-        match extern_values {
-            Ok(ev) => {
-                let impls: Vec<_> = module.impls().cloned().collect();
-                let backends: Vec<_> = module.backends().cloned().collect();
-
-                match SemanticModule::new(
-                    module_path.clone(),
-                    module.as_ref().clone(),
-                    ev,
-                    &impls,
-                    &backends,
-                ) {
-                    Ok(m) => {
-                        modules.insert(module_path, m);
-                    }
-                    Err(e) => module_errors.push(e),
-                }
+        match SemanticModule::new(
+            module_path.clone(),
+            module.as_ref().clone(),
+            &impls,
+            &backends,
+        ) {
+            Ok(m) => {
+                modules.insert(module_path, m);
             }
             Err(e) => module_errors.push(e),
         }
@@ -350,14 +309,7 @@ pub fn analyze<'db>(
         return bail(&type_registry, &modules, semantic_errors);
     }
 
-    // 1. Resolve extern values
-    for module in modules.values_mut() {
-        if let Err(e) = module.resolve_extern_values(&mut type_registry) {
-            semantic_errors.push(e);
-        }
-    }
-
-    // 2. Resolve freestanding functions
+    // Resolve freestanding functions
     for module in modules.values_mut() {
         if let Err(e) = module.resolve_functions(&type_registry) {
             semantic_errors.push(e);

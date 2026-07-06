@@ -160,6 +160,7 @@ pub enum ItemKind {
     Bitflags,
     TypeAlias,
     Constant,
+    ExternValue,
 }
 
 impl ItemKind {
@@ -171,6 +172,7 @@ impl ItemKind {
             ItemDefinitionInner::Bitflags(_) => ItemKind::Bitflags,
             ItemDefinitionInner::TypeAlias(_) => ItemKind::TypeAlias,
             ItemDefinitionInner::Constant(_) => ItemKind::Constant,
+            ItemDefinitionInner::ExternValue(_) => ItemKind::ExternValue,
         }
     }
 }
@@ -183,6 +185,7 @@ impl fmt::Display for ItemKind {
             ItemKind::Bitflags => write!(f, "a bitflags"),
             ItemKind::TypeAlias => write!(f, "a type alias"),
             ItemKind::Constant => write!(f, "a constant"),
+            ItemKind::ExternValue => write!(f, "an extern value"),
         }
     }
 }
@@ -266,6 +269,8 @@ pub enum UnresolvedTypeContext {
     },
     /// Type annotation of a `const` declaration
     ConstType { const_path: ItemPath },
+    /// Type annotation of an `extern` value declaration
+    ExternValueType { extern_path: ItemPath },
 }
 
 impl fmt::Display for UnresolvedTypeContext {
@@ -288,6 +293,9 @@ impl fmt::Display for UnresolvedTypeContext {
             }
             UnresolvedTypeContext::ConstType { const_path } => {
                 write!(f, "type annotation of const `{const_path}`")
+            }
+            UnresolvedTypeContext::ExternValueType { extern_path } => {
+                write!(f, "type annotation of extern value `{extern_path}`")
             }
         }
     }

@@ -135,12 +135,6 @@ pub(crate) fn find_reference_at(
                     return Some(from_hit(hit));
                 }
             }
-            // Extern values: `extern name: Type;` — the referenced type.
-            ModuleItem::ExternValue { extern_value } => {
-                if let Some(hit) = type_hit_at(&extern_value.type_, loc) {
-                    return Some(from_hit(hit));
-                }
-            }
             _ => {}
         }
     }
@@ -239,6 +233,7 @@ pub(crate) fn find_type_ref_in_definition<'a>(
         ItemDefinitionInner::Bitflags(b) => return type_hit_at(&b.type_, loc),
         ItemDefinitionInner::TypeAlias(ta) => return type_hit_at(&ta.target, loc),
         ItemDefinitionInner::Constant(c) => return type_hit_at(&c.type_, loc),
+        ItemDefinitionInner::ExternValue(ev) => return type_hit_at(&ev.type_, loc),
     }
 
     None

@@ -21,7 +21,8 @@ use crate::{
     semantic::{
         Module, TypeRegistry,
         types::{
-            Argument, BitflagsDefinition, EnumDefinition, ExternValue, Function, ItemCategory,
+            Argument, BitflagsDefinition, EnumDefinition,
+            ExternValueDefinition as SemanticExternValueDefinition, Function, ItemCategory,
             ItemDefinitionInner, Region, Type, TypeAliasDefinition, TypeDefinition,
         },
     },
@@ -290,6 +291,7 @@ fn collect_intra_module_full_deps(
             );
         }
         ItemDefinitionInner::Constant(_) => {}
+        ItemDefinitionInner::ExternValue(_) => {}
     }
 }
 
@@ -407,12 +409,12 @@ pub fn collect_module_deps(
                 walk_type_alias_def(ta, &mut deps, module_path, registry, bindings)
             }
             ItemDefinitionInner::Constant(_) => {}
+            ItemDefinitionInner::ExternValue(ev) => {
+                walk_extern_value(ev, &mut deps, module_path, registry, bindings)
+            }
         }
     }
 
-    for ev in &module.extern_values {
-        walk_extern_value(ev, &mut deps, module_path, registry, bindings);
-    }
     for func in module.functions() {
         walk_function(func, &mut deps, module_path, registry, bindings);
     }
@@ -447,7 +449,7 @@ pub fn collect_module_deps(
 }
 
 fn walk_extern_value(
-    ev: &ExternValue,
+    ev: &SemanticExternValueDefinition,
     deps: &mut ModuleDeps,
     module_path: &ItemPath,
     registry: &TypeRegistry,

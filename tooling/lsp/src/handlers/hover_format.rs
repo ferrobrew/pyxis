@@ -74,6 +74,7 @@ pub(crate) fn format_type_hover(definition: &ItemDefinition) -> String {
         ItemDefinitionInner::Bitflags(_) => "bitflags",
         ItemDefinitionInner::TypeAlias(_) => "type alias",
         ItemDefinitionInner::Constant(_) => "const",
+        ItemDefinitionInner::ExternValue(_) => "extern",
     };
     let mut md = format!("**{}** `{}`\n\n", kind, name);
 
@@ -107,6 +108,10 @@ pub(crate) fn format_type_hover(definition: &ItemDefinition) -> String {
         if let Expr::IntLiteral { value, .. } = &cd.expr {
             md.push_str(&format!("\n{}\n", format_int_reprs(*value as i128)));
         }
+    }
+
+    if let ItemDefinitionInner::ExternValue(ev) = &definition.inner {
+        md.push_str(&format!("`{}: {}`\n", name, ev.type_));
     }
 
     md
@@ -321,6 +326,7 @@ pub(crate) fn attribute_at<'a>(
                     ItemDefinitionInner::Bitflags(b) => &b.attributes,
                     ItemDefinitionInner::TypeAlias(ta) => &ta.attributes,
                     ItemDefinitionInner::Constant(c) => &c.attributes,
+                    ItemDefinitionInner::ExternValue(ev) => &ev.attributes,
                 };
                 if let Some(hit) = find(inner_attrs) {
                     return Some(hit);
@@ -356,6 +362,7 @@ pub(crate) fn attribute_at<'a>(
                     }
                     ItemDefinitionInner::TypeAlias(_) => {}
                     ItemDefinitionInner::Constant(_) => {}
+                    ItemDefinitionInner::ExternValue(_) => {}
                 }
             }
             ModuleItem::Impl { impl_block } => {
@@ -372,11 +379,6 @@ pub(crate) fn attribute_at<'a>(
             }
             ModuleItem::Function { function } => {
                 if let Some(hit) = find(&function.attributes) {
-                    return Some(hit);
-                }
-            }
-            ModuleItem::ExternValue { extern_value } => {
-                if let Some(hit) = find(&extern_value.attributes) {
                     return Some(hit);
                 }
             }

@@ -13,9 +13,9 @@ use crate::{
         Module, SemanticOutput, TypeRegistry,
         types::{
             Argument, BitflagsDefinition, ConstDefinition as SemanticConstDefinition, ConstValue,
-            EnumDefinition, ExternValue, Function, FunctionBody, ItemCategory, ItemDefinition,
-            ItemDefinitionInner, ItemStateResolved, PredefinedItem, Region, Type,
-            TypeAliasDefinition, TypeDefinition, Visibility,
+            EnumDefinition, ExternValueDefinition as SemanticExternValueDefinition, Function,
+            FunctionBody, ItemCategory, ItemDefinition, ItemDefinitionInner, ItemStateResolved,
+            PredefinedItem, Region, Type, TypeAliasDefinition, TypeDefinition, Visibility,
         },
     },
     span::ItemLocation,
@@ -270,12 +270,12 @@ pub fn write_module(
         .collect::<Vec<_>>();
     definitions.sort_by_key(|d| &d.path);
     for definition in definitions {
-        // Skip nested constants — they're emitted inside their parent's
-        // `impl` block by build_type/build_enum/build_bitflags.
+        // Skip nested constants and extern values — they're emitted inside their
+        // parent's `impl` block by build_type/build_enum/build_bitflags.
         use ItemDefinitionInner as IDI;
         if definition
             .resolved()
-            .is_some_and(|r| matches!(r.inner, IDI::Constant(_)))
+            .is_some_and(|r| matches!(r.inner, IDI::Constant(_) | IDI::ExternValue(_)))
         {
             if let Some(parent_path) = definition.path.parent() {
                 if semantic_state.type_registry().contains(&parent_path) {
@@ -295,16 +295,6 @@ pub fn write_module(
                 &module_paths,
                 &nested_rewrites,
             )?
-        )?;
-    }
-
-    let mut extern_values = module.extern_values.clone();
-    extern_values.sort_by_key(|ev| ev.name.clone());
-    for ev in &extern_values {
-        writeln!(
-            raw_output,
-            "{}",
-            build_extern_value(ev, options.rust_module_prefix.as_ref(), &module_paths)?
         )?;
     }
 
@@ -376,14 +366,12 @@ fn module_has_public_exports(
     semantic_state: &SemanticOutput,
 ) -> bool {
     let type_registry = semantic_state.type_registry();
+    // Extern values are ordinary definitions now, so the definitions check
+    // above already covers public extern values.
     module
         .definitions(type_registry)
         .any(|d| d.visibility == Visibility::Public)
         || module.functions().iter().any(|f| f.is_public())
-        || module
-            .extern_values
-            .iter()
-            .any(|ev| ev.visibility == Visibility::Public)
         || semantic_state
             .modules()
             .keys()
@@ -469,6 +457,13 @@ fn build_item(
                 nested_rewrites,
             ),
             IDI::Constant(cd) => build_const(path, visibility, cd, location, module_paths),
+            IDI::ExternValue(ev) => build_extern_value(
+                path,
+                visibility,
+                ev,
+                options.rust_module_prefix.as_ref(),
+                module_paths,
+            ),
         },
         ItemCategory::Predefined => Ok(quote! {}),
         ItemCategory::Extern => {
@@ -765,6 +760,9 @@ fn build_type(
 
     // Emit nested constants as associated constants in an impl block
     let nested_const_impls = build_nested_const_impls(type_registry, path, module_paths);
+    // Emit nested extern values as associated `get_*` accessors in an impl block
+    let nested_extern_value_impls =
+        build_nested_extern_value_impls(type_registry, path, module_paths);
 
     Ok(quote! {
         #derives
@@ -781,6 +779,7 @@ fn build_type(
             #(#vftable_function_impl)*
         }
         #nested_const_impls
+        #nested_extern_value_impls
         #(#as_ref_conversions)*
     })
 }
@@ -884,6 +883,9 @@ fn build_enum(
 
     // Emit nested constants as associated constants in an impl block
     let nested_const_impls = build_nested_const_impls(type_registry, path, module_paths);
+    // Emit nested extern values as associated `get_*` accessors in an impl block
+    let nested_extern_value_impls =
+        build_nested_extern_value_impls(type_registry, path, module_paths);
 
     Ok(quote! {
         #[repr(#syn_type)]
@@ -896,6 +898,7 @@ fn build_enum(
         #singleton_impl
         #associated_impl
         #nested_const_impls
+        #nested_extern_value_impls
     })
 }
 
@@ -968,6 +971,9 @@ fn build_bitflags(
 
     // Emit nested constants as associated constants in an impl block
     let nested_const_impls = build_nested_const_impls(type_registry, path, module_paths);
+    // Emit nested extern values as associated `get_*` accessors in an impl block
+    let nested_extern_value_impls =
+        build_nested_extern_value_impls(type_registry, path, module_paths);
 
     Ok(quote! {
         crate::__bitflags! {
@@ -980,6 +986,7 @@ fn build_bitflags(
         #singleton_impl
         #default_impl
         #nested_const_impls
+        #nested_extern_value_impls
     })
 }
 
@@ -1260,21 +1267,81 @@ fn build_function(
     })
 }
 
+/// Emit a module-level extern value as a freestanding `get_<name>()` accessor
+/// over its fixed address.
 fn build_extern_value(
-    ev: &ExternValue,
+    path: &ItemPath,
+    visibility: Visibility,
+    ev: &SemanticExternValueDefinition,
     prefix: Option<&ItemPath>,
     module_paths: &BTreeSet<ItemPath>,
 ) -> Result<proc_macro2::TokenStream> {
-    let visibility = visibility_to_tokens(ev.visibility);
-    let function_ident = quote::format_ident!("get_{}", ev.name);
+    let name = flatten_type_name(path, module_paths);
+    let visibility = visibility_to_tokens(visibility);
+    let function_ident = quote::format_ident!("get_{}", name);
     let type_ = sa_type_to_syn_type(&ev.type_, prefix, Some(module_paths))?;
     let address = hex_literal(ev.address);
+    let doc = doc_to_tokens(false, &ev.doc, None);
 
     Ok(quote! {
+        #doc
         #visibility unsafe fn #function_ident() -> &'static mut #type_ {
             unsafe { &mut *(#address as *mut #type_) }
         }
     })
+}
+
+/// Collect nested extern values from the type registry for a given parent path
+/// and emit them as associated `get_<name>()` accessors inside an `impl` block —
+/// the value-item analogue of [`build_nested_const_impls`], modelling e.g. a
+/// C++ class's static globals as `Parent::get_<name>()`.
+fn build_nested_extern_value_impls(
+    type_registry: &TypeRegistry,
+    parent_path: &ItemPath,
+    module_paths: &BTreeSet<ItemPath>,
+) -> Option<proc_macro2::TokenStream> {
+    use ItemDefinitionInner as IDI;
+
+    let parent_name = flatten_type_name(parent_path, module_paths);
+    let parent_ident = str_to_ident(parent_name.as_str());
+
+    let mut items: Vec<proc_macro2::TokenStream> = Vec::new();
+
+    for (item_path, item) in type_registry.iter() {
+        if item_path.parent().as_ref() != Some(parent_path) {
+            continue;
+        }
+        let Some(resolved) = item.resolved() else {
+            continue;
+        };
+        if let IDI::ExternValue(ev) = &resolved.inner {
+            let value_name = item_path.last().map(|s| s.as_str()).unwrap_or_default();
+            let function_ident = quote::format_ident!("get_{}", value_name);
+            let type_ = match sa_type_to_syn_type(&ev.type_, None, Some(module_paths)) {
+                Ok(t) => t,
+                Err(_) => continue,
+            };
+            let address = hex_literal(ev.address);
+            let doc = doc_to_tokens(false, &ev.doc, None);
+
+            items.push(quote! {
+                #doc
+                pub unsafe fn #function_ident() -> &'static mut #type_ {
+                    unsafe { &mut *(#address as *mut #type_) }
+                }
+            });
+        }
+    }
+
+    if items.is_empty() {
+        None
+    } else {
+        Some(quote! {
+            impl #parent_ident {
+                #(#items)*
+            }
+        })
+    }
 }
 
 fn str_to_ident(s: &str) -> syn::Ident {

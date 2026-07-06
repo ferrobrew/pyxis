@@ -9,15 +9,12 @@ use crate::span::StripLocations;
 
 use super::{
     ParseError,
-    attributes::{Attributes, Visibility},
+    attributes::Attributes,
     core::Parser,
     expressions::{Expr, StringFormat},
     module::ModuleItem,
-    types::{Ident, Type},
+    types::Ident,
 };
-
-#[cfg(test)]
-use super::attributes::Attribute;
 
 /// A `prologue`/`epilogue` slot on a backend block. The plain form
 /// (`prologue r#"..."#;`) targets the header (or whatever the backend
@@ -166,39 +163,6 @@ impl Backend {
         self.epilogue.header = Some(epilogue.into());
         self.epilogue.header_format = StringFormat::Raw;
         self.epilogue.for_type = Some(for_type.into());
-        self
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash, HasLocation)]
-#[cfg_attr(test, derive(StripLocations))]
-pub struct ExternValue {
-    pub visibility: Visibility,
-    pub name: Ident,
-    pub type_: Type,
-    pub attributes: Attributes,
-    pub doc_comments: Vec<String>,
-    pub location: ItemLocation,
-}
-#[cfg(test)]
-impl ExternValue {
-    pub fn new(
-        visibility: Visibility,
-        name: &str,
-        type_: Type,
-        attributes: impl IntoIterator<Item = Attribute>,
-    ) -> Self {
-        Self {
-            visibility,
-            name: name.into(),
-            type_,
-            attributes: Attributes::from_iter(attributes),
-            doc_comments: vec![],
-            location: ItemLocation::test(),
-        }
-    }
-    pub fn with_doc_comments(mut self, doc_comments: Vec<String>) -> Self {
-        self.doc_comments = doc_comments;
         self
     }
 }
@@ -446,43 +410,6 @@ impl Parser {
             doc_comments,
             location,
             declaration_location,
-        })
-    }
-
-    pub(crate) fn parse_extern_value(&mut self) -> Result<ExternValue, ParseError> {
-        let mut doc_comments = self.collect_doc_comments();
-        let attributes = if matches!(self.peek(), TokenKind::Hash) {
-            self.parse_attributes()?
-        } else {
-            Attributes::default()
-        };
-
-        // Also collect doc comments that appear after attributes
-        let after_attr_doc_comments = self.collect_doc_comments();
-        doc_comments.extend(after_attr_doc_comments);
-
-        // Span starts at the declaration, not its doc comment / attributes.
-        let start_pos = self.current().location.span.start;
-        let visibility = self.parse_visibility()?;
-        self.expect(TokenKind::Extern)?;
-        let (name, _) = self.expect_ident()?;
-        self.expect(TokenKind::Colon)?;
-        let type_ = self.parse_type()?;
-        self.expect(TokenKind::Semi)?;
-        let end_pos = if self.pos > 0 {
-            self.tokens[self.pos - 1].location.span.end
-        } else {
-            self.current().location.span.end
-        };
-        let location = self.item_location_from_locations(start_pos, end_pos);
-
-        Ok(ExternValue {
-            visibility,
-            name,
-            type_,
-            attributes,
-            doc_comments,
-            location,
         })
     }
 
@@ -884,18 +811,16 @@ extern type ManuallyDrop<SharedPtr<u32>>;
 
         let ast = M::new()
             .with_extern_types([("SomeType".into(), As::from_iter([A::size_decimal(4)]))])
-            .with_extern_values([
-                EV::new(
-                    V::Public,
-                    "some_value",
-                    T::ident("SomeType").mut_pointer(),
-                    [A::address(0x1337)],
+            .with_definitions([
+                ID::new(
+                    (V::Public, "some_value"),
+                    EVD::new(T::ident("SomeType").mut_pointer())
+                        .with_attributes([A::address(0x1337)]),
                 ),
-                EV::new(
-                    V::Private,
-                    "some_private_value",
-                    T::ident("SomeType").mut_pointer(),
-                    [A::address(0x1338)],
+                ID::new(
+                    (V::Private, "some_private_value"),
+                    EVD::new(T::ident("SomeType").mut_pointer())
+                        .with_attributes([A::address(0x1338)]),
                 ),
             ]);
 

@@ -59,6 +59,7 @@ pub enum DocLinkMemberKind {
     Variant,
     Flag,
     Constant,
+    ExternValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -68,15 +69,18 @@ enum ItemMembers {
         vftable_methods: Vec<String>,
         fields: Vec<String>,
         constants: Vec<String>,
+        extern_values: Vec<String>,
     },
     Enum {
         variants: Vec<String>,
         methods: Vec<String>,
         constants: Vec<String>,
+        extern_values: Vec<String>,
     },
     Bitflags {
         flags: Vec<String>,
         constants: Vec<String>,
+        extern_values: Vec<String>,
     },
     Other,
 }
@@ -99,6 +103,12 @@ pub struct DocLinkResolver {
     /// the Rust backend emits them as associated consts, not flattened free
     /// items, so importing the full path would name a nonexistent identifier.
     nested_constant_paths: BTreeSet<ItemPath>,
+    /// Paths of every `extern` value item (module-level and nested). Skipped in
+    /// the whole-path `Item` branch of [`Self::resolve`]: module-level externs
+    /// resolve as a [`DocLinkTarget::ExternValue`] and nested ones as a
+    /// [`DocLinkTarget::Member`], since the Rust backend emits both as `get_*`
+    /// accessors rather than importable free items named after the value.
+    extern_value_paths: BTreeSet<ItemPath>,
     module_functions: BTreeMap<ItemPath, Vec<String>>,
     module_extern_values: BTreeMap<ItemPath, Vec<String>>,
 }
@@ -109,33 +119,51 @@ impl DocLinkResolver {
         // that parent item's path, plus the set of their full paths.
         let mut nested_constants_by_parent: BTreeMap<ItemPath, Vec<String>> = BTreeMap::new();
         let mut nested_constant_paths = BTreeSet::new();
+        // Nested extern values, keyed by their parent item, plus the set of all
+        // extern-value paths (module-level and nested).
+        let mut nested_extern_values_by_parent: BTreeMap<ItemPath, Vec<String>> = BTreeMap::new();
+        let mut extern_value_paths = BTreeSet::new();
         for (path, item) in type_registry.iter() {
-            if !matches!(
-                item.resolved().map(|r| &r.inner),
-                Some(ItemDefinitionInner::Constant(_))
-            ) {
+            let inner = item.resolved().map(|r| &r.inner);
+            let is_constant = matches!(inner, Some(ItemDefinitionInner::Constant(_)));
+            let is_extern_value = matches!(inner, Some(ItemDefinitionInner::ExternValue(_)));
+            if !is_constant && !is_extern_value {
                 continue;
+            }
+            if is_extern_value {
+                extern_value_paths.insert(path.clone());
             }
             let Some(parent) = path.parent() else {
                 continue;
             };
-            // Only constants whose parent is itself an item (type/enum/bitflags)
-            // are "nested"; module-level constants resolve as their own item.
+            // Only values whose parent is itself an item (type/enum/bitflags) are
+            // "nested"; module-level ones resolve as their own item / extern.
             if !type_registry.contains(&parent) {
                 continue;
             }
             if let Some(name) = path.last() {
-                nested_constants_by_parent
+                let bucket = if is_constant {
+                    &mut nested_constants_by_parent
+                } else {
+                    &mut nested_extern_values_by_parent
+                };
+                bucket
                     .entry(parent)
                     .or_default()
                     .push(name.as_str().to_string());
-                nested_constant_paths.insert(path.clone());
+                if is_constant {
+                    nested_constant_paths.insert(path.clone());
+                }
             }
         }
 
         let mut items = BTreeMap::new();
         for (path, item) in type_registry.iter() {
             let constants = nested_constants_by_parent
+                .get(path)
+                .cloned()
+                .unwrap_or_default();
+            let extern_values = nested_extern_values_by_parent
                 .get(path)
                 .cloned()
                 .unwrap_or_default();
@@ -153,6 +181,7 @@ impl DocLinkResolver {
                         .unwrap_or_default(),
                     fields: td.regions.iter().filter_map(|r| r.name.clone()).collect(),
                     constants,
+                    extern_values,
                 },
                 Some(ItemDefinitionInner::Enum(ed)) => ItemMembers::Enum {
                     variants: ed.variants.iter().map(|v| v.name.clone()).collect(),
@@ -162,12 +191,13 @@ impl DocLinkResolver {
                         .map(|f| f.name.clone())
                         .collect(),
                     constants,
+                    extern_values,
                 },
                 Some(ItemDefinitionInner::Bitflags(bd)) => ItemMembers::Bitflags {
                     flags: bd.flags.iter().map(|f| f.name.clone()).collect(),
                     constants,
+                    extern_values,
                 },
-                Some(ItemDefinitionInner::Constant(_)) => ItemMembers::Other,
                 _ => ItemMembers::Other,
             };
             items.insert(
@@ -189,23 +219,30 @@ impl DocLinkResolver {
             })
             .collect();
 
-        let module_extern_values = modules
-            .iter()
-            .map(|(path, module)| {
-                (
-                    path.clone(),
-                    module
-                        .extern_values
-                        .iter()
-                        .map(|e| e.name.clone())
-                        .collect(),
-                )
-            })
-            .collect();
+        // Module-level extern values: extern-value items whose parent is a
+        // module (i.e. not nested inside another item), keyed by that module.
+        let mut module_extern_values: BTreeMap<ItemPath, Vec<String>> = BTreeMap::new();
+        for (module_path, _) in modules.iter() {
+            module_extern_values.entry(module_path.clone()).or_default();
+        }
+        for path in &extern_value_paths {
+            let Some(parent) = path.parent() else {
+                continue;
+            };
+            if modules.contains_key(&parent)
+                && let Some(name) = path.last()
+            {
+                module_extern_values
+                    .entry(parent)
+                    .or_default()
+                    .push(name.as_str().to_string());
+            }
+        }
 
         DocLinkResolver {
             items,
             nested_constant_paths,
+            extern_value_paths,
             module_functions,
             module_extern_values,
         }
@@ -220,6 +257,7 @@ impl DocLinkResolver {
         //    const, so it has no importable free-item path of its own.
         if let Some(item_path) = self.find_item(scope, path_str)
             && !self.nested_constant_paths.contains(&item_path)
+            && !self.extern_value_paths.contains(&item_path)
         {
             return Some(DocLinkTarget::Item(item_path));
         }
@@ -362,9 +400,8 @@ impl DocLinkResolver {
         for f in module.functions() {
             self.add_doc_imports(&scope, &f.doc, &mut imports);
         }
-        for ev in &module.extern_values {
-            self.add_doc_imports(&scope, &ev.doc, &mut imports);
-        }
+        // Extern values (including module-level ones) are registry items, so
+        // their docs are collected by the registry walk below.
 
         for (path, item) in type_registry.iter() {
             if path.parent().as_ref() != Some(module_path) {
@@ -421,6 +458,9 @@ impl DocLinkResolver {
                                 ItemDefinitionInner::Constant(ncd) => {
                                     self.add_doc_imports(&type_scope, &ncd.doc, &mut imports);
                                 }
+                                ItemDefinitionInner::ExternValue(nev) => {
+                                    self.add_doc_imports(&type_scope, &nev.doc, &mut imports);
+                                }
                             }
                         }
                     }
@@ -445,6 +485,9 @@ impl DocLinkResolver {
                 }
                 ItemDefinitionInner::Constant(cd) => {
                     self.add_doc_imports(&scope, &cd.doc, &mut imports);
+                }
+                ItemDefinitionInner::ExternValue(ev) => {
+                    self.add_doc_imports(&scope, &ev.doc, &mut imports);
                 }
             }
         }
@@ -472,6 +515,7 @@ impl DocLinkResolver {
                 vftable_methods,
                 fields,
                 constants,
+                extern_values,
             } => {
                 if methods.iter().any(|n| n == member) {
                     Some(DocLinkMemberKind::Method)
@@ -481,6 +525,8 @@ impl DocLinkResolver {
                     Some(DocLinkMemberKind::Field)
                 } else if constants.iter().any(|n| n == member) {
                     Some(DocLinkMemberKind::Constant)
+                } else if extern_values.iter().any(|n| n == member) {
+                    Some(DocLinkMemberKind::ExternValue)
                 } else {
                     None
                 }
@@ -489,6 +535,7 @@ impl DocLinkResolver {
                 variants,
                 methods,
                 constants,
+                extern_values,
             } => {
                 if variants.iter().any(|n| n == member) {
                     Some(DocLinkMemberKind::Variant)
@@ -496,15 +543,23 @@ impl DocLinkResolver {
                     Some(DocLinkMemberKind::Method)
                 } else if constants.iter().any(|n| n == member) {
                     Some(DocLinkMemberKind::Constant)
+                } else if extern_values.iter().any(|n| n == member) {
+                    Some(DocLinkMemberKind::ExternValue)
                 } else {
                     None
                 }
             }
-            ItemMembers::Bitflags { flags, constants } => {
+            ItemMembers::Bitflags {
+                flags,
+                constants,
+                extern_values,
+            } => {
                 if flags.iter().any(|n| n == member) {
                     Some(DocLinkMemberKind::Flag)
                 } else if constants.iter().any(|n| n == member) {
                     Some(DocLinkMemberKind::Constant)
+                } else if extern_values.iter().any(|n| n == member) {
+                    Some(DocLinkMemberKind::ExternValue)
                 } else {
                     None
                 }
@@ -539,9 +594,8 @@ pub fn validate(
         for f in module.functions() {
             check(&f.doc, &scope, &f.location)?;
         }
-        for ev in &module.extern_values {
-            check(&ev.doc, &scope, &ev.location)?;
-        }
+        // Extern values are registry items; their docs are checked in the
+        // registry walk below.
         let _ = path;
     }
 
@@ -590,6 +644,9 @@ pub fn validate(
             }
             ItemDefinitionInner::Constant(cd) => {
                 check(&cd.doc, &scope, loc)?;
+            }
+            ItemDefinitionInner::ExternValue(ev) => {
+                check(&ev.doc, &scope, loc)?;
             }
         }
     }

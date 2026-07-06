@@ -62,11 +62,9 @@ fn resolves_every_link_form() {
                     .with_attributes([A::address(0x10)])],
             )])
             .with_functions([F::new((V::Public, "helper"), []).with_attributes([A::address(0x30)])])
-            .with_extern_values([EV::new(
-                V::Public,
-                "global",
-                T::ident("u32").mut_pointer(),
-                [A::address(0x20)],
+            .with_definitions([ID::new(
+                (V::Public, "global"),
+                EVD::new(T::ident("u32").mut_pointer()).with_attributes([A::address(0x20)]),
             )]);
 
     let state = build_state(&module, &IP::from("test")).unwrap();

@@ -264,31 +264,24 @@ doc?: string | null; doc_links?: JsonDocLink[];
  */
 source: JsonSourceLocation | null };
 
-export type JsonExternValue = { 
 /**
- * Visibility
+ * An `extern` value item (a global at a fixed address). Emitted as an item
+ * page like any other definition; `visibility`, `path`, and `source` live on
+ * the enclosing [`JsonItem`].
  */
-visibility: JsonVisibility; 
-/**
- * Variable name
- */
-name: string; 
-/**
- * Type
- */
-type_ref: JsonType; 
-/**
- * Memory address
- */
-address: number; 
+export type JsonExternValueDefinition = { 
 /**
  * Documentation
  */
-doc?: string | null; doc_links?: JsonDocLink[]; 
+doc: string | null; doc_links?: JsonDocLink[]; 
 /**
- * Source location (file and line)
+ * The type annotation of the extern value
  */
-source?: JsonSourceLocation | null };
+value_type: JsonType; 
+/**
+ * Memory address
+ */
+address: number };
 
 export type JsonFunction = { 
 /**
@@ -394,7 +387,7 @@ source: JsonSourceLocation | null };
 
 export type JsonItemCategory = "defined" | "predefined" | "extern";
 
-export type JsonItemKind = ({ type: "type" } & JsonTypeDefinition) | ({ type: "enum" } & JsonEnumDefinition) | ({ type: "bitflags" } & JsonBitflagsDefinition) | ({ type: "type_alias" } & JsonTypeAliasDefinition) | ({ type: "constant" } & JsonConstantDefinition);
+export type JsonItemKind = ({ type: "type" } & JsonTypeDefinition) | ({ type: "enum" } & JsonEnumDefinition) | ({ type: "bitflags" } & JsonBitflagsDefinition) | ({ type: "type_alias" } & JsonTypeAliasDefinition) | ({ type: "constant" } & JsonConstantDefinition) | ({ type: "extern_value" } & JsonExternValueDefinition);
 
 /**
  * A module containing items and potentially submodules
@@ -412,10 +405,6 @@ items: string[];
  * Child modules
  */
 submodules: { [key in string]: JsonModule }; 
-/**
- * Extern values (global variables)
- */
-extern_values: JsonExternValue[]; 
 /**
  * Freestanding functions
  */

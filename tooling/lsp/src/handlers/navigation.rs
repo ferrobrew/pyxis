@@ -2,8 +2,8 @@ use super::*;
 
 use pyxis::{
     grammar::{
-        Backend, ExternValue, FunctionBlock, Ident, ImplItem, ItemDefinitionInner, TypeDefinition,
-        TypeStatement,
+        Backend, ExternValueDefinition, FunctionBlock, Ident, ImplItem, ItemDefinitionInner,
+        TypeDefinition, TypeStatement,
     },
     semantic::types::ItemDefinitionInner as ResolvedInner,
 };
@@ -132,9 +132,6 @@ impl ServerState {
                 ModuleItem::Function { function } if function.location.span.contains(&ctx.loc) => {
                     self.hover_function(ctx, function)
                 }
-                ModuleItem::ExternValue { extern_value } => {
-                    self.hover_extern_value(ctx, extern_value)
-                }
                 ModuleItem::ExternType { name, location, .. } => {
                     self.hover_extern_type(ctx, name, location)
                 }
@@ -194,6 +191,12 @@ impl ServerState {
         ctx: &HoverCtx,
         definition: &ItemDefinition,
     ) -> Option<(String, Span)> {
+        // An extern value is a value item (not a type), so its name hover shows
+        // the pointed-to type's size rather than the value item's own zero size —
+        // handled before hover_definition_name, which resolves names as types.
+        if let ItemDefinitionInner::ExternValue(ev) = &definition.inner {
+            return self.hover_extern_value(ctx, definition, ev);
+        }
         if let Some(hit) = self.hover_definition_name(ctx, definition) {
             return Some(hit);
         }
@@ -236,6 +239,8 @@ impl ServerState {
             ),
             ItemDefinitionInner::TypeAlias(_) => None,
             ItemDefinitionInner::Constant(_) => None,
+            // Handled above, before hover_definition_name.
+            ItemDefinitionInner::ExternValue(_) => None,
         }
     }
 
@@ -487,19 +492,20 @@ impl ServerState {
     fn hover_extern_value(
         &self,
         ctx: &HoverCtx,
-        extern_value: &ExternValue,
+        definition: &ItemDefinition,
+        ev: &ExternValueDefinition,
     ) -> Option<(String, Span)> {
         let span = name_token_span(
             ctx.tokens,
-            &extern_value.location.span.start,
-            extern_value.name.as_str(),
+            &definition.declaration_location.span.start,
+            definition.name.as_str(),
         )?;
         if !span.contains(&ctx.loc) {
             return None;
         }
-        let mut md = format_extern_value_hover(extern_value.name.as_str(), &extern_value.type_);
+        let mut md = format_extern_value_hover(definition.name.as_str(), &ev.type_);
         if let Some(size) = type_size_of(
-            &extern_value.type_,
+            &ev.type_,
             ctx.type_registry,
             ctx.scope,
             ctx.decl_registry,
@@ -900,7 +906,9 @@ fn nested_items(definition: &ItemDefinition) -> Vec<&ItemDefinition> {
                 _ => None,
             })
             .collect(),
-        ItemDefinitionInner::TypeAlias(_) | ItemDefinitionInner::Constant(_) => Vec::new(),
+        ItemDefinitionInner::TypeAlias(_)
+        | ItemDefinitionInner::Constant(_)
+        | ItemDefinitionInner::ExternValue(_) => Vec::new(),
     }
 }
 

@@ -230,7 +230,6 @@ pub fn resolve_item<'db>(
     if let Ok(m) = Module::new(
         module_path.clone(),
         module_ast.as_ref().clone(),
-        vec![],
         &impls,
         &backends,
     ) {
@@ -276,6 +275,7 @@ pub fn resolve_item<'db>(
                 ItemDefinitionInner::Bitflags(b) => b.attributes.cfg(),
                 ItemDefinitionInner::TypeAlias(ta) => ta.attributes.cfg(),
                 ItemDefinitionInner::Constant(c) => c.attributes.cfg(),
+                ItemDefinitionInner::ExternValue(ev) => ev.attributes.cfg(),
             };
             (
                 ItemDefinition {

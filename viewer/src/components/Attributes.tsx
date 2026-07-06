@@ -1,5 +1,5 @@
 import { Fragment, type ReactNode } from 'react';
-import type { JsonItem, JsonFunction, JsonExternValue, JsonCfg } from '@pyxis/types';
+import type { JsonItem, JsonFunction, JsonCfg } from '@pyxis/types';
 import { formatHexAddress } from '../utils/format';
 import { WRAP_COLUMN } from '../utils/typeString';
 
@@ -104,7 +104,20 @@ export function ItemAttributes({ item, className = '' }: { item: JsonItem; class
   const primary: ReactNode[] = [];
   const kind = item.kind;
 
-  const singleton = kind.type !== 'type_alias' && kind.type !== 'constant' ? kind.singleton : null;
+  // Extern values carry only their fixed address.
+  if (kind.type === 'extern_value') {
+    const a = formatHexAddress(kind.address);
+    primary.push(
+      <>
+        <Name>address</Name>({<Num>{a}</Num>})
+      </>
+    );
+  }
+
+  const singleton =
+    kind.type !== 'type_alias' && kind.type !== 'constant' && kind.type !== 'extern_value'
+      ? kind.singleton
+      : null;
   if (singleton != null) {
     const s = formatHexAddress(singleton);
     primary.push(
@@ -114,8 +127,9 @@ export function ItemAttributes({ item, className = '' }: { item: JsonItem; class
     );
   }
 
-  // Aliases and constants are just declarations — no layout/trait attributes.
-  if (kind.type !== 'type_alias' && kind.type !== 'constant') {
+  // Aliases, constants, and extern values are just declarations — no
+  // layout/trait attributes.
+  if (kind.type !== 'type_alias' && kind.type !== 'constant' && kind.type !== 'extern_value') {
     const sz = formatHexAddress(item.size);
     primary.push(
       <>
@@ -218,26 +232,4 @@ export function FunctionAttributes({
       </>,
     ]);
   return <AttrContainer groups={groups} className={className} />;
-}
-
-export function ExternAttributes({
-  ext,
-  className = '',
-}: {
-  ext: JsonExternValue;
-  className?: string;
-}) {
-  const a = formatHexAddress(ext.address);
-  return (
-    <AttrContainer
-      groups={[
-        [
-          <>
-            <Name>address</Name>({<Num>{a}</Num>})
-          </>,
-        ],
-      ]}
-      className={className}
-    />
-  );
 }

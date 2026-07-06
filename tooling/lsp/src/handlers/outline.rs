@@ -473,6 +473,7 @@ pub(crate) fn module_item_to_symbol(item: &ModuleItem, source: &str) -> Option<D
                 ItemDefinitionInner::Bitflags(_) => SymbolKind::ENUM,
                 ItemDefinitionInner::TypeAlias(_) => SymbolKind::TYPE_PARAMETER,
                 ItemDefinitionInner::Constant(_) => SymbolKind::CONSTANT,
+                ItemDefinitionInner::ExternValue(_) => SymbolKind::VARIABLE,
             };
             (
                 definition.name.as_str().to_string(),
@@ -488,11 +489,6 @@ pub(crate) fn module_item_to_symbol(item: &ModuleItem, source: &str) -> Option<D
         ModuleItem::ExternType { name, location, .. } => {
             (name.as_str().to_string(), SymbolKind::STRUCT, location.span)
         }
-        ModuleItem::ExternValue { extern_value } => (
-            extern_value.name.as_str().to_string(),
-            SymbolKind::VARIABLE,
-            extern_value.location.span,
-        ),
         ModuleItem::Impl { impl_block } => {
             // Impl blocks: use the target type name
             let name = impl_block.name.as_str().to_string();

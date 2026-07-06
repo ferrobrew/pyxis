@@ -136,28 +136,21 @@ impl PrettyPrinter {
             ModuleItem::Definition { definition } => {
                 self.print_item_definition(definition, false);
                 // Add blank line after this item, unless the next item is
-                // another const (group consts together without blank lines)
-                // or an impl block.
-                let is_const = matches!(definition.inner, ItemDefinitionInner::Constant(_));
-                let next_is_const = matches!(
+                // another value item (group consts / extern values together
+                // without blank lines) or an impl block.
+                let is_value = is_value_item(&definition.inner);
+                let next_is_value = matches!(
                     next_item,
-                    Some(ModuleItem::Definition { definition }) if matches!(
-                        definition.inner,
-                        ItemDefinitionInner::Constant(_)
-                    )
+                    Some(ModuleItem::Definition { definition }) if is_value_item(&definition.inner)
                 );
                 if !(matches!(next_item, Some(ModuleItem::Impl { .. }))
-                    || (is_const && next_is_const))
+                    || (is_value && next_is_value))
                 {
                     self.writeln("");
                 }
             }
             ModuleItem::Impl { impl_block } => {
                 self.print_impl_block(impl_block);
-                self.writeln("");
-            }
-            ModuleItem::ExternValue { extern_value } => {
-                self.print_extern_value(extern_value);
                 self.writeln("");
             }
             ModuleItem::Function { function } => {
@@ -700,6 +693,7 @@ impl PrettyPrinter {
             ),
             ItemDefinitionInner::TypeAlias(ta) => (&ta.attributes, &Vec::new(), &Vec::new()),
             ItemDefinitionInner::Constant(cd) => (&cd.attributes, &Vec::new(), &Vec::new()),
+            ItemDefinitionInner::ExternValue(ev) => (&ev.attributes, &Vec::new(), &Vec::new()),
         };
 
         // Print attributes with inline trailing comments
@@ -760,13 +754,15 @@ impl PrettyPrinter {
                         }
                     }
 
-                    // Partition into three groups: constants, nested types, and other items
+                    // Partition into three groups: value items (constants and
+                    // extern values), nested types, and other items. Value items
+                    // are compact one-liners grouped together without blank lines.
                     let const_groups: Vec<_> = groups
                         .iter()
                         .filter(|(_, item)| {
                             if let TypeDefItem::Statement(stmt) = item {
                                 if let TypeField::Item(inner) = &stmt.field {
-                                    return matches!(inner.inner, ItemDefinitionInner::Constant(_));
+                                    return is_value_item(&inner.inner);
                                 }
                             }
                             false
@@ -777,10 +773,7 @@ impl PrettyPrinter {
                         .filter(|(_, item)| {
                             if let TypeDefItem::Statement(stmt) = item {
                                 if let TypeField::Item(inner) = &stmt.field {
-                                    return !matches!(
-                                        inner.inner,
-                                        ItemDefinitionInner::Constant(_)
-                                    );
+                                    return !is_value_item(&inner.inner);
                                 }
                             }
                             false
@@ -863,12 +856,12 @@ impl PrettyPrinter {
                 let const_items: Vec<&EnumDefItem> = ed
                     .items
                     .iter()
-                    .filter(|item| matches!(item, EnumDefItem::Item(inner) if matches!(inner.inner, ItemDefinitionInner::Constant(_))))
+                    .filter(|item| matches!(item, EnumDefItem::Item(inner) if is_value_item(&inner.inner)))
                     .collect();
                 let other_items: Vec<&EnumDefItem> = ed
                     .items
                     .iter()
-                    .filter(|item| !matches!(item, EnumDefItem::Item(inner) if matches!(inner.inner, ItemDefinitionInner::Constant(_))))
+                    .filter(|item| !matches!(item, EnumDefItem::Item(inner) if is_value_item(&inner.inner)))
                     .collect();
 
                 // Emit constants first
@@ -916,12 +909,12 @@ impl PrettyPrinter {
                 let const_items: Vec<&BitflagsDefItem> = bf
                     .items
                     .iter()
-                    .filter(|item| matches!(item, BitflagsDefItem::Item(inner) if matches!(inner.inner, ItemDefinitionInner::Constant(_))))
+                    .filter(|item| matches!(item, BitflagsDefItem::Item(inner) if is_value_item(&inner.inner)))
                     .collect();
                 let other_items: Vec<&BitflagsDefItem> = bf
                     .items
                     .iter()
-                    .filter(|item| !matches!(item, BitflagsDefItem::Item(inner) if matches!(inner.inner, ItemDefinitionInner::Constant(_))))
+                    .filter(|item| !matches!(item, BitflagsDefItem::Item(inner) if is_value_item(&inner.inner)))
                     .collect();
 
                 // Emit constants first
@@ -966,6 +959,12 @@ impl PrettyPrinter {
                 self.print_type(&cd.type_);
                 write!(&mut self.output, " = ").unwrap();
                 self.print_expr(&cd.expr);
+                let terminator = if nested { ',' } else { ';' };
+                writeln!(&mut self.output, "{terminator}").unwrap();
+            }
+            ItemDefinitionInner::ExternValue(ev) => {
+                write!(&mut self.output, "extern {}: ", def.name).unwrap();
+                self.print_type(&ev.type_);
                 let terminator = if nested { ',' } else { ';' };
                 writeln!(&mut self.output, "{terminator}").unwrap();
             }
@@ -1057,9 +1056,10 @@ impl PrettyPrinter {
             TypeField::Item(inner_def) => {
                 // print_item_definition does its own write_indent()
                 self.print_item_definition(inner_def, true);
-                // Add trailing comma after nested type/enum/bitflags (consts
-                // already include their own terminator from print_item_definition)
-                if !matches!(inner_def.inner, ItemDefinitionInner::Constant(_)) {
+                // Add trailing comma after nested type/enum/bitflags (value items
+                // like consts and extern values already include their own
+                // terminator from print_item_definition)
+                if !is_value_item(&inner_def.inner) {
                     // Replace the trailing newline after `}` with `},\n`
                     if self.output.ends_with("}\n") {
                         self.output.pop(); // remove \n
@@ -1229,17 +1229,6 @@ impl PrettyPrinter {
         writeln!(&mut self.output, "}}").unwrap();
     }
 
-    fn print_extern_value(&mut self, extern_val: &ExternValue) {
-        self.print_attributes(&extern_val.attributes);
-        self.write_indent();
-        if extern_val.visibility == Visibility::Public {
-            write!(&mut self.output, "pub ").unwrap();
-        }
-        write!(&mut self.output, "extern {}: ", extern_val.name).unwrap();
-        self.print_type(&extern_val.type_);
-        writeln!(&mut self.output, ";").unwrap();
-    }
-
     fn print_function(&mut self, func: &Function) {
         // Print doc comments (they already include the space after ///)
         for doc in &func.doc_comments {
@@ -1293,6 +1282,17 @@ impl Default for PrettyPrinter {
 pub fn pretty_print(module: &Module) -> String {
     let mut printer = PrettyPrinter::new();
     printer.print_module(module)
+}
+
+/// Whether an item is a compact "value" item — a constant or an extern value.
+/// These print as grouped one-liners (no blank lines between them) and carry
+/// their own statement terminator when nested, unlike block items (type / enum
+/// / bitflags) which end in `}` and need a trailing comma appended.
+fn is_value_item(inner: &ItemDefinitionInner) -> bool {
+    matches!(
+        inner,
+        ItemDefinitionInner::Constant(_) | ItemDefinitionInner::ExternValue(_)
+    )
 }
 
 #[cfg(test)]

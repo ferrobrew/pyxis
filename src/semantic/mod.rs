@@ -9,6 +9,7 @@ pub mod db;
 pub mod declaration_registry;
 pub mod doc_links;
 pub(crate) mod enum_definition;
+pub(crate) mod extern_value_definition;
 pub(crate) mod function;
 pub mod inputs;
 pub mod ir;

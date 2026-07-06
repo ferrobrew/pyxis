@@ -2,12 +2,13 @@
 pub use crate::parser::{
     attributes::{Attribute, AttributeItem, AttributeItems, Attributes, Visibility},
     expressions::{Expr, ExprField, IntFormat, StringFormat},
-    external::{Backend, ExternValue, UseTree},
+    external::{Backend, UseTree},
     functions::{Argument, Function, FunctionBlock, ImplItem},
     items::{
         BitflagsDefItem, BitflagsDefinition, BitflagsStatement, Comment, ConstDefinition,
-        EnumDefItem, EnumDefinition, EnumStatement, ItemDefinition, ItemDefinitionInner,
-        TypeAliasDefinition, TypeDefItem, TypeDefinition, TypeField, TypeStatement,
+        EnumDefItem, EnumDefinition, EnumStatement, ExternValueDefinition, ItemDefinition,
+        ItemDefinitionInner, TypeAliasDefinition, TypeDefItem, TypeDefinition, TypeField,
+        TypeStatement,
     },
     module::{Module, ModuleItem},
     paths::{ItemPath, ItemPathSegment},
@@ -43,7 +44,7 @@ pub mod test_aliases {
     pub type UT = super::UseTree;
     pub type B = super::Backend;
     pub type V = super::Visibility;
-    pub type EV = super::ExternValue;
+    pub type EVD = super::ExternValueDefinition;
     pub fn int_literal(value: isize) -> E {
         E::IntLiteral {
             value,

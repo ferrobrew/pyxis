@@ -17,9 +17,9 @@ use crate::{
         types::{
             Argument, BitflagField, BitflagsDefinition, CallingConvention,
             ConstDefinition as SemanticConstDefinition, ConstValue, EnumDefinition, EnumVariant,
-            ExternValue, Function, FunctionBody, ItemDefinition, ItemDefinitionInner,
-            PredefinedItem, Region, Type, TypeAliasDefinition, TypeDefinition, TypeVftable,
-            Visibility,
+            ExternValueDefinition as SemanticExternValueDefinition, Function, FunctionBody,
+            ItemDefinition, ItemDefinitionInner, PredefinedItem, Region, Type, TypeAliasDefinition,
+            TypeDefinition, TypeVftable, Visibility,
         },
     },
     span::ItemLocation,
@@ -116,11 +116,11 @@ pub fn render_item(item: &ItemDefinition, ctx: RenderCtx) -> Result<Option<Rende
             &item.type_parameters,
         )?,
         ItemDefinitionInner::Enum(ed) => {
-            let (decl, post_cpp) = render_enum(&name, ed, resolved.size, ctx)?;
-            let mut decl = decl;
-            // Emit nested constants as module-level constexpr declarations
-            // (enums don't have a struct body for static members)
-            render_nested_consts_cpp_flat(&mut decl, ctx, &item.path, &name)?;
+            let (mut decl, mut post_cpp) = render_enum(&name, ed, resolved.size, ctx)?;
+            // Enums have no struct body for static members, so nested value items
+            // are flattened to module scope: `constexpr` consts in the header,
+            // extern-value getters declared in the header and defined in the `.cpp`.
+            render_nested_values_cpp_flat(&mut decl, &mut post_cpp, ctx, &item.path, &name)?;
             RenderedItem {
                 decl,
                 post_header: String::new(),
@@ -128,10 +128,8 @@ pub fn render_item(item: &ItemDefinition, ctx: RenderCtx) -> Result<Option<Rende
             }
         }
         ItemDefinitionInner::Bitflags(bd) => {
-            let (decl, post_cpp) = render_bitflags(&name, bd, resolved.size, ctx)?;
-            let mut decl = decl;
-            // Emit nested constants as module-level constexpr declarations
-            render_nested_consts_cpp_flat(&mut decl, ctx, &item.path, &name)?;
+            let (mut decl, mut post_cpp) = render_bitflags(&name, bd, resolved.size, ctx)?;
+            render_nested_values_cpp_flat(&mut decl, &mut post_cpp, ctx, &item.path, &name)?;
             RenderedItem {
                 decl,
                 post_header: String::new(),
@@ -144,6 +142,17 @@ pub fn render_item(item: &ItemDefinition, ctx: RenderCtx) -> Result<Option<Rende
             post_cpp: String::new(),
         },
         ItemDefinitionInner::Constant(cd) => render_const(&name, cd, ctx)?,
+        ItemDefinitionInner::ExternValue(ev) => {
+            let mut decl = String::new();
+            render_doc(&mut decl, &ev.doc, 0)?;
+            decl.push_str(&render_extern_value_decl(&name, ev, ctx)?);
+            let post_cpp = render_extern_value_definition(&name, ev, ctx)?;
+            RenderedItem {
+                decl,
+                post_header: String::new(),
+                post_cpp,
+            }
+        }
     };
     Ok(Some(rendered))
 }
@@ -356,6 +365,16 @@ fn render_struct(
                                 "    static constexpr {bf_type} {nested_name} = {value_str};"
                             )?;
                         }
+                        ItemDefinitionInner::ExternValue(nested_ev) => {
+                            // A nested extern value (e.g. a C++ class's static
+                            // global) becomes a static accessor over its address.
+                            // Declared here; defined out-of-class below (in the
+                            // `.cpp` for non-templates, like the singleton
+                            // accessor and member functions).
+                            render_doc(&mut body, &nested_ev.doc, 1)?;
+                            let ev_type = render_type(&nested_ev.type_, ctx)?;
+                            writeln!(body, "    static {ev_type}& get_{nested_name}();")?;
+                        }
                     }
                 }
             }
@@ -444,6 +463,38 @@ fn render_struct(
                 render_method_definition(&mut post_header, name, func, ctx)?;
             } else {
                 render_method_definition(&mut post_cpp, name, func, ctx)?;
+            }
+        }
+    }
+
+    // Nested extern values: out-of-class static accessor definitions, declared
+    // as `static T& get_<name>();` in the body above. Non-template parents put
+    // them in the `.cpp`; templates must keep them header-visible.
+    {
+        let def_out = if is_generic {
+            &mut post_header
+        } else {
+            &mut post_cpp
+        };
+        for nested_path in &td.nested_item_paths {
+            let Ok(nested_item) = ctx.registry.get(nested_path, &ItemLocation::internal()) else {
+                continue;
+            };
+            let Some(nested_resolved) = nested_item.resolved() else {
+                continue;
+            };
+            if let ItemDefinitionInner::ExternValue(nested_ev) = &nested_resolved.inner {
+                let value_name = nested_path.last().map(|s| s.as_str()).unwrap_or_default();
+                let value_name = cpp_ident(value_name);
+                let ev_type = render_type(&nested_ev.type_, ctx)?;
+                writeln!(def_out, "{ev_type}& {name}::get_{value_name}() {{")?;
+                writeln!(
+                    def_out,
+                    "    return *reinterpret_cast<{ev_type}*>(0x{addr:X});",
+                    addr = nested_ev.address
+                )?;
+                writeln!(def_out, "}}")?;
+                writeln!(def_out)?;
             }
         }
     }
@@ -899,11 +950,14 @@ fn render_type_alias(
     Ok(out)
 }
 
-/// Emit nested constants as flat module-level `constexpr` declarations with
-/// the parent name as a prefix (e.g., `Color_DEFAULT`). Used for enums and
-/// bitflags which don't have a struct body for `static constexpr` members.
-fn render_nested_consts_cpp_flat(
-    out: &mut String,
+/// Emit nested value items (constants and extern values) as flat module-level
+/// declarations with the parent name as a prefix (e.g., `Color_DEFAULT`,
+/// `Color_get_g_current`). Used for enums and bitflags which don't have a struct
+/// body to host `static` members. Constants become `constexpr`; extern values
+/// become `inline` getters over their address.
+fn render_nested_values_cpp_flat(
+    decl_out: &mut String,
+    cpp_out: &mut String,
     ctx: RenderCtx,
     parent_path: &ItemPath,
     parent_name: &str,
@@ -915,13 +969,33 @@ fn render_nested_consts_cpp_flat(
         let Some(resolved) = item.resolved() else {
             continue;
         };
-        if let ItemDefinitionInner::Constant(cd) = &resolved.inner {
-            let const_name = item_path.last().map(|s| s.as_str()).unwrap_or_default();
-            let flat_name = format!("{parent_name}_{}", cpp_ident(const_name));
-            let type_str = render_type(&cd.type_, ctx)?;
-            let value_str = format_const_value(&cd.value, &cd.type_);
-            render_doc(out, &cd.doc, 0)?;
-            writeln!(out, "constexpr {type_str} {flat_name} = {value_str};")?;
+        let value_name = item_path.last().map(|s| s.as_str()).unwrap_or_default();
+        match &resolved.inner {
+            ItemDefinitionInner::Constant(cd) => {
+                // `constexpr` values must stay in the header.
+                let flat_name = format!("{parent_name}_{}", cpp_ident(value_name));
+                let type_str = render_type(&cd.type_, ctx)?;
+                let value_str = format_const_value(&cd.value, &cd.type_);
+                render_doc(decl_out, &cd.doc, 0)?;
+                writeln!(decl_out, "constexpr {type_str} {flat_name} = {value_str};")?;
+            }
+            ItemDefinitionInner::ExternValue(ev) => {
+                // Declared in the header, defined in the `.cpp` — matching the
+                // module-level extern-value getters and the singleton accessor.
+                let flat_name = format!("{parent_name}_get_{}", cpp_ident(value_name));
+                let type_str = render_type(&ev.type_, ctx)?;
+                render_doc(decl_out, &ev.doc, 0)?;
+                writeln!(decl_out, "{type_str}& {flat_name}();")?;
+                writeln!(cpp_out, "{type_str}& {flat_name}() {{")?;
+                writeln!(
+                    cpp_out,
+                    "    return *reinterpret_cast<{type_str}*>(0x{addr:X});",
+                    addr = ev.address
+                )?;
+                writeln!(cpp_out, "}}")?;
+                writeln!(cpp_out)?;
+            }
+            _ => {}
         }
     }
 
@@ -1068,19 +1142,28 @@ fn function_pointer_alias(func: &Function, ctx: RenderCtx) -> Result<String> {
 
 /// Header-side declaration of an `extern <name>: <type>` value: a getter
 /// returning a reference to the value at the address.
-pub fn render_extern_value_decl(ev: &ExternValue, ctx: RenderCtx) -> Result<String> {
+pub fn render_extern_value_decl(
+    name: &str,
+    ev: &SemanticExternValueDefinition,
+    ctx: RenderCtx,
+) -> Result<String> {
     let ty = render_type(&ev.type_, ctx)?;
-    Ok(format!("{ty}& get_{0}();\n", ev.name))
+    let name = cpp_ident(name);
+    Ok(format!("{ty}& get_{name}();\n"))
 }
 
 /// `.cpp` definition for an `extern` value's getter. Three lines plus
 /// a trailing blank, so adjacent getters render with the same single-
 /// blank rhythm as out-of-class member definitions.
-pub fn render_extern_value_definition(ev: &ExternValue, ctx: RenderCtx) -> Result<String> {
+pub fn render_extern_value_definition(
+    name: &str,
+    ev: &SemanticExternValueDefinition,
+    ctx: RenderCtx,
+) -> Result<String> {
     let ty = render_type(&ev.type_, ctx)?;
+    let name = cpp_ident(name);
     Ok(format!(
         "{ty}& get_{name}() {{\n    return *reinterpret_cast<{ty}*>(0x{addr:X});\n}}\n\n",
-        name = ev.name,
         addr = ev.address,
     ))
 }

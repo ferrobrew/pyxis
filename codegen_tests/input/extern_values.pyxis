@@ -1,0 +1,32 @@
+// Module-level extern values (globals at fixed addresses).
+#[address(0x1_000)]
+pub extern g_frame_count: u32;
+/// The engine singleton, of type [`Engine`].
+#[address(0x2_000)]
+pub extern g_engine: *mut Engine;
+
+pub type Engine {
+    // A nested extern value models a C++ class's static global. It is emitted
+    // as an accessor scoped to the class (Rust: `Engine::get_g_instance()`;
+    // C++: `Engine::get_g_instance()`), not a flattened free `Engine_g_instance`.
+    #[address(0x3_000)]
+    pub extern g_instance: *mut Engine,
+
+    pub frame: u32,
+}
+
+pub enum RenderMode: u8 {
+    #[address(0x4_000)]
+    extern g_current: *mut RenderMode,
+
+    Forward,
+    Deferred,
+}
+
+pub bitflags DebugFlags: u32 {
+    #[address(0x5_000)]
+    extern g_active: *mut DebugFlags,
+
+    WIREFRAME = 1,
+    OVERDRAW = 2,
+}

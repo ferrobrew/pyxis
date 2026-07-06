@@ -11,6 +11,7 @@
 #include "doc_comments.hpp"
 #include "enums.hpp"
 #include "extern_bindings.hpp"
+#include "extern_values.hpp"
 #include "external_body.hpp"
 #include "freestanding_functions.hpp"
 #include "generics.hpp"

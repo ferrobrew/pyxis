@@ -10,6 +10,7 @@ use crate::{
         declaration_registry::ExternTypeInfo,
         enum_definition,
         error::{BuildOutcome, Result},
+        extern_value_definition,
         name_index::{ExternSig, NameIndex, NameResolution},
         resolution_context::{ResolutionContext, ResolutionContextRef},
         type_alias_definition, type_definition,
@@ -93,6 +94,10 @@ pub(super) fn build_item(
             let ctx_ref = ResolutionContextRef::new(type_registry, modules);
             const_definition::build(&ctx_ref, item_path, c, def_location, doc_comments)
         }
+        ItemDefinitionInner::ExternValue(ev) => {
+            let ctx_ref = ResolutionContextRef::new(type_registry, modules);
+            extern_value_definition::build(&ctx_ref, item_path, ev, def_location, doc_comments)
+        }
     }
 }
 
@@ -136,6 +141,7 @@ pub(super) fn register_unresolved(
         ItemDefinitionInner::Bitflags(b) => b.attributes.cfg(),
         ItemDefinitionInner::TypeAlias(ta) => ta.attributes.cfg(),
         ItemDefinitionInner::Constant(c) => c.attributes.cfg(),
+        ItemDefinitionInner::ExternValue(ev) => ev.attributes.cfg(),
     };
     type_registry.add(ItemDefinition {
         visibility: definition.visibility.into(),
@@ -299,6 +305,10 @@ pub(super) fn value_referenced_types(
                     }
                 }
             }
+        }
+        ItemDefinitionInner::ExternValue(ev) => {
+            // Collect the extern value's type annotation reference
+            collect_value_refs(&ev.type_, scope, index, &mut refs);
         }
     }
     refs

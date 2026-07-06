@@ -5,17 +5,14 @@ import { findModule, findLongestValidAncestor } from '../utils/pathUtils';
 import { useDocumentTitle } from '../utils/title';
 import { buildModuleUrl, buildItemUrl, buildRootUrl } from '../utils/navigation';
 import { getItemTypeColor, type ItemType } from '../utils/colors';
-import { ExternAttributes } from './Attributes';
 import { BackendSpliceSection } from './BackendSpliceSection';
-import { TypeRef } from './TypeRef';
 import { FunctionDisplay } from './FunctionDisplay';
 import { Breadcrumbs } from './Breadcrumbs';
 import { Markdown } from './Markdown';
-import { AnchorLink, CopyButton } from './Actions';
-import { SourceLink, SourceName } from './SourceLink';
+import { AnchorLink } from './Actions';
+import { SourceLink } from './SourceLink';
 import { OnThisPage, type TocEntry } from './OnThisPage';
 import type {
-  JsonExternValue,
   JsonBackend,
   JsonItem,
   JsonFunction,
@@ -28,7 +25,6 @@ interface ModuleData {
   doc_links?: JsonDocLink[];
   items?: string[];
   submodules?: { [key: string]: unknown };
-  extern_values?: JsonExternValue[];
   functions?: JsonFunction[];
   backends?: { [key: string]: unknown };
   source?: JsonSourceLocation | null;
@@ -51,49 +47,10 @@ function Panel({ children }: { children: React.ReactNode }) {
 const ROW = 'block p-3 border-b border-edge last:border-0 hover:bg-surface-2 transition-colors';
 
 function kindToItemType(kind: string): ItemType {
+  if (kind === 'extern_value') return 'extern';
   if (kind === 'enum' || kind === 'bitflags' || kind === 'type_alias' || kind === 'constant')
     return kind;
   return 'type';
-}
-
-// Extern value display component
-function ExternValueItem({ extern: ext }: { extern: JsonExternValue }) {
-  const isPrivate = ext.visibility === 'private';
-  const nameClasses = isPrivate ? 'font-semibold text-fg-subtle' : 'font-semibold text-fg';
-
-  return (
-    <div
-      id={`extval-${ext.name}`}
-      className="group relative border-b border-edge p-3 last:border-0"
-    >
-      <div className="absolute right-2 top-2 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-        <CopyButton
-          value={`0x${ext.address.toString(16)}`}
-          title="Copy address"
-          label="copy addr"
-        />
-        <AnchorLink targetId={`extval-${ext.name}`} label="link" />
-      </div>
-      <div className="font-mono text-sm leading-relaxed">
-        <ExternAttributes ext={ext} />
-        <div>
-          {!isPrivate && <span className="text-fg-muted">pub </span>}
-          <span className="text-kind-extern">extern </span>
-          <span className={nameClasses}>
-            {ext.source ? <SourceName source={ext.source}>{ext.name}</SourceName> : ext.name}
-          </span>
-          <span className="text-fg-muted">: </span>
-          <TypeRef type={ext.type_ref} />
-          <span className="text-fg-muted">;</span>
-        </div>
-      </div>
-      {ext.doc && (
-        <div className="mt-2 text-sm text-fg-muted">
-          <Markdown docLinks={ext.doc_links}>{ext.doc}</Markdown>
-        </div>
-      )}
-    </div>
-  );
 }
 
 // Item list component
@@ -247,8 +204,6 @@ export function ModuleView() {
 
   const toc: TocEntry[] = [];
   if (hasBackendSlot('prologue')) toc.push({ id: 'backend-prologue', label: 'Backend Prologue' });
-  if (module.extern_values && module.extern_values.length > 0)
-    toc.push({ id: 'extern-values', label: 'Extern Values' });
   if (module.functions && module.functions.length > 0)
     toc.push({ id: 'functions', label: 'Functions' });
   if (items.length > 0) toc.push({ id: 'types', label: 'Types' });
@@ -278,18 +233,6 @@ export function ModuleView() {
 
         {/* Backend Prologues */}
         <BackendSpliceSection backends={backends} slot="prologue" />
-
-        {/* Extern Values */}
-        {module.extern_values && module.extern_values.length > 0 && (
-          <div id="extern-values" className="mb-8">
-            <SectionHeader anchor="extern-values">Extern Values</SectionHeader>
-            <Panel>
-              {module.extern_values.map((ext: JsonExternValue, idx: number) => (
-                <ExternValueItem key={idx} extern={ext} />
-              ))}
-            </Panel>
-          </div>
-        )}
 
         {/* Functions */}
         {module.functions && module.functions.length > 0 && (
