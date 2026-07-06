@@ -503,7 +503,7 @@ impl ServerState {
         if !span.contains(&ctx.loc) {
             return None;
         }
-        let mut md = format_extern_value_hover(definition.name.as_str(), &ev.type_);
+        let mut md = format_extern_value_hover(definition.name.as_str(), &ev.type_, &ev.attributes);
         if let Some(size) = type_size_of(
             &ev.type_,
             ctx.type_registry,
@@ -877,7 +877,7 @@ impl ServerState {
 /// The nested item declarations (`const`/`type`/`enum`/… inside a body) of a
 /// type, enum, or bitflags definition. These sit in each body's item list
 /// alongside fields/variants, not in its `statements()`.
-fn nested_items(definition: &ItemDefinition) -> Vec<&ItemDefinition> {
+pub(crate) fn nested_items(definition: &ItemDefinition) -> Vec<&ItemDefinition> {
     match &definition.inner {
         ItemDefinitionInner::Type(td) => td
             .items

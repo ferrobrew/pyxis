@@ -536,10 +536,32 @@ pub(crate) fn format_function_hover(f: &Function) -> String {
     md
 }
 
-/// The base hover markdown for an `extern value` (its `name: type` signature).
-/// Callers with a resolved layout append size facts.
-pub(crate) fn format_extern_value_hover(name: &str, type_: &Type) -> String {
-    format!("**extern value** `{name}`\n\n```pyxis\n{name}: {type_}\n```\n")
+/// The `#[address(N)]` value on an extern value's attributes, if present.
+fn address_attribute_value(attributes: &Attributes) -> Option<isize> {
+    attributes.0.iter().find_map(|attr| {
+        let (name, items) = attr.function()?;
+        if name.as_str() != "address" {
+            return None;
+        }
+        match items.exprs().next()? {
+            Expr::IntLiteral { value, .. } => Some(*value),
+            _ => None,
+        }
+    })
+}
+
+/// The base hover markdown for an `extern value`: its `name: type` signature and
+/// its fixed `#[address]`. Callers with a resolved layout append size facts.
+pub(crate) fn format_extern_value_hover(
+    name: &str,
+    type_: &Type,
+    attributes: &Attributes,
+) -> String {
+    let mut md = format!("**extern value** `{name}`\n\n```pyxis\n{name}: {type_}\n```\n");
+    if let Some(address) = address_attribute_value(attributes) {
+        push_facts(&mut md, &[("address", format!("`0x{address:X}`"))]);
+    }
+    md
 }
 
 /// An explicit `#[index(N)]` on a vftable function, if present.

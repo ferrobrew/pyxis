@@ -1,4 +1,4 @@
-use super::*;
+use super::{navigation::nested_items, *};
 
 use pyxis::grammar::Argument;
 
@@ -224,16 +224,36 @@ pub(crate) fn find_type_ref_in_definition<'a>(
                         }
                     }
                     TypeField::Item(_) => {
-                        // Nested item type references are handled at the top level
+                        // A nested item's own type references are found by the
+                        // recursion below (via `nested_items`).
                     }
                 }
             }
         }
-        ItemDefinitionInner::Enum(e) => return type_hit_at(&e.type_, loc),
-        ItemDefinitionInner::Bitflags(b) => return type_hit_at(&b.type_, loc),
+        // Base type of an enum/bitflags; nested items handled by the recursion below.
+        ItemDefinitionInner::Enum(e) => {
+            if let Some(found) = type_hit_at(&e.type_, loc) {
+                return Some(found);
+            }
+        }
+        ItemDefinitionInner::Bitflags(b) => {
+            if let Some(found) = type_hit_at(&b.type_, loc) {
+                return Some(found);
+            }
+        }
+        // Value / alias items carry no nested items, so return directly.
         ItemDefinitionInner::TypeAlias(ta) => return type_hit_at(&ta.target, loc),
         ItemDefinitionInner::Constant(c) => return type_hit_at(&c.type_, loc),
         ItemDefinitionInner::ExternValue(ev) => return type_hit_at(&ev.type_, loc),
+    }
+
+    // Recurse into nested items (a nested extern's pointee, a nested type's
+    // fields, a nested enum's base, …). These live in the body's item list — not
+    // `statements()` or a base type — so the arms above don't reach them.
+    for nested in nested_items(definition) {
+        if let Some(found) = find_type_ref_in_definition(nested, loc) {
+            return Some(found);
+        }
     }
 
     None

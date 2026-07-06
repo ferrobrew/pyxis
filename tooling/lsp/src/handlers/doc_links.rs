@@ -257,7 +257,7 @@ impl ServerState {
                     match &definition.inner {
                         ItemDefinitionInner::ExternValue(ev) => (
                             definition.location.span.start,
-                            format_extern_value_hover(name, &ev.type_),
+                            format_extern_value_hover(name, &ev.type_, &ev.attributes),
                         ),
                         _ => continue,
                     }

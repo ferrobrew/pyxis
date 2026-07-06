@@ -250,6 +250,37 @@ fn extern_value_and_type_hover() {
 }
 
 #[test]
+fn extern_value_hover_shows_address_and_resolves_types() {
+    // A module-level extern with a pointer type, a nested extern in a type body,
+    // and the required `#[address]` surfaced on the name hover.
+    let src = "#[address(0x100)]\npub extern g_engine: *mut Bar;\n\npub type Owner {\n    #[address(0x200)]\n    pub extern g_inst: *mut Bar,\n    pub x: u64,\n}\n\npub type Bar {\n    pub x: u64,\n}\n";
+    let st = ServerState::in_memory(&[("/proj", 8, &[("m.pyxis", src)])]);
+    let uri = ServerState::document_uri("/proj", "m.pyxis");
+    let lines: Vec<&str> = src.lines().collect();
+
+    // The name hover shows the extern's fixed address.
+    let l1 = lines[1];
+    let name_hover = hover_text(&st, &uri, 1, l1.find("g_engine").unwrap() as u32 + 1);
+    assert!(
+        name_hover.contains("**extern value** `g_engine`") && name_hover.contains("0x100"),
+        "extern name hover should show the address: got {name_hover:?}"
+    );
+
+    // The pointee type resolves on a module-level extern...
+    assert!(
+        hover_text(&st, &uri, 1, l1.find("Bar").unwrap() as u32 + 1).contains("**type** `Bar`"),
+        "module-level extern pointee should resolve"
+    );
+
+    // ...and on a nested extern inside a type body.
+    let l5 = lines[5];
+    assert!(
+        hover_text(&st, &uri, 5, l5.find("Bar").unwrap() as u32 + 1).contains("**type** `Bar`"),
+        "nested extern pointee should resolve"
+    );
+}
+
+#[test]
 fn pointer_and_array_shells() {
     let src = "pub type Foo {\n    pub x: u64,\n}\npub type T {\n    pub p: *mut Foo,\n    pub arr: [Foo; 4],\n}\n";
     let st = ServerState::in_memory(&[("/proj", 8, &[("m.pyxis", src)])]);
