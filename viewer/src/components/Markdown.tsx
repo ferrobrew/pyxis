@@ -1,10 +1,12 @@
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import ReactMarkdown, { type Components } from 'react-markdown';
+import type { PluggableList } from 'unified';
 import remarkGfm from 'remark-gfm';
 import type { JsonDocLink } from '@pyxis/types';
 import { useDocumentation } from '../contexts/DocumentationContext';
 import { buildItemUrl, buildModuleUrl } from '../utils/navigation';
+import { remarkTruncate } from './remarkTruncate';
 
 // Element styling for rendered doc-comment Markdown. Text colour and size are
 // inherited from the surrounding container, so docs blend into their context;
@@ -57,9 +59,28 @@ function normalizeShortcutLinks(markdown: string, links: JsonDocLink[]): string 
   return out;
 }
 
-/** Render a doc comment (or any prose string) as GitHub-flavored Markdown. */
-export function Markdown({ children, docLinks }: { children: string; docLinks?: JsonDocLink[] }) {
+/**
+ * Render a doc comment (or any prose string) as GitHub-flavored Markdown.
+ *
+ * Pass `truncate` (a word budget) to render a one-block summary clipped to that
+ * many words while preserving inline formatting — for table-row summaries that
+ * must stay short but still render `code`, **emphasis**, and links.
+ */
+export function Markdown({
+  children,
+  docLinks,
+  truncate,
+}: {
+  children: string;
+  docLinks?: JsonDocLink[];
+  truncate?: number;
+}) {
   const { selectedSource } = useDocumentation();
+
+  const remarkPlugins = useMemo<PluggableList>(
+    () => (truncate ? [remarkGfm, [remarkTruncate, truncate]] : [remarkGfm]),
+    [truncate]
+  );
 
   const linkMap = useMemo(() => {
     const map = new Map<string, JsonDocLink>();
@@ -73,6 +94,12 @@ export function Markdown({ children, docLinks }: { children: string; docLinks?: 
     () => ({
       ...baseComponents,
       a: ({ href, children }) => {
+        // In summary mode the whole surrounding row is itself a link, so nesting
+        // an anchor here would be invalid HTML. Render links as styled spans —
+        // still visually formatted, and the row click carries the navigation.
+        if (truncate) {
+          return <span className="text-accent">{children}</span>;
+        }
         const link = href ? linkMap.get(href) : undefined;
         if (link) {
           return (
@@ -93,11 +120,15 @@ export function Markdown({ children, docLinks }: { children: string; docLinks?: 
         );
       },
     }),
-    [linkMap, selectedSource]
+    [linkMap, selectedSource, truncate]
   );
 
   return (
-    <ReactMarkdown remarkPlugins={[remarkGfm]} components={components} urlTransform={(url) => url}>
+    <ReactMarkdown
+      remarkPlugins={remarkPlugins}
+      components={components}
+      urlTransform={(url) => url}
+    >
       {source}
     </ReactMarkdown>
   );

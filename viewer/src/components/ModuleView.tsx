@@ -46,6 +46,10 @@ function Panel({ children }: { children: React.ReactNode }) {
 
 const ROW = 'block p-3 border-b border-edge last:border-0 hover:bg-surface-2 transition-colors';
 
+// Word budget for the one-line doc summaries in the Types and Submodules
+// tables — roughly what `max-w-md` (~28rem) holds on a row before it wraps.
+const SUMMARY_WORDS = 24;
+
 function kindToItemType(kind: string): ItemType {
   if (kind === 'extern_value') return 'extern';
   if (kind === 'enum' || kind === 'bitflags' || kind === 'type_alias' || kind === 'constant')
@@ -85,8 +89,10 @@ function ItemList({ items }: ItemListProps) {
                   </div>
                 </div>
                 {item.kind.doc && (
-                  <div className="ml-4 max-w-md truncate text-sm text-fg-muted">
-                    {item.kind.doc}
+                  <div className="ml-4 max-w-md overflow-hidden text-sm text-fg-muted">
+                    <Markdown docLinks={item.kind.doc_links} truncate={SUMMARY_WORDS}>
+                      {item.kind.doc}
+                    </Markdown>
                   </div>
                 )}
               </div>
@@ -106,6 +112,7 @@ interface SubmoduleListProps {
 
 interface SubmoduleData {
   doc?: string | null;
+  doc_links?: JsonDocLink[];
 }
 
 function SubmoduleList({ submodules, parentPath }: SubmoduleListProps) {
@@ -122,7 +129,13 @@ function SubmoduleList({ submodules, parentPath }: SubmoduleListProps) {
           return (
             <Link key={name} to={buildModuleUrl(subPath, selectedSource)} className={ROW}>
               <div className="font-mono text-sm font-semibold text-kind-module">{name}</div>
-              {data.doc && <div className="mt-1 text-sm text-fg-muted">{data.doc}</div>}
+              {data.doc && (
+                <div className="mt-1 max-w-md overflow-hidden text-sm text-fg-muted">
+                  <Markdown docLinks={data.doc_links} truncate={SUMMARY_WORDS}>
+                    {data.doc}
+                  </Markdown>
+                </div>
+              )}
             </Link>
           );
         })}
