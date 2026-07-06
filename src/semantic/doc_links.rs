@@ -49,6 +49,28 @@ impl DocLinkTarget {
             }
         }
     }
+
+    /// If this link points at an extern value, its full item path — `module::name`
+    /// for a module-level one, `Parent::name` for a nested one. `None` for any
+    /// other target.
+    ///
+    /// Extern values emit as `get_<name>` accessors rather than an item named
+    /// `<name>`, so a backend can't just resolve the logical path; it needs the
+    /// value's path to compute the accessor's path (see the Rust backend's doc
+    /// link rewriting).
+    pub fn extern_value_path(&self) -> Option<ItemPath> {
+        match self {
+            DocLinkTarget::ExternValue { module, name } => {
+                Some(module.join(ItemPathSegment::from(name.clone())))
+            }
+            DocLinkTarget::Member {
+                item,
+                name,
+                kind: DocLinkMemberKind::ExternValue,
+            } => Some(item.join(ItemPathSegment::from(name.clone()))),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -60,6 +82,19 @@ pub enum DocLinkMemberKind {
     Flag,
     Constant,
     ExternValue,
+}
+
+/// The intra-doc links referenced across a module's documentation, gathered by
+/// [`DocLinkResolver::module_doc_links`] for backend rewriting.
+#[derive(Debug, Clone, Default)]
+pub struct ModuleDocLinks {
+    /// Absolute paths of every item/function/extern referenced by a link, to be
+    /// imported so rustdoc resolves them.
+    pub imports: BTreeSet<ItemPath>,
+    /// `(written link text, extern-value item path)` for each link pointing at
+    /// an extern value. The backend rewrites the link destination to the emitted
+    /// `get_<name>` accessor rather than the value's logical name.
+    pub extern_value_links: Vec<(String, ItemPath)>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -380,25 +415,26 @@ impl DocLinkResolver {
         }
     }
 
-    /// Collect the absolute paths of every item/function/extern referenced by
-    /// an intra-doc link anywhere in `module_path`'s documentation (its own
-    /// doc, its items + their members, its functions, and its extern values).
-    /// Used by the Rust backend to import them so rustdoc resolves the links.
-    pub fn module_imports(
+    /// Collect every intra-doc link referenced anywhere in `module_path`'s
+    /// documentation (its own doc, its items + their members, its functions) —
+    /// the item paths to import so rustdoc resolves them, plus the extern-value
+    /// links the Rust backend rewrites to `get_<name>` accessors. See
+    /// [`ModuleDocLinks`].
+    pub fn module_doc_links(
         &self,
         type_registry: &TypeRegistry,
         modules: &BTreeMap<ItemPath, Module>,
         module_path: &ItemPath,
-    ) -> Vec<ItemPath> {
+    ) -> ModuleDocLinks {
         let Some(module) = modules.get(module_path) else {
-            return Vec::new();
+            return ModuleDocLinks::default();
         };
         let scope = module.scope();
-        let mut imports = BTreeSet::new();
+        let mut links = ModuleDocLinks::default();
 
-        self.add_doc_imports(&scope, module.doc(), &mut imports);
+        self.add_doc_imports(&scope, module.doc(), &mut links);
         for f in module.functions() {
-            self.add_doc_imports(&scope, &f.doc, &mut imports);
+            self.add_doc_imports(&scope, &f.doc, &mut links);
         }
         // Extern values (including module-level ones) are registry items, so
         // their docs are collected by the registry walk below.
@@ -417,16 +453,16 @@ impl DocLinkResolver {
                     let type_scope: Vec<ItemPath> = std::iter::once(path.clone())
                         .chain(scope.iter().cloned())
                         .collect();
-                    self.add_doc_imports(&type_scope, &td.doc, &mut imports);
+                    self.add_doc_imports(&type_scope, &td.doc, &mut links);
                     for r in &td.regions {
-                        self.add_doc_imports(&type_scope, &r.doc, &mut imports);
+                        self.add_doc_imports(&type_scope, &r.doc, &mut links);
                     }
                     for f in &td.associated_functions {
-                        self.add_doc_imports(&type_scope, &f.doc, &mut imports);
+                        self.add_doc_imports(&type_scope, &f.doc, &mut links);
                     }
                     if let Some(v) = &td.vftable {
                         for f in &v.functions {
-                            self.add_doc_imports(&type_scope, &f.doc, &mut imports);
+                            self.add_doc_imports(&type_scope, &f.doc, &mut links);
                         }
                     }
                     // Also scan doc comments on nested items
@@ -438,72 +474,70 @@ impl DocLinkResolver {
                         {
                             match &nested_resolved.inner {
                                 ItemDefinitionInner::Type(ntd) => {
-                                    self.add_doc_imports(&type_scope, &ntd.doc, &mut imports);
+                                    self.add_doc_imports(&type_scope, &ntd.doc, &mut links);
                                 }
                                 ItemDefinitionInner::Enum(ned) => {
-                                    self.add_doc_imports(&type_scope, &ned.doc, &mut imports);
+                                    self.add_doc_imports(&type_scope, &ned.doc, &mut links);
                                     for v in &ned.variants {
-                                        self.add_doc_imports(&type_scope, &v.doc, &mut imports);
+                                        self.add_doc_imports(&type_scope, &v.doc, &mut links);
                                     }
                                 }
                                 ItemDefinitionInner::Bitflags(nbd) => {
-                                    self.add_doc_imports(&type_scope, &nbd.doc, &mut imports);
+                                    self.add_doc_imports(&type_scope, &nbd.doc, &mut links);
                                     for f in &nbd.flags {
-                                        self.add_doc_imports(&type_scope, &f.doc, &mut imports);
+                                        self.add_doc_imports(&type_scope, &f.doc, &mut links);
                                     }
                                 }
                                 ItemDefinitionInner::TypeAlias(nta) => {
-                                    self.add_doc_imports(&type_scope, &nta.doc, &mut imports);
+                                    self.add_doc_imports(&type_scope, &nta.doc, &mut links);
                                 }
                                 ItemDefinitionInner::Constant(ncd) => {
-                                    self.add_doc_imports(&type_scope, &ncd.doc, &mut imports);
+                                    self.add_doc_imports(&type_scope, &ncd.doc, &mut links);
                                 }
                                 ItemDefinitionInner::ExternValue(nev) => {
-                                    self.add_doc_imports(&type_scope, &nev.doc, &mut imports);
+                                    self.add_doc_imports(&type_scope, &nev.doc, &mut links);
                                 }
                             }
                         }
                     }
                 }
                 ItemDefinitionInner::Enum(ed) => {
-                    self.add_doc_imports(&scope, &ed.doc, &mut imports);
+                    self.add_doc_imports(&scope, &ed.doc, &mut links);
                     for v in &ed.variants {
-                        self.add_doc_imports(&scope, &v.doc, &mut imports);
+                        self.add_doc_imports(&scope, &v.doc, &mut links);
                     }
                     for f in &ed.associated_functions {
-                        self.add_doc_imports(&scope, &f.doc, &mut imports);
+                        self.add_doc_imports(&scope, &f.doc, &mut links);
                     }
                 }
                 ItemDefinitionInner::Bitflags(bd) => {
-                    self.add_doc_imports(&scope, &bd.doc, &mut imports);
+                    self.add_doc_imports(&scope, &bd.doc, &mut links);
                     for f in &bd.flags {
-                        self.add_doc_imports(&scope, &f.doc, &mut imports);
+                        self.add_doc_imports(&scope, &f.doc, &mut links);
                     }
                 }
                 ItemDefinitionInner::TypeAlias(ta) => {
-                    self.add_doc_imports(&scope, &ta.doc, &mut imports);
+                    self.add_doc_imports(&scope, &ta.doc, &mut links);
                 }
                 ItemDefinitionInner::Constant(cd) => {
-                    self.add_doc_imports(&scope, &cd.doc, &mut imports);
+                    self.add_doc_imports(&scope, &cd.doc, &mut links);
                 }
                 ItemDefinitionInner::ExternValue(ev) => {
-                    self.add_doc_imports(&scope, &ev.doc, &mut imports);
+                    self.add_doc_imports(&scope, &ev.doc, &mut links);
                 }
             }
         }
 
-        imports.into_iter().collect()
+        links
     }
 
-    fn add_doc_imports(
-        &self,
-        scope: &[ItemPath],
-        doc: &[String],
-        imports: &mut BTreeSet<ItemPath>,
-    ) {
+    fn add_doc_imports(&self, scope: &[ItemPath], doc: &[String], links: &mut ModuleDocLinks) {
         for text in extract_links(doc) {
             if let Some(target) = self.resolve(scope, &text) {
-                imports.insert(target.import_path());
+                links.imports.insert(target.import_path());
+                if let Some(value_path) = target.extern_value_path() {
+                    links.extern_value_links.push((text, value_path));
+                }
             }
         }
     }

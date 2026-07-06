@@ -2575,7 +2575,14 @@
       "category": "defined",
       "kind": {
         "type": "bitflags",
-        "doc": null,
+        "doc": " The active flag set is [`g_active`](DebugFlags::g_active).",
+        "doc_links": [
+          {
+            "text": "DebugFlags::g_active",
+            "target_kind": "item",
+            "path": "extern_values::DebugFlags::g_active"
+          }
+        ],
         "underlying_type": {
           "type": "raw",
           "path": "u32"
@@ -2587,7 +2594,7 @@
             "doc": null,
             "source": {
               "file_index": 14,
-              "line": 30
+              "line": 33
             }
           },
           {
@@ -2596,7 +2603,7 @@
             "doc": null,
             "source": {
               "file_index": 14,
-              "line": 31
+              "line": 34
             }
           }
         ],
@@ -2611,7 +2618,7 @@
       },
       "source": {
         "file_index": 14,
-        "line": 26
+        "line": 29
       }
     },
     "extern_values::DebugFlags::g_active": {
@@ -2634,7 +2641,7 @@
       },
       "source": {
         "file_index": 14,
-        "line": 28
+        "line": 31
       }
     },
     "extern_values::Engine": {
@@ -2650,7 +2657,14 @@
           {
             "visibility": "public",
             "name": "frame",
-            "doc": null,
+            "doc": " The live instance is [`g_instance`](Engine::g_instance).",
+            "doc_links": [
+              {
+                "text": "Engine::g_instance",
+                "target_kind": "item",
+                "path": "extern_values::Engine::g_instance"
+              }
+            ],
             "type_ref": {
               "type": "raw",
               "path": "u32"
@@ -2661,7 +2675,7 @@
             "is_base": false,
             "source": {
               "file_index": 14,
-              "line": 15
+              "line": 16
             }
           }
         ],
@@ -2713,7 +2727,14 @@
       "category": "defined",
       "kind": {
         "type": "enum",
-        "doc": null,
+        "doc": " The active mode is [`g_current`](RenderMode::g_current).",
+        "doc_links": [
+          {
+            "text": "RenderMode::g_current",
+            "target_kind": "item",
+            "path": "extern_values::RenderMode::g_current"
+          }
+        ],
         "underlying_type": {
           "type": "raw",
           "path": "u8"
@@ -2725,7 +2746,7 @@
             "doc": null,
             "source": {
               "file_index": 14,
-              "line": 22
+              "line": 24
             }
           },
           {
@@ -2734,7 +2755,7 @@
             "doc": null,
             "source": {
               "file_index": 14,
-              "line": 23
+              "line": 25
             }
           }
         ],
@@ -2750,7 +2771,7 @@
       },
       "source": {
         "file_index": 14,
-        "line": 18
+        "line": 20
       }
     },
     "extern_values::RenderMode::g_current": {
@@ -2773,7 +2794,7 @@
       },
       "source": {
         "file_index": 14,
-        "line": 20
+        "line": 22
       }
     },
     "extern_values::g_engine": {
@@ -2784,12 +2805,17 @@
       "category": "defined",
       "kind": {
         "type": "extern_value",
-        "doc": " The engine singleton, of type [`Engine`].",
+        "doc": " The engine singleton, of type [`Engine`]. Advances with [`g_frame_count`].",
         "doc_links": [
           {
             "text": "Engine",
             "target_kind": "item",
             "path": "extern_values::Engine"
+          },
+          {
+            "text": "g_frame_count",
+            "target_kind": "item",
+            "path": "extern_values::g_frame_count"
           }
         ],
         "value_type": {

@@ -1,7 +1,7 @@
 // Module-level extern values (globals at fixed addresses).
 #[address(0x1_000)]
 pub extern g_frame_count: u32;
-/// The engine singleton, of type [`Engine`].
+/// The engine singleton, of type [`Engine`]. Advances with [`g_frame_count`].
 #[address(0x2_000)]
 pub extern g_engine: *mut Engine;
 
@@ -12,9 +12,11 @@ pub type Engine {
     #[address(0x3_000)]
     pub extern g_instance: *mut Engine,
 
+    /// The live instance is [`g_instance`](Engine::g_instance).
     pub frame: u32,
 }
 
+/// The active mode is [`g_current`](RenderMode::g_current).
 pub enum RenderMode: u8 {
     #[address(0x4_000)]
     extern g_current: *mut RenderMode,
@@ -23,6 +25,7 @@ pub enum RenderMode: u8 {
     Deferred,
 }
 
+/// The active flag set is [`g_active`](DebugFlags::g_active).
 pub bitflags DebugFlags: u32 {
     #[address(0x5_000)]
     extern g_active: *mut DebugFlags,

@@ -10,6 +10,7 @@ namespace extern_values {
     enum class RenderMode : ::std::uint8_t;
     struct Engine;
 
+    /// The active flag set is [`g_active`](DebugFlags::g_active).
     enum class DebugFlags : ::std::uint32_t {
         WIREFRAME = 0x1,
         OVERDRAW = 0x2,
@@ -30,6 +31,7 @@ namespace extern_values {
     DebugFlags*& DebugFlags_get_g_active();
 
     struct alignas(4) Engine {
+        /// The live instance is [`g_instance`](Engine::g_instance).
         ::std::uint32_t frame;
 
         static Engine*& get_g_instance();
@@ -37,6 +39,7 @@ namespace extern_values {
     static_assert(sizeof(Engine) == 0x4);
     static_assert(alignof(Engine) == 4);
 
+    /// The active mode is [`g_current`](RenderMode::g_current).
     enum class RenderMode : ::std::uint8_t {
         Forward = 0,
         Deferred = 1,
@@ -44,7 +47,7 @@ namespace extern_values {
     static_assert(sizeof(RenderMode) == 0x1);
     RenderMode*& RenderMode_get_g_current();
 
-    /// The engine singleton, of type [`Engine`].
+    /// The engine singleton, of type [`Engine`]. Advances with [`g_frame_count`].
     Engine*& get_g_engine();
 
     ::std::uint32_t& get_g_frame_count();

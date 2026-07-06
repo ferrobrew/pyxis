@@ -1,7 +1,7 @@
 #![cfg_attr(any(), rustfmt::skip)]
 crate::__bitflags! {
-    pub struct DebugFlags : u32 { const WIREFRAME = 1usize as _; const OVERDRAW = 2usize
-    as _; }
+    #[doc = " The active flag set is [`g_active`](DebugFlags::get_g_active)."] pub struct
+    DebugFlags : u32 { const WIREFRAME = 1usize as _; const OVERDRAW = 2usize as _; }
 }
 fn _DebugFlags_size_check() {
     unsafe {
@@ -16,6 +16,7 @@ impl DebugFlags {
 }
 #[repr(C, align(4))]
 pub struct Engine {
+    /// The live instance is [`g_instance`](Engine::get_g_instance).
     pub frame: u32,
 }
 fn _Engine_size_check() {
@@ -42,6 +43,7 @@ impl std::convert::AsMut<Engine> for Engine {
 }
 #[repr(u8)]
 #[derive(PartialEq, Eq, PartialOrd, Ord, Debug)]
+/// The active mode is [`g_current`](RenderMode::get_g_current).
 pub enum RenderMode {
     Forward = 0isize as _,
     Deferred = 1isize as _,
@@ -57,7 +59,7 @@ impl RenderMode {
         unsafe { &mut *(0x4000 as *mut *mut crate::extern_values::RenderMode) }
     }
 }
-/// The engine singleton, of type [`Engine`].
+/// The engine singleton, of type [`Engine`]. Advances with [`get_g_frame_count`].
 pub unsafe fn get_g_engine() -> &'static mut *mut crate::extern_values::Engine {
     unsafe { &mut *(0x2000 as *mut *mut crate::extern_values::Engine) }
 }

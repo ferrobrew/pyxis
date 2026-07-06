@@ -128,15 +128,16 @@ pub fn write_module(
     // Compute doc link imports and nested item rewrites before rendering
     // module docs, so doc link references can be rewritten.
     let module_scope = module.scope();
-    let doc_imports = semantic_state.doc_link_resolver().module_imports(
+    let doc_links = semantic_state.doc_link_resolver().module_doc_links(
         semantic_state.type_registry(),
         semantic_state.modules(),
         key,
     );
+    let doc_imports = &doc_links.imports;
     let module_path_set: BTreeSet<ItemPath> = semantic_state.modules().keys().cloned().collect();
     let mut cross_module_imports: Vec<&ItemPath> = Vec::new();
     let mut same_module_aliases: Vec<(&ItemPath, String)> = Vec::new();
-    for p in &doc_imports {
+    for p in doc_imports {
         let declaring_len = find_module_prefix_len(p, &module_path_set);
         let declaring_module: ItemPath = p.iter().take(declaring_len).cloned().collect();
         if &declaring_module == key {
@@ -241,6 +242,15 @@ pub fn write_module(
             format!("{root}::{p}")
         };
         nested_rewrites.insert(p.to_string(), rust_path);
+    }
+
+    // Extern values emit as `get_<name>` accessors (a free fn when module-level,
+    // an inherent method when nested), so a doc link written against the value's
+    // logical name won't resolve. Rewrite each such link's destination to the
+    // accessor's Rust path, reusing the same accessor naming the emitter uses.
+    for (text, value_path) in &doc_links.extern_value_links {
+        let rust_path = extern_value_accessor_doc_path(value_path, key, &module_path_set, prefix);
+        nested_rewrites.insert(text.clone(), rust_path);
     }
 
     // Generate `use FlatName as LeafName;` aliases for same-module nested
@@ -463,6 +473,7 @@ fn build_item(
                 ev,
                 options.rust_module_prefix.as_ref(),
                 module_paths,
+                nested_rewrites,
             ),
         },
         ItemCategory::Predefined => Ok(quote! {}),
@@ -762,7 +773,7 @@ fn build_type(
     let nested_const_impls = build_nested_const_impls(type_registry, path, module_paths);
     // Emit nested extern values as associated `get_*` accessors in an impl block
     let nested_extern_value_impls =
-        build_nested_extern_value_impls(type_registry, path, module_paths);
+        build_nested_extern_value_impls(type_registry, path, module_paths, nested_rewrites);
 
     Ok(quote! {
         #derives
@@ -885,7 +896,7 @@ fn build_enum(
     let nested_const_impls = build_nested_const_impls(type_registry, path, module_paths);
     // Emit nested extern values as associated `get_*` accessors in an impl block
     let nested_extern_value_impls =
-        build_nested_extern_value_impls(type_registry, path, module_paths);
+        build_nested_extern_value_impls(type_registry, path, module_paths, nested_rewrites);
 
     Ok(quote! {
         #[repr(#syn_type)]
@@ -973,7 +984,7 @@ fn build_bitflags(
     let nested_const_impls = build_nested_const_impls(type_registry, path, module_paths);
     // Emit nested extern values as associated `get_*` accessors in an impl block
     let nested_extern_value_impls =
-        build_nested_extern_value_impls(type_registry, path, module_paths);
+        build_nested_extern_value_impls(type_registry, path, module_paths, nested_rewrites);
 
     Ok(quote! {
         crate::__bitflags! {
@@ -1267,6 +1278,14 @@ fn build_function(
     })
 }
 
+/// The identifier of an extern value's accessor. Both the accessor emission
+/// (module-level free fn and nested associated fn) and the doc-link rewriting go
+/// through this, so a doc link to an extern value resolves to the exact name the
+/// accessor is emitted under.
+fn extern_value_accessor_name(value_name: &str) -> String {
+    format!("get_{value_name}")
+}
+
 /// Emit a module-level extern value as a freestanding `get_<name>()` accessor
 /// over its fixed address.
 fn build_extern_value(
@@ -1275,13 +1294,14 @@ fn build_extern_value(
     ev: &SemanticExternValueDefinition,
     prefix: Option<&ItemPath>,
     module_paths: &BTreeSet<ItemPath>,
+    nested_rewrites: &HashMap<String, String>,
 ) -> Result<proc_macro2::TokenStream> {
     let name = flatten_type_name(path, module_paths);
     let visibility = visibility_to_tokens(visibility);
-    let function_ident = quote::format_ident!("get_{}", name);
+    let function_ident = str_to_ident(&extern_value_accessor_name(&name));
     let type_ = sa_type_to_syn_type(&ev.type_, prefix, Some(module_paths))?;
     let address = hex_literal(ev.address);
-    let doc = doc_to_tokens(false, &ev.doc, None);
+    let doc = doc_to_tokens(false, &ev.doc, Some(nested_rewrites));
 
     Ok(quote! {
         #doc
@@ -1299,6 +1319,7 @@ fn build_nested_extern_value_impls(
     type_registry: &TypeRegistry,
     parent_path: &ItemPath,
     module_paths: &BTreeSet<ItemPath>,
+    nested_rewrites: &HashMap<String, String>,
 ) -> Option<proc_macro2::TokenStream> {
     use ItemDefinitionInner as IDI;
 
@@ -1316,13 +1337,13 @@ fn build_nested_extern_value_impls(
         };
         if let IDI::ExternValue(ev) = &resolved.inner {
             let value_name = item_path.last().map(|s| s.as_str()).unwrap_or_default();
-            let function_ident = quote::format_ident!("get_{}", value_name);
+            let function_ident = str_to_ident(&extern_value_accessor_name(value_name));
             let type_ = match sa_type_to_syn_type(&ev.type_, None, Some(module_paths)) {
                 Ok(t) => t,
                 Err(_) => continue,
             };
             let address = hex_literal(ev.address);
-            let doc = doc_to_tokens(false, &ev.doc, None);
+            let doc = doc_to_tokens(false, &ev.doc, Some(nested_rewrites));
 
             items.push(quote! {
                 #doc
@@ -1372,6 +1393,49 @@ fn flatten_type_name(path: &ItemPath, module_paths: &BTreeSet<ItemPath>) -> Stri
         .map(|s| s.as_str())
         .collect::<Vec<_>>()
         .join("_")
+}
+
+/// The rustdoc path of an extern value's accessor, for rewriting a doc link that
+/// points at the value. `value_path` is the extern value's item path
+/// (`module::[Type::…::]name`); the accessor is `get_<name>` — a free fn when
+/// module-level, an inherent method when nested. Enclosing type segments are
+/// flattened (`Outer::Inner` → `Outer_Inner`) and, when the value lives in
+/// another module, the path is absolutized to `crate::…` — mirroring the
+/// nested-item rewrites — while the trailing `get_<name>` stays its own segment
+/// so rustdoc resolves it as a function / method.
+fn extern_value_accessor_doc_path(
+    value_path: &ItemPath,
+    current_module: &ItemPath,
+    module_paths: &BTreeSet<ItemPath>,
+    prefix: Option<&ItemPath>,
+) -> String {
+    let module_len = find_module_prefix_len(value_path, module_paths);
+    let declaring_module: ItemPath = value_path.iter().take(module_len).cloned().collect();
+    let leaf = value_path.last().map(|s| s.as_str()).unwrap_or_default();
+    let accessor = extern_value_accessor_name(leaf);
+    // Type segments between the module prefix and the value's own leaf (empty for
+    // a module-level extern value).
+    let type_count = value_path.len().saturating_sub(module_len + 1);
+    let type_segments: Vec<&str> = value_path
+        .iter()
+        .skip(module_len)
+        .take(type_count)
+        .map(|s| s.as_str())
+        .collect();
+
+    let mut segments: Vec<String> = Vec::new();
+    if &declaring_module != current_module {
+        segments.push(match prefix {
+            Some(prefix) => format!("crate::{prefix}"),
+            None => "crate".to_string(),
+        });
+        segments.extend(declaring_module.iter().map(|s| s.as_str().to_string()));
+    }
+    if !type_segments.is_empty() {
+        segments.push(type_segments.join("_"));
+    }
+    segments.push(accessor);
+    segments.join("::")
 }
 
 /// Find the length of the longest module path prefix of `path`.
