@@ -14,8 +14,9 @@ use crate::semantic::{
     types::{
         Argument, BitflagField, BitflagsDefinition, CallingConvention,
         ConstDefinition as SemanticConstDefinition, ConstValue, EnumDefinition, EnumVariant,
-        ExternValue, Function, FunctionBody, ItemCategory, ItemDefinition, ItemDefinitionInner,
-        Region, TypeAliasDefinition, TypeDefinition, TypeVftable, Visibility,
+        ExternValueDefinition as SemanticExternValueDefinition, Function, FunctionBody,
+        ItemCategory, ItemDefinition, ItemDefinitionInner, Region, TypeAliasDefinition,
+        TypeDefinition, TypeVftable, Visibility,
     },
 };
 
@@ -45,7 +46,10 @@ use crate::semantic::{
 ///   render the splice on the owning type's page instead of the module page.
 /// - v8: added `Constant` item kind with `JsonConstValue` for int/float/
 ///   string/enum-value constants.
-pub const CURRENT_SCHEMA_VERSION: u32 = 8;
+/// - v9: extern values are item pages (`ExternValue` item kind) instead of a
+///   per-module `extern_values` array; nested extern values appear under their
+///   parent type's `nested_items`.
+pub const CURRENT_SCHEMA_VERSION: u32 = 9;
 
 /// Top-level JSON documentation structure
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
@@ -93,8 +97,6 @@ pub struct JsonModule {
     /// Child modules
     #[specta(inline)]
     pub submodules: BTreeMap<String, JsonModule>,
-    /// Extern values (global variables)
-    pub extern_values: Vec<JsonExternValue>,
     /// Freestanding functions
     pub functions: Vec<JsonFunction>,
     /// Backend configurations (prologue/epilogue for code generation)
@@ -174,13 +176,14 @@ impl JsonDocLink {
                 path: path.to_string(),
                 anchor: None,
             },
-            // A nested constant is emitted as its own item page in the viewer
-            // (unlike Rust, where it's an associated const), so point the link
-            // at the constant's own path rather than an anchor on its parent.
+            // A nested constant or extern value is emitted as its own item page
+            // in the viewer (unlike Rust, where they're associated members), so
+            // point the link at the value's own path rather than an anchor on
+            // its parent.
             T::Member {
                 item,
                 name,
-                kind: K::Constant,
+                kind: K::Constant | K::ExternValue,
             } => JsonDocLink {
                 text,
                 target_kind: JsonDocLinkTargetKind::Item,
@@ -196,7 +199,7 @@ impl JsonDocLink {
                     K::Field => format!("field-{name}"),
                     K::Variant => format!("variant-{name}"),
                     K::Flag => format!("flag-{name}"),
-                    K::Constant => unreachable!("handled above"),
+                    K::Constant | K::ExternValue => unreachable!("handled above"),
                 };
                 JsonDocLink {
                     text,
@@ -211,11 +214,15 @@ impl JsonDocLink {
                 path: module.to_string(),
                 anchor: Some(format!("func-{name}")),
             },
+            // A module-level extern value is its own item page at `module::name`,
+            // so link to the item rather than a module anchor.
             T::ExternValue { module, name } => JsonDocLink {
                 text,
-                target_kind: JsonDocLinkTargetKind::Module,
-                path: module.to_string(),
-                anchor: Some(format!("extval-{name}")),
+                target_kind: JsonDocLinkTargetKind::Item,
+                path: module
+                    .join(crate::grammar::ItemPathSegment::from(name.as_str()))
+                    .to_string(),
+                anchor: None,
             },
         }
     }
@@ -288,6 +295,7 @@ pub enum JsonItemKind {
     Bitflags(JsonBitflagsDefinition),
     TypeAlias(JsonTypeAliasDefinition),
     Constant(JsonConstantDefinition),
+    ExternValue(JsonExternValueDefinition),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
@@ -537,24 +545,19 @@ pub enum JsonArgument {
     Field { name: String, type_ref: JsonType },
 }
 
+/// An `extern` value item (a global at a fixed address). Emitted as an item
+/// page like any other definition; `visibility`, `path`, and `source` live on
+/// the enclosing [`JsonItem`].
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
-pub struct JsonExternValue {
-    /// Visibility
-    pub visibility: JsonVisibility,
-    /// Variable name
-    pub name: String,
-    /// Type
-    pub type_ref: JsonType,
-    /// Memory address
-    pub address: usize,
+pub struct JsonExternValueDefinition {
     /// Documentation
-    #[serde(default)]
     pub doc: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub doc_links: Vec<JsonDocLink>,
-    /// Source location (file and line)
-    #[serde(default)]
-    pub source: Option<JsonSourceLocation>,
+    /// The type annotation of the extern value
+    pub value_type: JsonType,
+    /// Memory address
+    pub address: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
@@ -1106,6 +1109,9 @@ fn convert_item(
             ItemDefinitionInner::Constant(cd) => {
                 JsonItemKind::Constant(convert_const_definition(cd, cx))
             }
+            ItemDefinitionInner::ExternValue(ev) => {
+                JsonItemKind::ExternValue(convert_extern_value_definition(ev, cx))
+            }
         };
 
     // Build source location for defined items (not predefined/internal)
@@ -1127,16 +1133,16 @@ fn convert_item(
     })
 }
 
-fn convert_extern_value(ev: &ExternValue, cx: &DocCx) -> JsonExternValue {
+fn convert_extern_value_definition(
+    ev: &SemanticExternValueDefinition,
+    cx: &DocCx,
+) -> JsonExternValueDefinition {
     let (doc, doc_links) = cx.convert(&ev.doc);
-    JsonExternValue {
-        visibility: ev.visibility.into(),
-        name: ev.name.clone(),
-        type_ref: convert_type(&ev.type_),
-        address: ev.address,
+    JsonExternValueDefinition {
         doc,
         doc_links,
-        source: convert_location(&ev.location),
+        value_type: convert_type(&ev.type_),
+        address: ev.address,
     }
 }
 
@@ -1194,11 +1200,6 @@ fn build_module_hierarchy(semantic_state: &SemanticOutput) -> BTreeMap<String, J
             })
             .map(|item| item.path.to_string())
             .collect();
-        let extern_values: Vec<JsonExternValue> = module
-            .extern_values
-            .iter()
-            .map(|e| convert_extern_value(e, &cx))
-            .collect();
         let functions: Vec<JsonFunction> = module
             .functions()
             .iter()
@@ -1224,7 +1225,6 @@ fn build_module_hierarchy(semantic_state: &SemanticOutput) -> BTreeMap<String, J
             doc_links,
             items,
             submodules: BTreeMap::new(),
-            extern_values,
             functions,
             backends,
             source: convert_location(module.location()),
@@ -1247,7 +1247,6 @@ fn build_module_hierarchy(semantic_state: &SemanticOutput) -> BTreeMap<String, J
                     doc_links: vec![],
                     items: vec![],
                     submodules: BTreeMap::new(),
-                    extern_values: vec![],
                     functions: vec![],
                     backends: BTreeMap::new(),
                     source: None,
@@ -1270,7 +1269,6 @@ fn build_module_hierarchy(semantic_state: &SemanticOutput) -> BTreeMap<String, J
                             doc_links: vec![],
                             items: vec![],
                             submodules: BTreeMap::new(),
-                            extern_values: vec![],
                             functions: vec![],
                             backends: BTreeMap::new(),
                             source: None,

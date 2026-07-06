@@ -55,7 +55,9 @@ export function searchDocumentation(doc: JsonDocumentation, query: string): Sear
     let itemScore = scoreName(name, q);
     if (itemScore === 0 && path.toLowerCase().includes(q)) itemScore = 40;
     if (itemScore === 0 && item.kind.doc && item.kind.doc.toLowerCase().includes(q)) itemScore = 20;
-    push(name, parentPath(path), item.kind.type as SearchKind, itemScore, itemTarget);
+    const itemKind: SearchKind =
+      item.kind.type === 'extern_value' ? 'extern' : (item.kind.type as SearchKind);
+    push(name, parentPath(path), itemKind, itemScore, itemTarget);
 
     const kind = item.kind;
     if (kind.type === 'type') {
@@ -109,12 +111,6 @@ export function searchDocumentation(doc: JsonDocumentation, query: string): Sear
       push(fn.name, modulePath, 'function', scoreName(fn.name, q), {
         ...target,
         anchor: `func-${fn.name}`,
-      });
-    }
-    for (const ext of module.extern_values) {
-      push(ext.name, modulePath, 'extern', scoreName(ext.name, q), {
-        ...target,
-        anchor: `extval-${ext.name}`,
       });
     }
     for (const [subName, sub] of Object.entries(module.submodules)) {

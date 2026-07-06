@@ -228,6 +228,9 @@ function ItemTree({ itemPath }: ItemTreeProps) {
     itemType = 'bitflags';
   } else if (item.kind.type === 'constant') {
     itemType = 'constant';
+  } else if (item.kind.type === 'extern_value') {
+    Icon = GlobalIcon;
+    itemType = 'extern';
   }
 
   // Get public members for this item
@@ -385,11 +388,7 @@ function ModuleTree({ name, module, path, level }: ModuleTreeProps) {
   }, [activeAnchor, isOpen]);
 
   const hasSubmodules = module.submodules && Object.keys(module.submodules).length > 0;
-  const hasContent =
-    hasSubmodules ||
-    module.items.length > 0 ||
-    module.functions.length > 0 ||
-    module.extern_values.length > 0;
+  const hasContent = hasSubmodules || module.items.length > 0 || module.functions.length > 0;
 
   const handleModuleClick = () => {
     if (hasContent) {
@@ -430,23 +429,6 @@ function ModuleTree({ name, module, path, level }: ModuleTreeProps) {
                   <ChevronSlot />
                   <FunctionIcon />
                   <span className="truncate">{func.name}</span>
-                </Link>
-              );
-            })}
-
-          {module.extern_values.length > 0 &&
-            module.extern_values.map((extVal, idx) => {
-              const active = activeAnchor === `extval-${extVal.name}`;
-              return (
-                <Link
-                  key={`ext-${idx}`}
-                  ref={active ? memberRef : undefined}
-                  to={`${buildModuleUrl(path, selectedSource)}##extval-${extVal.name}`}
-                  className={`${ROW} text-sm ${active ? 'bg-accent-soft text-fg' : `${getItemTypeColor('extern')} ${getItemTypeHoverColor('extern')}`}`}
-                >
-                  <ChevronSlot />
-                  <GlobalIcon />
-                  <span className="truncate">{extVal.name}</span>
                 </Link>
               );
             })}

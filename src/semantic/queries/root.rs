@@ -41,11 +41,7 @@ pub fn analyze<'db>(
 ) -> SemanticAnalysis<'db> {
     use crate::{
         semantic::{
-            attribute, doc_links,
-            error::{AttributeName, ExternKind, Result},
-            module::Module as SemanticModule,
-            types::{ExternValue, PredefinedItem, Type, Visibility},
-            validation,
+            doc_links, module::Module as SemanticModule, types::PredefinedItem, validation,
         },
         span::HasLocation,
     };
@@ -166,6 +162,36 @@ pub fn analyze<'db>(
     // than dropped, so the offending module isn't silently elided.
     let mut module_errors: Vec<SemanticError> = Vec::new();
 
+    // Reject value items (`const` / `extern` value) nested inside a generic
+    // type: the backends can't emit a correctly-qualified `impl<T> Parent<T>`
+    // accessor for them, and a fixed-address / compile-time value scoped under a
+    // per-instantiation generic is semantically murky. Nesting types / enums /
+    // bitflags inside a generic is fine.
+    for item_path in decl_registry.item_paths() {
+        let Some(def) = decl_registry.get_definition(item_path) else {
+            continue;
+        };
+        if !matches!(
+            def.inner,
+            crate::grammar::ItemDefinitionInner::Constant(_)
+                | crate::grammar::ItemDefinitionInner::ExternValue(_)
+        ) {
+            continue;
+        }
+        let Some(parent) = item_path.parent() else {
+            continue;
+        };
+        if let Some(parent_def) = decl_registry.get_definition(&parent)
+            && !parent_def.type_parameters.is_empty()
+        {
+            module_errors.push(SemanticError::ValueItemInGenericParent {
+                item_path: item_path.clone(),
+                parent_path: parent,
+                location: def.declaration_location,
+            });
+        }
+    }
+
     // Track module paths produced by the parsed source files so that two
     // distinct files reducing to the same module path (e.g. `world.pyxis` and
     // `world/mod.pyxis` -> `world`) surface a hard `DuplicateModule` error
@@ -192,56 +218,20 @@ pub fn analyze<'db>(
             continue;
         }
 
-        // Parse extern values
-        let extern_values: Result<Vec<ExternValue>> = module
-            .extern_values()
-            .map(|ev| {
-                let name = &ev.name;
-                let mut address = None;
-                for attribute in &ev.attributes {
-                    let Some((ident, items)) = attribute.function() else {
-                        continue;
-                    };
-                    if let Some(attr_address) =
-                        attribute::parse_address(ident, items, attribute.location())?
-                    {
-                        address = Some(attr_address);
-                    }
-                }
-                let address = address.ok_or_else(|| SemanticError::MissingAttribute {
-                    attribute_name: AttributeName::Address,
-                    extern_kind: ExternKind::Value,
-                    item_path: module_path.join(name.as_str().into()),
-                    location: ev.location,
-                })?;
-                Ok(ExternValue {
-                    visibility: Visibility::from(ev.visibility),
-                    name: name.as_str().to_owned(),
-                    type_: Type::Unresolved(ev.type_.clone()),
-                    address,
-                    doc: ev.doc_comments.clone(),
-                    location: ev.location,
-                })
-            })
-            .collect();
+        // Extern values are registry items (`ItemDefinitionInner::ExternValue`)
+        // built via the resolution pipeline like any other item, so a module
+        // only carries its impls and backends.
+        let impls: Vec<_> = module.impls().cloned().collect();
+        let backends: Vec<_> = module.backends().cloned().collect();
 
-        match extern_values {
-            Ok(ev) => {
-                let impls: Vec<_> = module.impls().cloned().collect();
-                let backends: Vec<_> = module.backends().cloned().collect();
-
-                match SemanticModule::new(
-                    module_path.clone(),
-                    module.as_ref().clone(),
-                    ev,
-                    &impls,
-                    &backends,
-                ) {
-                    Ok(m) => {
-                        modules.insert(module_path, m);
-                    }
-                    Err(e) => module_errors.push(e),
-                }
+        match SemanticModule::new(
+            module_path.clone(),
+            module.as_ref().clone(),
+            &impls,
+            &backends,
+        ) {
+            Ok(m) => {
+                modules.insert(module_path, m);
             }
             Err(e) => module_errors.push(e),
         }
@@ -350,14 +340,7 @@ pub fn analyze<'db>(
         return bail(&type_registry, &modules, semantic_errors);
     }
 
-    // 1. Resolve extern values
-    for module in modules.values_mut() {
-        if let Err(e) = module.resolve_extern_values(&mut type_registry) {
-            semantic_errors.push(e);
-        }
-    }
-
-    // 2. Resolve freestanding functions
+    // Resolve freestanding functions
     for module in modules.values_mut() {
         if let Err(e) = module.resolve_functions(&type_registry) {
             semantic_errors.push(e);

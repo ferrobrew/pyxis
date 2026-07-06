@@ -28,6 +28,7 @@ pub enum SigKind {
     Bitflags,
     TypeAlias,
     Constant,
+    ExternValue,
 }
 
 /// A declared item's stable signature: its kind and generic arity.
@@ -114,6 +115,7 @@ impl NameIndex {
                 grammar::ItemDefinitionInner::Bitflags(_) => SigKind::Bitflags,
                 grammar::ItemDefinitionInner::TypeAlias(_) => SigKind::TypeAlias,
                 grammar::ItemDefinitionInner::Constant(_) => SigKind::Constant,
+                grammar::ItemDefinitionInner::ExternValue(_) => SigKind::ExternValue,
             };
             self.items.insert(
                 path.clone(),
@@ -136,6 +138,7 @@ impl NameIndex {
                             grammar::ItemDefinitionInner::Bitflags(_) => SigKind::Bitflags,
                             grammar::ItemDefinitionInner::TypeAlias(_) => SigKind::TypeAlias,
                             grammar::ItemDefinitionInner::Constant(_) => SigKind::Constant,
+                            grammar::ItemDefinitionInner::ExternValue(_) => SigKind::ExternValue,
                         };
                         self.items.insert(
                             nested_path.clone(),
@@ -171,6 +174,9 @@ impl NameIndex {
                                         }
                                         grammar::ItemDefinitionInner::Constant(_) => {
                                             SigKind::Constant
+                                        }
+                                        grammar::ItemDefinitionInner::ExternValue(_) => {
+                                            SigKind::ExternValue
                                         }
                                     };
                                     self.items.insert(
@@ -209,6 +215,9 @@ impl NameIndex {
                                         grammar::ItemDefinitionInner::Constant(_) => {
                                             SigKind::Constant
                                         }
+                                        grammar::ItemDefinitionInner::ExternValue(_) => {
+                                            SigKind::ExternValue
+                                        }
                                     };
                                     self.items.insert(
                                         nested2_path.clone(),
@@ -243,6 +252,7 @@ impl NameIndex {
                             grammar::ItemDefinitionInner::Bitflags(_) => SigKind::Bitflags,
                             grammar::ItemDefinitionInner::TypeAlias(_) => SigKind::TypeAlias,
                             grammar::ItemDefinitionInner::Constant(_) => SigKind::Constant,
+                            grammar::ItemDefinitionInner::ExternValue(_) => SigKind::ExternValue,
                         };
                         self.items.insert(
                             nested_path.clone(),
@@ -274,6 +284,7 @@ impl NameIndex {
                             grammar::ItemDefinitionInner::Bitflags(_) => SigKind::Bitflags,
                             grammar::ItemDefinitionInner::TypeAlias(_) => SigKind::TypeAlias,
                             grammar::ItemDefinitionInner::Constant(_) => SigKind::Constant,
+                            grammar::ItemDefinitionInner::ExternValue(_) => SigKind::ExternValue,
                         };
                         self.items.insert(
                             nested_path.clone(),
@@ -342,6 +353,7 @@ impl NameIndex {
                         grammar::ItemDefinitionInner::Bitflags(_) => SigKind::Bitflags,
                         grammar::ItemDefinitionInner::TypeAlias(_) => SigKind::TypeAlias,
                         grammar::ItemDefinitionInner::Constant(_) => SigKind::Constant,
+                        grammar::ItemDefinitionInner::ExternValue(_) => SigKind::ExternValue,
                     };
                     self.items.insert(
                         nested_path.clone(),
@@ -373,6 +385,9 @@ impl NameIndex {
                                         SigKind::TypeAlias
                                     }
                                     grammar::ItemDefinitionInner::Constant(_) => SigKind::Constant,
+                                    grammar::ItemDefinitionInner::ExternValue(_) => {
+                                        SigKind::ExternValue
+                                    }
                                 };
                                 self.items.insert(
                                     nested2_path.clone(),
@@ -405,6 +420,9 @@ impl NameIndex {
                                         SigKind::TypeAlias
                                     }
                                     grammar::ItemDefinitionInner::Constant(_) => SigKind::Constant,
+                                    grammar::ItemDefinitionInner::ExternValue(_) => {
+                                        SigKind::ExternValue
+                                    }
                                 };
                                 self.items.insert(
                                     nested2_path.clone(),

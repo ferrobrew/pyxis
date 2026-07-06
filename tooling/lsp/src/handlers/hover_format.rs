@@ -74,6 +74,7 @@ pub(crate) fn format_type_hover(definition: &ItemDefinition) -> String {
         ItemDefinitionInner::Bitflags(_) => "bitflags",
         ItemDefinitionInner::TypeAlias(_) => "type alias",
         ItemDefinitionInner::Constant(_) => "const",
+        ItemDefinitionInner::ExternValue(_) => "extern",
     };
     let mut md = format!("**{}** `{}`\n\n", kind, name);
 
@@ -107,6 +108,10 @@ pub(crate) fn format_type_hover(definition: &ItemDefinition) -> String {
         if let Expr::IntLiteral { value, .. } = &cd.expr {
             md.push_str(&format!("\n{}\n", format_int_reprs(*value as i128)));
         }
+    }
+
+    if let ItemDefinitionInner::ExternValue(ev) = &definition.inner {
+        md.push_str(&format!("`{}: {}`\n", name, ev.type_));
     }
 
     md
@@ -321,6 +326,7 @@ pub(crate) fn attribute_at<'a>(
                     ItemDefinitionInner::Bitflags(b) => &b.attributes,
                     ItemDefinitionInner::TypeAlias(ta) => &ta.attributes,
                     ItemDefinitionInner::Constant(c) => &c.attributes,
+                    ItemDefinitionInner::ExternValue(ev) => &ev.attributes,
                 };
                 if let Some(hit) = find(inner_attrs) {
                     return Some(hit);
@@ -356,6 +362,7 @@ pub(crate) fn attribute_at<'a>(
                     }
                     ItemDefinitionInner::TypeAlias(_) => {}
                     ItemDefinitionInner::Constant(_) => {}
+                    ItemDefinitionInner::ExternValue(_) => {}
                 }
             }
             ModuleItem::Impl { impl_block } => {
@@ -372,11 +379,6 @@ pub(crate) fn attribute_at<'a>(
             }
             ModuleItem::Function { function } => {
                 if let Some(hit) = find(&function.attributes) {
-                    return Some(hit);
-                }
-            }
-            ModuleItem::ExternValue { extern_value } => {
-                if let Some(hit) = find(&extern_value.attributes) {
                     return Some(hit);
                 }
             }
@@ -534,10 +536,32 @@ pub(crate) fn format_function_hover(f: &Function) -> String {
     md
 }
 
-/// The base hover markdown for an `extern value` (its `name: type` signature).
-/// Callers with a resolved layout append size facts.
-pub(crate) fn format_extern_value_hover(name: &str, type_: &Type) -> String {
-    format!("**extern value** `{name}`\n\n```pyxis\n{name}: {type_}\n```\n")
+/// The `#[address(N)]` value on an extern value's attributes, if present.
+fn address_attribute_value(attributes: &Attributes) -> Option<isize> {
+    attributes.0.iter().find_map(|attr| {
+        let (name, items) = attr.function()?;
+        if name.as_str() != "address" {
+            return None;
+        }
+        match items.exprs().next()? {
+            Expr::IntLiteral { value, .. } => Some(*value),
+            _ => None,
+        }
+    })
+}
+
+/// The base hover markdown for an `extern value`: its `name: type` signature and
+/// its fixed `#[address]`. Callers with a resolved layout append size facts.
+pub(crate) fn format_extern_value_hover(
+    name: &str,
+    type_: &Type,
+    attributes: &Attributes,
+) -> String {
+    let mut md = format!("**extern value** `{name}`\n\n```pyxis\n{name}: {type_}\n```\n");
+    if let Some(address) = address_attribute_value(attributes) {
+        push_facts(&mut md, &[("address", format!("`0x{address:X}`"))]);
+    }
+    md
 }
 
 /// An explicit `#[index(N)]` on a vftable function, if present.

@@ -3,10 +3,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::{
     grammar::{self, ItemPath},
     semantic::{
-        error::{Result, SemanticError, TypeResolutionContext},
+        error::Result,
         function::{self, Function},
-        type_registry::{TypeLookupResult, TypeRegistry},
-        types::{Backend, BackendSplice, ExternValue, ItemDefinition, Type},
+        type_registry::TypeRegistry,
+        types::{Backend, BackendSplice, ItemDefinition},
     },
     span::{HasLocation, ItemLocation},
 };
@@ -36,7 +36,6 @@ pub struct Module {
     pub(crate) path: ItemPath,
     pub(crate) ast: grammar::Module,
     pub(crate) definition_paths: BTreeSet<ItemPath>,
-    pub(crate) extern_values: Vec<ExternValue>,
     pub(crate) functions: Vec<Function>,
     pub(crate) impls: BTreeMap<ItemPath, Vec<grammar::FunctionBlock>>,
     pub(crate) backends: BTreeMap<crate::Backend, Vec<Backend>>,
@@ -52,7 +51,6 @@ impl Default for Module {
             path: ItemPath::empty(),
             ast: Default::default(),
             definition_paths: Default::default(),
-            extern_values: Default::default(),
             functions: Default::default(),
             impls: Default::default(),
             backends: Default::default(),
@@ -77,7 +75,6 @@ impl Module {
     pub(crate) fn new(
         path: ItemPath,
         ast: grammar::Module,
-        extern_values: Vec<ExternValue>,
         impls: &[grammar::FunctionBlock],
         grammar_backends: &[grammar::Backend],
     ) -> Result<Self> {
@@ -139,7 +136,6 @@ impl Module {
             path,
             ast,
             definition_paths: BTreeSet::new(),
-            extern_values,
             functions: vec![],
             impls,
             backends,
@@ -223,31 +219,6 @@ impl Module {
                 }
             }))
             .collect()
-    }
-
-    pub(crate) fn resolve_extern_values(&mut self, type_registry: &mut TypeRegistry) -> Result<()> {
-        let scope = self.scope();
-
-        for ev in &mut self.extern_values {
-            if let Type::Unresolved(type_ref) = &ev.type_ {
-                ev.type_ = match type_registry.resolve_grammar_type(&scope, type_ref, &[]) {
-                    TypeLookupResult::Found(t) => t,
-                    TypeLookupResult::NotYetResolved
-                    | TypeLookupResult::NotFound { .. }
-                    | TypeLookupResult::PrivateAccess { .. } => {
-                        return Err(SemanticError::TypeResolutionFailed {
-                            type_: type_ref.clone(),
-                            resolution_context: TypeResolutionContext::ExternValue {
-                                extern_name: ev.name.clone(),
-                            },
-                            location: *type_ref.location(),
-                        });
-                    }
-                };
-            }
-        }
-
-        Ok(())
     }
 
     pub(crate) fn resolve_functions(&mut self, type_registry: &TypeRegistry) -> Result<()> {

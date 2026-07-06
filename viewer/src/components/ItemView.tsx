@@ -35,6 +35,7 @@ const KIND_KEYWORD: Record<string, string> = {
   bitflags: 'bitflags',
   type_alias: 'type',
   constant: 'const',
+  extern_value: 'extern',
 };
 
 // Quiet, typographic doc block. Spacing is owned by the header group, so this
@@ -178,6 +179,7 @@ function NestedItemsList({
           else if (item!.kind.type === 'bitflags') itemType = 'bitflags';
           else if (item!.kind.type === 'type_alias') itemType = 'type_alias';
           else if (item!.kind.type === 'constant') itemType = 'constant';
+          else if (item!.kind.type === 'extern_value') itemType = 'extern';
           return (
             <Link
               key={path}
@@ -465,6 +467,7 @@ export function ItemView() {
   else if (item.kind.type === 'bitflags') itemType = 'bitflags';
   else if (item.kind.type === 'type_alias') itemType = 'type_alias';
   else if (item.kind.type === 'constant') itemType = 'constant';
+  else if (item.kind.type === 'extern_value') itemType = 'extern';
 
   const name = decodedPath.split('::').pop() || decodedPath;
   const isExtern = item.category === 'extern';
@@ -483,8 +486,14 @@ export function ItemView() {
   const aliasTarget = item.kind.type === 'type_alias' ? item.kind.target : null;
   const constValue = item.kind.type === 'constant' ? item.kind.value : null;
   const constValueType = item.kind.type === 'constant' ? item.kind.value_type : null;
+  const externValueType = item.kind.type === 'extern_value' ? item.kind.value_type : null;
+  const externAddress = item.kind.type === 'extern_value' ? item.kind.address : null;
   const singleton =
-    item.kind.type !== 'type_alias' && item.kind.type !== 'constant' ? item.kind.singleton : null;
+    item.kind.type !== 'type_alias' &&
+    item.kind.type !== 'constant' &&
+    item.kind.type !== 'extern_value'
+      ? item.kind.singleton
+      : null;
 
   const toc: TocEntry[] = [];
   const k = item.kind;
@@ -559,11 +568,26 @@ export function ItemView() {
                     <span className="text-fg-muted">;</span>
                   </>
                 )}
+                {externValueType && (
+                  <>
+                    <span className="text-fg-muted">: </span>
+                    <TypeRef type={externValueType} currentModule={modulePath} />
+                    <span className="text-fg-muted">;</span>
+                  </>
+                )}
               </h1>
               {singleton != null && (
                 <CopyButton
                   value={`0x${singleton.toString(16)}`}
                   title="Copy singleton address"
+                  label="copy addr"
+                  className="mt-1 opacity-0 group-hover:opacity-100"
+                />
+              )}
+              {externAddress != null && (
+                <CopyButton
+                  value={`0x${externAddress.toString(16)}`}
+                  title="Copy address"
                   label="copy addr"
                   className="mt-1 opacity-0 group-hover:opacity-100"
                 />

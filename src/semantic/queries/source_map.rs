@@ -89,10 +89,6 @@ pub fn file_type_references<'db>(
             ModuleItem::Function { function } => {
                 fn_sig_type_spans(function, &scope, index, tokens, &mut references)
             }
-            // `extern name: Type;` — the referenced type.
-            ModuleItem::ExternValue { extern_value } => {
-                type_ref_spans(&extern_value.type_, &scope, index, tokens, &mut references)
-            }
             // `backend` blocks: their `use` trees and `for <Type>` clauses.
             ModuleItem::Backend { backend } => {
                 for tree in &backend.uses {
@@ -164,6 +160,9 @@ fn collect_type_ref_spans(
         ItemDefinitionInner::Bitflags(b) => type_ref_spans(&b.type_, scope, index, tokens, out),
         ItemDefinitionInner::TypeAlias(ta) => type_ref_spans(&ta.target, scope, index, tokens, out),
         ItemDefinitionInner::Constant(cd) => type_ref_spans(&cd.type_, scope, index, tokens, out),
+        ItemDefinitionInner::ExternValue(ev) => {
+            type_ref_spans(&ev.type_, scope, index, tokens, out)
+        }
     }
 }
 

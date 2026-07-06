@@ -160,6 +160,7 @@ pub enum ItemKind {
     Bitflags,
     TypeAlias,
     Constant,
+    ExternValue,
 }
 
 impl ItemKind {
@@ -171,6 +172,7 @@ impl ItemKind {
             ItemDefinitionInner::Bitflags(_) => ItemKind::Bitflags,
             ItemDefinitionInner::TypeAlias(_) => ItemKind::TypeAlias,
             ItemDefinitionInner::Constant(_) => ItemKind::Constant,
+            ItemDefinitionInner::ExternValue(_) => ItemKind::ExternValue,
         }
     }
 }
@@ -183,6 +185,7 @@ impl fmt::Display for ItemKind {
             ItemKind::Bitflags => write!(f, "a bitflags"),
             ItemKind::TypeAlias => write!(f, "a type alias"),
             ItemKind::Constant => write!(f, "a constant"),
+            ItemKind::ExternValue => write!(f, "an extern value"),
         }
     }
 }
@@ -266,6 +269,8 @@ pub enum UnresolvedTypeContext {
     },
     /// Type annotation of a `const` declaration
     ConstType { const_path: ItemPath },
+    /// Type annotation of an `extern` value declaration
+    ExternValueType { extern_path: ItemPath },
 }
 
 impl fmt::Display for UnresolvedTypeContext {
@@ -288,6 +293,9 @@ impl fmt::Display for UnresolvedTypeContext {
             }
             UnresolvedTypeContext::ConstType { const_path } => {
                 write!(f, "type annotation of const `{const_path}`")
+            }
+            UnresolvedTypeContext::ExternValueType { extern_path } => {
+                write!(f, "type annotation of extern value `{extern_path}`")
             }
         }
     }
@@ -424,6 +432,16 @@ pub enum SemanticError {
         attribute_name: AttributeName,
         extern_kind: ExternKind,
         item_path: ItemPath,
+        location: ItemLocation,
+    },
+    /// A value item (a `const` or an `extern` value) was nested inside a
+    /// generic type. The backends can't emit a correctly-qualified
+    /// `impl<T> Parent<T>` accessor for it, and a fixed-address / compile-time
+    /// value scoped under a per-instantiation generic is semantically murky.
+    /// Nesting non-value items (types/enums/bitflags) in a generic is fine.
+    ValueItemInGenericParent {
+        item_path: ItemPath,
+        parent_path: ItemPath,
         location: ItemLocation,
     },
     /// This function-attribute has the wrong number of arguments
@@ -745,6 +763,16 @@ impl SemanticError {
             } => {
                 format!(
                     "Missing required attribute `{attribute_name}` for {extern_kind} `{item_path}`"
+                )
+            }
+            SemanticError::ValueItemInGenericParent {
+                item_path,
+                parent_path,
+                ..
+            } => {
+                format!(
+                    "`{item_path}` cannot be nested inside generic type `{parent_path}`: \
+                     `const` and `extern` value items are not supported inside a generic type"
                 )
             }
             SemanticError::InvalidAttributeFunctionArgumentCount {
@@ -1085,6 +1113,7 @@ impl SemanticError {
             SemanticError::BackendForTargetCrossModule { location, .. } => Some(location),
             SemanticError::MissingExternAttribute { location, .. } => Some(location),
             SemanticError::MissingAttribute { location, .. } => Some(location),
+            SemanticError::ValueItemInGenericParent { location, .. } => Some(location),
             SemanticError::InvalidAttributeFunctionArgumentCount { location, .. } => Some(location),
             SemanticError::InvalidAttributeValue { location, .. } => Some(location),
             SemanticError::ConflictingAttributes { location, .. } => Some(location),

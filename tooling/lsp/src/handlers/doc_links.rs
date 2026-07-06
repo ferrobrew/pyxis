@@ -234,6 +234,8 @@ impl ServerState {
         from_uri: &Uri,
         want_function: bool,
     ) -> Option<(lsp_types::Location, String)> {
+        use pyxis::grammar::ItemDefinitionInner;
+
         let uri = self.module_uri(module, from_uri)?;
         let content = self.get_content(&uri)?;
         let module_ast = self.get_parsed_module(&uri)?;
@@ -249,13 +251,16 @@ impl ServerState {
                         format_function_hover(function),
                     )
                 }
-                ModuleItem::ExternValue { extern_value }
-                    if !want_function && extern_value.name.as_str() == name =>
+                ModuleItem::Definition { definition }
+                    if !want_function && definition.name.as_str() == name =>
                 {
-                    (
-                        extern_value.location.span.start,
-                        format_extern_value_hover(name, &extern_value.type_),
-                    )
+                    match &definition.inner {
+                        ItemDefinitionInner::ExternValue(ev) => (
+                            definition.location.span.start,
+                            format_extern_value_hover(name, &ev.type_, &ev.attributes),
+                        ),
+                        _ => continue,
+                    }
                 }
                 _ => continue,
             };

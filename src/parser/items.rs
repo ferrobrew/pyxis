@@ -508,6 +508,33 @@ impl ConstDefinition {
 }
 
 // items
+/// A `pub extern some_value: *mut T;` declaration. The `#[address(...)]`
+/// attribute (required at the semantic layer) lives in `attributes`. Like
+/// [`ConstDefinition`], this is a value item, not a type; `visibility`,
+/// `name`, and `doc_comments` live on the enclosing [`ItemDefinition`].
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(test, derive(StripLocations))]
+pub struct ExternValueDefinition {
+    pub type_: Type,
+    pub attributes: Attributes,
+    pub location: ItemLocation,
+}
+#[cfg(test)]
+impl ExternValueDefinition {
+    pub fn new(type_: Type) -> Self {
+        Self {
+            type_,
+            attributes: Default::default(),
+            location: ItemLocation::test(),
+        }
+    }
+    pub fn with_attributes(mut self, attributes: impl IntoIterator<Item = Attribute>) -> Self {
+        self.attributes = Attributes::from_iter(attributes);
+        self
+    }
+}
+
+// items
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(test, derive(StripLocations))]
 pub enum ItemDefinitionInner {
@@ -516,6 +543,7 @@ pub enum ItemDefinitionInner {
     Bitflags(BitflagsDefinition),
     TypeAlias(TypeAliasDefinition),
     Constant(ConstDefinition),
+    ExternValue(ExternValueDefinition),
 }
 impl From<TypeDefinition> for ItemDefinitionInner {
     fn from(item: TypeDefinition) -> Self {
@@ -540,6 +568,11 @@ impl From<TypeAliasDefinition> for ItemDefinitionInner {
 impl From<ConstDefinition> for ItemDefinitionInner {
     fn from(item: ConstDefinition) -> Self {
         ItemDefinitionInner::Constant(item)
+    }
+}
+impl From<ExternValueDefinition> for ItemDefinitionInner {
+    fn from(item: ExternValueDefinition) -> Self {
+        ItemDefinitionInner::ExternValue(item)
     }
 }
 
@@ -848,6 +881,39 @@ impl Parser {
                     declaration_location,
                 })
             }
+            TokenKind::Extern => {
+                self.advance(); // consume `extern`
+                let (name, _) = self.expect_ident()?;
+                self.expect(TokenKind::Colon)?;
+                let type_ = self.parse_type()?;
+                // Module-level extern values end with `;`; nested ones (inside
+                // type/enum/bitflags bodies) end with `,`. Accept either so the
+                // same parser works in both contexts.
+                if matches!(self.peek(), TokenKind::Semi | TokenKind::Comma) {
+                    self.advance();
+                }
+
+                let end_pos = if self.pos > 0 {
+                    self.tokens[self.pos - 1].location.span.end
+                } else {
+                    self.current().location.span.end
+                };
+
+                let location = self.item_location_from_locations(start_pos, end_pos);
+                Ok(ItemDefinition {
+                    visibility,
+                    name,
+                    type_parameters: vec![], // Extern values don't support type parameters
+                    doc_comments,
+                    inner: ItemDefinitionInner::ExternValue(ExternValueDefinition {
+                        type_,
+                        attributes,
+                        location,
+                    }),
+                    location,
+                    declaration_location,
+                })
+            }
             _ => Err(ParseError::ExpectedItemDefinition {
                 found: self.peek().clone(),
                 location: self.current().location,
@@ -887,6 +953,32 @@ impl Parser {
 
         self.expect(TokenKind::Gt)?;
         Ok(params)
+    }
+
+    /// Whether the tokens at `pos` (already advanced past any leading doc
+    /// comments, attributes, and comments) begin a nested item declaration:
+    /// `type`/`enum`/`bitflags`/`const`, or an `extern <name>: T` value — each
+    /// optionally `pub`. Note `extern type ...` is deliberately excluded: extern
+    /// types are module-level only, so `extern` counts as a nested item only
+    /// when it is *not* immediately followed by `type`.
+    fn peek_is_nested_item(&self, pos: usize) -> bool {
+        fn is_item_kw(kind: Option<&TokenKind>) -> bool {
+            matches!(
+                kind,
+                Some(TokenKind::Type | TokenKind::Enum | TokenKind::Bitflags | TokenKind::Const)
+            )
+        }
+        let is_extern_value = |pos: usize| {
+            matches!(self.peek_at(pos), Some(TokenKind::Extern))
+                && !matches!(self.peek_at(pos + 1), Some(TokenKind::Type))
+        };
+        if is_item_kw(self.peek_at(pos)) || is_extern_value(pos) {
+            return true;
+        }
+        if matches!(self.peek_at(pos), Some(TokenKind::Pub)) {
+            return is_item_kw(self.peek_at(pos + 1)) || is_extern_value(pos + 1);
+        }
+        false
     }
 
     pub(crate) fn parse_type_def_items(&mut self) -> Result<Vec<TypeDefItem>, ParseError> {
@@ -962,18 +1054,7 @@ impl Parser {
                 pos += 1;
             }
             // Check for nested item keywords: Type, Enum, Bitflags, Const, or Pub followed by one of those
-            let is_nested_item = match self.peek_at(pos) {
-                Some(
-                    TokenKind::Type | TokenKind::Enum | TokenKind::Bitflags | TokenKind::Const,
-                ) => true,
-                Some(TokenKind::Pub) => matches!(
-                    self.peek_at(pos + 1),
-                    Some(
-                        TokenKind::Type | TokenKind::Enum | TokenKind::Bitflags | TokenKind::Const
-                    )
-                ),
-                _ => false,
-            };
+            let is_nested_item = self.peek_is_nested_item(pos);
             if is_nested_item {
                 let inner_def = self.parse_item_definition()?;
                 let location = inner_def.location;
@@ -1081,21 +1162,7 @@ impl Parser {
                 ) {
                     pos += 1;
                 }
-                let is_nested_item = match self.peek_at(pos) {
-                    Some(
-                        TokenKind::Type | TokenKind::Enum | TokenKind::Bitflags | TokenKind::Const,
-                    ) => true,
-                    Some(TokenKind::Pub) => matches!(
-                        self.peek_at(pos + 1),
-                        Some(
-                            TokenKind::Type
-                                | TokenKind::Enum
-                                | TokenKind::Bitflags
-                                | TokenKind::Const
-                        )
-                    ),
-                    _ => false,
-                };
+                let is_nested_item = self.peek_is_nested_item(pos);
                 if is_nested_item {
                     let inner_def = self.parse_item_definition()?;
                     // Optional trailing comma after the nested item
@@ -1212,21 +1279,7 @@ impl Parser {
                 ) {
                     pos += 1;
                 }
-                let is_nested_item = match self.peek_at(pos) {
-                    Some(
-                        TokenKind::Type | TokenKind::Enum | TokenKind::Bitflags | TokenKind::Const,
-                    ) => true,
-                    Some(TokenKind::Pub) => matches!(
-                        self.peek_at(pos + 1),
-                        Some(
-                            TokenKind::Type
-                                | TokenKind::Enum
-                                | TokenKind::Bitflags
-                                | TokenKind::Const
-                        )
-                    ),
-                    _ => false,
-                };
+                let is_nested_item = self.peek_is_nested_item(pos);
                 if is_nested_item {
                     let inner_def = self.parse_item_definition()?;
                     // Optional trailing comma after the nested item

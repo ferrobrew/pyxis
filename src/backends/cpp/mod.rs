@@ -20,7 +20,7 @@ use crate::{
     grammar::ItemPath,
     semantic::{
         Module, SemanticOutput, TypeRegistry,
-        types::{ExternValue, Function, ItemDefinitionInner},
+        types::{Function, ItemDefinitionInner},
     },
 };
 
@@ -100,8 +100,6 @@ struct ModuleBody<'a> {
     wrote_anything: bool,
     /// Module-level free functions in deterministic order.
     public_functions: Vec<&'a Function>,
-    /// Module-level extern values in deterministic order.
-    sorted_externs: Vec<&'a ExternValue>,
 }
 
 /// Strip the common leading-whitespace prefix from every non-empty
@@ -229,30 +227,12 @@ fn render_module_body<'a>(
         }
     }
 
-    // Module-level extern values (`extern foo: Bar`). Pack the
-    // declarations tight as a block (no blank line between each), with
-    // a single blank line separating the block from the surrounding
-    // items.
-    let mut sorted_externs: Vec<_> = module.extern_values.iter().collect();
-    sorted_externs.sort_by(|a, b| a.name.cmp(&b.name));
-    if !sorted_externs.is_empty() {
-        if wrote_anything {
-            writeln!(body)?;
-        }
-        for ev in &sorted_externs {
-            let text = render::render_extern_value_decl(ev, ctx)?;
-            body.push_str(&text);
-        }
-        wrote_anything = true;
-    }
-
     Ok(ModuleBody {
         body,
         post_header,
         post_cpp,
         wrote_anything,
         public_functions,
-        sorted_externs,
     })
 }
 
@@ -320,6 +300,7 @@ fn intra_module_forward_decls(
             }
             ItemDefinitionInner::TypeAlias(_) => continue,
             ItemDefinitionInner::Constant(_) => continue,
+            ItemDefinitionInner::ExternValue(_) => continue,
         };
         out.push(line);
     }
@@ -545,10 +526,6 @@ fn assemble_source(
             free_def_buf.push('\n');
         }
     }
-    for ev in &body.sorted_externs {
-        let text = render::render_extern_value_definition(ev, ctx)?;
-        free_def_buf.push_str(&text);
-    }
     let free_def_trimmed = free_def_buf.trim_end_matches('\n');
     if !free_def_trimmed.is_empty() {
         for line in free_def_trimmed.lines() {
@@ -660,8 +637,9 @@ fn write_module(
     // free functions with #[address], extern values, non-template
     // member definitions hoisted out of the header, or a user-supplied
     // `prologue definition` / `epilogue definition` block.
+    // Extern values' `.cpp` getter definitions land in `body.post_cpp`, so the
+    // post_cpp check below covers them.
     let needs_cpp = !body.public_functions.is_empty()
-        || !body.sorted_externs.is_empty()
         || !body.post_cpp.is_empty()
         || !splices.prologue_def.is_empty()
         || !splices.epilogue_def.is_empty();
@@ -862,6 +840,7 @@ fn forward_decl_line(
             }
             ItemDefinitionInner::TypeAlias(_) => return format!("struct {leaf};"),
             ItemDefinitionInner::Constant(_) => return format!("struct {leaf};"),
+            ItemDefinitionInner::ExternValue(_) => return format!("struct {leaf};"),
         }
     }
     format!("struct {leaf};")

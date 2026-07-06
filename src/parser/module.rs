@@ -6,7 +6,7 @@ use crate::{
         ParseError,
         attributes::Attributes,
         core::Parser,
-        external::{Backend, ExternValue, UseTree},
+        external::{Backend, UseTree},
         functions::{Function, FunctionBlock},
         items::{Comment, ItemDefinition},
         types::Ident,
@@ -53,9 +53,6 @@ pub enum ModuleItem {
     },
     Impl {
         impl_block: FunctionBlock,
-    },
-    ExternValue {
-        extern_value: ExternValue,
     },
     Function {
         function: Function,
@@ -126,15 +123,6 @@ impl Module {
         }
         self
     }
-    pub fn with_extern_values(
-        mut self,
-        extern_values: impl IntoIterator<Item = ExternValue>,
-    ) -> Self {
-        for extern_value in extern_values.into_iter() {
-            self.items.push(ModuleItem::ExternValue { extern_value });
-        }
-        self
-    }
     pub fn with_functions(mut self, functions: impl IntoIterator<Item = Function>) -> Self {
         for function in functions.into_iter() {
             self.items.push(ModuleItem::Function { function });
@@ -184,12 +172,6 @@ impl Module {
         self.items
             .iter()
             .filter(|item| matches!(item, ModuleItem::ExternType { .. }))
-    }
-    pub fn extern_values(&self) -> impl Iterator<Item = &ExternValue> {
-        self.items.iter().filter_map(|item| match item {
-            ModuleItem::ExternValue { extern_value } => Some(extern_value),
-            _ => None,
-        })
     }
     pub fn functions(&self) -> impl Iterator<Item = &Function> {
         self.items.iter().filter_map(|item| match item {
@@ -359,12 +341,15 @@ impl Parser {
         match self.peek() {
             TokenKind::Use => self.parse_use(),
             TokenKind::Extern if !has_attributes => {
-                // Peek ahead to distinguish extern type from extern value
+                // Peek ahead to distinguish extern type from extern value. Extern
+                // values are item definitions (`ItemDefinitionInner::ExternValue`),
+                // so they route through `parse_item_definition`; extern types are
+                // their own module-level construct.
                 if matches!(self.peek_nth(1), TokenKind::Type) {
                     self.parse_extern_type()
                 } else {
-                    self.parse_extern_value()
-                        .map(|extern_value| ModuleItem::ExternValue { extern_value })
+                    self.parse_item_definition()
+                        .map(|definition| ModuleItem::Definition { definition })
                 }
             }
             TokenKind::Backend => self
@@ -394,16 +379,16 @@ impl Parser {
                         if matches!(self.peek_at(pos + 1), Some(TokenKind::Type)) {
                             self.parse_extern_type()
                         } else {
-                            self.parse_extern_value()
-                                .map(|extern_value| ModuleItem::ExternValue { extern_value })
+                            self.parse_item_definition()
+                                .map(|definition| ModuleItem::Definition { definition })
                         }
                     }
                     Some(TokenKind::Pub) => {
                         // Could be pub extern value, pub fn, or pub item definition
                         match self.peek_at(pos + 1) {
                             Some(TokenKind::Extern) => self
-                                .parse_extern_value()
-                                .map(|extern_value| ModuleItem::ExternValue { extern_value }),
+                                .parse_item_definition()
+                                .map(|definition| ModuleItem::Definition { definition }),
                             Some(TokenKind::Fn) => self
                                 .parse_function()
                                 .map(|function| ModuleItem::Function { function }),
@@ -450,14 +435,14 @@ impl Parser {
                     if matches!(self.peek_at(pos + 1), Some(TokenKind::Type)) {
                         self.parse_extern_type()
                     } else {
-                        self.parse_extern_value()
-                            .map(|extern_value| ModuleItem::ExternValue { extern_value })
+                        self.parse_item_definition()
+                            .map(|definition| ModuleItem::Definition { definition })
                     }
                 } else if matches!(self.peek_at(pos), Some(TokenKind::Pub))
                     && matches!(self.peek_at(pos + 1), Some(TokenKind::Extern))
                 {
-                    self.parse_extern_value()
-                        .map(|extern_value| ModuleItem::ExternValue { extern_value })
+                    self.parse_item_definition()
+                        .map(|definition| ModuleItem::Definition { definition })
                 } else if matches!(self.peek_at(pos), Some(TokenKind::Fn))
                     || (matches!(self.peek_at(pos), Some(TokenKind::Pub))
                         && matches!(self.peek_at(pos + 1), Some(TokenKind::Fn)))
@@ -834,19 +819,27 @@ extern g_other: *mut u8;
         // Don't strip locations - it empties doc_comments.
         let module = parse_str_for_tests(text).unwrap();
 
-        let ModuleItem::ExternValue { extern_value } = &module.items[0] else {
-            panic!("expected ExternValue, got {:?}", module.items[0]);
+        let ModuleItem::Definition { definition } = &module.items[0] else {
+            panic!("expected Definition, got {:?}", module.items[0]);
         };
-        assert_eq!(extern_value.name.0, "g_thing");
-        assert_eq!(extern_value.visibility, V::Public);
-        assert_eq!(extern_value.doc_comments, vec![" This is a global value."]);
+        assert!(matches!(
+            definition.inner,
+            crate::grammar::ItemDefinitionInner::ExternValue(_)
+        ));
+        assert_eq!(definition.name.0, "g_thing");
+        assert_eq!(definition.visibility, V::Public);
+        assert_eq!(definition.doc_comments, vec![" This is a global value."]);
 
-        let ModuleItem::ExternValue { extern_value } = &module.items[1] else {
-            panic!("expected ExternValue, got {:?}", module.items[1]);
+        let ModuleItem::Definition { definition } = &module.items[1] else {
+            panic!("expected Definition, got {:?}", module.items[1]);
         };
-        assert_eq!(extern_value.name.0, "g_other");
-        assert_eq!(extern_value.visibility, V::Private);
-        assert_eq!(extern_value.doc_comments, vec![" A private one too."]);
+        assert!(matches!(
+            definition.inner,
+            crate::grammar::ItemDefinitionInner::ExternValue(_)
+        ));
+        assert_eq!(definition.name.0, "g_other");
+        assert_eq!(definition.visibility, V::Private);
+        assert_eq!(definition.doc_comments, vec![" A private one too."]);
     }
 
     #[test]

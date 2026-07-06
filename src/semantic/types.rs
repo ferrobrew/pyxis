@@ -36,7 +36,7 @@ pub mod test_aliases {
     pub type SISR = super::ItemStateResolved;
     pub type SCC = super::CallingConvention;
     pub type SV = super::Visibility;
-    pub type SEV = super::ExternValue;
+    pub type SEVD = super::ExternValueDefinition;
     pub type STV = super::TypeVftable;
     pub type SFB = super::FunctionBody;
 }
@@ -297,6 +297,18 @@ pub struct ConstDefinition {
     pub doc: Vec<String>,
 }
 
+/// Semantic representation of an `extern` value declaration. Like
+/// [`ConstDefinition`] it is a value item (size 0 / alignment 1); its
+/// `visibility`, `name`, and path live on the enclosing [`ItemDefinition`].
+/// The `#[address(...)]` attribute is resolved into `address`.
+#[derive(PartialEq, Eq, Debug, Clone, Hash)]
+#[cfg_attr(test, derive(StripLocations))]
+pub struct ExternValueDefinition {
+    pub type_: Type,
+    pub address: usize,
+    pub doc: Vec<String>,
+}
+
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]
 #[cfg_attr(test, derive(StripLocations))]
 pub enum ItemDefinitionInner {
@@ -305,6 +317,7 @@ pub enum ItemDefinitionInner {
     Bitflags(BitflagsDefinition),
     TypeAlias(TypeAliasDefinition),
     Constant(ConstDefinition),
+    ExternValue(ExternValueDefinition),
 }
 impl From<TypeDefinition> for ItemDefinitionInner {
     fn from(td: TypeDefinition) -> Self {
@@ -331,6 +344,11 @@ impl From<ConstDefinition> for ItemDefinitionInner {
         ItemDefinitionInner::Constant(cd)
     }
 }
+impl From<ExternValueDefinition> for ItemDefinitionInner {
+    fn from(ev: ExternValueDefinition) -> Self {
+        ItemDefinitionInner::ExternValue(ev)
+    }
+}
 impl ItemDefinitionInner {
     pub fn defaultable(&self) -> bool {
         match self {
@@ -339,6 +357,7 @@ impl ItemDefinitionInner {
             ItemDefinitionInner::Bitflags(bd) => bd.default.is_some(),
             ItemDefinitionInner::TypeAlias(_) => false, // Type aliases don't have defaultable
             ItemDefinitionInner::Constant(_) => false,
+            ItemDefinitionInner::ExternValue(_) => false,
         }
     }
     pub fn copyable(&self) -> bool {
@@ -348,6 +367,7 @@ impl ItemDefinitionInner {
             ItemDefinitionInner::Bitflags(bd) => bd.copyable,
             ItemDefinitionInner::TypeAlias(_) => false, // Type aliases don't have copyable
             ItemDefinitionInner::Constant(_) => false,
+            ItemDefinitionInner::ExternValue(_) => false,
         }
     }
     pub fn cloneable(&self) -> bool {
@@ -357,6 +377,7 @@ impl ItemDefinitionInner {
             ItemDefinitionInner::Bitflags(bd) => bd.cloneable,
             ItemDefinitionInner::TypeAlias(_) => false, // Type aliases don't have cloneable
             ItemDefinitionInner::Constant(_) => false,
+            ItemDefinitionInner::ExternValue(_) => false,
         }
     }
     pub fn pinned(&self) -> bool {
@@ -366,6 +387,7 @@ impl ItemDefinitionInner {
             ItemDefinitionInner::Bitflags(bd) => bd.pinned,
             ItemDefinitionInner::TypeAlias(_) => false, // Type aliases don't have pinned
             ItemDefinitionInner::Constant(_) => false,
+            ItemDefinitionInner::ExternValue(_) => false,
         }
     }
     pub fn as_type(&self) -> Option<&TypeDefinition> {
@@ -387,6 +409,7 @@ impl ItemDefinitionInner {
             ItemDefinitionInner::Bitflags(_) => "a bitflags",
             ItemDefinitionInner::TypeAlias(_) => "a type alias",
             ItemDefinitionInner::Constant(_) => "a constant",
+            ItemDefinitionInner::ExternValue(_) => "an extern value",
         }
     }
     pub fn as_type_alias(&self) -> Option<&TypeAliasDefinition> {
@@ -398,6 +421,12 @@ impl ItemDefinitionInner {
     pub fn as_constant(&self) -> Option<&ConstDefinition> {
         match self {
             Self::Constant(v) => Some(v),
+            _ => None,
+        }
+    }
+    pub fn as_extern_value(&self) -> Option<&ExternValueDefinition> {
+        match self {
+            Self::ExternValue(v) => Some(v),
             _ => None,
         }
     }
@@ -713,15 +742,4 @@ impl Backend {
         self.uses = uses.into_iter().collect();
         self
     }
-}
-
-#[derive(PartialEq, Eq, Debug, Clone, Hash, HasLocation)]
-#[cfg_attr(test, derive(StripLocations))]
-pub struct ExternValue {
-    pub visibility: Visibility,
-    pub name: String,
-    pub type_: Type,
-    pub address: usize,
-    pub doc: Vec<String>,
-    pub location: ItemLocation,
 }
