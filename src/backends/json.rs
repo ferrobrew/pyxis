@@ -46,9 +46,9 @@ use crate::semantic::{
 ///   render the splice on the owning type's page instead of the module page.
 /// - v8: added `Constant` item kind with `JsonConstValue` for int/float/
 ///   string/enum-value constants.
-/// - v9: extern values are now item pages (`ExternValue` item kind) rather than
-///   a per-module `extern_values` array; the array was removed. Nested extern
-///   values appear under their parent type's `nested_items`.
+/// - v9: extern values are item pages (`ExternValue` item kind) instead of a
+///   per-module `extern_values` array; nested extern values appear under their
+///   parent type's `nested_items`.
 pub const CURRENT_SCHEMA_VERSION: u32 = 9;
 
 /// Top-level JSON documentation structure
@@ -214,8 +214,8 @@ impl JsonDocLink {
                 path: module.to_string(),
                 anchor: Some(format!("func-{name}")),
             },
-            // A module-level extern value is now its own item page at
-            // `module::name`, so link to the item rather than a module anchor.
+            // A module-level extern value is its own item page at `module::name`,
+            // so link to the item rather than a module anchor.
             T::ExternValue { module, name } => JsonDocLink {
                 text,
                 target_kind: JsonDocLinkTargetKind::Item,

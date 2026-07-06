@@ -436,8 +436,8 @@ impl DocLinkResolver {
         for f in module.functions() {
             self.add_doc_imports(&scope, &f.doc, &mut links);
         }
-        // Extern values (including module-level ones) are registry items, so
-        // their docs are collected by the registry walk below.
+        // Extern values' docs (including module-level ones) are collected by the
+        // registry walk below.
 
         for (path, item) in type_registry.iter() {
             if path.parent().as_ref() != Some(module_path) {
@@ -628,8 +628,7 @@ pub fn validate(
         for f in module.functions() {
             check(&f.doc, &scope, &f.location)?;
         }
-        // Extern values are registry items; their docs are checked in the
-        // registry walk below.
+        // Extern values' docs are checked in the registry walk below.
         let _ = path;
     }
 

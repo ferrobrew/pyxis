@@ -12,9 +12,9 @@ use crate::{
 
 use pretty_assertions::assert_eq;
 
-/// An `extern` value is an ordinary registry item (like a `const`): it resolves
-/// to an `ItemDefinitionInner::ExternValue` keyed by its full path, carrying the
-/// resolved type and the `#[address(...)]`.
+/// An `extern` value resolves to an `ItemDefinitionInner::ExternValue` registry
+/// item (like a `const`) keyed by its full path, carrying the resolved type and
+/// the `#[address(...)]`.
 #[test]
 fn can_define_extern_value() {
     let module1 = M::new().with_definitions([ID::new(

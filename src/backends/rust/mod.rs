@@ -376,8 +376,6 @@ fn module_has_public_exports(
     semantic_state: &SemanticOutput,
 ) -> bool {
     let type_registry = semantic_state.type_registry();
-    // Extern values are ordinary definitions now, so the definitions check
-    // above already covers public extern values.
     module
         .definitions(type_registry)
         .any(|d| d.visibility == Visibility::Public)

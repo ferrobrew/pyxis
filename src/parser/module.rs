@@ -342,8 +342,8 @@ impl Parser {
             TokenKind::Use => self.parse_use(),
             TokenKind::Extern if !has_attributes => {
                 // Peek ahead to distinguish extern type from extern value. Extern
-                // values are ordinary item definitions (`ItemDefinitionInner::ExternValue`),
-                // so they route through `parse_item_definition`; extern types remain
+                // values are item definitions (`ItemDefinitionInner::ExternValue`),
+                // so they route through `parse_item_definition`; extern types are
                 // their own module-level construct.
                 if matches!(self.peek_nth(1), TokenKind::Type) {
                     self.parse_extern_type()

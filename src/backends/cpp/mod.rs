@@ -227,10 +227,6 @@ fn render_module_body<'a>(
         }
     }
 
-    // Module-level extern values (`extern foo: Bar`) are ordinary item
-    // definitions now, so they are rendered by the item loop above via
-    // `render::render_item` (header getter declaration + `.cpp` definition).
-
     Ok(ModuleBody {
         body,
         post_header,

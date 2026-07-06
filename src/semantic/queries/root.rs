@@ -218,8 +218,9 @@ pub fn analyze<'db>(
             continue;
         }
 
-        // Extern values are ordinary registry items (`ItemDefinitionInner::ExternValue`),
-        // built via the resolution pipeline like any other item; nothing to collect here.
+        // Extern values are registry items (`ItemDefinitionInner::ExternValue`)
+        // built via the resolution pipeline like any other item, so a module
+        // only carries its impls and backends.
         let impls: Vec<_> = module.impls().cloned().collect();
         let backends: Vec<_> = module.backends().cloned().collect();
 
