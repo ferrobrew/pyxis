@@ -162,6 +162,36 @@ pub fn analyze<'db>(
     // than dropped, so the offending module isn't silently elided.
     let mut module_errors: Vec<SemanticError> = Vec::new();
 
+    // Reject value items (`const` / `extern` value) nested inside a generic
+    // type: the backends can't emit a correctly-qualified `impl<T> Parent<T>`
+    // accessor for them, and a fixed-address / compile-time value scoped under a
+    // per-instantiation generic is semantically murky. Nesting types / enums /
+    // bitflags inside a generic is fine.
+    for item_path in decl_registry.item_paths() {
+        let Some(def) = decl_registry.get_definition(item_path) else {
+            continue;
+        };
+        if !matches!(
+            def.inner,
+            crate::grammar::ItemDefinitionInner::Constant(_)
+                | crate::grammar::ItemDefinitionInner::ExternValue(_)
+        ) {
+            continue;
+        }
+        let Some(parent) = item_path.parent() else {
+            continue;
+        };
+        if let Some(parent_def) = decl_registry.get_definition(&parent)
+            && !parent_def.type_parameters.is_empty()
+        {
+            module_errors.push(SemanticError::ValueItemInGenericParent {
+                item_path: item_path.clone(),
+                parent_path: parent,
+                location: def.declaration_location,
+            });
+        }
+    }
+
     // Track module paths produced by the parsed source files so that two
     // distinct files reducing to the same module path (e.g. `world.pyxis` and
     // `world/mod.pyxis` -> `world`) surface a hard `DuplicateModule` error

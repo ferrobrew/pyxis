@@ -434,6 +434,16 @@ pub enum SemanticError {
         item_path: ItemPath,
         location: ItemLocation,
     },
+    /// A value item (a `const` or an `extern` value) was nested inside a
+    /// generic type. The backends can't emit a correctly-qualified
+    /// `impl<T> Parent<T>` accessor for it, and a fixed-address / compile-time
+    /// value scoped under a per-instantiation generic is semantically murky.
+    /// Nesting non-value items (types/enums/bitflags) in a generic is fine.
+    ValueItemInGenericParent {
+        item_path: ItemPath,
+        parent_path: ItemPath,
+        location: ItemLocation,
+    },
     /// This function-attribute has the wrong number of arguments
     InvalidAttributeFunctionArgumentCount {
         attribute_name: AttributeName,
@@ -753,6 +763,16 @@ impl SemanticError {
             } => {
                 format!(
                     "Missing required attribute `{attribute_name}` for {extern_kind} `{item_path}`"
+                )
+            }
+            SemanticError::ValueItemInGenericParent {
+                item_path,
+                parent_path,
+                ..
+            } => {
+                format!(
+                    "`{item_path}` cannot be nested inside generic type `{parent_path}`: \
+                     `const` and `extern` value items are not supported inside a generic type"
                 )
             }
             SemanticError::InvalidAttributeFunctionArgumentCount {
@@ -1093,6 +1113,7 @@ impl SemanticError {
             SemanticError::BackendForTargetCrossModule { location, .. } => Some(location),
             SemanticError::MissingExternAttribute { location, .. } => Some(location),
             SemanticError::MissingAttribute { location, .. } => Some(location),
+            SemanticError::ValueItemInGenericParent { location, .. } => Some(location),
             SemanticError::InvalidAttributeFunctionArgumentCount { location, .. } => Some(location),
             SemanticError::InvalidAttributeValue { location, .. } => Some(location),
             SemanticError::ConflictingAttributes { location, .. } => Some(location),
