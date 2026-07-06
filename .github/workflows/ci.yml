@@ -83,15 +83,13 @@ jobs:
           fi
 
   # Build the viewer, and on main — once the Rust tests and pyxis-defs
-  # validation have passed — deploy it. `needs` keeps the deploy after
-  # everything else is green; the deploy steps are gated on the build above
-  # succeeding (later steps don't run once one fails) and on being on main.
+  # validation have passed — upload it as a Pages artifact. `needs` keeps
+  # this after everything else is green; the artifact upload is gated on
+  # being on main.
   viewer:
-    name: Build & deploy viewer
+    name: Build viewer
     needs: [test, validate-pyxis-defs]
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -106,44 +104,27 @@ jobs:
         working-directory: viewer
         run: npm run build
 
-      - name: Checkout GitHub Pages repository
+      - name: Upload Pages artifact
         if: github.ref == 'refs/heads/main'
-        uses: actions/checkout@v4
+        uses: actions/upload-pages-artifact@v3
         with:
-          repository: ferrobrew/ferrobrew.github.io
-          path: pages
-          token: ${{ secrets.PAGES_DEPLOY_TOKEN }}
+          path: viewer/dist
 
+  # Deploy the uploaded artifact to this repository's GitHub Pages site
+  # (served at https://ferrobrew.github.io/pyxis/). Requires the repo's
+  # Pages source to be set to "GitHub Actions".
+  deploy-viewer:
+    name: Deploy viewer
+    needs: viewer
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
       - name: Deploy to GitHub Pages
-        if: github.ref == 'refs/heads/main'
-        working-directory: pages
-        run: |
-          # Create target directory if it doesn't exist
-          mkdir -p pyxis
-
-          # Remove old files
-          rm -rf pyxis/*
-
-          # Copy new build
-          cp -r ../viewer/dist/* pyxis/
-
-          # Configure git
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          # Commit and push
-          git add pyxis
-          if git diff --staged --quiet; then
-            echo "No changes to deploy"
-          else
-            git commit -m "Deploy pyxis viewer
-
-            Automated deployment from ferrobrew/pyxis@${{ github.sha }}"
-            git push
-          fi
-
-      - name: Deployment complete
-        if: github.ref == 'refs/heads/main'
-        run: |
-          echo "✓ Viewer deployed successfully!"
-          echo "🌐 Available at: https://ferrobrew.github.io/pyxis/"
+        id: deployment
+        uses: actions/deploy-pages@v4
