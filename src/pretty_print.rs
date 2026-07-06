@@ -731,9 +731,17 @@ impl PrettyPrinter {
 
         match &def.inner {
             ItemDefinitionInner::Type(td) => {
-                // Use semicolon for empty types
-                if td.items.is_empty() {
-                    writeln!(&mut self.output, "type {}{};", def.name, type_params).unwrap();
+                // Opaque types (`type Name`, no body) have no braces, so they take
+                // a caller-supplied terminator: `,` when nested, `;` at module
+                // level. A braced body — even an empty one — is self-terminating.
+                if td.is_opaque {
+                    let terminator = if nested { ',' } else { ';' };
+                    writeln!(
+                        &mut self.output,
+                        "type {}{}{terminator}",
+                        def.name, type_params
+                    )
+                    .unwrap();
                 } else {
                     writeln!(&mut self.output, "type {}{} {{", def.name, type_params).unwrap();
                     self.indent();
@@ -952,7 +960,8 @@ impl PrettyPrinter {
             ItemDefinitionInner::TypeAlias(ta) => {
                 write!(&mut self.output, "type {}{} = ", def.name, type_params).unwrap();
                 self.print_type(&ta.target);
-                writeln!(&mut self.output, ";").unwrap();
+                let terminator = if nested { ',' } else { ';' };
+                writeln!(&mut self.output, "{terminator}").unwrap();
             }
             ItemDefinitionInner::Constant(cd) => {
                 write!(&mut self.output, "const {}: ", def.name).unwrap();
@@ -1321,6 +1330,16 @@ pub type Test {
         let printed = pretty_print(&module);
 
         assert_eq!(printed, expected);
+    }
+
+    #[test]
+    fn opaque_and_braced_empty_types_are_distinct() {
+        // An opaque type keeps its `;`; an empty braced body keeps its braces.
+        // Both must round-trip to themselves rather than collapsing together.
+        for text in ["pub type Marker;", "pub type Marker {\n}"] {
+            let module = parse_str_for_tests(text).unwrap();
+            assert_eq!(pretty_print(&module), text);
+        }
     }
 
     #[test]

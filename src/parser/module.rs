@@ -8,7 +8,7 @@ use crate::{
         core::Parser,
         external::{Backend, UseTree},
         functions::{Function, FunctionBlock},
-        items::{Comment, ItemDefinition},
+        items::{Comment, ItemDefinition, ItemTerminator},
         types::Ident,
     },
     span::{HasLocation, ItemLocation},
@@ -328,6 +328,23 @@ impl Parser {
         })
     }
 
+    /// Parse a module-level item definition and consume its terminator.
+    ///
+    /// Brace-delimited items (`type Name { .. }`, `enum`, `bitflags`) are
+    /// self-terminating, but value-like items (`const`, `extern`, a type alias,
+    /// or an opaque `type Name`) must be terminated with `;` at module level.
+    /// The item's [`ItemDefinition::terminator`] says whether it is
+    /// self-terminating; the terminator is enforced here rather than inside
+    /// `parse_item_definition` so that body contexts (type/enum/bitflags) can
+    /// apply their own separator rules.
+    fn parse_module_definition(&mut self) -> Result<ModuleItem, ParseError> {
+        let definition = self.parse_item_definition()?;
+        if definition.terminator() == ItemTerminator::Separated {
+            self.expect(TokenKind::Semi)?;
+        }
+        Ok(ModuleItem::Definition { definition })
+    }
+
     pub(crate) fn parse_module_item(&mut self) -> Result<ModuleItem, ParseError> {
         // Module-level inner attributes (`#![...]`). Detected before the
         // outer-attribute (`#[...]`) handling below via the leading `!`.
@@ -348,8 +365,7 @@ impl Parser {
                 if matches!(self.peek_nth(1), TokenKind::Type) {
                     self.parse_extern_type()
                 } else {
-                    self.parse_item_definition()
-                        .map(|definition| ModuleItem::Definition { definition })
+                    self.parse_module_definition()
                 }
             }
             TokenKind::Backend => self
@@ -379,29 +395,22 @@ impl Parser {
                         if matches!(self.peek_at(pos + 1), Some(TokenKind::Type)) {
                             self.parse_extern_type()
                         } else {
-                            self.parse_item_definition()
-                                .map(|definition| ModuleItem::Definition { definition })
+                            self.parse_module_definition()
                         }
                     }
                     Some(TokenKind::Pub) => {
                         // Could be pub extern value, pub fn, or pub item definition
                         match self.peek_at(pos + 1) {
-                            Some(TokenKind::Extern) => self
-                                .parse_item_definition()
-                                .map(|definition| ModuleItem::Definition { definition }),
+                            Some(TokenKind::Extern) => self.parse_module_definition(),
                             Some(TokenKind::Fn) => self
                                 .parse_function()
                                 .map(|function| ModuleItem::Function { function }),
-                            _ => self
-                                .parse_item_definition()
-                                .map(|definition| ModuleItem::Definition { definition }),
+                            _ => self.parse_module_definition(),
                         }
                     }
                     Some(
                         TokenKind::Type | TokenKind::Enum | TokenKind::Bitflags | TokenKind::Const,
-                    ) => self
-                        .parse_item_definition()
-                        .map(|definition| ModuleItem::Definition { definition }),
+                    ) => self.parse_module_definition(),
                     Some(TokenKind::Impl) => self
                         .parse_impl_block()
                         .map(|impl_block| ModuleItem::Impl { impl_block }),
@@ -412,8 +421,7 @@ impl Parser {
                         // Lookahead couldn't determine item type - this often happens with
                         // malformed attributes. Let parse_item_definition handle it, which
                         // will properly parse (and error on) the attributes.
-                        self.parse_item_definition()
-                            .map(|definition| ModuleItem::Definition { definition })
+                        self.parse_module_definition()
                     }
                 }
             }
@@ -435,14 +443,12 @@ impl Parser {
                     if matches!(self.peek_at(pos + 1), Some(TokenKind::Type)) {
                         self.parse_extern_type()
                     } else {
-                        self.parse_item_definition()
-                            .map(|definition| ModuleItem::Definition { definition })
+                        self.parse_module_definition()
                     }
                 } else if matches!(self.peek_at(pos), Some(TokenKind::Pub))
                     && matches!(self.peek_at(pos + 1), Some(TokenKind::Extern))
                 {
-                    self.parse_item_definition()
-                        .map(|definition| ModuleItem::Definition { definition })
+                    self.parse_module_definition()
                 } else if matches!(self.peek_at(pos), Some(TokenKind::Fn))
                     || (matches!(self.peek_at(pos), Some(TokenKind::Pub))
                         && matches!(self.peek_at(pos + 1), Some(TokenKind::Fn)))
@@ -450,8 +456,7 @@ impl Parser {
                     self.parse_function()
                         .map(|function| ModuleItem::Function { function })
                 } else {
-                    self.parse_item_definition()
-                        .map(|definition| ModuleItem::Definition { definition })
+                    self.parse_module_definition()
                 }
             }
             TokenKind::Pub => {
@@ -460,13 +465,12 @@ impl Parser {
                     self.parse_function()
                         .map(|function| ModuleItem::Function { function })
                 } else {
-                    self.parse_item_definition()
-                        .map(|definition| ModuleItem::Definition { definition })
+                    self.parse_module_definition()
                 }
             }
-            TokenKind::Type | TokenKind::Enum | TokenKind::Bitflags | TokenKind::Const => self
-                .parse_item_definition()
-                .map(|definition| ModuleItem::Definition { definition }),
+            TokenKind::Type | TokenKind::Enum | TokenKind::Bitflags | TokenKind::Const => {
+                self.parse_module_definition()
+            }
             TokenKind::Impl => self
                 .parse_impl_block()
                 .map(|impl_block| ModuleItem::Impl { impl_block }),
@@ -688,9 +692,22 @@ mod tests {
     }
 
     #[test]
-    fn can_parse_an_empty_type() {
+    fn can_parse_an_opaque_type() {
         let text = r#"
         type Test;
+        "#;
+
+        let ast = M::new().with_definitions([ID::new((V::Private, "Test"), TD::opaque())]);
+        assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
+    }
+
+    #[test]
+    fn can_parse_an_empty_braced_type() {
+        // A braced empty body is distinct from an opaque type: it is
+        // self-terminating and round-trips to `type Test {}`, not `type Test;`.
+        let text = r#"
+        type Test {
+        }
         "#;
 
         let ast = M::new().with_definitions([ID::new((V::Private, "Test"), TD::new([]))]);

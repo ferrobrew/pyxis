@@ -150,6 +150,12 @@ impl TypeStatement {
 pub struct TypeDefinition {
     pub items: Vec<TypeDefItem>,
     pub attributes: Attributes,
+    /// Whether this was written in opaque form (`type Name`, no braces) rather
+    /// than with a `{ … }` body. An opaque type and an empty-bodied type both
+    /// have no `items`, but they differ in terminator handling: an opaque type
+    /// is separator-terminated (caller supplies `;`/`,`) while a braced body is
+    /// self-terminating. See [`ItemDefinition::terminator`].
+    pub is_opaque: bool,
     pub inline_trailing_comments: Vec<Comment>, // Comments on same line as attributes
     pub following_comments: Vec<Comment>,       // Comments on lines after attributes
 }
@@ -166,6 +172,7 @@ impl StripLocations for TypeDefinition {
                 })
                 .collect(),
             attributes: self.attributes.strip_locations(),
+            is_opaque: self.is_opaque,
             inline_trailing_comments: Vec::new(), // Strip trailing comments
             following_comments: Vec::new(),
         }
@@ -177,8 +184,17 @@ impl TypeDefinition {
         Self {
             items: statements.into_iter().map(TypeDefItem::Statement).collect(),
             attributes: Default::default(),
+            is_opaque: false,
             inline_trailing_comments: Vec::new(),
             following_comments: Vec::new(),
+        }
+    }
+
+    /// Build an opaque type definition (`type Name`, no body).
+    pub fn opaque() -> Self {
+        Self {
+            is_opaque: true,
+            ..Self::new([])
         }
     }
     pub fn with_attributes(mut self, attributes: impl IntoIterator<Item = Attribute>) -> Self {
@@ -651,6 +667,37 @@ impl ItemDefinition {
     }
 }
 
+/// Whether an item carries its own closing token or expects a terminator from
+/// whatever context it appears in.
+///
+/// Brace-delimited items (`type Name { .. }`, `enum`, `bitflags`) close with `}`
+/// and need nothing after them. Value-like items (`const`, `extern`, a type
+/// alias, or an opaque `type Name`) are terminated by a separator supplied by
+/// the context: `;` at module level, an optional `,` inside a
+/// type/enum/bitflags body. Consuming that separator is the caller's job so each
+/// context can enforce its own rule. Derive this from a parsed item with
+/// [`ItemDefinition::terminator`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ItemTerminator {
+    SelfTerminating,
+    Separated,
+}
+
+impl ItemDefinition {
+    /// How this item is terminated. Brace-delimited definitions are
+    /// self-terminating; value-like items (including opaque `type Name`) expect
+    /// a caller-supplied separator.
+    pub(crate) fn terminator(&self) -> ItemTerminator {
+        match &self.inner {
+            ItemDefinitionInner::Type(td) if !td.is_opaque => ItemTerminator::SelfTerminating,
+            ItemDefinitionInner::Enum(_) | ItemDefinitionInner::Bitflags(_) => {
+                ItemTerminator::SelfTerminating
+            }
+            _ => ItemTerminator::Separated,
+        }
+    }
+}
+
 impl Parser {
     pub(crate) fn parse_item_definition(&mut self) -> Result<ItemDefinition, ParseError> {
         // Capture the start position
@@ -713,13 +760,14 @@ impl Parser {
                 // Parse optional type parameters: type Name<T, U> { ... }
                 let type_parameters = self.parse_type_parameters()?;
 
-                // Check if this is a type alias (= Type;) or a type definition ({ ... } or ;)
+                // Check if this is a type alias (= Type), a type definition
+                // ({ ... }), or an opaque type (bare `type Name`).
                 if matches!(self.peek(), TokenKind::Eq) {
-                    // Type alias: type Name = TargetType;
-                    // Type aliases don't support type parameters (yet)
+                    // Type alias: type Name = TargetType
+                    // Type aliases don't support type parameters (yet). The
+                    // terminator is left to the caller.
                     self.advance(); // Consume '='
                     let target = self.parse_type()?;
-                    self.expect(TokenKind::Semi)?;
 
                     // Capture the end position
                     let end_pos = if self.pos > 0 {
@@ -743,21 +791,25 @@ impl Parser {
                         declaration_location,
                     })
                 } else {
-                    // Type definition: type Name { ... } or type Name;
+                    // Type definition: type Name { ... } or opaque type Name.
                     let mut def = TypeDefinition {
                         items: Vec::new(),
                         attributes,
+                        is_opaque: false,
                         inline_trailing_comments: inline_trailing_comments.clone(),
                         following_comments: following_comments.clone(),
                     };
 
-                    // Support both "type Name;" and "type Name { ... }"
-                    if matches!(self.peek(), TokenKind::Semi) {
-                        self.advance(); // Consume semicolon
-                    } else {
-                        self.expect(TokenKind::LBrace)?;
+                    // A braced body is self-terminating; an opaque `type Name`
+                    // (no body) is terminated by the caller (`;` at module level,
+                    // optional `,` in a body). The distinction is recorded on the
+                    // definition via `is_opaque` — see `ItemDefinition::terminator`.
+                    if matches!(self.peek(), TokenKind::LBrace) {
+                        self.advance(); // Consume '{'
                         def.items = self.parse_type_def_items()?;
                         self.expect(TokenKind::RBrace)?;
+                    } else {
+                        def.is_opaque = true;
                     }
 
                     // Capture the end position
@@ -852,12 +904,6 @@ impl Parser {
                 let type_ = self.parse_type()?;
                 self.expect(TokenKind::Eq)?;
                 let expr = self.parse_expr()?;
-                // Module-level consts end with `;`; nested consts (inside
-                // type/enum/bitflags bodies) end with `,`. Accept either so
-                // the same parser works in both contexts.
-                if matches!(self.peek(), TokenKind::Semi | TokenKind::Comma) {
-                    self.advance();
-                }
 
                 let end_pos = if self.pos > 0 {
                     self.tokens[self.pos - 1].location.span.end
@@ -886,12 +932,6 @@ impl Parser {
                 let (name, _) = self.expect_ident()?;
                 self.expect(TokenKind::Colon)?;
                 let type_ = self.parse_type()?;
-                // Module-level extern values end with `;`; nested ones (inside
-                // type/enum/bitflags bodies) end with `,`. Accept either so the
-                // same parser works in both contexts.
-                if matches!(self.peek(), TokenKind::Semi | TokenKind::Comma) {
-                    self.advance();
-                }
 
                 let end_pos = if self.pos > 0 {
                     self.tokens[self.pos - 1].location.span.end
@@ -1056,6 +1096,9 @@ impl Parser {
             // Check for nested item keywords: Type, Enum, Bitflags, Const, or Pub followed by one of those
             let is_nested_item = self.peek_is_nested_item(pos);
             if is_nested_item {
+                // Nested-item terminators inside a body are the optional trailing
+                // comma consumed by `parse_type_def_items`, so the item's own
+                // terminator kind is irrelevant here.
                 let inner_def = self.parse_item_definition()?;
                 let location = inner_def.location;
                 return Ok(TypeStatement {
@@ -2364,7 +2407,7 @@ mod tests {
         let text = r#"
         pub type Outer {
             pub field: u32,
-            pub type InnerAlias = u32;
+            pub type InnerAlias = u32,
         }
         "#;
         assert!(parse_str_for_tests(text).is_ok());
@@ -2523,5 +2566,92 @@ mod tests {
             }
             _ => panic!("Expected Definition"),
         }
+    }
+
+    #[test]
+    fn module_level_const_requires_semicolon() {
+        // Missing terminator is rejected.
+        assert!(parse_str_for_tests("pub const MAX: i32 = 100").is_err());
+        // A trailing comma is not a valid module-level terminator.
+        assert!(parse_str_for_tests("pub const MAX: i32 = 100,").is_err());
+    }
+
+    #[test]
+    fn module_level_extern_value_requires_semicolon() {
+        assert!(parse_str_for_tests("pub extern GLOBAL: i32").is_err());
+        assert!(parse_str_for_tests("pub extern GLOBAL: i32,").is_err());
+        assert!(parse_str_for_tests("pub extern GLOBAL: i32;").is_ok());
+    }
+
+    #[test]
+    fn nested_const_trailing_comma_is_optional() {
+        // No trailing comma before the closing brace parses fine.
+        let text = r#"
+        pub type Player {
+            pub const STARTING_GOLD: u32 = 500
+        }
+        "#;
+        let ast = parse_str_for_tests(text).unwrap().strip_locations();
+        let crate::grammar::ModuleItem::Definition { definition } = &ast.items[0] else {
+            panic!("Expected Definition");
+        };
+        let crate::grammar::ItemDefinitionInner::Type(td) = &definition.inner else {
+            panic!("Expected Type");
+        };
+        assert_eq!(td.items.len(), 1);
+    }
+
+    #[test]
+    fn nested_const_rejects_semicolon_terminator() {
+        // Bodies separate items with `,`; a `;` is not a valid separator.
+        let text = r#"
+        pub type Player {
+            pub const STARTING_GOLD: u32 = 500;
+        }
+        "#;
+        assert!(parse_str_for_tests(text).is_err());
+    }
+
+    #[test]
+    fn module_level_type_alias_requires_semicolon() {
+        assert!(parse_str_for_tests("pub type Alias = u32").is_err());
+        assert!(parse_str_for_tests("pub type Alias = u32,").is_err());
+        assert!(parse_str_for_tests("pub type Alias = u32;").is_ok());
+    }
+
+    #[test]
+    fn module_level_opaque_type_requires_semicolon() {
+        assert!(parse_str_for_tests("pub type Opaque").is_err());
+        assert!(parse_str_for_tests("pub type Opaque,").is_err());
+        assert!(parse_str_for_tests("pub type Opaque;").is_ok());
+    }
+
+    #[test]
+    fn nested_type_alias_uses_comma_not_semicolon() {
+        // A nested alias follows the body rule: optional `,`, and `;` is rejected.
+        let comma = r#"
+        pub type Outer {
+            pub type InnerAlias = u32,
+            pub field: u32,
+        }
+        "#;
+        assert!(parse_str_for_tests(comma).is_ok());
+
+        // Trailing comma is optional before the closing brace.
+        let no_comma = r#"
+        pub type Outer {
+            pub type InnerAlias = u32
+        }
+        "#;
+        assert!(parse_str_for_tests(no_comma).is_ok());
+
+        // A `;` terminator is not accepted inside a body.
+        let semi = r#"
+        pub type Outer {
+            pub type InnerAlias = u32;
+            pub field: u32,
+        }
+        "#;
+        assert!(parse_str_for_tests(semi).is_err());
     }
 }

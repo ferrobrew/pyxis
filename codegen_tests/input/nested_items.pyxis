@@ -26,7 +26,7 @@ pub type Outer {
         FLAG_B = 2,
     },
     /// A type alias nested inside [`Outer`].
-    pub type InnerAlias = u32;
+    pub type InnerAlias = u32,
 
     pub field: u32,
 }
