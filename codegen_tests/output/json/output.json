@@ -6487,6 +6487,107 @@
         "line": 3
       }
     },
+    "reexport::Bundle": {
+      "path": "reexport::Bundle",
+      "visibility": "public",
+      "size": 76,
+      "alignment": 4,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": " A type that sits alongside the re-exports and uses them directly.",
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "matrix",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "math::Matrix4"
+            },
+            "offset": 0,
+            "size": 64,
+            "alignment": 4,
+            "is_base": false,
+            "source": {
+              "file_index": 25,
+              "line": 11
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "position",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "math::Vector3"
+            },
+            "offset": 64,
+            "size": 12,
+            "alignment": 4,
+            "is_base": false,
+            "source": {
+              "file_index": 25,
+              "line": 12
+            }
+          }
+        ],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false,
+        "pinned": false
+      },
+      "source": {
+        "file_index": 25,
+        "line": 10
+      }
+    },
+    "reexport_consumer::UsesReexport": {
+      "path": "reexport_consumer::UsesReexport",
+      "visibility": "public",
+      "size": 12,
+      "alignment": 4,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "position",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "math::Vector3"
+            },
+            "offset": 0,
+            "size": 12,
+            "alignment": 4,
+            "is_base": false,
+            "source": {
+              "file_index": 26,
+              "line": 8
+            }
+          }
+        ],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false,
+        "pinned": false
+      },
+      "source": {
+        "file_index": 26,
+        "line": 7
+      }
+    },
     "self_referential_generics::GameObject": {
       "path": "self_referential_generics::GameObject",
       "visibility": "public",
@@ -6510,7 +6611,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 25,
+              "file_index": 27,
               "line": 20
             }
           },
@@ -6531,7 +6632,7 @@
             "alignment": 1,
             "is_base": false,
             "source": {
-              "file_index": 25,
+              "file_index": 27,
               "line": 23
             }
           },
@@ -6554,7 +6655,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 25,
+              "file_index": 27,
               "line": 23
             }
           },
@@ -6577,7 +6678,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 25,
+              "file_index": 27,
               "line": 24
             }
           },
@@ -6600,7 +6701,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 25,
+              "file_index": 27,
               "line": 25
             }
           },
@@ -6621,7 +6722,7 @@
             "alignment": 1,
             "is_base": false,
             "source": {
-              "file_index": 25,
+              "file_index": 27,
               "line": 13
             }
           }
@@ -6636,7 +6737,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 25,
+        "file_index": 27,
         "line": 19
       }
     },
@@ -6669,7 +6770,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 25,
+              "file_index": 27,
               "line": 4
             }
           }
@@ -6684,7 +6785,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 25,
+        "file_index": 27,
         "line": 3
       }
     },
@@ -6711,7 +6812,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 25,
+              "file_index": 27,
               "line": 31
             }
           },
@@ -6732,7 +6833,7 @@
             "alignment": 1,
             "is_base": false,
             "source": {
-              "file_index": 25,
+              "file_index": 27,
               "line": 34
             }
           },
@@ -6755,7 +6856,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 25,
+              "file_index": 27,
               "line": 34
             }
           },
@@ -6778,7 +6879,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 25,
+              "file_index": 27,
               "line": 35
             }
           }
@@ -6793,7 +6894,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 25,
+        "file_index": 27,
         "line": 30
       }
     },
@@ -6826,7 +6927,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 25,
+              "file_index": 27,
               "line": 10
             }
           }
@@ -6841,7 +6942,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 25,
+        "file_index": 27,
         "line": 9
       }
     },
@@ -6868,7 +6969,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 26,
+              "file_index": 28,
               "line": 3
             }
           }
@@ -6883,7 +6984,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 26,
+        "file_index": 28,
         "line": 2
       }
     },
@@ -6934,7 +7035,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 27,
+              "file_index": 29,
               "line": 4
             }
           },
@@ -6951,7 +7052,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 27,
+              "file_index": 29,
               "line": 8
             }
           }
@@ -6984,7 +7085,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 27,
+              "file_index": 29,
               "line": 12
             }
           }
@@ -7018,7 +7119,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 27,
+                "file_index": 29,
                 "line": 4
               }
             }
@@ -7032,7 +7133,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 27,
+        "file_index": 29,
         "line": 2
       }
     },
@@ -7082,7 +7183,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 27,
+              "file_index": 29,
               "line": 4
             }
           }
@@ -7097,7 +7198,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 27,
+        "file_index": 29,
         "line": 4
       }
     },
@@ -7127,7 +7228,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 27,
+              "file_index": 29,
               "line": 18
             }
           },
@@ -7144,7 +7245,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 27,
+              "file_index": 29,
               "line": 22
             }
           }
@@ -7177,7 +7278,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 27,
+              "file_index": 29,
               "line": 26
             }
           }
@@ -7211,7 +7312,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 27,
+                "file_index": 29,
                 "line": 18
               }
             }
@@ -7225,7 +7326,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 27,
+        "file_index": 29,
         "line": 16
       }
     },
@@ -7275,7 +7376,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 27,
+              "file_index": 29,
               "line": 18
             }
           }
@@ -7290,7 +7391,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 27,
+        "file_index": 29,
         "line": 18
       }
     },
@@ -7317,7 +7418,7 @@
             "alignment": 8,
             "is_base": true,
             "source": {
-              "file_index": 27,
+              "file_index": 29,
               "line": 37
             }
           },
@@ -7334,7 +7435,7 @@
             "alignment": 8,
             "is_base": true,
             "source": {
-              "file_index": 27,
+              "file_index": 29,
               "line": 39
             }
           }
@@ -7368,7 +7469,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 27,
+              "file_index": 29,
               "line": 12
             }
           },
@@ -7400,7 +7501,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 27,
+              "file_index": 29,
               "line": 26
             }
           },
@@ -7432,7 +7533,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 27,
+              "file_index": 29,
               "line": 18
             }
           },
@@ -7463,7 +7564,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 27,
+              "file_index": 29,
               "line": 43
             }
           }
@@ -7497,7 +7598,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 27,
+                "file_index": 29,
                 "line": 32
               }
             },
@@ -7528,7 +7629,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 27,
+                "file_index": 29,
                 "line": 33
               }
             }
@@ -7542,7 +7643,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 27,
+        "file_index": 29,
         "line": 30
       }
     },
@@ -7592,7 +7693,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 27,
+              "file_index": 29,
               "line": 32
             }
           },
@@ -7632,7 +7733,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 27,
+              "file_index": 29,
               "line": 33
             }
           }
@@ -7647,7 +7748,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 27,
+        "file_index": 29,
         "line": 32
       }
     },
@@ -7677,7 +7778,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 28,
+              "file_index": 30,
               "line": 9
             }
           }
@@ -7692,7 +7793,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 28,
+        "file_index": 30,
         "line": 8
       }
     },
@@ -7728,7 +7829,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 29,
+              "file_index": 31,
               "line": 59
             }
           },
@@ -7755,7 +7856,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 29,
+              "file_index": 31,
               "line": 60
             }
           }
@@ -7770,7 +7871,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 29,
+        "file_index": 31,
         "line": 58
       }
     },
@@ -7795,7 +7896,7 @@
         }
       },
       "source": {
-        "file_index": 29,
+        "file_index": 31,
         "line": 16
       }
     },
@@ -7825,7 +7926,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 29,
+              "file_index": 31,
               "line": 33
             }
           },
@@ -7845,7 +7946,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 29,
+              "file_index": 31,
               "line": 34
             }
           }
@@ -7860,7 +7961,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 29,
+        "file_index": 31,
         "line": 32
       }
     },
@@ -7893,7 +7994,7 @@
         }
       },
       "source": {
-        "file_index": 29,
+        "file_index": 31,
         "line": 25
       }
     },
@@ -7926,7 +8027,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 29,
+              "file_index": 31,
               "line": 42
             }
           },
@@ -7949,7 +8050,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 29,
+              "file_index": 31,
               "line": 43
             }
           },
@@ -7976,7 +8077,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 29,
+              "file_index": 31,
               "line": 44
             }
           },
@@ -7996,7 +8097,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 29,
+              "file_index": 31,
               "line": 45
             }
           },
@@ -8016,7 +8117,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 29,
+              "file_index": 31,
               "line": 46
             }
           }
@@ -8031,7 +8132,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 29,
+        "file_index": 31,
         "line": 41
       }
     },
@@ -8053,7 +8154,7 @@
         }
       },
       "source": {
-        "file_index": 29,
+        "file_index": 31,
         "line": 9
       }
     },
@@ -8078,7 +8179,7 @@
         }
       },
       "source": {
-        "file_index": 29,
+        "file_index": 31,
         "line": 13
       }
     },
@@ -8109,7 +8210,7 @@
         }
       },
       "source": {
-        "file_index": 29,
+        "file_index": 31,
         "line": 28
       }
     },
@@ -8137,7 +8238,7 @@
         }
       },
       "source": {
-        "file_index": 29,
+        "file_index": 31,
         "line": 19
       }
     },
@@ -8159,7 +8260,7 @@
         }
       },
       "source": {
-        "file_index": 29,
+        "file_index": 31,
         "line": 6
       }
     },
@@ -8188,7 +8289,7 @@
         }
       },
       "source": {
-        "file_index": 29,
+        "file_index": 31,
         "line": 54
       }
     },
@@ -8216,7 +8317,7 @@
         }
       },
       "source": {
-        "file_index": 29,
+        "file_index": 31,
         "line": 51
       }
     },
@@ -8244,7 +8345,7 @@
         }
       },
       "source": {
-        "file_index": 29,
+        "file_index": 31,
         "line": 22
       }
     },
@@ -8379,7 +8480,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 30,
+              "file_index": 32,
               "line": 8
             }
           },
@@ -8396,7 +8497,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 30,
+              "file_index": 32,
               "line": 13
             }
           }
@@ -8418,7 +8519,7 @@
             "return_type": null,
             "calling_convention": "system",
             "source": {
-              "file_index": 30,
+              "file_index": 32,
               "line": 20
             }
           }
@@ -8441,7 +8542,7 @@
               "return_type": null,
               "calling_convention": "system",
               "source": {
-                "file_index": 30,
+                "file_index": 32,
                 "line": 8
               }
             }
@@ -8455,7 +8556,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 30,
+        "file_index": 32,
         "line": 5
       }
     },
@@ -8495,7 +8596,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 30,
+              "file_index": 32,
               "line": 8
             }
           }
@@ -8510,7 +8611,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 30,
+        "file_index": 32,
         "line": 8
       }
     },
@@ -8540,7 +8641,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 31,
+              "file_index": 33,
               "line": 13
             }
           },
@@ -8557,7 +8658,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 31,
+              "file_index": 33,
               "line": 23
             }
           }
@@ -8584,7 +8685,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 31,
+                "file_index": 33,
                 "line": 13
               }
             },
@@ -8604,7 +8705,7 @@
               "return_type": null,
               "calling_convention": "system",
               "source": {
-                "file_index": 31,
+                "file_index": 33,
                 "line": 11
               }
             },
@@ -8635,7 +8736,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 31,
+                "file_index": 33,
                 "line": 16
               }
             },
@@ -8658,7 +8759,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 31,
+                "file_index": 33,
                 "line": 19
               }
             }
@@ -8672,7 +8773,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 31,
+        "file_index": 33,
         "line": 9
       }
     },
@@ -8715,7 +8816,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 31,
+              "file_index": 33,
               "line": 13
             }
           },
@@ -8745,7 +8846,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 31,
+              "file_index": 33,
               "line": 11
             }
           },
@@ -8785,7 +8886,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 31,
+              "file_index": 33,
               "line": 16
             }
           },
@@ -8818,7 +8919,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 31,
+              "file_index": 33,
               "line": 19
             }
           }
@@ -8833,7 +8934,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 31,
+        "file_index": 33,
         "line": 13
       }
     },
@@ -8881,7 +8982,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 34,
+              "file_index": 36,
               "line": 10
             }
           }
@@ -8896,7 +8997,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 34,
+        "file_index": 36,
         "line": 9
       }
     },
@@ -8926,7 +9027,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 32,
+              "file_index": 34,
               "line": 8
             }
           },
@@ -8943,7 +9044,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 32,
+              "file_index": 34,
               "line": 9
             }
           },
@@ -8960,7 +9061,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 32,
+              "file_index": 34,
               "line": 10
             }
           }
@@ -8975,7 +9076,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 32,
+        "file_index": 34,
         "line": 7
       }
     },
@@ -9002,7 +9103,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 33,
+              "file_index": 35,
               "line": 6
             }
           }
@@ -9017,7 +9118,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 33,
+        "file_index": 35,
         "line": 5
       }
     },
@@ -9044,7 +9145,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 35,
+              "file_index": 37,
               "line": 4
             }
           },
@@ -9061,7 +9162,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 35,
+              "file_index": 37,
               "line": 5
             }
           }
@@ -9076,7 +9177,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 35,
+        "file_index": 37,
         "line": 3
       }
     },
@@ -9113,7 +9214,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 36,
+              "file_index": 38,
               "line": 14
             }
           },
@@ -9133,7 +9234,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 36,
+              "file_index": 38,
               "line": 15
             }
           }
@@ -9148,7 +9249,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 36,
+        "file_index": 38,
         "line": 13
       }
     },
@@ -9175,7 +9276,7 @@
             "alignment": 1,
             "is_base": false,
             "source": {
-              "file_index": 37,
+              "file_index": 39,
               "line": 10
             }
           },
@@ -9192,7 +9293,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 37,
+              "file_index": 39,
               "line": 13
             }
           },
@@ -9213,7 +9314,7 @@
             "alignment": 1,
             "is_base": false,
             "source": {
-              "file_index": 37,
+              "file_index": 39,
               "line": 6
             }
           }
@@ -9228,7 +9329,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 37,
+        "file_index": 39,
         "line": 9
       }
     },
@@ -9259,7 +9360,7 @@
             "alignment": 1,
             "is_base": false,
             "source": {
-              "file_index": 37,
+              "file_index": 39,
               "line": 1
             }
           }
@@ -9274,7 +9375,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 37,
+        "file_index": 39,
         "line": 4
       }
     }
@@ -9901,6 +10002,42 @@
         "line": 1
       }
     },
+    "reexport": {
+      "doc": null,
+      "items": [
+        "reexport::Bundle"
+      ],
+      "reexports": [
+        {
+          "name": "Matrix4",
+          "path": "math::Matrix4"
+        },
+        {
+          "name": "Vector3",
+          "path": "math::Vector3"
+        }
+      ],
+      "submodules": {},
+      "functions": [],
+      "backends": {},
+      "source": {
+        "file_index": 25,
+        "line": 1
+      }
+    },
+    "reexport_consumer": {
+      "doc": null,
+      "items": [
+        "reexport_consumer::UsesReexport"
+      ],
+      "submodules": {},
+      "functions": [],
+      "backends": {},
+      "source": {
+        "file_index": 26,
+        "line": 1
+      }
+    },
     "root": {
       "doc": null,
       "items": [],
@@ -9921,7 +10058,7 @@
       "functions": [],
       "backends": {},
       "source": {
-        "file_index": 25,
+        "file_index": 27,
         "line": 1
       }
     },
@@ -9934,7 +10071,7 @@
       "functions": [],
       "backends": {},
       "source": {
-        "file_index": 26,
+        "file_index": 28,
         "line": 1
       }
     },
@@ -9952,7 +10089,7 @@
       "functions": [],
       "backends": {},
       "source": {
-        "file_index": 27,
+        "file_index": 29,
         "line": 1
       }
     },
@@ -9965,7 +10102,7 @@
       "functions": [],
       "backends": {},
       "source": {
-        "file_index": 28,
+        "file_index": 30,
         "line": 1
       }
     },
@@ -9990,7 +10127,7 @@
       "functions": [],
       "backends": {},
       "source": {
-        "file_index": 29,
+        "file_index": 31,
         "line": 1
       }
     },
@@ -10004,7 +10141,7 @@
       "functions": [],
       "backends": {},
       "source": {
-        "file_index": 30,
+        "file_index": 32,
         "line": 3
       }
     },
@@ -10018,7 +10155,7 @@
       "functions": [],
       "backends": {},
       "source": {
-        "file_index": 31,
+        "file_index": 33,
         "line": 8
       }
     },
@@ -10037,7 +10174,7 @@
           "functions": [],
           "backends": {},
           "source": {
-            "file_index": 32,
+            "file_index": 34,
             "line": 1
           }
         },
@@ -10054,7 +10191,7 @@
               "functions": [],
               "backends": {},
               "source": {
-                "file_index": 33,
+                "file_index": 35,
                 "line": 1
               }
             }
@@ -10072,7 +10209,7 @@
           "functions": [],
           "backends": {},
           "source": {
-            "file_index": 35,
+            "file_index": 37,
             "line": 1
           }
         }
@@ -10090,7 +10227,7 @@
         ]
       },
       "source": {
-        "file_index": 34,
+        "file_index": 36,
         "line": 7
       }
     },
@@ -10103,7 +10240,7 @@
       "functions": [],
       "backends": {},
       "source": {
-        "file_index": 36,
+        "file_index": 38,
         "line": 1
       }
     },
@@ -10117,7 +10254,7 @@
       "functions": [],
       "backends": {},
       "source": {
-        "file_index": 37,
+        "file_index": 39,
         "line": 1
       }
     }
@@ -10148,6 +10285,8 @@
     "multiple_levels.pyxis",
     "nested_items.pyxis",
     "pinned.pyxis",
+    "reexport.pyxis",
+    "reexport_consumer.pyxis",
     "self_referential_generics.pyxis",
     "singleton.pyxis",
     "two_base_classes.pyxis",

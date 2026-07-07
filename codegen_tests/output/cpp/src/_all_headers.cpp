@@ -23,6 +23,8 @@
 #include "nested_items.hpp"
 #include "pinned.hpp"
 #include "pyxis_runtime.hpp"
+#include "reexport.hpp"
+#include "reexport_consumer.hpp"
 #include "self_referential_generics.hpp"
 #include "singleton.hpp"
 #include "two_base_classes.hpp"

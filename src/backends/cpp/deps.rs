@@ -419,6 +419,27 @@ pub fn collect_module_deps(
         walk_function(func, &mut deps, module_path, registry, bindings);
     }
 
+    // Re-exports (`pub use foo::Bar`) emit a `using` alias in this module's
+    // header. The alias names the target's fully-qualified type, so the
+    // defining module's header must be visible. A `using` to an incomplete
+    // type is legal, but we mirror a normal cross-module full reference and
+    // pull in the header via `record_path` (which also handles
+    // predefined/extern targets and same-module self-references).
+    for (_local, target) in module.reexports() {
+        let canonical = registry.canonicalize(&target);
+        if !registry.contains(&canonical) {
+            continue;
+        }
+        record_path(
+            &canonical,
+            EdgeKind::FullDef,
+            &mut deps,
+            module_path,
+            registry,
+            bindings,
+        );
+    }
+
     // Promote `backend cpp { use ...; }` paths to `#include` edges. The
     // user-declared working set is the explicit signal of which other
     // modules the cpp prologue/epilogue depends on - the text itself is

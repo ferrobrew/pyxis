@@ -94,6 +94,10 @@ pub struct JsonModule {
     pub doc_links: Vec<JsonDocLink>,
     /// Items defined directly in this module
     pub items: Vec<String>, // Paths to items
+    /// Explicit re-exports (`pub use`): items imported and re-exported from this
+    /// module. Each points at the canonical path of the item being re-exported.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub reexports: Vec<JsonReexport>,
     /// Child modules
     #[specta(inline)]
     pub submodules: BTreeMap<String, JsonModule>,
@@ -104,6 +108,17 @@ pub struct JsonModule {
     /// Source location (file and line) - None for synthesized/folder modules
     #[serde(default)]
     pub source: Option<JsonSourceLocation>,
+}
+
+/// An explicit re-export (`pub use path::Item;`). `name` is the local name the
+/// item is re-exported as; `path` is the canonical absolute path of the target
+/// item (following any re-export chain), which the viewer links to.
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+pub struct JsonReexport {
+    /// The local name the item is re-exported as.
+    pub name: String,
+    /// Canonical absolute path of the re-exported item.
+    pub path: String,
 }
 
 /// Backend configuration with prologue and epilogue
@@ -1206,6 +1221,22 @@ fn build_module_hierarchy(semantic_state: &SemanticOutput) -> BTreeMap<String, J
             .map(|f| convert_function(f, &cx))
             .collect();
 
+        // Explicit `pub use` re-exports, each canonicalized (through any
+        // re-export chain) to the defining item's path so the viewer links to
+        // its page. A target that doesn't resolve to a known item is skipped.
+        let type_registry = semantic_state.type_registry();
+        let reexports: Vec<JsonReexport> = module
+            .reexports()
+            .into_iter()
+            .filter_map(|(name, target)| {
+                let canonical = type_registry.canonicalize(&target);
+                type_registry.contains(&canonical).then(|| JsonReexport {
+                    name,
+                    path: canonical.to_string(),
+                })
+            })
+            .collect();
+
         // Convert backends. Map the typed `crate::Backend` key back to its
         // canonical lower-case string for JSON output.
         let backends: BTreeMap<String, Vec<JsonBackend>> = module
@@ -1224,6 +1255,7 @@ fn build_module_hierarchy(semantic_state: &SemanticOutput) -> BTreeMap<String, J
             doc,
             doc_links,
             items,
+            reexports,
             submodules: BTreeMap::new(),
             functions,
             backends,
@@ -1246,6 +1278,7 @@ fn build_module_hierarchy(semantic_state: &SemanticOutput) -> BTreeMap<String, J
                     doc: None,
                     doc_links: vec![],
                     items: vec![],
+                    reexports: vec![],
                     submodules: BTreeMap::new(),
                     functions: vec![],
                     backends: BTreeMap::new(),
@@ -1268,6 +1301,7 @@ fn build_module_hierarchy(semantic_state: &SemanticOutput) -> BTreeMap<String, J
                             doc: None,
                             doc_links: vec![],
                             items: vec![],
+                            reexports: vec![],
                             submodules: BTreeMap::new(),
                             functions: vec![],
                             backends: BTreeMap::new(),

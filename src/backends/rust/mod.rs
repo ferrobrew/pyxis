@@ -197,20 +197,11 @@ pub fn write_module(
 
     // Wire up child modules. Every folder that contains `.pyxis` files has a
     // module (see `synthesize_ancestor_modules`), so this produces a complete
-    // module tree without any hand-written `mod.rs`/`lib.rs`. The optional
-    // `pub use <child>::*;` re-export is controlled by `rust_reexport_children`,
-    // and a child can opt out of it with `#![rust(no_reexport)]`.
-    for (child, child_path, child_module) in &children {
+    // module tree without any hand-written `mod.rs`/`lib.rs`. Items are reached
+    // by their canonical path; a module that wants to re-expose a child's item
+    // under its own path does so with an explicit `pub use`.
+    for (child, _child_path, _child_module) in &children {
         writeln!(raw_output, "pub mod {child};")?;
-        // Skip the glob re-export when the module opts out, or when it has
-        // nothing public to re-export (a vacuous `pub use` would just trip
-        // `unused_imports`).
-        if options.rust_reexport_children
-            && !child_module.rust_no_reexport()
-            && module_has_public_exports(child_path, child_module, semantic_state)
-        {
-            writeln!(raw_output, "pub use {child}::*;")?;
-        }
     }
 
     // Rewrite cross-module doc-link destinations to absolute crate paths so
@@ -227,9 +218,11 @@ pub fn write_module(
         Some(prefix) => format!("crate::{prefix}"),
         None => "crate".to_string(),
     };
-    for p in &cross_module_imports {
+    // Map a canonical item path to its absolute Rust path, flattening nested
+    // item names (`module::Outer::Inner` → `crate::module::Outer_Inner`).
+    let to_rust_path = |p: &ItemPath| -> String {
         let module_len = find_module_prefix_len(p, &module_path_set);
-        let rust_path = if p.len() > module_len + 1 {
+        if p.len() > module_len + 1 {
             let type_segments: Vec<&str> = p.iter().skip(module_len).map(|s| s.as_str()).collect();
             let module_part: Vec<&str> = p.iter().take(module_len).map(|s| s.as_str()).collect();
             let flat_name = type_segments.join("_");
@@ -240,8 +233,23 @@ pub fn write_module(
             }
         } else {
             format!("{root}::{p}")
-        };
-        nested_rewrites.insert(p.to_string(), rust_path);
+        }
+    };
+    for p in &cross_module_imports {
+        nested_rewrites.insert(p.to_string(), to_rust_path(p));
+    }
+
+    // Emit explicit `pub use` re-exports. Each re-export is canonicalized (past
+    // any re-export chain) to the defining item and rendered as an absolute
+    // `pub use crate::…;`, so consumers of the generated crate can reach the
+    // item through this module too — mirroring the pyxis-level re-export.
+    let type_registry = semantic_state.type_registry();
+    for (_name, target) in module.reexports() {
+        let canonical = type_registry.canonicalize(&target);
+        if !type_registry.contains(&canonical) {
+            continue;
+        }
+        writeln!(raw_output, "pub use {};", to_rust_path(&canonical))?;
     }
 
     // Extern values emit as `get_<name>` accessors (a free fn when module-level,
@@ -365,27 +373,6 @@ pub fn write_module(
 
     Ok(())
 }
-
-/// Whether `pub use <module>::*;` would re-export anything: a public
-/// definition, public free function, public extern value, or a child module
-/// (whose name the glob re-exports). Extern types emit no Rust item, so they
-/// don't count. A module with only private items produces a vacuous glob.
-fn module_has_public_exports(
-    path: &ItemPath,
-    module: &Module,
-    semantic_state: &SemanticOutput,
-) -> bool {
-    let type_registry = semantic_state.type_registry();
-    module
-        .definitions(type_registry)
-        .any(|d| d.visibility == Visibility::Public)
-        || module.functions().iter().any(|f| f.is_public())
-        || semantic_state
-            .modules()
-            .keys()
-            .any(|p| p.parent().as_ref() == Some(path))
-}
-
 fn build_item(
     type_registry: &TypeRegistry,
     definition: &ItemDefinition,

@@ -148,20 +148,28 @@ impl Module {
         self.ast.uses()
     }
 
-    /// Whether this module opted out of being glob-re-exported by its parent
-    /// via `#![rust(no_reexport)]`. Honoured by the Rust backend when
-    /// `rust_reexport_children` is enabled, so a module can be declared
-    /// (`pub mod foo;`) without flattening its items into the parent.
-    pub fn rust_no_reexport(&self) -> bool {
-        self.ast.inner_attributes().any(|attr| {
-            let Some((name, items)) = attr.function() else {
-                return false;
-            };
-            name.as_str() == "rust"
-                && items.exprs().any(|expr| {
-                    matches!(expr, grammar::Expr::Ident { ident, .. } if ident.as_str() == "no_reexport")
-                })
-        })
+    /// Explicit re-exports declared with `pub use`. Each entry is
+    /// `(local_name, target_path_as_written)` — the name the item is re-exported
+    /// as (this module's `<path>::<local_name>`) and the path it points at.
+    /// Plain `use` imports are module-private and are not included.
+    pub fn reexports(&self) -> Vec<(String, ItemPath)> {
+        self.ast
+            .uses()
+            .filter_map(|item| match item {
+                grammar::ModuleItem::Use {
+                    tree,
+                    visibility: grammar::Visibility::Public,
+                    ..
+                } => Some(tree),
+                _ => None,
+            })
+            .flat_map(|tree| tree.flatten())
+            .filter_map(|target| {
+                target
+                    .last()
+                    .map(|leaf| (leaf.as_str().to_string(), target.clone()))
+            })
+            .collect()
     }
 
     /// Each `extern type`'s `#[rust_name = "..."]` binding (extern name ->

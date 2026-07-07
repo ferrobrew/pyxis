@@ -1,0 +1,13 @@
+// Explicit re-exports (`pub use`): re-exports `Matrix4` and `Vector3` from
+// `math` so that `reexport::Matrix4` / `reexport::Vector3` become valid paths
+// for other modules. A plain `use` would keep them module-private; `pub use`
+// makes them part of this module's public surface (surfaced in the viewer's
+// "Re-exports" section and emitted as `pub use` in the Rust backend).
+pub use math::{Matrix4, Vector3};
+
+/// A type that sits alongside the re-exports and uses them directly.
+#[align(4)]
+pub type Bundle {
+    pub matrix: Matrix4,
+    pub position: Vector3,
+}

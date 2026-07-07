@@ -402,6 +402,11 @@ doc: string | null; doc_links?: JsonDocLink[];
  */
 items: string[]; 
 /**
+ * Explicit re-exports (`pub use`): items imported and re-exported from this
+ * module. Each points at the canonical path of the item being re-exported.
+ */
+reexports?: JsonReexport[]; 
+/**
  * Child modules
  */
 submodules: { [key in string]: JsonModule }; 
@@ -417,6 +422,21 @@ backends: { [key in string]: JsonBackend[] };
  * Source location (file and line) - None for synthesized/folder modules
  */
 source?: JsonSourceLocation | null };
+
+/**
+ * An explicit re-export (`pub use path::Item;`). `name` is the local name the
+ * item is re-exported as; `path` is the canonical absolute path of the target
+ * item (following any re-export chain), which the viewer links to.
+ */
+export type JsonReexport = { 
+/**
+ * The local name the item is re-exported as.
+ */
+name: string; 
+/**
+ * Canonical absolute path of the re-exported item.
+ */
+path: string };
 
 export type JsonRegion = { 
 /**

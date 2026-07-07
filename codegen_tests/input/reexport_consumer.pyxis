@@ -1,0 +1,9 @@
+// Consumes a type through another module's `pub use` re-export: `Vector3` is
+// defined in `math` but re-exported by `reexport`, so importing it via
+// `reexport::Vector3` resolves to the canonical `math::Vector3`.
+use reexport::Vector3;
+
+#[size(0xC)]
+pub type UsesReexport {
+    pub position: Vector3,
+}

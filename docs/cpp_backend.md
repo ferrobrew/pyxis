@@ -195,6 +195,18 @@ walks them once up front and:
   name may contain generic syntax — `Foo<Bar<u32>>` — that's invalid
   on the LHS of `using`).
 
+## Re-exports (`pub use`)
+
+A `pub use other::Item;` re-export is emitted as a `using Item = ::other::Item;`
+alias inside the re-exporting module's namespace, so the item is reachable as
+`<module>::Item` from C++ consumers — mirroring the pyxis-level re-export. The
+target is canonicalized through any re-export chain and rendered fully qualified
+(routing through the normal type renderer, so predefined / `#[cpp_name]` externs
+resolve correctly). The alias participates in dependency analysis like any other
+cross-module reference, so the defining module's header is `#include`d; a
+same-module target needs no extra include and is still declared before the alias.
+A plain `use` is module-private and emits nothing.
+
 ## Dependency analysis & forward declarations
 
 Two distinct kinds of edges:

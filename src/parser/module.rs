@@ -4,7 +4,7 @@ use crate::span::StripLocations;
 use crate::{
     parser::{
         ParseError,
-        attributes::Attributes,
+        attributes::{Attributes, Visibility},
         core::Parser,
         external::{Backend, UseTree},
         functions::{Function, FunctionBlock},
@@ -25,15 +25,20 @@ pub enum ModuleItem {
     Comment {
         comment: Comment,
     },
-    /// Module-level inner attributes (`#![...]`), e.g. `#![rust(no_reexport)]`.
+    /// Module-level inner attributes (`#![...]`), e.g. `#![rust(example_flag)]`.
     /// Kept as an item (rather than a side-field on [`Module`]) so their
     /// position relative to comments is preserved on a format round-trip.
     InnerAttributes {
         attributes: Attributes,
         location: ItemLocation,
     },
+    /// A `use` import. `visibility` is [`Visibility::Public`] for `pub use`
+    /// (an explicit re-export: the imported name is exported from this module
+    /// as `<module>::<name>`) and [`Visibility::Private`] for a plain `use`
+    /// (in scope for this module only, not re-exported).
     Use {
         tree: UseTree,
+        visibility: Visibility,
         location: ItemLocation,
     },
     ExternType {
@@ -92,6 +97,19 @@ impl Module {
         for path in uses.into_iter() {
             self.items.push(ModuleItem::Use {
                 tree: UseTree::path(path),
+                visibility: Visibility::Private,
+                location: ItemLocation::test(),
+            });
+        }
+        self
+    }
+
+    /// Add `pub use` re-exports (convenience for tests).
+    pub fn with_pub_uses(mut self, uses: impl IntoIterator<Item = ItemPath>) -> Self {
+        for path in uses.into_iter() {
+            self.items.push(ModuleItem::Use {
+                tree: UseTree::path(path),
+                visibility: Visibility::Public,
                 location: ItemLocation::test(),
             });
         }
@@ -103,6 +121,19 @@ impl Module {
         for tree in trees.into_iter() {
             self.items.push(ModuleItem::Use {
                 tree,
+                visibility: Visibility::Private,
+                location: ItemLocation::test(),
+            });
+        }
+        self
+    }
+
+    /// Add `pub use` re-export trees with full UseTree support (for tests).
+    pub fn with_pub_use_trees(mut self, trees: impl IntoIterator<Item = UseTree>) -> Self {
+        for tree in trees.into_iter() {
+            self.items.push(ModuleItem::Use {
+                tree,
+                visibility: Visibility::Public,
                 location: ItemLocation::test(),
             });
         }
@@ -356,7 +387,15 @@ impl Parser {
         let has_attributes = matches!(self.peek(), TokenKind::Hash);
 
         match self.peek() {
-            TokenKind::Use => self.parse_use(),
+            TokenKind::Use => {
+                let use_token = self.current().clone();
+                self.parse_use(Visibility::Private, use_token)
+            }
+            // `pub use ...;` — an explicit re-export.
+            TokenKind::Pub if matches!(self.peek_nth(1), TokenKind::Use) => {
+                let pub_token = self.advance();
+                self.parse_use(Visibility::Public, pub_token)
+            }
             TokenKind::Extern if !has_attributes => {
                 // Peek ahead to distinguish extern type from extern value. Extern
                 // values are item definitions (`ItemDefinitionInner::ExternValue`),
@@ -921,8 +960,10 @@ impl PfxInstance {
 
     #[test]
     fn can_parse_module_inner_attributes() {
+        // Inner attributes (`#![...]`) parse generically; this exercises the
+        // parsing/round-tripping machinery independent of any specific attribute.
         let text = r#"
-        #![rust(no_reexport)]
+        #![rust(example_flag)]
 
         pub type Foo {
             field: i32,
@@ -938,7 +979,7 @@ impl PfxInstance {
         assert_eq!(name.as_str(), "rust");
         assert!(items.exprs().any(|e| matches!(
             e,
-            crate::grammar::Expr::Ident { ident, .. } if ident.as_str() == "no_reexport"
+            crate::grammar::Expr::Ident { ident, .. } if ident.as_str() == "example_flag"
         )));
     }
 

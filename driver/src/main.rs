@@ -21,10 +21,6 @@ enum Command {
         /// The directory to write the generated files to
         #[clap(default_value = "out")]
         out_dir: PathBuf,
-        /// (Rust) Emit `pub use <child>::*;` next to each child `pub mod`,
-        /// flattening module items into ancestors (and the crate root).
-        #[clap(long)]
-        rust_reexport_children: bool,
         /// (Rust) File name for the root module (default `lib.rs`; use
         /// `mod.rs` when mounting the tree as a submodule).
         #[clap(long)]
@@ -84,14 +80,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             in_dir,
             backend,
             out_dir,
-            rust_reexport_children,
             rust_root_file_name,
             rust_module_prefix,
         } => {
             std::fs::create_dir_all(&out_dir)?;
             let mut file_store = pyxis::source_store::FileStore::new();
             let options = pyxis::BuildOptions {
-                rust_reexport_children,
                 rust_root_file_name,
                 rust_module_prefix: rust_module_prefix
                     .as_deref()

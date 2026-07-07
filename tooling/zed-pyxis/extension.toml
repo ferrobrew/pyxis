@@ -14,4 +14,4 @@ repository = "https://github.com/ferrobrew/tree-sitter-pyxis"
 # Must be a full commit SHA, not a branch name: Zed keys its compiled-grammar
 # cache on this string, so a branch ref is never re-resolved once cached. Bump
 # it (after pushing the grammar) via `python tooling/sync-grammar.py`.
-commit = "e99210243df8fcee36d4c57eddd994e238800ff1"
+commit = "9d9e17eb6d62fc27a35d6c7385e38f3c2daabf1d"

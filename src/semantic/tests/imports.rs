@@ -186,6 +186,154 @@ fn will_fail_on_use_of_nonexistent_module() {
 }
 
 #[test]
+fn pub_use_reexport_is_consumable_cross_module() {
+    // `foo` defines Bar; `mid` re-exports it with `pub use foo::Bar`; `top`
+    // imports the re-export as `mid::Bar` and uses it. The field must resolve to
+    // the *canonical* `foo::Bar`, not the alias `mid::Bar`.
+    let foo = M::new().with_definitions([ID::new(
+        (V::Public, "Bar"),
+        TD::new([TS::field((V::Private, "x"), T::ident("u32"))]),
+    )]);
+    let mid = M::new().with_pub_uses([IP::from("foo::Bar")]);
+    let top = M::new()
+        .with_uses([IP::from("mid::Bar")])
+        .with_definitions([ID::new(
+            (V::Public, "Top"),
+            TD::new([TS::field((V::Private, "b"), T::ident("Bar"))]),
+        )]);
+
+    let mut builder = SemanticBuilder::new(4);
+    builder.add_module(&foo, &IP::from("foo")).unwrap();
+    builder.add_module(&mid, &IP::from("mid")).unwrap();
+    builder.add_module(&top, &IP::from("top")).unwrap();
+    let resolved = builder.build().unwrap();
+
+    let top_ty = resolved
+        .type_registry()
+        .get(&IP::from("top::Top"), &ItemLocation::test())
+        .expect("Top should resolve")
+        .resolved()
+        .expect("Top should be resolved")
+        .inner
+        .as_type()
+        .expect("Top is a type")
+        .clone();
+    assert_eq!(top_ty.regions.len(), 1);
+    assert_eq!(top_ty.regions[0].type_ref, ST::raw("foo::Bar"));
+}
+
+#[test]
+fn pub_use_reexport_resolves_by_absolute_path() {
+    // A consumer can reference a re-exported item by its aliased absolute path
+    // (`mid::Bar`) without importing it, e.g. behind a pointer. It resolves to
+    // the canonical `foo::Bar`.
+    let foo = M::new().with_definitions([ID::new(
+        (V::Public, "Bar"),
+        TD::new([TS::field((V::Private, "x"), T::ident("u32"))]),
+    )]);
+    let mid = M::new().with_pub_uses([IP::from("foo::Bar")]);
+    let top = M::new().with_definitions([ID::new(
+        (V::Public, "Top"),
+        TD::new([TS::field(
+            (V::Private, "b"),
+            T::ident("mid::Bar").mut_pointer(),
+        )]),
+    )]);
+
+    let mut builder = SemanticBuilder::new(4);
+    builder.add_module(&foo, &IP::from("foo")).unwrap();
+    builder.add_module(&mid, &IP::from("mid")).unwrap();
+    builder.add_module(&top, &IP::from("top")).unwrap();
+    let resolved = builder.build().unwrap();
+
+    let top_ty = resolved
+        .type_registry()
+        .get(&IP::from("top::Top"), &ItemLocation::test())
+        .expect("Top should resolve")
+        .resolved()
+        .expect("Top should be resolved")
+        .inner
+        .as_type()
+        .expect("Top is a type")
+        .clone();
+    assert_eq!(top_ty.regions.len(), 1);
+    assert_eq!(
+        top_ty.regions[0].type_ref,
+        ST::raw("foo::Bar").mut_pointer()
+    );
+}
+
+#[test]
+fn plain_use_is_not_implicitly_reexported() {
+    // Regression guard: a *plain* `use foo::Bar` in `mid` must NOT make
+    // `mid::Bar` importable elsewhere. `top`'s `use mid::Bar` has to fail —
+    // implicit re-export is not a thing.
+    let foo = M::new().with_definitions([ID::new(
+        (V::Public, "Bar"),
+        TD::new([TS::field((V::Private, "x"), T::ident("u32"))]),
+    )]);
+    // `mid` imports Bar privately and uses it in a definition of its own.
+    let mid = M::new()
+        .with_uses([IP::from("foo::Bar")])
+        .with_definitions([ID::new(
+            (V::Public, "MidThing"),
+            TD::new([TS::field((V::Private, "b"), T::ident("Bar"))]),
+        )]);
+    let top = M::new()
+        .with_uses([IP::from("mid::Bar")])
+        .with_definitions([ID::new(
+            (V::Public, "Top"),
+            TD::new([TS::field((V::Private, "b"), T::ident("Bar"))]),
+        )]);
+
+    let mut builder = SemanticBuilder::new(4);
+    builder.add_module(&foo, &IP::from("foo")).unwrap();
+    builder.add_module(&mid, &IP::from("mid")).unwrap();
+    builder.add_module(&top, &IP::from("top")).unwrap();
+
+    let err = builder.build().unwrap_err();
+    assert_eq!(
+        err.strip_locations(),
+        SemanticError::UseItemNotFound {
+            path: IP::from("mid::Bar"),
+            location: ItemLocation::test(),
+        }
+        .strip_locations()
+    );
+}
+
+#[test]
+fn plain_use_reexport_not_referenceable_by_path() {
+    // The path-reference counterpart: `top` referencing `mid::Bar` (privately
+    // imported into `mid`) by absolute path must not resolve.
+    let foo = M::new().with_definitions([ID::new(
+        (V::Public, "Bar"),
+        TD::new([TS::field((V::Private, "x"), T::ident("u32"))]),
+    )]);
+    let mid = M::new()
+        .with_uses([IP::from("foo::Bar")])
+        .with_definitions([ID::new(
+            (V::Public, "MidThing"),
+            TD::new([TS::field((V::Private, "b"), T::ident("Bar"))]),
+        )]);
+    let top = M::new().with_definitions([ID::new(
+        (V::Public, "Top"),
+        TD::new([TS::field(
+            (V::Private, "b"),
+            T::ident("mid::Bar").mut_pointer(),
+        )]),
+    )]);
+
+    let mut builder = SemanticBuilder::new(4);
+    builder.add_module(&foo, &IP::from("foo")).unwrap();
+    builder.add_module(&mid, &IP::from("mid")).unwrap();
+    builder.add_module(&top, &IP::from("top")).unwrap();
+
+    // `mid::Bar` is not a real item and not re-exported, so `Top` stalls.
+    assert!(builder.build().is_err());
+}
+
+#[test]
 fn can_use_module_in_use_statement() {
     // Test that using a module path (not just a type) is allowed
     // This is useful for `use math` to bring the module into scope

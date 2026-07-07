@@ -9,7 +9,7 @@ use crate::span::StripLocations;
 
 use super::{
     ParseError,
-    attributes::Attributes,
+    attributes::{Attributes, Visibility},
     core::Parser,
     expressions::{Expr, StringFormat},
     module::ModuleItem,
@@ -267,8 +267,16 @@ impl EqualsIgnoringLocations for UseTree {
 impl Parser {
     /// Parse a use statement, potentially with braced imports (including nested).
     /// Returns a single ModuleItem containing a UseTree.
-    pub(crate) fn parse_use(&mut self) -> Result<ModuleItem, ParseError> {
-        let first_token = self.expect(TokenKind::Use)?;
+    ///
+    /// `start_token` anchors the item's span. For a plain `use` it is the `use`
+    /// keyword itself; for `pub use` it is the `pub` keyword (already consumed by
+    /// the caller) so the span covers the whole statement.
+    pub(crate) fn parse_use(
+        &mut self,
+        visibility: Visibility,
+        start_token: crate::tokenizer::Token,
+    ) -> Result<ModuleItem, ParseError> {
+        self.expect(TokenKind::Use)?;
 
         // Check for super keyword (not supported yet)
         if let TokenKind::Ident(name) = self.peek()
@@ -281,9 +289,13 @@ impl Parser {
 
         let tree = self.parse_use_tree()?;
         let last_token = self.expect(TokenKind::Semi)?;
-        let location = self.item_location_from_token_range(&first_token, &last_token);
+        let location = self.item_location_from_token_range(&start_token, &last_token);
 
-        Ok(ModuleItem::Use { tree, location })
+        Ok(ModuleItem::Use {
+            tree,
+            visibility,
+            location,
+        })
     }
 
     /// Parse a use tree (recursive for nested braced imports).
@@ -591,6 +603,46 @@ mod tests {
                     T::generic("TestType", [T::ident("Hey")]),
                 )]),
             )]);
+
+        assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
+    }
+
+    #[test]
+    fn can_parse_pub_use_reexport() {
+        // `pub use` is an explicit re-export; plain `use` is private.
+        let text = r#"
+        pub use math::Vector3;
+        use math::Matrix4;
+        "#;
+
+        let module = parse_str_for_tests(text).unwrap();
+        let uses: Vec<_> = module
+            .items
+            .iter()
+            .filter_map(|i| match i {
+                ModuleItem::Use {
+                    tree, visibility, ..
+                } => Some((tree.flatten(), *visibility)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(uses.len(), 2);
+        assert_eq!(uses[0].0, vec![IP::from("math::Vector3")]);
+        assert_eq!(uses[0].1, V::Public);
+        assert_eq!(uses[1].0, vec![IP::from("math::Matrix4")]);
+        assert_eq!(uses[1].1, V::Private);
+    }
+
+    #[test]
+    fn can_parse_pub_use_braced() {
+        let text = r#"
+        pub use math::{Matrix4, Vector3};
+        "#;
+
+        let ast = M::new().with_pub_use_trees([UT::group(
+            "math",
+            [UT::path("Matrix4"), UT::path("Vector3")],
+        )]);
 
         assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
     }

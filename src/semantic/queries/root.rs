@@ -153,6 +153,13 @@ pub fn analyze<'db>(
         }
     }
 
+    // Carry `pub use` re-exports so `contains`/lookup can canonicalize a
+    // re-exported name to its defining item (used by validate_uses and by
+    // resolution of items referencing re-exports).
+    for (alias, target) in decl_registry.reexports() {
+        type_registry.add_reexport(alias.clone(), target.clone());
+    }
+
     // Build modules from parsed files (extern values, impls, backends)
     let mut modules: BTreeMap<ItemPath, SemanticModule> = BTreeMap::new();
     modules.insert(ItemPath::empty(), SemanticModule::default());

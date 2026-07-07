@@ -16,6 +16,7 @@ import type {
   JsonBackend,
   JsonItem,
   JsonFunction,
+  JsonReexport,
   JsonSourceLocation,
   JsonDocLink,
 } from '@pyxis/types';
@@ -24,6 +25,7 @@ interface ModuleData {
   doc?: string | null;
   doc_links?: JsonDocLink[];
   items?: string[];
+  reexports?: JsonReexport[];
   submodules?: { [key: string]: unknown };
   functions?: JsonFunction[];
   backends?: { [key: string]: unknown };
@@ -96,6 +98,39 @@ function ItemList({ items }: ItemListProps) {
                   </div>
                 )}
               </div>
+            </Link>
+          );
+        })}
+      </Panel>
+    </div>
+  );
+}
+
+// Re-export list component. Mirrors rustdoc's "Re-exports" section: each entry
+// links to the canonical page of the re-exported item, shown under the local
+// name it is re-exported as.
+function ReexportList({ reexports }: { reexports: JsonReexport[] }) {
+  const { documentation, selectedSource } = useDocumentation();
+  if (!reexports || reexports.length === 0) return null;
+
+  return (
+    <div id="reexports" className="mb-8">
+      <SectionHeader anchor="reexports">Re-exports</SectionHeader>
+      <Panel>
+        {reexports.map((reexport: JsonReexport) => {
+          const target = documentation?.items[reexport.path];
+          const color = target ? getItemTypeColor(kindToItemType(target.kind.type)) : 'text-fg';
+          return (
+            <Link
+              key={reexport.name}
+              to={buildItemUrl(reexport.path, selectedSource)}
+              className={ROW}
+            >
+              <div className="font-mono text-sm">
+                <span className="text-fg-subtle">pub use </span>
+                <span className={`font-semibold ${color}`}>{reexport.name}</span>
+              </div>
+              <div className="mt-1 font-mono text-xs text-fg-subtle">{reexport.path}</div>
             </Link>
           );
         })}
@@ -215,8 +250,11 @@ export function ModuleView() {
       })
     );
 
+  const reexports = module.reexports || [];
+
   const toc: TocEntry[] = [];
   if (hasBackendSlot('prologue')) toc.push({ id: 'backend-prologue', label: 'Backend Prologue' });
+  if (reexports.length > 0) toc.push({ id: 'reexports', label: 'Re-exports' });
   if (module.functions && module.functions.length > 0)
     toc.push({ id: 'functions', label: 'Functions' });
   if (items.length > 0) toc.push({ id: 'types', label: 'Types' });
@@ -246,6 +284,9 @@ export function ModuleView() {
 
         {/* Backend Prologues */}
         <BackendSpliceSection backends={backends} slot="prologue" />
+
+        {/* Re-exports */}
+        <ReexportList reexports={reexports} />
 
         {/* Functions */}
         {module.functions && module.functions.length > 0 && (

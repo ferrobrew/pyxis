@@ -36,6 +36,8 @@ pub struct DeclarationRegistry {
     predefined: BTreeMap<ItemPath, PredefinedInfo>,
     /// Item path → declaring module path (for nested items whose parent is a type, not a module).
     item_scopes: BTreeMap<ItemPath, ItemPath>,
+    /// Explicit re-exports (`pub use`): alias path → target path as written.
+    reexports: BTreeMap<ItemPath, ItemPath>,
     /// Pointer size from project config (4 or 8)
     pointer_size: usize,
 }
@@ -99,6 +101,26 @@ impl DeclarationRegistry {
                 scope,
             },
         );
+
+        // Record explicit re-exports (`pub use`). Plain `use` is module-private
+        // and deliberately does not populate this map.
+        for item in module.uses() {
+            if let grammar::ModuleItem::Use {
+                tree,
+                visibility: crate::grammar::Visibility::Public,
+                ..
+            } = item
+            {
+                for target in tree.flatten() {
+                    if let Some(leaf) = target.last() {
+                        let alias = module_path.join(leaf.clone());
+                        if alias != target {
+                            self.reexports.insert(alias, target);
+                        }
+                    }
+                }
+            }
+        }
 
         // Register all definitions
         for def in module.definitions() {
@@ -240,11 +262,31 @@ impl DeclarationRegistry {
         }
     }
 
-    /// Check if a path exists in the registry (as any kind of item).
+    /// Follow the `pub use` re-export chain from `path` to a fixpoint. Returns
+    /// `path` unchanged if it is not a re-export alias. Bounded against cycles.
+    pub fn canonicalize(&self, path: &ItemPath) -> ItemPath {
+        let mut current = path.clone();
+        for _ in 0..64 {
+            match self.reexports.get(&current) {
+                Some(next) if next != &current => current = next.clone(),
+                _ => break,
+            }
+        }
+        current
+    }
+
+    /// All recorded re-exports: alias path → target path (as written).
+    pub fn reexports(&self) -> &BTreeMap<ItemPath, ItemPath> {
+        &self.reexports
+    }
+
+    /// Check if a path exists in the registry (as any kind of item), following
+    /// `pub use` re-exports.
     pub fn contains(&self, path: &ItemPath) -> bool {
-        self.items.contains_key(path)
-            || self.extern_types.contains_key(path)
-            || self.predefined.contains_key(path)
+        let path = self.canonicalize(path);
+        self.items.contains_key(&path)
+            || self.extern_types.contains_key(&path)
+            || self.predefined.contains_key(&path)
     }
 
     /// Get the grammar definition for an item path.
@@ -298,6 +340,8 @@ impl DeclarationRegistry {
 
         match found {
             Some(path) => {
+                // Canonicalize through any `pub use` re-export to the defining item.
+                let path = self.canonicalize(&path);
                 if self.predefined.contains_key(&path) {
                     NameResolution::FoundPredefined(path)
                 } else if self.extern_types.contains_key(&path) {

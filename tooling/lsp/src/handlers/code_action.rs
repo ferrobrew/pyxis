@@ -111,7 +111,7 @@ impl ServerState {
         // absorb a `types::math::Vector3` as `…math::{Aabb, Vector3}…`).
         let mut best: Option<(usize, &ItemLocation, Vec<ItemPath>)> = None;
         for item in &module.items {
-            let ModuleItem::Use { tree, location } = item else {
+            let ModuleItem::Use { tree, location, .. } = item else {
                 continue;
             };
             let flat = tree.flatten();

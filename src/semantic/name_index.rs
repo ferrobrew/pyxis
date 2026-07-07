@@ -65,6 +65,11 @@ pub struct NameIndex {
     predefined: BTreeSet<ItemPath>,
     /// Module path → resolution scope (own path + `use` leaves).
     module_scopes: BTreeMap<ItemPath, Vec<ItemPath>>,
+    /// Explicit re-exports (`pub use`): alias path (`<module>::<leaf>`) → the
+    /// target path as written. Following the chain to a fixpoint yields the
+    /// canonical item path. Plain `use` does NOT populate this — it is
+    /// module-private and never re-exported.
+    reexports: BTreeMap<ItemPath, ItemPath>,
     /// Item path → index into the query's `sources` list (which file declares it).
     item_files: BTreeMap<ItemPath, usize>,
     /// Item path → declaring module path (for nested items whose parent is a type, not a module).
@@ -106,6 +111,28 @@ impl NameIndex {
             }))
             .collect::<Vec<_>>();
         self.module_scopes.insert(module_path.clone(), scope);
+
+        // Record explicit re-exports (`pub use`). Each re-exported leaf becomes
+        // an alias `<module>::<leaf>` pointing at the target path as written.
+        for item in module.uses() {
+            if let grammar::ModuleItem::Use {
+                tree,
+                visibility: grammar::Visibility::Public,
+                ..
+            } = item
+            {
+                for target in tree.flatten() {
+                    if let Some(leaf) = target.last() {
+                        let alias = module_path.join(leaf.clone());
+                        // A re-export of oneself is meaningless; skip it so a
+                        // stray `pub use <self>;` can't form a 1-cycle.
+                        if alias != target {
+                            self.reexports.insert(alias, target);
+                        }
+                    }
+                }
+            }
+        }
 
         for def in module.definitions() {
             let path = module_path.join(def.name.as_str().into());
@@ -452,6 +479,25 @@ impl NameIndex {
         self.pointer_size
     }
 
+    /// Follow the `pub use` re-export chain from `path` to a fixpoint. If `path`
+    /// is not a re-export alias, it is returned unchanged. A bounded loop guards
+    /// against a pathological re-export cycle.
+    pub fn canonicalize(&self, path: &ItemPath) -> ItemPath {
+        let mut current = path.clone();
+        for _ in 0..64 {
+            match self.reexports.get(&current) {
+                Some(next) if next != &current => current = next.clone(),
+                _ => break,
+            }
+        }
+        current
+    }
+
+    /// All recorded re-exports: alias path → target path (as written).
+    pub fn reexports(&self) -> &BTreeMap<ItemPath, ItemPath> {
+        &self.reexports
+    }
+
     pub fn item_sig(&self, path: &ItemPath) -> Option<&ItemSig> {
         self.items.get(path)
     }
@@ -505,6 +551,17 @@ impl NameIndex {
         {
             return Some(path.clone());
         }
+        // A multi-segment path may name a re-export alias (`<module>::<leaf>`);
+        // follow it to its canonical target.
+        if path.len() > 1 {
+            let canonical = self.canonicalize(path);
+            if canonical != *path
+                && (self.items.contains_key(&canonical)
+                    || self.extern_types.contains_key(&canonical))
+            {
+                return Some(canonical);
+            }
+        }
         match self.resolve_name(scope, path.last()?.as_str()) {
             NameResolution::Found(p)
             | NameResolution::FoundExtern(p)
@@ -534,6 +591,9 @@ impl NameIndex {
             });
 
         if let Some(path) = found {
+            // A name brought into scope by a `pub use` (or referenced through a
+            // re-exporting module) resolves to its canonical target.
+            let path = self.canonicalize(&path);
             if self.extern_types.contains_key(&path) {
                 return NameResolution::FoundExtern(path);
             }

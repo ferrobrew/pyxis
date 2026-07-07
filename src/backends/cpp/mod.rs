@@ -309,6 +309,38 @@ fn intra_module_forward_decls(
     out
 }
 
+/// Render `using` aliases for a module's `pub use` re-exports. Each alias
+/// makes `<module>::<local_name>` a valid C++ name for the re-export's
+/// canonical target, mirroring the pyxis-level re-export. Targets that no
+/// longer resolve (e.g. dangling paths) are skipped.
+fn render_reexport_aliases(
+    module: &Module,
+    registry: &TypeRegistry,
+    ctx: render::RenderCtx,
+) -> Result<Vec<String>> {
+    use crate::semantic::types::Type;
+    // Force fully-qualified target names: a same-module bare-name render
+    // could produce a degenerate `using Bar = Bar;`, and member-shadow
+    // rewriting must never touch the alias's right-hand side.
+    let empty = ItemPath::empty();
+    let qualified_ctx = render::RenderCtx {
+        module_path: &empty,
+        shadowed_members: None,
+        ..ctx
+    };
+    let mut aliases = Vec::new();
+    for (local_name, target) in module.reexports() {
+        let canonical = registry.canonicalize(&target);
+        if !registry.contains(&canonical) {
+            continue;
+        }
+        let rendered = render::render_type(&Type::Raw(canonical), qualified_ctx)?;
+        let name = render::cpp_ident(&local_name);
+        aliases.push(format!("using {name} = {rendered};"));
+    }
+    Ok(aliases)
+}
+
 /// Append `#include <header>` (or `"header"`) to `out` if it hasn't
 /// already been emitted; track seen includes in `emitted`. The arg is
 /// stored verbatim so callers control angle-bracket vs quote form.
@@ -417,8 +449,11 @@ fn assemble_header(
         }
     }
 
-    let has_namespace_body =
-        !body.is_empty() || !post_header.is_empty() || !splices.epilogue.is_empty();
+    let reexport_aliases = render_reexport_aliases(module, registry, ctx)?;
+    let has_namespace_body = !body.is_empty()
+        || !post_header.is_empty()
+        || !reexport_aliases.is_empty()
+        || !splices.epilogue.is_empty();
     if has_namespace_body {
         writeln!(out)?;
         open_namespace(&mut out, key)?;
@@ -445,6 +480,15 @@ fn assemble_header(
                 } else {
                     writeln!(out, "    {line}")?;
                 }
+            }
+        }
+        // Re-export `using` aliases land after every same-module type is
+        // fully declared, so an alias whose target lives in this module
+        // refers to an already-declared name.
+        if !reexport_aliases.is_empty() {
+            writeln!(out)?;
+            for line in &reexport_aliases {
+                writeln!(out, "    {line}")?;
             }
         }
         if !splices.epilogue.is_empty() {
@@ -599,6 +643,7 @@ fn write_module(
     // Skip writing anything if the module contributes no declarations,
     // no cross-module deps, and no user-supplied splices.
     if !body.wrote_anything
+        && module.reexports().is_empty()
         && module_deps.include_modules.is_empty()
         && module_deps.include_headers.is_empty()
         && splices.prologue.is_empty()

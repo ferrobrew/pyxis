@@ -104,10 +104,16 @@ impl PrettyPrinter {
                     self.writeln("");
                 }
             }
-            ModuleItem::Use { tree, .. } => {
+            ModuleItem::Use {
+                tree, visibility, ..
+            } => {
                 self.write_indent();
                 let tree_str = self.format_use_tree(tree);
-                writeln!(&mut self.output, "use {tree_str};").unwrap();
+                let vis = match visibility {
+                    Visibility::Public => "pub ",
+                    Visibility::Private => "",
+                };
+                writeln!(&mut self.output, "{vis}use {tree_str};").unwrap();
                 // Only add blank line if next item is not a use statement
                 if !matches!(next_item, Some(ModuleItem::Use { .. })) {
                     self.writeln("");
@@ -1343,12 +1349,21 @@ pub type Test {
     }
 
     #[test]
+    fn pub_use_reexport_round_trips() {
+        // `pub use` (an explicit re-export) must survive a round-trip and stay
+        // distinct from a plain `use`.
+        let text = "pub use math::Vector3;\nuse math::Matrix4;";
+        let module = parse_str_for_tests(text).unwrap();
+        assert_eq!(pretty_print(&module), text);
+    }
+
+    #[test]
     fn test_pretty_print_module_inner_attributes() {
         // Module-level inner attributes (`#![...]`) must survive a round-trip
         // so `pyxis fmt` doesn't strip them.
         let text = r#"
-        // keep this module's items namespaced
-        #![rust(no_reexport)]
+        // a module-level inner attribute
+        #![rust(example_flag)]
 
         pub type Foo {
             field: i32,
@@ -1356,8 +1371,8 @@ pub type Test {
         "#;
 
         let expected = r#"
-// keep this module's items namespaced
-#![rust(no_reexport)]
+// a module-level inner attribute
+#![rust(example_flag)]
 
 pub type Foo {
     field: i32,

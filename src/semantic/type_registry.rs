@@ -34,6 +34,11 @@ pub enum TypeLookupResult {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TypeRegistry {
     types: BTreeMap<ItemPath, ItemDefinition>,
+    /// Explicit re-exports (`pub use`): alias path → target path as written.
+    /// Only the shared `placeholder_base` registry populates this; overlays
+    /// created via [`Self::with_base`] inherit it through `base`. Following the
+    /// chain to a fixpoint canonicalizes a re-exported name to its definition.
+    reexports: BTreeMap<ItemPath, ItemPath>,
     /// Optional shared read-only base consulted for any path not in `types`.
     /// Lets `resolve_item` overlay just its own resolved dependencies on top
     /// of a memoized placeholder base instead of cloning all n placeholders.
@@ -45,6 +50,7 @@ impl TypeRegistry {
     pub(crate) fn new(pointer_size: usize) -> TypeRegistry {
         TypeRegistry {
             types: BTreeMap::new(),
+            reexports: BTreeMap::new(),
             base: None,
             pointer_size,
         }
@@ -56,21 +62,55 @@ impl TypeRegistry {
         let pointer_size = base.pointer_size;
         TypeRegistry {
             types: BTreeMap::new(),
+            reexports: BTreeMap::new(),
             base: Some(base),
             pointer_size,
         }
     }
 
-    /// Look up an item — own additions first, then the base.
-    fn lookup(&self, path: &ItemPath) -> Option<&ItemDefinition> {
-        self.types
-            .get(path)
-            .or_else(|| self.base.as_ref().and_then(|b| b.lookup(path)))
+    /// Record a `pub use` re-export: `alias` (`<module>::<leaf>`) → `target`
+    /// (as written). Consulted by [`Self::canonicalize`].
+    pub(crate) fn add_reexport(&mut self, alias: ItemPath, target: ItemPath) {
+        if alias != target {
+            self.reexports.insert(alias, target);
+        }
     }
 
-    /// Whether an item exists in own additions or the base.
+    /// The re-export target for `path`, checking own additions then the base.
+    fn reexport_target(&self, path: &ItemPath) -> Option<ItemPath> {
+        self.reexports
+            .get(path)
+            .cloned()
+            .or_else(|| self.base.as_ref().and_then(|b| b.reexport_target(path)))
+    }
+
+    /// Follow the `pub use` re-export chain from `path` to a fixpoint. Returns
+    /// `path` unchanged if it is not a re-export alias. Bounded against cycles.
+    pub(crate) fn canonicalize(&self, path: &ItemPath) -> ItemPath {
+        let mut current = path.clone();
+        for _ in 0..64 {
+            match self.reexport_target(&current) {
+                Some(next) if next != current => current = next,
+                _ => break,
+            }
+        }
+        current
+    }
+
+    /// Look up an item — own additions first, then the base. A re-export alias
+    /// is canonicalized to its target so the resolved definition (which may live
+    /// in this overlay) is found rather than the alias path.
+    fn lookup(&self, path: &ItemPath) -> Option<&ItemDefinition> {
+        let canonical = self.canonicalize(path);
+        self.types
+            .get(&canonical)
+            .or_else(|| self.base.as_ref().and_then(|b| b.lookup(&canonical)))
+    }
+
+    /// Whether an item exists in own additions or the base (following re-exports).
     fn has(&self, path: &ItemPath) -> bool {
-        self.types.contains_key(path) || self.base.as_ref().is_some_and(|b| b.has(path))
+        let canonical = self.canonicalize(path);
+        self.types.contains_key(&canonical) || self.base.as_ref().is_some_and(|b| b.has(&canonical))
     }
 
     pub fn pointer_size(&self) -> usize {
@@ -328,7 +368,10 @@ impl TypeRegistry {
             });
 
         match found_path {
+            // Canonicalize through any `pub use` re-export so the resolved type
+            // carries its defining path, not the re-exporting module's alias.
             Some(path) => {
+                let path = self.canonicalize(&path);
                 // Check if the type is resolved
                 if let Some(item_def) = self.lookup(&path) {
                     if item_def.is_resolved() {
@@ -356,7 +399,9 @@ impl TypeRegistry {
         let (scope_types, scope_modules): (Vec<&ItemPath>, Vec<&ItemPath>) =
             scope.iter().partition(|ip| self.has(ip));
 
-        // If we find the relevant type within our scope, take the last one
+        // If we find the relevant type within our scope, take the last one.
+        // Canonicalize through any `pub use` re-export so callers (e.g. pointer
+        // pointees) reference the defining path, not the re-exporting alias.
         scope_types
             .into_iter()
             .rev()
@@ -369,6 +414,7 @@ impl TypeRegistry {
                     .map(|ip| ip.join(name.into()))
                     .find(|ip| self.has(ip))
             })
+            .map(|p| self.canonicalize(&p))
     }
 
     /// Attempts to partially resolve a generic type even when some of its arguments
@@ -455,21 +501,22 @@ impl TypeRegistry {
     pub(crate) fn resolve_path(&self, scope: &[ItemPath], path: &ItemPath) -> TypeLookupResult {
         let from_module = Self::get_from_module(scope);
 
-        // If path has multiple segments, try to resolve it directly first
+        // If path has multiple segments, try to resolve it directly first.
+        // Canonicalize through any `pub use` re-export so `<module>::<alias>`
+        // resolves to (and reports as) the item's defining path.
         if path.len() > 1 {
-            if let Some(item_def) = self.lookup(path) {
+            let canonical = self.canonicalize(path);
+            if let Some(item_def) = self.lookup(&canonical) {
                 // Check visibility for directly resolved paths
                 if let Some(from) = from_module {
-                    if !self.can_access(from, path) {
+                    if !self.can_access(from, &canonical) {
                         return TypeLookupResult::PrivateAccess {
-                            item_path: path.clone(),
+                            item_path: canonical.clone(),
                         };
                     }
                 }
                 if item_def.is_resolved() {
-                    return TypeLookupResult::Found(
-                        self.resolve_type_alias(Type::Raw(path.clone())),
-                    );
+                    return TypeLookupResult::Found(self.resolve_type_alias(Type::Raw(canonical)));
                 } else {
                     return TypeLookupResult::NotYetResolved;
                 }
@@ -510,10 +557,18 @@ impl TypeRegistry {
                 } = pointee
                 {
                     if generic_args.is_empty() {
-                        // Non-generic type reference - just find its path
-                        if let Some(last) = path.last()
-                            && let Some(full_path) = self.find_type_path(scope, last.as_str())
-                        {
+                        // Non-generic type reference — find its canonical path
+                        // even if the pointee isn't fully resolved (a pointer only
+                        // needs the pointee to exist). A multi-segment path is
+                        // taken directly (canonicalized through any `pub use`
+                        // re-export); a bare name resolves through the scope.
+                        let full_path = if path.len() > 1 && self.has(path) {
+                            Some(self.canonicalize(path))
+                        } else {
+                            path.last()
+                                .and_then(|last| self.find_type_path(scope, last.as_str()))
+                        };
+                        if let Some(full_path) = full_path {
                             return TypeLookupResult::Found(wrap_pointer(Box::new(Type::Raw(
                                 full_path,
                             ))));

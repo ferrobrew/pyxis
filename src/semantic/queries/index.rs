@@ -88,5 +88,10 @@ pub fn placeholder_base<'db>(
         let arity = index.item_sig(path).map(|s| s.arity).unwrap_or(0);
         registry.add(make_placeholder(path, arity));
     }
+    // Carry `pub use` re-exports into the shared base so every overlay can
+    // canonicalize a re-exported name to its defining item.
+    for (alias, target) in index.reexports() {
+        registry.add_reexport(alias.clone(), target.clone());
+    }
     PlaceholderBase::new(db, Arc::new(registry))
 }
