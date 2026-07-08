@@ -11,7 +11,8 @@
 // `<cstdio>` is only needed by the .cpp method bodies below. Routing
 // it through `prologue definition` keeps the include out of the
 // public header.
-backend cpp prologue definition r#"
+#[cfg(backend = "cpp")]
+prologue definition r#"
     #include <cstdio>
 "#;
 
@@ -26,14 +27,16 @@ impl Logger {
     pub fn record(&mut self) -> u32;
 }
 
-backend rust epilogue r#"
+#[cfg(backend = "rust")]
+epilogue r#"
     impl Logger {
         pub fn make() -> Logger { Logger { seen: 0 } }
         pub fn record(&mut self) -> u32 { self.seen += 1; self.seen }
     }
 "#;
 
-backend cpp epilogue definition r#"
+#[cfg(backend = "cpp")]
+epilogue definition r#"
 Logger Logger::make() { return Logger{0}; }
 
 ::std::uint32_t Logger::record() {

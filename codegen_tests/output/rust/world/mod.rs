@@ -2,7 +2,7 @@
 //! The world subsystem.
 //! This module is backed by a `mod.pyxis`, so it exercises folder-level
 //! modules: a module doc comment, an item defined directly in the folder
-//! module, and `backend` glue - all spliced into the generated `mod.rs`
+//! module, and splice glue - all spliced into the generated `mod.rs`
 //! alongside the auto-generated child `mod` declarations.
 pub mod atmosphere;
 pub mod deep;

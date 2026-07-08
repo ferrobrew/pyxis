@@ -6,7 +6,7 @@ use crate::{
         error::Result,
         function::{self, Function},
         type_registry::TypeRegistry,
-        types::{Backend, BackendSplice, ItemDefinition},
+        types::{ItemDefinition, Splice},
     },
     span::{HasLocation, ItemLocation},
 };
@@ -38,7 +38,10 @@ pub struct Module {
     pub(crate) definition_paths: BTreeSet<ItemPath>,
     pub(crate) functions: Vec<Function>,
     pub(crate) impls: BTreeMap<ItemPath, Vec<grammar::FunctionBlock>>,
-    pub(crate) backends: BTreeMap<crate::Backend, Vec<Backend>>,
+    /// Standalone `prologue`/`epilogue` splices, in source order, each
+    /// carrying its optional cfg gate. Backends select the ones active for
+    /// them via [`Splice::active_for`].
+    pub(crate) splices: Vec<Splice>,
     pub(crate) doc: Vec<String>,
     /// Where the module is declared, derived from its first item. Internal for
     /// synthesized/folder modules that have no source of their own.
@@ -53,7 +56,7 @@ impl Default for Module {
             definition_paths: Default::default(),
             functions: Default::default(),
             impls: Default::default(),
-            backends: Default::default(),
+            splices: Default::default(),
             doc: Default::default(),
             location: ItemLocation::internal(),
         }
@@ -76,7 +79,7 @@ impl Module {
         path: ItemPath,
         ast: grammar::Module,
         impls: &[grammar::FunctionBlock],
-        grammar_backends: &[grammar::Backend],
+        grammar_splices: &[grammar::Splice],
     ) -> Result<Self> {
         let mut impls_map: BTreeMap<ItemPath, Vec<grammar::FunctionBlock>> = BTreeMap::new();
         for fb in impls {
@@ -97,32 +100,20 @@ impl Module {
         }
         let impls = impls_map;
 
-        let mut backends: BTreeMap<crate::Backend, Vec<Backend>> = BTreeMap::new();
-        for backend in grammar_backends {
-            // Flatten each `use` tree on the backend block into absolute
-            // item paths for the semantic representation. Validation
-            // (existence + visibility) happens later during semantic
-            // checking, alongside module-level use validation.
-            let uses: Vec<ItemPath> = backend
-                .uses
-                .iter()
-                .flat_map(|tree| tree.flatten())
-                .collect();
-            backends.entry(backend.name).or_default().push(Backend {
-                prologue: BackendSplice {
-                    header: backend.prologue.header.clone(),
-                    definition: backend.prologue.definition.clone(),
-                    for_type: backend.prologue.for_type.clone(),
-                },
-                epilogue: BackendSplice {
-                    header: backend.epilogue.header.clone(),
-                    definition: backend.epilogue.definition.clone(),
-                    for_type: backend.epilogue.for_type.clone(),
-                },
-                uses,
-                location: backend.location,
-            });
-        }
+        // Lower each grammar splice to its semantic form: read the optional
+        // cfg gate off its attributes and carry the as-written `for_type`
+        // through (resolved later during validation).
+        let splices: Vec<Splice> = grammar_splices
+            .iter()
+            .map(|splice| Splice {
+                kind: splice.kind,
+                cfg: splice.attributes.cfg(),
+                definition: splice.definition,
+                for_type: splice.for_type.clone(),
+                text: splice.text.clone(),
+                location: splice.location,
+            })
+            .collect();
 
         let doc = ast.doc_comments.clone();
         // Use the first item's location as a proxy for the module's own source
@@ -138,7 +129,7 @@ impl Module {
             definition_paths: BTreeSet::new(),
             functions: vec![],
             impls,
-            backends,
+            splices,
             doc,
             location,
         })
@@ -146,6 +137,34 @@ impl Module {
 
     pub fn uses(&self) -> impl Iterator<Item = &grammar::ModuleItem> {
         self.ast.uses()
+    }
+
+    /// Splices active for `backend` (ungated ones always qualify), in
+    /// source order.
+    pub fn splices_for(&self, backend: crate::Backend) -> impl Iterator<Item = &Splice> {
+        self.splices.iter().filter(move |s| s.active_for(backend))
+    }
+
+    /// As-written `use` paths that are cfg-*gated* and active under
+    /// `backend`, flattened. Ungated uses are resolution-only and excluded:
+    /// a forced `#include` is inherently backend-specific, so it must be
+    /// gated. The cpp backend promotes these to `#include` edges.
+    pub fn gated_uses_for(&self, backend: crate::Backend) -> Vec<ItemPath> {
+        let ctx = crate::parser::cfg::CfgContext { backend };
+        self.ast
+            .items
+            .iter()
+            .filter_map(|item| match item {
+                grammar::ModuleItem::Use {
+                    tree, attributes, ..
+                } => attributes
+                    .cfg()
+                    .filter(|cfg| cfg.evaluate(&ctx))
+                    .map(|_| tree),
+                _ => None,
+            })
+            .flat_map(|tree| tree.flatten())
+            .collect()
     }
 
     /// Explicit re-exports declared with `pub use`. Each entry is

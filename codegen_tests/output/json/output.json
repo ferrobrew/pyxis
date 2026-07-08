@@ -1,5 +1,5 @@
 {
-  "schema_version": 9,
+  "schema_version": 10,
   "pyxis_version": "0.1.0",
   "pointer_size": 8,
   "project_name": "test-project",
@@ -419,7 +419,7 @@
             "is_base": false,
             "source": {
               "file_index": 3,
-              "line": 44
+              "line": 48
             }
           }
         ],
@@ -439,7 +439,7 @@
             "calling_convention": "system",
             "source": {
               "file_index": 3,
-              "line": 48
+              "line": 52
             }
           }
         ],
@@ -453,7 +453,7 @@
       },
       "source": {
         "file_index": 3,
-        "line": 43
+        "line": 47
       }
     },
     "backend_for::Widget": {
@@ -1579,7 +1579,7 @@
             "is_base": false,
             "source": {
               "file_index": 9,
-              "line": 20
+              "line": 21
             }
           }
         ],
@@ -1599,7 +1599,7 @@
             "calling_convention": "system",
             "source": {
               "file_index": 9,
-              "line": 24
+              "line": 25
             }
           },
           {
@@ -1621,7 +1621,7 @@
             "calling_convention": "system",
             "source": {
               "file_index": 9,
-              "line": 26
+              "line": 27
             }
           }
         ],
@@ -1635,7 +1635,7 @@
       },
       "source": {
         "file_index": 9,
-        "line": 19
+        "line": 20
       }
     },
     "diamond_inheritance::Base": {
@@ -2987,7 +2987,7 @@
             "is_base": false,
             "source": {
               "file_index": 15,
-              "line": 44
+              "line": 48
             }
           },
           {
@@ -3007,7 +3007,7 @@
             "is_base": false,
             "source": {
               "file_index": 15,
-              "line": 45
+              "line": 49
             }
           }
         ],
@@ -3034,7 +3034,7 @@
             "calling_convention": "system",
             "source": {
               "file_index": 15,
-              "line": 49
+              "line": 53
             }
           },
           {
@@ -3062,7 +3062,7 @@
             ],
             "source": {
               "file_index": 15,
-              "line": 56
+              "line": 60
             }
           }
         ],
@@ -3076,7 +3076,7 @@
       },
       "source": {
         "file_index": 15,
-        "line": 43
+        "line": 47
       }
     },
     "f32": {
@@ -9388,7 +9388,7 @@
       ],
       "submodules": {},
       "functions": [],
-      "backends": {},
+      "splices": [],
       "source": {
         "file_index": 2,
         "line": 1
@@ -9417,70 +9417,98 @@
           "calling_convention": "system",
           "source": {
             "file_index": 3,
-            "line": 31
+            "line": 33
           }
         }
       ],
-      "backends": {
-        "cpp": [
-          {
-            "prologue": null,
-            "epilogue": {
-              "header": "\ninline Widget Widget::make() { return Widget{0}; }\ninline ::std::uint32_t Widget::get_id() const { return id; }\n",
-              "definition": null,
-              "for_type": "backend_for::Widget"
-            }
+      "splices": [
+        {
+          "kind": "epilogue",
+          "cfg": {
+            "type": "key_value",
+            "key": "backend",
+            "value": "rust"
           },
-          {
-            "prologue": null,
-            "epilogue": {
-              "header": "\ninline ::std::uint32_t module_init() { return 1; }\n",
-              "definition": null
-            }
+          "definition": false,
+          "for_type": "backend_for::Widget",
+          "text": "\n    impl Widget {\n        pub fn make() -> Widget { Widget { id: 0 } }\n        pub fn get_id(&self) -> u32 { self.id }\n    }\n"
+        },
+        {
+          "kind": "epilogue",
+          "cfg": {
+            "type": "key_value",
+            "key": "backend",
+            "value": "cpp"
           },
-          {
-            "prologue": {
-              "header": "\nusing HandleRaw = ::std::uint8_t*;\n",
-              "definition": null,
-              "for_type": "backend_for::Handle"
-            },
-            "epilogue": {
-              "header": "\ninline Handle Handle::null() { return Handle{nullptr}; }\n",
-              "definition": null,
-              "for_type": "backend_for::Handle"
-            }
-          }
-        ],
-        "rust": [
-          {
-            "prologue": null,
-            "epilogue": {
-              "header": "\n    impl Widget {\n        pub fn make() -> Widget { Widget { id: 0 } }\n        pub fn get_id(&self) -> u32 { self.id }\n    }\n",
-              "definition": null,
-              "for_type": "backend_for::Widget"
-            }
+          "definition": false,
+          "for_type": "backend_for::Widget",
+          "text": "\ninline Widget Widget::make() { return Widget{0}; }\ninline ::std::uint32_t Widget::get_id() const { return id; }\n"
+        },
+        {
+          "kind": "epilogue",
+          "cfg": {
+            "type": "key_value",
+            "key": "backend",
+            "value": "rust"
           },
-          {
-            "prologue": null,
-            "epilogue": {
-              "header": "\n    pub fn module_init() -> u32 { 1 }\n",
-              "definition": null
-            }
+          "definition": false,
+          "text": "\n    pub fn module_init() -> u32 { 1 }\n"
+        },
+        {
+          "kind": "epilogue",
+          "cfg": {
+            "type": "key_value",
+            "key": "backend",
+            "value": "cpp"
           },
-          {
-            "prologue": {
-              "header": "\ntype HandleRaw = *mut u8;\n",
-              "definition": null,
-              "for_type": "backend_for::Handle"
-            },
-            "epilogue": {
-              "header": "\n    impl Handle {\n        pub fn null() -> Handle { Handle { raw: std::ptr::null_mut() } }\n    }\n",
-              "definition": null,
-              "for_type": "backend_for::Handle"
-            }
-          }
-        ]
-      },
+          "definition": false,
+          "text": "\ninline ::std::uint32_t module_init() { return 1; }\n"
+        },
+        {
+          "kind": "prologue",
+          "cfg": {
+            "type": "key_value",
+            "key": "backend",
+            "value": "rust"
+          },
+          "definition": false,
+          "for_type": "backend_for::Handle",
+          "text": "\ntype HandleRaw = *mut u8;\n"
+        },
+        {
+          "kind": "epilogue",
+          "cfg": {
+            "type": "key_value",
+            "key": "backend",
+            "value": "rust"
+          },
+          "definition": false,
+          "for_type": "backend_for::Handle",
+          "text": "\n    impl Handle {\n        pub fn null() -> Handle { Handle { raw: std::ptr::null_mut() } }\n    }\n"
+        },
+        {
+          "kind": "prologue",
+          "cfg": {
+            "type": "key_value",
+            "key": "backend",
+            "value": "cpp"
+          },
+          "definition": false,
+          "for_type": "backend_for::Handle",
+          "text": "\nusing HandleRaw = ::std::uint8_t*;\n"
+        },
+        {
+          "kind": "epilogue",
+          "cfg": {
+            "type": "key_value",
+            "key": "backend",
+            "value": "cpp"
+          },
+          "definition": false,
+          "for_type": "backend_for::Handle",
+          "text": "\ninline Handle Handle::null() { return Handle{nullptr}; }\n"
+        }
+      ],
       "source": {
         "file_index": 3,
         "line": 1
@@ -9494,7 +9522,7 @@
       ],
       "submodules": {},
       "functions": [],
-      "backends": {},
+      "splices": [],
       "source": {
         "file_index": 4,
         "line": 1
@@ -9507,7 +9535,7 @@
       ],
       "submodules": {},
       "functions": [],
-      "backends": {},
+      "splices": [],
       "source": {
         "file_index": 5,
         "line": 1
@@ -9557,7 +9585,7 @@
           }
         }
       ],
-      "backends": {},
+      "splices": [],
       "source": {
         "file_index": 6,
         "line": 1
@@ -9571,26 +9599,28 @@
       ],
       "submodules": {},
       "functions": [],
-      "backends": {
-        "cpp": [
-          {
-            "prologue": null,
-            "epilogue": {
-              "header": "\ninline ::std::uint32_t Probe::read() const { return value; }\ninline ::std::uint32_t Probe::cpp_only() const { return value + 2; }\ninline ::std::uint32_t Probe::cpp_or_json() const { return value + 3; }\ninline ::std::uint32_t Probe::not_rust() const { return value + 4; }\n",
-              "definition": null
-            }
-          }
-        ],
-        "rust": [
-          {
-            "prologue": null,
-            "epilogue": {
-              "header": "\n    impl Probe {\n        pub fn read(&self) -> u32 { self.value }\n        pub fn rust_only(&self) -> u32 { self.value + 1 }\n        pub fn rust_block_method(&self) -> u32 { self.value + 100 }\n    }\n",
-              "definition": null
-            }
-          }
-        ]
-      },
+      "splices": [
+        {
+          "kind": "epilogue",
+          "cfg": {
+            "type": "key_value",
+            "key": "backend",
+            "value": "rust"
+          },
+          "definition": false,
+          "text": "\n    impl Probe {\n        pub fn read(&self) -> u32 { self.value }\n        pub fn rust_only(&self) -> u32 { self.value + 1 }\n        pub fn rust_block_method(&self) -> u32 { self.value + 100 }\n    }\n"
+        },
+        {
+          "kind": "epilogue",
+          "cfg": {
+            "type": "key_value",
+            "key": "backend",
+            "value": "cpp"
+          },
+          "definition": false,
+          "text": "\ninline ::std::uint32_t Probe::read() const { return value; }\ninline ::std::uint32_t Probe::cpp_only() const { return value + 2; }\ninline ::std::uint32_t Probe::cpp_or_json() const { return value + 3; }\ninline ::std::uint32_t Probe::not_rust() const { return value + 4; }\n"
+        }
+      ],
       "source": {
         "file_index": 7,
         "line": 1
@@ -9610,7 +9640,7 @@
       ],
       "submodules": {},
       "functions": [],
-      "backends": {},
+      "splices": [],
       "source": {
         "file_index": 8,
         "line": 1
@@ -9623,33 +9653,38 @@
       ],
       "submodules": {},
       "functions": [],
-      "backends": {
-        "cpp": [
-          {
-            "prologue": {
-              "header": null,
-              "definition": "\n    #include <cstdio>\n"
-            },
-            "epilogue": null
+      "splices": [
+        {
+          "kind": "prologue",
+          "cfg": {
+            "type": "key_value",
+            "key": "backend",
+            "value": "cpp"
           },
-          {
-            "prologue": null,
-            "epilogue": {
-              "header": null,
-              "definition": "\nLogger Logger::make() { return Logger{0}; }\n\n::std::uint32_t Logger::record() {\n    seen += 1;\n    std::printf(\"Logger seen=%u\\n\", seen);\n    return seen;\n}\n"
-            }
-          }
-        ],
-        "rust": [
-          {
-            "prologue": null,
-            "epilogue": {
-              "header": "\n    impl Logger {\n        pub fn make() -> Logger { Logger { seen: 0 } }\n        pub fn record(&mut self) -> u32 { self.seen += 1; self.seen }\n    }\n",
-              "definition": null
-            }
-          }
-        ]
-      },
+          "definition": true,
+          "text": "\n    #include <cstdio>\n"
+        },
+        {
+          "kind": "epilogue",
+          "cfg": {
+            "type": "key_value",
+            "key": "backend",
+            "value": "rust"
+          },
+          "definition": false,
+          "text": "\n    impl Logger {\n        pub fn make() -> Logger { Logger { seen: 0 } }\n        pub fn record(&mut self) -> u32 { self.seen += 1; self.seen }\n    }\n"
+        },
+        {
+          "kind": "epilogue",
+          "cfg": {
+            "type": "key_value",
+            "key": "backend",
+            "value": "cpp"
+          },
+          "definition": true,
+          "text": "\nLogger Logger::make() { return Logger{0}; }\n\n::std::uint32_t Logger::record() {\n    seen += 1;\n    std::printf(\"Logger seen=%u\\n\", seen);\n    return seen;\n}\n"
+        }
+      ],
       "source": {
         "file_index": 9,
         "line": 1
@@ -9669,7 +9704,7 @@
       ],
       "submodules": {},
       "functions": [],
-      "backends": {},
+      "splices": [],
       "source": {
         "file_index": 10,
         "line": 1
@@ -9683,7 +9718,7 @@
       ],
       "submodules": {},
       "functions": [],
-      "backends": {},
+      "splices": [],
       "source": {
         "file_index": 11,
         "line": 1
@@ -9696,7 +9731,7 @@
       ],
       "submodules": {},
       "functions": [],
-      "backends": {},
+      "splices": [],
       "source": {
         "file_index": 12,
         "line": 1
@@ -9710,7 +9745,7 @@
       ],
       "submodules": {},
       "functions": [],
-      "backends": {},
+      "splices": [],
       "source": {
         "file_index": 13,
         "line": 1
@@ -9727,7 +9762,7 @@
       ],
       "submodules": {},
       "functions": [],
-      "backends": {},
+      "splices": [],
       "source": {
         "file_index": 14,
         "line": 1
@@ -9756,58 +9791,72 @@
           "calling_convention": "system",
           "source": {
             "file_index": 15,
-            "line": 32
+            "line": 34
           }
         }
       ],
-      "backends": {
-        "cpp": [
-          {
-            "prologue": null,
-            "epilogue": {
-              "header": "\ninline Counter Counter::make() { return Counter{0}; }\ninline ::std::uint32_t Counter::bump() { value += 1; return value; }\ninline ::std::uint32_t Counter::read() const { return value; }\n",
-              "definition": null
-            }
+      "splices": [
+        {
+          "kind": "epilogue",
+          "cfg": {
+            "type": "key_value",
+            "key": "backend",
+            "value": "rust"
           },
-          {
-            "prologue": null,
-            "epilogue": {
-              "header": "\ninline ::std::uint32_t module_hello() { return 42; }\n",
-              "definition": null
-            }
+          "definition": false,
+          "text": "\n    impl Counter {\n        pub fn make() -> Counter { Counter { value: 0 } }\n        pub fn bump(&mut self) -> u32 { self.value += 1; self.value }\n        pub fn read(&self) -> u32 { self.value }\n    }\n"
+        },
+        {
+          "kind": "epilogue",
+          "cfg": {
+            "type": "key_value",
+            "key": "backend",
+            "value": "cpp"
           },
-          {
-            "prologue": null,
-            "epilogue": {
-              "header": "\ntemplate <class T>\ninline T* Pair<T>::first_ptr() const { return first; }\n\ntemplate <class T> template <class Y>\ninline Y* Pair<T>::cast_first() const { return reinterpret_cast<Y*>(first); }\n",
-              "definition": null
-            }
-          }
-        ],
-        "rust": [
-          {
-            "prologue": null,
-            "epilogue": {
-              "header": "\n    impl Counter {\n        pub fn make() -> Counter { Counter { value: 0 } }\n        pub fn bump(&mut self) -> u32 { self.value += 1; self.value }\n        pub fn read(&self) -> u32 { self.value }\n    }\n",
-              "definition": null
-            }
+          "definition": false,
+          "text": "\ninline Counter Counter::make() { return Counter{0}; }\ninline ::std::uint32_t Counter::bump() { value += 1; return value; }\ninline ::std::uint32_t Counter::read() const { return value; }\n"
+        },
+        {
+          "kind": "epilogue",
+          "cfg": {
+            "type": "key_value",
+            "key": "backend",
+            "value": "rust"
           },
-          {
-            "prologue": null,
-            "epilogue": {
-              "header": "\n    pub fn module_hello() -> u32 { 42 }\n",
-              "definition": null
-            }
+          "definition": false,
+          "text": "\n    pub fn module_hello() -> u32 { 42 }\n"
+        },
+        {
+          "kind": "epilogue",
+          "cfg": {
+            "type": "key_value",
+            "key": "backend",
+            "value": "cpp"
           },
-          {
-            "prologue": null,
-            "epilogue": {
-              "header": "\n    impl<T> Pair<T> {\n        pub fn first_ptr(&self) -> *mut T { self.first }\n        // In Rust, method-level type parameters live on the function, not\n        // the impl. Pyxis's `impl<T, Y> Pair<T> { fn cast_first ... }` form\n        // maps to this Rust shape.\n        pub fn cast_first<Y>(&self) -> *mut Y { self.first as *mut Y }\n    }\n",
-              "definition": null
-            }
-          }
-        ]
-      },
+          "definition": false,
+          "text": "\ninline ::std::uint32_t module_hello() { return 42; }\n"
+        },
+        {
+          "kind": "epilogue",
+          "cfg": {
+            "type": "key_value",
+            "key": "backend",
+            "value": "rust"
+          },
+          "definition": false,
+          "text": "\n    impl<T> Pair<T> {\n        pub fn first_ptr(&self) -> *mut T { self.first }\n        // In Rust, method-level type parameters live on the function, not\n        // the impl. Pyxis's `impl<T, Y> Pair<T> { fn cast_first ... }` form\n        // maps to this Rust shape.\n        pub fn cast_first<Y>(&self) -> *mut Y { self.first as *mut Y }\n    }\n"
+        },
+        {
+          "kind": "epilogue",
+          "cfg": {
+            "type": "key_value",
+            "key": "backend",
+            "value": "cpp"
+          },
+          "definition": false,
+          "text": "\ntemplate <class T>\ninline T* Pair<T>::first_ptr() const { return first; }\n\ntemplate <class T> template <class Y>\ninline Y* Pair<T>::cast_first() const { return reinterpret_cast<Y*>(first); }\n"
+        }
+      ],
       "source": {
         "file_index": 15,
         "line": 1
@@ -9821,7 +9870,7 @@
       ],
       "submodules": {},
       "functions": [],
-      "backends": {},
+      "splices": [],
       "source": {
         "file_index": 16,
         "line": 1
@@ -9879,7 +9928,7 @@
           }
         }
       ],
-      "backends": {},
+      "splices": [],
       "source": {
         "file_index": 17,
         "line": 1
@@ -9902,7 +9951,7 @@
       ],
       "submodules": {},
       "functions": [],
-      "backends": {},
+      "splices": [],
       "source": {
         "file_index": 18,
         "line": 1
@@ -9919,7 +9968,7 @@
       ],
       "submodules": {},
       "functions": [],
-      "backends": {},
+      "splices": [],
       "source": {
         "file_index": 19,
         "line": 1
@@ -9933,7 +9982,7 @@
       ],
       "submodules": {},
       "functions": [],
-      "backends": {},
+      "splices": [],
       "source": {
         "file_index": 20,
         "line": 1
@@ -9947,7 +9996,7 @@
       ],
       "submodules": {},
       "functions": [],
-      "backends": {},
+      "splices": [],
       "source": {
         "file_index": 21,
         "line": 1
@@ -9967,7 +10016,7 @@
       ],
       "submodules": {},
       "functions": [],
-      "backends": {},
+      "splices": [],
       "source": {
         "file_index": 22,
         "line": 1
@@ -9980,7 +10029,7 @@
       ],
       "submodules": {},
       "functions": [],
-      "backends": {},
+      "splices": [],
       "source": {
         "file_index": 23,
         "line": 1
@@ -9996,7 +10045,7 @@
       ],
       "submodules": {},
       "functions": [],
-      "backends": {},
+      "splices": [],
       "source": {
         "file_index": 24,
         "line": 1
@@ -10019,7 +10068,7 @@
       ],
       "submodules": {},
       "functions": [],
-      "backends": {},
+      "splices": [],
       "source": {
         "file_index": 25,
         "line": 1
@@ -10032,7 +10081,7 @@
       ],
       "submodules": {},
       "functions": [],
-      "backends": {},
+      "splices": [],
       "source": {
         "file_index": 26,
         "line": 1
@@ -10043,7 +10092,7 @@
       "items": [],
       "submodules": {},
       "functions": [],
-      "backends": {},
+      "splices": [],
       "source": null
     },
     "self_referential_generics": {
@@ -10056,7 +10105,7 @@
       ],
       "submodules": {},
       "functions": [],
-      "backends": {},
+      "splices": [],
       "source": {
         "file_index": 27,
         "line": 1
@@ -10069,7 +10118,7 @@
       ],
       "submodules": {},
       "functions": [],
-      "backends": {},
+      "splices": [],
       "source": {
         "file_index": 28,
         "line": 1
@@ -10087,7 +10136,7 @@
       ],
       "submodules": {},
       "functions": [],
-      "backends": {},
+      "splices": [],
       "source": {
         "file_index": 29,
         "line": 1
@@ -10100,7 +10149,7 @@
       ],
       "submodules": {},
       "functions": [],
-      "backends": {},
+      "splices": [],
       "source": {
         "file_index": 30,
         "line": 1
@@ -10125,7 +10174,7 @@
       ],
       "submodules": {},
       "functions": [],
-      "backends": {},
+      "splices": [],
       "source": {
         "file_index": 31,
         "line": 1
@@ -10139,7 +10188,7 @@
       ],
       "submodules": {},
       "functions": [],
-      "backends": {},
+      "splices": [],
       "source": {
         "file_index": 32,
         "line": 3
@@ -10153,14 +10202,14 @@
       ],
       "submodules": {},
       "functions": [],
-      "backends": {},
+      "splices": [],
       "source": {
         "file_index": 33,
         "line": 8
       }
     },
     "world": {
-      "doc": " The world subsystem.\n This module is backed by a `mod.pyxis`, so it exercises folder-level\n modules: a module doc comment, an item defined directly in the folder\n module, and `backend` glue - all spliced into the generated `mod.rs`\n alongside the auto-generated child `mod` declarations.",
+      "doc": " The world subsystem.\n This module is backed by a `mod.pyxis`, so it exercises folder-level\n modules: a module doc comment, an item defined directly in the folder\n module, and splice glue - all spliced into the generated `mod.rs`\n alongside the auto-generated child `mod` declarations.",
       "items": [
         "world::World"
       ],
@@ -10172,7 +10221,7 @@
           ],
           "submodules": {},
           "functions": [],
-          "backends": {},
+          "splices": [],
           "source": {
             "file_index": 34,
             "line": 1
@@ -10189,7 +10238,7 @@
               ],
               "submodules": {},
               "functions": [],
-              "backends": {},
+              "splices": [],
               "source": {
                 "file_index": 35,
                 "line": 1
@@ -10197,7 +10246,7 @@
             }
           },
           "functions": [],
-          "backends": {},
+          "splices": [],
           "source": null
         },
         "weather": {
@@ -10207,7 +10256,7 @@
           ],
           "submodules": {},
           "functions": [],
-          "backends": {},
+          "splices": [],
           "source": {
             "file_index": 37,
             "line": 1
@@ -10215,17 +10264,18 @@
         }
       },
       "functions": [],
-      "backends": {
-        "rust": [
-          {
-            "prologue": null,
-            "epilogue": {
-              "header": "\n    impl World {\n        pub fn from_id(id: u64) -> World { World { id } }\n    }\n",
-              "definition": null
-            }
-          }
-        ]
-      },
+      "splices": [
+        {
+          "kind": "epilogue",
+          "cfg": {
+            "type": "key_value",
+            "key": "backend",
+            "value": "rust"
+          },
+          "definition": false,
+          "text": "\n    impl World {\n        pub fn from_id(id: u64) -> World { World { id } }\n    }\n"
+        }
+      ],
       "source": {
         "file_index": 36,
         "line": 7
@@ -10238,7 +10288,7 @@
       ],
       "submodules": {},
       "functions": [],
-      "backends": {},
+      "splices": [],
       "source": {
         "file_index": 38,
         "line": 1
@@ -10252,7 +10302,7 @@
       ],
       "submodules": {},
       "functions": [],
-      "backends": {},
+      "splices": [],
       "source": {
         "file_index": 39,
         "line": 1

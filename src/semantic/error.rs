@@ -1,7 +1,6 @@
 #![allow(clippy::result_large_err)]
 
 use crate::{
-    Backend,
     grammar::{self, ItemPath},
     semantic::types::{
         CallingConvention, ItemDefinitionInner, ItemStateResolved, PredefinedItem,
@@ -394,13 +393,11 @@ pub enum SemanticError {
         path: ItemPath,
         location: ItemLocation,
     },
-    /// `prologue definition` / `epilogue definition` was used on a non-cpp
-    /// backend. Only cpp distinguishes a header from a source file, so the
-    /// modifier is meaningless elsewhere.
-    BackendDefinitionNotSupported {
-        backend: Backend,
-        location: ItemLocation,
-    },
+    /// A `prologue definition` / `epilogue definition` splice's cfg didn't
+    /// resolve cpp-only (it was ungated, or gated so it's active for a
+    /// non-cpp backend). Only cpp distinguishes a header from a source file,
+    /// so the `definition` modifier is meaningless elsewhere.
+    SpliceDefinitionNotCppOnly { location: ItemLocation },
     /// `prologue for <Type>` / `epilogue for <Type>` referenced a type that
     /// doesn't resolve to any known item. The target must name a type
     /// visible from the backend block's module.
@@ -724,14 +721,14 @@ impl SemanticError {
             SemanticError::UseItemNotFound { path, .. } => {
                 format!("Item in use statement not found: `{path}`")
             }
-            SemanticError::BackendDefinitionNotSupported { backend, .. } => {
-                format!(
-                    "`prologue definition` / `epilogue definition` is only valid for `backend cpp`; got `backend {backend}`"
-                )
+            SemanticError::SpliceDefinitionNotCppOnly { .. } => {
+                "`prologue definition` / `epilogue definition` is only valid for cpp; gate the \
+                 splice with `#[cfg(backend = \"cpp\")]`"
+                    .to_string()
             }
             SemanticError::BackendForTargetNotFound { target, module, .. } => {
                 format!(
-                    "`for {target}` on a `backend` block in module `{module}` does not resolve to a known type"
+                    "`for {target}` on a splice in module `{module}` does not resolve to a known type"
                 )
             }
             SemanticError::BackendForTargetCrossModule {
@@ -1108,7 +1105,7 @@ impl SemanticError {
             SemanticError::TypeNotFound { location, .. } => Some(location),
             SemanticError::DocLinkNotFound { location, .. } => Some(location),
             SemanticError::UseItemNotFound { location, .. } => Some(location),
-            SemanticError::BackendDefinitionNotSupported { location, .. } => Some(location),
+            SemanticError::SpliceDefinitionNotCppOnly { location, .. } => Some(location),
             SemanticError::BackendForTargetNotFound { location, .. } => Some(location),
             SemanticError::BackendForTargetCrossModule { location, .. } => Some(location),
             SemanticError::MissingExternAttribute { location, .. } => Some(location),

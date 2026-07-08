@@ -23,7 +23,7 @@ import type {
   JsonEnumDefinition,
   JsonBitflagsDefinition,
   JsonDocLink,
-  JsonBackend,
+  JsonSplice,
   JsonItem,
 } from '@pyxis/types';
 
@@ -446,19 +446,14 @@ export function ItemView() {
 
   // Backend splices tagged `for <Type>` are stored on the enclosing module;
   // pull them here so the type page can render its own prologue/epilogue.
-  const moduleBackends =
+  const moduleSplices =
     (
       findModule(documentation.modules, modulePath) as {
-        backends?: { [key: string]: unknown };
+        splices?: JsonSplice[];
       } | null
-    )?.backends ?? {};
-  const hasBackendProvided = Object.values(moduleBackends).some((configs) =>
-    (configs as JsonBackend[]).some((c) =>
-      (['prologue', 'epilogue'] as const).some((slot) => {
-        const s = c[slot];
-        return s && s.for_type === decodedPath && (s.header || s.definition);
-      })
-    )
+    )?.splices ?? [];
+  const hasBackendProvided = moduleSplices.some(
+    (s) => s.for_type === decodedPath && s.text.trim().length > 0
   );
 
   // Determine item type for color coding
@@ -605,7 +600,7 @@ export function ItemView() {
         {item.kind.type === 'type' && <TypeView def={item.kind} modulePath={modulePath} />}
         {item.kind.type === 'enum' && <EnumView def={item.kind} modulePath={modulePath} />}
         {item.kind.type === 'bitflags' && <BitflagsView def={item.kind} />}
-        {hasBackendProvided && <TypeBackendCode backends={moduleBackends} itemPath={decodedPath} />}
+        {hasBackendProvided && <TypeBackendCode splices={moduleSplices} itemPath={decodedPath} />}
       </article>
 
       <OnThisPage entries={toc} />

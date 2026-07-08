@@ -2,7 +2,7 @@ use super::*;
 
 use pyxis::{
     grammar::{
-        Backend, ExternValueDefinition, FunctionBlock, Ident, ImplItem, ItemDefinitionInner,
+        ExternValueDefinition, FunctionBlock, Ident, ImplItem, ItemDefinitionInner, Splice,
         TypeDefinition, TypeStatement,
     },
     semantic::types::ItemDefinitionInner as ResolvedInner,
@@ -135,7 +135,7 @@ impl ServerState {
                 ModuleItem::ExternType { name, location, .. } => {
                     self.hover_extern_type(ctx, name, location)
                 }
-                ModuleItem::Backend { backend } => self.hover_backend(ctx, backend),
+                ModuleItem::Splice { splice } => self.hover_splice(ctx, splice),
                 _ => None,
             };
             if hit.is_some() {
@@ -537,13 +537,13 @@ impl ServerState {
         Some((value, span))
     }
 
-    /// Branch 3, a backend block: its keywords
-    /// (cpp/rust/prologue/epilogue/definition/for).
-    fn hover_backend(&self, ctx: &HoverCtx, backend: &Backend) -> Option<(String, Span)> {
-        if !backend.location.span.contains(&ctx.loc) {
+    /// Branch 3, a splice statement: its keywords
+    /// (prologue/epilogue/definition/for).
+    fn hover_splice(&self, ctx: &HoverCtx, splice: &Splice) -> Option<(String, Span)> {
+        if !splice.location.span.contains(&ctx.loc) {
             return None;
         }
-        backend_term_at(ctx.tokens, backend, &ctx.loc)
+        splice_term_at(ctx.tokens, splice, &ctx.loc)
     }
 
     /// textDocument/definition

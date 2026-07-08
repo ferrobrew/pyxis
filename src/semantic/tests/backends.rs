@@ -1,4 +1,4 @@
-//! Tests for `backend NAME { ... }` block validation.
+//! Tests for standalone `prologue`/`epilogue` splice validation.
 
 use crate::{
     grammar::test_aliases::*,
@@ -8,56 +8,73 @@ use crate::{
 use super::util::pointer_size;
 
 #[test]
-fn cpp_backend_accepts_definition_modifier() {
-    let module = M::new().with_backends([B::new("cpp")
-        .with_epilogue("bool foo();")
-        .with_epilogue_definition("bool foo() { return true; }")]);
+fn cpp_gated_splice_accepts_definition_modifier() {
+    let module = M::new().with_splices([
+        SP::epilogue("bool foo();").cfg_backend("cpp"),
+        SP::epilogue("bool foo() { return true; }")
+            .definition()
+            .cfg_backend("cpp"),
+    ]);
 
     let mut s = SemanticBuilder::new(4);
     s.add_module(&module, &IP::from("test")).unwrap();
-    // Build should succeed; the cpp backend is allowed to declare a
-    // separate `definition` slot.
+    // Build should succeed; a cpp-gated splice is allowed to use the
+    // `definition` slot.
     s.build().expect("cpp + definition should validate");
 }
 
 #[test]
-fn rust_backend_rejects_epilogue_definition() {
-    let module = M::new().with_backends([B::new("rust").with_epilogue_definition("// nope")]);
+fn rust_gated_definition_is_rejected() {
+    let module = M::new().with_splices([SP::epilogue("// nope").definition().cfg_backend("rust")]);
 
     let mut s = SemanticBuilder::new(4);
     s.add_module(&module, &IP::from("test")).unwrap();
     let err = s.build().expect_err("rust + definition should be rejected");
-    match err {
-        SemanticError::BackendDefinitionNotSupported { backend, .. } => {
-            assert_eq!(backend, crate::Backend::Rust);
-        }
-        other => panic!("expected BackendDefinitionNotSupported, got {other:?}"),
-    }
+    assert!(
+        matches!(err, SemanticError::SpliceDefinitionNotCppOnly { .. }),
+        "expected SpliceDefinitionNotCppOnly, got {err:?}"
+    );
 }
 
 #[test]
-fn json_backend_rejects_prologue_definition() {
-    let module = M::new().with_backends([B::new("json").with_prologue_definition("// nope")]);
+fn json_gated_definition_is_rejected() {
+    let module = M::new().with_splices([SP::prologue("// nope").definition().cfg_backend("json")]);
 
     let mut s = SemanticBuilder::new(4);
     s.add_module(&module, &IP::from("test")).unwrap();
     let err = s.build().expect_err("json + definition should be rejected");
-    match err {
-        SemanticError::BackendDefinitionNotSupported { backend, .. } => {
-            assert_eq!(backend, crate::Backend::Json);
-        }
-        other => panic!("expected BackendDefinitionNotSupported, got {other:?}"),
-    }
+    assert!(
+        matches!(err, SemanticError::SpliceDefinitionNotCppOnly { .. }),
+        "expected SpliceDefinitionNotCppOnly, got {err:?}"
+    );
 }
 
 #[test]
-fn backend_for_type_resolves_in_same_module() {
+fn ungated_definition_is_rejected() {
+    // An ungated `definition` names no backend, so it can't be cpp-only.
+    let module = M::new().with_splices([SP::prologue("// nope").definition()]);
+
+    let mut s = SemanticBuilder::new(4);
+    s.add_module(&module, &IP::from("test")).unwrap();
+    let err = s
+        .build()
+        .expect_err("ungated definition should be rejected");
+    assert!(
+        matches!(err, SemanticError::SpliceDefinitionNotCppOnly { .. }),
+        "expected SpliceDefinitionNotCppOnly, got {err:?}"
+    );
+}
+
+#[test]
+fn splice_for_type_resolves_in_same_module() {
     let module = M::new()
         .with_definitions([ID::new(
             (V::Public, "Widget"),
             TD::new([TS::field((V::Public, "id"), T::ident("u32"))]),
         )])
-        .with_backends([B::new("rust").with_epilogue_for("impl Widget {}", "Widget")]);
+        .with_splices([SP::epilogue("impl Widget {}")
+            .for_type("Widget")
+            .cfg_backend("rust")]);
 
     let mut s = SemanticBuilder::new(pointer_size());
     s.add_module(&module, &IP::from("test")).unwrap();
@@ -65,21 +82,22 @@ fn backend_for_type_resolves_in_same_module() {
 
     // The grammar `for Widget` should be resolved to the absolute path.
     let module = state.modules().get(&IP::from("test")).unwrap();
-    let rust = &module.backends[&crate::Backend::Rust][0];
     assert_eq!(
-        rust.epilogue.for_type.as_ref(),
+        module.splices[0].for_type.as_ref(),
         Some(&IP::from("test::Widget"))
     );
 }
 
 #[test]
-fn backend_for_type_not_found_is_rejected() {
+fn splice_for_type_not_found_is_rejected() {
     let module = M::new()
         .with_definitions([ID::new(
             (V::Public, "Widget"),
             TD::new([TS::field((V::Public, "id"), T::ident("u32"))]),
         )])
-        .with_backends([B::new("rust").with_epilogue_for("// nope", "Ghost")]);
+        .with_splices([SP::epilogue("// nope")
+            .for_type("Ghost")
+            .cfg_backend("rust")]);
 
     let mut s = SemanticBuilder::new(pointer_size());
     s.add_module(&module, &IP::from("test")).unwrap();
@@ -94,9 +112,10 @@ fn backend_for_type_not_found_is_rejected() {
 }
 
 #[test]
-fn backend_for_type_cross_module_is_rejected() {
-    let module_a =
-        M::new().with_backends([B::new("rust").with_epilogue_for("// nope", "b::OtherType")]);
+fn splice_for_type_cross_module_is_rejected() {
+    let module_a = M::new().with_splices([SP::epilogue("// nope")
+        .for_type("b::OtherType")
+        .cfg_backend("rust")]);
     let module_b = M::new().with_definitions([ID::new(
         (V::Public, "OtherType"),
         TD::new([TS::field((V::Public, "v"), T::ident("u32"))]),

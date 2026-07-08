@@ -90,23 +90,14 @@ pub(crate) fn find_reference_at(
                     return Some(make_ref(path, span));
                 }
             }
-            // `backend` blocks carry their own `use`-style dependency list, and
-            // prologue/epilogue splices can be attributed `for <Type>`.
-            ModuleItem::Backend { backend } => {
-                for tree in &backend.uses {
-                    if let Some((path, span)) = use_tree_reference(tree, loc, tokens) {
-                        return Some(make_ref(path, span));
-                    }
-                }
-                for for_type in [&backend.prologue.for_type, &backend.epilogue.for_type]
-                    .into_iter()
-                    .flatten()
+            // Splice statements can be attributed `for <Type>`. (Any cfg-gated
+            // `use` they replaced is a plain `ModuleItem::Use`, handled above.)
+            ModuleItem::Splice { splice } => {
+                if let Some(for_type) = &splice.for_type
+                    && let Some(span) =
+                        find_for_path_span(tokens, &splice.location.span, for_type, loc)
                 {
-                    if let Some(span) =
-                        find_for_path_span(tokens, &backend.location.span, for_type, loc)
-                    {
-                        return Some(resolve(for_type, span));
-                    }
+                    return Some(resolve(for_type, span));
                 }
             }
             // `impl` blocks (including `#[cfg(...)]`-gated ones): the target

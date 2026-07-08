@@ -3,7 +3,7 @@ use std::{collections::BTreeMap, path::Path};
 use crate::{
     backends::{BackendError, Result},
     grammar::ItemPath,
-    semantic::types::{Backend, Type},
+    semantic::types::Type,
     source_store::FileStore,
     span::FileId,
 };
@@ -49,7 +49,13 @@ use crate::semantic::{
 /// - v9: extern values are item pages (`ExternValue` item kind) instead of a
 ///   per-module `extern_values` array; nested extern values appear under their
 ///   parent type's `nested_items`.
-pub const CURRENT_SCHEMA_VERSION: u32 = 9;
+/// - v10: replaced the per-module `backends` map (keyed by backend name, with
+///   `prologue`/`epilogue` splice objects) with a flat `splices` array. Each
+///   `JsonSplice` carries its own `kind`, `cfg` predicate (null = every
+///   backend), `definition` flag, `for_type`, and `text`, mirroring the
+///   retirement of the `backend { ... }` wrapper in favour of cfg-gated
+///   standalone `prologue`/`epilogue` statements.
+pub const CURRENT_SCHEMA_VERSION: u32 = 10;
 
 /// Top-level JSON documentation structure
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
@@ -103,8 +109,9 @@ pub struct JsonModule {
     pub submodules: BTreeMap<String, JsonModule>,
     /// Freestanding functions
     pub functions: Vec<JsonFunction>,
-    /// Backend configurations (prologue/epilogue for code generation)
-    pub backends: BTreeMap<String, Vec<JsonBackend>>,
+    /// Standalone `prologue`/`epilogue` splices, in source order, each with
+    /// its own optional `cfg` gate.
+    pub splices: Vec<JsonSplice>,
     /// Source location (file and line) - None for synthesized/folder modules
     #[serde(default)]
     pub source: Option<JsonSourceLocation>,
@@ -121,31 +128,38 @@ pub struct JsonReexport {
     pub path: String,
 }
 
-/// Backend configuration with prologue and epilogue
-#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
-pub struct JsonBackend {
-    /// Prologue code inserted at the beginning of generated output
-    pub prologue: Option<JsonBackendSplice>,
-    /// Epilogue code inserted at the end of generated output
-    pub epilogue: Option<JsonBackendSplice>,
+/// Which end of the module's generated output a splice attaches to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "snake_case")]
+pub enum JsonSpliceKind {
+    Prologue,
+    Epilogue,
 }
 
-/// A backend splice payload. `header` lands in the language's primary
-/// declaration surface (Rust module, C++ header). `definition` lands in
-/// the C++ source file and is always `None` for non-cpp backends.
+/// A standalone `prologue`/`epilogue` splice: raw backend code spliced into
+/// the module's generated output.
+///
+/// `cfg`, when present, gates which backends emit it (`null`/absent = every
+/// backend). `definition` routes the splice into the C++ `.cpp` source
+/// rather than the header (only meaningful for cpp-gated splices).
 /// `for_type`, when set, is the resolved absolute item path this splice is
 /// attributed to (`prologue/epilogue for <Type>`); the viewer renders such
 /// splices on the owning type's page rather than the module page.
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
-pub struct JsonBackendSplice {
-    /// Code spliced into the header / declaration surface
-    pub header: Option<String>,
-    /// Code spliced into the C++ source file (cpp backend only)
-    pub definition: Option<String>,
+pub struct JsonSplice {
+    /// Whether the splice is a prologue or an epilogue.
+    pub kind: JsonSpliceKind,
+    /// `#[cfg(...)]` gate; `null`/absent means emitted for every backend.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cfg: Option<JsonCfg>,
+    /// Whether this is a `definition` splice (C++ `.cpp` source).
+    pub definition: bool,
     /// Resolved absolute item path this splice is attributed to, when tagged
     /// with `for <Type>`. `None`/absent means module-level rendering.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub for_type: Option<String>,
+    /// The spliced code text.
+    pub text: String,
 }
 
 /// Source location of an item (file index and line number)
@@ -1161,26 +1175,17 @@ fn convert_extern_value_definition(
     }
 }
 
-fn convert_backend(backend: &Backend) -> JsonBackend {
-    // Mirror the IR's `BackendSplice { header, definition }` shape.
-    // `definition` is cpp-only (semantic validation rejects it for any
-    // other backend) and ends up `None` for rust/json. A splice with
-    // both fields empty round-trips as `None` so consumers can skip
-    // rendering it entirely.
-    let convert_splice = |splice: &crate::semantic::types::BackendSplice| {
-        if splice.is_empty() {
-            None
-        } else {
-            Some(JsonBackendSplice {
-                header: splice.header.clone(),
-                definition: splice.definition.clone(),
-                for_type: splice.for_type.as_ref().map(|p| p.to_string()),
-            })
-        }
-    };
-    JsonBackend {
-        prologue: convert_splice(&backend.prologue),
-        epilogue: convert_splice(&backend.epilogue),
+fn convert_splice(splice: &crate::semantic::types::Splice) -> JsonSplice {
+    use crate::grammar::SpliceKind;
+    JsonSplice {
+        kind: match splice.kind {
+            SpliceKind::Prologue => JsonSpliceKind::Prologue,
+            SpliceKind::Epilogue => JsonSpliceKind::Epilogue,
+        },
+        cfg: splice.cfg.as_ref().map(convert_cfg),
+        definition: splice.definition,
+        for_type: splice.for_type.as_ref().map(|p| p.to_string()),
+        text: splice.text.clone(),
     }
 }
 
@@ -1237,18 +1242,10 @@ fn build_module_hierarchy(semantic_state: &SemanticOutput) -> BTreeMap<String, J
             })
             .collect();
 
-        // Convert backends. Map the typed `crate::Backend` key back to its
-        // canonical lower-case string for JSON output.
-        let backends: BTreeMap<String, Vec<JsonBackend>> = module
-            .backends
-            .iter()
-            .map(|(name, backend_list)| {
-                (
-                    name.name().to_string(),
-                    backend_list.iter().map(convert_backend).collect(),
-                )
-            })
-            .collect();
+        // Every splice is emitted with its cfg intact (no per-backend
+        // filtering): the docs describe all backends, so the viewer reads
+        // the cfg predicate off each splice to decide how to render it.
+        let splices: Vec<JsonSplice> = module.splices.iter().map(convert_splice).collect();
 
         let (doc, doc_links) = cx.convert(module.doc());
         let json_module = JsonModule {
@@ -1258,7 +1255,7 @@ fn build_module_hierarchy(semantic_state: &SemanticOutput) -> BTreeMap<String, J
             reexports,
             submodules: BTreeMap::new(),
             functions,
-            backends,
+            splices,
             source: convert_location(module.location()),
         };
 
@@ -1281,7 +1278,7 @@ fn build_module_hierarchy(semantic_state: &SemanticOutput) -> BTreeMap<String, J
                     reexports: vec![],
                     submodules: BTreeMap::new(),
                     functions: vec![],
-                    backends: BTreeMap::new(),
+                    splices: vec![],
                     source: None,
                 });
 
@@ -1304,7 +1301,7 @@ fn build_module_hierarchy(semantic_state: &SemanticOutput) -> BTreeMap<String, J
                             reexports: vec![],
                             submodules: BTreeMap::new(),
                             functions: vec![],
-                            backends: BTreeMap::new(),
+                            splices: vec![],
                             source: None,
                         });
                 }

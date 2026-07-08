@@ -12,15 +12,17 @@ impl Widget {
     pub fn get_id(&self) -> u32;
 }
 
-// Tagged epilogue (shorthand form): lands on Widget's type page.
-backend rust epilogue for Widget r#"
+// Tagged epilogue: lands on Widget's type page.
+#[cfg(backend = "rust")]
+epilogue for Widget r#"
     impl Widget {
         pub fn make() -> Widget { Widget { id: 0 } }
         pub fn get_id(&self) -> u32 { self.id }
     }
 "#;
 
-backend cpp epilogue for Widget r#"
+#[cfg(backend = "cpp")]
+epilogue for Widget r#"
 inline Widget Widget::make() { return Widget{0}; }
 inline ::std::uint32_t Widget::get_id() const { return id; }
 "#;
@@ -30,15 +32,17 @@ inline ::std::uint32_t Widget::get_id() const { return id; }
 #[external_body]
 pub fn module_init() -> u32;
 
-backend rust epilogue r#"
+#[cfg(backend = "rust")]
+epilogue r#"
     pub fn module_init() -> u32 { 1 }
 "#;
 
-backend cpp epilogue r#"
+#[cfg(backend = "cpp")]
+epilogue r#"
 inline ::std::uint32_t module_init() { return 1; }
 "#;
 
-// Tagged prologue + epilogue via braced form, on a different type.
+// Tagged prologue + epilogue on a different type.
 #[size(0x8)]
 pub type Handle {
     pub raw: *mut u8,
@@ -48,22 +52,24 @@ impl Handle {
     pub fn null() -> Handle;
 }
 
-backend rust {
-    prologue for Handle r#"
+#[cfg(backend = "rust")]
+prologue for Handle r#"
 type HandleRaw = *mut u8;
 "#;
-    epilogue for Handle r#"
+
+#[cfg(backend = "rust")]
+epilogue for Handle r#"
     impl Handle {
         pub fn null() -> Handle { Handle { raw: std::ptr::null_mut() } }
     }
 "#;
-}
 
-backend cpp {
-    prologue for Handle r#"
+#[cfg(backend = "cpp")]
+prologue for Handle r#"
 using HandleRaw = ::std::uint8_t*;
 "#;
-    epilogue for Handle r#"
+
+#[cfg(backend = "cpp")]
+epilogue for Handle r#"
 inline Handle Handle::null() { return Handle{nullptr}; }
 "#;
-}

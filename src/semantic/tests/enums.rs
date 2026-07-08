@@ -102,11 +102,10 @@ fn can_carry_backend_across() {
     .trim();
 
     // Intentionally double-include the epilogue to test if it's correctly carried across
-    let ast = M::new().with_backends([
-        B::new("rust")
-            .with_prologue(prologue)
-            .with_epilogue(epilogue),
-        B::new("rust").with_epilogue(epilogue),
+    let ast = M::new().with_splices([
+        SP::prologue(prologue).cfg_backend("rust"),
+        SP::epilogue(epilogue).cfg_backend("rust"),
+        SP::epilogue(epilogue).cfg_backend("rust"),
     ]);
     let test_path = IP::from("test");
 
@@ -115,15 +114,14 @@ fn can_carry_backend_across() {
 
     assert_eq!(
         module
-            .backends
-            .get(&crate::Backend::Rust)
-            .unwrap()
+            .splices
             .iter()
-            .map(|b| b.strip_locations())
+            .map(|s| s.strip_locations())
             .collect::<Vec<_>>(),
         [
-            SB::new(prologue.to_string(), epilogue.to_string()),
-            SB::new(None, epilogue.to_string()),
+            SSp::prologue(prologue).cfg_backend("rust"),
+            SSp::epilogue(epilogue).cfg_backend("rust"),
+            SSp::epilogue(epilogue).cfg_backend("rust"),
         ]
     );
 }

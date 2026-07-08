@@ -1,7 +1,8 @@
 import { Collapsible } from './Collapsible';
 import { CodeBlock } from './CodeBlock';
 import { AnchorLink } from './Actions';
-import type { JsonBackend, JsonBackendSplice } from '@pyxis/types';
+import { renderCfg } from './Attributes';
+import type { JsonSplice, JsonCfg } from '@pyxis/types';
 
 export type SpliceSlot = 'prologue' | 'epilogue';
 
@@ -31,13 +32,24 @@ export function normalizeSpliceText(text: string): string {
   return trimmed.map((line) => line.slice(minIndent)).join('\n');
 }
 
-function joinSplicePart(splices: JsonBackendSplice[], part: 'header' | 'definition'): string {
-  return splices
-    .map((s) => s[part])
-    .filter((v): v is string => v != null)
-    .map(normalizeSpliceText)
-    .filter((v) => v.length > 0)
-    .join('\n\n');
+// Derive a syntax-highlight language from a splice's cfg: a `backend = "x"`
+// atom (possibly nested in any/all) picks `x`; otherwise undefined so the
+// code renders as plain text. An ungated splice (no cfg) is language-agnostic.
+function spliceLanguage(cfg: JsonCfg | null | undefined): string | undefined {
+  if (!cfg) return undefined;
+  switch (cfg.type) {
+    case 'key_value':
+      return cfg.key === 'backend' ? cfg.value : undefined;
+    case 'any':
+    case 'all':
+      for (const p of cfg.predicates) {
+        const lang = spliceLanguage(p);
+        if (lang) return lang;
+      }
+      return undefined;
+    default:
+      return undefined;
+  }
 }
 
 function SectionHeader({ anchor, children }: { anchor?: string; children: React.ReactNode }) {
@@ -49,161 +61,83 @@ function SectionHeader({ anchor, children }: { anchor?: string; children: React.
   );
 }
 
-// One labeled chunk of splice text (header or definition). `label` is only
-// shown when a slot carries both a header and a definition payload (cpp-only),
-// so header-only blocks render without noise.
-interface SplicePart {
-  label: string;
-  code: string;
-}
-interface SpliceBlock {
-  slot: SpliceSlot;
-  parts: SplicePart[];
-  showLabels: boolean;
-}
-
-// Collect renderable blocks for a single backend, across the requested slots,
-// keeping only splices that pass `filter`. Each slot's header + definition
-// payloads are normalized and joined; slots with no text are dropped.
-function blocksForBackend(
-  configs: JsonBackend[],
-  slots: SpliceSlot[],
-  filter: (s: JsonBackendSplice) => boolean
-): SpliceBlock[] {
-  const blocks: SpliceBlock[] = [];
-  for (const slot of slots) {
-    const splices = configs
-      .map((c) => c[slot])
-      .filter((s): s is JsonBackendSplice => s != null)
-      .filter(filter);
-    const header = joinSplicePart(splices, 'header');
-    const definition = joinSplicePart(splices, 'definition');
-    if (!header && !definition) continue;
-    const parts: SplicePart[] = [];
-    if (header) parts.push({ label: 'header', code: header });
-    if (definition) parts.push({ label: 'definition', code: definition });
-    blocks.push({ slot, parts, showLabels: !!definition });
-  }
-  return blocks;
-}
-
-function hasAnyMatching(
-  backends: { [key: string]: unknown },
-  slots: SpliceSlot[],
-  filter: (s: JsonBackendSplice) => boolean
-): boolean {
-  return Object.values(backends).some((configs) =>
-    (configs as JsonBackend[]).some((config) =>
-      slots.some((slot) => {
-        const s = config[slot];
-        return s != null && filter(s) && (s.header || s.definition);
-      })
-    )
+// One splice: its `#[cfg(...)]` gate (if any) and a `definition` marker as
+// metadata, then the (dedented) code in a collapsible block.
+function SpliceItem({ splice }: { splice: JsonSplice }) {
+  const code = normalizeSpliceText(splice.text);
+  if (!code) return null;
+  const language = spliceLanguage(splice.cfg);
+  const title = splice.kind === 'prologue' ? 'Prologue' : 'Epilogue';
+  return (
+    <div className="mb-4">
+      <div className="mb-2 flex items-center gap-2 font-mono text-xs text-fg-muted">
+        {splice.cfg ? (
+          <code className="text-fg-subtle">#[cfg({renderCfg(splice.cfg)})]</code>
+        ) : (
+          <span className="text-fg-subtle italic">all backends</span>
+        )}
+        {splice.definition && (
+          <span className="rounded bg-surface px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-fg-subtle">
+            definition
+          </span>
+        )}
+      </div>
+      <Collapsible title={title}>
+        <CodeBlock code={code} language={language} />
+      </Collapsible>
+    </div>
   );
 }
 
 interface BackendSpliceSectionProps {
-  backends: { [key: string]: unknown };
+  splices: JsonSplice[];
   slot: SpliceSlot;
 }
 
-// Module-page section: renders one slot (prologue OR epilogue), excluding
-// any splice tagged `for <Type>` (those render on the type's page instead).
-// Drop-in replacement for the old ModuleView-local component.
-export function BackendSpliceSection({ backends, slot }: BackendSpliceSectionProps) {
-  if (!backends || Object.keys(backends).length === 0) return null;
+// Module-page section: renders one slot (prologue OR epilogue), excluding any
+// splice tagged `for <Type>` (those render on the type's page instead). Each
+// splice shows its own cfg gate, so the reader sees which backends it targets.
+export function BackendSpliceSection({ splices, slot }: BackendSpliceSectionProps) {
+  const matching = (splices ?? []).filter(
+    (s) => s.kind === slot && !s.for_type && normalizeSpliceText(s.text).length > 0
+  );
+  if (matching.length === 0) return null;
 
   const title = slot === 'prologue' ? 'Backend Prologue' : 'Backend Epilogue';
-  const slotLabel = slot === 'prologue' ? 'Prologue' : 'Epilogue';
   const sectionMargin = slot === 'prologue' ? 'mb-8' : 'my-8';
   const sectionId = slot === 'prologue' ? 'backend-prologue' : 'backend-epilogue';
-  // Module page renders only untagged splices; tagged ones belong to types.
-  const filter = (s: JsonBackendSplice) => !s.for_type;
-
-  if (!hasAnyMatching(backends, [slot], filter)) return null;
 
   return (
     <div id={sectionId} className={sectionMargin}>
       <SectionHeader anchor={sectionId}>{title}</SectionHeader>
-      {Object.entries(backends).map(([backendName, configs]) => {
-        const blocks = blocksForBackend(configs as JsonBackend[], [slot], filter);
-        if (blocks.length === 0) return null;
-        const block = blocks[0];
-        return (
-          <div key={backendName} className="mb-4">
-            <h3 className="mb-2 font-mono text-sm font-semibold text-fg-muted">{backendName}</h3>
-            <Collapsible title={slotLabel}>
-              {block.parts.map((part, idx) => (
-                <div key={part.label} className={idx > 0 ? 'border-t border-edge' : ''}>
-                  {block.showLabels && (
-                    <div className="border-b border-edge bg-surface px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-fg-subtle">
-                      {part.label}
-                    </div>
-                  )}
-                  <CodeBlock code={part.code} language={backendName} />
-                </div>
-              ))}
-            </Collapsible>
-          </div>
-        );
-      })}
+      {matching.map((s, i) => (
+        <SpliceItem key={i} splice={s} />
+      ))}
     </div>
   );
 }
 
 interface TypeBackendCodeProps {
-  backends: { [key: string]: unknown };
+  splices: JsonSplice[];
   itemPath: string;
 }
 
-// Type-page section: renders a single "Backend-provided code" block collecting
-// every splice (prologue and epilogue, across backends) whose `for_type`
-// resolves to this item's path. These are splices the defs author tagged
-// `backend <name> <slot> for <Type> r#"..."#;` so that backend-supplied
-// functionality (trait impls, etc.) shows up on the type's page rather than
-// the module page.
-export function TypeBackendCode({ backends, itemPath }: TypeBackendCodeProps) {
-  if (!backends || Object.keys(backends).length === 0) return null;
-
-  const slots: SpliceSlot[] = ['prologue', 'epilogue'];
-  const filter = (s: JsonBackendSplice) => s.for_type === itemPath;
-
-  if (!hasAnyMatching(backends, slots, filter)) return null;
+// Type-page section: renders every splice (prologue and epilogue) whose
+// `for_type` resolves to this item's path. These are splices the defs author
+// tagged `<slot> for <Type> r#"..."#;` so backend-supplied functionality
+// (trait impls, etc.) shows up on the type's page rather than the module page.
+export function TypeBackendCode({ splices, itemPath }: TypeBackendCodeProps) {
+  const matching = (splices ?? []).filter(
+    (s) => s.for_type === itemPath && normalizeSpliceText(s.text).length > 0
+  );
+  if (matching.length === 0) return null;
 
   return (
     <div id="backend-provided" className="mb-8">
       <SectionHeader anchor="backend-provided">Backend-provided code</SectionHeader>
-      {Object.entries(backends).map(([backendName, configs]) => {
-        const blocks = blocksForBackend(configs as JsonBackend[], slots, filter);
-        if (blocks.length === 0) return null;
-        const labelSlots = blocks.length > 1;
-        return (
-          <div key={backendName} className="mb-4">
-            <h3 className="mb-2 font-mono text-sm font-semibold text-fg-muted">{backendName}</h3>
-            {blocks.map((block) => (
-              <div key={block.slot} className="mb-2 last:mb-0">
-                {labelSlots && (
-                  <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-fg-subtle">
-                    {block.slot}
-                  </div>
-                )}
-                <Collapsible title={labelSlots ? block.slot : 'Code'}>
-                  {block.parts.map((part, idx) => (
-                    <div key={part.label} className={idx > 0 ? 'border-t border-edge' : ''}>
-                      {block.showLabels && (
-                        <div className="border-b border-edge bg-surface px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-fg-subtle">
-                          {part.label}
-                        </div>
-                      )}
-                      <CodeBlock code={part.code} language={backendName} />
-                    </div>
-                  ))}
-                </Collapsible>
-              </div>
-            ))}
-          </div>
-        );
-      })}
+      {matching.map((s, i) => (
+        <SpliceItem key={i} splice={s} />
+      ))}
     </div>
   );
 }

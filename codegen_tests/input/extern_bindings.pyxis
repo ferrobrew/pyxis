@@ -1,7 +1,7 @@
 // Exercises extern-type name bindings (`#[rust_name]` + `#[cpp_name]`) on one
 // extern, so you can see how a single binding projects into each backend: the Rust backend emits
 // a `pub use <path> as <Name>;` alias to the real type, so references resolve
-// without a hand-written `backend rust prologue "use ...;"`. (A std type is
+// without a hand-written `#[cfg(backend = "rust")] prologue "use ...;"`. (A std type is
 // used here so the generated crate compiles with no extra dependencies.)
 #[size(4), align(4), rust_name = "::core::sync::atomic::AtomicU32", cpp_name = "::std::atomic<::std::uint32_t>"]
 extern type AtomicHandle;

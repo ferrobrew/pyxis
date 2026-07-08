@@ -11,8 +11,8 @@ impl ServerState {
         // duplicated literals); `as` is a contextual keyword with no token, so
         // it stays inline.
         use TokenKind::{
-            Backend, Bitflags, Const, Enum, Epilogue, Extern, Fn, Impl, Mut, Prologue, Pub,
-            SelfType, SelfValue, Type, Use, Vftable,
+            Bitflags, Const, Enum, Epilogue, Extern, Fn, Impl, Mut, Prologue, Pub, SelfType,
+            SelfValue, Type, Use, Vftable,
         };
         let kw = |k: TokenKind| k.keyword_str().expect("keyword token");
         let mut items: Vec<CompletionItem> = [
@@ -24,7 +24,6 @@ impl ServerState {
             kw(Fn),
             kw(Extern),
             kw(Use),
-            kw(Backend),
             kw(Vftable),
             kw(Const),
             kw(Mut),

@@ -38,7 +38,8 @@ pub type CppOnlyType {
     pub flag: u32,
 }
 
-backend rust epilogue r#"
+#[cfg(backend = "rust")]
+epilogue r#"
     impl Probe {
         pub fn read(&self) -> u32 { self.value }
         pub fn rust_only(&self) -> u32 { self.value + 1 }
@@ -46,7 +47,8 @@ backend rust epilogue r#"
     }
 "#;
 
-backend cpp epilogue r#"
+#[cfg(backend = "cpp")]
+epilogue r#"
 inline ::std::uint32_t Probe::read() const { return value; }
 inline ::std::uint32_t Probe::cpp_only() const { return value + 2; }
 inline ::std::uint32_t Probe::cpp_or_json() const { return value + 3; }

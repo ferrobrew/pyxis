@@ -197,10 +197,6 @@ fn snapshot_completion() {
           },
           {
             "kind": 14,
-            "label": "backend"
-          },
-          {
-            "kind": 14,
             "label": "vftable"
           },
           {

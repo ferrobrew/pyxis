@@ -1,5 +1,5 @@
 //! Regression tests for precise, structure-aware hover/go-to-definition:
-//! type names, fields, vftable entries, impl methods, impl targets, backend
+//! type names, fields, vftable entries, impl methods, impl targets, cfg-gated
 //! `use`s — and robustness when a type has a semantic error (mid-edit `#[size]`).
 
 use lsp_server::{Request, RequestId};
@@ -29,9 +29,9 @@ fn hover_text(s: &ServerState, u: &lsp_types::Uri, line: u32, ch: u32) -> String
 
 const SRC: &str = r#"use types::math::Matrix4;
 
-backend cpp {
-    use types::math::Matrix4;
-}
+// cpp include hint for the epilogue below
+#[cfg(backend = "cpp")]
+use types::math::Matrix4;
 
 #[size(0x18)]
 pub type GameObject {
@@ -95,7 +95,7 @@ fn structural_hovers() {
     let (l, c) = at("Matrix4", 12); // field type
     assert!(hover_text(&st, &uri, l, c).contains("**type** `Matrix4`"));
 
-    let (l, c) = at("Matrix4", 2); // type inside a backend block's `use`
+    let (l, c) = at("Matrix4", 2); // type inside a cfg-gated `use`
     assert!(hover_text(&st, &uri, l, c).contains("**type** `Matrix4`"));
 
     let (l, c) = at("release", 0); // impl method (in a cfg-gated block)
@@ -134,7 +134,7 @@ fn field_hover_shows_offset() {
 
 #[test]
 fn backend_for_type_navigates() {
-    let main = "use types::shared::SharedPtr;\n\nbackend cpp {\n    epilogue for SharedPtr r#\"// code\"#;\n}\n";
+    let main = "use types::shared::SharedPtr;\n\n#[cfg(backend = \"cpp\")]\nepilogue for SharedPtr r#\"// code\"#;\n";
     let st = ServerState::in_memory(&[(
         "/proj",
         8,
@@ -217,6 +217,41 @@ fn attribute_hover_describes_attribute() {
 }
 
 #[test]
+fn cfg_attribute_on_use_and_splice_hovers() {
+    // A `#[cfg(...)]` gate on a `use` or a `prologue`/`epilogue` splice must
+    // hover as an attribute, just like a cfg on an item.
+    let src = "#[cfg(backend = \"cpp\")]\nuse types::math::Matrix4;\n\n#[cfg(backend = \"rust\")]\nepilogue r#\"// x\"#;\n";
+    let st = ServerState::in_memory(&[(
+        "/proj",
+        8,
+        &[
+            (
+                "types/math.pyxis",
+                "pub type Matrix4 {\n    pub data: [f32; 16],\n}\n",
+            ),
+            ("m.pyxis", src),
+        ],
+    )]);
+    let uri = ServerState::document_uri("/proj", "m.pyxis");
+
+    // The cfg gate on the `use` (line 0).
+    let cu = src.lines().next().unwrap().find("cfg").unwrap() as u32 + 1;
+    let hu = hover_text(&st, &uri, 0, cu);
+    assert!(
+        hu.contains("**attribute**") && hu.contains("cfg"),
+        "cfg on a use should hover as an attribute: {hu}"
+    );
+
+    // The cfg gate on the splice (line 3).
+    let cs = src.lines().nth(3).unwrap().find("cfg").unwrap() as u32 + 1;
+    let hs = hover_text(&st, &uri, 3, cs);
+    assert!(
+        hs.contains("**attribute**") && hs.contains("cfg"),
+        "cfg on a splice should hover as an attribute: {hs}"
+    );
+}
+
+#[test]
 fn free_functions_hover() {
     let src = "pub type T {\n    pub x: u64,\n}\nfn free_fn(item: *const T) -> bool;\n";
     let st = ServerState::in_memory(&[("/proj", 8, &[("m.pyxis", src)])]);
@@ -294,19 +329,11 @@ fn pointer_and_array_shells() {
 }
 
 #[test]
-fn backend_terms_hover() {
-    let src = "pub type Foo {\n    pub x: u64,\n}\nbackend rust {\n    epilogue for Foo r#\"\n    for x in 0..3 {}\n\"#;\n}\n";
+fn splice_terms_hover() {
+    let src = "pub type Foo {\n    pub x: u64,\n}\n#[cfg(backend = \"rust\")]\nepilogue for Foo r#\"\n    for x in 0..3 {}\n\"#;\n";
     let st = ServerState::in_memory(&[("/proj", 8, &[("m.pyxis", src)])]);
     let uri = ServerState::document_uri("/proj", "m.pyxis");
-    assert!(
-        hover_text(
-            &st,
-            &uri,
-            3,
-            src.lines().nth(3).unwrap().find("rust").unwrap() as u32
-        )
-        .contains("`rust` backend")
-    );
+    // The `epilogue` keyword hovers as a splice term.
     assert!(
         hover_text(
             &st,
@@ -314,25 +341,22 @@ fn backend_terms_hover() {
             4,
             src.lines().nth(4).unwrap().find("epilogue").unwrap() as u32
         )
-        .contains("**backend**")
+        .contains("**splice**")
     );
-    // `for` inside the spliced code must NOT be treated as a backend keyword
+    // `for` in the `for Foo` attribution clause hovers as a splice term.
     assert!(
         hover_text(
             &st,
             &uri,
-            5,
-            src.lines().nth(5).unwrap().find("for").unwrap() as u32
+            4,
+            src.lines().nth(4).unwrap().find("for").unwrap() as u32
         )
-        .is_empty()
-            || !hover_text(
-                &st,
-                &uri,
-                5,
-                src.lines().nth(5).unwrap().find("for").unwrap() as u32
-            )
-            .contains("**backend**")
+        .contains("**splice**")
     );
+    // `for` inside the spliced code must NOT be treated as a splice keyword.
+    let c5 = src.lines().nth(5).unwrap().find("for").unwrap() as u32;
+    let h5 = hover_text(&st, &uri, 5, c5);
+    assert!(h5.is_empty() || !h5.contains("**splice**"));
 }
 
 #[test]
@@ -1442,11 +1466,10 @@ fn rename_type_updates_use_leaf_and_field_across_files() {
 
 #[test]
 #[allow(clippy::mutable_key_type)] // lsp_types::Uri map key is fine here
-fn rename_type_updates_backend_for_clause() {
-    // Regression guard: a type referenced in a backend `for <Type>` splice must
-    // be renamed (source map must cover backend blocks, like find_reference_at).
-    let src =
-        "pub type Widget {\n    pub id: u32,\n}\nbackend rust epilogue for Widget r#\"x\"#;\n";
+fn rename_type_updates_splice_for_clause() {
+    // Regression guard: a type referenced in a splice `for <Type>` clause must
+    // be renamed (source map must cover splices, like find_reference_at).
+    let src = "pub type Widget {\n    pub id: u32,\n}\n#[cfg(backend = \"rust\")]\nepilogue for Widget r#\"x\"#;\n";
     let st = ServerState::in_memory(&[("/p", 8, &[("a.pyxis", src)])]);
     let uri = ServerState::document_uri("/p", "a.pyxis");
     let col = "pub type ".len() as u32;
@@ -1472,6 +1495,6 @@ fn rename_type_updates_backend_for_clause() {
     // Definition + the `for Widget` clause = 2.
     assert_eq!(
         total, 2,
-        "rename should update def + backend `for` clause; got {total}"
+        "rename should update def + splice `for` clause; got {total}"
     );
 }

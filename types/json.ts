@@ -2,42 +2,6 @@
 
 export type JsonArgument = { type: "const_self" } | { type: "mut_self" } | { type: "field"; name: string; type_ref: JsonType };
 
-/**
- * Backend configuration with prologue and epilogue
- */
-export type JsonBackend = { 
-/**
- * Prologue code inserted at the beginning of generated output
- */
-prologue: JsonBackendSplice | null; 
-/**
- * Epilogue code inserted at the end of generated output
- */
-epilogue: JsonBackendSplice | null };
-
-/**
- * A backend splice payload. `header` lands in the language's primary
- * declaration surface (Rust module, C++ header). `definition` lands in
- * the C++ source file and is always `None` for non-cpp backends.
- * `for_type`, when set, is the resolved absolute item path this splice is
- * attributed to (`prologue/epilogue for <Type>`); the viewer renders such
- * splices on the owning type's page rather than the module page.
- */
-export type JsonBackendSplice = { 
-/**
- * Code spliced into the header / declaration surface
- */
-header: string | null; 
-/**
- * Code spliced into the C++ source file (cpp backend only)
- */
-definition: string | null; 
-/**
- * Resolved absolute item path this splice is attributed to, when tagged
- * with `for <Type>`. `None`/absent means module-level rendering.
- */
-for_type?: string | null };
-
 export type JsonBitflag = { 
 /**
  * Flag name
@@ -415,9 +379,10 @@ submodules: { [key in string]: JsonModule };
  */
 functions: JsonFunction[]; 
 /**
- * Backend configurations (prologue/epilogue for code generation)
+ * Standalone `prologue`/`epilogue` splices, in source order, each with
+ * its own optional `cfg` gate.
  */
-backends: { [key in string]: JsonBackend[] }; 
+splices: JsonSplice[]; 
 /**
  * Source location (file and line) - None for synthesized/folder modules
  */
@@ -488,6 +453,45 @@ file_index: number;
  * Line number (1-indexed)
  */
 line: number };
+
+/**
+ * A standalone `prologue`/`epilogue` splice: raw backend code spliced into
+ * the module's generated output.
+ * 
+ * `cfg`, when present, gates which backends emit it (`null`/absent = every
+ * backend). `definition` routes the splice into the C++ `.cpp` source
+ * rather than the header (only meaningful for cpp-gated splices).
+ * `for_type`, when set, is the resolved absolute item path this splice is
+ * attributed to (`prologue/epilogue for <Type>`); the viewer renders such
+ * splices on the owning type's page rather than the module page.
+ */
+export type JsonSplice = { 
+/**
+ * Whether the splice is a prologue or an epilogue.
+ */
+kind: JsonSpliceKind; 
+/**
+ * `#[cfg(...)]` gate; `null`/absent means emitted for every backend.
+ */
+cfg?: JsonCfg | null; 
+/**
+ * Whether this is a `definition` splice (C++ `.cpp` source).
+ */
+definition: boolean; 
+/**
+ * Resolved absolute item path this splice is attributed to, when tagged
+ * with `for <Type>`. `None`/absent means module-level rendering.
+ */
+for_type?: string | null; 
+/**
+ * The spliced code text.
+ */
+text: string };
+
+/**
+ * Which end of the module's generated output a splice attaches to.
+ */
+export type JsonSpliceKind = "prologue" | "epilogue";
 
 export type JsonType = { type: "raw"; path: string } | 
 /**

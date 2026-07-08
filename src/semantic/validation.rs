@@ -15,21 +15,16 @@ use crate::{
 };
 
 /// Validate that all `use` statements reference existing, accessible items.
-/// Checks both module-level `use` trees and backend-block `use` trees.
+/// Covers every module-level `use` tree, including cfg-gated ones (a gated
+/// `use` is still in scope for resolution regardless of backend).
 pub fn validate_uses(
     type_registry: &TypeRegistry,
     modules: &BTreeMap<ItemPath, Module>,
 ) -> Result<()> {
     for module in modules.values() {
-        // Collect use trees from both module-level and backend-block scopes.
         let mut trees: Vec<&grammar::UseTree> = Vec::new();
         for use_item in module.uses() {
             if let grammar::ModuleItem::Use { tree, .. } = use_item {
-                trees.push(tree);
-            }
-        }
-        for backend in module.ast.backends() {
-            for tree in &backend.uses {
                 trees.push(tree);
             }
         }
@@ -65,29 +60,26 @@ pub fn validate_uses(
     Ok(())
 }
 
-/// Reject `prologue definition` / `epilogue definition` on backends
-/// other than cpp. The `definition` modifier means "splice into the
-/// .cpp source file"; only cpp has a distinct source file (rust and
-/// json emit single-output-per-module), so the modifier on those is
-/// almost certainly a typo or copy-paste error.
-pub fn validate_backend_definitions(modules: &BTreeMap<ItemPath, Module>) -> Result<()> {
-    fn supports_definition(backend: Backend) -> bool {
-        match backend {
-            Backend::Rust | Backend::Json => false,
-            Backend::Cpp => true,
-        }
-    }
+/// Reject a `prologue definition` / `epilogue definition` splice whose cfg
+/// doesn't resolve **cpp-only**. The `definition` modifier means "splice
+/// into the `.cpp` source file"; only cpp has a distinct source file (rust
+/// and json emit a single output per module). An ungated `definition`, or
+/// one gated so it's active for a non-cpp backend, is almost certainly a
+/// typo or copy-paste error, so we require the cfg to select cpp and
+/// nothing else.
+pub fn validate_splice_definitions(modules: &BTreeMap<ItemPath, Module>) -> Result<()> {
     for module in modules.values() {
-        for backend in module.ast.backends() {
-            if supports_definition(backend.name) {
+        for splice in &module.splices {
+            if !splice.definition {
                 continue;
             }
-            let has_definition =
-                backend.prologue.definition.is_some() || backend.epilogue.definition.is_some();
-            if has_definition {
-                return Err(SemanticError::BackendDefinitionNotSupported {
-                    backend: backend.name,
-                    location: backend.location,
+            let cpp_only = splice.active_for(Backend::Cpp)
+                && Backend::ALL
+                    .iter()
+                    .all(|&b| b == Backend::Cpp || !splice.active_for(b));
+            if !cpp_only {
+                return Err(SemanticError::SpliceDefinitionNotCppOnly {
+                    location: splice.location,
                 });
             }
         }
@@ -96,46 +88,42 @@ pub fn validate_backend_definitions(modules: &BTreeMap<ItemPath, Module>) -> Res
 }
 
 /// Resolve and validate `prologue for <Type>` / `epilogue for <Type>`
-/// attribution targets. Each target must resolve to a type defined in
-/// the same module as the `backend` block. On success the splice's
-/// `for_type` is replaced with the resolved absolute item path.
-/// Cross-module attribution is rejected.
-pub fn validate_backend_for_targets(
+/// attribution targets. Each target must resolve to a type defined in the
+/// same module as the splice. On success the splice's `for_type` is
+/// replaced with the resolved absolute item path. Cross-module attribution
+/// is rejected.
+pub fn validate_splice_for_targets(
     type_registry: &TypeRegistry,
     modules: &mut BTreeMap<ItemPath, Module>,
 ) -> Result<()> {
     for module in modules.values_mut() {
         let module_path = module.path.clone();
-        for backend_list in module.backends.values_mut() {
-            for backend in backend_list {
-                for slot in [&mut backend.prologue, &mut backend.epilogue] {
-                    let Some(raw) = slot.for_type.take() else {
-                        continue;
-                    };
-                    let relative = join_item_path(&module_path, &raw);
-                    let resolved = if type_registry.contains(&relative) {
-                        relative
-                    } else if type_registry.contains(&raw) {
-                        raw.clone()
-                    } else {
-                        return Err(SemanticError::BackendForTargetNotFound {
-                            target: raw,
-                            module: module_path,
-                            location: backend.location,
-                        });
-                    };
-                    if !module.definition_paths.contains(&resolved) {
-                        let defined_in = resolved.parent().unwrap_or_else(ItemPath::empty);
-                        return Err(SemanticError::BackendForTargetCrossModule {
-                            target: raw,
-                            module: module_path,
-                            defined_in,
-                            location: backend.location,
-                        });
-                    }
-                    slot.for_type = Some(resolved);
-                }
+        for splice in &mut module.splices {
+            let Some(raw) = splice.for_type.take() else {
+                continue;
+            };
+            let relative = join_item_path(&module_path, &raw);
+            let resolved = if type_registry.contains(&relative) {
+                relative
+            } else if type_registry.contains(&raw) {
+                raw.clone()
+            } else {
+                return Err(SemanticError::BackendForTargetNotFound {
+                    target: raw,
+                    module: module_path,
+                    location: splice.location,
+                });
+            };
+            if !module.definition_paths.contains(&resolved) {
+                let defined_in = resolved.parent().unwrap_or_else(ItemPath::empty);
+                return Err(SemanticError::BackendForTargetCrossModule {
+                    target: raw,
+                    module: module_path,
+                    defined_in,
+                    location: splice.location,
+                });
             }
+            splice.for_type = Some(resolved);
         }
     }
     Ok(())

@@ -13,7 +13,7 @@ import { AnchorLink } from './Actions';
 import { SourceLink } from './SourceLink';
 import { OnThisPage, type TocEntry } from './OnThisPage';
 import type {
-  JsonBackend,
+  JsonSplice,
   JsonItem,
   JsonFunction,
   JsonReexport,
@@ -28,7 +28,7 @@ interface ModuleData {
   reexports?: JsonReexport[];
   submodules?: { [key: string]: unknown };
   functions?: JsonFunction[];
-  backends?: { [key: string]: unknown };
+  splices?: JsonSplice[];
   source?: JsonSourceLocation | null;
 }
 
@@ -240,15 +240,10 @@ export function ModuleView() {
       item: documentation.items[itemPath],
     })) || [];
 
-  const backends = module.backends || {};
+  const splices = module.splices || [];
   const hasBackendSlot = (slot: 'prologue' | 'epilogue') =>
-    Object.values(backends).some((configs) =>
-      (configs as JsonBackend[]).some((c) => {
-        const s = c[slot];
-        // Tagged splices (`for <Type>`) render on the type's page, not here.
-        return s && !s.for_type && (s.header || s.definition);
-      })
-    );
+    // Tagged splices (`for <Type>`) render on the type's page, not here.
+    splices.some((s) => s.kind === slot && !s.for_type && s.text.trim().length > 0);
 
   const reexports = module.reexports || [];
 
@@ -283,7 +278,7 @@ export function ModuleView() {
         )}
 
         {/* Backend Prologues */}
-        <BackendSpliceSection backends={backends} slot="prologue" />
+        <BackendSpliceSection splices={splices} slot="prologue" />
 
         {/* Re-exports */}
         <ReexportList reexports={reexports} />
@@ -312,7 +307,7 @@ export function ModuleView() {
         <SubmoduleList submodules={module.submodules || {}} parentPath={decodedPath} />
 
         {/* Backend Epilogues */}
-        <BackendSpliceSection backends={backends} slot="epilogue" />
+        <BackendSpliceSection splices={splices} slot="epilogue" />
       </article>
 
       <OnThisPage entries={toc} />

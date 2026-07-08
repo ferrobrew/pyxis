@@ -29,7 +29,7 @@ pub mod test_aliases {
     pub type SAr = super::Argument;
     pub type SF = super::Function;
     pub type SIP = super::ItemPath;
-    pub type SB = super::Backend;
+    pub type SSp = super::Splice;
     pub type SR = super::Region;
     pub type SIC = super::ItemCategory;
     pub type SIS = super::ItemState;
@@ -670,76 +670,73 @@ impl ItemDefinition {
     }
 }
 
-/// A `prologue` or `epilogue` slot on a backend. Either part can be set
-/// independently. `header` is the default; `definition` is only valid
-/// for the cpp backend (rejected at semantic-validation time elsewhere)
-/// and lands in the `.cpp` source file rather than the `.hpp` header.
+/// A resolved `prologue`/`epilogue` splice: raw backend code spliced into
+/// a module's generated output.
+///
+/// `cfg` carries the optional gate: `None` means "every backend"; a
+/// predicate means "only the backends it selects" (evaluated via
+/// [`Splice::active_for`]). `definition` routes the splice into the cpp
+/// `.cpp` source file rather than the `.hpp` header — only valid when the
+/// cfg resolves cpp-only (enforced at validation time).
 ///
 /// `for_type`, when set, holds the **resolved absolute item path** of the
-/// type this splice is attributed to (from `epilogue for <Type> ...`). It
-/// is resolved and validated (same-module) during semantic analysis; the
-/// grammar carries the as-written path. `None` means "module-level".
-#[derive(PartialEq, Eq, Debug, Clone, Hash, Default)]
-#[cfg_attr(test, derive(StripLocations))]
-pub struct BackendSplice {
-    pub header: Option<String>,
-    pub definition: Option<String>,
-    pub for_type: Option<ItemPath>,
-}
-impl BackendSplice {
-    pub fn is_empty(&self) -> bool {
-        self.header.is_none() && self.definition.is_none()
-    }
-}
-
+/// type this splice is attributed to (from `epilogue for <Type> ...`),
+/// resolved and validated (same-module) during semantic analysis. `None`
+/// means "module-level".
 #[derive(PartialEq, Eq, Debug, Clone, Hash, HasLocation)]
 #[cfg_attr(test, derive(StripLocations))]
-pub struct Backend {
-    pub prologue: BackendSplice,
-    pub epilogue: BackendSplice,
-    /// Resolved working set: every `use` path declared on this backend
-    /// block, flattened to absolute item paths. The cpp backend
-    /// promotes these to `#include`s; other backends are free to use
-    /// (or ignore) them as they see fit.
-    pub uses: Vec<ItemPath>,
+pub struct Splice {
+    pub kind: crate::grammar::SpliceKind,
+    pub cfg: Option<crate::parser::cfg::CfgPredicate>,
+    pub definition: bool,
+    pub for_type: Option<ItemPath>,
+    pub text: String,
     pub location: ItemLocation,
 }
+impl Splice {
+    /// Whether this splice is emitted for `backend` (ungated → always).
+    pub fn active_for(&self, backend: crate::Backend) -> bool {
+        let ctx = crate::parser::cfg::CfgContext { backend };
+        self.cfg.as_ref().is_none_or(|p| p.evaluate(&ctx))
+    }
+}
 #[cfg(test)]
-impl Backend {
-    pub fn new(prologue: impl Into<Option<String>>, epilogue: impl Into<Option<String>>) -> Self {
-        Backend {
-            prologue: BackendSplice {
-                header: prologue.into(),
-                definition: None,
-                for_type: None,
-            },
-            epilogue: BackendSplice {
-                header: epilogue.into(),
-                definition: None,
-                for_type: None,
-            },
-            uses: Vec::new(),
+impl Splice {
+    fn new(kind: crate::grammar::SpliceKind, text: impl Into<String>) -> Self {
+        Splice {
+            kind,
+            cfg: None,
+            definition: false,
+            for_type: None,
+            text: text.into(),
             location: ItemLocation::test(),
         }
     }
-    pub fn with_prologue_definition(mut self, def: impl Into<String>) -> Self {
-        self.prologue.definition = Some(def.into());
+    pub fn prologue(text: impl Into<String>) -> Self {
+        Self::new(crate::grammar::SpliceKind::Prologue, text)
+    }
+    pub fn epilogue(text: impl Into<String>) -> Self {
+        Self::new(crate::grammar::SpliceKind::Epilogue, text)
+    }
+    pub fn definition(mut self) -> Self {
+        self.definition = true;
         self
     }
-    pub fn with_epilogue_definition(mut self, def: impl Into<String>) -> Self {
-        self.epilogue.definition = Some(def.into());
+    pub fn for_type(mut self, for_type: impl Into<ItemPath>) -> Self {
+        self.for_type = Some(for_type.into());
         self
     }
-    pub fn with_prologue_for(mut self, for_type: impl Into<ItemPath>) -> Self {
-        self.prologue.for_type = Some(for_type.into());
-        self
-    }
-    pub fn with_epilogue_for(mut self, for_type: impl Into<ItemPath>) -> Self {
-        self.epilogue.for_type = Some(for_type.into());
-        self
-    }
-    pub fn with_uses(mut self, uses: impl IntoIterator<Item = ItemPath>) -> Self {
-        self.uses = uses.into_iter().collect();
+    /// Gate this splice with `#[cfg(backend = "<name>")]`.
+    pub fn cfg_backend(mut self, name: &str) -> Self {
+        use crate::parser::cfg::{CfgAtom, CfgPredicate};
+        self.cfg = Some(CfgPredicate::Atom {
+            atom: CfgAtom::KeyValue {
+                key: "backend".into(),
+                value: name.into(),
+                location: ItemLocation::test(),
+            },
+            location: ItemLocation::test(),
+        });
         self
     }
 }

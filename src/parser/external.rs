@@ -16,153 +16,96 @@ use super::{
     types::Ident,
 };
 
-/// A `prologue`/`epilogue` slot on a backend block. The plain form
-/// (`prologue r#"..."#;`) targets the header (or whatever the backend
-/// considers its primary output); the `definition` modifier
-/// (`prologue definition r#"..."#;`) targets the source file - currently
-/// only meaningful for `backend cpp` where header / source are distinct.
-///
-/// An optional `for <ItemPath>` clause (`epilogue for SharedPtr r#"..."#;`)
-/// attributes the splice to a type defined in the same module, so the
-/// viewer renders it on that type's page instead of the module page.
-/// The path is stored as-written here and resolved to an absolute item
-/// path during semantic analysis.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+/// Which end of a module's generated output a splice attaches to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(test, derive(StripLocations))]
-pub struct BackendSplice {
-    pub header: Option<String>,
-    pub header_format: StringFormat,
-    pub definition: Option<String>,
-    pub definition_format: StringFormat,
-    /// `for <Type>` attribution target, as-written (module-relative or
-    /// absolute). Resolved to an absolute item path at semantic-analysis
-    /// time; `None` means "module-level" (today's rendering).
-    pub for_type: Option<ItemPath>,
+#[cfg_attr(test, strip_locations(copy))]
+pub enum SpliceKind {
+    /// `prologue ...;` — emitted *before* the module's generated output.
+    Prologue,
+    /// `epilogue ...;` — emitted *after* the module's generated output.
+    Epilogue,
 }
-impl Default for BackendSplice {
-    fn default() -> Self {
-        Self {
-            header: None,
-            header_format: StringFormat::Regular,
-            definition: None,
-            definition_format: StringFormat::Regular,
-            for_type: None,
+impl SpliceKind {
+    pub fn keyword(self) -> &'static str {
+        match self {
+            SpliceKind::Prologue => "prologue",
+            SpliceKind::Epilogue => "epilogue",
         }
-    }
-}
-impl BackendSplice {
-    pub fn is_empty(&self) -> bool {
-        self.header.is_none() && self.definition.is_none()
     }
 }
 
+/// A standalone `prologue`/`epilogue` splice statement: raw backend code
+/// spliced into a module's generated output.
+///
+/// A leading `#[cfg(...)]` is optional. Gated → emitted only for the
+/// backends the predicate selects; ungated → emitted unconditionally
+/// across every backend (e.g. a licence header). The predicate lives in
+/// `attributes` and is read via [`Attributes::cfg`].
+///
+/// The `definition` modifier (`epilogue definition r#"..."#;`) targets the
+/// source file rather than the header — only meaningful for `cpp`, where
+/// header and source are distinct. It is rejected at the semantic layer
+/// unless the splice's cfg resolves cpp-only.
+///
+/// An optional `for <ItemPath>` clause (`epilogue for SharedPtr r#"..."#;`)
+/// attributes the splice to a type defined in the same module, so the
+/// viewer renders it on that type's page instead of the module page. The
+/// path is stored as-written and resolved to an absolute item path during
+/// semantic analysis.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, HasLocation)]
 #[cfg_attr(test, derive(StripLocations))]
-pub struct Backend {
-    /// Typed backend identity. Validated at parse time - an unknown
-    /// backend name raises `ParseError::UnknownBackend` rather than
-    /// surviving as a string in the IR.
-    pub name: crate::Backend,
-    pub prologue: BackendSplice,
-    pub epilogue: BackendSplice,
-    /// Per-backend explicit working set: which other-module items this
-    /// backend block references. Drives cpp `#include` selection and
-    /// (in principle) any other backend that wants to know what its
-    /// epilogue/prologue depends on. `use`-style with the same syntax as
-    /// module-level imports - braced groups, nested groups, etc.
-    pub uses: Vec<UseTree>,
+pub struct Splice {
+    pub kind: SpliceKind,
+    /// Leading outer attributes. Only `#[cfg(...)]` is meaningful; other
+    /// attributes are rejected during semantic analysis.
+    pub attributes: Attributes,
+    /// `definition` modifier: splice into the source file (cpp `.cpp`).
+    pub definition: bool,
+    /// `for <Type>` attribution target, as-written (module-relative or
+    /// absolute). Resolved to an absolute item path at semantic-analysis
+    /// time; `None` means "module-level".
+    pub for_type: Option<ItemPath>,
+    pub text: String,
+    pub format: StringFormat,
     pub location: ItemLocation,
 }
 #[cfg(test)]
-impl Backend {
-    /// Test helper: panics if the name isn't a valid backend. Tests
-    /// that want to exercise the unknown-backend error path should
-    /// construct a `ParseError::UnknownBackend` directly instead.
-    pub fn new(name: &str) -> Self {
-        let name = crate::Backend::from_name(name)
-            .unwrap_or_else(|| panic!("test used unknown backend `{name}`"));
+impl Splice {
+    fn new(kind: SpliceKind, text: impl Into<String>) -> Self {
         Self {
-            name,
-            prologue: BackendSplice::default(),
-            epilogue: BackendSplice::default(),
-            uses: Vec::new(),
+            kind,
+            attributes: Attributes::default(),
+            definition: false,
+            for_type: None,
+            text: text.into(),
+            format: StringFormat::Raw,
             location: ItemLocation::test(),
         }
     }
-    pub fn with_prologue(mut self, prologue: impl Into<String>) -> Self {
-        self.prologue.header = Some(prologue.into());
+    pub fn prologue(text: impl Into<String>) -> Self {
+        Self::new(SpliceKind::Prologue, text)
+    }
+    pub fn epilogue(text: impl Into<String>) -> Self {
+        Self::new(SpliceKind::Epilogue, text)
+    }
+    pub fn with_format(mut self, format: StringFormat) -> Self {
+        self.format = format;
         self
     }
-    pub fn with_prologue_format(
-        mut self,
-        prologue: impl Into<String>,
-        format: StringFormat,
-    ) -> Self {
-        self.prologue.header = Some(prologue.into());
-        self.prologue.header_format = format;
+    pub fn definition(mut self) -> Self {
+        self.definition = true;
         self
     }
-    pub fn with_prologue_definition(mut self, prologue: impl Into<String>) -> Self {
-        self.prologue.definition = Some(prologue.into());
+    pub fn for_type(mut self, for_type: impl Into<ItemPath>) -> Self {
+        self.for_type = Some(for_type.into());
         self
     }
-    pub fn with_prologue_definition_format(
-        mut self,
-        prologue: impl Into<String>,
-        format: StringFormat,
-    ) -> Self {
-        self.prologue.definition = Some(prologue.into());
-        self.prologue.definition_format = format;
-        self
-    }
-    pub fn with_epilogue(mut self, epilogue: impl Into<String>) -> Self {
-        self.epilogue.header = Some(epilogue.into());
-        self
-    }
-    pub fn with_epilogue_format(
-        mut self,
-        epilogue: impl Into<String>,
-        format: StringFormat,
-    ) -> Self {
-        self.epilogue.header = Some(epilogue.into());
-        self.epilogue.header_format = format;
-        self
-    }
-    pub fn with_epilogue_definition(mut self, epilogue: impl Into<String>) -> Self {
-        self.epilogue.definition = Some(epilogue.into());
-        self
-    }
-    pub fn with_epilogue_definition_format(
-        mut self,
-        epilogue: impl Into<String>,
-        format: StringFormat,
-    ) -> Self {
-        self.epilogue.definition = Some(epilogue.into());
-        self.epilogue.definition_format = format;
-        self
-    }
-    pub fn with_uses(mut self, uses: impl IntoIterator<Item = UseTree>) -> Self {
-        self.uses = uses.into_iter().collect();
-        self
-    }
-    pub fn with_prologue_for(
-        mut self,
-        prologue: impl Into<String>,
-        for_type: impl Into<ItemPath>,
-    ) -> Self {
-        self.prologue.header = Some(prologue.into());
-        self.prologue.header_format = StringFormat::Raw;
-        self.prologue.for_type = Some(for_type.into());
-        self
-    }
-    pub fn with_epilogue_for(
-        mut self,
-        epilogue: impl Into<String>,
-        for_type: impl Into<ItemPath>,
-    ) -> Self {
-        self.epilogue.header = Some(epilogue.into());
-        self.epilogue.header_format = StringFormat::Raw;
-        self.epilogue.for_type = Some(for_type.into());
+    /// Attach a `#[cfg(backend = "<name>")]` gate.
+    pub fn cfg_backend(mut self, name: &str) -> Self {
+        self.attributes
+            .0
+            .push(super::attributes::Attribute::cfg_backend(name));
         self
     }
 }
@@ -268,13 +211,14 @@ impl Parser {
     /// Parse a use statement, potentially with braced imports (including nested).
     /// Returns a single ModuleItem containing a UseTree.
     ///
-    /// `start_token` anchors the item's span. For a plain `use` it is the `use`
-    /// keyword itself; for `pub use` it is the `pub` keyword (already consumed by
-    /// the caller) so the span covers the whole statement.
+    /// `start_pos` anchors the item's span start: the leading attribute (if
+    /// any), else the `use`/`pub` keyword, so the span covers the whole
+    /// statement. `attributes` carries an optional leading `#[cfg(...)]`.
     pub(crate) fn parse_use(
         &mut self,
         visibility: Visibility,
-        start_token: crate::tokenizer::Token,
+        attributes: Attributes,
+        start_pos: crate::span::Location,
     ) -> Result<ModuleItem, ParseError> {
         self.expect(TokenKind::Use)?;
 
@@ -289,11 +233,12 @@ impl Parser {
 
         let tree = self.parse_use_tree()?;
         let last_token = self.expect(TokenKind::Semi)?;
-        let location = self.item_location_from_token_range(&start_token, &last_token);
+        let location = self.item_location_from_locations(start_pos, last_token.location.span.end);
 
         Ok(ModuleItem::Use {
             tree,
             visibility,
+            attributes,
             location,
         })
     }
@@ -425,26 +370,45 @@ impl Parser {
         })
     }
 
-    /// Parse the body of a single `prologue`/`epilogue` slot, after the
-    /// keyword has been consumed. Accepts, in any order, an optional
-    /// `definition` modifier (only meaningful for `backend cpp`; rejected
-    /// at the semantic layer for other backends) and an optional
-    /// `for <ItemPath>` attribution target. Then expects a string literal
-    /// and a trailing semicolon.
-    fn parse_backend_splice_slot(&mut self, slot: &mut BackendSplice) -> Result<(), ParseError> {
-        // Optional modifiers: `definition` and `for <ItemPath>`, in any order.
-        // Each may appear at most once per directive; duplicates fall through
-        // to the string literal parse and surface as a clear "expected string
-        // literal" error. The local flags reset per call, so a braced
-        // `backend cpp { epilogue for T r#"..."#; epilogue definition for T r#"..."#; }`
-        // correctly sets `for_type` on both directives (they share the same
-        // `BackendSplice`, but each directive is parsed independently).
-        let mut is_definition = false;
+    /// Parse a standalone `prologue`/`epilogue` splice statement, including
+    /// any leading `#[cfg(...)]` attributes. Accepts, in any order, an
+    /// optional `definition` modifier (only meaningful for cpp; rejected at
+    /// the semantic layer unless the cfg resolves cpp-only) and an optional
+    /// `for <ItemPath>` attribution target, then a string literal and a
+    /// trailing semicolon.
+    pub(crate) fn parse_splice(&mut self) -> Result<Splice, ParseError> {
+        // Full span (incl. leading attributes), used by the formatter to
+        // associate preceding comments and spacing.
+        let start_pos = self.current().location.span.start;
+        let attributes = if matches!(self.peek(), TokenKind::Hash) {
+            self.parse_attributes()?
+        } else {
+            Attributes::default()
+        };
+
+        let kind = match self.peek() {
+            TokenKind::Prologue => SpliceKind::Prologue,
+            TokenKind::Epilogue => SpliceKind::Epilogue,
+            _ => {
+                return Err(ParseError::ExpectedPrologueOrEpilogue {
+                    found: self.peek().clone(),
+                    location: self.current().location,
+                });
+            }
+        };
+        self.advance(); // consume `prologue` / `epilogue`
+
+        // Optional modifiers: `definition` and `for <ItemPath>`, in any
+        // order. Each may appear at most once; duplicates fall through to the
+        // string-literal parse and surface as a clear "expected string
+        // literal" error.
+        let mut definition = false;
         let mut has_for = false;
+        let mut for_type = None;
         loop {
             match self.peek() {
-                TokenKind::Ident(s) if s == "definition" && !is_definition => {
-                    is_definition = true;
+                TokenKind::Ident(s) if s == "definition" && !definition => {
+                    definition = true;
                     self.advance();
                 }
                 TokenKind::Ident(s) if s == "for" && !has_for => {
@@ -457,11 +421,12 @@ impl Parser {
                         });
                     }
                     let (path, _loc) = self.parse_item_path()?;
-                    slot.for_type = Some(path);
+                    for_type = Some(path);
                 }
                 _ => break,
             }
         }
+
         let expr = self.parse_expr()?;
         let Expr::StringLiteral { value, format, .. } = expr else {
             return Err(ParseError::ExpectedStringLiteral {
@@ -469,106 +434,15 @@ impl Parser {
                 location: *expr.location(),
             });
         };
-        if is_definition {
-            slot.definition = Some(value);
-            slot.definition_format = format;
-        } else {
-            slot.header = Some(value);
-            slot.header_format = format;
-        }
-        self.expect(TokenKind::Semi)?;
-        Ok(())
-    }
-
-    /// Returns the most recently consumed token (typically a closing
-    /// `;` or `}`), used to compute span ranges.
-    fn last_token(&self) -> &crate::tokenizer::Token {
-        let idx = self.pos.saturating_sub(1);
-        &self.tokens[idx.min(self.tokens.len() - 1)]
-    }
-
-    pub(crate) fn parse_backend(&mut self) -> Result<Backend, ParseError> {
-        let first_token = self.expect(TokenKind::Backend)?;
-        let (name_ident, name_span) = self.expect_ident()?;
-        let name = match crate::Backend::from_name(name_ident.0.as_str()) {
-            Some(b) => b,
-            None => {
-                return Err(ParseError::UnknownBackend {
-                    found: name_ident.0,
-                    location: ItemLocation {
-                        file_id: first_token.location.file_id,
-                        span: name_span,
-                    },
-                });
-            }
-        };
-
-        let mut prologue = BackendSplice::default();
-        let mut epilogue = BackendSplice::default();
-        let mut uses: Vec<UseTree> = Vec::new();
-
-        // Check if we have braces or direct prologue/epilogue
-        let last_token = if matches!(self.peek(), TokenKind::LBrace) {
-            // Form: backend name { use ...; prologue ...; epilogue ...; }
-            self.advance(); // consume {
-
-            while !matches!(self.peek(), TokenKind::RBrace) {
-                match self.peek() {
-                    TokenKind::Use => {
-                        // `use foo::bar;` or `use foo::{a, b};` - same
-                        // grammar as module-level use statements.
-                        self.advance();
-                        let tree = self.parse_use_tree()?;
-                        self.expect(TokenKind::Semi)?;
-                        uses.push(tree);
-                    }
-                    TokenKind::Prologue => {
-                        self.advance();
-                        self.parse_backend_splice_slot(&mut prologue)?;
-                    }
-                    TokenKind::Epilogue => {
-                        self.advance();
-                        self.parse_backend_splice_slot(&mut epilogue)?;
-                    }
-                    _ => {
-                        return Err(ParseError::ExpectedPrologueOrEpilogue {
-                            found: self.peek().clone(),
-                            location: self.current().location,
-                        });
-                    }
-                }
-            }
-
-            self.expect(TokenKind::RBrace)?
-        } else {
-            // Form: `backend name prologue ...` or `backend name epilogue ...`
-            // (with optional `definition` modifier).
-            match self.peek() {
-                TokenKind::Prologue => {
-                    self.advance();
-                    self.parse_backend_splice_slot(&mut prologue)?;
-                    self.last_token().clone()
-                }
-                TokenKind::Epilogue => {
-                    self.advance();
-                    self.parse_backend_splice_slot(&mut epilogue)?;
-                    self.last_token().clone()
-                }
-                _ => {
-                    return Err(ParseError::ExpectedBackendContent {
-                        found: self.peek().clone(),
-                        location: self.current().location,
-                    });
-                }
-            }
-        };
-
-        let location = self.item_location_from_token_range(&first_token, &last_token);
-        Ok(Backend {
-            name,
-            prologue,
-            epilogue,
-            uses,
+        let semi = self.expect(TokenKind::Semi)?;
+        let location = self.item_location_from_locations(start_pos, semi.location.span.end);
+        Ok(Splice {
+            kind,
+            attributes,
+            definition,
+            for_type,
+            text: value,
+            format,
             location,
         })
     }
@@ -880,328 +754,150 @@ extern type ManuallyDrop<SharedPtr<u32>>;
     }
 
     #[test]
-    fn can_parse_backends() {
+    fn can_parse_splices() {
+        // Standalone splice statements: an ungated one (every backend) and
+        // cfg-gated ones. Each is its own module item, in source order.
         let text = r##"
-backend rust {
-    prologue r#"
-        use std::ffi::CString;
-        use std::os::raw::c_char;
-    "#;
+prologue r#"// licence header"#;
 
-    epilogue r#"
-        fn main() {
-            println!("Hello, world!");
-        }
-    "#;
-}
-
-
-backend rust prologue r#"
+#[cfg(backend = "rust")]
+prologue r#"
     use std::ffi::CString;
     use std::os::raw::c_char;
 "#;
 
-backend rust epilogue r#"
+#[cfg(backend = "rust")]
+epilogue r#"
     fn main() {
         println!("Hello, world!");
     }
 "#;
 "##;
 
-        let ast = M::new().with_backends([
-            B::new("rust")
-                .with_prologue_format(
-                    r#"
-        use std::ffi::CString;
-        use std::os::raw::c_char;
-    "#,
-                    StringFormat::Raw,
-                )
-                .with_epilogue_format(
-                    r#"
-        fn main() {
-            println!("Hello, world!");
-        }
-    "#,
-                    StringFormat::Raw,
-                ),
-            B::new("rust").with_prologue_format(
-                r#"
-    use std::ffi::CString;
-    use std::os::raw::c_char;
-"#,
-                StringFormat::Raw,
-            ),
-            B::new("rust").with_epilogue_format(
-                r#"
-    fn main() {
-        println!("Hello, world!");
-    }
-"#,
-                StringFormat::Raw,
-            ),
+        let ast = M::new().with_splices([
+            SP::prologue("// licence header"),
+            SP::prologue("\n    use std::ffi::CString;\n    use std::os::raw::c_char;\n")
+                .cfg_backend("rust"),
+            SP::epilogue("\n    fn main() {\n        println!(\"Hello, world!\");\n    }\n")
+                .cfg_backend("rust"),
         ]);
 
         assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
     }
 
     #[test]
-    fn can_parse_backend_with_uses() {
-        let text = r##"
-backend cpp {
-    use types::math::Matrix4;
-    use types::shared_ptr::{SharedPtr, WeakPtr};
+    fn can_parse_cfg_gated_use() {
+        // A leading `#[cfg(...)]` on a `use` parses into the use's attributes.
+        let text = r#"
+        #[cfg(backend = "cpp")]
+        use types::math::Matrix4;
+        "#;
 
-    epilogue r#"
-        inline auto test() { return 1; }
-    "#;
-}
-"##;
-
-        let ast = M::new().with_backends([B::new("cpp")
-            .with_uses([
-                UT::path("types::math::Matrix4"),
-                UT::group(
-                    "types::shared_ptr",
-                    [UT::path("SharedPtr"), UT::path("WeakPtr")],
-                ),
-            ])
-            .with_epilogue_format(
-                r#"
-        inline auto test() { return 1; }
-    "#,
-                StringFormat::Raw,
-            )]);
-
-        assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
-    }
-
-    #[test]
-    fn unknown_backend_name_is_a_parse_error() {
-        // `backend foobar { ... }` should be rejected at parse time
-        // before any semantic analysis runs - typos shouldn't escape
-        // into the IR.
-        let text = r##"backend foobar prologue r#""#;"##;
-        let err = parse_str_for_tests(text).unwrap_err();
-        match err {
-            ParseError::UnknownBackend { found, .. } => {
-                assert_eq!(found, "foobar");
-            }
-            other => panic!("expected UnknownBackend, got {other:?}"),
-        }
-    }
-
-    #[test]
-    fn known_backend_names_parse() {
-        // Every known backend name round-trips through the parser regardless of
-        // which codegen features are compiled in (issue #104): parsing defs that
-        // name a backend is independent of being able to *generate* it.
-        for name in ["rust", "cpp", "json"] {
-            let text = format!(r##"backend {name} prologue r#""#;"##);
-            let module = parse_str_for_tests(&text).unwrap();
-            let backends: Vec<_> = module.backends().collect();
-            assert_eq!(backends.len(), 1);
-            assert_eq!(backends[0].name.name(), name);
-        }
-    }
-
-    #[test]
-    fn feature_gated_backend_block_parses_without_its_feature() {
-        // Regression for #104: a `backend cpp { ... }` block in a shared def
-        // file must parse even for a consumer that never enables the `cpp`
-        // feature (e.g. a Rust-only build.rs), so a routine dependency update
-        // doesn't break their build. The block is carried in the IR; only its
-        // codegen is gated.
-        let text = r##"
-backend cpp {
-    prologue definition r#"#include <cstdint>"#;
-    epilogue r#"inline int answer() { return 42; }"#;
-}
-"##;
         let module = parse_str_for_tests(text).unwrap();
-        let backends: Vec<_> = module.backends().collect();
-        assert_eq!(backends.len(), 1);
-        assert_eq!(backends[0].name, crate::Backend::Cpp);
+        let uses: Vec<_> = module
+            .items
+            .iter()
+            .filter_map(|i| match i {
+                ModuleItem::Use {
+                    tree, attributes, ..
+                } => Some((tree.flatten(), attributes.cfg())),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(uses.len(), 1);
+        assert_eq!(uses[0].0, vec![IP::from("types::math::Matrix4")]);
+        assert!(uses[0].1.is_some(), "cfg-gated use should carry a cfg");
     }
 
     #[test]
-    fn can_parse_backend_with_definition_modifier() {
-        // The `definition` modifier on an epilogue/prologue lands in the
-        // .cpp source file rather than the .hpp header. Both shorthand
-        // and block forms should accept it.
+    fn can_parse_splice_with_definition_modifier() {
+        // The `definition` modifier lands the splice in the cpp `.cpp` source
+        // file rather than the `.hpp` header.
         let text = r##"
-backend cpp epilogue definition r#"
+#[cfg(backend = "cpp")]
+epilogue definition r#"
     bool Probe::read() const { return value; }
 "#;
-
-backend cpp {
-    prologue definition r#"
-        #include <windows.h>
-    "#;
-    epilogue r#"
-        bool header_only_helper();
-    "#;
-    epilogue definition r#"
-        bool source_only_helper() { return true; }
-    "#;
-}
 "##;
 
-        let ast = M::new().with_backends([
-            B::new("cpp").with_epilogue_definition_format(
-                r#"
-    bool Probe::read() const { return value; }
-"#,
-                StringFormat::Raw,
-            ),
-            B::new("cpp")
-                .with_prologue_definition_format(
-                    r#"
-        #include <windows.h>
-    "#,
-                    StringFormat::Raw,
-                )
-                .with_epilogue_format(
-                    r#"
-        bool header_only_helper();
-    "#,
-                    StringFormat::Raw,
-                )
-                .with_epilogue_definition_format(
-                    r#"
-        bool source_only_helper() { return true; }
-    "#,
-                    StringFormat::Raw,
-                ),
-        ]);
+        let ast = M::new().with_splices([SP::epilogue(
+            "\n    bool Probe::read() const { return value; }\n",
+        )
+        .definition()
+        .cfg_backend("cpp")]);
 
         assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
     }
 
     #[test]
-    fn can_parse_backend_with_for_type() {
+    fn can_parse_splice_with_for_type() {
         // `for <Type>` tags a splice as belonging to that type's page rather
-        // than the module page. Both shorthand and braced forms accept it,
-        // and it composes with `definition` in any order.
+        // than the module page.
         let text = r##"
-backend rust epilogue for Widget r#"
+#[cfg(backend = "rust")]
+epilogue for Widget r#"
     impl Widget { pub fn new() -> Widget { Widget { id: 0 } } }
 "#;
-
-backend rust {
-    prologue for Handle r#"
-type HandleRaw = *mut u8;
-"#;
-    epilogue for Handle r#"
-    impl Handle { pub fn null() -> Handle { Handle { raw: std::ptr::null_mut() } } }
-"#;
-}
 "##;
 
-        let ast = M::new().with_backends([
-            B::new("rust").with_epilogue_for(
-                "\n    impl Widget { pub fn new() -> Widget { Widget { id: 0 } } }\n",
-                "Widget",
-            ),
-            B::new("rust")
-                .with_prologue_for("\ntype HandleRaw = *mut u8;\n", "Handle")
-                .with_epilogue_for(
-                    "\n    impl Handle { pub fn null() -> Handle { Handle { raw: std::ptr::null_mut() } } }\n",
-                    "Handle",
-                ),
-        ]);
+        let ast = M::new().with_splices([SP::epilogue(
+            "\n    impl Widget { pub fn new() -> Widget { Widget { id: 0 } } }\n",
+        )
+        .for_type("Widget")
+        .cfg_backend("rust")]);
 
         assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
     }
 
     #[test]
-    fn can_parse_backend_for_type_with_definition() {
-        // `definition` and `for` are independent modifiers — either order works,
-        // and `for` without `definition` lands in `header` as usual.
+    fn can_parse_splice_for_type_with_definition_any_order() {
+        // `definition` and `for` are independent modifiers — either order works.
         let text = r##"
-backend cpp epilogue definition for Probe r#"
+#[cfg(backend = "cpp")]
+epilogue definition for Probe r#"
     bool Probe::read() const { return value; }
 "#;
-backend cpp epilogue for Probe definition r#"
+#[cfg(backend = "cpp")]
+epilogue for Probe definition r#"
     bool Probe::init() { value = 0; }
 "#;
-backend cpp epilogue for Probe r#"
+#[cfg(backend = "cpp")]
+epilogue for Probe r#"
     bool Probe::is_ready() const { return value != 0; }
 "#;
 "##;
 
-        let ast = M::new().with_backends([
-            {
-                let mut b = B::new("cpp");
-                b.epilogue.definition =
-                    Some("\n    bool Probe::read() const { return value; }\n".into());
-                b.epilogue.definition_format = StringFormat::Raw;
-                b.epilogue.for_type = Some("Probe".into());
-                b
-            },
-            {
-                let mut b = B::new("cpp");
-                b.epilogue.definition = Some("\n    bool Probe::init() { value = 0; }\n".into());
-                b.epilogue.definition_format = StringFormat::Raw;
-                b.epilogue.for_type = Some("Probe".into());
-                b
-            },
-            {
-                let mut b = B::new("cpp");
-                b.epilogue.header =
-                    Some("\n    bool Probe::is_ready() const { return value != 0; }\n".into());
-                b.epilogue.header_format = StringFormat::Raw;
-                b.epilogue.for_type = Some("Probe".into());
-                b
-            },
+        let ast = M::new().with_splices([
+            SP::epilogue("\n    bool Probe::read() const { return value; }\n")
+                .definition()
+                .for_type("Probe")
+                .cfg_backend("cpp"),
+            SP::epilogue("\n    bool Probe::init() { value = 0; }\n")
+                .definition()
+                .for_type("Probe")
+                .cfg_backend("cpp"),
+            SP::epilogue("\n    bool Probe::is_ready() const { return value != 0; }\n")
+                .for_type("Probe")
+                .cfg_backend("cpp"),
         ]);
 
         assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
     }
 
     #[test]
-    fn can_parse_braced_for_type_with_header_and_definition() {
-        // A braced `backend cpp { }` block that has both an `epilogue for T`
-        // (header) and `epilogue definition for T` (definition) for the same
-        // type. The braced form reuses one BackendSplice for all epilogue
-        // entries, so `for_type` must be settable on the second entry too
-        // (regression: previously blocked by `slot.for_type.is_none()` guard).
-        let text = r##"
-backend cpp {
-    epilogue for Probe r#"
-    bool Probe::is_ready() const;
-"#;
-    epilogue definition for Probe r#"
-    bool Probe::is_ready() const { return value != 0; }
-"#;
-}
-"##;
-
-        let ast = M::new().with_backends([{
-            let mut b = B::new("cpp");
-            b.epilogue.header = Some("\n    bool Probe::is_ready() const;\n".into());
-            b.epilogue.header_format = StringFormat::Raw;
-            b.epilogue.definition =
-                Some("\n    bool Probe::is_ready() const { return value != 0; }\n".into());
-            b.epilogue.definition_format = StringFormat::Raw;
-            b.epilogue.for_type = Some("Probe".into());
-            b
-        }]);
-
-        assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
-    }
-
-    #[test]
-    fn can_parse_backend_with_multiline_prologue() {
+    fn can_parse_ungated_splice_with_plain_string() {
+        // A plain (non-raw) string literal splice, emitted for every backend.
         let text = r#"
-backend rust prologue "
+prologue "
     use crate::shared_ptr::*;
     use std::mem::ManuallyDrop;
 ";
     "#;
 
-        let ast = M::new().with_backends([B::new("rust")
-            .with_prologue("\n    use crate::shared_ptr::*;\n    use std::mem::ManuallyDrop;\n")]);
+        let ast = M::new().with_splices([SP::prologue(
+            "\n    use crate::shared_ptr::*;\n    use std::mem::ManuallyDrop;\n",
+        )
+        .with_format(StringFormat::Regular)]);
 
         assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
     }

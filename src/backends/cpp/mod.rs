@@ -136,14 +136,11 @@ fn dedent(s: &str) -> String {
 /// Multiple splice blocks targeting the same slot are joined with one
 /// blank line between each so they render with the same visual rhythm
 /// as definitions within a single block.
-fn join_slot<'a>(
-    bs: &'a [crate::semantic::types::Backend],
-    pick: impl Fn(&'a crate::semantic::types::Backend) -> Option<&'a String>,
-) -> String {
-    bs.iter()
-        .filter_map(pick)
+fn join_slot(splices: &[&crate::semantic::types::Splice]) -> String {
+    splices
+        .iter()
         .map(|s| {
-            let dedented = dedent(s.trim_matches('\n'));
+            let dedented = dedent(s.text.trim_matches('\n'));
             dedented.trim().to_string()
         })
         .filter(|s| !s.is_empty())
@@ -151,16 +148,25 @@ fn join_slot<'a>(
         .join("\n\n")
 }
 
-/// Pull all four splice slots out of a module's cpp backend blocks.
-fn extract_cpp_splices(cpp_backends: Option<&Vec<crate::semantic::types::Backend>>) -> CppSplices {
-    let Some(bs) = cpp_backends else {
-        return CppSplices::default();
+/// Pull all four splice slots (header/source × prologue/epilogue) out of a
+/// module's cpp-active splices, in source order.
+fn extract_cpp_splices(module: &crate::semantic::Module) -> CppSplices {
+    use crate::grammar::SpliceKind;
+    let active: Vec<&crate::semantic::types::Splice> =
+        module.splices_for(crate::Backend::Cpp).collect();
+    let slot = |kind: SpliceKind, definition: bool| {
+        let picked: Vec<_> = active
+            .iter()
+            .copied()
+            .filter(|s| s.kind == kind && s.definition == definition)
+            .collect();
+        join_slot(&picked)
     };
     CppSplices {
-        prologue: join_slot(bs, |b| b.prologue.header.as_ref()),
-        epilogue: join_slot(bs, |b| b.epilogue.header.as_ref()),
-        prologue_def: join_slot(bs, |b| b.prologue.definition.as_ref()),
-        epilogue_def: join_slot(bs, |b| b.epilogue.definition.as_ref()),
+        prologue: slot(SpliceKind::Prologue, false),
+        epilogue: slot(SpliceKind::Epilogue, false),
+        prologue_def: slot(SpliceKind::Prologue, true),
+        epilogue_def: slot(SpliceKind::Epilogue, true),
     }
 }
 
@@ -637,7 +643,7 @@ fn write_module(
     };
     let ctx = render::RenderCtx::new(key, registry, bindings, cfg_ctx);
     let module_deps = deps::collect_module_deps(key, module, registry, bindings);
-    let splices = extract_cpp_splices(module.backends.get(&crate::Backend::Cpp));
+    let splices = extract_cpp_splices(module);
     let body = render_module_body(key, module, registry, bindings, ctx)?;
 
     // Skip writing anything if the module contributes no declarations,

@@ -1,7 +1,7 @@
 use super::*;
 
 use pyxis::{
-    grammar::{Argument, Backend, Expr, Ident, IntFormat, ItemDefinitionInner, StringFormat},
+    grammar::{Argument, Expr, Ident, IntFormat, ItemDefinitionInner, Splice, StringFormat},
     semantic::types::{ItemDefinitionInner as ResolvedInner, ItemStateResolved},
     tokenizer::TokenKind,
 };
@@ -217,35 +217,33 @@ pub(crate) fn literal_hover(kind: &TokenKind) -> Option<String> {
     }
 }
 
-/// Describe a backend keyword (`cpp`/`rust`/`prologue`/`epilogue`/`definition`/
-/// `uses`/`for`) under the cursor. The grammar AST carries no spans for these,
-/// so we tokenize and match the token directly. A `r#"…"#` splice lexes as a
-/// single token, so keywords inside the spliced code can never match.
-pub(crate) fn backend_term_at(
+/// Describe a splice keyword (`prologue`/`epilogue`/`definition`/`for`) under
+/// the cursor. The grammar AST carries no spans for these, so we tokenize and
+/// match the token directly. A `r#"…"#` splice lexes as a single token, so
+/// keywords inside the spliced code can never match. Only tokens within the
+/// splice statement's own span are considered.
+pub(crate) fn splice_term_at(
     tokens: &[Token],
-    backend: &Backend,
+    splice: &Splice,
     loc: &Location,
 ) -> Option<(String, Span)> {
     use pyxis::tokenizer::TokenKind;
-    let name = backend.name.name();
-    let token = tokens.iter().find(|t| t.location.span.contains(loc))?;
-    let desc: String = match &token.kind {
-        TokenKind::Backend => format!("The `{name}` backend block."),
-        TokenKind::Prologue => "Splice emitted *before* this backend's generated output.".into(),
-        TokenKind::Epilogue => "Splice emitted *after* this backend's generated output.".into(),
-        TokenKind::Ident(s) if s == name => {
-            format!("The `{name}` backend — code emitted by the {name} generator.")
-        }
-        TokenKind::Ident(s) if s == "for" => "Attributes this splice to a specific type.".into(),
+    if !splice.location.span.contains(loc) {
+        return None;
+    }
+    let token = tokens.iter().find(|t| {
+        t.location.span.contains(loc) && splice.location.span.contains(&t.location.span.start)
+    })?;
+    let desc: &str = match &token.kind {
+        TokenKind::Prologue => "Splice emitted *before* the module's generated output.",
+        TokenKind::Epilogue => "Splice emitted *after* the module's generated output.",
+        TokenKind::Ident(s) if s == "for" => "Attributes this splice to a specific type.",
         TokenKind::Ident(s) if s == "definition" => {
-            "Targets the source/definition file rather than the header.".into()
-        }
-        TokenKind::Ident(s) if s == "uses" => {
-            "Declares other-module items this backend block depends on.".into()
+            "Targets the source/definition file rather than the header (cpp only)."
         }
         _ => return None,
     };
-    Some((format!("**backend**\n\n{desc}"), token.location.span))
+    Some((format!("**splice**\n\n{desc}"), token.location.span))
 }
 
 /// Render a definition/field's attributes compactly (e.g. `#[base] #[cfg(...)]`).
@@ -384,6 +382,19 @@ pub(crate) fn attribute_at<'a>(
             }
             ModuleItem::ExternType { attributes, .. } => {
                 if let Some(hit) = find(attributes) {
+                    return Some(hit);
+                }
+            }
+            // A cfg-gated `use` (`#[cfg(backend = "cpp")] use ...;`) carries its
+            // gate in `attributes`; hovering it should describe the attribute.
+            ModuleItem::Use { attributes, .. } => {
+                if let Some(hit) = find(attributes) {
+                    return Some(hit);
+                }
+            }
+            // Likewise a cfg-gated splice statement.
+            ModuleItem::Splice { splice } => {
+                if let Some(hit) = find(&splice.attributes) {
                     return Some(hit);
                 }
             }

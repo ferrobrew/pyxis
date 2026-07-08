@@ -453,7 +453,7 @@ impl ServerState {
                     }
                 }
                 ModuleItem::Impl { impl_block } => push(impl_block.location.span),
-                ModuleItem::Backend { backend } => push(backend.location.span),
+                ModuleItem::Splice { splice } => push(splice.location.span),
                 ModuleItem::Use { location, .. } => push(location.span),
                 _ => {}
             }
@@ -495,7 +495,7 @@ pub(crate) fn module_item_to_symbol(item: &ModuleItem, source: &str) -> Option<D
             (name, SymbolKind::OBJECT, impl_block.location.span)
         }
         ModuleItem::Use { .. } => return None,
-        ModuleItem::Backend { .. } => return None,
+        ModuleItem::Splice { .. } => return None,
         ModuleItem::Comment { .. } => return None,
         ModuleItem::InnerAttributes { .. } => return None,
     };

@@ -123,6 +123,21 @@ impl Attribute {
             location: ItemLocation::test(),
         }
     }
+    /// `#[cfg(backend = "<name>")]` — the common gate in splice/use tests.
+    pub fn cfg_backend(name: &str) -> Self {
+        use crate::parser::cfg::{CfgAtom, CfgPredicate};
+        Attribute::Cfg {
+            predicate: CfgPredicate::Atom {
+                atom: CfgAtom::KeyValue {
+                    key: "backend".into(),
+                    value: name.into(),
+                    location: ItemLocation::test(),
+                },
+                location: ItemLocation::test(),
+            },
+            location: ItemLocation::test(),
+        }
+    }
     pub fn packed() -> Self {
         Attribute::Ident {
             ident: "packed".into(),
@@ -368,11 +383,9 @@ impl Parser {
         Ok(Attributes(attrs))
     }
 
-    /// Accept a name in cfg-attribute context: either a regular identifier
-    /// or one of the keyword tokens that can plausibly appear as a cfg key
-    /// (currently just `backend`, since it's the only hard-keyword we
-    /// expect to use as a cfg key). Future keys like `pointer_size` /
-    /// `feature` aren't keywords, so they fall through to `Ident`.
+    /// Accept a name in cfg-attribute context. All cfg keys (`backend`,
+    /// and future keys like `pointer_size` / `feature`) lex as plain
+    /// identifiers, so a bare `Ident` is all we need to accept.
     fn parse_cfg_name(&mut self) -> Result<(String, crate::span::Span), ParseError> {
         let token = self.current().clone();
         match &token.kind {
@@ -380,10 +393,6 @@ impl Parser {
                 let s = s.clone();
                 self.advance();
                 Ok((s, token.location.span))
-            }
-            TokenKind::Backend => {
-                self.advance();
-                Ok(("backend".to_string(), token.location.span))
             }
             _ => Err(ParseError::ExpectedIdentifier {
                 found: token.kind,

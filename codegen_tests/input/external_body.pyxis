@@ -14,7 +14,8 @@ impl Counter {
     pub fn read(&self) -> u32;
 }
 
-backend rust epilogue r#"
+#[cfg(backend = "rust")]
+epilogue r#"
     impl Counter {
         pub fn make() -> Counter { Counter { value: 0 } }
         pub fn bump(&mut self) -> u32 { self.value += 1; self.value }
@@ -22,7 +23,8 @@ backend rust epilogue r#"
     }
 "#;
 
-backend cpp epilogue r#"
+#[cfg(backend = "cpp")]
+epilogue r#"
 inline Counter Counter::make() { return Counter{0}; }
 inline ::std::uint32_t Counter::bump() { value += 1; return value; }
 inline ::std::uint32_t Counter::read() const { return value; }
@@ -31,11 +33,13 @@ inline ::std::uint32_t Counter::read() const { return value; }
 #[external_body]
 pub fn module_hello() -> u32;
 
-backend rust epilogue r#"
+#[cfg(backend = "rust")]
+epilogue r#"
     pub fn module_hello() -> u32 { 42 }
 "#;
 
-backend cpp epilogue r#"
+#[cfg(backend = "cpp")]
+epilogue r#"
 inline ::std::uint32_t module_hello() { return 42; }
 "#;
 
@@ -56,7 +60,8 @@ impl<T, Y> Pair<T> {
     pub fn cast_first(&self) -> *mut Y;
 }
 
-backend rust epilogue r#"
+#[cfg(backend = "rust")]
+epilogue r#"
     impl<T> Pair<T> {
         pub fn first_ptr(&self) -> *mut T { self.first }
         // In Rust, method-level type parameters live on the function, not
@@ -66,7 +71,8 @@ backend rust epilogue r#"
     }
 "#;
 
-backend cpp epilogue r#"
+#[cfg(backend = "cpp")]
+epilogue r#"
 template <class T>
 inline T* Pair<T>::first_ptr() const { return first; }
 

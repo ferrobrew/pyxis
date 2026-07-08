@@ -153,18 +153,23 @@ vectorcall semantics must build against the MSVC arm.
 
 ## Splices: `prologue` / `epilogue` and `definition`
 
-`backend cpp { prologue ...; epilogue ...; }` blocks splice user-written
-C++ into the emitted module. The cpp backend uniquely supports a
-`definition` modifier:
+Standalone `prologue` / `epilogue` statements, gated with
+`#[cfg(backend = "cpp")]`, splice user-written C++ into the emitted
+module. The cpp backend uniquely supports a `definition` modifier:
 
 ```pyxis
-backend cpp {
-    prologue r#" ... "#;             // lands in the .hpp above the namespace
-    epilogue r#" ... "#;             // lands in the .hpp at the bottom of the namespace
-    prologue definition r#" ... "#;  // lands in the .cpp above the namespace
-    epilogue definition r#" ... "#;  // lands in the .cpp at the bottom of the namespace
-}
+#[cfg(backend = "cpp")]
+prologue r#" ... "#;             // lands in the .hpp above the namespace
+#[cfg(backend = "cpp")]
+epilogue r#" ... "#;             // lands in the .hpp at the bottom of the namespace
+#[cfg(backend = "cpp")]
+prologue definition r#" ... "#;  // lands in the .cpp above the namespace
+#[cfg(backend = "cpp")]
+epilogue definition r#" ... "#;  // lands in the .cpp at the bottom of the namespace
 ```
+
+The `definition` modifier requires a cfg that resolves cpp-only (an
+ungated `definition`, or one active for a non-cpp backend, is rejected).
 
 Common use cases:
 

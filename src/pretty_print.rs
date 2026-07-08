@@ -105,8 +105,12 @@ impl PrettyPrinter {
                 }
             }
             ModuleItem::Use {
-                tree, visibility, ..
+                tree,
+                visibility,
+                attributes,
+                ..
             } => {
+                self.print_attributes(attributes);
                 self.write_indent();
                 let tree_str = self.format_use_tree(tree);
                 let vis = match visibility {
@@ -135,8 +139,8 @@ impl PrettyPrinter {
                 writeln!(&mut self.output, "extern type {name};").unwrap();
                 self.writeln("");
             }
-            ModuleItem::Backend { backend } => {
-                self.print_backend(backend);
+            ModuleItem::Splice { splice } => {
+                self.print_splice(splice);
                 self.writeln("");
             }
             ModuleItem::Definition { definition } => {
@@ -554,107 +558,22 @@ impl PrettyPrinter {
         }
     }
 
-    fn print_backend(&mut self, backend: &Backend) {
+    fn print_splice(&mut self, splice: &Splice) {
+        // Leading `#[cfg(...)]` (or any) attributes, one per line.
+        self.print_attributes(&splice.attributes);
         self.write_indent();
-
-        // Count the number of populated splice slots; the shorthand form
-        // is only available when there's exactly one (and no `use`s).
-        let prologue_count = backend.prologue.header.is_some() as usize
-            + backend.prologue.definition.is_some() as usize;
-        let epilogue_count = backend.epilogue.header.is_some() as usize
-            + backend.epilogue.definition.is_some() as usize;
-        let total = prologue_count + epilogue_count;
-        let shorthand_eligible = backend.uses.is_empty() && total == 1;
-
-        let only_prologue_header = shorthand_eligible
-            && backend.prologue.header.is_some()
-            && backend.prologue.definition.is_none();
-        let only_prologue_def = shorthand_eligible && backend.prologue.definition.is_some();
-        let only_epilogue_header = shorthand_eligible
-            && backend.epilogue.header.is_some()
-            && backend.epilogue.definition.is_none();
-        let only_epilogue_def = shorthand_eligible && backend.epilogue.definition.is_some();
-
-        if only_prologue_header {
-            let prologue = backend.prologue.header.as_ref().unwrap();
-            let s = self.format_string_with_format(prologue, backend.prologue.header_format);
-            let m = self.splice_modifiers(false, backend.prologue.for_type.as_ref());
-            writeln!(
-                &mut self.output,
-                "backend {} prologue{m} {s};",
-                backend.name
-            )
-            .unwrap();
-        } else if only_prologue_def {
-            let prologue = backend.prologue.definition.as_ref().unwrap();
-            let s = self.format_string_with_format(prologue, backend.prologue.definition_format);
-            let m = self.splice_modifiers(true, backend.prologue.for_type.as_ref());
-            writeln!(
-                &mut self.output,
-                "backend {} prologue{m} {s};",
-                backend.name
-            )
-            .unwrap();
-        } else if only_epilogue_header {
-            let epilogue = backend.epilogue.header.as_ref().unwrap();
-            let s = self.format_string_with_format(epilogue, backend.epilogue.header_format);
-            let m = self.splice_modifiers(false, backend.epilogue.for_type.as_ref());
-            writeln!(
-                &mut self.output,
-                "backend {} epilogue{m} {s};",
-                backend.name
-            )
-            .unwrap();
-        } else if only_epilogue_def {
-            let epilogue = backend.epilogue.definition.as_ref().unwrap();
-            let s = self.format_string_with_format(epilogue, backend.epilogue.definition_format);
-            let m = self.splice_modifiers(true, backend.epilogue.for_type.as_ref());
-            writeln!(
-                &mut self.output,
-                "backend {} epilogue{m} {s};",
-                backend.name
-            )
-            .unwrap();
+        // Splices are code blocks: render any multi-line body as a raw string
+        // so it lays out across real lines instead of a single `"\n...\n"`
+        // escape soup. Single-line bodies keep their original format.
+        let format = if splice.text.contains('\n') {
+            StringFormat::Raw
         } else {
-            // Block form: emits `use`s first, then prologue, then epilogue.
-            writeln!(&mut self.output, "backend {} {{", backend.name).unwrap();
-            self.indent();
-
-            for tree in &backend.uses {
-                self.write_indent();
-                let tree_str = self.format_use_tree(tree);
-                writeln!(&mut self.output, "use {tree_str};").unwrap();
-            }
-
-            if let Some(text) = &backend.prologue.header {
-                self.write_indent();
-                let s = self.format_string_with_format(text, backend.prologue.header_format);
-                let m = self.splice_modifiers(false, backend.prologue.for_type.as_ref());
-                writeln!(&mut self.output, "prologue{m} {s};").unwrap();
-            }
-            if let Some(text) = &backend.prologue.definition {
-                self.write_indent();
-                let s = self.format_string_with_format(text, backend.prologue.definition_format);
-                let m = self.splice_modifiers(true, backend.prologue.for_type.as_ref());
-                writeln!(&mut self.output, "prologue{m} {s};").unwrap();
-            }
-            if let Some(text) = &backend.epilogue.header {
-                self.write_indent();
-                let s = self.format_string_with_format(text, backend.epilogue.header_format);
-                let m = self.splice_modifiers(false, backend.epilogue.for_type.as_ref());
-                writeln!(&mut self.output, "epilogue{m} {s};").unwrap();
-            }
-            if let Some(text) = &backend.epilogue.definition {
-                self.write_indent();
-                let s = self.format_string_with_format(text, backend.epilogue.definition_format);
-                let m = self.splice_modifiers(true, backend.epilogue.for_type.as_ref());
-                writeln!(&mut self.output, "epilogue{m} {s};").unwrap();
-            }
-
-            self.dedent();
-            self.write_indent();
-            writeln!(&mut self.output, "}}").unwrap();
-        }
+            splice.format
+        };
+        let s = self.format_string_with_format(&splice.text, format);
+        let m = self.splice_modifiers(splice.definition, splice.for_type.as_ref());
+        let kw = splice.kind.keyword();
+        writeln!(&mut self.output, "{kw}{m} {s};").unwrap();
     }
 
     /// Format the modifier suffix for a splice slot: an optional `definition`
@@ -1876,15 +1795,20 @@ pub type MultipleBlocks {
     }
 
     #[test]
-    fn test_preserve_regular_string_format_in_backend() {
+    fn test_multiline_regular_splice_becomes_raw() {
+        // A multi-line splice body is a code block: it renders as a raw string
+        // across real lines rather than a single-line `"\n...\n"` escape soup,
+        // regardless of whether the source used a regular or raw literal.
         let text = r#"
-backend rust prologue "
-    use crate::shared_ptr::*;
-    use std::mem::ManuallyDrop;
-";
+#[cfg(backend = "rust")]
+prologue "\n    use crate::shared_ptr::*;\n    use std::mem::ManuallyDrop;\n";
         "#;
 
-        let expected = r#"backend rust prologue "\n    use crate::shared_ptr::*;\n    use std::mem::ManuallyDrop;\n";"#;
+        let expected = r##"#[cfg(backend = "rust")]
+prologue r#"
+    use crate::shared_ptr::*;
+    use std::mem::ManuallyDrop;
+"#;"##;
 
         let module = parse_str_for_tests(text).unwrap();
         let printed = pretty_print(&module);
@@ -1893,16 +1817,36 @@ backend rust prologue "
     }
 
     #[test]
-    fn test_preserve_raw_string_format_in_backend() {
+    fn test_single_line_regular_splice_stays_regular() {
+        // A single-line body has no newline to lay out, so it keeps its
+        // regular-string form.
+        let text = r#"
+#[cfg(backend = "rust")]
+epilogue "pub const K: u32 = 1;";
+        "#;
+
+        let expected = r#"#[cfg(backend = "rust")]
+epilogue "pub const K: u32 = 1;";"#;
+
+        let module = parse_str_for_tests(text).unwrap();
+        let printed = pretty_print(&module);
+
+        assert_eq!(printed, expected);
+    }
+
+    #[test]
+    fn test_preserve_raw_string_format_in_splice() {
         let text = r##"
-backend rust prologue r#"
+#[cfg(backend = "rust")]
+prologue r#"
     use crate::shared_ptr::*;
     use std::mem::ManuallyDrop;
 "#;
         "##;
 
         let expected = r##"
-backend rust prologue r#"
+#[cfg(backend = "rust")]
+prologue r#"
     use crate::shared_ptr::*;
     use std::mem::ManuallyDrop;
 "#;

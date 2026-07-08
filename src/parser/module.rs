@@ -6,7 +6,7 @@ use crate::{
         ParseError,
         attributes::{Attributes, Visibility},
         core::Parser,
-        external::{Backend, UseTree},
+        external::{Splice, UseTree},
         functions::{Function, FunctionBlock},
         items::{Comment, ItemDefinition, ItemTerminator},
         types::Ident,
@@ -39,6 +39,10 @@ pub enum ModuleItem {
     Use {
         tree: UseTree,
         visibility: Visibility,
+        /// Optional leading `#[cfg(...)]`. A cfg-gated `use` still
+        /// participates in name resolution; the cpp backend additionally
+        /// promotes a cpp-active gated `use` to a forced `#include`.
+        attributes: Attributes,
         location: ItemLocation,
     },
     ExternType {
@@ -50,8 +54,8 @@ pub enum ModuleItem {
         /// Position of the declaration itself, for documentation source links.
         declaration_location: ItemLocation,
     },
-    Backend {
-        backend: Backend,
+    Splice {
+        splice: Splice,
     },
     Definition {
         definition: ItemDefinition,
@@ -98,6 +102,7 @@ impl Module {
             self.items.push(ModuleItem::Use {
                 tree: UseTree::path(path),
                 visibility: Visibility::Private,
+                attributes: Attributes::default(),
                 location: ItemLocation::test(),
             });
         }
@@ -110,6 +115,7 @@ impl Module {
             self.items.push(ModuleItem::Use {
                 tree: UseTree::path(path),
                 visibility: Visibility::Public,
+                attributes: Attributes::default(),
                 location: ItemLocation::test(),
             });
         }
@@ -122,6 +128,7 @@ impl Module {
             self.items.push(ModuleItem::Use {
                 tree,
                 visibility: Visibility::Private,
+                attributes: Attributes::default(),
                 location: ItemLocation::test(),
             });
         }
@@ -134,6 +141,7 @@ impl Module {
             self.items.push(ModuleItem::Use {
                 tree,
                 visibility: Visibility::Public,
+                attributes: Attributes::default(),
                 location: ItemLocation::test(),
             });
         }
@@ -175,9 +183,9 @@ impl Module {
         }
         self
     }
-    pub fn with_backends(mut self, backends: impl IntoIterator<Item = Backend>) -> Self {
-        for backend in backends.into_iter() {
-            self.items.push(ModuleItem::Backend { backend });
+    pub fn with_splices(mut self, splices: impl IntoIterator<Item = Splice>) -> Self {
+        for splice in splices.into_iter() {
+            self.items.push(ModuleItem::Splice { splice });
         }
         self
     }
@@ -230,9 +238,9 @@ impl Module {
             _ => [].iter(),
         })
     }
-    pub fn backends(&self) -> impl Iterator<Item = &Backend> {
+    pub fn splices(&self) -> impl Iterator<Item = &Splice> {
         self.items.iter().filter_map(|item| match item {
-            ModuleItem::Backend { backend } => Some(backend),
+            ModuleItem::Splice { splice } => Some(splice),
             _ => None,
         })
     }
@@ -388,14 +396,19 @@ impl Parser {
 
         match self.peek() {
             TokenKind::Use => {
-                let use_token = self.current().clone();
-                self.parse_use(Visibility::Private, use_token)
+                let start_pos = self.current().location.span.start;
+                self.parse_use(Visibility::Private, Attributes::default(), start_pos)
             }
             // `pub use ...;` — an explicit re-export.
             TokenKind::Pub if matches!(self.peek_nth(1), TokenKind::Use) => {
-                let pub_token = self.advance();
-                self.parse_use(Visibility::Public, pub_token)
+                let start_pos = self.current().location.span.start;
+                self.advance(); // consume `pub`
+                self.parse_use(Visibility::Public, Attributes::default(), start_pos)
             }
+            // Standalone `prologue`/`epilogue` splice statements (ungated).
+            TokenKind::Prologue | TokenKind::Epilogue => self
+                .parse_splice()
+                .map(|splice| ModuleItem::Splice { splice }),
             TokenKind::Extern if !has_attributes => {
                 // Peek ahead to distinguish extern type from extern value. Extern
                 // values are item definitions (`ItemDefinitionInner::ExternValue`),
@@ -407,9 +420,6 @@ impl Parser {
                     self.parse_module_definition()
                 }
             }
-            TokenKind::Backend => self
-                .parse_backend()
-                .map(|backend| ModuleItem::Backend { backend }),
             TokenKind::Hash => {
                 // Attributes - need to peek ahead to see what comes after
                 let mut pos = self.skip_attributes_lookahead(self.pos);
@@ -437,9 +447,26 @@ impl Parser {
                             self.parse_module_definition()
                         }
                     }
+                    // Cfg-gated `use` — parse the attributes, then the use.
+                    Some(TokenKind::Use) => {
+                        let start_pos = self.current().location.span.start;
+                        let attributes = self.parse_attributes()?;
+                        self.parse_use(Visibility::Private, attributes, start_pos)
+                    }
+                    // Cfg-gated `prologue`/`epilogue` splice; `parse_splice`
+                    // consumes its own leading attributes.
+                    Some(TokenKind::Prologue | TokenKind::Epilogue) => self
+                        .parse_splice()
+                        .map(|splice| ModuleItem::Splice { splice }),
                     Some(TokenKind::Pub) => {
-                        // Could be pub extern value, pub fn, or pub item definition
+                        // Could be pub use, pub extern value, pub fn, or pub item definition
                         match self.peek_at(pos + 1) {
+                            Some(TokenKind::Use) => {
+                                let start_pos = self.current().location.span.start;
+                                let attributes = self.parse_attributes()?;
+                                self.advance(); // consume `pub`
+                                self.parse_use(Visibility::Public, attributes, start_pos)
+                            }
                             Some(TokenKind::Extern) => self.parse_module_definition(),
                             Some(TokenKind::Fn) => self
                                 .parse_function()

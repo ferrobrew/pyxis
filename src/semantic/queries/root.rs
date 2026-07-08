@@ -229,13 +229,13 @@ pub fn analyze<'db>(
         // built via the resolution pipeline like any other item, so a module
         // only carries its impls and backends.
         let impls: Vec<_> = module.impls().cloned().collect();
-        let backends: Vec<_> = module.backends().cloned().collect();
+        let splices: Vec<_> = module.splices().cloned().collect();
 
         match SemanticModule::new(
             module_path.clone(),
             module.as_ref().clone(),
             &impls,
-            &backends,
+            &splices,
         ) {
             Ok(m) => {
                 modules.insert(module_path, m);
@@ -286,16 +286,16 @@ pub fn analyze<'db>(
     if let Err(e) = validation::validate_uses(&type_registry, &modules) {
         return bail(&type_registry, &modules, vec![e]);
     }
-    // validate_backend_for_targets also needs to run before type resolution
+    // validate_splice_for_targets also needs to run before type resolution
     // so that for_type paths are resolved before backends read them.
-    if let Err(e) = validation::validate_backend_for_targets(&type_registry, &mut modules) {
+    if let Err(e) = validation::validate_splice_for_targets(&type_registry, &mut modules) {
         return bail(&type_registry, &modules, vec![e]);
     }
-    // validate_backend_definitions rejects `prologue definition`/`epilogue definition`
-    // on non-cpp backends. It inspects only backend prologue/epilogue definitions
+    // validate_splice_definitions rejects `prologue definition`/`epilogue definition`
+    // splices whose cfg isn't cpp-only. It inspects only splice cfg/definition flags
     // (no resolved-type dependency), so it runs before item resolution to keep its
     // diagnostic ahead of resolution errors — matching the pre-rewrite ordering.
-    if let Err(e) = validation::validate_backend_definitions(&modules) {
+    if let Err(e) = validation::validate_splice_definitions(&modules) {
         return bail(&type_registry, &modules, vec![e]);
     }
 

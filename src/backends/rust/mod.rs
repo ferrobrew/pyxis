@@ -181,17 +181,19 @@ pub fn write_module(
         raw_output.push_str(BITFLAGS_MACRO);
     }
 
-    let backends = module.backends.get(&crate::Backend::Rust);
-    let prologues = backends
-        .iter()
-        .flat_map(|bs| bs.iter().flat_map(|b| b.prologue.header.as_deref()))
-        .collect::<Vec<_>>()
-        .join("\n");
-    let epilogues = backends
-        .iter()
-        .flat_map(|bs| bs.iter().flat_map(|b| b.epilogue.header.as_deref()))
-        .collect::<Vec<_>>()
-        .join("\n");
+    use crate::grammar::SpliceKind;
+    // Rust has no separate source file, so `definition` splices never apply
+    // (validation guarantees they're cpp-only); filter them out defensively.
+    let rust_splice_text = |kind: SpliceKind| {
+        module
+            .splices_for(crate::Backend::Rust)
+            .filter(move |s| s.kind == kind && !s.definition)
+            .map(|s| s.text.as_str())
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+    let prologues = rust_splice_text(SpliceKind::Prologue);
+    let epilogues = rust_splice_text(SpliceKind::Epilogue);
 
     writeln!(raw_output, "{prologues}")?;
 

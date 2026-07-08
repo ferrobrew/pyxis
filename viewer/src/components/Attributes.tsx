@@ -23,7 +23,7 @@ function Ident({ children }: { children: string }) {
 
 // --- cfg rendering ---
 
-function renderCfg(cfg: JsonCfg): ReactNode {
+export function renderCfg(cfg: JsonCfg): ReactNode {
   switch (cfg.type) {
     case 'ident':
       return cfg.name;

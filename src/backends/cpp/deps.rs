@@ -440,20 +440,17 @@ pub fn collect_module_deps(
         );
     }
 
-    // Promote `backend cpp { use ...; }` paths to `#include` edges. The
-    // user-declared working set is the explicit signal of which other
-    // modules the cpp prologue/epilogue depends on - the text itself is
-    // opaque to the dep walker, so we trust the declaration.
-    if let Some(backend_blocks) = module.backends.get(&crate::Backend::Cpp) {
-        for block in backend_blocks {
-            for use_path in &block.uses {
-                if let Ok(item) = registry.get(use_path, &crate::span::ItemLocation::internal())
-                    && let Some(parent) = item.path.parent()
-                    && parent != *module_path
-                {
-                    deps.include_modules.insert(parent);
-                }
-            }
+    // Promote cpp-gated `#[cfg(backend = "cpp")] use ...;` paths to
+    // `#include` edges. A cfg-gated use is the explicit signal of which
+    // other modules the cpp prologue/epilogue depends on — the splice text
+    // is opaque to the dep walker, so we trust the declaration. Ungated
+    // uses are resolution-only and deliberately excluded.
+    for use_path in module.gated_uses_for(crate::Backend::Cpp) {
+        if let Ok(item) = registry.get(&use_path, &crate::span::ItemLocation::internal())
+            && let Some(parent) = item.path.parent()
+            && parent != *module_path
+        {
+            deps.include_modules.insert(parent);
         }
     }
 

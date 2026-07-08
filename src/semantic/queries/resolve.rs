@@ -226,12 +226,12 @@ pub fn resolve_item<'db>(
     let mut modules: BTreeMap<ItemPath, Module> = BTreeMap::new();
     modules.insert(ItemPath::empty(), Module::default());
     let impls: Vec<_> = module_ast.impls().cloned().collect();
-    let backends: Vec<_> = module_ast.backends().cloned().collect();
+    let splices: Vec<_> = module_ast.splices().cloned().collect();
     if let Ok(m) = Module::new(
         module_path.clone(),
         module_ast.as_ref().clone(),
         &impls,
-        &backends,
+        &splices,
     ) {
         modules.insert(module_path, m);
     }
