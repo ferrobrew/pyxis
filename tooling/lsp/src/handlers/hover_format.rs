@@ -14,10 +14,9 @@ pub(crate) fn builtin_hover(
 ) -> Option<String> {
     let (kind, size, alignment) = if let Some(p) = decl_registry.get_predefined(path) {
         ("builtin", p.size, p.alignment)
-    } else if let Some(e) = decl_registry.get_extern_type(path) {
-        ("extern type", e.size, e.alignment)
     } else {
-        return None;
+        let e = decl_registry.get_extern_type(path)?;
+        ("extern type", e.size, e.alignment)
     };
     let mut md = format!("**{kind}** `{path}`\n");
     push_facts(
