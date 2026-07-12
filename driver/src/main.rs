@@ -44,6 +44,11 @@ enum Command {
         #[clap(default_value = "types/json.ts")]
         output: PathBuf,
     },
+    /// Check project for errors without generating output
+    Check {
+        /// The directory containing the Pyxis source files
+        in_dir: PathBuf,
+    },
     /// Format all .pyxis files recursively in the current directory
     Fmt {
         /// Check if files are formatted without modifying them
@@ -106,6 +111,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 std::process::exit(1);
             }
             Ok(())
+        }
+        Command::Check { in_dir } => {
+            let mut file_store = pyxis::source_store::FileStore::new();
+            match pyxis::check(&in_dir, &mut file_store) {
+                Ok(()) => {
+                    println!("No errors found.");
+                    Ok(())
+                }
+                Err(errors) => {
+                    for err in &errors {
+                        let formatted = err.format_with_ariadne(&file_store);
+                        eprintln!("{formatted}");
+                    }
+                    eprintln!("\n{} error(s) found.", errors.len());
+                    std::process::exit(1);
+                }
+            }
         }
         Command::AstDump { file, pretty } => {
             let content = std::fs::read_to_string(&file)?;

@@ -399,6 +399,84 @@ pub fn build_with_store_and_options(
     }
 }
 
+/// Check a project for parse and semantic errors without generating output.
+///
+/// Runs the same config loading, parsing, type resolution, and validation
+/// pipeline as [`build`], but stops before backend codegen. Unlike `build`,
+/// which returns only the first error, `check` collects **all** parse and
+/// semantic errors so the user can fix them in bulk.
+pub fn check(
+    in_dir: &Path,
+    file_store: &mut source_store::FileStore,
+) -> Result<(), Vec<BuildError>> {
+    check_with_store(in_dir, file_store)
+}
+
+/// Check a project for errors with an externally-managed [`FileStore`].
+///
+/// This allows callers to access the file store for error formatting
+/// even when the check fails. See [`check`] for details.
+pub fn check_with_store(
+    in_dir: &Path,
+    file_store: &mut source_store::FileStore,
+) -> Result<(), Vec<BuildError>> {
+    let config = config::Config::load(&in_dir.join("pyxis.toml")).map_err(|e| vec![e.into()])?;
+
+    // Build a Salsa database and register all .pyxis source files as inputs.
+    let db = semantic::PyxisDatabaseImpl::default();
+    let mut sources = Vec::new();
+
+    for path in glob::glob(&format!("{}/**/*.pyxis", in_dir.display()))
+        .map_err(|e| vec![e.into()])?
+        .filter_map(Result::ok)
+    {
+        let source = std::fs::read_to_string(&path).map_err(|e| {
+            vec![BuildError::Io {
+                error: e,
+                context: format!("reading file {}", path.display()),
+            }]
+        })?;
+        let relative_path = path.strip_prefix(in_dir).unwrap_or(&path);
+        let filename = relative_path.display().to_string();
+        let file_id = file_store.register_path(filename.clone(), path.to_path_buf());
+        let file_id_u32 = file_id.index() as u32;
+        let source_file = semantic::SourceFile::new(&db, filename, file_id_u32, source);
+        sources.push(source_file);
+    }
+
+    // Create an interned source set for the Salsa query
+    let source_set = semantic::SourceSet::new(&db, sources);
+
+    // Run the Salsa-backed analysis query.
+    let analysis = semantic::analyze(&db, config.project.pointer_size, source_set);
+
+    // Collect ALL errors — parse errors first (matching build's priority),
+    // then semantic errors. Parse errors short-circuit semantic analysis
+    // (see analyze in src/semantic/queries/root.rs), so the two categories
+    // are mutually exclusive in a single run.
+    let mut errors: Vec<BuildError> = Vec::new();
+    errors.extend(
+        analysis
+            .parse_errors(&db)
+            .iter()
+            .cloned()
+            .map(BuildError::Parser),
+    );
+    errors.extend(
+        analysis
+            .errors(&db)
+            .iter()
+            .cloned()
+            .map(BuildError::Semantic),
+    );
+
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(errors)
+    }
+}
+
 /// Helper for running Pyxis against `in_dir` to produce `out_dir`. If `out_dir` is not provided, it will default to `OUT_DIR`.
 pub fn build_script(in_dir: &Path, out_dir: Option<&Path>) -> Result<(), BuildError> {
     build_script_with_options(in_dir, out_dir, BuildOptions::default())

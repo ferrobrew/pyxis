@@ -79,6 +79,17 @@ pyxis build . --backend json out/
 pyxis build . --backend cpp out/
 ```
 
+## Checking definitions
+
+You can check that your `.pyxis` definitions are valid - correct syntax, resolved types, passing validation - without generating any output:
+
+```sh
+# Check definitions for errors without generating output
+pyxis check .
+```
+
+This runs the full semantic analysis pipeline and reports all parse and semantic errors it finds.
+
 ## Language reference
 
 The full language reference covers every syntax form, type, attribute, cfg predicate, backend splice, module construct, and convention:
