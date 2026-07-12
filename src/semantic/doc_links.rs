@@ -257,7 +257,7 @@ impl DocLinkResolver {
         // Module-level extern values: extern-value items whose parent is a
         // module (i.e. not nested inside another item), keyed by that module.
         let mut module_extern_values: BTreeMap<ItemPath, Vec<String>> = BTreeMap::new();
-        for (module_path, _) in modules.iter() {
+        for module_path in modules.keys() {
             module_extern_values.entry(module_path.clone()).or_default();
         }
         for path in &extern_value_paths {
