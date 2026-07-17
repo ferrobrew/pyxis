@@ -4435,7 +4435,7 @@
             "is_base": false,
             "source": {
               "file_index": 20,
-              "line": 10
+              "line": 16
             }
           },
           {
@@ -4452,7 +4452,7 @@
             "is_base": false,
             "source": {
               "file_index": 20,
-              "line": 11
+              "line": 17
             }
           },
           {
@@ -4469,7 +4469,61 @@
             "is_base": false,
             "source": {
               "file_index": 20,
-              "line": 12
+              "line": 18
+            }
+          }
+        ],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false,
+        "pinned": false
+      },
+      "source": {
+        "file_index": 20,
+        "line": 15
+      }
+    },
+    "math::VectorGrid": {
+      "path": "math::VectorGrid",
+      "visibility": "public",
+      "size": 288,
+      "alignment": 4,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": " Nested array type: a 3D grid of vectors indexed as `cells[z][y][x]`.",
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "cells",
+            "doc": null,
+            "type_ref": {
+              "type": "array",
+              "inner": {
+                "type": "array",
+                "inner": {
+                  "type": "array",
+                  "inner": {
+                    "type": "raw",
+                    "path": "math::Vector3"
+                  },
+                  "size": 4
+                },
+                "size": 3
+              },
+              "size": 2
+            },
+            "offset": 0,
+            "size": 288,
+            "alignment": 4,
+            "is_base": false,
+            "source": {
+              "file_index": 20,
+              "line": 10
             }
           }
         ],
@@ -9978,7 +10032,8 @@
       "doc": null,
       "items": [
         "math::Matrix4",
-        "math::Vector3"
+        "math::Vector3",
+        "math::VectorGrid"
       ],
       "submodules": {},
       "functions": [],

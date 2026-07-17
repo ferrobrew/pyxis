@@ -45,3 +45,25 @@ impl std::convert::AsMut<Vector3> for Vector3 {
         self
     }
 }
+#[repr(C, align(4))]
+/// Nested array type: a 3D grid of vectors indexed as `cells[z][y][x]`.
+pub struct VectorGrid {
+    pub cells: [[[crate::math::Vector3; 4]; 3]; 2],
+}
+fn _VectorGrid_size_check() {
+    unsafe {
+        ::std::mem::transmute::<[u8; 0x120], VectorGrid>([0u8; 0x120]);
+    }
+    unreachable!()
+}
+impl VectorGrid {}
+impl std::convert::AsRef<VectorGrid> for VectorGrid {
+    fn as_ref(&self) -> &VectorGrid {
+        self
+    }
+}
+impl std::convert::AsMut<VectorGrid> for VectorGrid {
+    fn as_mut(&mut self) -> &mut VectorGrid {
+        self
+    }
+}

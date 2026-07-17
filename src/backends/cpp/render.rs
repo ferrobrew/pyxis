@@ -804,12 +804,26 @@ fn render_field_indented(
         return Ok(());
     };
     let field_name = cpp_ident(field_name);
-    // Arrays render as `T name[N]`; function pointers as `R (cc *name)(args)`;
+    // Arrays render as `T name[N1][N2]...` (C++ array dimensions follow the
+    // declarator, outer-to-inner); function pointers as `R (cc *name)(args)`;
     // everything else as a plain `T name`.
     match &region.type_ref {
-        Type::Array(inner, n) => {
-            let inner_text = render_type(inner, ctx)?;
-            writeln!(out, "{pad}{inner_text} {field_name}[{n}];")?;
+        Type::Array(_, _) => {
+            // Walk the nested Array chain to collect every dimension and find
+            // the innermost element type, then emit `T name[N1][N2]...`.
+            let mut dims: Vec<String> = Vec::new();
+            let mut elem = &region.type_ref;
+            while let Type::Array(inner, n) = elem {
+                dims.push(n.to_string());
+                elem = inner;
+            }
+            let inner_text = render_type(elem, ctx)?;
+            let suffix = dims
+                .iter()
+                .map(|d| format!("[{d}]"))
+                .collect::<Vec<_>>()
+                .join("");
+            writeln!(out, "{pad}{inner_text} {field_name}{suffix};")?;
         }
         Type::Function(cc, args, ret) => {
             let decl = render_function_pointer_decl(
