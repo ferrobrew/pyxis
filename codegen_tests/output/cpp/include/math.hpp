@@ -8,6 +8,7 @@
 namespace math {
     struct Matrix4;
     struct Vector3;
+    struct VectorGrid;
 
     /// 4x4 matrix type for transformations
     struct alignas(4) Matrix4 {
@@ -24,4 +25,11 @@ namespace math {
     };
     static_assert(sizeof(Vector3) == 0xC);
     static_assert(alignof(Vector3) == 4);
+
+    /// Nested array type: a 3D grid of vectors indexed as `cells[z][y][x]`.
+    struct alignas(4) VectorGrid {
+        Vector3 cells[2][3][4];
+    };
+    static_assert(sizeof(VectorGrid) == 0x120);
+    static_assert(alignof(VectorGrid) == 4);
 } // namespace math

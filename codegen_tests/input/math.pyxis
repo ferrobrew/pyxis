@@ -4,6 +4,12 @@ pub type Matrix4 {
     pub data: [f32; 16],
 }
 
+/// Nested array type: a 3D grid of vectors indexed as `cells[z][y][x]`.
+#[align(4)]
+pub type VectorGrid {
+    pub cells: [[[Vector3; 4]; 3]; 2],
+}
+
 /// 3D vector type
 #[align(4)]
 pub type Vector3 {
