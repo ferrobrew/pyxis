@@ -88,7 +88,12 @@ export type JsonCfg =
  */
 { type: "not"; predicate: JsonCfg };
 
-export type JsonConstValue = { kind: "int"; value: number } | { kind: "float"; value: number } | { kind: "string"; value: string } | { kind: "enum_value"; path: string };
+/**
+ * A named field in a struct constant initializer.
+ */
+export type JsonConstField = { name: string; value: JsonConstValue };
+
+export type JsonConstValue = { kind: "int"; value: number } | { kind: "float"; value: number } | { kind: "string"; value: string } | { kind: "c_string"; value: string } | { kind: "enum_value"; path: string } | { kind: "struct"; fields: JsonConstField[] } | { kind: "array"; elements: JsonConstValue[] } | { kind: "const_ref"; path: string };
 
 export type JsonConstantDefinition = { 
 /**

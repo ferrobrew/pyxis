@@ -50,6 +50,13 @@ pub enum Expr {
         format: StringFormat,
         location: ItemLocation,
     },
+    /// A C-string literal (`c"..."` or `cr#"..."#`). The stored `value` has
+    /// escape sequences resolved; `format` records whether the source was raw.
+    CStringLiteral {
+        value: String,
+        format: StringFormat,
+        location: ItemLocation,
+    },
     Ident {
         ident: Ident,
         location: ItemLocation,
@@ -58,6 +65,19 @@ pub enum Expr {
     /// references in `const` declarations.
     Path {
         path: ItemPath,
+        location: ItemLocation,
+    },
+    /// A struct literal: `TypeName { field: value, ... }`. The `type_name`
+    /// stores the type prefix so the pretty-printer and backends can
+    /// reconstruct the source form.
+    StructLiteral {
+        type_name: ItemPath,
+        fields: Vec<ExprField>,
+        location: ItemLocation,
+    },
+    /// An array literal: `[expr, ...]`.
+    ArrayLiteral {
+        elements: Vec<Expr>,
         location: ItemLocation,
     },
 }
@@ -88,6 +108,12 @@ impl Expr {
             _ => None,
         }
     }
+    pub fn c_string_literal(&self) -> Option<&str> {
+        match self {
+            Expr::CStringLiteral { value, .. } => Some(value.as_str()),
+            _ => None,
+        }
+    }
     pub fn path(&self) -> Option<&ItemPath> {
         match self {
             Expr::Path { path, .. } => Some(path),
@@ -97,6 +123,7 @@ impl Expr {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(test, derive(StripLocations))]
 pub struct ExprField(pub Ident, pub Expr);
 impl ExprField {
     pub fn ident(&self) -> &Ident {
@@ -162,23 +189,117 @@ impl Parser {
                     location,
                 })
             }
+            TokenKind::CStringLiteral(_) => {
+                let token = self.advance();
+                let TokenKind::CStringLiteral(s) = token.kind else {
+                    unreachable!()
+                };
+                // Detect raw-ness from the original token text: `cr` prefix
+                // means raw, `c"` means regular.
+                let text = self.span_text(&token.location.span);
+                let format = if text.starts_with("cr") {
+                    StringFormat::Raw
+                } else {
+                    StringFormat::Regular
+                };
+                Ok(Expr::CStringLiteral {
+                    value: s,
+                    format,
+                    location: token.location,
+                })
+            }
             TokenKind::Ident(_) => {
                 // Check if this is a path expression (Ident::Ident...) for
-                // enum-value references like `Color::Red`.
+                // enum-value references like `Color::Red`, or a struct
+                // literal like `TypeName { field: value }`.
                 if matches!(self.peek_nth(1), TokenKind::ColonColon) {
                     let (path, location) = self.parse_item_path()?;
-                    Ok(Expr::Path { path, location })
+                    // After parsing the path, check for `{` → struct literal.
+                    if matches!(self.peek(), TokenKind::LBrace) {
+                        let (fields, end_location) = self.parse_struct_literal_fields(location)?;
+                        Ok(Expr::StructLiteral {
+                            type_name: path,
+                            fields,
+                            location: end_location,
+                        })
+                    } else {
+                        Ok(Expr::Path { path, location })
+                    }
+                } else if matches!(self.peek_nth(1), TokenKind::LBrace) {
+                    // `TypeName { ... }` — struct literal with a bare type name.
+                    let (ident, ident_span) = self.expect_ident()?;
+                    let start_location = self.item_location_from_span(ident_span);
+                    let type_name = ItemPath::from(ident.as_str());
+                    let (fields, end_location) =
+                        self.parse_struct_literal_fields(start_location)?;
+                    Ok(Expr::StructLiteral {
+                        type_name,
+                        fields,
+                        location: end_location,
+                    })
                 } else {
                     let (ident, ident_span) = self.expect_ident()?;
                     let location = self.item_location_from_span(ident_span);
                     Ok(Expr::Ident { ident, location })
                 }
             }
+            TokenKind::LBracket => {
+                let start_location = self.current().location;
+                self.advance(); // consume `[`
+                let mut elements = Vec::new();
+                // Allow empty arrays and trailing commas.
+                while !matches!(self.peek(), TokenKind::RBracket) {
+                    elements.push(self.parse_expr()?);
+                    if matches!(self.peek(), TokenKind::Comma) {
+                        self.advance();
+                    } else {
+                        break;
+                    }
+                }
+                self.expect(TokenKind::RBracket)?;
+                let end_location = self.item_location_from_locations(
+                    start_location.span.start,
+                    self.current().location.span.end,
+                );
+                Ok(Expr::ArrayLiteral {
+                    elements,
+                    location: end_location,
+                })
+            }
             _ => Err(ParseError::ExpectedExpression {
                 found: self.peek().clone(),
                 location: self.current().location,
             }),
         }
+    }
+
+    /// Parse the `{ field: value, ... }` part of a struct literal. The caller
+    /// has already consumed the type name; this consumes the `{`, fields, and
+    /// closing `}`. Returns the fields and a location spanning from the
+    /// `start_location` (the type name's start) to the closing `}`.
+    fn parse_struct_literal_fields(
+        &mut self,
+        start_location: ItemLocation,
+    ) -> Result<(Vec<ExprField>, ItemLocation), ParseError> {
+        self.expect(TokenKind::LBrace)?;
+        let mut fields = Vec::new();
+        while !matches!(self.peek(), TokenKind::RBrace) {
+            let (ident, _) = self.expect_ident()?;
+            self.expect(TokenKind::Colon)?;
+            let value = self.parse_expr()?;
+            fields.push(ExprField(ident, value));
+            if matches!(self.peek(), TokenKind::Comma) {
+                self.advance();
+            } else {
+                break;
+            }
+        }
+        self.expect(TokenKind::RBrace)?;
+        let end_location = self.item_location_from_locations(
+            start_location.span.start,
+            self.current().location.span.end,
+        );
+        Ok((fields, end_location))
     }
 
     pub(crate) fn parse_int_literal(&mut self) -> Result<(isize, ItemLocation), ParseError> {

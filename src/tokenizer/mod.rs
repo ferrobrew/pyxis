@@ -32,7 +32,8 @@ pub enum TokenKind {
     Ident(String),
     IntLiteral(String),
     FloatLiteral(String),
-    StringLiteral(String), // Already processed, escape sequences resolved
+    StringLiteral(String),  // Already processed, escape sequences resolved
+    CStringLiteral(String), // C-string literal `c"..."` / `cr#"..."#`, escapes resolved
     CharLiteral(char),
 
     // Comments (preserve the original text including markers)
@@ -405,6 +406,22 @@ impl Lexer {
         // Handle raw string literals (must come before identifier check)
         if ch == 'r' && (self.peek_nth(1) == Some('"') || self.peek_nth(1) == Some('#')) {
             return self.lex_raw_string(start, start_pos);
+        }
+
+        // Handle C-string literals: `c"..."` (regular) and `cr#"..."#` (raw).
+        // Must come before the identifier check so `c`/`cr` prefixes aren't
+        // lexed as identifiers, but only trigger when immediately followed by
+        // `"` (regular) or `r` then `"`/`#` (raw) — identifiers like `copyable`
+        // or `const` are unaffected.
+        if ch == 'c' {
+            if self.peek_nth(1) == Some('"') {
+                return self.lex_c_string(start, start_pos);
+            }
+            if self.peek_nth(1) == Some('r')
+                && (self.peek_nth(2) == Some('"') || self.peek_nth(2) == Some('#'))
+            {
+                return self.lex_raw_c_string(start, start_pos);
+            }
         }
 
         // Handle identifiers and keywords
@@ -908,6 +925,124 @@ impl Lexer {
 
         Ok(Token::new(
             TokenKind::StringLiteral(value),
+            ItemLocation::new(self.file_id, Span::new(start, end)),
+        ))
+    }
+
+    /// Lex a regular C-string literal `c"..."` with escape processing.
+    /// Mirrors `lex_string` but consumes the leading `c` and emits a
+    /// `CStringLiteral` token.
+    fn lex_c_string(&mut self, start: Location, _start_pos: usize) -> Result<Token, LexError> {
+        self.advance(); // consume 'c'
+        self.advance(); // consume opening '"'
+
+        let mut value = String::new();
+
+        while let Some(ch) = self.peek() {
+            if ch == '"' {
+                self.advance(); // consume closing '"'
+                break;
+            } else if ch == '\\' {
+                let escape_start = self.current_location();
+                self.advance();
+                if let Some(escaped) = self.peek() {
+                    self.advance();
+                    match escaped {
+                        'n' => value.push('\n'),
+                        'r' => value.push('\r'),
+                        't' => value.push('\t'),
+                        '\\' => value.push('\\'),
+                        '"' => value.push('"'),
+                        '\'' => value.push('\''),
+                        '0' => value.push('\0'),
+                        _ => {
+                            return Err(LexError::InvalidEscapeSequence {
+                                character: escaped,
+                                location: self.loc_to_current(escape_start),
+                            });
+                        }
+                    }
+                } else {
+                    return Err(LexError::UnexpectedEofInStringLiteral {
+                        location: self.loc_to_current(start),
+                    });
+                }
+            } else {
+                value.push(ch);
+                self.advance();
+            }
+        }
+
+        let end = self.current_location();
+
+        Ok(Token::new(
+            TokenKind::CStringLiteral(value),
+            ItemLocation::new(self.file_id, Span::new(start, end)),
+        ))
+    }
+
+    /// Lex a raw C-string literal `cr#"..."#` (with variable hash counts)
+    /// without escape processing. Mirrors `lex_raw_string` but consumes the
+    /// leading `cr` and emits a `CStringLiteral` token.
+    fn lex_raw_c_string(&mut self, start: Location, _start_pos: usize) -> Result<Token, LexError> {
+        self.advance(); // consume 'c'
+        self.advance(); // consume 'r'
+
+        // Count the number of '#' characters
+        let mut hash_count = 0;
+        while self.peek() == Some('#') {
+            hash_count += 1;
+            self.advance();
+        }
+
+        if self.peek() != Some('"') {
+            return Err(LexError::InvalidRawStringStart {
+                location: self.loc_to_current(start),
+            });
+        }
+
+        self.advance(); // consume opening '"'
+
+        let mut value = String::new();
+
+        loop {
+            if self.is_eof() {
+                return Err(LexError::UnterminatedRawString {
+                    location: self.loc_to_current(start),
+                });
+            }
+
+            if self.peek() == Some('"') {
+                // Check if we have the right number of '#' characters
+                let mut matching_hashes = 0;
+                for i in 1..=hash_count {
+                    if self.peek_nth(i) == Some('#') {
+                        matching_hashes += 1;
+                    } else {
+                        break;
+                    }
+                }
+
+                if matching_hashes == hash_count {
+                    self.advance(); // consume '"'
+                    for _ in 0..hash_count {
+                        self.advance(); // consume '#' characters
+                    }
+                    break;
+                } else {
+                    value.push('"');
+                    self.advance();
+                }
+            } else {
+                value.push(self.peek().unwrap());
+                self.advance();
+            }
+        }
+
+        let end = self.current_location();
+
+        Ok(Token::new(
+            TokenKind::CStringLiteral(value),
             ItemLocation::new(self.file_id, Span::new(start, end)),
         ))
     }

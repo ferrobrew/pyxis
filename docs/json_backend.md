@@ -8,7 +8,7 @@ The output is a `JsonDocumentation` struct serialized to JSON:
 
 ```json
 {
-  "schema_version": 10,
+  "schema_version": 11,
   "pyxis_version": "0.1.0",
   "pointer_size": 4,
   "project_name": "my_project",
@@ -30,11 +30,11 @@ The output is a `JsonDocumentation` struct serialized to JSON:
 
 ## Schema versioning
 
-The current schema version is **10** (`CURRENT_SCHEMA_VERSION` in `src/backends/json.rs`). The version is bumped on breaking shape changes to the JSON output. The version history is documented in the source file's comments.
+The current schema version is **11** (`CURRENT_SCHEMA_VERSION` in `src/backends/json.rs`). The version is bumped on breaking shape changes to the JSON output. The version history is documented in the source file's comments.
 
 Older documents (pre-v2) omit the `schema_version` field entirely. Consumers should treat a missing value as version 1. The `pyxis_version` field defaults to `"unknown"` when not available.
 
-Notable version history: schema v10 retired the per-module `backends` map in favor of a flat `splices` array of standalone `prologue`/`epilogue` statements, each carrying its own cfg gate.
+Notable version history: schema v10 retired the per-module `backends` map in favor of a flat `splices` array of standalone `prologue`/`epilogue` statements, each carrying its own cfg gate. Schema v11 added `c_string`, `struct`, `array`, and `const_ref` variants to `JsonConstValue` for C-string literals, structured initializers, and constant aliases.
 
 ## Item model
 

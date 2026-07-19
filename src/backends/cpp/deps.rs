@@ -21,7 +21,7 @@ use crate::{
     semantic::{
         Module, TypeRegistry,
         types::{
-            Argument, BitflagsDefinition, EnumDefinition,
+            Argument, BitflagsDefinition, ConstValue, EnumDefinition,
             ExternValueDefinition as SemanticExternValueDefinition, Function, ItemCategory,
             ItemDefinitionInner, Region, Type, TypeAliasDefinition, TypeDefinition,
         },
@@ -290,8 +290,50 @@ fn collect_intra_module_full_deps(
                 out,
             );
         }
-        ItemDefinitionInner::Constant(_) => {}
+        ItemDefinitionInner::Constant(cd) => {
+            // Walk ConstValue::ConstRef paths so that const aliases are
+            // ordered correctly in the C++ output (referenced const before
+            // the alias).
+            walk_const_value(&cd.value, module_path, item_paths, out);
+        }
         ItemDefinitionInner::ExternValue(_) => {}
+    }
+}
+
+/// Walk a `ConstValue` for intra-module dependencies. This ensures that
+/// `ConstValue::ConstRef` references are tracked so the C++ backend emits
+/// the referenced constant before the alias.
+fn walk_const_value(
+    value: &ConstValue,
+    module_path: &ItemPath,
+    item_paths: &std::collections::BTreeSet<ItemPath>,
+    out: &mut std::collections::BTreeSet<ItemPath>,
+) {
+    match value {
+        ConstValue::Struct { fields, .. } => {
+            for (_, v) in fields {
+                walk_const_value(v, module_path, item_paths, out);
+            }
+        }
+        ConstValue::Array(elements) => {
+            for e in elements {
+                walk_const_value(e, module_path, item_paths, out);
+            }
+        }
+        ConstValue::ConstRef(path) => {
+            // Only track if the referenced const is in the same module.
+            if let Some(parent) = path.parent() {
+                if parent == *module_path || item_paths.contains(path) {
+                    out.insert(path.clone());
+                }
+            }
+        }
+        // Literal values have no intra-module dependencies.
+        ConstValue::Int(_)
+        | ConstValue::Float(_)
+        | ConstValue::String(_)
+        | ConstValue::CString(_)
+        | ConstValue::EnumValue(_) => {}
     }
 }
 

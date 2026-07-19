@@ -1,5 +1,5 @@
 /// 4x4 matrix type for transformations
-#[align(4)]
+#[align(4), copyable]
 pub type Matrix4 {
     pub data: [f32; 16],
 }
@@ -11,9 +11,16 @@ pub type VectorGrid {
 }
 
 /// 3D vector type
-#[align(4)]
+#[align(4), copyable]
 pub type Vector3 {
     pub x: f32,
     pub y: f32,
     pub z: f32,
+}
+
+/// Camera type with position and transform matrices
+#[align(4), copyable]
+pub type Camera {
+    pub position: Vector3,
+    pub transforms: [Matrix4; 3],
 }

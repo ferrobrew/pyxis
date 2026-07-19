@@ -1,9 +1,28 @@
 // Module-level constants
+use math::{Camera, Matrix4, Vector3};
+
 pub const MAX_HEALTH: i32 = 100;
 pub const SCALE_FACTOR: f32 = 1.5;
 pub const GRAVITY: f64 = 9.81;
 pub const GAME_NAME: str = "Pyxis";
 pub const DEFAULT_COLOR: Color = Color::Red;
+
+// C-string constants
+pub const DLL_NAME: cstr = c"MSVCP80";
+pub const SYMBOL_NAME: cstr = cr#"??0?$basic_string@D"#;
+
+// Structured initializers — simple
+pub const ZERO_MATRIX: Matrix4 = Matrix4 { data: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0] };
+pub const IDENTITY: Matrix4 = Matrix4 { data: [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0] };
+pub const EMPTY_VEC: Vector3 = Vector3 { x: 0.0, y: 0.0, z: 0.0 };
+
+// Structured initializers — nested: a Camera containing an array of matrices,
+// some initialized inline and some referencing other constants.
+pub const DEFAULT_CAMERA: Camera = Camera { position: Vector3 { x: 0.0, y: 0.0, z: 0.0 }, transforms: [Matrix4 { data: [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0] }, IDENTITY, Matrix4 { data: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0] }] };
+
+// Constant aliases — simple
+pub const DEFAULT_HEALTH: i32 = MAX_HEALTH;
+pub const SPAWN_POINT: Vector3 = EMPTY_VEC;
 
 /// Defaults to [`DEFAULT`](Color::DEFAULT).
 pub enum Color: u8 {
@@ -25,6 +44,8 @@ pub bitflags AccessFlags: u32 {
 pub type Player {
     pub const STARTING_GOLD: u32 = 500,
     pub const SPAWN_X: f32 = 0.0,
+    pub const IDENTITY_MATRIX: Matrix4 = Matrix4 { data: [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0] },
+    pub const PLAYER_DLL: cstr = c"player.dll",
 
     pub type Inventory {
         pub const MAX_SLOTS: u32 = 30,

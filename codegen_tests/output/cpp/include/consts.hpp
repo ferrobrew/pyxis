@@ -39,13 +39,23 @@ namespace consts {
     static_assert(sizeof(Color) == 0x1);
     constexpr Color Color_DEFAULT = Color::Red;
 
+    inline const ::math::Matrix4 IDENTITY = { { 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0 } };
+
+    inline const ::math::Camera DEFAULT_CAMERA = { { 0.0, 0.0, 0.0 }, { { { 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0 } }, IDENTITY, { { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 } } } };
+
     constexpr Color DEFAULT_COLOR = Color::Red;
+
+    constexpr ::std::int32_t MAX_HEALTH = 100;
+
+    inline const ::std::int32_t DEFAULT_HEALTH = MAX_HEALTH;
+
+    constexpr const char* const DLL_NAME = "MSVCP80";
+
+    inline const ::math::Vector3 EMPTY_VEC = { 0.0, 0.0, 0.0 };
 
     constexpr const char* const GAME_NAME = "Pyxis";
 
     constexpr double GRAVITY = 9.81;
-
-    constexpr ::std::int32_t MAX_HEALTH = 100;
 
     struct alignas(4) Player {
         /// New players begin with [`STARTING_GOLD`](Player::STARTING_GOLD) gold,
@@ -57,6 +67,10 @@ namespace consts {
 
         static constexpr float SPAWN_X = 0.0f;
 
+        static const ::math::Matrix4 IDENTITY_MATRIX;
+
+        static constexpr const char* const PLAYER_DLL = "player.dll";
+
         struct Inventory {
             ::std::uint32_t slots;
             static constexpr ::std::uint32_t MAX_SLOTS = 30;
@@ -66,4 +80,12 @@ namespace consts {
     static_assert(alignof(Player) == 4);
 
     constexpr float SCALE_FACTOR = 1.5f;
+
+    inline const ::math::Vector3 SPAWN_POINT = EMPTY_VEC;
+
+    constexpr const char* const SYMBOL_NAME = "??0?$basic_string@D";
+
+    inline const ::math::Matrix4 ZERO_MATRIX = { { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 } };
+
+    inline const ::math::Matrix4 Player::IDENTITY_MATRIX = { { 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0 } };
 } // namespace consts
