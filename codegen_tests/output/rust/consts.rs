@@ -31,9 +31,86 @@ fn _Color_size_check() {
 impl Color {
     pub const DEFAULT: crate::consts::Color = Color::Red;
 }
+pub const DEFAULT_CAMERA: crate::math::Camera = crate::math::Camera {
+    position: crate::math::Vector3 {
+        x: 0.0,
+        y: 0.0,
+        z: 0.0,
+    },
+    transforms: [
+        crate::math::Matrix4 {
+            data: [
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+            ],
+        },
+        IDENTITY,
+        crate::math::Matrix4 {
+            data: [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+            ],
+        },
+    ],
+};
 pub const DEFAULT_COLOR: crate::consts::Color = Color::Red;
+pub const DEFAULT_HEALTH: i32 = MAX_HEALTH;
+pub const DLL_NAME: &::std::ffi::CStr = c"MSVCP80";
+pub const EMPTY_VEC: crate::math::Vector3 = crate::math::Vector3 {
+    x: 0.0,
+    y: 0.0,
+    z: 0.0,
+};
 pub const GAME_NAME: &str = "Pyxis";
 pub const GRAVITY: f64 = 9.81;
+pub const IDENTITY: crate::math::Matrix4 = crate::math::Matrix4 {
+    data: [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+    ],
+};
 pub const MAX_HEALTH: i32 = 100;
 #[repr(C, align(4))]
 pub struct Player {
@@ -50,6 +127,27 @@ fn _Player_size_check() {
 }
 impl Player {}
 impl Player {
+    pub const IDENTITY_MATRIX: crate::math::Matrix4 = crate::math::Matrix4 {
+        data: [
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+        ],
+    };
+    pub const PLAYER_DLL: &::std::ffi::CStr = c"player.dll";
     pub const SPAWN_X: f32 = 0.0;
     pub const STARTING_GOLD: u32 = 500;
 }
@@ -88,3 +186,25 @@ impl std::convert::AsMut<Player_Inventory> for Player_Inventory {
     }
 }
 pub const SCALE_FACTOR: f32 = 1.5;
+pub const SPAWN_POINT: crate::math::Vector3 = EMPTY_VEC;
+pub const SYMBOL_NAME: &::std::ffi::CStr = c"??0?$basic_string@D";
+pub const ZERO_MATRIX: crate::math::Matrix4 = crate::math::Matrix4 {
+    data: [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+    ],
+};

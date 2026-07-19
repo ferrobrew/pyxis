@@ -126,8 +126,33 @@ fn render_const_expr(expr: &Expr) -> String {
             StringFormat::Regular => format!("{value:?}"),
             StringFormat::Raw => format!("r#\"{value}\"#"),
         },
+        Expr::CStringLiteral { value, format, .. } => match format {
+            StringFormat::Regular => format!("c{value:?}"),
+            StringFormat::Raw => format!("cr#\"{value}\"#"),
+        },
         Expr::Ident { ident, .. } => ident.to_string(),
         Expr::Path { path, .. } => path.to_string(),
+        Expr::StructLiteral {
+            type_name, fields, ..
+        } => {
+            let mut s = format!("{type_name} {{ ");
+            for (i, field) in fields.iter().enumerate() {
+                if i > 0 {
+                    s.push_str(", ");
+                }
+                s.push_str(&format!(
+                    "{}: {}",
+                    field.ident(),
+                    render_const_expr(&field.1)
+                ));
+            }
+            s.push_str(" }");
+            s
+        }
+        Expr::ArrayLiteral { elements, .. } => {
+            let parts: Vec<String> = elements.iter().map(render_const_expr).collect();
+            format!("[{}]", parts.join(", "))
+        }
     }
 }
 

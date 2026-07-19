@@ -275,7 +275,20 @@ pub enum ConstValue {
     Int(isize),
     Float(u64),
     String(String),
+    CString(String),
     EnumValue(ItemPath),
+    /// A structured initializer for a POD type. `type_path` is the resolved
+    /// type of the struct; `fields` are ordered to match the type definition's
+    /// field declaration order (not source literal order), so the C++ backend
+    /// can emit positional braced initialization.
+    Struct {
+        type_path: ItemPath,
+        fields: Vec<(String, ConstValue)>,
+    },
+    /// An array initializer. Elements are in declaration order.
+    Array(Vec<ConstValue>),
+    /// A reference to another constant by path.
+    ConstRef(ItemPath),
 }
 
 impl ConstValue {
@@ -501,6 +514,9 @@ macro_rules! predefined_items {
             pub fn is_str(&self) -> bool {
                 matches!(self, Self::Str)
             }
+            pub fn is_cstr(&self) -> bool {
+                matches!(self, Self::CStr)
+            }
             pub fn is_integer(&self) -> bool {
                 self.is_unsigned_integer()
                     || matches!(
@@ -547,6 +563,10 @@ predefined_items! {
     // `str` — const-only string type. Size 0 / alignment 1 are sentinels; it has
     // no runtime layout because it only appears in `const` declarations.
     (Str, "str", 0),
+    // `cstr` — const-only C-string type (NUL-terminated). Like `str` it has no
+    // runtime layout; it only appears in `const` declarations. Rust backend
+    // maps to `&'static ::std::ffi::CStr`; C++ maps to `const char* const`.
+    (CStr, "cstr", 0),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, HasLocation)]

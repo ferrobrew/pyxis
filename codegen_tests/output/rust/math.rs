@@ -1,4 +1,29 @@
 #![cfg_attr(any(), rustfmt::skip)]
+#[derive(Copy, Clone)]
+#[repr(C, align(4))]
+/// Camera type with position and transform matrices
+pub struct Camera {
+    pub position: crate::math::Vector3,
+    pub transforms: [crate::math::Matrix4; 3],
+}
+fn _Camera_size_check() {
+    unsafe {
+        ::std::mem::transmute::<[u8; 0xCC], Camera>([0u8; 0xCC]);
+    }
+    unreachable!()
+}
+impl Camera {}
+impl std::convert::AsRef<Camera> for Camera {
+    fn as_ref(&self) -> &Camera {
+        self
+    }
+}
+impl std::convert::AsMut<Camera> for Camera {
+    fn as_mut(&mut self) -> &mut Camera {
+        self
+    }
+}
+#[derive(Copy, Clone)]
 #[repr(C, align(4))]
 /// 4x4 matrix type for transformations
 pub struct Matrix4 {
@@ -21,6 +46,7 @@ impl std::convert::AsMut<Matrix4> for Matrix4 {
         self
     }
 }
+#[derive(Copy, Clone)]
 #[repr(C, align(4))]
 /// 3D vector type
 pub struct Vector3 {

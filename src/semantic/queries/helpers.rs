@@ -295,16 +295,9 @@ pub(super) fn value_referenced_types(
         ItemDefinitionInner::Constant(c) => {
             // Collect the const's type annotation reference
             collect_value_refs(&c.type_, scope, index, &mut refs);
-            // If the value is an enum-value reference, collect the enum's path
-            if let grammar::Expr::Path { path, .. } = &c.expr {
-                // The path is `EnumName::VariantName` — the enum is the first segment
-                if !path.is_empty() {
-                    let enum_name = path.iter().next().unwrap().as_str();
-                    if let NameResolution::Found(p) = index.resolve_name(scope, enum_name) {
-                        refs.push(p);
-                    }
-                }
-            }
+            // Collect constant references from the value expression (const
+            // aliases, struct literals referencing types, etc.)
+            collect_expr_value_refs(&c.expr, scope, index, &mut refs);
         }
         ItemDefinitionInner::ExternValue(ev) => {
             // Collect the extern value's type annotation reference
@@ -340,5 +333,68 @@ fn collect_value_refs(
         // Pointers: the pointee need only exist, so don't recurse into it.
         Type::ConstPointer { .. } | Type::MutPointer { .. } => {}
         Type::Unknown { .. } => {}
+    }
+}
+
+/// Collect value references from a const value expression. This ensures that
+/// constants referenced by alias, and types referenced by struct literals,
+/// are resolved before the const itself is built.
+fn collect_expr_value_refs(
+    expr: &grammar::Expr,
+    scope: &[ItemPath],
+    index: &NameIndex,
+    refs: &mut Vec<ItemPath>,
+) {
+    match expr {
+        grammar::Expr::Path { path, .. } => {
+            // Could be an enum-value reference (`Color::Red`) or a constant
+            // reference (`MAX_HEALTH` or `module::CONST`). Resolve the first
+            // segment as a name; if it's a multi-segment path, try resolving
+            // the full path too.
+            if path.len() > 1 {
+                // Try resolving the full path (for constants like `module::CONST`)
+                if let Some(p) = index.resolve_path(scope, path) {
+                    refs.push(p);
+                }
+                // Also resolve the first segment (for enum types like `Color::Red`)
+                let first = path.iter().next().unwrap().as_str();
+                if let NameResolution::Found(p) = index.resolve_name(scope, first) {
+                    refs.push(p);
+                }
+            } else if let Some(name) = path.last() {
+                if let NameResolution::Found(p) = index.resolve_name(scope, name.as_str()) {
+                    refs.push(p);
+                }
+            }
+        }
+        grammar::Expr::Ident { ident, .. } => {
+            if let NameResolution::Found(p) = index.resolve_name(scope, ident.as_str()) {
+                refs.push(p);
+            }
+        }
+        grammar::Expr::StructLiteral {
+            type_name, fields, ..
+        } => {
+            // The struct type must be resolved before we can validate the literal.
+            if let Some(name) = type_name.last() {
+                if let NameResolution::Found(p) = index.resolve_name(scope, name.as_str()) {
+                    refs.push(p);
+                }
+            }
+            // Recurse into field values.
+            for field in fields {
+                collect_expr_value_refs(&field.1, scope, index, refs);
+            }
+        }
+        grammar::Expr::ArrayLiteral { elements, .. } => {
+            for elem in elements {
+                collect_expr_value_refs(elem, scope, index, refs);
+            }
+        }
+        // Literals with no external references.
+        grammar::Expr::IntLiteral { .. }
+        | grammar::Expr::FloatLiteral { .. }
+        | grammar::Expr::StringLiteral { .. }
+        | grammar::Expr::CStringLiteral { .. } => {}
     }
 }

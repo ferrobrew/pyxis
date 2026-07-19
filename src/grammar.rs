@@ -38,6 +38,7 @@ pub mod test_aliases {
     pub type Ar = super::Argument;
     pub type TF = super::TypeField;
     pub type E = super::Expr;
+    pub type Ident = super::Ident;
     pub type F = super::Function;
     pub type FB = super::FunctionBlock;
     pub type IP = super::ItemPath;
@@ -82,6 +83,38 @@ pub mod test_aliases {
     pub fn path_expr(path: impl Into<super::ItemPath>) -> E {
         E::Path {
             path: path.into(),
+            location: ItemLocation::test(),
+        }
+    }
+    pub fn c_string_literal(value: impl Into<String>) -> E {
+        E::CStringLiteral {
+            value: value.into(),
+            format: super::StringFormat::Regular,
+            location: ItemLocation::test(),
+        }
+    }
+    pub fn ident_expr(ident: impl Into<String>) -> E {
+        E::Ident {
+            ident: super::Ident::from(ident.into().as_str()),
+            location: ItemLocation::test(),
+        }
+    }
+    pub fn struct_literal_expr(
+        type_name: impl Into<super::ItemPath>,
+        fields: Vec<(super::Ident, E)>,
+    ) -> E {
+        E::StructLiteral {
+            type_name: type_name.into(),
+            fields: fields
+                .into_iter()
+                .map(|(i, e)| super::ExprField(i, e))
+                .collect(),
+            location: ItemLocation::test(),
+        }
+    }
+    pub fn array_literal_expr(elements: Vec<E>) -> E {
+        E::ArrayLiteral {
+            elements,
             location: ItemLocation::test(),
         }
     }

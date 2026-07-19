@@ -55,7 +55,10 @@ use crate::semantic::{
 ///   backend), `definition` flag, `for_type`, and `text`, mirroring the
 ///   retirement of the `backend { ... }` wrapper in favour of cfg-gated
 ///   standalone `prologue`/`epilogue` statements.
-pub const CURRENT_SCHEMA_VERSION: u32 = 10;
+/// - v11: added `c_string`, `struct`, `array`, and `const_ref` variants to
+///   `JsonConstValue` for C-string literals, structured initializers, and
+///   constant aliases.
+pub const CURRENT_SCHEMA_VERSION: u32 = 11;
 
 /// Top-level JSON documentation structure
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
@@ -345,7 +348,18 @@ pub enum JsonConstValue {
     Int { value: isize },
     Float { value: f64 },
     String { value: String },
+    CString { value: String },
     EnumValue { path: String },
+    Struct { fields: Vec<JsonConstField> },
+    Array { elements: Vec<JsonConstValue> },
+    ConstRef { path: String },
+}
+
+/// A named field in a struct constant initializer.
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+pub struct JsonConstField {
+    pub name: String,
+    pub value: JsonConstValue,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
@@ -1095,21 +1109,46 @@ fn convert_type_alias_definition(ta: &TypeAliasDefinition, cx: &DocCx) -> JsonTy
 
 fn convert_const_definition(cd: &SemanticConstDefinition, cx: &DocCx) -> JsonConstantDefinition {
     let (doc, doc_links) = cx.convert(&cd.doc);
-    let value = match &cd.value {
-        ConstValue::Int(v) => JsonConstValue::Int { value: *v },
-        ConstValue::Float(bits) => JsonConstValue::Float {
-            value: f64::from_bits(*bits),
-        },
-        ConstValue::String(s) => JsonConstValue::String { value: s.clone() },
-        ConstValue::EnumValue(path) => JsonConstValue::EnumValue {
-            path: path.to_string(),
-        },
-    };
+    let value = convert_const_value(&cd.value, cx);
     JsonConstantDefinition {
         doc,
         doc_links,
         value_type: convert_type(&cd.type_),
         value,
+    }
+}
+
+/// Convert a semantic `ConstValue` to its JSON representation. Extracted as a
+/// standalone function so struct fields and array elements can recurse.
+fn convert_const_value(value: &ConstValue, _cx: &DocCx) -> JsonConstValue {
+    match value {
+        ConstValue::Int(v) => JsonConstValue::Int { value: *v },
+        ConstValue::Float(bits) => JsonConstValue::Float {
+            value: f64::from_bits(*bits),
+        },
+        ConstValue::String(s) => JsonConstValue::String { value: s.clone() },
+        ConstValue::CString(s) => JsonConstValue::CString { value: s.clone() },
+        ConstValue::EnumValue(path) => JsonConstValue::EnumValue {
+            path: path.to_string(),
+        },
+        ConstValue::Struct { fields, .. } => JsonConstValue::Struct {
+            fields: fields
+                .iter()
+                .map(|(name, val)| JsonConstField {
+                    name: name.clone(),
+                    value: convert_const_value(val, _cx),
+                })
+                .collect(),
+        },
+        ConstValue::Array(elements) => JsonConstValue::Array {
+            elements: elements
+                .iter()
+                .map(|e| convert_const_value(e, _cx))
+                .collect(),
+        },
+        ConstValue::ConstRef(path) => JsonConstValue::ConstRef {
+            path: path.to_string(),
+        },
     }
 }
 

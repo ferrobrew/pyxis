@@ -1020,7 +1020,12 @@ fn build_type_alias(
 
 /// Render a `ConstValue` as a Rust expression token stream. `type_` is the
 /// const's declared type, consulted to pick the right float literal suffix.
-fn const_value_to_tokens(value: &ConstValue, type_: &Type) -> proc_macro2::TokenStream {
+/// `module_paths` is needed to flatten type/const paths for nested items.
+fn const_value_to_tokens(
+    value: &ConstValue,
+    type_: &Type,
+    module_paths: &BTreeSet<ItemPath>,
+) -> proc_macro2::TokenStream {
     match value {
         ConstValue::Int(v) => {
             let lit = proc_macro2::Literal::i64_unsuffixed(*v as i64);
@@ -1041,13 +1046,89 @@ fn const_value_to_tokens(value: &ConstValue, type_: &Type) -> proc_macro2::Token
             let s = s.as_str();
             quote! { #s }
         }
+        ConstValue::CString(s) => {
+            // `quote! { c#s }` would tokenize `c` and `#s` as two separate
+            // tokens (identifier + string literal), not a single C-string
+            // literal. Construct the full literal as a string and parse it
+            // into a TokenStream, mirroring how `EnumValue` handles paths.
+            // The stored value has escapes resolved, so re-escape before
+            // embedding in the literal.
+            let escaped = escape_rust_string_contents(s);
+            let lit = format!("c\"{escaped}\"");
+            lit.parse().unwrap_or_else(|_| quote! { () })
+        }
         ConstValue::EnumValue(p) => {
             // Build the path as a Rust path expression. We construct it as a
             // string and parse it to get proper tokenization.
             let path_str = p.to_string();
             path_str.parse().unwrap_or_else(|_| quote! { () })
         }
+        ConstValue::Struct { type_path, fields } => {
+            // Emit `TypeName { field: value, ... }` using the fully-qualified
+            // type name (same rendering as the const's type annotation).
+            let type_syn = match sa_type_to_syn_type(
+                &Type::Raw(type_path.clone()),
+                None,
+                Some(module_paths),
+            ) {
+                Ok(t) => t,
+                Err(_) => {
+                    // Fallback to flattened name if full qualification fails.
+                    let flat = flatten_type_name(type_path, module_paths);
+                    let flat_ident = str_to_ident(&flat);
+                    let field_tokens: Vec<proc_macro2::TokenStream> = fields
+                        .iter()
+                        .map(|(name, val)| {
+                            let field_ident = str_to_ident(name);
+                            let val_tokens = const_value_to_tokens(val, type_, module_paths);
+                            quote! { #field_ident: #val_tokens }
+                        })
+                        .collect();
+                    return quote! { #flat_ident { #(#field_tokens),* } };
+                }
+            };
+            let field_tokens: Vec<proc_macro2::TokenStream> = fields
+                .iter()
+                .map(|(name, val)| {
+                    let field_ident = str_to_ident(name);
+                    let val_tokens = const_value_to_tokens(val, type_, module_paths);
+                    quote! { #field_ident: #val_tokens }
+                })
+                .collect();
+            quote! { #type_syn { #(#field_tokens),* } }
+        }
+        ConstValue::Array(elements) => {
+            let elem_tokens: Vec<proc_macro2::TokenStream> = elements
+                .iter()
+                .map(|e| const_value_to_tokens(e, type_, module_paths))
+                .collect();
+            quote! { [ #(#elem_tokens),* ] }
+        }
+        ConstValue::ConstRef(path) => {
+            // Flatten the path the same way type names are flattened, since
+            // nested constants are emitted as `ParentName_ConstName` in Rust.
+            let flat = flatten_type_name(path, module_paths);
+            flat.parse().unwrap_or_else(|_| quote! { () })
+        }
     }
+}
+
+/// Escape string contents for embedding inside a Rust string literal
+/// (between the quotes). Re-escapes `\`, `"`, `\n`, `\r`, `\t` — the set of
+/// characters that have special meaning inside a regular string literal.
+fn escape_rust_string_contents(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for ch in s.chars() {
+        match ch {
+            '\\' => out.push_str("\\\\"),
+            '"' => out.push_str("\\\""),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            _ => out.push(ch),
+        }
+    }
+    out
 }
 
 fn build_const(
@@ -1062,7 +1143,11 @@ fn build_const(
     let visibility = visibility_to_tokens(visibility);
     let type_ = sa_type_to_syn_type(&const_definition.type_, None, Some(module_paths))?;
     let doc = doc_to_tokens(false, &const_definition.doc, None);
-    let value_tokens = const_value_to_tokens(&const_definition.value, &const_definition.type_);
+    let value_tokens = const_value_to_tokens(
+        &const_definition.value,
+        &const_definition.type_,
+        module_paths,
+    );
 
     Ok(quote! {
         #doc
@@ -1100,7 +1185,7 @@ fn build_nested_const_impls(
                 Err(_) => continue,
             };
             let doc = doc_to_tokens(false, &cd.doc, None);
-            let value_tokens = const_value_to_tokens(&cd.value, &cd.type_);
+            let value_tokens = const_value_to_tokens(&cd.value, &cd.type_, module_paths);
 
             const_items.push(quote! {
                 #doc
@@ -1543,6 +1628,7 @@ fn fully_qualified_type_ref_impl(
                     PredefinedItem::AtomicI32 => "::std::sync::atomic::AtomicI32",
                     PredefinedItem::AtomicI64 => "::std::sync::atomic::AtomicI64",
                     PredefinedItem::Str => "&str",
+                    PredefinedItem::CStr => "&::std::ffi::CStr",
                 };
                 (ItemPath::from(p.name()), rust_type)
             })

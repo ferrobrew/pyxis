@@ -6,6 +6,7 @@
 #include "pyxis_runtime.hpp"
 
 namespace math {
+    struct Camera;
     struct Matrix4;
     struct Vector3;
     struct VectorGrid;
@@ -25,6 +26,14 @@ namespace math {
     };
     static_assert(sizeof(Vector3) == 0xC);
     static_assert(alignof(Vector3) == 4);
+
+    /// Camera type with position and transform matrices
+    struct alignas(4) Camera {
+        Vector3 position;
+        Matrix4 transforms[3];
+    };
+    static_assert(sizeof(Camera) == 0xCC);
+    static_assert(alignof(Camera) == 4);
 
     /// Nested array type: a 3D grid of vectors indexed as `cells[z][y][x]`.
     struct alignas(4) VectorGrid {

@@ -462,12 +462,56 @@ impl PrettyPrinter {
                     }
                 }
             }
+            Expr::CStringLiteral { value, format, .. } => match format {
+                StringFormat::Raw => {
+                    let hash_count = self.count_hashes_needed(value);
+                    let hashes = "#".repeat(hash_count);
+                    write!(&mut self.output, "cr{hashes}\"{value}\"{hashes}").unwrap();
+                }
+                StringFormat::Regular => {
+                    write!(&mut self.output, "c\"").unwrap();
+                    for ch in value.chars() {
+                        match ch {
+                            '"' => write!(&mut self.output, "\\\"").unwrap(),
+                            '\\' => write!(&mut self.output, "\\\\").unwrap(),
+                            '\n' => write!(&mut self.output, "\\n").unwrap(),
+                            '\r' => write!(&mut self.output, "\\r").unwrap(),
+                            '\t' => write!(&mut self.output, "\\t").unwrap(),
+                            _ => write!(&mut self.output, "{ch}").unwrap(),
+                        }
+                    }
+                    write!(&mut self.output, "\"").unwrap();
+                }
+            },
             Expr::Ident { ident, .. } => write!(&mut self.output, "{ident}").unwrap(),
             Expr::FloatLiteral { raw_text, .. } => {
                 write!(&mut self.output, "{raw_text}").unwrap();
             }
             Expr::Path { path, .. } => {
                 write!(&mut self.output, "{path}").unwrap();
+            }
+            Expr::StructLiteral {
+                type_name, fields, ..
+            } => {
+                write!(&mut self.output, "{type_name} {{ ").unwrap();
+                for (i, field) in fields.iter().enumerate() {
+                    if i > 0 {
+                        write!(&mut self.output, ", ").unwrap();
+                    }
+                    write!(&mut self.output, "{}: ", field.ident()).unwrap();
+                    self.print_expr(&field.1);
+                }
+                write!(&mut self.output, " }}").unwrap();
+            }
+            Expr::ArrayLiteral { elements, .. } => {
+                write!(&mut self.output, "[").unwrap();
+                for (i, elem) in elements.iter().enumerate() {
+                    if i > 0 {
+                        write!(&mut self.output, ", ").unwrap();
+                    }
+                    self.print_expr(elem);
+                }
+                write!(&mut self.output, "]").unwrap();
             }
         }
     }
@@ -2093,6 +2137,22 @@ pub type Outer {
         let module = parse_str_for_tests(text).unwrap();
         let printed = pretty_print(&module);
         // Round-trip: parse the printed output and print again
+        let module2 = parse_str_for_tests(&printed).unwrap();
+        let printed2 = pretty_print(&module2);
+
+        assert_eq!(printed, printed2);
+    }
+
+    #[test]
+    fn new_const_forms_round_trip() {
+        // C-string literals, array literals, and const aliases must all
+        // survive a round-trip through pretty-print.
+        let text = "pub const DLL_NAME: cstr = c\"kernel32.dll\";\n\
+pub const ARR: [i32; 3] = [1, 2, 3];\n\
+pub const ALIAS: i32 = ARR;";
+
+        let module = parse_str_for_tests(text).unwrap();
+        let printed = pretty_print(&module);
         let module2 = parse_str_for_tests(&printed).unwrap();
         let printed2 = pretty_print(&module2);
 

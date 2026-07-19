@@ -323,7 +323,70 @@ pub const GAME_NAME: str = "Pyxis";
 pub const DEFAULT_COLOR: Color = Color::Red;
 ```
 
-Constant expressions support integers (decimal and hex), floats, strings (the `str` type), and enum/bitflag variant paths.
+Constant expressions support integers (decimal and hex), floats, strings (the `str` type), enum/bitflag variant paths, C-string literals, structured initializers, and constant aliases (see below).
+
+### C-string constants
+
+The `cstr` type represents a NUL-terminated C string. Use `c"..."` for regular C-string literals (with escape processing) or `cr#"..."#` for raw C-string literals (no escape processing, useful for strings containing `"` or `\`):
+
+```pyxis
+pub const DLL_NAME: cstr = c"MSVCP80";
+pub const SYMBOL_NAME: cstr = cr#"??0?$basic_string@D"#;
+```
+
+In the Rust backend, `cstr` maps to `&'static ::std::ffi::CStr` and the literal is emitted as a Rust C-string literal (`c"..."`). In the C++ backend, `cstr` maps to `const char* const` and the literal is emitted as a regular string literal.
+
+### Structured initializers
+
+Constants of `#[copyable]` POD types (no vftable, no base regions, no `#[pinned]`) can be initialized with struct literals:
+
+```pyxis
+#[copyable]
+pub type Vector3 {
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
+}
+
+pub const ORIGIN: Vector3 = Vector3 { x: 0.0, y: 0.0, z: 0.0 };
+```
+
+Array constants use array literal syntax:
+
+```pyxis
+pub const DATA: [f32; 4] = [1.0, 0.0, 0.0, 0.0];
+```
+
+Struct and array literals can be nested:
+
+```pyxis
+#[copyable]
+pub type Camera {
+    pub position: Vector3,
+    pub transforms: [Matrix4; 2],
+}
+
+pub const DEFAULT: Camera = Camera {
+    position: Vector3 { x: 0.0, y: 0.0, z: 0.0 },
+    transforms: [
+        Matrix4 { data: [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0] },
+        Matrix4 { data: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0] },
+    ],
+};
+```
+
+All fields must be specified — partial initialization is not supported. In the Rust backend, struct literals emit `TypeName { field: value, ... }` and array literals emit `[value, ...]`. In the C++ backend, both emit braced initialization `{ value, ... }`.
+
+### Constant aliases
+
+A constant can reference another constant by name or path, as long as the types match:
+
+```pyxis
+pub const MAX_HEALTH: i32 = 100;
+pub const DEFAULT_HEALTH: i32 = MAX_HEALTH;
+```
+
+Both module-level and associated constants can be referenced. Cross-module references work through `use` imports.
 
 Nested constants inside a type body use commas as separators:
 

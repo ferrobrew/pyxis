@@ -238,6 +238,12 @@ fn render_struct(
     // emit `Name {};` on one line instead of two.
     let mut body = String::new();
 
+    // Deferred out-of-class constant definitions: for struct/array/const-ref
+    // constants that can't be initialized in-class (C++ incomplete-type or
+    // non-literal-type restrictions), we declare `static const T name;` in
+    // the body and define `inline const T Class::name = ...;` after the class.
+    let mut deferred_consts: Vec<(String, String, String)> = Vec::new();
+
     // Fields. Vftable structs (named `<ParentType>Vftable`) get their
     // function-pointer slots' first param replaced with `void*` so the
     // wrappers on derived types can pass `this` without an explicit cast
@@ -400,10 +406,29 @@ fn render_struct(
                             render_doc(&mut body, &nested_cd.doc, 1)?;
                             let bf_type = render_type(&nested_cd.type_, ctx)?;
                             let value_str = format_const_value(&nested_cd.value, &nested_cd.type_);
-                            writeln!(
-                                body,
-                                "    static constexpr {bf_type} {nested_name} = {value_str};"
-                            )?;
+                            // For scalar/POD types, use `static constexpr` with
+                            // in-class initialization. For struct/array/const-ref
+                            // types, the type may not be a C++ literal type (trivial
+                            // ctor/dtor), and if the type is the enclosing class
+                            // itself, it's incomplete inside the body. So declare
+                            // `static const T name;` here (no initializer) and
+                            // define `inline const T Class::name = ...;` after
+                            // the class body (in `post_header`).
+                            let needs_out_of_class = matches!(
+                                &nested_cd.value,
+                                ConstValue::Struct { .. }
+                                    | ConstValue::Array(_)
+                                    | ConstValue::ConstRef(_)
+                            );
+                            if needs_out_of_class {
+                                writeln!(body, "    static const {bf_type} {nested_name};")?;
+                                deferred_consts.push((nested_name.to_string(), bf_type, value_str));
+                            } else {
+                                writeln!(
+                                    body,
+                                    "    static constexpr {bf_type} {nested_name} = {value_str};"
+                                )?;
+                            }
                         }
                         ItemDefinitionInner::ExternValue(nested_ev) => {
                             // A nested extern value (e.g. a C++ class's static
@@ -456,6 +481,16 @@ fn render_struct(
     // stay header-visible for the same reason.
     let mut post_header = String::new();
     let mut post_cpp = String::new();
+
+    // Deferred out-of-class constant definitions: emit after the struct body
+    // so the type is complete. `inline` (C++17) avoids ODR violations when
+    // the header is included in multiple translation units.
+    for (const_name, const_type, const_value) in &deferred_consts {
+        writeln!(
+            post_header,
+            "inline const {const_type} {name}::{const_name} = {const_value};"
+        )?;
+    }
     if is_generic {
         if let Some(vftable) = &td.vftable {
             render_vftable_accessor_definition(&mut post_header, name, vftable, ctx)?;
@@ -1030,8 +1065,14 @@ fn render_nested_values_cpp_flat(
                 let flat_name = format!("{parent_name}_{}", cpp_ident(value_name));
                 let type_str = render_type(&cd.type_, ctx)?;
                 let value_str = format_const_value(&cd.value, &cd.type_);
+                let storage = match &cd.value {
+                    ConstValue::Struct { .. } | ConstValue::Array(_) | ConstValue::ConstRef(_) => {
+                        "inline const"
+                    }
+                    _ => "constexpr",
+                };
                 render_doc(decl_out, &cd.doc, 0)?;
-                writeln!(decl_out, "constexpr {type_str} {flat_name} = {value_str};")?;
+                writeln!(decl_out, "{storage} {type_str} {flat_name} = {value_str};")?;
             }
             ItemDefinitionInner::ExternValue(ev) => {
                 // Declared in the header, defined in the `.cpp` — matching the
@@ -1091,7 +1132,68 @@ fn format_const_value(value: &ConstValue, type_: &Type) -> String {
             esc.push('"');
             esc
         }
+        ConstValue::CString(s) => {
+            // C++ has no distinct C-string literal type; emit a regular
+            // string literal (same escaping as `String`).
+            let mut esc = String::from("\"");
+            for ch in s.chars() {
+                match ch {
+                    '"' => esc.push_str("\\\""),
+                    '\\' => esc.push_str("\\\\"),
+                    '\n' => esc.push_str("\\n"),
+                    '\r' => esc.push_str("\\r"),
+                    '\t' => esc.push_str("\\t"),
+                    _ => esc.push(ch),
+                }
+            }
+            esc.push('"');
+            esc
+        }
         ConstValue::EnumValue(path) => path.to_string(),
+        ConstValue::Struct { fields, .. } => {
+            // C++ braced initialization is positional — emit values in
+            // declaration order (the semantic layer already reordered them).
+            let parts: Vec<String> = fields
+                .iter()
+                .map(|(_, v)| format_const_value(v, type_))
+                .collect();
+            format!("{{ {} }}", parts.join(", "))
+        }
+        ConstValue::Array(elements) => {
+            let parts: Vec<String> = elements
+                .iter()
+                .map(|e| format_const_value(e, type_))
+                .collect();
+            format!("{{ {} }}", parts.join(", "))
+        }
+        ConstValue::ConstRef(path) => {
+            // Flatten the path to match how nested constants are emitted in
+            // C++: `Parent::Const` becomes `Parent_Const` (replace `::` with
+            // `_`). Module prefixes are stripped (the C++ backend emits
+            // everything into a flat namespace, so module-level constants are
+            // just their leaf name).
+            let segments: Vec<&str> = path.iter().map(|s| s.as_str()).collect();
+            // Strip the first segment if it's a module name (heuristic: if
+            // there's more than one segment, the first is likely a module).
+            let name_segments = if segments.len() > 1 {
+                // Check if the first segment is a module by seeing if the
+                // remaining segments form a type+const or just a const.
+                // For module-level consts like `consts::MAX_HEALTH`, we want
+                // just `MAX_HEALTH`. For nested consts like
+                // `Player::IDENTITY`, we want `Player_IDENTITY`.
+                // Heuristic: if there are exactly 2 segments, the first is
+                // a module → use just the last. If >2, the first is a module
+                // and the rest are type+const → join with `_`.
+                if segments.len() == 2 {
+                    vec![segments[1]]
+                } else {
+                    segments[1..].to_vec()
+                }
+            } else {
+                segments
+            };
+            name_segments.join("_")
+        }
     }
 }
 
@@ -1101,7 +1203,16 @@ fn render_const(name: &str, cd: &SemanticConstDefinition, ctx: RenderCtx) -> Res
     render_doc(&mut decl, &cd.doc, 0)?;
     let type_str = render_type(&cd.type_, ctx)?;
     let value_str = format_const_value(&cd.value, &cd.type_);
-    writeln!(decl, "constexpr {type_str} {name} = {value_str};")?;
+    // Use `constexpr` for scalar/POD types, `inline const` for
+    // struct/array/const-ref types (C++ requires a literal type for constexpr;
+    // a ConstRef may point to a struct constant, so treat it conservatively).
+    let storage = match &cd.value {
+        ConstValue::Struct { .. } | ConstValue::Array(_) | ConstValue::ConstRef(_) => {
+            "inline const"
+        }
+        _ => "constexpr",
+    };
+    writeln!(decl, "{storage} {type_str} {name} = {value_str};")?;
     Ok(RenderedItem {
         decl,
         post_header: String::new(),
@@ -1505,6 +1616,7 @@ fn predefined_to_cpp(p: PredefinedItem) -> &'static str {
         PredefinedItem::AtomicI32 => "::pyxis::AtomicI32",
         PredefinedItem::AtomicI64 => "::pyxis::AtomicI64",
         PredefinedItem::Str => "const char* const",
+        PredefinedItem::CStr => "const char* const",
     }
 }
 
