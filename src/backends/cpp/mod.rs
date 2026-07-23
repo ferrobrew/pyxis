@@ -88,12 +88,11 @@ struct CppSplices {
     epilogue_def: String,
 }
 
-/// Output of rendering every item in a module. `body` / `post_header` /
-/// `post_cpp` are unindented raw text; the namespace + indentation
-/// passes happen in [`assemble_header`] / [`assemble_source`].
+/// Output of rendering every item in a module. `body` / `post_cpp`
+/// are unindented raw text; the namespace + indentation passes happen
+/// in [`assemble_header`] / [`assemble_source`].
 struct ModuleBody<'a> {
     body: String,
-    post_header: String,
     post_cpp: String,
     /// True if any item produced any output. Used by the caller to
     /// decide whether the module needs a header at all.
@@ -182,7 +181,6 @@ fn render_module_body<'a>(
     ctx: render::RenderCtx,
 ) -> Result<ModuleBody<'a>> {
     let mut body = String::new();
-    let mut post_header = String::new();
     let mut post_cpp = String::new();
     let mut wrote_anything = false;
 
@@ -196,19 +194,53 @@ fn render_module_body<'a>(
         })
         .collect();
     let sorted_items = deps::topo_sort_module_items(key, raw_items, registry, bindings)?;
+    // Standalone module-level constants: collect here (before the consuming
+    // `for` loop) and emit as a single contiguous block after all types and
+    // free functions. The parent==key check is defensive — `sorted_items`
+    // already only contains module-direct items (filtered at collection
+    // time above) — but makes the intent explicit. `render_const` returns
+    // empty `post_header`/`post_cpp`, so the contiguous const block only
+    // needs `decl` — no out-of-line definitions to carry over.
+    let standalone_consts: Vec<_> = sorted_items
+        .iter()
+        .filter(|item| {
+            item.resolved()
+                .is_some_and(|r| matches!(r.inner, ItemDefinitionInner::Constant(_)))
+                && item.path.parent().is_some_and(|parent| &parent == key)
+        })
+        .copied()
+        .collect();
     for item in sorted_items {
+        let is_standalone_const = item
+            .resolved()
+            .is_some_and(|r| matches!(r.inner, ItemDefinitionInner::Constant(_)))
+            && item.path.parent().is_some_and(|parent| &parent == key);
+        if is_standalone_const {
+            continue;
+        }
         let Some(rendered) = render::render_item(item, ctx)? else {
             continue;
         };
-        if !rendered.decl.is_empty() {
+        // Emit post_header (out-of-class definitions like deferred constants
+        // and template method definitions) immediately after the decl so they
+        // stay adjacent to their type, rather than being deferred to a
+        // separate block at the end of the namespace.
+        let combined = if rendered.post_header.is_empty() {
+            rendered.decl
+        } else {
+            let mut s = rendered.decl;
+            if !s.ends_with('\n') {
+                s.push('\n');
+            }
+            s.push_str(&rendered.post_header);
+            s
+        };
+        if !combined.is_empty() {
             if wrote_anything {
                 writeln!(body)?;
             }
-            body.push_str(&rendered.decl);
+            body.push_str(&combined);
             wrote_anything = true;
-        }
-        if !rendered.post_header.is_empty() {
-            post_header.push_str(&rendered.post_header);
         }
         if !rendered.post_cpp.is_empty() {
             post_cpp.push_str(&rendered.post_cpp);
@@ -233,9 +265,23 @@ fn render_module_body<'a>(
         }
     }
 
+    // Emit standalone module-level constants as a single contiguous block
+    // (no blank lines between them) after all types and free functions.
+    if !standalone_consts.is_empty() {
+        if wrote_anything {
+            writeln!(body)?;
+        }
+        for item in standalone_consts {
+            let Some(rendered) = render::render_item(item, ctx)? else {
+                continue;
+            };
+            body.push_str(&rendered.decl);
+        }
+        wrote_anything = true;
+    }
+
     Ok(ModuleBody {
         body,
-        post_header,
         post_cpp,
         wrote_anything,
         public_functions,
@@ -363,9 +409,8 @@ fn emit_include(
 
 /// Assemble the full `.hpp` text: pragma + automatic includes +
 /// cross-module includes/forward decls + module prologue + namespace
-/// block containing intra-module forward decls, every item body, any
-/// out-of-class definitions that must stay header-visible, and the
-/// user's epilogue.
+/// block containing intra-module forward decls, every item body, and
+/// the user's epilogue.
 #[allow(clippy::too_many_arguments)]
 fn assemble_header(
     key: &ItemPath,
@@ -375,7 +420,6 @@ fn assemble_header(
     ctx: render::RenderCtx,
     module_deps: &deps::ModuleDeps,
     body: &str,
-    post_header: &str,
     splices: &CppSplices,
 ) -> Result<String> {
     let mut out = String::new();
@@ -456,10 +500,8 @@ fn assemble_header(
     }
 
     let reexport_aliases = render_reexport_aliases(module, registry, ctx)?;
-    let has_namespace_body = !body.is_empty()
-        || !post_header.is_empty()
-        || !reexport_aliases.is_empty()
-        || !splices.epilogue.is_empty();
+    let has_namespace_body =
+        !body.is_empty() || !reexport_aliases.is_empty() || !splices.epilogue.is_empty();
     if has_namespace_body {
         writeln!(out)?;
         open_namespace(&mut out, key)?;
@@ -475,17 +517,6 @@ fn assemble_header(
                 writeln!(out)?;
             } else {
                 writeln!(out, "    {line}")?;
-            }
-        }
-        let post_header_trimmed = post_header.trim_end_matches('\n');
-        if !post_header_trimmed.is_empty() {
-            writeln!(out)?;
-            for line in post_header_trimmed.lines() {
-                if line.is_empty() {
-                    writeln!(out)?;
-                } else {
-                    writeln!(out, "    {line}")?;
-                }
             }
         }
         // Re-export `using` aliases land after every same-module type is
@@ -676,7 +707,6 @@ fn write_module(
         ctx,
         &module_deps,
         &body.body,
-        &body.post_header,
         &splices,
     )?;
     std::fs::write(&header_path, &header_text).map_err(|e| BackendError::Io {

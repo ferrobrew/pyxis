@@ -317,13 +317,19 @@ fn render_struct(
     // Nested item declarations (enums, types, bitflags, type aliases)
     // are rendered inside the struct body.
     if !td.nested_item_paths.is_empty() {
+        let mut prev_was_constant = false;
         for nested_path in &td.nested_item_paths {
             if let Ok(nested_item) = ctx.registry.get(nested_path, &ItemLocation::internal()) {
                 if let Some(nested_resolved) = nested_item.resolved() {
-                    // Add blank line before nested item if body has content
-                    if !body.trim().is_empty() {
+                    let curr_is_constant =
+                        matches!(&nested_resolved.inner, ItemDefinitionInner::Constant(_));
+                    // Add blank line before nested item if body has content,
+                    // unless both the previous and current items are constants
+                    // (consecutive constants form a contiguous block).
+                    if !body.trim().is_empty() && !(prev_was_constant && curr_is_constant) {
                         writeln!(body)?;
                     }
+                    prev_was_constant = curr_is_constant;
                     let nested_name = nested_path
                         .last()
                         .map(|s| s.as_str().to_string())
@@ -333,10 +339,24 @@ fn render_struct(
                         ItemDefinitionInner::Type(nested_td) => {
                             render_doc(&mut body, &nested_td.doc, 1)?;
                             writeln!(body, "    struct {nested_name} {{")?;
+                            let nested_had_fields = !nested_td.regions.is_empty();
                             for region in &nested_td.regions {
                                 render_field_indented(&mut body, region, ctx, false, 2)?;
                             }
                             // Render nested constants inside the nested struct
+                            let nested_has_consts = nested_td.nested_item_paths.iter().any(|p| {
+                                ctx.registry
+                                    .get(p, &ItemLocation::internal())
+                                    .ok()
+                                    .and_then(|i| i.resolved())
+                                    .is_some_and(|r| {
+                                        matches!(r.inner, ItemDefinitionInner::Constant(_))
+                                    })
+                            });
+                            // Add blank line between fields and constants
+                            if nested_had_fields && nested_has_consts {
+                                writeln!(body)?;
+                            }
                             for nested_nested_path in &nested_td.nested_item_paths {
                                 if let Ok(nested_nested_item) = ctx
                                     .registry
