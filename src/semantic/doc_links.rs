@@ -121,28 +121,52 @@ pub struct ResolvedDocLink {
     pub target: DocLinkTarget,
 }
 
+/// Identity of one doc block within a module, for keying resolved links.
+///
+/// The module's own (`//!`-style) doc block gets a dedicated variant rather
+/// than being keyed by `Module::location()`: that location is a *proxy*
+/// borrowed from the module's first item (see `Module::from_ast`), so using
+/// it as a key would collide with that item's own doc block. Every other
+/// doc-bearing node is keyed by its source location, which is unique — no two
+/// distinct nodes share an identical full span.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum DocBlockKey {
+    /// The module's own doc block.
+    Module,
+    /// A doc-bearing node (item, field, function, variant, flag, …) at this
+    /// source location.
+    Node(ItemLocation),
+}
+
 /// Every resolved intra-doc link in one module's documentation, keyed by the
-/// location of the doc-bearing node (module, item, field, function, variant,
-/// flag, …). Produced once by [`resolve_all`] during semantic analysis;
-/// backends look their links up here rather than re-scanning and re-resolving
-/// doc text with locally-reconstructed context.
+/// owning doc block. Produced once by [`resolve_all`] during semantic
+/// analysis; backends look their links up here rather than re-scanning and
+/// re-resolving doc text with locally-reconstructed context.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
 pub struct ModuleDocLinks {
-    pub by_location: BTreeMap<ItemLocation, Vec<ResolvedDocLink>>,
+    pub by_block: BTreeMap<DocBlockKey, Vec<ResolvedDocLink>>,
 }
 
 impl ModuleDocLinks {
     /// The resolved links of the doc block owned by the node at `location`.
     pub fn at(&self, location: &ItemLocation) -> &[ResolvedDocLink] {
-        self.by_location
-            .get(location)
+        self.by_block
+            .get(&DocBlockKey::Node(*location))
+            .map(Vec::as_slice)
+            .unwrap_or_default()
+    }
+
+    /// The resolved links of the module's own doc block.
+    pub fn module_doc(&self) -> &[ResolvedDocLink] {
+        self.by_block
+            .get(&DocBlockKey::Module)
             .map(Vec::as_slice)
             .unwrap_or_default()
     }
 
     /// Iterate every resolved link in the module.
     pub fn iter(&self) -> impl Iterator<Item = &ResolvedDocLink> {
-        self.by_location.values().flatten()
+        self.by_block.values().flatten()
     }
 
     /// Absolute paths of every item/function/extern referenced by a link — the
@@ -613,10 +637,14 @@ pub fn resolve_all(
         .map(|k| (k.clone(), ModuleDocLinks::default()))
         .collect();
 
+    // `key` identifies the doc block in the output table; `location` anchors
+    // any resolution error (for the module's own doc block, its proxy
+    // location — see [`DocBlockKey`]).
     let mut record = |module_path: &ItemPath,
                       doc: &[String],
                       scope: &[ItemPath],
                       enclosing: Option<&ItemPath>,
+                      key: DocBlockKey,
                       location: &ItemLocation|
      -> Result<()> {
         for (text, path) in extract_links(doc) {
@@ -629,14 +657,13 @@ pub fn resolve_all(
             links
                 .entry(module_path.clone())
                 .or_default()
-                .by_location
-                .entry(*location)
+                .by_block
+                .entry(key)
                 .or_default()
                 .push(ResolvedDocLink { text, target });
         }
         Ok(())
     };
-
     let scopes: BTreeMap<&ItemPath, Vec<ItemPath>> = modules
         .iter()
         .map(|(path, module)| (path, module.scope()))
@@ -644,9 +671,23 @@ pub fn resolve_all(
 
     for (module_path, module) in modules {
         let scope = &scopes[module_path];
-        record(module_path, module.doc(), scope, None, module.location())?;
+        record(
+            module_path,
+            module.doc(),
+            scope,
+            None,
+            DocBlockKey::Module,
+            module.location(),
+        )?;
         for f in module.functions() {
-            record(module_path, &f.doc, scope, None, &f.location)?;
+            record(
+                module_path,
+                &f.doc,
+                scope,
+                None,
+                DocBlockKey::Node(f.location),
+                &f.location,
+            )?;
         }
     }
 
@@ -660,7 +701,24 @@ pub fn resolve_all(
         let Some(scope) = scopes.get(&parent) else {
             continue;
         };
-        walk_item_docs(type_registry, &parent, path, item, scope, None, &mut record)?;
+        walk_item_docs(
+            type_registry,
+            &parent,
+            path,
+            item,
+            scope,
+            None,
+            &mut |module_path, doc, scope, enclosing, location| {
+                record(
+                    module_path,
+                    doc,
+                    scope,
+                    enclosing,
+                    DocBlockKey::Node(*location),
+                    location,
+                )
+            },
+        )?;
     }
 
     Ok(links)

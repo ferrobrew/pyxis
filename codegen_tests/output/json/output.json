@@ -3104,6 +3104,31 @@
       "kind": {
         "type": "type",
         "doc": " Test `Self::` links in type docs.\n\n Link to a field as [`Self::field`](Self::field), to a method as\n [`Self::method`](Self::method), to a nested type as\n [`Self::Nested`](Self::Nested), and to a nested type's member as\n [`Self::Nested::nested_field`](Self::Nested::nested_field).",
+        "doc_links": [
+          {
+            "text": "Self::field",
+            "target_kind": "item",
+            "path": "doc_self_links::Container",
+            "anchor": "field-field"
+          },
+          {
+            "text": "Self::method",
+            "target_kind": "item",
+            "path": "doc_self_links::Container",
+            "anchor": "func-method"
+          },
+          {
+            "text": "Self::Nested",
+            "target_kind": "item",
+            "path": "doc_self_links::Container::Nested"
+          },
+          {
+            "text": "Self::Nested::nested_field",
+            "target_kind": "item",
+            "path": "doc_self_links::Container::Nested",
+            "anchor": "field-nested_field"
+          }
+        ],
         "fields": [
           {
             "visibility": "public",
@@ -3119,7 +3144,7 @@
             "is_base": false,
             "source": {
               "file_index": 12,
-              "line": 14
+              "line": 18
             }
           }
         ],
@@ -3141,7 +3166,7 @@
             "calling_convention": "system",
             "source": {
               "file_index": 12,
-              "line": 19
+              "line": 23
             }
           }
         ],
@@ -3158,7 +3183,7 @@
       },
       "source": {
         "file_index": 12,
-        "line": 7
+        "line": 11
       }
     },
     "doc_self_links::Container::Nested": {
@@ -3170,6 +3195,14 @@
       "kind": {
         "type": "type",
         "doc": " A nested type. Its field is [`Self::nested_field`](Self::nested_field).",
+        "doc_links": [
+          {
+            "text": "Self::nested_field",
+            "target_kind": "item",
+            "path": "doc_self_links::Container::Nested",
+            "anchor": "field-nested_field"
+          }
+        ],
         "fields": [
           {
             "visibility": "public",
@@ -3185,7 +3218,7 @@
             "is_base": false,
             "source": {
               "file_index": 12,
-              "line": 10
+              "line": 14
             }
           }
         ],
@@ -3200,7 +3233,7 @@
       },
       "source": {
         "file_index": 12,
-        "line": 9
+        "line": 13
       }
     },
     "enums::TestEnum": {
@@ -10726,7 +10759,14 @@
       }
     },
     "doc_self_links": {
-      "doc": null,
+      "doc": " Self-link testing module. Its own doc links [`Container`] — the module's\n doc block must keep its links separate from its first item's, since the\n module's source location is a proxy borrowed from that item.",
+      "doc_links": [
+        {
+          "text": "Container",
+          "target_kind": "item",
+          "path": "doc_self_links::Container"
+        }
+      ],
       "items": [
         "doc_self_links::Container"
       ],
@@ -10735,7 +10775,7 @@
       "splices": [],
       "source": {
         "file_index": 12,
-        "line": 1
+        "line": 5
       }
     },
     "enums": {

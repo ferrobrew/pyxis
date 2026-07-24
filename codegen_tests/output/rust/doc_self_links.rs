@@ -1,4 +1,7 @@
 #![cfg_attr(any(), rustfmt::skip)]
+//! Self-link testing module. Its own doc links [`Container`] — the module's
+//! doc block must keep its links separate from its first item's, since the
+//! module's source location is a proxy borrowed from that item.
 #[allow(unused_imports)]
 use Container_Nested as Nested;
 #[repr(C, align(4))]
