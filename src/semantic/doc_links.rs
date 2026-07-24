@@ -424,16 +424,30 @@ impl DocLinkResolver {
         None
     }
 
+    /// The current module within a resolution scope: the first entry that
+    /// actually is a module.
+    ///
+    /// A scope is not just module paths — resolving a doc block inside a type
+    /// prepends the type's own path (so bare references to its nested items
+    /// resolve), and the tail carries `use`-imported item paths. Assuming
+    /// "first entry = current module" mis-anchors same-module preference at
+    /// the type path for those blocks, silently changing which of several
+    /// same-named crate-wide candidates wins.
+    fn current_module<'s>(&self, scope: &'s [ItemPath]) -> Option<&'s ItemPath> {
+        scope
+            .iter()
+            .find(|ip| self.module_functions.contains_key(ip))
+    }
+
     /// Find the module that declares a member with `name` in `by_module`,
-    /// preferring the current module (scope's first entry).
+    /// preferring the current module.
     fn find_in_modules(
         &self,
         scope: &[ItemPath],
         by_module: &BTreeMap<ItemPath, Vec<String>>,
         name: &str,
     ) -> Option<ItemPath> {
-        scope
-            .first()
+        self.current_module(scope)
             .filter(|m| {
                 by_module
                     .get(m)
@@ -453,7 +467,7 @@ impl DocLinkResolver {
     /// imports doc-referenced types regardless of the current `use`s; a
     /// `::`-qualified name is resolved root- or scope-relative.
     fn find_item(&self, scope: &[ItemPath], segments: &[ItemPathSegment]) -> Option<ItemPath> {
-        let from_module = scope.first();
+        let from_module = self.current_module(scope);
 
         if segments.len() == 1 {
             // 1. A type directly imported into scope wins.
