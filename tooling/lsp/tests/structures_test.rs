@@ -1498,3 +1498,29 @@ fn rename_type_updates_splice_for_clause() {
         "rename should update def + splice `for` clause; got {total}"
     );
 }
+
+#[test]
+fn doc_links_resolve_self_prefixed_paths() {
+    // `Self::` doc links (issue #114) resolve against the enclosing type in
+    // the editor too: hover and go-to-definition work on a field doc's
+    // [`Self::member`] link, and inside an impl block's method docs.
+    let src = "pub type Foo {\n    /// Pairs with [`Self::y`].\n    pub x: u64,\n    pub y: u64,\n}\nimpl Foo {\n    /// Uses [`Self::x`].\n    #[address(0x10)]\n    pub fn go(&mut self);\n}\n";
+    let st = ServerState::in_memory(&[("/p", 8, &[("m.pyxis", src)])]);
+    let uri = ServerState::document_uri("/p", "m.pyxis");
+
+    let field_col = src.lines().nth(1).unwrap().find("Self::y").unwrap() as u32 + 1;
+    assert!(
+        hover_text(&st, &uri, 1, field_col).contains("`y`"),
+        "hover on [`Self::y`] in a field doc resolves to the sibling field"
+    );
+    assert!(
+        def_uri(&st, &uri, 1, field_col).is_some(),
+        "go-to-def on [`Self::y`] resolves"
+    );
+
+    let impl_col = src.lines().nth(6).unwrap().find("Self::x").unwrap() as u32 + 1;
+    assert!(
+        hover_text(&st, &uri, 6, impl_col).contains("`x`"),
+        "hover on [`Self::x`] in an impl method doc resolves to the field"
+    );
+}
