@@ -59,12 +59,13 @@ def check_cpp_docs():
                         "WARN_IF_UNDOCUMENTED = NO",
                         "WARN_IF_DOC_ERROR = YES",
                         f"WARN_LOGFILE = {warn_log}",
-                        # Only ref resolution matters here — never generate
-                        # graphs, even if the environment has graphviz (some
-                        # doxygen builds auto-enable dot and then fail on
-                        # their own map files, e.g. Ubuntu's on CI runners).
-                        "HAVE_DOT = NO",
-                        "CLASS_GRAPH = NO",
+                        # Pin dot ON so every environment behaves the same:
+                        # distro doxygen packages disagree on the default
+                        # (Ubuntu's assumes dot exists, nix's assumes it
+                        # doesn't), and half-enabled graph generation fails on
+                        # its own map files. Graphviz comes from shell.nix
+                        # locally and apt on CI, alongside doxygen itself.
+                        "HAVE_DOT = YES",
                     ]
                 )
                 + "\n"
