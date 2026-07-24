@@ -59,6 +59,12 @@ def check_cpp_docs():
                         "WARN_IF_UNDOCUMENTED = NO",
                         "WARN_IF_DOC_ERROR = YES",
                         f"WARN_LOGFILE = {warn_log}",
+                        # Only ref resolution matters here — never generate
+                        # graphs, even if the environment has graphviz (some
+                        # doxygen builds auto-enable dot and then fail on
+                        # their own map files, e.g. Ubuntu's on CI runners).
+                        "HAVE_DOT = NO",
+                        "CLASS_GRAPH = NO",
                     ]
                 )
                 + "\n"
