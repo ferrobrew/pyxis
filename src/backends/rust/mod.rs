@@ -128,16 +128,12 @@ pub fn write_module(
     // Compute doc link imports and nested item rewrites before rendering
     // module docs, so doc link references can be rewritten.
     let module_scope = module.scope();
-    let doc_links = semantic_state.doc_link_resolver().module_doc_links(
-        semantic_state.type_registry(),
-        semantic_state.modules(),
-        key,
-    );
-    let doc_imports = &doc_links.imports;
+    let doc_links = semantic_state.module_doc_links(key);
+    let doc_imports = doc_links.imports();
     let module_path_set: BTreeSet<ItemPath> = semantic_state.modules().keys().cloned().collect();
     let mut cross_module_imports: Vec<&ItemPath> = Vec::new();
     let mut same_module_aliases: Vec<(&ItemPath, String)> = Vec::new();
-    for p in doc_imports {
+    for p in &doc_imports {
         let declaring_len = find_module_prefix_len(p, &module_path_set);
         let declaring_module: ItemPath = p.iter().take(declaring_len).cloned().collect();
         if &declaring_module == key {
@@ -258,9 +254,9 @@ pub fn write_module(
     // an inherent method when nested), so a doc link written against the value's
     // logical name won't resolve. Rewrite each such link's destination to the
     // accessor's Rust path, reusing the same accessor naming the emitter uses.
-    for (text, value_path) in &doc_links.extern_value_links {
-        let rust_path = extern_value_accessor_doc_path(value_path, key, &module_path_set, prefix);
-        nested_rewrites.insert(text.clone(), rust_path);
+    for (text, value_path) in doc_links.extern_value_links() {
+        let rust_path = extern_value_accessor_doc_path(&value_path, key, &module_path_set, prefix);
+        nested_rewrites.insert(text.to_string(), rust_path);
     }
 
     // Generate `use FlatName as LeafName;` aliases for same-module nested

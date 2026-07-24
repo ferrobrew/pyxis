@@ -67,6 +67,7 @@ pub fn analyze<'db>(
             Arc::new(type_registry.clone()),
             Arc::new(modules.clone()),
             Arc::new(doc_link_resolver),
+            Arc::new(doc_links::DocLinks::new()),
             Arc::new(errors),
             Arc::new(vec![]),
         )
@@ -78,6 +79,7 @@ pub fn analyze<'db>(
     let finish = |type_registry: TypeRegistry,
                   modules: BTreeMap<ItemPath, SemanticModule>,
                   doc_link_resolver: doc_links::DocLinkResolver,
+                  doc_links: doc_links::DocLinks,
                   errors: Vec<SemanticError>|
      -> SemanticAnalysis<'db> {
         SemanticAnalysis::new(
@@ -85,6 +87,7 @@ pub fn analyze<'db>(
             Arc::new(type_registry),
             Arc::new(modules),
             Arc::new(doc_link_resolver),
+            Arc::new(doc_links),
             Arc::new(errors),
             Arc::new(vec![]),
         )
@@ -114,6 +117,7 @@ pub fn analyze<'db>(
                 &TypeRegistry::new(pointer_size),
                 &BTreeMap::new(),
             )),
+            Arc::new(doc_links::DocLinks::new()),
             Arc::new(vec![]),
             Arc::new(parse_errors),
         );
@@ -364,16 +368,29 @@ pub fn analyze<'db>(
     let af_errors = merge_associated_functions(&mut type_registry, &modules);
     if !af_errors.is_empty() {
         let doc_link_resolver = doc_links::DocLinkResolver::build(&type_registry, &modules);
-        return finish(type_registry, modules, doc_link_resolver, af_errors);
+        return finish(
+            type_registry,
+            modules,
+            doc_link_resolver,
+            doc_links::DocLinks::new(),
+            af_errors,
+        );
     }
 
-    // Doc link resolution (now with associated functions in the registry)
+    // Doc link resolution (now with associated functions in the registry).
+    // This is the single pass that resolves every intra-doc link; validation
+    // is its failure path, and the resulting tables are what backends consume.
     let doc_link_resolver = doc_links::DocLinkResolver::build(&type_registry, &modules);
-    if let Err(e) = doc_links::validate(&doc_link_resolver, &type_registry, &modules) {
-        return finish(type_registry, modules, doc_link_resolver, vec![e]);
+    match doc_links::resolve_all(&doc_link_resolver, &type_registry, &modules) {
+        Ok(resolved) => finish(type_registry, modules, doc_link_resolver, resolved, vec![]),
+        Err(e) => finish(
+            type_registry,
+            modules,
+            doc_link_resolver,
+            doc_links::DocLinks::new(),
+            vec![e],
+        ),
     }
-
-    finish(type_registry, modules, doc_link_resolver, vec![])
 }
 
 /// Compute associated functions (own impl methods + inherited from base types)

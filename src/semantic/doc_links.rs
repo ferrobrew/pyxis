@@ -84,18 +84,84 @@ pub enum DocLinkMemberKind {
     ExternValue,
 }
 
-/// The intra-doc links referenced across a module's documentation, gathered by
-/// [`DocLinkResolver::module_doc_links`] for backend rewriting.
-#[derive(Debug, Clone, Default)]
-pub struct ModuleDocLinks {
-    /// Absolute paths of every item/function/extern referenced by a link, to be
-    /// imported so rustdoc resolves them.
-    pub imports: BTreeSet<ItemPath>,
-    /// `(written link text, extern-value item path)` for each link pointing at
-    /// an extern value. The backend rewrites the link destination to the emitted
-    /// `get_<name>` accessor rather than the value's logical name.
-    pub extern_value_links: Vec<(String, ItemPath)>,
+/// A parsed intra-doc link path: an optional leading `Self` plus the remaining
+/// `::`-separated segments.
+///
+/// This is the *only* place link text is split into segments — everything
+/// downstream of [`DocLinkPath::parse`] works with the structured form, so the
+/// resolution path never re-derives structure from strings.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct DocLinkPath {
+    /// Whether the written path began with `Self` (bare `Self` or `Self::…`).
+    pub self_prefixed: bool,
+    /// The path segments after any `Self` prefix.
+    pub segments: Vec<ItemPathSegment>,
 }
+
+impl DocLinkPath {
+    pub fn parse(text: &str) -> Self {
+        let mut parts = text.split("::").peekable();
+        let self_prefixed = parts.peek() == Some(&"Self");
+        if self_prefixed {
+            parts.next();
+        }
+        DocLinkPath {
+            self_prefixed,
+            segments: parts.map(ItemPathSegment::from).collect(),
+        }
+    }
+}
+
+/// A single doc link resolved to its target, alongside the exact path text
+/// written in the source — the text a backend substitutes when rewriting the
+/// link destination.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ResolvedDocLink {
+    pub text: String,
+    pub target: DocLinkTarget,
+}
+
+/// Every resolved intra-doc link in one module's documentation, keyed by the
+/// location of the doc-bearing node (module, item, field, function, variant,
+/// flag, …). Produced once by [`resolve_all`] during semantic analysis;
+/// backends look their links up here rather than re-scanning and re-resolving
+/// doc text with locally-reconstructed context.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
+pub struct ModuleDocLinks {
+    pub by_location: BTreeMap<ItemLocation, Vec<ResolvedDocLink>>,
+}
+
+impl ModuleDocLinks {
+    /// The resolved links of the doc block owned by the node at `location`.
+    pub fn at(&self, location: &ItemLocation) -> &[ResolvedDocLink] {
+        self.by_location
+            .get(location)
+            .map(Vec::as_slice)
+            .unwrap_or_default()
+    }
+
+    /// Iterate every resolved link in the module.
+    pub fn iter(&self) -> impl Iterator<Item = &ResolvedDocLink> {
+        self.by_location.values().flatten()
+    }
+
+    /// Absolute paths of every item/function/extern referenced by a link — the
+    /// set the Rust backend imports so rustdoc resolves the links.
+    pub fn imports(&self) -> BTreeSet<ItemPath> {
+        self.iter().map(|l| l.target.import_path()).collect()
+    }
+
+    /// `(written link text, extern-value item path)` for each link pointing at
+    /// an extern value. The Rust backend rewrites these destinations to the
+    /// emitted `get_<name>` accessor rather than the value's logical name.
+    pub fn extern_value_links(&self) -> impl Iterator<Item = (&str, ItemPath)> {
+        self.iter()
+            .filter_map(|l| Some((l.text.as_str(), l.target.extern_value_path()?)))
+    }
+}
+
+/// The resolved doc links of every module in the crate, keyed by module path.
+pub type DocLinks = BTreeMap<ItemPath, ModuleDocLinks>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 enum ItemMembers {
@@ -286,29 +352,29 @@ impl DocLinkResolver {
     /// Resolve a written link path (e.g. `Action`, `Type::method`) against a
     /// module scope. Returns `None` if it doesn't resolve to anything.
     ///
-    /// `path` is the parsed `::`-separated segments of the link text.
-    /// `enclosing_type` is the path of the type/enum/bitflags whose definition
-    /// contains the doc comment — used to resolve `Self::` links. `None` at
-    /// module scope.
+    /// `enclosing_type` is the path of the item whose emitted docs will contain
+    /// the link — the type/enum/bitflags itself for its own and its members'
+    /// docs, or the *parent* type for a nested constant/extern value (their
+    /// docs land in the parent's `impl` block). It substitutes a `Self` prefix;
+    /// `None` at module scope, where `Self` doesn't resolve.
     pub fn resolve(
         &self,
         scope: &[ItemPath],
-        path: &[ItemPathSegment],
+        path: &DocLinkPath,
         enclosing_type: Option<&ItemPath>,
     ) -> Option<DocLinkTarget> {
-        // If the first segment is `Self`, replace it with the enclosing type's
-        // segments. Works entirely at the ItemPathSegment level.
+        // Substitute a `Self` prefix with the enclosing type's segments.
         let owned_segments;
-        let path = if path.first().is_some_and(|s| s.as_str() == "Self") {
+        let path: &[ItemPathSegment] = if path.self_prefixed {
             let enclosing = enclosing_type?;
             owned_segments = enclosing
                 .iter()
+                .chain(path.segments.iter())
                 .cloned()
-                .chain(path[1..].iter().cloned())
                 .collect::<Vec<_>>();
             &owned_segments
         } else {
-            path
+            &path.segments
         };
 
         // 1. The whole path as a type. A nested constant is skipped here so it
@@ -358,7 +424,7 @@ impl DocLinkResolver {
             let module_segments = &path[..path.len() - 1];
             let bases = std::iter::once(ItemPath::empty()).chain(scope.iter().cloned());
             for base in bases {
-                let mut full = base.clone();
+                let mut full = base;
                 for seg in module_segments {
                     full.push(seg.clone());
                 }
@@ -468,181 +534,6 @@ impl DocLinkResolver {
         }
     }
 
-    /// Collect every intra-doc link referenced anywhere in `module_path`'s
-    /// documentation (its own doc, its items + their members, its functions) —
-    /// the item paths to import so rustdoc resolves them, plus the extern-value
-    /// links the Rust backend rewrites to `get_<name>` accessors. See
-    /// [`ModuleDocLinks`].
-    pub fn module_doc_links(
-        &self,
-        type_registry: &TypeRegistry,
-        modules: &BTreeMap<ItemPath, Module>,
-        module_path: &ItemPath,
-    ) -> ModuleDocLinks {
-        let mut links = ModuleDocLinks::default();
-        let out = &mut links;
-        self.walk_module_docs(
-            type_registry,
-            modules,
-            module_path,
-            |doc, scope, enclosing, _| {
-                self.add_doc_imports(scope, enclosing, doc, out);
-                Ok(())
-            },
-        )
-        .ok();
-        links
-    }
-
-    /// Walk every doc-comment-bearing location in `module_path` — the module's
-    /// own doc and functions, every item whose parent is `module_path`, and
-    /// every member/nested-item doc within those items. The closure receives
-    /// `(doc, scope, enclosing_type, location)` at each location.
-    ///
-    /// `enclosing_type` is `Some(path)` when inside a type/enum/bitflags
-    /// definition (enables `Self::` resolution) and `None` at module scope.
-    /// For nested items, the enclosing type is the nested item's own path —
-    /// `Self::` inside a nested enum's variant doc refers to the nested enum,
-    /// not the outer type — but the augmented `type_scope` (outer type's
-    /// scope) is still used for bare-name resolution of siblings.
-    fn walk_module_docs(
-        &self,
-        type_registry: &TypeRegistry,
-        modules: &BTreeMap<ItemPath, Module>,
-        module_path: &ItemPath,
-        mut visit: impl FnMut(&[String], &[ItemPath], Option<&ItemPath>, &ItemLocation) -> Result<()>,
-    ) -> Result<()> {
-        let Some(module) = modules.get(module_path) else {
-            return Ok(());
-        };
-        let scope = module.scope();
-
-        visit(module.doc(), &scope, None, module.location())?;
-        for f in module.functions() {
-            visit(&f.doc, &scope, None, &f.location)?;
-        }
-
-        for (path, item) in type_registry.iter() {
-            if path.parent().as_ref() != Some(module_path) {
-                continue;
-            }
-            let Some(resolved) = item.resolved() else {
-                continue;
-            };
-            let enclosing = Some(path);
-            match &resolved.inner {
-                ItemDefinitionInner::Type(td) => {
-                    // Augment scope with the type's own path so bare
-                    // references to nested items (e.g. [InnerEnum]) resolve.
-                    let type_scope: Vec<ItemPath> = std::iter::once(path.clone())
-                        .chain(scope.iter().cloned())
-                        .collect();
-                    visit(&td.doc, &type_scope, enclosing, &item.location)?;
-                    for r in &td.regions {
-                        visit(&r.doc, &type_scope, enclosing, &r.location)?;
-                    }
-                    for f in &td.associated_functions {
-                        visit(&f.doc, &type_scope, enclosing, &f.location)?;
-                    }
-                    if let Some(v) = &td.vftable {
-                        for f in &v.functions {
-                            visit(&f.doc, &type_scope, enclosing, &f.location)?;
-                        }
-                    }
-                    for nested_path in &td.nested_item_paths {
-                        let Some(nested_item) = type_registry
-                            .get(nested_path, &ItemLocation::internal())
-                            .ok()
-                        else {
-                            continue;
-                        };
-                        let Some(nested_resolved) = nested_item.resolved() else {
-                            continue;
-                        };
-                        let nested_loc = &nested_item.location;
-                        // Nested items use their own path as enclosing type —
-                        // `Self::` inside a nested enum's variant doc refers to
-                        // the nested enum, not the outer type. The `type_scope`
-                        // (outer type's augmented scope) is still used for
-                        // bare-name resolution of siblings.
-                        let nested_enclosing = Some(nested_path);
-                        match &nested_resolved.inner {
-                            ItemDefinitionInner::Type(ntd) => {
-                                visit(&ntd.doc, &type_scope, nested_enclosing, nested_loc)?;
-                            }
-                            ItemDefinitionInner::Enum(ned) => {
-                                visit(&ned.doc, &type_scope, nested_enclosing, nested_loc)?;
-                                for v in &ned.variants {
-                                    visit(&v.doc, &type_scope, nested_enclosing, &v.location)?;
-                                }
-                                for f in &ned.associated_functions {
-                                    visit(&f.doc, &type_scope, nested_enclosing, &f.location)?;
-                                }
-                            }
-                            ItemDefinitionInner::Bitflags(nbd) => {
-                                visit(&nbd.doc, &type_scope, nested_enclosing, nested_loc)?;
-                                for f in &nbd.flags {
-                                    visit(&f.doc, &type_scope, nested_enclosing, &f.location)?;
-                                }
-                            }
-                            ItemDefinitionInner::TypeAlias(nta) => {
-                                visit(&nta.doc, &type_scope, nested_enclosing, nested_loc)?;
-                            }
-                            ItemDefinitionInner::Constant(ncd) => {
-                                visit(&ncd.doc, &type_scope, nested_enclosing, nested_loc)?;
-                            }
-                            ItemDefinitionInner::ExternValue(nev) => {
-                                visit(&nev.doc, &type_scope, nested_enclosing, nested_loc)?;
-                            }
-                        }
-                    }
-                }
-                ItemDefinitionInner::Enum(ed) => {
-                    visit(&ed.doc, &scope, enclosing, &item.location)?;
-                    for v in &ed.variants {
-                        visit(&v.doc, &scope, enclosing, &v.location)?;
-                    }
-                    for f in &ed.associated_functions {
-                        visit(&f.doc, &scope, enclosing, &f.location)?;
-                    }
-                }
-                ItemDefinitionInner::Bitflags(bd) => {
-                    visit(&bd.doc, &scope, enclosing, &item.location)?;
-                    for f in &bd.flags {
-                        visit(&f.doc, &scope, enclosing, &f.location)?;
-                    }
-                }
-                ItemDefinitionInner::TypeAlias(ta) => {
-                    visit(&ta.doc, &scope, enclosing, &item.location)?;
-                }
-                ItemDefinitionInner::Constant(cd) => {
-                    visit(&cd.doc, &scope, enclosing, &item.location)?;
-                }
-                ItemDefinitionInner::ExternValue(ev) => {
-                    visit(&ev.doc, &scope, enclosing, &item.location)?;
-                }
-            }
-        }
-        Ok(())
-    }
-
-    fn add_doc_imports(
-        &self,
-        scope: &[ItemPath],
-        enclosing_type: Option<&ItemPath>,
-        doc: &[String],
-        links: &mut ModuleDocLinks,
-    ) {
-        for (text, segments) in extract_links(doc) {
-            if let Some(target) = self.resolve(scope, &segments, enclosing_type) {
-                links.imports.insert(target.import_path());
-                if let Some(value_path) = target.extern_value_path() {
-                    links.extern_value_links.push((text, value_path));
-                }
-            }
-        }
-    }
-
     fn find_member(&self, item_path: &ItemPath, member: &str) -> Option<DocLinkMemberKind> {
         match &self.items.get(item_path)?.members {
             ItemMembers::Type {
@@ -704,30 +595,166 @@ impl DocLinkResolver {
     }
 }
 
-/// Validate every doc comment's intra-doc links, erroring on the first that
-/// doesn't resolve.
-pub fn validate(
+/// Resolve every intra-doc link in every doc comment across the crate, in one
+/// pass. Returns the per-module location-keyed link tables that backends
+/// consume, or the first link that fails to resolve as an error.
+///
+/// This is the single point where doc links are resolved — validation is this
+/// pass's failure path, and every downstream consumer (backends, LSP hover on
+/// build results) reads the returned tables rather than re-resolving with
+/// locally-reconstructed context.
+pub fn resolve_all(
     resolver: &DocLinkResolver,
     type_registry: &TypeRegistry,
     modules: &BTreeMap<ItemPath, Module>,
-) -> Result<()> {
-    for module_path in modules.keys() {
-        resolver.walk_module_docs(
-            type_registry,
-            modules,
-            module_path,
-            |doc, scope, enclosing, location| {
-                for (text, segments) in extract_links(doc) {
-                    if resolver.resolve(scope, &segments, enclosing).is_none() {
-                        return Err(SemanticError::DocLinkNotFound {
-                            path: text,
-                            location: *location,
-                        });
-                    }
+) -> Result<DocLinks> {
+    let mut links: DocLinks = modules
+        .keys()
+        .map(|k| (k.clone(), ModuleDocLinks::default()))
+        .collect();
+
+    let mut record = |module_path: &ItemPath,
+                      doc: &[String],
+                      scope: &[ItemPath],
+                      enclosing: Option<&ItemPath>,
+                      location: &ItemLocation|
+     -> Result<()> {
+        for (text, path) in extract_links(doc) {
+            let Some(target) = resolver.resolve(scope, &path, enclosing) else {
+                return Err(SemanticError::DocLinkNotFound {
+                    path: text,
+                    location: *location,
+                });
+            };
+            links
+                .entry(module_path.clone())
+                .or_default()
+                .by_location
+                .entry(*location)
+                .or_default()
+                .push(ResolvedDocLink { text, target });
+        }
+        Ok(())
+    };
+
+    let scopes: BTreeMap<&ItemPath, Vec<ItemPath>> = modules
+        .iter()
+        .map(|(path, module)| (path, module.scope()))
+        .collect();
+
+    for (module_path, module) in modules {
+        let scope = &scopes[module_path];
+        record(module_path, module.doc(), scope, None, module.location())?;
+        for f in module.functions() {
+            record(module_path, &f.doc, scope, None, &f.location)?;
+        }
+    }
+
+    // Top-level items — those whose parent is a module. Items nested inside
+    // another item are reached by `walk_item_docs`' recursion instead, with
+    // the enclosing type's augmented scope.
+    for (path, item) in type_registry.iter() {
+        let Some(parent) = path.parent() else {
+            continue;
+        };
+        let Some(scope) = scopes.get(&parent) else {
+            continue;
+        };
+        walk_item_docs(type_registry, &parent, path, item, scope, None, &mut record)?;
+    }
+
+    Ok(links)
+}
+
+/// Walk the doc comments of one item — its own doc, its members' docs, and
+/// (recursively) any nested items' — calling `record` with the scope and
+/// `Self`-enclosing context each doc block resolves under.
+///
+/// `enclosing_type` for a doc block is the item whose *emitted* docs will
+/// contain it: the type/enum/bitflags itself for its own, its members', and
+/// its associated functions' docs, and the parent type for a nested
+/// constant/extern value (the Rust backend emits those inside the parent's
+/// `impl` block, where rustdoc resolves `Self` as the parent). Type aliases
+/// and module-level constants/extern values get `None` — `Self` has nothing
+/// to refer to in their emitted docs.
+///
+/// `parent_type` is the type this item is nested inside, `None` at module
+/// level.
+fn walk_item_docs<F>(
+    type_registry: &TypeRegistry,
+    module_path: &ItemPath,
+    path: &ItemPath,
+    item: &crate::semantic::types::ItemDefinition,
+    scope: &[ItemPath],
+    parent_type: Option<&ItemPath>,
+    record: &mut F,
+) -> Result<()>
+where
+    F: FnMut(&ItemPath, &[String], &[ItemPath], Option<&ItemPath>, &ItemLocation) -> Result<()>,
+{
+    let Some(resolved) = item.resolved() else {
+        return Ok(());
+    };
+    let enclosing = Some(path);
+    match &resolved.inner {
+        ItemDefinitionInner::Type(td) => {
+            // Augment scope with the type's own path so bare references to
+            // nested items (e.g. [InnerEnum]) resolve.
+            let type_scope: Vec<ItemPath> = std::iter::once(path.clone())
+                .chain(scope.iter().cloned())
+                .collect();
+            record(module_path, &td.doc, &type_scope, enclosing, &item.location)?;
+            for r in &td.regions {
+                record(module_path, &r.doc, &type_scope, enclosing, &r.location)?;
+            }
+            for f in &td.associated_functions {
+                record(module_path, &f.doc, &type_scope, enclosing, &f.location)?;
+            }
+            if let Some(v) = &td.vftable {
+                for f in &v.functions {
+                    record(module_path, &f.doc, &type_scope, enclosing, &f.location)?;
                 }
-                Ok(())
-            },
-        )?;
+            }
+            for nested_path in &td.nested_item_paths {
+                let Ok(nested_item) = type_registry.get(nested_path, &ItemLocation::internal())
+                else {
+                    continue;
+                };
+                walk_item_docs(
+                    type_registry,
+                    module_path,
+                    nested_path,
+                    nested_item,
+                    &type_scope,
+                    Some(path),
+                    record,
+                )?;
+            }
+        }
+        ItemDefinitionInner::Enum(ed) => {
+            record(module_path, &ed.doc, scope, enclosing, &item.location)?;
+            for v in &ed.variants {
+                record(module_path, &v.doc, scope, enclosing, &v.location)?;
+            }
+            for f in &ed.associated_functions {
+                record(module_path, &f.doc, scope, enclosing, &f.location)?;
+            }
+        }
+        ItemDefinitionInner::Bitflags(bd) => {
+            record(module_path, &bd.doc, scope, enclosing, &item.location)?;
+            for f in &bd.flags {
+                record(module_path, &f.doc, scope, enclosing, &f.location)?;
+            }
+        }
+        ItemDefinitionInner::TypeAlias(ta) => {
+            record(module_path, &ta.doc, scope, None, &item.location)?;
+        }
+        ItemDefinitionInner::Constant(cd) => {
+            record(module_path, &cd.doc, scope, parent_type, &item.location)?;
+        }
+        ItemDefinitionInner::ExternValue(ev) => {
+            record(module_path, &ev.doc, scope, parent_type, &item.location)?;
+        }
     }
     Ok(())
 }
@@ -900,17 +927,17 @@ pub fn scan_links(text: &str) -> Vec<ScannedLink> {
 /// the inline (`[label](path)`) and code-shortcut (`` [`path`] ``) forms. Bare
 /// `[path]` shortcuts are intentionally excluded.
 ///
-/// Returns `(original_text, parsed_segments)` for each link — the original
-/// path text (for backend rewriting / extern-value link storage) and the
-/// parsed `::`-separated segments (for `resolve()`).
-pub fn extract_links(doc: &[String]) -> Vec<(String, Vec<ItemPathSegment>)> {
+/// Returns `(original_text, parsed_path)` for each link — the original path
+/// text exactly as written (what a backend substitutes when rewriting) and its
+/// parsed [`DocLinkPath`] (what [`DocLinkResolver::resolve`] consumes).
+pub fn extract_links(doc: &[String]) -> Vec<(String, DocLinkPath)> {
     let text = doc.join("\n");
     scan_links(&text)
         .into_iter()
         .filter(|l| l.syntax != DocLinkSyntax::PlainShortcut)
         .map(|l| {
-            let segs = l.path.split("::").map(ItemPathSegment::from).collect();
-            (l.path, segs)
+            let parsed = DocLinkPath::parse(&l.path);
+            (l.path, parsed)
         })
         .collect()
 }
