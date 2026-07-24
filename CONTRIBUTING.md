@@ -14,6 +14,10 @@ The full language reference - every syntax form, type, attribute, cfg predicate,
 cargo run -p pyxis-driver -- build --backend cpp <input-dir> <output-dir>
 ```
 
+## Keeping files small
+
+Keep source files under 1,000 lines. When a module approaches that, split it: convert `foo.rs` into a `foo/` directory, move cohesive clusters into submodules, and preserve the public API with re-exports from `foo/mod.rs`. Methods on one type can be spread across multiple `impl` blocks in different files of the same module, so no visibility or trait plumbing is needed. Large inline `#[cfg(test)] mod tests` blocks count too - extracting them to a sibling `tests.rs` is often the whole fix.
+
 ## Building emitted C++ on Linux dev hosts
 
 The cpp output is normative - it does not bake xwin or clang-cl assumptions into `CMakeLists.txt`. To build it on Linux, point CMake at the dev-only toolchain in `tools/cmake-toolchains/xwin-x86.cmake`, which wires `clang-cl` against the MSVC SDK provisioned by [`xwin`](https://github.com/Jake-Shadle/xwin).

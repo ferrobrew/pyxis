@@ -1,0 +1,186 @@
+//! Tests for extracting and scanning doc links from doc comment text.
+
+use super::*;
+use pretty_assertions::assert_eq;
+
+#[test]
+fn extracts_shortcut_and_inline_links() {
+    let doc = vec![
+        " See [`Foo`] and [`Bar::baz`].".to_string(),
+        " Also [the thing](Qux::quux) but not [external](https://example.com).".to_string(),
+        " A code-labelled inline link [`Update`](Mode::Update) too.".to_string(),
+        " And plain [text] is ignored.".to_string(),
+    ];
+    let texts: Vec<String> = extract_links(&doc)
+        .into_iter()
+        .map(|(text, _)| text)
+        .collect();
+    assert_eq!(texts, vec!["Foo", "Bar::baz", "Qux::quux", "Mode::Update"]);
+}
+
+#[test]
+fn ignores_brackets_inside_code_spans() {
+    // `[first, last)` is a code span — its `[` must not consume the `]`
+    // from the real link [`Target`].
+    let doc = vec![" Half-open range `[first, last)`: walks the [`Target`] list.".to_string()];
+    let texts: Vec<String> = extract_links(&doc)
+        .into_iter()
+        .map(|(text, _)| text)
+        .collect();
+    assert_eq!(texts, vec!["Target"]);
+}
+
+#[test]
+fn resolves_every_link_form() {
+    // A module with one of each kind of link target: a type (with a method and
+    // a field), an enum variant, a bitflags flag, a freestanding function, and
+    // an extern value.
+    let module =
+        M::new()
+            .with_definitions([
+                ID::new(
+                    (V::Public, "Target"),
+                    TD::new([TS::field((V::Public, "m_value"), T::ident("u32"))
+                        .with_attributes([A::address(0)])])
+                    .with_attributes([A::size(4), A::align(4)]),
+                ),
+                ID::new(
+                    (V::Public, "Mode"),
+                    ED::new(T::ident("u32"), [ES::field("VarA")], []),
+                ),
+                ID::new(
+                    (V::Public, "Flags"),
+                    BFD::new(T::ident("u32"), [BFS::field("FlagX", int_literal(1))], []),
+                ),
+            ])
+            .with_impls([FB::new(
+                "Target",
+                [F::new((V::Public, "do_it"), [Ar::const_self()])
+                    .with_attributes([A::address(0x10)])],
+            )])
+            .with_functions([F::new((V::Public, "helper"), []).with_attributes([A::address(0x30)])])
+            .with_definitions([ID::new(
+                (V::Public, "global"),
+                EVD::new(T::ident("u32").mut_pointer()).with_attributes([A::address(0x20)]),
+            )]);
+
+    let state = build_state(&module, &IP::from("test")).unwrap();
+    let scope = state.modules().get(&IP::from("test")).unwrap().scope();
+    let resolver = state.doc_link_resolver();
+
+    let member = |item: &str, name: &str, kind| DocLinkTarget::Member {
+        item: IP::from(item),
+        name: name.to_string(),
+        kind,
+    };
+
+    assert_eq!(
+        resolver.resolve(&scope, &segs("Target"), None),
+        Some(DocLinkTarget::Item(IP::from("test::Target")))
+    );
+    assert_eq!(
+        resolver.resolve(&scope, &segs("Target::do_it"), None),
+        Some(member("test::Target", "do_it", DocLinkMemberKind::Method))
+    );
+    assert_eq!(
+        resolver.resolve(&scope, &segs("Target::m_value"), None),
+        Some(member("test::Target", "m_value", DocLinkMemberKind::Field))
+    );
+    assert_eq!(
+        resolver.resolve(&scope, &segs("Mode::VarA"), None),
+        Some(member("test::Mode", "VarA", DocLinkMemberKind::Variant))
+    );
+    assert_eq!(
+        resolver.resolve(&scope, &segs("Flags::FlagX"), None),
+        Some(member("test::Flags", "FlagX", DocLinkMemberKind::Flag))
+    );
+    assert_eq!(
+        resolver.resolve(&scope, &segs("helper"), None),
+        Some(DocLinkTarget::Function {
+            module: IP::from("test"),
+            name: "helper".to_string(),
+        })
+    );
+    assert_eq!(
+        resolver.resolve(&scope, &segs("global"), None),
+        Some(DocLinkTarget::ExternValue {
+            module: IP::from("test"),
+            name: "global".to_string(),
+        })
+    );
+    assert_eq!(resolver.resolve(&scope, &segs("Nonexistent"), None), None);
+    assert_eq!(
+        resolver.resolve(&scope, &segs("Target::missing"), None),
+        None
+    );
+}
+
+#[test]
+fn resolves_nested_constant_as_member() {
+    // A constant nested inside a type resolves as a `Constant` *member* of its
+    // parent (issue #103), not as a freestanding item: the Rust backend emits
+    // it as an associated const, so a `Type::CONST` link imports the parent
+    // type and rewrites to the associated-const form rather than importing a
+    // nonexistent flattened free item.
+    let module = M::new().with_definitions([ID::new(
+        (V::Public, "Player"),
+        TD::new([
+            TS::item(ID::new(
+                (V::Public, "STARTING_GOLD"),
+                CD::new(T::ident("u32"), int_literal(500)),
+            )),
+            TS::field((V::Public, "health"), T::ident("i32")).with_attributes([A::address(0)]),
+        ])
+        .with_attributes([A::size(4), A::align(4)]),
+    )]);
+
+    let state = build_state(&module, &IP::from("test")).unwrap();
+    let scope = state.modules().get(&IP::from("test")).unwrap().scope();
+    let resolver = state.doc_link_resolver();
+
+    assert_eq!(
+        resolver.resolve(&scope, &segs("Player::STARTING_GOLD"), None),
+        Some(DocLinkTarget::Member {
+            item: IP::from("test::Player"),
+            name: "STARTING_GOLD".to_string(),
+            kind: DocLinkMemberKind::Constant,
+        })
+    );
+    // A nested constant has no freestanding path to link to by bare name, so it
+    // must not resolve as an item (which would emit an unresolvable import).
+    assert_eq!(resolver.resolve(&scope, &segs("STARTING_GOLD"), None), None);
+    assert_eq!(
+        resolver.resolve(&scope, &segs("Player::MISSING"), None),
+        None
+    );
+}
+
+#[test]
+fn scan_links_tags_syntax_with_precise_regions() {
+    // The shared scanner backs the compiler, the Rust backend's link rewriting,
+    // and the LSP, so each link's syntax and `path_region` must be exact.
+    let line = "a [`Foo::bar`] b [Baz] c [lbl](Qux::quux) d";
+    let links = scan_links(line);
+
+    let summary: Vec<(DocLinkSyntax, &str)> =
+        links.iter().map(|l| (l.syntax, l.path.as_str())).collect();
+    assert_eq!(
+        summary,
+        vec![
+            (DocLinkSyntax::CodeShortcut, "Foo::bar"),
+            (DocLinkSyntax::PlainShortcut, "Baz"),
+            (DocLinkSyntax::Inline, "Qux::quux"),
+        ]
+    );
+
+    // `path_region` slices to exactly the path text (no backticks / label).
+    for l in &links {
+        assert_eq!(&line[l.path_region.0..l.path_region.1], l.path);
+    }
+    // An inline link's label region is the bracket text, distinct from its dest.
+    let inline = links
+        .iter()
+        .find(|l| l.syntax == DocLinkSyntax::Inline)
+        .unwrap();
+    assert_eq!(&line[inline.label_region.0..inline.label_region.1], "lbl");
+}
