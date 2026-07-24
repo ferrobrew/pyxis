@@ -2,6 +2,11 @@ use super::*;
 
 use pyxis::semantic::doc_links::{DocLinkSyntax, DocLinkTarget, ScannedLink};
 
+/// Parse a `::`-separated path string into segments for `resolve()`.
+fn parse_segments(path: &str) -> Vec<ItemPathSegment> {
+    path.split("::").map(ItemPathSegment::from).collect()
+}
+
 impl ServerState {
     /// Doc-comment links that reference `symbol`, returning the span of the
     /// symbol's name within each link's path (a type's name segment, or a
@@ -66,7 +71,7 @@ impl ServerState {
                 };
                 for dl in scan_doc_links(line) {
                     if !resolver
-                        .resolve(&scope, &dl.path)
+                        .resolve(&scope, &parse_segments(&dl.path), None)
                         .is_some_and(|t| matches(&t))
                     {
                         continue;
@@ -154,7 +159,7 @@ impl ServerState {
             for dl in scan_doc_links(line) {
                 // Target file + 1-based line to anchor the link at, and a tooltip.
                 let Some((target_uri, target_line, tooltip)) =
-                    (match resolver.resolve(&scope, &dl.path) {
+                    (match resolver.resolve(&scope, &parse_segments(&dl.path), None) {
                         Some(DocLinkTarget::Item(p)) => self
                             .resolved_definition(&p, type_registry, uri)
                             .map(|rd| (rd.uri, rd.name_span.start.line, p.to_string())),
@@ -441,30 +446,31 @@ impl ServerState {
                 Location::new(loc.line, dl.link.0 + 1),
                 Location::new(loc.line, dl.link.1 + 1),
             );
-            let (location, hover) = match resolver.resolve(&scope, &dl.path)? {
-                DocLinkTarget::Item(p) => to_type(self, &p)?,
-                DocLinkTarget::Member { item, name, .. } => {
-                    match self.resolve_doc_member(&item, &name, uri) {
-                        Some((muri, mspan, mhover)) => {
-                            let mcontent = self.get_content(&muri)?;
-                            (
-                                lsp_types::Location {
-                                    uri: muri.clone(),
-                                    range: pyxis_span_to_lsp_range(mcontent, &mspan),
-                                },
-                                mhover,
-                            )
+            let (location, hover) =
+                match resolver.resolve(&scope, &parse_segments(&dl.path), None)? {
+                    DocLinkTarget::Item(p) => to_type(self, &p)?,
+                    DocLinkTarget::Member { item, name, .. } => {
+                        match self.resolve_doc_member(&item, &name, uri) {
+                            Some((muri, mspan, mhover)) => {
+                                let mcontent = self.get_content(&muri)?;
+                                (
+                                    lsp_types::Location {
+                                        uri: muri.clone(),
+                                        range: pyxis_span_to_lsp_range(mcontent, &mspan),
+                                    },
+                                    mhover,
+                                )
+                            }
+                            None => to_type(self, &item)?,
                         }
-                        None => to_type(self, &item)?,
                     }
-                }
-                DocLinkTarget::Function { module, name } => {
-                    self.resolve_doc_module_item(&module, &name, uri, true)?
-                }
-                DocLinkTarget::ExternValue { module, name } => {
-                    self.resolve_doc_module_item(&module, &name, uri, false)?
-                }
-            };
+                    DocLinkTarget::Function { module, name } => {
+                        self.resolve_doc_module_item(&module, &name, uri, true)?
+                    }
+                    DocLinkTarget::ExternValue { module, name } => {
+                        self.resolve_doc_module_item(&module, &name, uri, false)?
+                    }
+                };
             return Some((link_span, location, hover));
         }
         None

@@ -271,11 +271,11 @@ impl DocCx<'_> {
     /// Convert a doc comment into its markdown text and resolved links.
     fn convert(&self, doc: &[String]) -> (Option<String>, Vec<JsonDocLink>) {
         let mut links: Vec<JsonDocLink> = Vec::new();
-        for text in crate::semantic::doc_links::extract_links(doc) {
+        for (text, segments) in crate::semantic::doc_links::extract_links(doc) {
             if links.iter().any(|l| l.text == text) {
                 continue;
             }
-            if let Some(target) = self.resolver.resolve(&self.scope, &text) {
+            if let Some(target) = self.resolver.resolve(&self.scope, &segments, None) {
                 links.push(JsonDocLink::from_target(text, target));
             }
         }

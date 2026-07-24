@@ -1,0 +1,7 @@
+/// A module with a freestanding function.
+#[address(0x100)]
+pub fn shared_function();
+
+/// An extern value.
+#[address(0x200)]
+pub extern shared_extern: *mut u32;

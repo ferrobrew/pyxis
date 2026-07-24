@@ -16,7 +16,7 @@ pub(crate) use lsp_types::{
 pub(crate) use pyxis::{
     grammar::{
         Attribute, Attributes, BitflagsDefItem, EnumDefItem, Function, ItemDefinition, ItemPath,
-        Module, ModuleItem, Type, TypeDefItem, TypeField, UseTree, Visibility,
+        ItemPathSegment, Module, ModuleItem, Type, TypeDefItem, TypeField, UseTree, Visibility,
     },
     semantic,
     semantic::{declaration_registry::DeclarationRegistry, type_registry::TypeRegistry},
