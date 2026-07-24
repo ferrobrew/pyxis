@@ -11,6 +11,7 @@ use crate::{
     grammar::ItemPath,
     semantic::{
         Module, SemanticOutput, TypeRegistry,
+        doc_links::{DocLinkTarget, ModuleDocLinks, ResolvedDocLink},
         types::{
             Argument, BitflagsDefinition, ConstDefinition as SemanticConstDefinition, ConstValue,
             EnumDefinition, ExternValueDefinition as SemanticExternValueDefinition, Function,
@@ -111,10 +112,17 @@ pub fn write_module(
     // on the root file (lib.rs / the mounted-subtree root); emitting them on
     // the root also overrides a stricter host crate (the innermost level
     // wins), keeping the whole generated subtree quiet.
+    //
+    // `rustdoc::redundant_explicit_links`: every resolved doc link's
+    // destination is rewritten to the absolute path of its semantic target
+    // (see `DocLinkCx`), uniformly. For links rustdoc could have resolved from
+    // the label alone this is "redundant" — deciding when that holds would
+    // mean re-implementing rustdoc's own resolution, so the lint is allowed
+    // instead.
     if key.is_empty() {
         writeln!(
             raw_output,
-            "#![allow(dead_code, non_snake_case, non_camel_case_types, non_upper_case_globals, clippy::missing_safety_doc, clippy::unnecessary_cast, clippy::module_inception)]"
+            "#![allow(dead_code, non_snake_case, non_camel_case_types, non_upper_case_globals, clippy::missing_safety_doc, clippy::unnecessary_cast, clippy::module_inception, rustdoc::redundant_explicit_links)]"
         )?;
     }
     // Disable rustfmt on generated files to prevent the prettyplease-formatted code being reformatted
@@ -125,50 +133,23 @@ pub fn write_module(
     // Collect all module paths for flattening nested item names.
     let module_paths: BTreeSet<ItemPath> = semantic_state.modules().keys().cloned().collect();
 
-    // Compute doc link imports and nested item rewrites before rendering
-    // module docs, so doc link references can be rewritten.
-    let module_scope = module.scope();
-    let doc_links = semantic_state.doc_link_resolver().module_doc_links(
-        semantic_state.type_registry(),
-        semantic_state.modules(),
-        key,
-    );
-    let doc_imports = &doc_links.imports;
-    let module_path_set: BTreeSet<ItemPath> = semantic_state.modules().keys().cloned().collect();
-    let mut cross_module_imports: Vec<&ItemPath> = Vec::new();
-    let mut same_module_aliases: Vec<(&ItemPath, String)> = Vec::new();
-    for p in doc_imports {
-        let declaring_len = find_module_prefix_len(p, &module_path_set);
-        let declaring_module: ItemPath = p.iter().take(declaring_len).cloned().collect();
-        if &declaring_module == key {
-            if p.len() > key.len() + 1 {
-                let flat = flatten_type_name(p, &module_path_set);
-                let leaf = p.last().map(|s| s.as_str().to_string()).unwrap_or_default();
-                if flat != leaf {
-                    same_module_aliases.push((p, flat));
-                }
-            }
-        } else {
-            cross_module_imports.push(p);
-        }
-    }
-    let mut nested_rewrites: std::collections::HashMap<String, String> = {
-        let mut map = std::collections::HashMap::new();
-        for (p, flat) in &same_module_aliases {
-            // The unflattened leaf is the item path's last segment — not
-            // `flat.rsplit('_')`, which would truncate an item name that itself
-            // contains an underscore.
-            let leaf = p.last().map(|s| s.as_str()).unwrap_or(flat.as_str());
-            map.insert(leaf.to_string(), flat.clone());
-        }
-        map
+    // Doc-link rewriting context: every resolved link's destination is
+    // rendered from its semantic target as an absolute crate path, so rustdoc
+    // resolves it without any doc-driven imports or aliases.
+    let prefix = options.rust_module_prefix.as_ref();
+    let doc_cx = DocLinkCx {
+        links: semantic_state.module_doc_links(key),
+        type_registry: semantic_state.type_registry(),
+        module_paths: &module_paths,
+        module_path: key,
+        prefix,
+        root: match prefix {
+            Some(prefix) => format!("crate::{prefix}"),
+            None => "crate".to_string(),
+        },
     };
 
-    writeln!(
-        raw_output,
-        "{}",
-        doc_to_tokens(true, module.doc(), Some(&nested_rewrites))
-    )?;
+    writeln!(raw_output, "{}", doc_cx.module_doc(module.doc()))?;
 
     // Emit the freestanding `__bitflags!` macro definition exactly once, on the
     // crate root, when the crate contains any bitflags. It is
@@ -206,41 +187,6 @@ pub fn write_module(
         writeln!(raw_output, "pub mod {child};")?;
     }
 
-    // Rewrite cross-module doc-link destinations to absolute crate paths so
-    // rustdoc resolves them without any `use` imports. The path is flattened
-    // for nested items (e.g. `module::Outer::InnerEnum` →
-    // `crate::module::Outer_InnerEnum`), using the declaring module's prefix.
-    let mut cross_module_imports: Vec<ItemPath> =
-        cross_module_imports.into_iter().cloned().collect();
-    cross_module_imports.retain(|p| {
-        !module_scope.contains(p) && p.last().is_some_and(|s| is_plain_ident(s.as_str()))
-    });
-    let prefix = options.rust_module_prefix.as_ref();
-    let root = match prefix {
-        Some(prefix) => format!("crate::{prefix}"),
-        None => "crate".to_string(),
-    };
-    // Map a canonical item path to its absolute Rust path, flattening nested
-    // item names (`module::Outer::Inner` → `crate::module::Outer_Inner`).
-    let to_rust_path = |p: &ItemPath| -> String {
-        let module_len = find_module_prefix_len(p, &module_path_set);
-        if p.len() > module_len + 1 {
-            let type_segments: Vec<&str> = p.iter().skip(module_len).map(|s| s.as_str()).collect();
-            let module_part: Vec<&str> = p.iter().take(module_len).map(|s| s.as_str()).collect();
-            let flat_name = type_segments.join("_");
-            if module_part.is_empty() {
-                format!("{root}::{flat_name}")
-            } else {
-                format!("{root}::{}::{flat_name}", module_part.join("::"))
-            }
-        } else {
-            format!("{root}::{p}")
-        }
-    };
-    for p in &cross_module_imports {
-        nested_rewrites.insert(p.to_string(), to_rust_path(p));
-    }
-
     // Emit explicit `pub use` re-exports. Each re-export is canonicalized (past
     // any re-export chain) to the defining item and rendered as an absolute
     // `pub use crate::…;`, so consumers of the generated crate can reach the
@@ -251,27 +197,11 @@ pub fn write_module(
         if !type_registry.contains(&canonical) {
             continue;
         }
-        writeln!(raw_output, "pub use {};", to_rust_path(&canonical))?;
-    }
-
-    // Extern values emit as `get_<name>` accessors (a free fn when module-level,
-    // an inherent method when nested), so a doc link written against the value's
-    // logical name won't resolve. Rewrite each such link's destination to the
-    // accessor's Rust path, reusing the same accessor naming the emitter uses.
-    for (text, value_path) in &doc_links.extern_value_links {
-        let rust_path = extern_value_accessor_doc_path(value_path, key, &module_path_set, prefix);
-        nested_rewrites.insert(text.clone(), rust_path);
-    }
-
-    // Generate `use FlatName as LeafName;` aliases for same-module nested
-    // items referenced in doc links, so rustdoc resolves [`LeafName`] to
-    // the flattened Rust identifier.
-    if !same_module_aliases.is_empty() {
-        for (p, flat) in &same_module_aliases {
-            let leaf = p.last().map(|s| s.as_str()).unwrap_or(flat.as_str());
-            writeln!(raw_output, "#[allow(unused_imports)]")?;
-            writeln!(raw_output, "use {flat} as {leaf};")?;
-        }
+        writeln!(
+            raw_output,
+            "pub use {};",
+            doc_cx.absolute_item_path(&canonical)
+        )?;
     }
 
     let cfg_pass = |cfg: &Option<crate::parser::cfg::CfgPredicate>| match cfg {
@@ -313,7 +243,7 @@ pub fn write_module(
                 options,
                 &extern_rust_names,
                 &module_paths,
-                &nested_rewrites,
+                &doc_cx,
             )?
         )?;
     }
@@ -324,7 +254,7 @@ pub fn write_module(
         .iter()
         .filter(|f| !f.is_internal())
         .filter(|f| cfg_pass(&f.cfg))
-        .map(|f| build_function(f, options, false, &module_paths))
+        .map(|f| build_function(f, options, false, &module_paths, &doc_cx))
         .collect::<Result<Vec<_>>>()?;
     for func in freestanding_functions {
         writeln!(raw_output, "{func}")?;
@@ -382,7 +312,7 @@ fn build_item(
     options: &crate::BuildOptions,
     extern_rust_names: &HashMap<String, String>,
     module_paths: &BTreeSet<ItemPath>,
-    nested_rewrites: &std::collections::HashMap<String, String>,
+    doc_cx: &DocLinkCx,
 ) -> Result<proc_macro2::TokenStream> {
     let resolved = definition
         .resolved()
@@ -417,7 +347,7 @@ fn build_item(
                 cfg_ctx,
                 options,
                 module_paths,
-                nested_rewrites,
+                doc_cx,
             ),
             IDI::Enum(ed) => build_enum(
                 type_registry,
@@ -429,7 +359,7 @@ fn build_item(
                 cfg_ctx,
                 options,
                 module_paths,
-                nested_rewrites,
+                doc_cx,
             ),
             IDI::Bitflags(bd) => build_bitflags(
                 type_registry,
@@ -440,7 +370,7 @@ fn build_item(
                 location,
                 options.rust_module_prefix.as_ref(),
                 module_paths,
-                nested_rewrites,
+                doc_cx,
             ),
             IDI::TypeAlias(ta) => build_type_alias(
                 type_registry,
@@ -451,16 +381,17 @@ fn build_item(
                 type_parameters,
                 options.rust_module_prefix.as_ref(),
                 module_paths,
-                nested_rewrites,
+                doc_cx,
             ),
-            IDI::Constant(cd) => build_const(path, visibility, cd, location, module_paths),
+            IDI::Constant(cd) => build_const(path, visibility, cd, location, module_paths, doc_cx),
             IDI::ExternValue(ev) => build_extern_value(
                 path,
                 visibility,
                 ev,
+                location,
                 options.rust_module_prefix.as_ref(),
                 module_paths,
-                nested_rewrites,
+                doc_cx,
             ),
         },
         ItemCategory::Predefined => Ok(quote! {}),
@@ -494,12 +425,12 @@ fn build_type(
     alignment: usize,
     visibility: Visibility,
     type_definition: &TypeDefinition,
-    _location: &ItemLocation,
+    location: &ItemLocation,
     type_parameters: &[String],
     cfg_ctx: &crate::parser::cfg::CfgContext,
     options: &crate::BuildOptions,
     module_paths: &BTreeSet<ItemPath>,
-    nested_rewrites: &std::collections::HashMap<String, String>,
+    doc_cx: &DocLinkCx,
 ) -> Result<proc_macro2::TokenStream> {
     let name = flatten_type_name(path, module_paths);
     let name = &name;
@@ -520,7 +451,7 @@ fn build_type(
     } = type_definition;
 
     let visibility = visibility_to_tokens(visibility);
-    let doc = doc_to_tokens(false, doc, Some(nested_rewrites));
+    let doc = doc_cx.node(doc, location);
     let mut fields = regions
         .iter()
         .map(|r| {
@@ -543,7 +474,7 @@ fn build_type(
             let field_ident = str_to_ident(field_name);
             let visibility = visibility_to_tokens(*visibility);
             let syn_type = sa_type_to_syn_type(type_ref, prefix, Some(module_paths))?;
-            let doc = doc_to_tokens(false, doc, Some(nested_rewrites));
+            let doc = doc_cx.node(doc, location);
             Ok(quote! {
                 #doc
                 #visibility #field_ident: #syn_type
@@ -604,7 +535,7 @@ fn build_type(
         .iter()
         .filter(|f| !f.is_internal())
         .filter(|f| cfg_pass(&f.cfg))
-        .map(|f| build_function(f, options, true, module_paths))
+        .map(|f| build_function(f, options, true, module_paths, doc_cx))
         .collect::<Result<Vec<_>>>()?;
 
     let vftable_function_impl = vftable
@@ -614,7 +545,7 @@ fn build_type(
                 .iter()
                 .filter(|f| !f.is_internal())
                 .filter(|f| cfg_pass(&f.cfg))
-                .map(|f| build_function(f, options, true, module_paths))
+                .map(|f| build_function(f, options, true, module_paths, doc_cx))
                 .collect::<Result<Vec<_>>>()
         })
         .transpose()?
@@ -757,10 +688,10 @@ fn build_type(
     };
 
     // Emit nested constants as associated constants in an impl block
-    let nested_const_impls = build_nested_const_impls(type_registry, path, module_paths);
+    let nested_const_impls = build_nested_const_impls(type_registry, path, module_paths, doc_cx);
     // Emit nested extern values as associated `get_*` accessors in an impl block
     let nested_extern_value_impls =
-        build_nested_extern_value_impls(type_registry, path, module_paths, nested_rewrites);
+        build_nested_extern_value_impls(type_registry, path, module_paths, doc_cx);
 
     Ok(quote! {
         #derives
@@ -789,11 +720,11 @@ fn build_enum(
     size: usize,
     visibility: Visibility,
     enum_definition: &EnumDefinition,
-    _location: &ItemLocation,
+    location: &ItemLocation,
     cfg_ctx: &crate::parser::cfg::CfgContext,
     options: &crate::BuildOptions,
     module_paths: &BTreeSet<ItemPath>,
-    nested_rewrites: &std::collections::HashMap<String, String>,
+    doc_cx: &DocLinkCx,
 ) -> Result<proc_macro2::TokenStream> {
     let name = flatten_type_name(path, module_paths);
     let name = &name;
@@ -815,7 +746,7 @@ fn build_enum(
     let name_ident = str_to_ident(name.as_str());
 
     let visibility = visibility_to_tokens(visibility);
-    let doc = doc_to_tokens(false, doc, Some(nested_rewrites));
+    let doc = doc_cx.node(doc, location);
 
     let size_check_impl = generate_size_check(name.as_str(), size);
 
@@ -866,7 +797,7 @@ fn build_enum(
         .iter()
         .filter(|f| !f.is_internal())
         .filter(|f| cfg_pass(&f.cfg))
-        .map(|f| build_function(f, options, true, module_paths))
+        .map(|f| build_function(f, options, true, module_paths, doc_cx))
         .collect::<Result<Vec<_>>>()?;
 
     let associated_impl = if !associated_functions_impl.is_empty() {
@@ -880,10 +811,10 @@ fn build_enum(
     };
 
     // Emit nested constants as associated constants in an impl block
-    let nested_const_impls = build_nested_const_impls(type_registry, path, module_paths);
+    let nested_const_impls = build_nested_const_impls(type_registry, path, module_paths, doc_cx);
     // Emit nested extern values as associated `get_*` accessors in an impl block
     let nested_extern_value_impls =
-        build_nested_extern_value_impls(type_registry, path, module_paths, nested_rewrites);
+        build_nested_extern_value_impls(type_registry, path, module_paths, doc_cx);
 
     Ok(quote! {
         #[repr(#syn_type)]
@@ -907,10 +838,10 @@ fn build_bitflags(
     size: usize,
     visibility: Visibility,
     bitflags_definition: &BitflagsDefinition,
-    _location: &ItemLocation,
+    location: &ItemLocation,
     prefix: Option<&ItemPath>,
     module_paths: &BTreeSet<ItemPath>,
-    nested_rewrites: &std::collections::HashMap<String, String>,
+    doc_cx: &DocLinkCx,
 ) -> Result<proc_macro2::TokenStream> {
     let name = flatten_type_name(path, module_paths);
     let name = &name;
@@ -928,7 +859,7 @@ fn build_bitflags(
     let name_ident = str_to_ident(name.as_str());
 
     let visibility = visibility_to_tokens(visibility);
-    let doc = doc_to_tokens(false, doc, Some(nested_rewrites));
+    let doc = doc_cx.node(doc, location);
 
     let size_check_impl = generate_size_check(name.as_str(), size);
 
@@ -968,10 +899,10 @@ fn build_bitflags(
     });
 
     // Emit nested constants as associated constants in an impl block
-    let nested_const_impls = build_nested_const_impls(type_registry, path, module_paths);
+    let nested_const_impls = build_nested_const_impls(type_registry, path, module_paths, doc_cx);
     // Emit nested extern values as associated `get_*` accessors in an impl block
     let nested_extern_value_impls =
-        build_nested_extern_value_impls(type_registry, path, module_paths, nested_rewrites);
+        build_nested_extern_value_impls(type_registry, path, module_paths, doc_cx);
 
     Ok(quote! {
         crate::__bitflags! {
@@ -994,11 +925,11 @@ fn build_type_alias(
     path: &ItemPath,
     visibility: Visibility,
     type_alias_definition: &TypeAliasDefinition,
-    _location: &ItemLocation,
+    location: &ItemLocation,
     type_parameters: &[String],
     prefix: Option<&ItemPath>,
     module_paths: &BTreeSet<ItemPath>,
-    nested_rewrites: &std::collections::HashMap<String, String>,
+    doc_cx: &DocLinkCx,
 ) -> Result<proc_macro2::TokenStream> {
     let name = flatten_type_name(path, module_paths);
     let name = &name;
@@ -1007,7 +938,7 @@ fn build_type_alias(
 
     let name_ident = str_to_ident(name.as_str());
     let visibility = visibility_to_tokens(visibility);
-    let doc = doc_to_tokens(false, doc, Some(nested_rewrites));
+    let doc = doc_cx.node(doc, location);
     let target_type = sa_type_to_syn_type(target, prefix, Some(module_paths))?;
 
     let generic_params = build_generic_params(type_parameters);
@@ -1135,14 +1066,15 @@ fn build_const(
     path: &ItemPath,
     visibility: Visibility,
     const_definition: &SemanticConstDefinition,
-    _location: &ItemLocation,
+    location: &ItemLocation,
     module_paths: &BTreeSet<ItemPath>,
+    doc_cx: &DocLinkCx,
 ) -> Result<proc_macro2::TokenStream> {
     let name = flatten_type_name(path, module_paths);
     let name_ident = str_to_ident(name.as_str());
     let visibility = visibility_to_tokens(visibility);
     let type_ = sa_type_to_syn_type(&const_definition.type_, None, Some(module_paths))?;
-    let doc = doc_to_tokens(false, &const_definition.doc, None);
+    let doc = doc_cx.node(&const_definition.doc, location);
     let value_tokens = const_value_to_tokens(
         &const_definition.value,
         &const_definition.type_,
@@ -1161,6 +1093,7 @@ fn build_nested_const_impls(
     type_registry: &TypeRegistry,
     parent_path: &ItemPath,
     module_paths: &BTreeSet<ItemPath>,
+    doc_cx: &DocLinkCx,
 ) -> Option<proc_macro2::TokenStream> {
     use ItemDefinitionInner as IDI;
 
@@ -1184,7 +1117,7 @@ fn build_nested_const_impls(
                 Ok(t) => t,
                 Err(_) => continue,
             };
-            let doc = doc_to_tokens(false, &cd.doc, None);
+            let doc = doc_cx.node(&cd.doc, &item.location);
             let value_tokens = const_value_to_tokens(&cd.value, &cd.type_, module_paths);
 
             const_items.push(quote! {
@@ -1210,6 +1143,7 @@ fn build_function(
     options: &crate::BuildOptions,
     in_impl: bool,
     module_paths: &BTreeSet<ItemPath>,
+    doc_cx: &DocLinkCx,
 ) -> Result<proc_macro2::TokenStream> {
     let prefix = options.rust_module_prefix.as_ref();
     // External-body methods declare their existence in pyxis but get their
@@ -1221,7 +1155,7 @@ fn build_function(
         return Ok(proc_macro2::TokenStream::new());
     }
     let name = str_to_ident(&function.name);
-    let doc = doc_to_tokens(false, &function.doc, None);
+    let doc = doc_cx.node(&function.doc, &function.location);
 
     let arguments = function
         .arguments
@@ -1364,16 +1298,17 @@ fn build_extern_value(
     path: &ItemPath,
     visibility: Visibility,
     ev: &SemanticExternValueDefinition,
+    location: &ItemLocation,
     prefix: Option<&ItemPath>,
     module_paths: &BTreeSet<ItemPath>,
-    nested_rewrites: &HashMap<String, String>,
+    doc_cx: &DocLinkCx,
 ) -> Result<proc_macro2::TokenStream> {
     let name = flatten_type_name(path, module_paths);
     let visibility = visibility_to_tokens(visibility);
     let function_ident = str_to_ident(&extern_value_accessor_name(&name));
     let type_ = sa_type_to_syn_type(&ev.type_, prefix, Some(module_paths))?;
     let address = hex_literal(ev.address);
-    let doc = doc_to_tokens(false, &ev.doc, Some(nested_rewrites));
+    let doc = doc_cx.node(&ev.doc, location);
 
     Ok(quote! {
         #doc
@@ -1391,7 +1326,7 @@ fn build_nested_extern_value_impls(
     type_registry: &TypeRegistry,
     parent_path: &ItemPath,
     module_paths: &BTreeSet<ItemPath>,
-    nested_rewrites: &HashMap<String, String>,
+    doc_cx: &DocLinkCx,
 ) -> Option<proc_macro2::TokenStream> {
     use ItemDefinitionInner as IDI;
 
@@ -1415,7 +1350,7 @@ fn build_nested_extern_value_impls(
                 Err(_) => continue,
             };
             let address = hex_literal(ev.address);
-            let doc = doc_to_tokens(false, &ev.doc, Some(nested_rewrites));
+            let doc = doc_cx.node(&ev.doc, &item.location);
 
             items.push(quote! {
                 #doc
@@ -1439,16 +1374,6 @@ fn build_nested_extern_value_impls(
 
 fn str_to_ident(s: &str) -> syn::Ident {
     quote::format_ident!("{}", s)
-}
-
-/// Whether `s` is a plain Rust identifier (no generics, operators, etc.), so it
-/// can appear verbatim in a `use` path.
-fn is_plain_ident(s: &str) -> bool {
-    let mut chars = s.chars();
-    chars
-        .next()
-        .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
-        && chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
 
 /// Flatten a nested item path to a Rust-safe identifier by joining type-nesting
@@ -1745,13 +1670,16 @@ fn visibility_to_tokens(visibility: Visibility) -> proc_macro2::TokenStream {
 fn doc_to_tokens(
     is_module_doc: bool,
     doc: &[String],
-    nested_rewrites: Option<&std::collections::HashMap<String, String>>,
+    links: Option<(&DocLinkCx, &[ResolvedDocLink])>,
 ) -> proc_macro2::TokenStream {
     if doc.is_empty() {
         return proc_macro2::TokenStream::new();
     };
     let doc_attrs = doc.iter().map(|line| {
-        let rewritten = rewrite_doc_links(line, nested_rewrites);
+        let rewritten = match links {
+            Some((cx, block)) => cx.rewrite_line(line, block),
+            None => line.clone(),
+        };
         if is_module_doc {
             quote! { #![doc = #rewritten] }
         } else {
@@ -1763,74 +1691,133 @@ fn doc_to_tokens(
     }
 }
 
-/// Rewrite a single `::`-separated intra-doc link path to use flattened Rust
-/// names for nested items. When a segment matches a rewrite key, it's replaced
-/// with the flattened name and all preceding segments are dropped (they're the
-/// parent-type prefix already baked into the flattened name), while trailing
-/// member-access segments are preserved. For example, with `Inner → Outer_Inner`:
-/// `Inner` → `Outer_Inner`, `Inner::A` → `Outer_Inner::A`, and
-/// `Outer::Inner::CONST` → `Outer_Inner::CONST`.
+/// Context for rewriting intra-doc links in emitted docs.
 ///
-/// Cross-module paths are rewritten to absolute crate paths via an exact
-/// full-path match before the per-segment loop.
-fn rewrite_doc_link_path(
-    content: &str,
-    rewrites: &std::collections::HashMap<String, String>,
-) -> String {
-    // First, try an exact full-path match (for cross-module imports).
-    if let Some(target) = rewrites.get(content) {
-        return target.clone();
-    }
-    let segments: Vec<&str> = content.split("::").collect();
-    if segments.len() == 1 {
-        return rewrites
-            .get(segments[0])
-            .cloned()
-            .unwrap_or_else(|| content.to_string());
-    }
-    for (i, seg) in segments.iter().enumerate() {
-        if let Some(flat) = rewrites.get(*seg) {
-            let rest = &segments[i + 1..];
-            return if rest.is_empty() {
-                flat.clone()
-            } else {
-                format!("{}::{}", flat, rest.join("::"))
-            };
-        }
-    }
-    content.to_string()
+/// Each link's *resolved target* — determined once during semantic analysis
+/// and stored in the module's [`ModuleDocLinks`] table — is rendered as an
+/// absolute Rust path (`crate::module::Outer_Inner::member`), flattening
+/// nested-item names and substituting extern-value accessors. Rewriting from
+/// the target rather than the written text means the destination is always
+/// what the link actually resolved to: no leaf-name rewrite maps that can
+/// collide, no doc-driven `use` imports for rustdoc's benefit.
+struct DocLinkCx<'a> {
+    links: &'a ModuleDocLinks,
+    type_registry: &'a TypeRegistry,
+    module_paths: &'a BTreeSet<ItemPath>,
+    /// The module being emitted; extern-value accessor paths in the same
+    /// module stay relative.
+    module_path: &'a ItemPath,
+    prefix: Option<&'a ItemPath>,
+    /// `crate` or `crate::<prefix>`.
+    root: String,
 }
 
-/// Rewrite intra-doc link references in a doc comment line to use flattened
-/// Rust names for nested items. Handles both the shortcut form (`` [`InnerEnum`] ``
-/// → `` [`Outer_InnerEnum`] ``) and the inline form's destination
-/// (`[label](Outer::InnerEnum)` → `[label](Outer_InnerEnum)`) — the latter
-/// matters because rustdoc resolves the destination, not the label, and nested
-/// types are emitted under flattened names.
-///
-/// Link detection is shared with the compiler and LSP via
-/// [`scan_links`](crate::semantic::doc_links::scan_links); each link's precise
-/// `path_region` is substituted in place (right-to-left so earlier offsets stay
-/// valid). Bare `[Path]` shortcuts are left alone — the compiler doesn't import
-/// them, so rustdoc couldn't resolve a rewritten one anyway.
-fn rewrite_doc_links(
-    line: &str,
-    nested_rewrites: Option<&std::collections::HashMap<String, String>>,
-) -> String {
-    use crate::semantic::doc_links::DocLinkSyntax;
-    let Some(rewrites) = nested_rewrites else {
-        return line.to_string();
-    };
-    let mut result = line.to_string();
-    let mut links = crate::semantic::doc_links::scan_links(line);
-    links.retain(|l| l.syntax != DocLinkSyntax::PlainShortcut);
-    for link in links.into_iter().rev() {
-        let rewritten = rewrite_doc_link_path(&link.path, rewrites);
-        if rewritten != link.path {
-            result.replace_range(link.path_region.0..link.path_region.1, &rewritten);
+impl DocLinkCx<'_> {
+    /// Doc tokens for the doc block owned by the node at `location`.
+    fn node(&self, doc: &[String], location: &ItemLocation) -> proc_macro2::TokenStream {
+        doc_to_tokens(false, doc, Some((self, self.links.at(location))))
+    }
+
+    /// Doc tokens for the module's own (`//!`) doc block.
+    fn module_doc(&self, doc: &[String]) -> proc_macro2::TokenStream {
+        doc_to_tokens(true, doc, Some((self, self.links.module_doc())))
+    }
+
+    /// The absolute Rust path of an item: `{root}::{module}::{FlatName}`,
+    /// flattening nested-item segments (`module::Outer::Inner` →
+    /// `crate::module::Outer_Inner`).
+    fn absolute_item_path(&self, path: &ItemPath) -> String {
+        let module_len = find_module_prefix_len(path, self.module_paths);
+        let root = &self.root;
+        if path.len() > module_len + 1 {
+            let flat_name = flatten_type_name(path, self.module_paths);
+            let module_part: Vec<&str> = path.iter().take(module_len).map(|s| s.as_str()).collect();
+            if module_part.is_empty() {
+                format!("{root}::{flat_name}")
+            } else {
+                format!("{root}::{}::{flat_name}", module_part.join("::"))
+            }
+        } else {
+            format!("{root}::{path}")
         }
     }
-    result
+
+    /// Render a resolved target as the destination rustdoc should see, or
+    /// `None` to leave the written link untouched (predefined types, which
+    /// rustdoc resolves natively as primitives).
+    fn render_target(&self, target: &DocLinkTarget) -> Option<String> {
+        use crate::semantic::doc_links::DocLinkMemberKind;
+        match target {
+            DocLinkTarget::Item(path) => {
+                let predefined = self
+                    .type_registry
+                    .get(path, &ItemLocation::internal())
+                    .is_ok_and(|i| i.category == crate::semantic::types::ItemCategory::Predefined);
+                if predefined {
+                    return None;
+                }
+                Some(self.absolute_item_path(path))
+            }
+            DocLinkTarget::Member { item, name, kind } => match kind {
+                DocLinkMemberKind::ExternValue => Some(self.accessor_path(item, name)),
+                _ => Some(format!("{}::{name}", self.absolute_item_path(item))),
+            },
+            DocLinkTarget::Function { module, name } => Some(if module.is_empty() {
+                format!("{}::{name}", self.root)
+            } else {
+                format!("{}::{module}::{name}", self.root)
+            }),
+            DocLinkTarget::ExternValue { module, name } => Some(self.accessor_path(module, name)),
+        }
+    }
+
+    /// The rustdoc path of an extern value's `get_<name>` accessor, given the
+    /// value's parent (module or type) and name.
+    fn accessor_path(&self, parent: &ItemPath, name: &str) -> String {
+        let value_path = parent.join(crate::grammar::ItemPathSegment::from(name));
+        extern_value_accessor_doc_path(
+            &value_path,
+            self.module_path,
+            self.module_paths,
+            self.prefix,
+        )
+    }
+
+    /// Rewrite every resolved link in `line` to its rendered destination.
+    ///
+    /// Link spans come from [`scan_links`](crate::semantic::doc_links::scan_links)
+    /// (shared with the compiler and LSP) and are substituted right-to-left so
+    /// earlier offsets stay valid. An inline link keeps its label and gets its
+    /// destination replaced; a code shortcut becomes an inline link so its
+    /// visible label survives the rewrite. Bare `[Path]` shortcuts aren't
+    /// resolved by the compiler and are left alone.
+    fn rewrite_line(&self, line: &str, block: &[ResolvedDocLink]) -> String {
+        use crate::semantic::doc_links::DocLinkSyntax;
+        if block.is_empty() {
+            return line.to_string();
+        }
+        let mut result = line.to_string();
+        let mut scanned = crate::semantic::doc_links::scan_links(line);
+        scanned.retain(|l| l.syntax != DocLinkSyntax::PlainShortcut);
+        for link in scanned.into_iter().rev() {
+            let Some(resolved) = block.iter().find(|r| r.text == link.path) else {
+                continue;
+            };
+            let Some(dest) = self.render_target(&resolved.target) else {
+                continue;
+            };
+            match link.syntax {
+                DocLinkSyntax::Inline => {
+                    result.replace_range(link.path_region.0..link.path_region.1, &dest);
+                }
+                DocLinkSyntax::CodeShortcut | DocLinkSyntax::PlainShortcut => {
+                    let label = &line[link.label_region.0..link.label_region.1];
+                    result.replace_range(link.link.0..link.link.1, &format!("[{label}]({dest})"));
+                }
+            }
+        }
+        result
+    }
 }
 
 fn hex_literal(value: impl Into<usize>) -> proc_macro2::Literal {

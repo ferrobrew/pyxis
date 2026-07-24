@@ -31,7 +31,7 @@ impl std::fmt::Display for Location {
 }
 
 /// A span representing a range in source code
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Span {
     /// Start location (inclusive)
     pub start: Location,
@@ -123,7 +123,7 @@ impl std::fmt::Display for FileId {
 
 /// Location of an item in source code (file ID + span)
 /// Every grammar and semantic item should have an ItemLocation for error reporting
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ItemLocation {
     /// Source file containing the item
     pub file_id: FileId,

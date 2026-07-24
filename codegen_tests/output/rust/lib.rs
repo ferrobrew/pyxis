@@ -5,7 +5,8 @@
     non_upper_case_globals,
     clippy::missing_safety_doc,
     clippy::unnecessary_cast,
-    clippy::module_inception
+    clippy::module_inception,
+    rustdoc::redundant_explicit_links
 )]
 #![cfg_attr(any(), rustfmt::skip)]
 #[macro_export]
@@ -106,6 +107,7 @@ pub mod consts;
 pub mod definition_body;
 pub mod diamond_inheritance;
 pub mod doc_comments;
+pub mod doc_self_links;
 pub mod enums;
 pub mod extern_bindings;
 pub mod extern_values;
@@ -119,6 +121,8 @@ pub mod min_size;
 pub mod multiple_levels;
 pub mod nested_items;
 pub mod pinned;
+pub mod qualified_links_consumer;
+pub mod qualified_links_provider;
 pub mod reexport;
 pub mod reexport_consumer;
 pub mod self_referential_generics;

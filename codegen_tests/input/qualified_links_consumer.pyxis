@@ -1,0 +1,7 @@
+/// Test module-qualified doc-links to functions and extern values.
+///
+/// See [`shared_function`](qualified_links_provider::shared_function) and
+/// [`shared_extern`](qualified_links_provider::shared_extern).
+pub type Consumer {
+    pub _marker: u8,
+}

@@ -260,24 +260,45 @@ impl JsonDocLink {
     }
 }
 
-/// Context for resolving doc-comment links during conversion: the shared
-/// resolver plus the scope of the module currently being converted.
+/// Context for surfacing doc-comment links during conversion: the module's
+/// resolved link table, produced once during semantic analysis. Links are
+/// looked up by the doc-bearing node's location — conversion never re-scans
+/// or re-resolves doc text, so it cannot diverge from what the compiler
+/// validated.
 struct DocCx<'a> {
-    resolver: &'a crate::semantic::doc_links::DocLinkResolver,
-    scope: Vec<ItemPath>,
+    links: &'a crate::semantic::doc_links::ModuleDocLinks,
 }
 
 impl DocCx<'_> {
-    /// Convert a doc comment into its markdown text and resolved links.
-    fn convert(&self, doc: &[String]) -> (Option<String>, Vec<JsonDocLink>) {
+    /// Convert a doc comment into its markdown text and the resolved links of
+    /// the doc block owned by the node at `location`.
+    fn convert(
+        &self,
+        doc: &[String],
+        location: &crate::span::ItemLocation,
+    ) -> (Option<String>, Vec<JsonDocLink>) {
+        Self::convert_resolved(doc, self.links.at(location))
+    }
+
+    /// Convert the module's own doc block (keyed separately from node docs —
+    /// see [`crate::semantic::doc_links::DocBlockKey`]).
+    fn convert_module_doc(&self, doc: &[String]) -> (Option<String>, Vec<JsonDocLink>) {
+        Self::convert_resolved(doc, self.links.module_doc())
+    }
+
+    fn convert_resolved(
+        doc: &[String],
+        resolved: &[crate::semantic::doc_links::ResolvedDocLink],
+    ) -> (Option<String>, Vec<JsonDocLink>) {
         let mut links: Vec<JsonDocLink> = Vec::new();
-        for text in crate::semantic::doc_links::extract_links(doc) {
-            if links.iter().any(|l| l.text == text) {
+        for link in resolved {
+            if links.iter().any(|l| l.text == link.text) {
                 continue;
             }
-            if let Some(target) = self.resolver.resolve(&self.scope, &text) {
-                links.push(JsonDocLink::from_target(text, target));
-            }
+            links.push(JsonDocLink::from_target(
+                link.text.clone(),
+                link.target.clone(),
+            ));
         }
         (doc_to_option(doc), links)
     }
@@ -756,11 +777,10 @@ pub fn build(
     // predicate attached as structured data so downstream tooling can
     // render or filter per their own rules.
     let mut items = BTreeMap::new();
-    for module in semantic_state.modules().values() {
+    for (module_path, module) in semantic_state.modules() {
         let bindings: BTreeMap<&str, ExternBindings> = module.extern_bindings().collect();
         let cx = DocCx {
-            resolver: semantic_state.doc_link_resolver(),
-            scope: module.scope(),
+            links: semantic_state.module_doc_links(module_path),
         };
         for definition in module.definitions(type_registry) {
             let binding = definition
@@ -779,9 +799,9 @@ pub fn build(
     // module, so the loop above never emits them. Add them here so the viewer
     // can render the builtin types user code references. They carry no source
     // location (see `ItemDefinition::default`), and are public.
+    let predefined_links = Default::default();
     let predefined_cx = DocCx {
-        resolver: semantic_state.doc_link_resolver(),
-        scope: Vec::new(),
+        links: &predefined_links,
     };
     for (path, item) in type_registry.iter() {
         if item.category != ItemCategory::Predefined {
@@ -901,7 +921,7 @@ fn convert_function_body(body: &FunctionBody) -> JsonFunctionBody {
 }
 
 fn convert_function(func: &Function, cx: &DocCx) -> JsonFunction {
-    let (doc, doc_links) = cx.convert(&func.doc);
+    let (doc, doc_links) = cx.convert(&func.doc, &func.location);
     JsonFunction {
         visibility: func.visibility.into(),
         name: func.name.clone(),
@@ -947,7 +967,7 @@ fn convert_region(
 ) -> JsonRegion {
     let size = region.type_ref.size(type_registry).unwrap_or(0);
     let alignment = region.type_ref.alignment(type_registry).unwrap_or(1);
-    let (doc, doc_links) = cx.convert(&region.doc);
+    let (doc, doc_links) = cx.convert(&region.doc, &region.location);
 
     JsonRegion {
         visibility: region.visibility.into(),
@@ -977,6 +997,7 @@ fn convert_type_definition(
     td: &TypeDefinition,
     type_registry: &TypeRegistry,
     cx: &DocCx,
+    item_location: &crate::span::ItemLocation,
 ) -> JsonTypeDefinition {
     // Calculate field offsets
     let mut current_offset = 0;
@@ -990,7 +1011,7 @@ fn convert_type_definition(
         })
         .collect();
 
-    let (doc, doc_links) = cx.convert(&td.doc);
+    let (doc, doc_links) = cx.convert(&td.doc, item_location);
     JsonTypeDefinition {
         doc,
         doc_links,
@@ -1012,7 +1033,7 @@ fn convert_type_definition(
 }
 
 fn convert_enum_variant(variant: &EnumVariant, cx: &DocCx) -> JsonEnumVariant {
-    let (doc, doc_links) = cx.convert(&variant.doc);
+    let (doc, doc_links) = cx.convert(&variant.doc, &variant.location);
     JsonEnumVariant {
         name: variant.name.clone(),
         value: variant.value,
@@ -1027,8 +1048,9 @@ fn convert_enum_definition(
     type_registry: &TypeRegistry,
     parent_path: &ItemPath,
     cx: &DocCx,
+    item_location: &crate::span::ItemLocation,
 ) -> JsonEnumDefinition {
-    let (doc, doc_links) = cx.convert(&ed.doc);
+    let (doc, doc_links) = cx.convert(&ed.doc, item_location);
     let nested_items: Vec<String> = type_registry
         .iter()
         .filter(|(p, _)| p.parent().as_ref() == Some(parent_path))
@@ -1058,7 +1080,7 @@ fn convert_enum_definition(
 }
 
 fn convert_bitflag_field(flag: &BitflagField, cx: &DocCx) -> JsonBitflag {
-    let (doc, doc_links) = cx.convert(&flag.doc);
+    let (doc, doc_links) = cx.convert(&flag.doc, &flag.location);
     JsonBitflag {
         name: flag.name.clone(),
         value: flag.value,
@@ -1073,8 +1095,9 @@ fn convert_bitflags_definition(
     type_registry: &TypeRegistry,
     parent_path: &ItemPath,
     cx: &DocCx,
+    item_location: &crate::span::ItemLocation,
 ) -> JsonBitflagsDefinition {
-    let (doc, doc_links) = cx.convert(&bd.doc);
+    let (doc, doc_links) = cx.convert(&bd.doc, item_location);
     let nested_items: Vec<String> = type_registry
         .iter()
         .filter(|(p, _)| p.parent().as_ref() == Some(parent_path))
@@ -1098,8 +1121,12 @@ fn convert_bitflags_definition(
     }
 }
 
-fn convert_type_alias_definition(ta: &TypeAliasDefinition, cx: &DocCx) -> JsonTypeAliasDefinition {
-    let (doc, doc_links) = cx.convert(&ta.doc);
+fn convert_type_alias_definition(
+    ta: &TypeAliasDefinition,
+    cx: &DocCx,
+    item_location: &crate::span::ItemLocation,
+) -> JsonTypeAliasDefinition {
+    let (doc, doc_links) = cx.convert(&ta.doc, item_location);
     JsonTypeAliasDefinition {
         doc,
         doc_links,
@@ -1107,8 +1134,12 @@ fn convert_type_alias_definition(ta: &TypeAliasDefinition, cx: &DocCx) -> JsonTy
     }
 }
 
-fn convert_const_definition(cd: &SemanticConstDefinition, cx: &DocCx) -> JsonConstantDefinition {
-    let (doc, doc_links) = cx.convert(&cd.doc);
+fn convert_const_definition(
+    cd: &SemanticConstDefinition,
+    cx: &DocCx,
+    item_location: &crate::span::ItemLocation,
+) -> JsonConstantDefinition {
+    let (doc, doc_links) = cx.convert(&cd.doc, item_location);
     let value = convert_const_value(&cd.value, cx);
     JsonConstantDefinition {
         doc,
@@ -1162,23 +1193,30 @@ fn convert_item(
 
     let kind =
         match &resolved.inner {
-            ItemDefinitionInner::Type(td) => {
-                JsonItemKind::Type(convert_type_definition(td, type_registry, cx))
-            }
-            ItemDefinitionInner::Enum(ed) => {
-                JsonItemKind::Enum(convert_enum_definition(ed, type_registry, &item.path, cx))
-            }
+            ItemDefinitionInner::Type(td) => JsonItemKind::Type(convert_type_definition(
+                td,
+                type_registry,
+                cx,
+                &item.location,
+            )),
+            ItemDefinitionInner::Enum(ed) => JsonItemKind::Enum(convert_enum_definition(
+                ed,
+                type_registry,
+                &item.path,
+                cx,
+                &item.location,
+            )),
             ItemDefinitionInner::Bitflags(bd) => JsonItemKind::Bitflags(
-                convert_bitflags_definition(bd, type_registry, &item.path, cx),
+                convert_bitflags_definition(bd, type_registry, &item.path, cx, &item.location),
             ),
             ItemDefinitionInner::TypeAlias(ta) => {
-                JsonItemKind::TypeAlias(convert_type_alias_definition(ta, cx))
+                JsonItemKind::TypeAlias(convert_type_alias_definition(ta, cx, &item.location))
             }
             ItemDefinitionInner::Constant(cd) => {
-                JsonItemKind::Constant(convert_const_definition(cd, cx))
+                JsonItemKind::Constant(convert_const_definition(cd, cx, &item.location))
             }
             ItemDefinitionInner::ExternValue(ev) => {
-                JsonItemKind::ExternValue(convert_extern_value_definition(ev, cx))
+                JsonItemKind::ExternValue(convert_extern_value_definition(ev, cx, &item.location))
             }
         };
 
@@ -1204,8 +1242,9 @@ fn convert_item(
 fn convert_extern_value_definition(
     ev: &SemanticExternValueDefinition,
     cx: &DocCx,
+    item_location: &crate::span::ItemLocation,
 ) -> JsonExternValueDefinition {
-    let (doc, doc_links) = cx.convert(&ev.doc);
+    let (doc, doc_links) = cx.convert(&ev.doc, item_location);
     JsonExternValueDefinition {
         doc,
         doc_links,
@@ -1240,8 +1279,7 @@ fn build_module_hierarchy(semantic_state: &SemanticOutput) -> BTreeMap<String, J
             .collect();
 
         let cx = DocCx {
-            resolver: semantic_state.doc_link_resolver(),
-            scope: module.scope(),
+            links: semantic_state.module_doc_links(module_path),
         };
 
         // Items, externs, and functions are all emitted regardless of
@@ -1286,7 +1324,7 @@ fn build_module_hierarchy(semantic_state: &SemanticOutput) -> BTreeMap<String, J
         // the cfg predicate off each splice to decide how to render it.
         let splices: Vec<JsonSplice> = module.splices.iter().map(convert_splice).collect();
 
-        let (doc, doc_links) = cx.convert(module.doc());
+        let (doc, doc_links) = cx.convert_module_doc(module.doc());
         let json_module = JsonModule {
             doc,
             doc_links,

@@ -59,7 +59,7 @@ impl RenderMode {
         unsafe { &mut *(0x4000 as *mut *mut crate::extern_values::RenderMode) }
     }
 }
-/// The engine singleton, of type [`Engine`]. Advances with [`get_g_frame_count`].
+/// The engine singleton, of type [`Engine`](crate::extern_values::Engine). Advances with [`g_frame_count`](get_g_frame_count).
 pub unsafe fn get_g_engine() -> &'static mut *mut crate::extern_values::Engine {
     unsafe { &mut *(0x2000 as *mut *mut crate::extern_values::Engine) }
 }

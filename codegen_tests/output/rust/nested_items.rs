@@ -1,18 +1,10 @@
 #![cfg_attr(any(), rustfmt::skip)]
-#[allow(unused_imports)]
-use Outer_InnerAlias as InnerAlias;
-#[allow(unused_imports)]
-use Outer_InnerEnum as InnerEnum;
-#[allow(unused_imports)]
-use Outer_InnerFlags as InnerFlags;
-#[allow(unused_imports)]
-use Outer_InnerType as InnerType;
 #[repr(C, align(4))]
 /// A type with nested declarations.
 ///
-/// See [`Outer_InnerEnum`], [`Outer_InnerType`], [`Outer_InnerFlags`], and [`Outer_InnerAlias`].
+/// See [`InnerEnum`](crate::nested_items::Outer_InnerEnum), [`InnerType`](crate::nested_items::Outer_InnerType), [`InnerFlags`](crate::nested_items::Outer_InnerFlags), and [`InnerAlias`](crate::nested_items::Outer_InnerAlias).
 ///
-/// You can also qualify them: [`Outer_InnerEnum`], [`Outer_InnerType`].
+/// You can also qualify them: [`Outer::InnerEnum`](crate::nested_items::Outer_InnerEnum), [`Outer::InnerType`](crate::nested_items::Outer_InnerType).
 pub struct Outer {
     pub field: u32,
 }
@@ -33,13 +25,13 @@ impl std::convert::AsMut<Outer> for Outer {
         self
     }
 }
-/// A type alias nested inside [`Outer`].
+/// A type alias nested inside [`Outer`](crate::nested_items::Outer).
 pub type Outer_InnerAlias = u32;
 #[repr(u8)]
 #[derive(PartialEq, Eq, PartialOrd, Ord, Debug)]
-/// An enum nested inside [`Outer`].
+/// An enum nested inside [`Outer`](crate::nested_items::Outer).
 ///
-/// Variants: [`Outer_InnerEnum::A`], [`Outer_InnerEnum::B`], [`Outer_InnerEnum::C`].
+/// Variants: [`InnerEnum::A`](crate::nested_items::Outer_InnerEnum::A), [`InnerEnum::B`](crate::nested_items::Outer_InnerEnum::B), [`InnerEnum::C`](crate::nested_items::Outer_InnerEnum::C).
 pub enum Outer_InnerEnum {
     A = 0isize as _,
     B = 1isize as _,
@@ -52,9 +44,11 @@ fn _Outer_InnerEnum_size_check() {
     unreachable!()
 }
 crate::__bitflags! {
-    #[doc = " Bitflags nested inside [`Outer`]."] #[doc = ""] #[doc =
-    " Members: [`Outer_InnerFlags::FLAG_A`], [`Outer_InnerFlags::FLAG_B`]."] pub struct
-    Outer_InnerFlags : u32 { const FLAG_A = 1usize as _; const FLAG_B = 2usize as _; }
+    #[doc = " Bitflags nested inside [`Outer`](crate::nested_items::Outer)."] #[doc = ""]
+    #[doc =
+    " Members: [`InnerFlags::FLAG_A`](crate::nested_items::Outer_InnerFlags::FLAG_A), [`InnerFlags::FLAG_B`](crate::nested_items::Outer_InnerFlags::FLAG_B)."]
+    pub struct Outer_InnerFlags : u32 { const FLAG_A = 1usize as _; const FLAG_B = 2usize
+    as _; }
 }
 fn _Outer_InnerFlags_size_check() {
     unsafe {
@@ -63,9 +57,9 @@ fn _Outer_InnerFlags_size_check() {
     unreachable!()
 }
 #[repr(C, align(2))]
-/// A type nested inside [`Outer`].
+/// A type nested inside [`Outer`](crate::nested_items::Outer).
 ///
-/// Its field is [`Outer_InnerType::inner_field`].
+/// Its field is [`InnerType::inner_field`](crate::nested_items::Outer_InnerType::inner_field).
 pub struct Outer_InnerType {
     pub inner_field: u16,
 }

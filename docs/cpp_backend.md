@@ -270,6 +270,18 @@ with `CppBackendError::LayoutCycle` if it finds one. Break the cycle
 by introducing a pointer indirection or moving a type into a separate
 module.
 
+## Doc comments and doxygen links
+
+Doc comments are emitted as `///` comments, which doxygen picks up natively. Rustdoc-style intra-doc links are rewritten from their resolved semantic targets into doxygen-markdown references:
+
+```cpp
+/// Link to a field as [`Self::field`](@ref doc_self_links::Container::field).
+```
+
+Rendering follows the C++ emission rules rather than the written path: module segments become namespaces, nested types stay genuinely nested (`ns::Outer::Inner`), extern values map to their `get_<name>()` accessor, and nested constants/extern values under an enum or bitflags parent — which the emitter flattens to module scope, since those have no struct body — become `ns::Parent_NAME` / `ns::Parent_get_name`. Links to predefined primitives and out-of-tree extern types have no documented entity to reference and are flattened to their bare label instead of emitting a dead link.
+
+`test.py` verifies the emitted corpus with doxygen (any warning, including an unresolvable `@ref`, fails the suite). The check is skipped with a warning when doxygen isn't installed; `shell.nix` provides it.
+
 ## Building on Linux
 
 The emitted `CMakeLists.txt` is normative — no toolchain assumptions.

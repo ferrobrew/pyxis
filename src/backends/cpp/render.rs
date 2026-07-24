@@ -40,6 +40,9 @@ pub struct RenderCtx<'a> {
     pub registry: &'a TypeRegistry,
     pub bindings: &'a BTreeMap<ItemPath, CppExternBinding>,
     pub cfg_ctx: crate::parser::cfg::CfgContext,
+    /// Resolved intra-doc links of the module being rendered, for rewriting
+    /// doc-comment links into doxygen `@ref`s.
+    pub doc_links: &'a crate::semantic::doc_links::ModuleDocLinks,
     /// Member names of the class currently being rendered, if any. A
     /// same-module type reference whose leaf is in this set collides with a
     /// member and must be emitted qualified (see [`render_path`]). `None`
@@ -53,12 +56,14 @@ impl<'a> RenderCtx<'a> {
         registry: &'a TypeRegistry,
         bindings: &'a BTreeMap<ItemPath, CppExternBinding>,
         cfg_ctx: crate::parser::cfg::CfgContext,
+        doc_links: &'a crate::semantic::doc_links::ModuleDocLinks,
     ) -> Self {
         Self {
             module_path,
             registry,
             bindings,
             cfg_ctx,
+            doc_links,
             shadowed_members: None,
         }
     }
@@ -134,9 +139,11 @@ pub fn render_item(item: &ItemDefinition, ctx: RenderCtx) -> Result<Option<Rende
             ctx,
             item.visibility,
             &item.type_parameters,
+            &item.location,
         )?,
         ItemDefinitionInner::Enum(ed) => {
-            let (mut decl, mut post_cpp) = render_enum(&name, ed, resolved.size, ctx)?;
+            let (mut decl, mut post_cpp) =
+                render_enum(&name, ed, resolved.size, ctx, &item.location)?;
             // Enums have no struct body for static members, so nested value items
             // are flattened to module scope: `constexpr` consts in the header,
             // extern-value getters declared in the header and defined in the `.cpp`.
@@ -148,7 +155,8 @@ pub fn render_item(item: &ItemDefinition, ctx: RenderCtx) -> Result<Option<Rende
             }
         }
         ItemDefinitionInner::Bitflags(bd) => {
-            let (mut decl, mut post_cpp) = render_bitflags(&name, bd, resolved.size, ctx)?;
+            let (mut decl, mut post_cpp) =
+                render_bitflags(&name, bd, resolved.size, ctx, &item.location)?;
             render_nested_values_cpp_flat(&mut decl, &mut post_cpp, ctx, &item.path, &name)?;
             RenderedItem {
                 decl,
@@ -157,14 +165,14 @@ pub fn render_item(item: &ItemDefinition, ctx: RenderCtx) -> Result<Option<Rende
             }
         }
         ItemDefinitionInner::TypeAlias(ta) => RenderedItem {
-            decl: render_type_alias(&name, ta, ctx, &item.type_parameters)?,
+            decl: render_type_alias(&name, ta, ctx, &item.type_parameters, &item.location)?,
             post_header: String::new(),
             post_cpp: String::new(),
         },
-        ItemDefinitionInner::Constant(cd) => render_const(&name, cd, ctx)?,
+        ItemDefinitionInner::Constant(cd) => render_const(&name, cd, ctx, &item.location)?,
         ItemDefinitionInner::ExternValue(ev) => {
             let mut decl = String::new();
-            render_doc(&mut decl, &ev.doc, 0)?;
+            render_doc(&mut decl, &ev.doc, 0, ctx, &item.location)?;
             decl.push_str(&render_extern_value_decl(&name, ev, ctx)?);
             let post_cpp = render_extern_value_definition(&name, ev, ctx)?;
             RenderedItem {
@@ -189,6 +197,7 @@ fn template_clause(type_parameters: &[String]) -> String {
     format!("template <{params}>\n")
 }
 
+#[allow(clippy::too_many_arguments)]
 fn render_struct(
     name: &str,
     td: &TypeDefinition,
@@ -197,6 +206,7 @@ fn render_struct(
     ctx: RenderCtx,
     visibility: Visibility,
     type_parameters: &[String],
+    location: &ItemLocation,
 ) -> Result<RenderedItem> {
     let name = &*cpp_ident(name);
     let is_generic = !type_parameters.is_empty();
@@ -221,7 +231,7 @@ fn render_struct(
     let ctx = ctx.with_shadowed_members(&shadowed_members);
 
     let mut out = String::new();
-    render_doc(&mut out, &td.doc, 0)?;
+    render_doc(&mut out, &td.doc, 0, ctx, location)?;
     if td.packed {
         writeln!(out, "#pragma pack(push, 1)")?;
     }
@@ -337,7 +347,7 @@ fn render_struct(
                     let nested_name = cpp_ident(&nested_name);
                     match &nested_resolved.inner {
                         ItemDefinitionInner::Type(nested_td) => {
-                            render_doc(&mut body, &nested_td.doc, 1)?;
+                            render_doc(&mut body, &nested_td.doc, 1, ctx, &nested_item.location)?;
                             writeln!(body, "    struct {nested_name} {{")?;
                             let nested_had_fields = !nested_td.regions.is_empty();
                             for region in &nested_td.regions {
@@ -371,7 +381,13 @@ fn render_struct(
                                         .map(|s| s.as_str().to_string())
                                         .unwrap_or_default();
                                     let nested_const_name = cpp_ident(&nested_const_name);
-                                    render_doc(&mut body, &nested_cd.doc, 2)?;
+                                    render_doc(
+                                        &mut body,
+                                        &nested_cd.doc,
+                                        2,
+                                        ctx,
+                                        &nested_nested_item.location,
+                                    )?;
                                     let bf_type = render_type(&nested_cd.type_, ctx)?;
                                     let value_str =
                                         format_const_value(&nested_cd.value, &nested_cd.type_);
@@ -384,7 +400,7 @@ fn render_struct(
                             writeln!(body, "    }};")?;
                         }
                         ItemDefinitionInner::Enum(nested_ed) => {
-                            render_doc(&mut body, &nested_ed.doc, 1)?;
+                            render_doc(&mut body, &nested_ed.doc, 1, ctx, &nested_item.location)?;
                             writeln!(
                                 body,
                                 "    enum class {nested_name} : {} {{",
@@ -401,7 +417,7 @@ fn render_struct(
                             writeln!(body, "    }};")?;
                         }
                         ItemDefinitionInner::Bitflags(nested_bd) => {
-                            render_doc(&mut body, &nested_bd.doc, 1)?;
+                            render_doc(&mut body, &nested_bd.doc, 1, ctx, &nested_item.location)?;
                             writeln!(body, "    struct {nested_name} {{")?;
                             let bf_type = render_type(&nested_bd.type_, ctx)?;
                             for flag in &nested_bd.flags {
@@ -415,7 +431,7 @@ fn render_struct(
                             writeln!(body, "    }};")?;
                         }
                         ItemDefinitionInner::TypeAlias(nested_ta) => {
-                            render_doc(&mut body, &nested_ta.doc, 1)?;
+                            render_doc(&mut body, &nested_ta.doc, 1, ctx, &nested_item.location)?;
                             writeln!(
                                 body,
                                 "    using {nested_name} = {};",
@@ -423,7 +439,7 @@ fn render_struct(
                             )?;
                         }
                         ItemDefinitionInner::Constant(nested_cd) => {
-                            render_doc(&mut body, &nested_cd.doc, 1)?;
+                            render_doc(&mut body, &nested_cd.doc, 1, ctx, &nested_item.location)?;
                             let bf_type = render_type(&nested_cd.type_, ctx)?;
                             let value_str = format_const_value(&nested_cd.value, &nested_cd.type_);
                             // For scalar/POD types, use `static constexpr` with
@@ -456,7 +472,7 @@ fn render_struct(
                             // Declared here; defined out-of-class below (in the
                             // `.cpp` for non-templates, like the singleton
                             // accessor and member functions).
-                            render_doc(&mut body, &nested_ev.doc, 1)?;
+                            render_doc(&mut body, &nested_ev.doc, 1, ctx, &nested_item.location)?;
                             let ev_type = render_type(&nested_ev.type_, ctx)?;
                             writeln!(body, "    static {ev_type}& get_{nested_name}();")?;
                         }
@@ -639,7 +655,7 @@ fn render_method_signature(out: &mut String, func: &Function, ctx: RenderCtx) ->
     if func.name.starts_with("_vfunc_") {
         return Ok(());
     }
-    render_doc(out, &func.doc, 1)?;
+    render_doc(out, &func.doc, 1, ctx, &func.location)?;
     let (return_text, sig_args_text, const_qual) = method_sig_parts(func, ctx)?;
     let static_kw = if func_has_self(func) { "" } else { "static " };
     // Method-level template parameters (e.g. `Y` in
@@ -852,7 +868,7 @@ fn render_field_indented(
     indent: usize,
 ) -> Result<()> {
     let pad = " ".repeat(indent * 4);
-    render_doc(out, &region.doc, indent)?;
+    render_doc(out, &region.doc, indent, ctx, &region.location)?;
     let Some(field_name) = region.name.as_deref() else {
         // Should not happen post-resolution, but be defensive.
         writeln!(out, "{pad}// <unnamed region skipped>")?;
@@ -941,10 +957,11 @@ fn render_enum(
     ed: &EnumDefinition,
     size: usize,
     ctx: RenderCtx,
+    location: &ItemLocation,
 ) -> Result<(String, String)> {
     let name = &*cpp_ident(name);
     let mut out = String::new();
-    render_doc(&mut out, &ed.doc, 0)?;
+    render_doc(&mut out, &ed.doc, 0, ctx, location)?;
     let underlying = render_type(&ed.type_, ctx)?;
     writeln!(out, "enum class {name} : {underlying} {{")?;
     for variant in &ed.variants {
@@ -978,10 +995,11 @@ fn render_bitflags(
     bd: &BitflagsDefinition,
     size: usize,
     ctx: RenderCtx,
+    location: &ItemLocation,
 ) -> Result<(String, String)> {
     let name = &*cpp_ident(name);
     let mut out = String::new();
-    render_doc(&mut out, &bd.doc, 0)?;
+    render_doc(&mut out, &bd.doc, 0, ctx, location)?;
     let underlying = render_type(&bd.type_, ctx)?;
     writeln!(out, "enum class {name} : {underlying} {{")?;
     for flag in &bd.flags {
@@ -1049,10 +1067,11 @@ fn render_type_alias(
     ta: &TypeAliasDefinition,
     ctx: RenderCtx,
     type_parameters: &[String],
+    location: &ItemLocation,
 ) -> Result<String> {
     let name = &*cpp_ident(name);
     let mut out = String::new();
-    render_doc(&mut out, &ta.doc, 0)?;
+    render_doc(&mut out, &ta.doc, 0, ctx, location)?;
     let target = render_type(&ta.target, ctx)?;
     let template = template_clause(type_parameters);
     writeln!(out, "{template}using {name} = {target};")?;
@@ -1091,7 +1110,7 @@ fn render_nested_values_cpp_flat(
                     }
                     _ => "constexpr",
                 };
-                render_doc(decl_out, &cd.doc, 0)?;
+                render_doc(decl_out, &cd.doc, 0, ctx, &item.location)?;
                 writeln!(decl_out, "{storage} {type_str} {flat_name} = {value_str};")?;
             }
             ItemDefinitionInner::ExternValue(ev) => {
@@ -1099,7 +1118,7 @@ fn render_nested_values_cpp_flat(
                 // module-level extern-value getters and the singleton accessor.
                 let flat_name = format!("{parent_name}_get_{}", cpp_ident(value_name));
                 let type_str = render_type(&ev.type_, ctx)?;
-                render_doc(decl_out, &ev.doc, 0)?;
+                render_doc(decl_out, &ev.doc, 0, ctx, &item.location)?;
                 writeln!(decl_out, "{type_str}& {flat_name}();")?;
                 writeln!(cpp_out, "{type_str}& {flat_name}() {{")?;
                 writeln!(
@@ -1217,10 +1236,15 @@ fn format_const_value(value: &ConstValue, type_: &Type) -> String {
     }
 }
 
-fn render_const(name: &str, cd: &SemanticConstDefinition, ctx: RenderCtx) -> Result<RenderedItem> {
+fn render_const(
+    name: &str,
+    cd: &SemanticConstDefinition,
+    ctx: RenderCtx,
+    location: &ItemLocation,
+) -> Result<RenderedItem> {
     let name = &*cpp_ident(name);
     let mut decl = String::new();
-    render_doc(&mut decl, &cd.doc, 0)?;
+    render_doc(&mut decl, &cd.doc, 0, ctx, location)?;
     let type_str = render_type(&cd.type_, ctx)?;
     let value_str = format_const_value(&cd.value, &cd.type_);
     // Use `constexpr` for scalar/POD types, `inline const` for
@@ -1246,7 +1270,7 @@ fn render_const(name: &str, cd: &SemanticConstDefinition, ctx: RenderCtx) -> Res
 /// declaration whose body is supplied by the user's `backend cpp` block.
 pub fn render_free_function_decl(func: &Function, ctx: RenderCtx) -> Result<Option<String>> {
     let mut out = String::new();
-    render_doc(&mut out, &func.doc, 0)?;
+    render_doc(&mut out, &func.doc, 0, ctx, &func.location)?;
     let name = cpp_ident(&func.name);
     match &func.body {
         FunctionBody::Address { .. } => {
@@ -1353,7 +1377,14 @@ pub fn render_extern_value_definition(
     ))
 }
 
-fn render_doc(out: &mut String, doc: &[String], indent_levels: usize) -> Result<()> {
+fn render_doc(
+    out: &mut String,
+    doc: &[String],
+    indent_levels: usize,
+    ctx: RenderCtx,
+    location: &ItemLocation,
+) -> Result<()> {
+    let links = ctx.doc_links.at(location);
     let pad = "    ".repeat(indent_levels);
     for line in doc {
         let trimmed = line.trim();
@@ -1361,10 +1392,150 @@ fn render_doc(out: &mut String, doc: &[String], indent_levels: usize) -> Result<
             // Blank doc line - emit just `///` with no trailing space.
             writeln!(out, "{pad}///")?;
         } else {
-            writeln!(out, "{pad}/// {trimmed}")?;
+            let rewritten = rewrite_doc_links(trimmed, links, ctx);
+            writeln!(out, "{pad}/// {rewritten}")?;
         }
     }
     Ok(())
+}
+
+/// Rewrite each resolved intra-doc link in `line` into a doxygen-resolvable
+/// form: the markdown destination becomes `@ref <qualified C++ name>`
+/// (`[`field`](Self::field)` → `[`field`](@ref ns::Container::field)`), and a
+/// code shortcut becomes an inline link so its written label survives.
+/// Doxygen's markdown support resolves `[label](@ref target)` to the target's
+/// documentation.
+///
+/// Links whose target has no documented C++ entity (predefined primitives,
+/// externs bound to out-of-tree types) are flattened to their bare label —
+/// leaving the raw path as a markdown destination would render a dead
+/// `href="Path::To"` link.
+fn rewrite_doc_links(
+    line: &str,
+    links: &[crate::semantic::doc_links::ResolvedDocLink],
+    ctx: RenderCtx,
+) -> String {
+    use crate::semantic::doc_links::{DocLinkSyntax, scan_links};
+    if links.is_empty() {
+        return line.to_string();
+    }
+    let mut result = line.to_string();
+    let mut scanned = scan_links(line);
+    scanned.retain(|l| l.syntax != DocLinkSyntax::PlainShortcut);
+    for link in scanned.into_iter().rev() {
+        let Some(resolved) = links.iter().find(|r| r.text == link.path) else {
+            continue;
+        };
+        let label = &line[link.label_region.0..link.label_region.1];
+        let replacement = match doxygen_ref(&resolved.target, ctx) {
+            Some(target) => format!("[{label}](@ref {target})"),
+            None => label.to_string(),
+        };
+        result.replace_range(link.link.0..link.link.1, &replacement);
+    }
+    result
+}
+
+/// The fully-qualified C++ name of a resolved link target, for a doxygen
+/// `@ref` — or `None` when no documented C++ entity exists for it.
+///
+/// Module segments are namespaces and nested types stay genuinely nested in
+/// C++, so the item path maps segment-for-segment (with identifier escaping).
+/// Extern values map to their `get_<name>` accessor.
+fn doxygen_ref(
+    target: &crate::semantic::doc_links::DocLinkTarget,
+    ctx: RenderCtx,
+) -> Option<String> {
+    use crate::semantic::doc_links::{DocLinkMemberKind, DocLinkTarget};
+
+    let qualify = |path: &ItemPath| -> Option<String> {
+        // Predefined items are C++ primitives; externs may be bound to
+        // out-of-tree types. Neither has documentation to reference.
+        if let Ok(item) = ctx
+            .registry
+            .get(path, &crate::span::ItemLocation::internal())
+        {
+            if item.predefined.is_some()
+                || matches!(item.category, crate::semantic::types::ItemCategory::Extern)
+            {
+                return None;
+            }
+        }
+        let last = path.len().saturating_sub(1);
+        Some(
+            path.iter()
+                .enumerate()
+                .map(|(i, seg)| {
+                    if i == last {
+                        cpp_ident(seg.as_str()).into_owned()
+                    } else {
+                        cpp_namespace_ident(seg.as_str()).into_owned()
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("::"),
+        )
+    };
+
+    match target {
+        DocLinkTarget::Item(path) => qualify(path),
+        DocLinkTarget::Member { item, name, kind } => {
+            let base = qualify(item)?;
+            // Nested constants/extern values under an enum or bitflags parent
+            // have no struct body to live in; the emitter flattens them to
+            // module scope as `Parent_NAME` / `Parent_get_name()` (see
+            // `render_nested_values_cpp_flat`). Mirror that here.
+            let parent_is_bodyless = ctx
+                .registry
+                .get(item, &crate::span::ItemLocation::internal())
+                .ok()
+                .and_then(|i| i.resolved())
+                .is_some_and(|r| {
+                    matches!(
+                        r.inner,
+                        ItemDefinitionInner::Enum(_) | ItemDefinitionInner::Bitflags(_)
+                    )
+                });
+            let value_member = matches!(
+                kind,
+                DocLinkMemberKind::Constant | DocLinkMemberKind::ExternValue
+            );
+            let accessor = |name: &str| match kind {
+                DocLinkMemberKind::ExternValue => format!("get_{}", cpp_ident(name)),
+                _ => cpp_ident(name).into_owned(),
+            };
+            Some(if parent_is_bodyless && value_member {
+                format!("{base}_{}", accessor(name))
+            } else {
+                format!("{base}::{}", accessor(name))
+            })
+        }
+        DocLinkTarget::Function { module, name } => {
+            let ns = module
+                .iter()
+                .map(|s| cpp_namespace_ident(s.as_str()).into_owned())
+                .collect::<Vec<_>>()
+                .join("::");
+            Some(if ns.is_empty() {
+                cpp_ident(name).into_owned()
+            } else {
+                format!("{ns}::{}", cpp_ident(name))
+            })
+        }
+        DocLinkTarget::ExternValue { module, name } => {
+            let ns = module
+                .iter()
+                .map(|s| cpp_namespace_ident(s.as_str()).into_owned())
+                .collect::<Vec<_>>()
+                .join("::");
+            let accessor = format!("get_{}", cpp_ident(name));
+            Some(if ns.is_empty() {
+                accessor
+            } else {
+                format!("{ns}::{accessor}")
+            })
+        }
+    }
 }
 
 /// Render a `Type` as a C++ type expression. For arrays the caller is

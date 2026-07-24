@@ -16,7 +16,7 @@ namespace world_consumer {
     struct WorldConsumer;
 
     /// Consumes the world. Doc-links a type from a deeper, un-imported module
-    /// ([`DeepMarker`](world::deep::marker::DeepMarker)) to exercise cross-module
+    /// ([`DeepMarker`](@ref world::deep::marker::DeepMarker)) to exercise cross-module
     /// doc-link resolution: the link destination must be rewritten to an absolute
     /// crate path so rustdoc resolves it without a `use` import.
     struct alignas(8) WorldConsumer {

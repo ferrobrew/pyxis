@@ -1,0 +1,24 @@
+//! Self-link testing module. Its own doc links [`Container`] — the module's
+//! doc block must keep its links separate from its first item's, since the
+//! module's source location is a proxy borrowed from that item.
+
+/// Test `Self::` links in type docs.
+///
+/// Link to a field as [`Self::field`](Self::field), to a method as
+/// [`Self::method`](Self::method), to a nested type as
+/// [`Self::Nested`](Self::Nested), and to a nested type's member as
+/// [`Self::Nested::nested_field`](Self::Nested::nested_field).
+pub type Container {
+    /// A nested type. Its field is [`Self::nested_field`](Self::nested_field).
+    pub type Nested {
+        pub nested_field: u16,
+    },
+
+    /// A field.
+    pub field: u32,
+}
+impl Container {
+    /// A method.
+    #[address(0x10)]
+    pub fn method(&self);
+}

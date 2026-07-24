@@ -1,6 +1,96 @@
 use super::*;
 
-use pyxis::semantic::doc_links::{DocLinkSyntax, DocLinkTarget, ScannedLink};
+use pyxis::semantic::doc_links::{DocLinkPath, DocLinkSyntax, DocLinkTarget, ScannedLink};
+
+impl ServerState {
+    /// The `Self`-enclosing item for a doc-comment line — the type/enum/
+    /// bitflags whose definition or `impl` block contains the line. Mirrors
+    /// the compiler's doc walk (`doc_links::resolve_all`): nested constants
+    /// and extern values use their *parent* type (their emitted docs land in
+    /// the parent's impl block), type aliases and module-level docs get
+    /// `None`.
+    pub(crate) fn enclosing_type_for_doc_line(
+        &self,
+        uri: &Uri,
+        line_no: usize,
+    ) -> Option<ItemPath> {
+        let doc = self.documents.get(uri)?;
+        let parsed = semantic::parse_file(&self.db, doc.source_file);
+        let module = parsed.module(&self.db);
+        let own_module = self.module_path_for(uri);
+        let item_path = |name: &str| match &own_module {
+            Some(mp) => mp.join(name.into()),
+            None => ItemPath::from(name),
+        };
+
+        for item in &module.items {
+            match item {
+                ModuleItem::Definition { definition }
+                    if location_contains_line(&definition.location, line_no) =>
+                {
+                    return enclosing_in_definition(
+                        definition,
+                        &item_path(definition.name.as_str()),
+                        None,
+                        line_no,
+                    );
+                }
+                ModuleItem::Impl { impl_block }
+                    if location_contains_line(&impl_block.location, line_no) =>
+                {
+                    // `impl Outer::Inner` targets a nested item; join every
+                    // written segment onto the module path.
+                    let mut path = item_path(impl_block.name.as_str());
+                    if let Some(np) = &impl_block.name_path {
+                        for seg in np.iter() {
+                            path = path.join(seg.clone());
+                        }
+                    }
+                    return Some(path);
+                }
+                _ => {}
+            }
+        }
+        None
+    }
+}
+
+fn location_contains_line(location: &pyxis::span::ItemLocation, line_no: usize) -> bool {
+    location.span.start.line <= line_no && line_no <= location.span.end.line
+}
+
+/// Walk into a definition to find the enclosing item for `line_no`, mirroring
+/// the compiler's enclosing-type semantics. `parent_type` is the type this
+/// definition is nested inside (`None` at module level).
+fn enclosing_in_definition(
+    definition: &ItemDefinition,
+    path: &ItemPath,
+    parent_type: Option<&ItemPath>,
+    line_no: usize,
+) -> Option<ItemPath> {
+    use pyxis::grammar::ItemDefinitionInner as IDI;
+    match &definition.inner {
+        IDI::Type(td) => {
+            // A line inside a nested item's own span belongs to that item.
+            for statement in td.statements() {
+                if let TypeField::Item(nested) = &statement.field
+                    && location_contains_line(&nested.location, line_no)
+                {
+                    return enclosing_in_definition(
+                        nested,
+                        &path.join(nested.name.as_str().into()),
+                        Some(path),
+                        line_no,
+                    );
+                }
+            }
+            Some(path.clone())
+        }
+        IDI::Enum(_) | IDI::Bitflags(_) => Some(path.clone()),
+        IDI::Constant(_) | IDI::ExternValue(_) => parent_type.cloned(),
+        IDI::TypeAlias(_) => None,
+    }
+}
 
 impl ServerState {
     /// Doc-comment links that reference `symbol`, returning the span of the
@@ -64,9 +154,10 @@ impl ServerState {
                 let Some(line) = lines.get(line_no - 1) else {
                     continue;
                 };
+                let enclosing = self.enclosing_type_for_doc_line(uri, line_no);
                 for dl in scan_doc_links(line) {
                     if !resolver
-                        .resolve(&scope, &dl.path)
+                        .resolve(&scope, &DocLinkPath::parse(&dl.path), enclosing.as_ref())
                         .is_some_and(|t| matches(&t))
                     {
                         continue;
@@ -151,40 +242,43 @@ impl ServerState {
             let Some(line) = lines.get(line_no - 1) else {
                 continue;
             };
+            let enclosing = self.enclosing_type_for_doc_line(uri, line_no);
             for dl in scan_doc_links(line) {
                 // Target file + 1-based line to anchor the link at, and a tooltip.
-                let Some((target_uri, target_line, tooltip)) =
-                    (match resolver.resolve(&scope, &dl.path) {
-                        Some(DocLinkTarget::Item(p)) => self
-                            .resolved_definition(&p, type_registry, uri)
-                            .map(|rd| (rd.uri, rd.name_span.start.line, p.to_string())),
-                        Some(DocLinkTarget::Member { item, name, .. }) => self
-                            .resolve_doc_member(&item, &name, uri)
-                            .map(|(muri, mspan, _)| {
-                                let path = item.join(name.as_str().into());
-                                (muri, mspan.start.line, path.to_string())
-                            })
-                            // Fall back to the owning type if the member's own
-                            // declaration can't be located.
-                            .or_else(|| {
-                                self.resolved_definition(&item, type_registry, uri)
-                                    .map(|rd| (rd.uri, rd.name_span.start.line, item.to_string()))
-                            }),
-                        Some(DocLinkTarget::Function { module, name }) => self
-                            .resolve_doc_module_item(&module, &name, uri, true)
-                            .map(|(loc, _)| {
-                                let path = module.join(name.as_str().into());
-                                (loc.uri, loc.range.start.line as usize + 1, path.to_string())
-                            }),
-                        Some(DocLinkTarget::ExternValue { module, name }) => self
-                            .resolve_doc_module_item(&module, &name, uri, false)
-                            .map(|(loc, _)| {
-                                let path = module.join(name.as_str().into());
-                                (loc.uri, loc.range.start.line as usize + 1, path.to_string())
-                            }),
-                        None => None,
-                    })
-                else {
+                let Some((target_uri, target_line, tooltip)) = (match resolver.resolve(
+                    &scope,
+                    &DocLinkPath::parse(&dl.path),
+                    enclosing.as_ref(),
+                ) {
+                    Some(DocLinkTarget::Item(p)) => self
+                        .resolved_definition(&p, type_registry, uri)
+                        .map(|rd| (rd.uri, rd.name_span.start.line, p.to_string())),
+                    Some(DocLinkTarget::Member { item, name, .. }) => self
+                        .resolve_doc_member(&item, &name, uri)
+                        .map(|(muri, mspan, _)| {
+                            let path = item.join(name.as_str().into());
+                            (muri, mspan.start.line, path.to_string())
+                        })
+                        // Fall back to the owning type if the member's own
+                        // declaration can't be located.
+                        .or_else(|| {
+                            self.resolved_definition(&item, type_registry, uri)
+                                .map(|rd| (rd.uri, rd.name_span.start.line, item.to_string()))
+                        }),
+                    Some(DocLinkTarget::Function { module, name }) => self
+                        .resolve_doc_module_item(&module, &name, uri, true)
+                        .map(|(loc, _)| {
+                            let path = module.join(name.as_str().into());
+                            (loc.uri, loc.range.start.line as usize + 1, path.to_string())
+                        }),
+                    Some(DocLinkTarget::ExternValue { module, name }) => self
+                        .resolve_doc_module_item(&module, &name, uri, false)
+                        .map(|(loc, _)| {
+                            let path = module.join(name.as_str().into());
+                            (loc.uri, loc.range.start.line as usize + 1, path.to_string())
+                        }),
+                    None => None,
+                }) else {
                     continue;
                 };
                 let span = Span::new(
@@ -433,6 +527,7 @@ impl ServerState {
             ))
         };
 
+        let enclosing = self.enclosing_type_for_doc_line(uri, loc.line);
         for dl in scan_doc_links(line) {
             if col < dl.link.0 || col >= dl.link.1 {
                 continue;
@@ -441,7 +536,11 @@ impl ServerState {
                 Location::new(loc.line, dl.link.0 + 1),
                 Location::new(loc.line, dl.link.1 + 1),
             );
-            let (location, hover) = match resolver.resolve(&scope, &dl.path)? {
+            let (location, hover) = match resolver.resolve(
+                &scope,
+                &DocLinkPath::parse(&dl.path),
+                enclosing.as_ref(),
+            )? {
                 DocLinkTarget::Item(p) => to_type(self, &p)?,
                 DocLinkTarget::Member { item, name, .. } => {
                     match self.resolve_doc_member(&item, &name, uri) {

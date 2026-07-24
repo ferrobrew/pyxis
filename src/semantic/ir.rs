@@ -90,6 +90,8 @@ pub struct SemanticAnalysis<'db> {
     #[returns(ref)]
     pub doc_link_resolver: Arc<crate::semantic::doc_links::DocLinkResolver>,
     #[returns(ref)]
+    pub doc_links: Arc<crate::semantic::doc_links::DocLinks>,
+    #[returns(ref)]
     pub errors: Arc<Vec<crate::semantic::SemanticError>>,
     #[returns(ref)]
     pub parse_errors: Arc<Vec<crate::parser::ParseError>>,
@@ -113,6 +115,7 @@ impl SemanticAnalysis<'_> {
             (**self.type_registry(db)).clone(),
             (**self.modules(db)).clone(),
             (**self.doc_link_resolver(db)).clone(),
+            (**self.doc_links(db)).clone(),
         ))
     }
 }
