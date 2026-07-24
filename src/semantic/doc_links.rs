@@ -1,10 +1,12 @@
 //! Resolution of rustdoc-style intra-doc links embedded in doc comments, e.g.
-//! `[`Type`]`, `[`Type::method`]`, `[`Enum::VARIANT`]`, and the inline form
+//! `[`Type`]`, `[`Type::method`]`, `[`Self::member`]`, and the inline form
 //! `` [label](Type::method) ``.
 //!
-//! Resolution happens at the semantic layer (after every item and function is
-//! resolved) so links are validated up-front; the resolver is then reused by
-//! the backends to surface the resolved targets.
+//! Every link is resolved exactly once, during semantic analysis
+//! ([`resolve_all`]) — validation is that pass's failure path, and the
+//! resulting per-module [`ModuleDocLinks`] tables (keyed by doc block) are
+//! what the backends consume to rewrite or surface links. The [`DocLinkResolver`]
+//! itself is also used live by the LSP to resolve links at edit time.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -34,43 +36,6 @@ pub enum DocLinkTarget {
     Function { module: ItemPath, name: String },
     /// A module-level extern value (global).
     ExternValue { module: ItemPath, name: String },
-}
-
-impl DocLinkTarget {
-    /// The absolute path of the base item/function/extern to import so a Rust
-    /// consumer (rustdoc) can resolve the link.
-    pub fn import_path(&self) -> ItemPath {
-        match self {
-            DocLinkTarget::Item(path) => path.clone(),
-            DocLinkTarget::Member { item, .. } => item.clone(),
-            DocLinkTarget::Function { module, name }
-            | DocLinkTarget::ExternValue { module, name } => {
-                module.join(ItemPathSegment::from(name.clone()))
-            }
-        }
-    }
-
-    /// If this link points at an extern value, its full item path — `module::name`
-    /// for a module-level one, `Parent::name` for a nested one. `None` for any
-    /// other target.
-    ///
-    /// Extern values emit as `get_<name>` accessors rather than an item named
-    /// `<name>`, so a backend can't just resolve the logical path; it needs the
-    /// value's path to compute the accessor's path (see the Rust backend's doc
-    /// link rewriting).
-    pub fn extern_value_path(&self) -> Option<ItemPath> {
-        match self {
-            DocLinkTarget::ExternValue { module, name } => {
-                Some(module.join(ItemPathSegment::from(name.clone())))
-            }
-            DocLinkTarget::Member {
-                item,
-                name,
-                kind: DocLinkMemberKind::ExternValue,
-            } => Some(item.join(ItemPathSegment::from(name.clone()))),
-            _ => None,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -167,20 +132,6 @@ impl ModuleDocLinks {
     /// Iterate every resolved link in the module.
     pub fn iter(&self) -> impl Iterator<Item = &ResolvedDocLink> {
         self.by_block.values().flatten()
-    }
-
-    /// Absolute paths of every item/function/extern referenced by a link — the
-    /// set the Rust backend imports so rustdoc resolves the links.
-    pub fn imports(&self) -> BTreeSet<ItemPath> {
-        self.iter().map(|l| l.target.import_path()).collect()
-    }
-
-    /// `(written link text, extern-value item path)` for each link pointing at
-    /// an extern value. The Rust backend rewrites these destinations to the
-    /// emitted `get_<name>` accessor rather than the value's logical name.
-    pub fn extern_value_links(&self) -> impl Iterator<Item = (&str, ItemPath)> {
-        self.iter()
-            .filter_map(|l| Some((l.text.as_str(), l.target.extern_value_path()?)))
     }
 }
 

@@ -900,9 +900,11 @@ pub type Outer {
 Link forms:
 - `[`Item`]` - shortcut link to an item in scope.
 - `[`Item::Field`]` - link to a field, variant, or method.
+- `[`Self::member`]` - link to a member of the enclosing type. Inside a nested item, `Self` refers to the nested item; in a nested constant or extern value's doc, it refers to the parent type.
+- `[`module::function`]` - module-qualified link to a freestanding function or extern value.
 - `[`display text`](Path)` - inline link with custom display text.
 
-The Rust backend rewrites links to fully-qualified `crate::` paths at emission time, adding cross-module imports as needed. The JSON backend resolves links to absolute paths and attaches them as structured `doc_links` data so the viewer can render clickable references.
+Every link is resolved once during semantic analysis (an unresolvable link is a build error), and each backend renders the resolved target in its own idiom: the Rust backend rewrites destinations to fully-qualified `crate::` paths, the C++ backend rewrites them to doxygen `[label](@ref ns::Target)` references, and the JSON backend attaches them as structured `doc_links` data so the viewer can render clickable references.
 
 ### Unicode
 

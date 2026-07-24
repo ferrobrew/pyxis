@@ -124,14 +124,16 @@ Rust permits multiple `impl Foo` blocks, so the user's epilogue can host its own
 
 ## Doc link rewriting
 
-Rustdoc-style intra-doc links (`[`Item`]`, `[`Item::Field`]`, `[`display text`](Path)`) are rewritten to fully-qualified `crate::` paths at emission time.
+Rustdoc-style intra-doc links (`[`Item`]`, `[`Item::Field`]`, `[`Self::member`]`, `[`display text`](Path)`) are rewritten at emission time by rendering each link's *resolved target* as an absolute Rust path.
 
 The process:
 
-1. The semantic resolver collects all doc links in each module and resolves them to target item paths.
-2. Cross-module links trigger imports - the target's defining module is added to the current module's `use` list.
-3. Nested items (types declared inside other types) are flattened in Rust (`Outer::Inner` → `Outer_Inner`), so doc links referencing nested items are rewritten to their flattened names.
+1. Semantic analysis resolves every doc link once, crate-wide, and stores the results per doc block (`doc_links::resolve_all`). Unresolvable links fail the build there.
+2. The backend renders each resolved target as an absolute `crate::` path: nested items are flattened (`Outer::Inner` → `crate::module::Outer_Inner`), extern values become their `get_<name>` accessor path, and members append to their owner's rendered path. Links to predefined types (`u32`, ...) are left alone — rustdoc resolves primitives natively.
+3. An inline link keeps its label and has its destination replaced; a code shortcut (`` [`Inner`] ``) becomes an inline link (`` [`Inner`](crate::module::Outer_Inner) ``) so the written label survives.
 4. The rewritten links are emitted in the `#[doc = "..."]` attribute strings.
+
+Because every destination is absolute, no doc-driven `use` imports or aliases are emitted, and rewriting never depends on how the link was written — only on what it resolved to. The generated root allows `rustdoc::redundant_explicit_links`, since the uniform rewrite is "redundant" for the subset of links rustdoc could have resolved from the label alone.
 
 The link detection is shared between the compiler and the LSP via `scan_links`, so hover previews and generated docs see the same link resolution.
 
