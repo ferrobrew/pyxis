@@ -4,6 +4,72 @@ impl SemanticError {
     /// Returns the core error message without location prefix
     pub fn error_message(&self) -> String {
         match self {
+            SemanticError::ModuleNotFound { .. }
+            | SemanticError::DuplicateModule { .. }
+            | SemanticError::TypeNotFound { .. }
+            | SemanticError::DocLinkNotFound { .. }
+            | SemanticError::UseItemNotFound { .. } => self.resolution_error_message(),
+
+            SemanticError::SpliceDefinitionNotCppOnly { .. }
+            | SemanticError::BackendForTargetNotFound { .. }
+            | SemanticError::BackendForTargetCrossModule { .. } => self.splice_error_message(),
+
+            SemanticError::MissingExternAttribute { .. }
+            | SemanticError::MissingAttribute { .. }
+            | SemanticError::ValueItemInGenericParent { .. }
+            | SemanticError::InvalidAttributeFunctionArgumentCount { .. }
+            | SemanticError::InvalidAttributeValue { .. }
+            | SemanticError::ConflictingAttributes { .. }
+            | SemanticError::AttributeNotSupported { .. }
+            | SemanticError::AttributeWrongForm { .. } => self.attribute_error_message(),
+
+            SemanticError::TypeResolutionFailed { .. }
+            | SemanticError::TypeResolutionStalled { .. } => self.type_resolution_error_message(),
+
+            SemanticError::SizeBelowMinimum { .. }
+            | SemanticError::SizeMismatch { .. }
+            | SemanticError::AlignmentBelowMinimum { .. }
+            | SemanticError::FieldNotAligned { .. }
+            | SemanticError::SizeNotAlignmentMultiple { .. }
+            | SemanticError::OverlappingRegions { .. }
+            | SemanticError::ZeroSizeFieldEmbedding { .. } => self.layout_error_message(),
+
+            SemanticError::VftableMissingFunctions { .. }
+            | SemanticError::VftableFunctionMismatch { .. }
+            | SemanticError::VftableNonAscendingIndex { .. }
+            | SemanticError::VftableMustBeFirst { .. } => self.vftable_error_message(),
+
+            SemanticError::BitflagsInvalidType { .. }
+            | SemanticError::EnumUnsupportedValue { .. }
+            | SemanticError::EnumMultipleDefaults { .. }
+            | SemanticError::EnumDefaultWithoutDefaultable { .. }
+            | SemanticError::EnumDefaultableMissingDefault { .. }
+            | SemanticError::BitflagsUnsupportedValue { .. }
+            | SemanticError::BitflagsMultipleDefaults { .. }
+            | SemanticError::BitflagsDefaultWithoutDefaultable { .. }
+            | SemanticError::BitflagsDefaultableMissingDefault { .. } => {
+                self.enum_bitflags_error_message()
+            }
+
+            SemanticError::RegionFieldNotRawType { .. }
+            | SemanticError::RegionFieldNotStructType { .. }
+            | SemanticError::DefaultableError { .. }
+            | SemanticError::CopyableError { .. }
+            | SemanticError::CloneableError { .. } => self.member_error_message(),
+
+            SemanticError::DuplicateDefinition { .. }
+            | SemanticError::FunctionMissingImplementation { .. }
+            | SemanticError::InvalidCallingConvention { .. }
+            | SemanticError::IntegerConversion { .. }
+            | SemanticError::PrivateItemAccess { .. }
+            | SemanticError::ConstValueTypeMismatch { .. }
+            | SemanticError::StrTypeNotConst { .. } => self.item_error_message(),
+        }
+    }
+
+    /// Module, type, doc-link, and use-item lookup failures.
+    fn resolution_error_message(&self) -> String {
+        match self {
             SemanticError::ModuleNotFound { path, .. } => {
                 format!("Module not found: `{path}`")
             }
@@ -21,6 +87,13 @@ impl SemanticError {
             SemanticError::UseItemNotFound { path, .. } => {
                 format!("Item in use statement not found: `{path}`")
             }
+            _ => unreachable!(),
+        }
+    }
+
+    /// Splice / `backend` block attribution failures.
+    fn splice_error_message(&self) -> String {
+        match self {
             SemanticError::SpliceDefinitionNotCppOnly { .. } => {
                 "`prologue definition` / `epilogue definition` is only valid for cpp; gate the \
                  splice with `#[cfg(backend = \"cpp\")]`"
@@ -41,6 +114,13 @@ impl SemanticError {
                     "`for {target}` on a `backend` block in module `{module}` resolves to a type defined in module `{defined_in}`; attribution must target a type defined in the same module"
                 )
             }
+            _ => unreachable!(),
+        }
+    }
+
+    /// Attribute presence, form, value, and conflict failures.
+    fn attribute_error_message(&self) -> String {
+        match self {
             SemanticError::MissingExternAttribute {
                 attribute_name,
                 extern_kind,
@@ -99,6 +179,27 @@ impl SemanticError {
                     "cannot specify both `{attr1}` and `{attr2}` attributes for type `{item_path}`"
                 )
             }
+            SemanticError::AttributeNotSupported {
+                attribute_name,
+                attribute_context,
+                ..
+            } => {
+                format!("Attribute `{attribute_name}` is not supported for {attribute_context}")
+            }
+            SemanticError::AttributeWrongForm {
+                attribute_name,
+                expected,
+                ..
+            } => {
+                format!("Attribute `{attribute_name}` must be written as {expected}")
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    /// Type-resolution failures (single type and whole-graph stalls).
+    fn type_resolution_error_message(&self) -> String {
+        match self {
             SemanticError::TypeResolutionFailed {
                 type_,
                 resolution_context,
@@ -136,70 +237,13 @@ impl SemanticError {
                     )
                 }
             }
-            SemanticError::BitflagsInvalidType {
-                expected,
-                found,
-                item_path,
-                ..
-            } => {
-                format!(
-                    "bitflags definition `{item_path}` has a type that is not {expected}: {found}"
-                )
-            }
-            SemanticError::RegionFieldNotRawType {
-                field_name,
-                item_path,
-                found,
-                ..
-            } => {
-                format!(
-                    "region field `{field_name}` in `{item_path}` must be a raw type, found {found}"
-                )
-            }
-            SemanticError::RegionFieldNotStructType {
-                field_name,
-                item_path,
-                found,
-                ..
-            } => {
-                format!(
-                    "region field `{field_name}` in `{item_path}` must reference a struct type, found {found}"
-                )
-            }
-            SemanticError::VftableMissingFunctions {
-                item_path,
-                base_name,
-                expected_count,
-                actual_count,
-                ..
-            } => {
-                format!(
-                    "vftable for `{item_path}` has {actual_count} functions but base class `{base_name}` requires at least {expected_count}"
-                )
-            }
-            SemanticError::VftableFunctionMismatch {
-                item_path,
-                base_name,
-                index,
-                derived_function,
-                base_function,
-                ..
-            } => {
-                format!(
-                    "vftable for `{item_path}` has function `{derived_function}` at index {index} but base class `{base_name}` has function `{base_function}`"
-                )
-            }
-            SemanticError::VftableNonAscendingIndex {
-                item_path,
-                function_name,
-                declared_index,
-                min_index,
-                ..
-            } => {
-                format!(
-                    "vftable for `{item_path}`: function `{function_name}` is declared at index {declared_index}, but must be at least {min_index} to avoid overwriting earlier slots (indices must be strictly ascending)"
-                )
-            }
+            _ => unreachable!(),
+        }
+    }
+
+    /// Size, alignment, region overlap, and layout embedding failures.
+    fn layout_error_message(&self) -> String {
+        match self {
             SemanticError::SizeBelowMinimum {
                 minimum_size,
                 actual_size,
@@ -251,42 +295,88 @@ impl SemanticError {
                     "the type `{item_path}` has a size of {size}, which is not a multiple of its alignment {alignment}"
                 )
             }
+            SemanticError::OverlappingRegions {
+                item_path,
+                region_name,
+                address,
+                existing_end,
+                ..
+            } => {
+                format!(
+                    "Overlapping regions in `{item_path}`: attempted to insert padding at {address:#x}, but overlapped with existing region `{region_name}` that ends at {existing_end:#x}"
+                )
+            }
+            SemanticError::ZeroSizeFieldEmbedding {
+                field_name,
+                item_path,
+                field_type,
+                ..
+            } => {
+                format!(
+                    "field `{field_name}` in `{item_path}` embeds zero-size type `{field_type}`, \
+                     which has no representable layout in backends that lack zero-size objects"
+                )
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    /// Vftable ordering and base-class consistency failures.
+    fn vftable_error_message(&self) -> String {
+        match self {
+            SemanticError::VftableMissingFunctions {
+                item_path,
+                base_name,
+                expected_count,
+                actual_count,
+                ..
+            } => {
+                format!(
+                    "vftable for `{item_path}` has {actual_count} functions but base class `{base_name}` requires at least {expected_count}"
+                )
+            }
+            SemanticError::VftableFunctionMismatch {
+                item_path,
+                base_name,
+                index,
+                derived_function,
+                base_function,
+                ..
+            } => {
+                format!(
+                    "vftable for `{item_path}` has function `{derived_function}` at index {index} but base class `{base_name}` has function `{base_function}`"
+                )
+            }
+            SemanticError::VftableNonAscendingIndex {
+                item_path,
+                function_name,
+                declared_index,
+                min_index,
+                ..
+            } => {
+                format!(
+                    "vftable for `{item_path}`: function `{function_name}` is declared at index {declared_index}, but must be at least {min_index} to avoid overwriting earlier slots (indices must be strictly ascending)"
+                )
+            }
             SemanticError::VftableMustBeFirst { item_path, .. } => {
                 format!("Vftable field must precede all fields in type `{item_path}`")
             }
-            SemanticError::DuplicateDefinition {
-                name,
-                item_path,
-                kind,
-                ..
-            } => {
-                format!("Duplicate definition of `{name}` in `{item_path}` ({kind})")
-            }
-            SemanticError::FunctionMissingImplementation { function_name, .. } => {
-                format!(
-                    "Function `{function_name}` has no implementation (missing address attribute?)"
-                )
-            }
-            SemanticError::InvalidCallingConvention {
-                convention,
-                function_name,
-                ..
-            } => {
-                format!("Invalid calling convention `{convention}` for function `{function_name}`")
-            }
-            SemanticError::AttributeNotSupported {
-                attribute_name,
-                attribute_context,
-                ..
-            } => {
-                format!("Attribute `{attribute_name}` is not supported for {attribute_context}")
-            }
-            SemanticError::AttributeWrongForm {
-                attribute_name,
+            _ => unreachable!(),
+        }
+    }
+
+    /// Enum and bitflags value / default-variant failures.
+    fn enum_bitflags_error_message(&self) -> String {
+        match self {
+            SemanticError::BitflagsInvalidType {
                 expected,
+                found,
+                item_path,
                 ..
             } => {
-                format!("Attribute `{attribute_name}` must be written as {expected}")
+                format!(
+                    "bitflags definition `{item_path}` has a type that is not {expected}: {found}"
+                )
             }
             SemanticError::EnumUnsupportedValue {
                 item_path,
@@ -328,6 +418,33 @@ impl SemanticError {
                     "bitflags `{item_path}` is marked as defaultable but has no default value set"
                 )
             }
+            _ => unreachable!(),
+        }
+    }
+
+    /// Region field and derive (defaultable/copyable/cloneable) member failures.
+    fn member_error_message(&self) -> String {
+        match self {
+            SemanticError::RegionFieldNotRawType {
+                field_name,
+                item_path,
+                found,
+                ..
+            } => {
+                format!(
+                    "region field `{field_name}` in `{item_path}` must be a raw type, found {found}"
+                )
+            }
+            SemanticError::RegionFieldNotStructType {
+                field_name,
+                item_path,
+                found,
+                ..
+            } => {
+                format!(
+                    "region field `{field_name}` in `{item_path}` must reference a struct type, found {found}"
+                )
+            }
             SemanticError::DefaultableError {
                 field_name,
                 item_path,
@@ -350,21 +467,37 @@ impl SemanticError {
             } => {
                 format!("field `{field_name}` of type `{item_path}` is not a cloneable type")
             }
+            _ => unreachable!(),
+        }
+    }
+
+    /// Item-level failures: definitions, functions, conversions, visibility, consts.
+    fn item_error_message(&self) -> String {
+        match self {
+            SemanticError::DuplicateDefinition {
+                name,
+                item_path,
+                kind,
+                ..
+            } => {
+                format!("Duplicate definition of `{name}` in `{item_path}` ({kind})")
+            }
+            SemanticError::FunctionMissingImplementation { function_name, .. } => {
+                format!(
+                    "Function `{function_name}` has no implementation (missing address attribute?)"
+                )
+            }
+            SemanticError::InvalidCallingConvention {
+                convention,
+                function_name,
+                ..
+            } => {
+                format!("Invalid calling convention `{convention}` for function `{function_name}`")
+            }
             SemanticError::IntegerConversion {
                 value, target_type, ..
             } => {
                 format!("Failed to convert `{value}` to {target_type}")
-            }
-            SemanticError::OverlappingRegions {
-                item_path,
-                region_name,
-                address,
-                existing_end,
-                ..
-            } => {
-                format!(
-                    "Overlapping regions in `{item_path}`: attempted to insert padding at {address:#x}, but overlapped with existing region `{region_name}` that ends at {existing_end:#x}"
-                )
             }
             SemanticError::PrivateItemAccess {
                 item_path,
@@ -384,17 +517,7 @@ impl SemanticError {
             SemanticError::StrTypeNotConst { .. } => {
                 "`str` type is only allowed on `const` declarations".to_string()
             }
-            SemanticError::ZeroSizeFieldEmbedding {
-                field_name,
-                item_path,
-                field_type,
-                ..
-            } => {
-                format!(
-                    "field `{field_name}` in `{item_path}` embeds zero-size type `{field_type}`, \
-                     which has no representable layout in backends that lack zero-size objects"
-                )
-            }
+            _ => unreachable!(),
         }
     }
 }

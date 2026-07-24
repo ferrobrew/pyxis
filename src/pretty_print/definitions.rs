@@ -4,6 +4,47 @@ use std::fmt::Write;
 
 impl PrettyPrinter {
     pub(super) fn print_item_definition(&mut self, def: &ItemDefinition, nested: bool) {
+        self.print_item_definition_preamble(def);
+
+        self.write_indent();
+        if def.visibility == Visibility::Public {
+            write!(&mut self.output, "pub ").unwrap();
+        }
+
+        let type_params = self.format_type_parameters(&def.type_parameters);
+
+        match &def.inner {
+            ItemDefinitionInner::Type(td) => {
+                self.print_type_definition(def, td, &type_params, nested)
+            }
+            ItemDefinitionInner::Enum(ed) => self.print_enum_definition(def, ed),
+            ItemDefinitionInner::Bitflags(bf) => self.print_bitflags_definition(def, bf),
+            ItemDefinitionInner::TypeAlias(ta) => {
+                write!(&mut self.output, "type {}{} = ", def.name, type_params).unwrap();
+                self.print_type(&ta.target);
+                let terminator = if nested { ',' } else { ';' };
+                writeln!(&mut self.output, "{terminator}").unwrap();
+            }
+            ItemDefinitionInner::Constant(cd) => {
+                write!(&mut self.output, "const {}: ", def.name).unwrap();
+                self.print_type(&cd.type_);
+                write!(&mut self.output, " = ").unwrap();
+                self.print_expr(&cd.expr);
+                let terminator = if nested { ',' } else { ';' };
+                writeln!(&mut self.output, "{terminator}").unwrap();
+            }
+            ItemDefinitionInner::ExternValue(ev) => {
+                write!(&mut self.output, "extern {}: ", def.name).unwrap();
+                self.print_type(&ev.type_);
+                let terminator = if nested { ',' } else { ';' };
+                writeln!(&mut self.output, "{terminator}").unwrap();
+            }
+        }
+    }
+
+    /// Emit the doc comments, attributes, and surrounding comments that precede
+    /// the body of any item definition.
+    fn print_item_definition_preamble(&mut self, def: &ItemDefinition) {
         // Print doc comments (they already include the space after ///)
         for doc in &def.doc_comments {
             self.write_indent();
@@ -57,263 +98,252 @@ impl PrettyPrinter {
         for comment in following_comments {
             self.print_comment(comment);
         }
+    }
 
+    /// Print a `type` definition body: an opaque forward declaration or a braced
+    /// body with its items grouped into constants, nested types, and fields.
+    fn print_type_definition(
+        &mut self,
+        def: &ItemDefinition,
+        td: &TypeDefinition,
+        type_params: &str,
+        nested: bool,
+    ) {
+        // Opaque types (`type Name`, no body) have no braces, so they take
+        // a caller-supplied terminator: `,` when nested, `;` at module
+        // level. A braced body — even an empty one — is self-terminating.
+        if td.is_opaque {
+            let terminator = if nested { ',' } else { ';' };
+            writeln!(
+                &mut self.output,
+                "type {}{}{terminator}",
+                def.name, type_params
+            )
+            .unwrap();
+        } else {
+            writeln!(&mut self.output, "type {}{} {{", def.name, type_params).unwrap();
+            self.indent();
+
+            // Partition items into groups: (comments, statement) pairs.
+            // Comments attach to the NEXT statement in source order.
+            // Then split into nested-item groups and other groups.
+            let mut groups: Vec<(Vec<&Comment>, &TypeDefItem)> = Vec::new();
+            let mut pending_comments: Vec<&Comment> = Vec::new();
+            for item in &td.items {
+                match item {
+                    TypeDefItem::Comment(c) => {
+                        pending_comments.push(c);
+                    }
+                    TypeDefItem::Statement(_) => {
+                        groups.push((std::mem::take(&mut pending_comments), item));
+                    }
+                }
+            }
+
+            // Partition into three groups: value items (constants and
+            // extern values), nested types, and other items. Value items
+            // are compact one-liners grouped together without blank lines.
+            let const_groups: Vec<_> = groups
+                .iter()
+                .filter(|(_, item)| {
+                    if let TypeDefItem::Statement(stmt) = item {
+                        if let TypeField::Item(inner) = &stmt.field {
+                            return is_value_item(&inner.inner);
+                        }
+                    }
+                    false
+                })
+                .collect();
+            let nested_type_groups: Vec<_> = groups
+                .iter()
+                .filter(|(_, item)| {
+                    if let TypeDefItem::Statement(stmt) = item {
+                        if let TypeField::Item(inner) = &stmt.field {
+                            return !is_value_item(&inner.inner);
+                        }
+                    }
+                    false
+                })
+                .collect();
+            let other_groups: Vec<_> = groups
+                .iter()
+                .filter(|(_, item)| {
+                    if let TypeDefItem::Statement(stmt) = item {
+                        return !matches!(stmt.field, TypeField::Item(_));
+                    }
+                    true
+                })
+                .collect();
+
+            // Emit constants first (no blank lines between them)
+            for (comments, item) in &const_groups {
+                for c in comments {
+                    self.print_comment(c);
+                }
+                if let TypeDefItem::Statement(stmt) = item {
+                    self.print_type_statement(stmt, None);
+                }
+            }
+
+            // Blank line between constants and nested types
+            if !const_groups.is_empty() && !nested_type_groups.is_empty() {
+                self.writeln("");
+            }
+
+            // Emit nested types
+            for (comments, item) in &nested_type_groups {
+                for c in comments {
+                    self.print_comment(c);
+                }
+                if let TypeDefItem::Statement(stmt) = item {
+                    self.print_type_statement(stmt, None);
+                }
+            }
+
+            // Blank line between nested items and other items
+            if (!const_groups.is_empty() || !nested_type_groups.is_empty())
+                && !other_groups.is_empty()
+            {
+                self.writeln("");
+            }
+
+            // Emit other items (fields, vftables)
+            for (idx, (comments, item)) in other_groups.iter().enumerate() {
+                for c in comments {
+                    self.print_comment(c);
+                }
+                if let TypeDefItem::Statement(stmt) = item {
+                    // Pass the next item for vftable blank-line logic
+                    let next_item = other_groups.get(idx + 1).map(|(_, it)| *it);
+                    self.print_type_statement(stmt, next_item);
+                }
+            }
+
+            // Emit any trailing comments (comments after the last statement)
+            for c in &pending_comments {
+                self.print_comment(c);
+            }
+
+            self.dedent();
+            self.write_indent();
+            writeln!(&mut self.output, "}}").unwrap();
+        }
+    }
+
+    /// Print an `enum` definition body: the backing type, then constants
+    /// followed by variants and comments.
+    fn print_enum_definition(&mut self, def: &ItemDefinition, ed: &EnumDefinition) {
+        write!(&mut self.output, "enum {}: ", def.name).unwrap();
+        self.print_type(&ed.type_);
+        writeln!(&mut self.output, " {{").unwrap();
+        self.indent();
+        // Set binary literal width based on enum type
+        let old_width = self.binary_literal_width;
+        self.binary_literal_width = self.get_type_bit_width(&ed.type_);
+
+        // Partition: const items first, then other items (variants, comments)
+        let const_items: Vec<&EnumDefItem> = ed
+            .items
+            .iter()
+            .filter(|item| matches!(item, EnumDefItem::Item(inner) if is_value_item(&inner.inner)))
+            .collect();
+        let other_items: Vec<&EnumDefItem> = ed
+            .items
+            .iter()
+            .filter(|item| !matches!(item, EnumDefItem::Item(inner) if is_value_item(&inner.inner)))
+            .collect();
+
+        // Emit constants first
+        for item in &const_items {
+            if let EnumDefItem::Item(inner) = item {
+                self.print_item_definition(inner, true);
+            }
+        }
+
+        // Blank line between constants and other items
+        if !const_items.is_empty() && !other_items.is_empty() {
+            self.writeln("");
+        }
+
+        // Emit other items (variants, comments, non-const nested items)
+        for item in &other_items {
+            match item {
+                EnumDefItem::Comment(comment) => {
+                    self.print_comment(comment);
+                }
+                EnumDefItem::Statement(stmt) => {
+                    self.print_enum_statement(stmt, None);
+                }
+                EnumDefItem::Item(inner) => {
+                    self.print_item_definition(inner, true);
+                }
+            }
+        }
+
+        self.binary_literal_width = old_width;
+        self.dedent();
         self.write_indent();
-        if def.visibility == Visibility::Public {
-            write!(&mut self.output, "pub ").unwrap();
-        }
+        writeln!(&mut self.output, "}}").unwrap();
+    }
 
-        let type_params = self.format_type_parameters(&def.type_parameters);
+    /// Print a `bitflags` definition body: the backing type, then constants
+    /// followed by flags and comments.
+    fn print_bitflags_definition(&mut self, def: &ItemDefinition, bf: &BitflagsDefinition) {
+        write!(&mut self.output, "bitflags {}: ", def.name).unwrap();
+        self.print_type(&bf.type_);
+        writeln!(&mut self.output, " {{").unwrap();
+        self.indent();
+        // Set binary literal width based on bitflags type
+        let old_width = self.binary_literal_width;
+        self.binary_literal_width = self.get_type_bit_width(&bf.type_);
 
-        match &def.inner {
-            ItemDefinitionInner::Type(td) => {
-                // Opaque types (`type Name`, no body) have no braces, so they take
-                // a caller-supplied terminator: `,` when nested, `;` at module
-                // level. A braced body — even an empty one — is self-terminating.
-                if td.is_opaque {
-                    let terminator = if nested { ',' } else { ';' };
-                    writeln!(
-                        &mut self.output,
-                        "type {}{}{terminator}",
-                        def.name, type_params
-                    )
-                    .unwrap();
-                } else {
-                    writeln!(&mut self.output, "type {}{} {{", def.name, type_params).unwrap();
-                    self.indent();
+        // Partition: const items first, then other items (flags, comments)
+        let const_items: Vec<&BitflagsDefItem> = bf
+            .items
+            .iter()
+            .filter(
+                |item| matches!(item, BitflagsDefItem::Item(inner) if is_value_item(&inner.inner)),
+            )
+            .collect();
+        let other_items: Vec<&BitflagsDefItem> = bf
+            .items
+            .iter()
+            .filter(
+                |item| !matches!(item, BitflagsDefItem::Item(inner) if is_value_item(&inner.inner)),
+            )
+            .collect();
 
-                    // Partition items into groups: (comments, statement) pairs.
-                    // Comments attach to the NEXT statement in source order.
-                    // Then split into nested-item groups and other groups.
-                    let mut groups: Vec<(Vec<&Comment>, &TypeDefItem)> = Vec::new();
-                    let mut pending_comments: Vec<&Comment> = Vec::new();
-                    for item in &td.items {
-                        match item {
-                            TypeDefItem::Comment(c) => {
-                                pending_comments.push(c);
-                            }
-                            TypeDefItem::Statement(_) => {
-                                groups.push((std::mem::take(&mut pending_comments), item));
-                            }
-                        }
-                    }
-
-                    // Partition into three groups: value items (constants and
-                    // extern values), nested types, and other items. Value items
-                    // are compact one-liners grouped together without blank lines.
-                    let const_groups: Vec<_> = groups
-                        .iter()
-                        .filter(|(_, item)| {
-                            if let TypeDefItem::Statement(stmt) = item {
-                                if let TypeField::Item(inner) = &stmt.field {
-                                    return is_value_item(&inner.inner);
-                                }
-                            }
-                            false
-                        })
-                        .collect();
-                    let nested_type_groups: Vec<_> = groups
-                        .iter()
-                        .filter(|(_, item)| {
-                            if let TypeDefItem::Statement(stmt) = item {
-                                if let TypeField::Item(inner) = &stmt.field {
-                                    return !is_value_item(&inner.inner);
-                                }
-                            }
-                            false
-                        })
-                        .collect();
-                    let other_groups: Vec<_> = groups
-                        .iter()
-                        .filter(|(_, item)| {
-                            if let TypeDefItem::Statement(stmt) = item {
-                                return !matches!(stmt.field, TypeField::Item(_));
-                            }
-                            true
-                        })
-                        .collect();
-
-                    // Emit constants first (no blank lines between them)
-                    for (comments, item) in &const_groups {
-                        for c in comments {
-                            self.print_comment(c);
-                        }
-                        if let TypeDefItem::Statement(stmt) = item {
-                            self.print_type_statement(stmt, None);
-                        }
-                    }
-
-                    // Blank line between constants and nested types
-                    if !const_groups.is_empty() && !nested_type_groups.is_empty() {
-                        self.writeln("");
-                    }
-
-                    // Emit nested types
-                    for (comments, item) in &nested_type_groups {
-                        for c in comments {
-                            self.print_comment(c);
-                        }
-                        if let TypeDefItem::Statement(stmt) = item {
-                            self.print_type_statement(stmt, None);
-                        }
-                    }
-
-                    // Blank line between nested items and other items
-                    if (!const_groups.is_empty() || !nested_type_groups.is_empty())
-                        && !other_groups.is_empty()
-                    {
-                        self.writeln("");
-                    }
-
-                    // Emit other items (fields, vftables)
-                    for (idx, (comments, item)) in other_groups.iter().enumerate() {
-                        for c in comments {
-                            self.print_comment(c);
-                        }
-                        if let TypeDefItem::Statement(stmt) = item {
-                            // Pass the next item for vftable blank-line logic
-                            let next_item = other_groups.get(idx + 1).map(|(_, it)| *it);
-                            self.print_type_statement(stmt, next_item);
-                        }
-                    }
-
-                    // Emit any trailing comments (comments after the last statement)
-                    for c in &pending_comments {
-                        self.print_comment(c);
-                    }
-
-                    self.dedent();
-                    self.write_indent();
-                    writeln!(&mut self.output, "}}").unwrap();
-                }
-            }
-            ItemDefinitionInner::Enum(ed) => {
-                write!(&mut self.output, "enum {}: ", def.name).unwrap();
-                self.print_type(&ed.type_);
-                writeln!(&mut self.output, " {{").unwrap();
-                self.indent();
-                // Set binary literal width based on enum type
-                let old_width = self.binary_literal_width;
-                self.binary_literal_width = self.get_type_bit_width(&ed.type_);
-
-                // Partition: const items first, then other items (variants, comments)
-                let const_items: Vec<&EnumDefItem> = ed
-                    .items
-                    .iter()
-                    .filter(|item| matches!(item, EnumDefItem::Item(inner) if is_value_item(&inner.inner)))
-                    .collect();
-                let other_items: Vec<&EnumDefItem> = ed
-                    .items
-                    .iter()
-                    .filter(|item| !matches!(item, EnumDefItem::Item(inner) if is_value_item(&inner.inner)))
-                    .collect();
-
-                // Emit constants first
-                for item in &const_items {
-                    if let EnumDefItem::Item(inner) = item {
-                        self.print_item_definition(inner, true);
-                    }
-                }
-
-                // Blank line between constants and other items
-                if !const_items.is_empty() && !other_items.is_empty() {
-                    self.writeln("");
-                }
-
-                // Emit other items (variants, comments, non-const nested items)
-                for item in &other_items {
-                    match item {
-                        EnumDefItem::Comment(comment) => {
-                            self.print_comment(comment);
-                        }
-                        EnumDefItem::Statement(stmt) => {
-                            self.print_enum_statement(stmt, None);
-                        }
-                        EnumDefItem::Item(inner) => {
-                            self.print_item_definition(inner, true);
-                        }
-                    }
-                }
-
-                self.binary_literal_width = old_width;
-                self.dedent();
-                self.write_indent();
-                writeln!(&mut self.output, "}}").unwrap();
-            }
-            ItemDefinitionInner::Bitflags(bf) => {
-                write!(&mut self.output, "bitflags {}: ", def.name).unwrap();
-                self.print_type(&bf.type_);
-                writeln!(&mut self.output, " {{").unwrap();
-                self.indent();
-                // Set binary literal width based on bitflags type
-                let old_width = self.binary_literal_width;
-                self.binary_literal_width = self.get_type_bit_width(&bf.type_);
-
-                // Partition: const items first, then other items (flags, comments)
-                let const_items: Vec<&BitflagsDefItem> = bf
-                    .items
-                    .iter()
-                    .filter(|item| matches!(item, BitflagsDefItem::Item(inner) if is_value_item(&inner.inner)))
-                    .collect();
-                let other_items: Vec<&BitflagsDefItem> = bf
-                    .items
-                    .iter()
-                    .filter(|item| !matches!(item, BitflagsDefItem::Item(inner) if is_value_item(&inner.inner)))
-                    .collect();
-
-                // Emit constants first
-                for item in &const_items {
-                    if let BitflagsDefItem::Item(inner) = item {
-                        self.print_item_definition(inner, true);
-                    }
-                }
-
-                // Blank line between constants and other items
-                if !const_items.is_empty() && !other_items.is_empty() {
-                    self.writeln("");
-                }
-
-                // Emit other items (flags, comments, non-const nested items)
-                for item in &other_items {
-                    match item {
-                        BitflagsDefItem::Comment(comment) => {
-                            self.print_comment(comment);
-                        }
-                        BitflagsDefItem::Statement(stmt) => {
-                            self.print_bitflags_statement(stmt, None);
-                        }
-                        BitflagsDefItem::Item(inner) => {
-                            self.print_item_definition(inner, true);
-                        }
-                    }
-                }
-
-                self.binary_literal_width = old_width;
-                self.dedent();
-                self.write_indent();
-                writeln!(&mut self.output, "}}").unwrap();
-            }
-            ItemDefinitionInner::TypeAlias(ta) => {
-                write!(&mut self.output, "type {}{} = ", def.name, type_params).unwrap();
-                self.print_type(&ta.target);
-                let terminator = if nested { ',' } else { ';' };
-                writeln!(&mut self.output, "{terminator}").unwrap();
-            }
-            ItemDefinitionInner::Constant(cd) => {
-                write!(&mut self.output, "const {}: ", def.name).unwrap();
-                self.print_type(&cd.type_);
-                write!(&mut self.output, " = ").unwrap();
-                self.print_expr(&cd.expr);
-                let terminator = if nested { ',' } else { ';' };
-                writeln!(&mut self.output, "{terminator}").unwrap();
-            }
-            ItemDefinitionInner::ExternValue(ev) => {
-                write!(&mut self.output, "extern {}: ", def.name).unwrap();
-                self.print_type(&ev.type_);
-                let terminator = if nested { ',' } else { ';' };
-                writeln!(&mut self.output, "{terminator}").unwrap();
+        // Emit constants first
+        for item in &const_items {
+            if let BitflagsDefItem::Item(inner) = item {
+                self.print_item_definition(inner, true);
             }
         }
+
+        // Blank line between constants and other items
+        if !const_items.is_empty() && !other_items.is_empty() {
+            self.writeln("");
+        }
+
+        // Emit other items (flags, comments, non-const nested items)
+        for item in &other_items {
+            match item {
+                BitflagsDefItem::Comment(comment) => {
+                    self.print_comment(comment);
+                }
+                BitflagsDefItem::Statement(stmt) => {
+                    self.print_bitflags_statement(stmt, None);
+                }
+                BitflagsDefItem::Item(inner) => {
+                    self.print_item_definition(inner, true);
+                }
+            }
+        }
+
+        self.binary_literal_width = old_width;
+        self.dedent();
+        self.write_indent();
+        writeln!(&mut self.output, "}}").unwrap();
     }
 
     fn print_type_statement(&mut self, stmt: &TypeStatement, next_item: Option<&TypeDefItem>) {

@@ -10,6 +10,7 @@ use crate::{
             AttributeName, BuildOutcome, DefaultableErrorKind, Result, SemanticError,
             UnresolvedTypeContext, UnresolvedTypeReference,
         },
+        module::Module,
         resolution_context::ResolutionContext,
         type_registry::TypeLookupResult,
         types::{Function, ItemDefinitionInner, ItemState, ItemStateResolved, Type, Visibility},
@@ -19,6 +20,27 @@ use crate::{
 };
 
 use super::{TypeDefinition, vftable};
+
+/// Type-level attributes parsed from a `TypeDefinition`'s attribute list.
+struct TypeAttributes {
+    target_size: Option<usize>,
+    min_size: Option<usize>,
+    singleton: Option<usize>,
+    copyable: bool,
+    cloneable: bool,
+    defaultable: bool,
+    packed: bool,
+    pinned: bool,
+    align: Option<usize>,
+}
+
+/// The layout-bearing content collected from a type body: the pending field
+/// regions, the resolved vftable functions (if any), and the nested item paths.
+struct TypeBody {
+    pending_regions: Vec<(Option<usize>, Region)>,
+    vftable_functions: Option<Vec<Function>>,
+    nested_item_paths: Vec<ItemPath>,
+}
 
 pub fn build(
     semantic: &mut ResolutionContext<'_>,
@@ -31,7 +53,106 @@ pub fn build(
 ) -> Result<BuildOutcome> {
     let module = semantic.get_module_for_path(resolvee_path, location)?;
 
-    // Handle attributes
+    let mut attributes = parse_type_attributes(&definition.attributes)?;
+
+    // Ensure size and min_size are mutually exclusive
+    if attributes.target_size.is_some() && attributes.min_size.is_some() {
+        return Err({
+            SemanticError::ConflictingAttributes {
+                attr1: AttributeName::Size,
+                attr2: AttributeName::MinSize,
+                item_path: resolvee_path.clone(),
+                location: *location,
+            }
+        });
+    }
+
+    let body = match build_type_body(semantic, module, resolvee_path, definition, type_parameters)?
+    {
+        BuildFlow::Continue(body) => body,
+        BuildFlow::Outcome(outcome) => return Ok(*outcome),
+    };
+    let TypeBody {
+        pending_regions,
+        vftable_functions,
+        nested_item_paths,
+    } = body;
+
+    // Handle min_size: pre-calculate alignment and round up min_size
+    if let Some(min_size_value) = attributes.min_size {
+        attributes.target_size = Some(round_up_min_size(
+            semantic,
+            min_size_value,
+            attributes.packed,
+            attributes.align,
+            &pending_regions,
+        ));
+    }
+
+    let Some((regions, vftable, size)) = resolve_regions(
+        semantic,
+        resolvee_path,
+        visibility,
+        attributes.target_size,
+        attributes.min_size.is_some(),
+        pending_regions,
+        vftable_functions,
+        location,
+    )?
+    else {
+        return Ok(BuildOutcome::Deferred);
+    };
+
+    // Reborrow the module after resolving regions
+    let module = semantic.get_module_for_path(resolvee_path, location)?;
+
+    // Associated-function resolution (own impl block + inheritance from base
+    // types) is deferred to `compute_associated_functions` after every type has
+    // fully resolved. This prevents the resolver from defer-looping
+    // when an impl method's signature references its own enclosing type
+    // (`impl Foo { fn make() -> Foo; }`).
+    let associated_functions: Vec<Function> = Vec::new();
+    let _ = module;
+
+    check_trait_constraints(semantic, resolvee_path, &regions, &attributes)?;
+
+    let alignment = resolve_alignment(
+        semantic,
+        resolvee_path,
+        location,
+        &regions,
+        &attributes,
+        size,
+    )?;
+
+    Ok(BuildOutcome::Resolved(ItemStateResolved {
+        size,
+        alignment,
+        inner: TypeDefinition {
+            regions,
+            doc: doc_comments.to_vec(),
+            associated_functions,
+            vftable,
+            singleton: attributes.singleton,
+            copyable: attributes.copyable,
+            cloneable: attributes.cloneable,
+            defaultable: attributes.defaultable,
+            packed: attributes.packed,
+            pinned: attributes.pinned,
+            nested_item_paths,
+        }
+        .into(),
+    }))
+}
+
+/// Result of a phase that may short-circuit the whole `build` with an outcome.
+enum BuildFlow<T> {
+    Continue(T),
+    Outcome(Box<BuildOutcome>),
+}
+
+/// Parse the type-level attributes (`#[size]`, `#[copyable]`, `#[align]`, ...).
+fn parse_type_attributes(attributes: &[grammar::Attribute]) -> Result<TypeAttributes> {
     let mut target_size: Option<usize> = None;
     let mut min_size: Option<usize> = None;
     let mut singleton = None;
@@ -41,8 +162,7 @@ pub fn build(
     let mut packed = false;
     let mut pinned = false;
     let mut align = None;
-    let doc = doc_comments.to_vec();
-    for attribute in &definition.attributes {
+    for attribute in attributes {
         match attribute {
             grammar::Attribute::Function { name, items, .. } => {
                 let loc = attribute.location();
@@ -71,19 +191,29 @@ pub fn build(
         }
     }
 
-    // Ensure size and min_size are mutually exclusive
-    if target_size.is_some() && min_size.is_some() {
-        return Err({
-            SemanticError::ConflictingAttributes {
-                attr1: AttributeName::Size,
-                attr2: AttributeName::MinSize,
-                item_path: resolvee_path.clone(),
-                location: *location,
-            }
-        });
-    }
+    Ok(TypeAttributes {
+        target_size,
+        min_size,
+        singleton,
+        copyable,
+        cloneable,
+        defaultable,
+        packed,
+        pinned,
+        align,
+    })
+}
 
-    // Handle fields
+/// Walk the type body's statements, resolving field types, the vftable, and
+/// collecting nested item paths. Returns `BuildFlow::Outcome` when a field's
+/// type is unresolved (deferring or reporting a not-found type).
+fn build_type_body(
+    semantic: &ResolutionContext<'_>,
+    module: &Module,
+    resolvee_path: &ItemPath,
+    definition: &grammar::TypeDefinition,
+    type_parameters: &[String],
+) -> Result<BuildFlow<TypeBody>> {
     let mut pending_regions: Vec<(Option<usize>, Region)> = vec![];
     let mut vftable_functions = None;
     let mut nested_item_paths: Vec<ItemPath> = Vec::new();
@@ -136,21 +266,25 @@ pub fn build(
                     type_parameters,
                 ) {
                     TypeLookupResult::Found(t) => t,
-                    TypeLookupResult::NotYetResolved => return Ok(BuildOutcome::Deferred),
+                    TypeLookupResult::NotYetResolved => {
+                        return Ok(BuildFlow::Outcome(Box::new(BuildOutcome::Deferred)));
+                    }
                     TypeLookupResult::NotFound { type_name } => {
                         let field_name = if field_ident.0 == "_" {
                             "<anonymous>".to_string()
                         } else {
                             field_ident.0.clone()
                         };
-                        return Ok(BuildOutcome::NotFoundType(UnresolvedTypeReference {
-                            type_name,
-                            location: *type_.location(),
-                            context: UnresolvedTypeContext::StructField {
-                                field_name,
-                                type_path: resolvee_path.clone(),
+                        return Ok(BuildFlow::Outcome(Box::new(BuildOutcome::NotFoundType(
+                            UnresolvedTypeReference {
+                                type_name,
+                                location: *type_.location(),
+                                context: UnresolvedTypeContext::StructField {
+                                    field_name,
+                                    type_path: resolvee_path.clone(),
+                                },
                             },
-                        }));
+                        ))));
                     }
                     TypeLookupResult::PrivateAccess { item_path } => {
                         let field_name = if field_ident.0 == "_" {
@@ -158,14 +292,16 @@ pub fn build(
                         } else {
                             field_ident.0.clone()
                         };
-                        return Ok(BuildOutcome::NotFoundType(UnresolvedTypeReference {
-                            type_name: item_path.to_string(),
-                            location: *type_.location(),
-                            context: UnresolvedTypeContext::StructField {
-                                field_name,
-                                type_path: resolvee_path.clone(),
+                        return Ok(BuildFlow::Outcome(Box::new(BuildOutcome::NotFoundType(
+                            UnresolvedTypeReference {
+                                type_name: item_path.to_string(),
+                                location: *type_.location(),
+                                context: UnresolvedTypeContext::StructField {
+                                    field_name,
+                                    type_path: resolvee_path.clone(),
+                                },
                             },
-                        }));
+                        ))));
                     }
                 };
 
@@ -227,7 +363,7 @@ pub fn build(
                     &statement.location,
                 )? {
                     Some(funcs) => Some(funcs),
-                    None => return Ok(BuildOutcome::Deferred),
+                    None => return Ok(BuildFlow::Outcome(Box::new(BuildOutcome::Deferred))),
                 };
             }
             grammar::TypeField::Item(inner_def) => {
@@ -240,75 +376,69 @@ pub fn build(
         }
     }
 
-    // Handle min_size: pre-calculate alignment and round up min_size
-    if let Some(min_size_value) = min_size {
-        // Calculate preliminary alignment based on the pending regions
-        let preliminary_alignment = if packed {
-            1
-        } else {
-            // Determine the requested alignment
-            let requested_alignment = align
-                .or((pending_regions.len() == 1)
-                    .then(|| {
-                        pending_regions[0]
-                            .1
-                            .type_ref
-                            .alignment(semantic.type_registry)
-                    })
-                    .flatten())
-                .unwrap_or(semantic.type_registry.pointer_size());
-
-            // Calculate the minimum required alignment from field types
-            let required_alignment = util::lcm(
-                pending_regions
-                    .iter()
-                    .flat_map(|(_, r)| r.type_ref.alignment(semantic.type_registry)),
-            );
-
-            // Use the maximum of requested and required alignment
-            requested_alignment.max(required_alignment)
-        };
-
-        // Round min_size up to nearest multiple of alignment
-        let rounded_min_size = if min_size_value % preliminary_alignment == 0 {
-            min_size_value
-        } else {
-            ((min_size_value / preliminary_alignment) + 1) * preliminary_alignment
-        };
-
-        // Use the rounded min_size as target_size for padding
-        target_size = Some(rounded_min_size);
-    }
-
-    let Some((regions, vftable, size)) = resolve_regions(
-        semantic,
-        resolvee_path,
-        visibility,
-        target_size,
-        min_size.is_some(),
+    Ok(BuildFlow::Continue(TypeBody {
         pending_regions,
         vftable_functions,
-        location,
-    )?
-    else {
-        return Ok(BuildOutcome::Deferred);
+        nested_item_paths,
+    }))
+}
+
+/// Round a `#[min_size]` up to the type's preliminary alignment so it can be
+/// used as a padding target.
+fn round_up_min_size(
+    semantic: &ResolutionContext<'_>,
+    min_size_value: usize,
+    packed: bool,
+    align: Option<usize>,
+    pending_regions: &[(Option<usize>, Region)],
+) -> usize {
+    // Calculate preliminary alignment based on the pending regions
+    let preliminary_alignment = if packed {
+        1
+    } else {
+        // Determine the requested alignment
+        let requested_alignment = align
+            .or((pending_regions.len() == 1)
+                .then(|| {
+                    pending_regions[0]
+                        .1
+                        .type_ref
+                        .alignment(semantic.type_registry)
+                })
+                .flatten())
+            .unwrap_or(semantic.type_registry.pointer_size());
+
+        // Calculate the minimum required alignment from field types
+        let required_alignment = util::lcm(
+            pending_regions
+                .iter()
+                .flat_map(|(_, r)| r.type_ref.alignment(semantic.type_registry)),
+        );
+
+        // Use the maximum of requested and required alignment
+        requested_alignment.max(required_alignment)
     };
 
-    // Reborrow the module after resolving regions
-    let module = semantic.get_module_for_path(resolvee_path, location)?;
+    // Round min_size up to nearest multiple of alignment
+    if min_size_value.is_multiple_of(preliminary_alignment) {
+        min_size_value
+    } else {
+        ((min_size_value / preliminary_alignment) + 1) * preliminary_alignment
+    }
+}
 
-    // Associated-function resolution (own impl block + inheritance from base
-    // types) is deferred to `compute_associated_functions` after every type has
-    // fully resolved. This prevents the resolver from defer-looping
-    // when an impl method's signature references its own enclosing type
-    // (`impl Foo { fn make() -> Foo; }`).
-    let associated_functions: Vec<Function> = Vec::new();
-    let _ = module;
-
+/// Enforce the `#[defaultable]`, `#[copyable]`, and `#[cloneable]` constraints
+/// against every region's type.
+fn check_trait_constraints(
+    semantic: &ResolutionContext<'_>,
+    resolvee_path: &ItemPath,
+    regions: &[Region],
+    attributes: &TypeAttributes,
+) -> Result<()> {
     // Iterate over all of the regions and ensure their types are defaultable if
     // we have our defaultable attribute set.
-    if defaultable {
-        for region in &regions {
+    if attributes.defaultable {
+        for region in regions {
             let Region {
                 visibility: _,
                 name,
@@ -360,8 +490,8 @@ pub fn build(
     // NOTE: Check copyable first, before cloneable, because copyable implies cloneable.
     // If we checked cloneable first, a type marked #[copyable] with a non-copyable field
     // would report "not cloneable" instead of "not copyable".
-    if copyable {
-        for region in &regions {
+    if attributes.copyable {
+        for region in regions {
             let Region {
                 visibility: _,
                 name,
@@ -390,8 +520,8 @@ pub fn build(
 
     // Iterate over all of the regions and ensure their types are cloneable if
     // we have our cloneable attribute set (and not already covered by copyable check above).
-    if cloneable && !copyable {
-        for region in &regions {
+    if attributes.cloneable && !attributes.copyable {
+        for region in regions {
             let Region {
                 visibility: _,
                 name,
@@ -418,8 +548,21 @@ pub fn build(
         }
     }
 
-    let alignment = if packed {
-        if align.is_some() {
+    Ok(())
+}
+
+/// Compute the type's final alignment, validating `#[packed]`/`#[align]`
+/// conflicts, field alignment, and that the size is an alignment multiple.
+fn resolve_alignment(
+    semantic: &ResolutionContext<'_>,
+    resolvee_path: &ItemPath,
+    location: &ItemLocation,
+    regions: &[Region],
+    attributes: &TypeAttributes,
+    size: usize,
+) -> Result<usize> {
+    if attributes.packed {
+        if attributes.align.is_some() {
             return Err(SemanticError::ConflictingAttributes {
                 attr1: AttributeName::Packed,
                 attr2: AttributeName::Align,
@@ -428,81 +571,63 @@ pub fn build(
             });
         }
 
-        1
-    } else {
-        // Determine the final requested alignment.
-        // The requested alignment, the alignment of a single-region type, or the pointer size.
-        let alignment = align
-            .or((regions.len() == 1)
-                .then(|| regions[0].type_ref.alignment(semantic.type_registry))
-                .flatten())
-            .unwrap_or(semantic.type_registry.pointer_size());
+        return Ok(1);
+    }
 
-        // Calculate the minimum required alignment.
-        let required_alignment = util::lcm(
-            regions
-                .iter()
-                .flat_map(|r| r.type_ref.alignment(semantic.type_registry)),
-        );
+    // Determine the final requested alignment.
+    // The requested alignment, the alignment of a single-region type, or the pointer size.
+    let alignment = attributes
+        .align
+        .or((regions.len() == 1)
+            .then(|| regions[0].type_ref.alignment(semantic.type_registry))
+            .flatten())
+        .unwrap_or(semantic.type_registry.pointer_size());
 
-        // Ensure that the alignment is at least the minimum required alignment.
-        if required_alignment > alignment {
-            return Err(SemanticError::AlignmentBelowMinimum {
-                alignment,
-                required_alignment,
-                item_path: resolvee_path.clone(),
-                location: *location,
-            });
-        }
+    // Calculate the minimum required alignment.
+    let required_alignment = util::lcm(
+        regions
+            .iter()
+            .flat_map(|r| r.type_ref.alignment(semantic.type_registry)),
+    );
 
-        // Ensure that all fields are aligned.
-        {
-            let mut last_address = 0;
-            for region in &regions {
-                let name = region.name.as_deref().unwrap_or("unnamed");
-                let field_alignment = region.type_ref.alignment(semantic.type_registry).unwrap();
-                if last_address % field_alignment != 0 {
-                    return Err(SemanticError::FieldNotAligned {
-                        field_name: name.into(),
-                        item_path: resolvee_path.clone(),
-                        address: last_address,
-                        required_alignment: field_alignment,
-                        location: *location,
-                    });
-                }
-                last_address += region.size(semantic.type_registry).unwrap();
+    // Ensure that the alignment is at least the minimum required alignment.
+    if required_alignment > alignment {
+        return Err(SemanticError::AlignmentBelowMinimum {
+            alignment,
+            required_alignment,
+            item_path: resolvee_path.clone(),
+            location: *location,
+        });
+    }
+
+    // Ensure that all fields are aligned.
+    {
+        let mut last_address = 0;
+        for region in regions {
+            let name = region.name.as_deref().unwrap_or("unnamed");
+            let field_alignment = region.type_ref.alignment(semantic.type_registry).unwrap();
+            if last_address % field_alignment != 0 {
+                return Err(SemanticError::FieldNotAligned {
+                    field_name: name.into(),
+                    item_path: resolvee_path.clone(),
+                    address: last_address,
+                    required_alignment: field_alignment,
+                    location: *location,
+                });
             }
+            last_address += region.size(semantic.type_registry).unwrap();
         }
+    }
 
-        // Ensure that the size is a multiple of the alignment.
-        if size % alignment != 0 {
-            return Err(SemanticError::SizeNotAlignmentMultiple {
-                size,
-                alignment,
-                item_path: resolvee_path.clone(),
-                location: *location,
-            });
-        }
+    // Ensure that the size is a multiple of the alignment.
+    if !size.is_multiple_of(alignment) {
+        return Err(SemanticError::SizeNotAlignmentMultiple {
+            size,
+            alignment,
+            item_path: resolvee_path.clone(),
+            location: *location,
+        });
+    }
 
-        alignment
-    };
-
-    Ok(BuildOutcome::Resolved(ItemStateResolved {
-        size,
-        alignment,
-        inner: TypeDefinition {
-            regions,
-            doc,
-            associated_functions,
-            vftable,
-            singleton,
-            copyable,
-            cloneable,
-            defaultable,
-            packed,
-            pinned,
-            nested_item_paths,
-        }
-        .into(),
-    }))
+    Ok(alignment)
 }
