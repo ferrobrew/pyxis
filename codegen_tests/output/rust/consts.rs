@@ -1,8 +1,7 @@
 #![cfg_attr(any(), rustfmt::skip)]
-#[allow(unused_imports)]
-use Player_Inventory as Inventory;
 crate::__bitflags! {
-    #[doc = " The permissive baseline is [`DEFAULT_MASK`](AccessFlags::DEFAULT_MASK)."]
+    #[doc =
+    " The permissive baseline is [`DEFAULT_MASK`](crate::consts::AccessFlags::DEFAULT_MASK)."]
     pub struct AccessFlags : u32 { const READ = 1usize as _; const WRITE = 2usize as _; }
 }
 fn _AccessFlags_size_check() {
@@ -16,7 +15,7 @@ impl AccessFlags {
 }
 #[repr(u8)]
 #[derive(PartialEq, Eq, PartialOrd, Ord, Debug)]
-/// Defaults to [`DEFAULT`](Color::DEFAULT).
+/// Defaults to [`DEFAULT`](crate::consts::Color::DEFAULT).
 pub enum Color {
     Red = 0isize as _,
     Green = 1isize as _,
@@ -114,9 +113,9 @@ pub const IDENTITY: crate::math::Matrix4 = crate::math::Matrix4 {
 pub const MAX_HEALTH: i32 = 100;
 #[repr(C, align(4))]
 pub struct Player {
-    /// New players begin with [`STARTING_GOLD`](Player::STARTING_GOLD) gold,
-    /// spawn at x=[`SPAWN_X`](Player::SPAWN_X), and can hold up to
-    /// [`MAX_SLOTS`](Player_Inventory::MAX_SLOTS) items.
+    /// New players begin with [`STARTING_GOLD`](crate::consts::Player::STARTING_GOLD) gold,
+    /// spawn at x=[`SPAWN_X`](crate::consts::Player::SPAWN_X), and can hold up to
+    /// [`MAX_SLOTS`](crate::consts::Player_Inventory::MAX_SLOTS) items.
     pub health: i32,
 }
 fn _Player_size_check() {

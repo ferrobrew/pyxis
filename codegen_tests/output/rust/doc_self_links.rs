@@ -1,16 +1,14 @@
 #![cfg_attr(any(), rustfmt::skip)]
-//! Self-link testing module. Its own doc links [`Container`] — the module's
+//! Self-link testing module. Its own doc links [`Container`](crate::doc_self_links::Container) — the module's
 //! doc block must keep its links separate from its first item's, since the
 //! module's source location is a proxy borrowed from that item.
-#[allow(unused_imports)]
-use Container_Nested as Nested;
 #[repr(C, align(4))]
 /// Test `Self::` links in type docs.
 ///
-/// Link to a field as [`Self::field`](Self::field), to a method as
-/// [`Self::method`](Self::method), to a nested type as
-/// [`Self::Nested`](Container_Nested), and to a nested type's member as
-/// [`Self::Nested::nested_field`](Container_Nested::nested_field).
+/// Link to a field as [`Self::field`](crate::doc_self_links::Container::field), to a method as
+/// [`Self::method`](crate::doc_self_links::Container::method), to a nested type as
+/// [`Self::Nested`](crate::doc_self_links::Container_Nested), and to a nested type's member as
+/// [`Self::Nested::nested_field`](crate::doc_self_links::Container_Nested::nested_field).
 pub struct Container {
     /// A field.
     pub field: u32,
@@ -43,7 +41,7 @@ impl std::convert::AsMut<Container> for Container {
     }
 }
 #[repr(C, align(2))]
-/// A nested type. Its field is [`Self::nested_field`](Self::nested_field).
+/// A nested type. Its field is [`Self::nested_field`](crate::doc_self_links::Container_Nested::nested_field).
 pub struct Container_Nested {
     pub nested_field: u16,
 }
