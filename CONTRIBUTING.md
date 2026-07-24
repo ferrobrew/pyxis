@@ -73,7 +73,7 @@ When you change the language (new attributes, syntax, types, etc.), you must aud
 python test.py
 ```
 
-runs the full test suite: clippy, fmt, the parser/semantic unit tests, `cargo run --example codegen_tests` (which emits the test corpus through every backend and rebuilds the emitted output), and `cargo doc --no-deps -p codegen_tests` (which catches unresolved doc link references in the generated Rust output). The cpp test corpus uses a regular host C++17 compiler (no MSVC ABI required) so CI doesn't need xwin.
+runs the full test suite: clippy, fmt, the parser/semantic unit tests, `cargo run --example codegen_tests` (which emits the test corpus through every backend and rebuilds the emitted output), `cargo doc --no-deps -p codegen_tests` (which catches unresolved doc link references in the generated Rust output), and a doxygen pass over the emitted C++ corpus (which catches unresolvable `@ref`s in the rewritten C++ doc links — skipped with a warning if doxygen isn't installed; `nix-shell` provides it via `shell.nix`). The cpp test corpus uses a regular host C++17 compiler (no MSVC ABI required) so CI doesn't need xwin.
 
 Formatting relies on a nightly-only rustfmt feature (`imports_granularity`, configured in `rustfmt.toml`), so check it with nightly:
 

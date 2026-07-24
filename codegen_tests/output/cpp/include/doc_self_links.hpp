@@ -10,17 +10,17 @@ namespace doc_self_links {
 
     /// Test `Self::` links in type docs.
     ///
-    /// Link to a field as [`Self::field`](Self::field), to a method as
-    /// [`Self::method`](Self::method), to a nested type as
-    /// [`Self::Nested`](Self::Nested), and to a nested type's member as
-    /// [`Self::Nested::nested_field`](Self::Nested::nested_field).
+    /// Link to a field as [`Self::field`](@ref doc_self_links::Container::field), to a method as
+    /// [`Self::method`](@ref doc_self_links::Container::method), to a nested type as
+    /// [`Self::Nested`](@ref doc_self_links::Container::Nested), and to a nested type's member as
+    /// [`Self::Nested::nested_field`](@ref doc_self_links::Container::Nested::nested_field).
     struct alignas(4) Container {
         /// A field.
         ::std::uint32_t field;
         /// A method.
         void method() const;
 
-        /// A nested type. Its field is [`Self::nested_field`](Self::nested_field).
+        /// A nested type. Its field is [`Self::nested_field`](@ref doc_self_links::Container::Nested::nested_field).
         struct Nested {
             ::std::uint16_t nested_field;
         };

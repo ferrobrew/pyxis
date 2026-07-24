@@ -5,8 +5,10 @@ Runs tests with different pointer sizes, codegen tests, clippy, and fmt.
 """
 
 import os
+import shutil
 import sys
 import subprocess
+import tempfile
 
 
 def run_command(cmd, env=None, cwd=None, shell=False):
@@ -22,6 +24,56 @@ def run_command(cmd, env=None, cwd=None, shell=False):
         sys.exit(result.returncode)
     print("\n[PASS] Command succeeded")
     return result
+
+
+def check_cpp_docs():
+    """Run doxygen over codegen_tests/output/cpp and fail on any warning.
+
+    The emitted headers carry doxygen-markdown doc links (`[label](@ref
+    ns::Target)`); an unresolvable `@ref` surfaces as a doxygen warning, so
+    warnings are treated as errors. `EXTRACT_ALL` keeps undocumented items
+    from warning — only genuine doc problems remain.
+    """
+    print(f"\n{'=' * 60}")
+    print("Running: doxygen (C++ doc-link check on codegen_tests/output/cpp)")
+    print(f"{'=' * 60}\n")
+
+    cpp_dir = os.path.abspath(os.path.join("codegen_tests", "output", "cpp"))
+    with tempfile.TemporaryDirectory(prefix="pyxis-doxygen-") as tmp:
+        warn_log = os.path.join(tmp, "warnings.log")
+        doxyfile = os.path.join(tmp, "Doxyfile")
+        with open(doxyfile, "w") as f:
+            f.write(
+                "\n".join(
+                    [
+                        "PROJECT_NAME = pyxis-codegen-tests",
+                        f"OUTPUT_DIRECTORY = {tmp}",
+                        f"INPUT = {os.path.join(cpp_dir, 'include')}",
+                        "FILE_PATTERNS = *.hpp",
+                        "RECURSIVE = YES",
+                        "EXTRACT_ALL = YES",
+                        "GENERATE_HTML = YES",
+                        "GENERATE_LATEX = NO",
+                        "QUIET = YES",
+                        "WARNINGS = YES",
+                        "WARN_IF_UNDOCUMENTED = NO",
+                        "WARN_IF_DOC_ERROR = YES",
+                        f"WARN_LOGFILE = {warn_log}",
+                    ]
+                )
+                + "\n"
+            )
+        result = subprocess.run(["doxygen", doxyfile])
+        warnings = ""
+        if os.path.exists(warn_log):
+            with open(warn_log) as f:
+                warnings = f.read().strip()
+        if result.returncode != 0 or warnings:
+            if warnings:
+                print(warnings)
+            print("\n[FAIL] doxygen reported problems in the emitted C++ docs")
+            sys.exit(1)
+        print("\n[PASS] Command succeeded")
 
 
 def main():
@@ -75,6 +127,19 @@ def main():
     doc_env = os.environ.copy()
     doc_env["RUSTDOCFLAGS"] = "-Dwarnings"
     run_command(["cargo", "doc", "--no-deps", "-p", "codegen_tests"], env=doc_env)
+
+    # Run doxygen over the emitted C++ corpus (catches unresolved `@ref`s in
+    # the rewritten doc links — the C++ analogue of the cargo doc gate above).
+    # The output is generated into a temp dir and discarded; only the warnings
+    # matter. Skipped with a warning when doxygen isn't installed (it's in
+    # shell.nix, and CI installs it).
+    if shutil.which("doxygen"):
+        check_cpp_docs()
+    else:
+        print(f"\n{'=' * 60}")
+        print("[SKIP] doxygen not found on PATH — C++ doc-link check skipped.")
+        print("       Install doxygen (see shell.nix) to run it locally.")
+        print(f"{'=' * 60}\n")
 
     # Lint the viewer (tsc + eslint + prettier). This assumes the workspace
     # deps are already installed — CI runs `npm ci` before test.py, and local

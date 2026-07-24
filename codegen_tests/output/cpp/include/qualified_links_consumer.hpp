@@ -10,8 +10,8 @@ namespace qualified_links_consumer {
 
     /// Test module-qualified doc-links to functions and extern values.
     ///
-    /// See [`shared_function`](qualified_links_provider::shared_function) and
-    /// [`shared_extern`](qualified_links_provider::shared_extern).
+    /// See [`shared_function`](@ref qualified_links_provider::shared_function) and
+    /// [`shared_extern`](@ref qualified_links_provider::get_shared_extern).
     struct alignas(1) Consumer {
         ::std::uint8_t _marker;
     };

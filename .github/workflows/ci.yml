@@ -27,6 +27,9 @@ jobs:
         with:
           python-version: "3.x"
 
+      # test.py verifies the emitted C++ corpus's doc links with doxygen.
+      - run: sudo apt-get update && sudo apt-get install -y doxygen
+
       # test.py lints the viewer (tsc/eslint/prettier) but does not install;
       # provide the workspace deps here.
       - name: Set up Node.js

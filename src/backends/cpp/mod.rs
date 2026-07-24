@@ -672,7 +672,13 @@ fn write_module(
     let cfg_ctx = crate::parser::cfg::CfgContext {
         backend: crate::Backend::Cpp,
     };
-    let ctx = render::RenderCtx::new(key, registry, bindings, cfg_ctx);
+    let ctx = render::RenderCtx::new(
+        key,
+        registry,
+        bindings,
+        cfg_ctx,
+        semantic_state.module_doc_links(key),
+    );
     let module_deps = deps::collect_module_deps(key, module, registry, bindings);
     let splices = extract_cpp_splices(module);
     let body = render_module_body(key, module, registry, bindings, ctx)?;

@@ -10,37 +10,37 @@ namespace nested_items {
 
     /// A type with nested declarations.
     ///
-    /// See [`InnerEnum`], [`InnerType`], [`InnerFlags`], and [`InnerAlias`].
+    /// See [`InnerEnum`](@ref nested_items::Outer::InnerEnum), [`InnerType`](@ref nested_items::Outer::InnerType), [`InnerFlags`](@ref nested_items::Outer::InnerFlags), and [`InnerAlias`](@ref nested_items::Outer::InnerAlias).
     ///
-    /// You can also qualify them: [`Outer::InnerEnum`], [`Outer::InnerType`].
+    /// You can also qualify them: [`Outer::InnerEnum`](@ref nested_items::Outer::InnerEnum), [`Outer::InnerType`](@ref nested_items::Outer::InnerType).
     struct alignas(4) Outer {
         ::std::uint32_t field;
 
-        /// An enum nested inside [`Outer`].
+        /// An enum nested inside [`Outer`](@ref nested_items::Outer).
         ///
-        /// Variants: [`InnerEnum::A`], [`InnerEnum::B`], [`InnerEnum::C`].
+        /// Variants: [`InnerEnum::A`](@ref nested_items::Outer::InnerEnum::A), [`InnerEnum::B`](@ref nested_items::Outer::InnerEnum::B), [`InnerEnum::C`](@ref nested_items::Outer::InnerEnum::C).
         enum class InnerEnum : ::std::uint8_t {
             A = 0,
             B = 1,
             C = 2,
         };
 
-        /// A type nested inside [`Outer`].
+        /// A type nested inside [`Outer`](@ref nested_items::Outer).
         ///
-        /// Its field is [`InnerType::inner_field`].
+        /// Its field is [`InnerType::inner_field`](@ref nested_items::Outer::InnerType::inner_field).
         struct InnerType {
             ::std::uint16_t inner_field;
         };
 
-        /// Bitflags nested inside [`Outer`].
+        /// Bitflags nested inside [`Outer`](@ref nested_items::Outer).
         ///
-        /// Members: [`InnerFlags::FLAG_A`], [`InnerFlags::FLAG_B`].
+        /// Members: [`InnerFlags::FLAG_A`](@ref nested_items::Outer::InnerFlags::FLAG_A), [`InnerFlags::FLAG_B`](@ref nested_items::Outer::InnerFlags::FLAG_B).
         struct InnerFlags {
             static constexpr ::std::uint32_t FLAG_A = 1;
             static constexpr ::std::uint32_t FLAG_B = 2;
         };
 
-        /// A type alias nested inside [`Outer`].
+        /// A type alias nested inside [`Outer`](@ref nested_items::Outer).
         using InnerAlias = ::std::uint32_t;
     };
     static_assert(sizeof(Outer) == 0x4);
