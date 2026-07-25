@@ -7,6 +7,8 @@
 
 namespace doc_self_links {
     struct Container;
+    struct VirtualContainer;
+    struct VirtualContainerVftable;
 
     /// Test `Self::` links in type docs.
     ///
@@ -27,4 +29,30 @@ namespace doc_self_links {
     };
     static_assert(sizeof(Container) == 0x4);
     static_assert(alignof(Container) == 4);
+
+    /// Test `Self::` links written in vftable-function docs. Those docs are
+    /// copied onto the generated `VirtualContainerVftable`'s function-pointer
+    /// fields, where `Self` must still mean the declaring type — not the
+    /// generated vftable struct.
+    struct alignas(8) VirtualContainer {
+        const VirtualContainerVftable* vftable;
+        /// A field a vftable-function doc links to via `Self::`.
+        ::std::uint32_t counter;
+        ::std::uint32_t padding;
+
+        const VirtualContainerVftable* _vftable_ptr() const;
+        /// Reads [`counter`](@ref doc_self_links::VirtualContainer::counter) and calls
+        /// [`get_counter`](@ref doc_self_links::VirtualContainer::get_counter).
+        ::std::uint32_t get_counter() const;
+    };
+    static_assert(sizeof(VirtualContainer) == 0x10);
+    static_assert(alignof(VirtualContainer) == 8);
+
+    struct alignas(8) VirtualContainerVftable {
+        /// Reads [`counter`](@ref doc_self_links::VirtualContainer::counter) and calls
+        /// [`get_counter`](@ref doc_self_links::VirtualContainer::get_counter).
+        ::std::uint32_t (*get_counter)(const void*);
+    };
+    static_assert(sizeof(VirtualContainerVftable) == 0x8);
+    static_assert(alignof(VirtualContainerVftable) == 8);
 } // namespace doc_self_links

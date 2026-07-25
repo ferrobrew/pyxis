@@ -3166,7 +3166,7 @@
             "calling_convention": "system",
             "source": {
               "file_index": 12,
-              "line": 23
+              "line": 39
             }
           }
         ],
@@ -3234,6 +3234,225 @@
       "source": {
         "file_index": 12,
         "line": 13
+      }
+    },
+    "doc_self_links::VirtualContainer": {
+      "path": "doc_self_links::VirtualContainer",
+      "visibility": "public",
+      "size": 16,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": " Test `Self::` links written in vftable-function docs. Those docs are\n copied onto the generated `VirtualContainerVftable`'s function-pointer\n fields, where `Self` must still mean the declaring type — not the\n generated vftable struct.",
+        "fields": [
+          {
+            "visibility": "private",
+            "name": "vftable",
+            "doc": null,
+            "doc_links": [
+              {
+                "text": "Self::counter",
+                "target_kind": "item",
+                "path": "doc_self_links::VirtualContainer",
+                "anchor": "field-counter"
+              },
+              {
+                "text": "Self::get_counter",
+                "target_kind": "item",
+                "path": "doc_self_links::VirtualContainer",
+                "anchor": "vfunc-get_counter"
+              }
+            ],
+            "type_ref": {
+              "type": "const_pointer",
+              "inner": {
+                "type": "raw",
+                "path": "doc_self_links::VirtualContainerVftable"
+              }
+            },
+            "offset": 0,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 12,
+              "line": 29
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "counter",
+            "doc": " A field a vftable-function doc links to via `Self::`.",
+            "type_ref": {
+              "type": "raw",
+              "path": "u32"
+            },
+            "offset": 8,
+            "size": 4,
+            "alignment": 4,
+            "is_base": false,
+            "source": {
+              "file_index": 12,
+              "line": 33
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "padding",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "u32"
+            },
+            "offset": 12,
+            "size": 4,
+            "alignment": 4,
+            "is_base": false,
+            "source": {
+              "file_index": 12,
+              "line": 34
+            }
+          }
+        ],
+        "associated_functions": [],
+        "vftable": {
+          "functions": [
+            {
+              "visibility": "public",
+              "name": "get_counter",
+              "doc": " Reads [`counter`](Self::counter) and calls\n [`get_counter`](Self::get_counter).",
+              "doc_links": [
+                {
+                  "text": "Self::counter",
+                  "target_kind": "item",
+                  "path": "doc_self_links::VirtualContainer",
+                  "anchor": "field-counter"
+                },
+                {
+                  "text": "Self::get_counter",
+                  "target_kind": "item",
+                  "path": "doc_self_links::VirtualContainer",
+                  "anchor": "vfunc-get_counter"
+                }
+              ],
+              "body": {
+                "type": "vftable",
+                "function_name": "get_counter"
+              },
+              "arguments": [
+                {
+                  "type": "const_self"
+                }
+              ],
+              "return_type": {
+                "type": "raw",
+                "path": "u32"
+              },
+              "calling_convention": "system",
+              "source": {
+                "file_index": 12,
+                "line": 29
+              }
+            }
+          ]
+        },
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false,
+        "pinned": false
+      },
+      "source": {
+        "file_index": 12,
+        "line": 25
+      }
+    },
+    "doc_self_links::VirtualContainerVftable": {
+      "path": "doc_self_links::VirtualContainerVftable",
+      "visibility": "public",
+      "size": 8,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "doc_links": [
+          {
+            "text": "Self::counter",
+            "target_kind": "item",
+            "path": "doc_self_links::VirtualContainer",
+            "anchor": "field-counter"
+          },
+          {
+            "text": "Self::get_counter",
+            "target_kind": "item",
+            "path": "doc_self_links::VirtualContainer",
+            "anchor": "vfunc-get_counter"
+          }
+        ],
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "get_counter",
+            "doc": " Reads [`counter`](Self::counter) and calls\n [`get_counter`](Self::get_counter).",
+            "doc_links": [
+              {
+                "text": "Self::counter",
+                "target_kind": "item",
+                "path": "doc_self_links::VirtualContainer",
+                "anchor": "field-counter"
+              },
+              {
+                "text": "Self::get_counter",
+                "target_kind": "item",
+                "path": "doc_self_links::VirtualContainer",
+                "anchor": "vfunc-get_counter"
+              }
+            ],
+            "type_ref": {
+              "type": "function",
+              "calling_convention": "system",
+              "arguments": [
+                {
+                  "name": "this",
+                  "type_ref": {
+                    "type": "const_pointer",
+                    "inner": {
+                      "type": "raw",
+                      "path": "doc_self_links::VirtualContainer"
+                    }
+                  }
+                }
+              ],
+              "return_type": {
+                "type": "raw",
+                "path": "u32"
+              }
+            },
+            "offset": 0,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 12,
+              "line": 29
+            }
+          }
+        ],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false,
+        "pinned": false
+      },
+      "source": {
+        "file_index": 12,
+        "line": 29
       }
     },
     "enums::TestEnum": {
@@ -10768,7 +10987,9 @@
         }
       ],
       "items": [
-        "doc_self_links::Container"
+        "doc_self_links::Container",
+        "doc_self_links::VirtualContainer",
+        "doc_self_links::VirtualContainerVftable"
       ],
       "submodules": {},
       "functions": [],

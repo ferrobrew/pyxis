@@ -17,6 +17,22 @@ pub type Container {
     /// A field.
     pub field: u32,
 }
+
+/// Test `Self::` links written in vftable-function docs. Those docs are
+/// copied onto the generated `VirtualContainerVftable`'s function-pointer
+/// fields, where `Self` must still mean the declaring type — not the
+/// generated vftable struct.
+pub type VirtualContainer {
+    vftable {
+        /// Reads [`counter`](Self::counter) and calls
+        /// [`get_counter`](Self::get_counter).
+        pub fn get_counter(&self) -> u32;
+    },
+
+    /// A field a vftable-function doc links to via `Self::`.
+    pub counter: u32,
+    pub padding: u32,
+}
 impl Container {
     /// A method.
     #[address(0x10)]

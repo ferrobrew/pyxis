@@ -17,7 +17,7 @@ use crate::{
         error::{Result, SemanticError},
         module::Module,
         type_registry::TypeRegistry,
-        types::{ItemDefinitionInner, Visibility},
+        types::{ItemDefinitionInner, Type, Visibility},
     },
     span::ItemLocation,
 };
@@ -540,10 +540,33 @@ pub fn resolve_all(
         }
     }
 
+    // Generated `{Type}Vftable` items copy the parent's vftable-function docs
+    // onto their function-pointer fields. Those doc blocks are already
+    // recorded — with `Self` anchored to the parent type — when the parent's
+    // vftable functions are walked, and both passes share the same location
+    // key. Walking the generated item too would re-resolve the same links
+    // with `Self` mis-anchored to the vftable struct, rejecting valid links
+    // like `Self::some_field`.
+    let generated_vftables: BTreeSet<&ItemPath> = type_registry
+        .iter()
+        .filter_map(
+            |(_, item)| match &item.resolved()?.inner.as_type()?.vftable.as_ref()?.type_ {
+                Type::ConstPointer(inner) => match &**inner {
+                    Type::Raw(path) => Some(path),
+                    _ => None,
+                },
+                _ => None,
+            },
+        )
+        .collect();
+
     // Top-level items — those whose parent is a module. Items nested inside
     // another item are reached by `walk_item_docs`' recursion instead, with
     // the enclosing type's augmented scope.
     for (path, item) in type_registry.iter() {
+        if generated_vftables.contains(path) {
+            continue;
+        }
         let Some(parent) = path.parent() else {
             continue;
         };

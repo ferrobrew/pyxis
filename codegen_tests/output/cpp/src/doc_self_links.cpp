@@ -7,4 +7,12 @@ namespace doc_self_links {
         using fn_t = void (*)(const void*);
         reinterpret_cast<fn_t>(0x10)(this);
     }
+
+    const VirtualContainerVftable* VirtualContainer::_vftable_ptr() const {
+        return this->vftable;
+    }
+
+    ::std::uint32_t VirtualContainer::get_counter() const {
+        return _vftable_ptr()->get_counter(this);
+    }
 } // namespace doc_self_links
