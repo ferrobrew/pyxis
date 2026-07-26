@@ -401,8 +401,11 @@ pub enum SemanticError {
         item_path: ItemPath,
         location: ItemLocation,
     },
-    /// The name generated for an inline union field is already taken.
-    InlineUnionNameCollision {
+    /// A name synthesised while building an item — an inline union's
+    /// `{Type}{Field}Union`, a `{Name}Vftable` — is already taken. Registering
+    /// it anyway would silently replace whatever holds that name, after the
+    /// owner has already measured it.
+    GeneratedNameCollision {
         generated_path: ItemPath,
         item_path: ItemPath,
         location: ItemLocation,
@@ -472,7 +475,7 @@ impl SemanticError {
             SemanticError::UnionMemberExceedsSize { location, .. } => Some(location),
             SemanticError::UnionAnonymousMember { location, .. } => Some(location),
             SemanticError::InlineUnionNestedItem { location, .. } => Some(location),
-            SemanticError::InlineUnionNameCollision { location, .. } => Some(location),
+            SemanticError::GeneratedNameCollision { location, .. } => Some(location),
         }
     }
 

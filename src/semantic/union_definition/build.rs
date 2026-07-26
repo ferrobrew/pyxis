@@ -57,25 +57,15 @@ enum Nesting {
     Inline,
 }
 
-/// Publish generated items, refusing to overwrite anything already present.
-///
-/// [`ResolutionContext::add_item`] is an insert: a collision would silently
-/// replace an item that the enclosing type has *already* measured, leaving it
-/// asserting a size it no longer has.
 fn register_generated(
     semantic: &mut ResolutionContext<'_>,
     owner: &ItemPath,
     generated: Vec<ItemDefinition>,
 ) -> Result<()> {
+    // Two fields in one body can generate the same name (`a_b` and `a__b` both
+    // give `AB`), so the second add collides with the first, not the registry.
     for item in generated {
-        if semantic.type_registry.lookup(&item.path).is_some() {
-            return Err(SemanticError::InlineUnionNameCollision {
-                generated_path: item.path.clone(),
-                item_path: owner.clone(),
-                location: item.location,
-            });
-        }
-        semantic.add_item(item)?;
+        semantic.add_generated_item(owner, item)?;
     }
     Ok(())
 }
@@ -152,7 +142,7 @@ pub fn build_inline_union(
     let mut claimed: Vec<&ItemPath> = Vec::new();
     for item in &built {
         if claimed.contains(&&item.path) {
-            return Err(SemanticError::InlineUnionNameCollision {
+            return Err(SemanticError::GeneratedNameCollision {
                 generated_path: item.path.clone(),
                 item_path: owner.clone(),
                 location: item.location,

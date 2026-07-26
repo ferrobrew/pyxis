@@ -493,3 +493,27 @@ fn make_vfunc_region(index: usize) -> SR {
         ),
     )
 }
+
+/// The generated `{Name}Vftable` must not land on top of a declared item. Before
+/// this was checked, the insert won silently: the type's `vftable` field pointed
+/// at the *user's* struct, and the real function table was discarded.
+#[test]
+fn will_reject_vftable_name_collision() {
+    assert_ast_produces_exact_error(
+        M::new().with_definitions([
+            ID::new(
+                (V::Public, "WidgetVftable"),
+                TD::new([TS::field((V::Public, "sentinel"), T::ident("u32"))]),
+            ),
+            ID::new(
+                (V::Public, "Widget"),
+                TD::new([TS::vftable([F::new((V::Public, "get"), [Ar::mut_self()])])]),
+            ),
+        ]),
+        SemanticError::GeneratedNameCollision {
+            generated_path: IP::from("test::WidgetVftable"),
+            item_path: IP::from("test::Widget"),
+            location: ItemLocation::test(),
+        },
+    );
+}

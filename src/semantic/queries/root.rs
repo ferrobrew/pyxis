@@ -336,7 +336,7 @@ pub fn analyze<'db>(
         }
         for generated in resolved.generated_items(db).iter() {
             if let Some(other) = generated_owners.get(&generated.path) {
-                semantic_errors.push(SemanticError::InlineUnionNameCollision {
+                semantic_errors.push(SemanticError::GeneratedNameCollision {
                     generated_path: generated.path.clone(),
                     item_path: other.clone(),
                     location: generated.location,

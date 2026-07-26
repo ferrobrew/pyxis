@@ -40,8 +40,7 @@ impl SemanticError {
             | SemanticError::EmptyUnion { .. }
             | SemanticError::UnionMemberExceedsSize { .. }
             | SemanticError::UnionAnonymousMember { .. }
-            | SemanticError::InlineUnionNestedItem { .. }
-            | SemanticError::InlineUnionNameCollision { .. } => self.union_error_message(),
+            | SemanticError::InlineUnionNestedItem { .. } => self.union_error_message(),
 
             SemanticError::VftableMissingFunctions { .. }
             | SemanticError::VftableFunctionMismatch { .. }
@@ -66,7 +65,8 @@ impl SemanticError {
             | SemanticError::CopyableError { .. }
             | SemanticError::CloneableError { .. } => self.member_error_message(),
 
-            SemanticError::DuplicateDefinition { .. }
+            SemanticError::GeneratedNameCollision { .. }
+            | SemanticError::DuplicateDefinition { .. }
             | SemanticError::FunctionMissingImplementation { .. }
             | SemanticError::InvalidCallingConvention { .. }
             | SemanticError::IntegerConversion { .. }
@@ -387,17 +387,6 @@ impl SemanticError {
                      be reachable. Declare it in the enclosing type, or give the union a name."
                 )
             }
-            SemanticError::InlineUnionNameCollision {
-                generated_path,
-                item_path,
-                ..
-            } => {
-                format!(
-                    "building `{item_path}` generates `{generated_path}`, but that name is already \
-                     taken. Rename the inline union's field (or, for a vftable, the type itself), \
-                     or declare the generated item separately."
-                )
-            }
             _ => unreachable!(),
         }
     }
@@ -555,6 +544,17 @@ impl SemanticError {
     /// Item-level failures: definitions, functions, conversions, visibility, consts.
     fn item_error_message(&self) -> String {
         match self {
+            SemanticError::GeneratedNameCollision {
+                generated_path,
+                item_path,
+                ..
+            } => {
+                format!(
+                    "building `{item_path}` generates `{generated_path}`, but that name is already \
+                     taken. Every reference to it would silently mean the other item. Rename \
+                     whatever produces it — an inline union's field, or a type with a vftable."
+                )
+            }
             SemanticError::DuplicateDefinition {
                 name,
                 item_path,

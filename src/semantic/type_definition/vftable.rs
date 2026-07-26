@@ -156,7 +156,7 @@ pub fn build(
 
         let vftable_path = vftable_type.path.clone();
         let vftable_pointer_type = Type::ConstPointer(Box::new(Type::Raw(vftable_path)));
-        semantic.add_item(vftable_type)?;
+        semantic.add_generated_item(resolvee_path, vftable_type)?;
 
         if let Some((base_name, base_vftable)) =
             get_optional_region_name_and_vftable(semantic.type_registry, resolvee_path, first_base)?

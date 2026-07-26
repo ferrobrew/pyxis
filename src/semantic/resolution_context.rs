@@ -54,6 +54,28 @@ impl<'a> ResolutionContext<'a> {
         })
     }
 
+    /// Register an item generated while building `owner` (an inline union's
+    /// `{Type}{Field}Union`, a `{Name}Vftable`).
+    ///
+    /// The registry is a map, so an insert over an existing path is silent: the
+    /// generated item vanishes and every reference to that name quietly means
+    /// something else. `owner` has already measured what it would replace, so it
+    /// keeps asserting a size and a shape that no longer hold.
+    pub fn add_generated_item(
+        &mut self,
+        owner: &ItemPath,
+        item_definition: ItemDefinition,
+    ) -> Result<()> {
+        if self.type_registry.lookup(&item_definition.path).is_some() {
+            return Err(SemanticError::GeneratedNameCollision {
+                generated_path: item_definition.path.clone(),
+                item_path: owner.clone(),
+                location: *item_definition.location(),
+            });
+        }
+        self.add_item(item_definition)
+    }
+
     pub fn add_item(&mut self, item_definition: ItemDefinition) -> Result<()> {
         let parent_path =
             &item_definition

@@ -419,7 +419,7 @@ fn inline_union_colliding_with_a_declared_item_is_rejected() {
                 )]),
             ),
         ]),
-        SemanticError::InlineUnionNameCollision {
+        SemanticError::GeneratedNameCollision {
             generated_path: IP::from("test::ScratchDataUnion"),
             item_path: IP::from("test::Scratch"),
             location: ItemLocation::test(),
@@ -445,7 +445,7 @@ fn two_inline_unions_generating_the_same_name_is_rejected() {
                 ),
             ]),
         )]),
-        SemanticError::InlineUnionNameCollision {
+        SemanticError::GeneratedNameCollision {
             generated_path: IP::from("test::TABUnion"),
             item_path: IP::from("test::T"),
             location: ItemLocation::test(),
@@ -474,7 +474,7 @@ fn two_types_generating_the_same_union_name_is_rejected() {
                 )]),
             ),
         ]),
-        SemanticError::InlineUnionNameCollision {
+        SemanticError::GeneratedNameCollision {
             generated_path: IP::from("test::ABCUnion"),
             item_path: IP::from("test::A"),
             location: ItemLocation::test(),

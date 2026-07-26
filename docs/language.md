@@ -159,6 +159,27 @@ pub type Outer {
 
 Nested items are accessed as `Outer::InnerEnum` etc. In the Rust backend, nested types are flattened to `Outer_InnerEnum` (rustdoc can't represent true nested types). In the JSON backend, they appear under the parent's `nested_items` with their full paths preserved.
 
+### Generated names
+
+Two constructs synthesise an item alongside the one you wrote, at a module-scope
+path derived from its name:
+
+| Construct | Generates |
+|---|---|
+| A [`vftable` block](#vftable-blocks) on `Foo` | `FooVftable` |
+| An [inline union](#inline-unions) field `bar` on `Foo` | `FooBarUnion` |
+
+That name must be free. Declaring `pub type FooVftable { … }` yourself alongside
+a `Foo` with a vftable is an error, as is `pub union FooBarUnion { … }` alongside
+`pub type Foo { pub bar: union { … } }`. So is any pair that lands on the same
+name — two fields whose names differ only in underscores (`b_c` and `b__c` both
+give `BC`), or two types that meet in the middle (`A` + `b_c` and `AB` + `c` both
+give `ABCUnion`).
+
+The alternative is worse than an error: the generated item would silently vanish,
+and every reference to that name would mean the item you declared — after the
+owner had already measured the one it expected.
+
 ### Generics
 
 Types can have type parameters:
@@ -281,10 +302,8 @@ These constructs are rejected:
 
 A union with no members is an error — it would have no size.
 
-The name an inline union generates must be free. `pub union FooBarUnion { … }`
-alongside `pub type Foo { pub bar: union { … } }` is an error rather than a
-silent overwrite, as are two fields whose names differ only in underscores
-(`b_c` and `bc` both generate `BC`).
+The name an inline union generates must be free — see
+[Generated names](#generated-names).
 
 ### Attributes on unions
 
