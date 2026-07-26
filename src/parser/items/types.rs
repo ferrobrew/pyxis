@@ -80,7 +80,9 @@ impl TypeField {
 #[cfg_attr(test, derive(StripLocations))]
 pub enum TypeDefItem {
     Comment(Comment),
-    Statement(TypeStatement),
+    /// Boxed to keep the enum small: a statement carries a whole field
+    /// (including its type, attributes and comments) and dwarfs a comment.
+    Statement(Box<TypeStatement>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, HasLocation)]
@@ -193,7 +195,10 @@ impl StripLocations for TypeDefinition {
 impl TypeDefinition {
     pub fn new(statements: impl IntoIterator<Item = TypeStatement>) -> Self {
         Self {
-            items: statements.into_iter().map(TypeDefItem::Statement).collect(),
+            items: statements
+                .into_iter()
+                .map(|s| TypeDefItem::Statement(Box::new(s)))
+                .collect(),
             attributes: Default::default(),
             is_opaque: false,
             inline_trailing_comments: Vec::new(),
@@ -224,7 +229,7 @@ impl TypeDefinition {
 impl TypeDefinition {
     pub fn statements(&self) -> impl Iterator<Item = &TypeStatement> {
         self.items.iter().filter_map(|item| match item {
-            TypeDefItem::Statement(stmt) => Some(stmt),
+            TypeDefItem::Statement(stmt) => Some(stmt.as_ref()),
             _ => None,
         })
     }
@@ -274,7 +279,7 @@ impl Parser {
                 }
             }
 
-            items.push(TypeDefItem::Statement(stmt));
+            items.push(TypeDefItem::Statement(Box::new(stmt)));
         }
 
         Ok(items)

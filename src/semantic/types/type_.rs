@@ -43,11 +43,49 @@ pub enum Type {
     ConstPointer(Box<Type>),
     MutPointer(Box<Type>),
     Array(Box<Type>, usize),
-    Function(
-        CallingConvention,
-        Vec<(String, Box<Type>)>,
-        Option<Box<Type>>,
-    ),
+    /// A function pointer: calling convention, parameters, optional return type.
+    Function(CallingConvention, Vec<FunctionArg>, Option<Box<Type>>),
+}
+
+/// One parameter of a function-pointer type. `name` is `None` for a parameter
+/// written without one (`fn(u32)`); backends that can emit an unnamed
+/// parameter do, rather than inventing an identifier.
+#[derive(PartialEq, Eq, Debug, Clone, Hash)]
+#[cfg_attr(test, derive(StripLocations))]
+pub struct FunctionArg {
+    pub name: Option<String>,
+    pub type_: Box<Type>,
+}
+impl EqualsIgnoringLocations for FunctionArg {
+    fn equals_ignoring_locations(&self, other: &Self) -> bool {
+        self.name == other.name && self.type_.equals_ignoring_locations(&other.type_)
+    }
+}
+impl FunctionArg {
+    pub fn new(name: Option<String>, type_: Type) -> Self {
+        FunctionArg {
+            name,
+            type_: Box::new(type_),
+        }
+    }
+    /// A parameter with a name, as vftable-derived signatures always have.
+    pub fn named(name: impl Into<String>, type_: Type) -> Self {
+        FunctionArg::new(Some(name.into()), type_)
+    }
+    /// An anonymous parameter, as written in `fn(u32)`.
+    pub fn unnamed(type_: Type) -> Self {
+        FunctionArg::new(None, type_)
+    }
+}
+impl From<(&str, Type)> for FunctionArg {
+    fn from((name, type_): (&str, Type)) -> Self {
+        FunctionArg::named(name, type_)
+    }
+}
+impl From<Type> for FunctionArg {
+    fn from(type_: Type) -> Self {
+        FunctionArg::unnamed(type_)
+    }
 }
 impl EqualsIgnoringLocations for Type {
     fn equals_ignoring_locations(&self, other: &Self) -> bool {
@@ -139,17 +177,14 @@ impl Type {
     pub fn array(self, size: usize) -> Self {
         Type::Array(Box::new(self), size)
     }
-    pub fn function<'a>(
+    pub fn function(
         calling_convention: CallingConvention,
-        args: impl Into<Vec<(&'a str, Type)>>,
+        args: impl IntoIterator<Item = impl Into<FunctionArg>>,
         return_type: impl Into<Option<Type>>,
     ) -> Self {
         Type::Function(
             calling_convention,
-            args.into()
-                .into_iter()
-                .map(|(name, tr)| (name.to_string(), Box::new(tr)))
-                .collect(),
+            args.into_iter().map(Into::into).collect(),
             return_type.into().map(Box::new),
         )
     }
@@ -215,12 +250,14 @@ impl fmt::Display for Type {
             }
             Type::Function(calling_convention, args, return_type) => {
                 write!(f, "extern \"{calling_convention}\" fn (")?;
-                for (index, (field, type_ref)) in args.iter().enumerate() {
-                    write!(f, "{field}: ")?;
-                    type_ref.fmt(f)?;
+                for (index, arg) in args.iter().enumerate() {
                     if index > 0 {
                         write!(f, ", ")?;
                     }
+                    if let Some(name) = &arg.name {
+                        write!(f, "{name}: ")?;
+                    }
+                    arg.type_.fmt(f)?;
                 }
                 write!(f, ")")?;
                 if let Some(type_ref) = return_type {

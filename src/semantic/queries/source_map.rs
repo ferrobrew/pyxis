@@ -8,7 +8,7 @@ use std::sync::Arc;
 use crate::{
     grammar::{
         Argument, Function, ImplItem, ItemDefinition, ItemDefinitionInner, ItemPath, ModuleItem,
-        Type, TypeField, TypeStatement,
+        Type, TypeField, TypeKind, TypeStatement,
     },
     semantic::name_index::NameIndex,
     span::{HasLocation, Location, Span},
@@ -242,8 +242,8 @@ fn type_ref_spans(
     tokens: &[Token],
     out: &mut Vec<(Span, ItemPath)>,
 ) {
-    match type_ {
-        Type::Ident {
+    match &type_.kind {
+        TypeKind::Ident {
             path, generic_args, ..
         } => {
             let span = type_.location().span;
@@ -262,11 +262,22 @@ fn type_ref_spans(
                 type_ref_spans(arg, scope, index, tokens, out);
             }
         }
-        Type::ConstPointer { pointee, .. } | Type::MutPointer { pointee, .. } => {
+        TypeKind::ConstPointer { pointee, .. } | TypeKind::MutPointer { pointee, .. } => {
             type_ref_spans(pointee, scope, index, tokens, out)
         }
-        Type::Array { element, .. } => type_ref_spans(element, scope, index, tokens, out),
-        Type::Unknown { .. } => {}
+        TypeKind::Array { element, .. } => type_ref_spans(element, scope, index, tokens, out),
+        TypeKind::Function {
+            arguments,
+            return_type,
+        } => {
+            for argument in arguments {
+                type_ref_spans(&argument.type_, scope, index, tokens, out);
+            }
+            if let Some(return_type) = return_type {
+                type_ref_spans(return_type, scope, index, tokens, out);
+            }
+        }
+        TypeKind::Unknown { .. } => {}
     }
 }
 

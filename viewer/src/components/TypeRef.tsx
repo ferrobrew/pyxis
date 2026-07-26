@@ -104,8 +104,12 @@ export function TypeRef({ type, currentModule = '' }: TypeRefProps) {
             {t.arguments.map((arg, i) => (
               <span key={i}>
                 {i > 0 && <span className="text-fg-muted">, </span>}
-                <span className="text-fg">{arg.name}</span>
-                <span className="text-fg-muted">: </span>
+                {arg.name && (
+                  <>
+                    <span className="text-fg">{arg.name}</span>
+                    <span className="text-fg-muted">: </span>
+                  </>
+                )}
                 {renderType(arg.type_ref)}
               </span>
             ))}

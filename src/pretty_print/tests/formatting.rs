@@ -602,3 +602,24 @@ fn nested_union_declarations_round_trip() {
     let module = parse_str_for_tests(text).unwrap();
     assert_eq!(pretty_print(&module), text);
 }
+
+#[test]
+fn function_pointer_types_round_trip() {
+    // Every position a function-pointer type can occupy — field, array
+    // element, pointee, nested parameter, return type, and type alias —
+    // along with the type-position attribute that selects its convention.
+    let text = r#"pub type Callbacks {
+    pub on_tick: fn(engine: *mut Engine, dt: f32),
+    pub on_event: fn(*mut Engine, u32) -> bool,
+    pub on_shutdown: fn(),
+    pub on_alloc: #[calling_convention(cdecl)] fn(size: u32) -> *mut Engine,
+    pub table: [#[calling_convention(C)] fn(*mut Engine); 4],
+    pub indirect: *mut fn(*mut Engine),
+    pub on_register: fn(callback: fn(*mut Engine), user_data: *mut Engine),
+}
+
+pub type TickFn = fn(*mut Engine, f32);"#;
+
+    let module = parse_str_for_tests(text).unwrap();
+    assert_eq!(pretty_print(&module), text);
+}

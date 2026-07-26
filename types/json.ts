@@ -296,7 +296,11 @@ cfg?: JsonCfg | null;
  */
 source: JsonSourceLocation | null };
 
-export type JsonFunctionArgument = { name: string; type_ref: JsonType };
+export type JsonFunctionArgument = { 
+/**
+ * `None` for a parameter written without a name, as in `fn(u32)`.
+ */
+name: string | null; type_ref: JsonType };
 
 export type JsonFunctionBody = { type: "address"; address: number } | { type: "field"; field: string; function_name: string } | { type: "vftable"; function_name: string } | 
 /**

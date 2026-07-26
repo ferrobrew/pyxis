@@ -49,7 +49,10 @@ impl StripLocations for UnionDefinition {
 impl UnionDefinition {
     pub fn new(statements: impl IntoIterator<Item = TypeStatement>) -> Self {
         Self {
-            items: statements.into_iter().map(TypeDefItem::Statement).collect(),
+            items: statements
+                .into_iter()
+                .map(|s| TypeDefItem::Statement(Box::new(s)))
+                .collect(),
             attributes: Default::default(),
             inline_trailing_comments: Vec::new(),
             following_comments: Vec::new(),
@@ -72,7 +75,7 @@ impl UnionDefinition {
 impl UnionDefinition {
     pub fn statements(&self) -> impl Iterator<Item = &TypeStatement> {
         self.items.iter().filter_map(|item| match item {
-            TypeDefItem::Statement(stmt) => Some(stmt),
+            TypeDefItem::Statement(stmt) => Some(stmt.as_ref()),
             _ => None,
         })
     }

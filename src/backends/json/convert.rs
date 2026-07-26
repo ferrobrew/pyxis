@@ -257,9 +257,9 @@ fn convert_type(type_ref: &Type) -> JsonType {
             calling_convention: (*cc).into(),
             arguments: args
                 .iter()
-                .map(|(name, type_ref)| JsonFunctionArgument {
-                    name: name.clone(),
-                    type_ref: convert_type(type_ref),
+                .map(|arg| JsonFunctionArgument {
+                    name: arg.name.clone(),
+                    type_ref: convert_type(&arg.type_),
                 })
                 .collect(),
             return_type: return_type.as_ref().map(|t| Box::new(convert_type(t))),

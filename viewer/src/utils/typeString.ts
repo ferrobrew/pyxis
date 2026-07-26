@@ -34,7 +34,9 @@ export function typeToString(
       case 'type_parameter':
         return t.name;
       case 'function': {
-        const args = t.arguments.map((a) => `${a.name}: ${r(a.type_ref)}`).join(', ');
+        const args = t.arguments
+          .map((a) => (a.name ? `${a.name}: ${r(a.type_ref)}` : r(a.type_ref)))
+          .join(', ');
         const ret = t.return_type ? ` -> ${r(t.return_type)}` : '';
         return `${ccText(t.calling_convention)}fn(${args})${ret}`;
       }

@@ -304,6 +304,7 @@ fn build_body(
                 ) {
                     TypeLookupResult::Found(t) => t,
                     TypeLookupResult::NotYetResolved => return Ok(None),
+                    TypeLookupResult::InvalidAttribute { error } => return Err(*error),
                     TypeLookupResult::NotFound { type_name } => {
                         return Err(unresolved(type_name, type_, field_ident, resolvee_path));
                     }

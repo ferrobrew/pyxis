@@ -5,12 +5,147 @@ use super::RenderCtx;
 use crate::{backends::Result, grammar::ItemPath, semantic::types::Type};
 
 /// Render a `Type` as a C++ type expression. For arrays the caller is
-/// responsible for placing the `[N]` suffix after the field name.
+/// responsible for placing the `[N]` suffix after the field name; use
+/// [`render_declaration`] when a declarator name is being attached.
 pub fn render_type(ty: &Type, ctx: RenderCtx) -> Result<String> {
     Ok(match ty {
-        Type::Unresolved(_) => "/* unresolved */ void".to_string(),
-        Type::TypeParameter(name) => name.clone(),
-        Type::Raw(path) => render_path(path, ctx),
+        Type::Array(inner, _n) => {
+            // Fields handle the `[N]` suffix themselves; for nested contexts
+            // (like template args) emit the bare element type.
+            render_type(inner, ctx)?
+        }
+        _ => render_declaration(ty, "", ctx)?,
+    })
+}
+
+/// Render a full C++ declaration of `ty` around the given declarator core -
+/// a field name, a parameter name, `name(params)` for a function, or `""`
+/// for a bare type-id.
+///
+/// C declaration syntax nests inside-out, so this can't be done by gluing a
+/// name onto a rendered type: an array of function pointers is
+/// `R (*name[N])(args)`, not `R (*)(args) name[N]`.
+pub fn render_declaration(ty: &Type, declarator: &str, ctx: RenderCtx) -> Result<String> {
+    render_declaration_with(ty, declarator, ctx, false)
+}
+
+/// A parameter type-id. Unlike [`render_type`] this keeps an array's extent,
+/// so a declaration (`void f(uint32_t x[4])`) and the function-pointer alias
+/// used to call it (`void (*)(uint32_t[4])`) agree on the parameter type
+/// instead of one of them silently decaying and the other not.
+pub fn render_parameter_type(ty: &Type, ctx: RenderCtx) -> Result<String> {
+    render_declaration(ty, "", ctx)
+}
+
+/// As [`render_declaration`], but when `rewrite_self_arg_to_void_ptr` the
+/// outermost function type's first parameter is rendered as `void*` (or
+/// `const void*`, preserving const-ness). Vftable struct slots use this so
+/// derived types can pass their `this` without explicit base-chain casts.
+pub fn render_declaration_with(
+    ty: &Type,
+    declarator: &str,
+    ctx: RenderCtx,
+    rewrite_self_arg_to_void_ptr: bool,
+) -> Result<String> {
+    let (base, declarator) = build_declarator(
+        ty,
+        declarator.to_string(),
+        ctx,
+        rewrite_self_arg_to_void_ptr,
+        false,
+    )?;
+
+    // Leading `*`s bind to the base type in this codebase's house style
+    // (`T* name`, not `T *name`); anything else is separated by a space.
+    let stars = declarator.len() - declarator.trim_start_matches('*').len();
+    let (stars, rest) = declarator.split_at(stars);
+    Ok(if rest.is_empty() {
+        format!("{base}{stars}")
+    } else {
+        format!("{base}{stars} {rest}")
+    })
+}
+
+/// Peel `ty` outside-in, wrapping the declarator as we go, and return the
+/// base type text plus the finished declarator.
+///
+/// `is_const` means "the type at this level is const-qualified", propagated
+/// down from an enclosing `*const`. It cannot simply be prepended to the base
+/// type: for `*const fn()` the base is the *return* type, and `const void
+/// (**f)()` would qualify the wrong thing. Instead each level that produces a
+/// `*` of its own consumes the flag as a trailing `const` on that star.
+fn build_declarator(
+    ty: &Type,
+    declarator: String,
+    ctx: RenderCtx,
+    rewrite_self_arg_to_void_ptr: bool,
+    is_const: bool,
+) -> Result<(String, String)> {
+    // The `*` this level contributes, const-qualified if an enclosing
+    // `*const` says the thing it points at is immutable.
+    let star = if is_const { "*const " } else { "*" };
+    // Applied to a base type (`const uint32_t`), where there is no star to
+    // hang the qualifier off.
+    let qualify = |base: String| {
+        if is_const {
+            format!("const {base}")
+        } else {
+            base
+        }
+    };
+
+    Ok(match ty {
+        Type::ConstPointer(inner) => build_declarator(
+            inner,
+            format!("{star}{declarator}"),
+            ctx,
+            false,
+            // What we point at is what `*const` makes immutable.
+            true,
+        )?,
+        Type::MutPointer(inner) => {
+            build_declarator(inner, format!("{star}{declarator}"), ctx, false, false)?
+        }
+        Type::Array(inner, n) => {
+            // `[]` binds tighter than `*`, so a pointer to an array needs
+            // parens; an array of pointers does not.
+            let declarator = if declarator.starts_with('*') {
+                format!("({declarator})[{n}]")
+            } else {
+                format!("{declarator}[{n}]")
+            };
+            // A const array is an array of const elements.
+            build_declarator(inner, declarator, ctx, false, is_const)?
+        }
+        Type::Function(cc, args, ret) => {
+            let cc_macro = super::structs::calling_conv_macro(*cc);
+            let arg_types = args
+                .iter()
+                .enumerate()
+                .map(|(i, arg)| {
+                    if rewrite_self_arg_to_void_ptr && i == 0 {
+                        Ok(match arg.type_.as_ref() {
+                            Type::ConstPointer(_) => "const void*".to_string(),
+                            Type::MutPointer(_) => "void*".to_string(),
+                            other => render_parameter_type(other, ctx)?,
+                        })
+                    } else {
+                        render_parameter_type(&arg.type_, ctx)
+                    }
+                })
+                .collect::<Result<Vec<_>>>()?
+                .join(", ");
+            // A function type is never itself const-qualified; `*const fn()`
+            // makes the *pointer* immutable, and this level owns that star.
+            let declarator = format!("({cc_macro}{star}{declarator})({arg_types})");
+            match ret.as_deref() {
+                Some(ret) => build_declarator(ret, declarator, ctx, false, false)?,
+                None => ("void".to_string(), declarator),
+            }
+        }
+        Type::Unresolved(_) => (qualify("/* unresolved */ void".to_string()), declarator),
+        Type::TypeParameter(name) => (qualify(name.clone()), declarator),
+        Type::Raw(path) => (qualify(render_path(path, ctx)), declarator),
         Type::Generic(base, args) => {
             let base_str = render_path(base, ctx);
             let args_str = args
@@ -18,30 +153,7 @@ pub fn render_type(ty: &Type, ctx: RenderCtx) -> Result<String> {
                 .map(|a| render_type(a, ctx))
                 .collect::<Result<Vec<_>>>()?
                 .join(", ");
-            format!("{base_str}<{args_str}>")
-        }
-        Type::ConstPointer(inner) => format!("const {}*", render_type(inner, ctx)?),
-        Type::MutPointer(inner) => format!("{}*", render_type(inner, ctx)?),
-        Type::Array(inner, _n) => {
-            // Fields handle the `[N]` suffix themselves; for nested contexts
-            // (like template args) emit the bare element type.
-            render_type(inner, ctx)?
-        }
-        Type::Function(cc, args, ret) => {
-            // Bare function-pointer expression (no name) for use in template
-            // arguments / type aliases. `render_function_pointer_decl`
-            // handles the with-name field/parameter case.
-            let cc_macro = super::structs::calling_conv_macro(*cc);
-            let ret_text = match ret.as_deref() {
-                Some(t) => render_type(t, ctx)?,
-                None => "void".to_string(),
-            };
-            let arg_types = args
-                .iter()
-                .map(|(_, t)| render_type(t, ctx))
-                .collect::<Result<Vec<_>>>()?
-                .join(", ");
-            format!("{ret_text} ({cc_macro}*)({arg_types})")
+            (qualify(format!("{base_str}<{args_str}>")), declarator)
         }
     })
 }

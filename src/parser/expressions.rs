@@ -1,5 +1,5 @@
 use crate::{
-    span::{HasLocation, ItemLocation},
+    span::{EqualsIgnoringLocations, HasLocation, ItemLocation},
     tokenizer::TokenKind,
 };
 
@@ -9,7 +9,8 @@ use crate::span::StripLocations;
 use super::{ParseError, core::Parser, paths::ItemPath, types::Ident};
 
 /// Format information for integer literals
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, EqualsIgnoringLocations)]
+#[equals_ignoring_locations(eq)]
 #[cfg_attr(test, derive(StripLocations))]
 #[cfg_attr(test, strip_locations(copy))]
 pub enum IntFormat {
@@ -20,7 +21,8 @@ pub enum IntFormat {
 }
 
 /// Format information for string literals
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, EqualsIgnoringLocations)]
+#[equals_ignoring_locations(eq)]
 #[cfg_attr(test, derive(StripLocations))]
 #[cfg_attr(test, strip_locations(copy))]
 pub enum StringFormat {
@@ -28,7 +30,7 @@ pub enum StringFormat {
     Raw,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, HasLocation)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, HasLocation, EqualsIgnoringLocations)]
 #[cfg_attr(test, derive(StripLocations))]
 pub enum Expr {
     IntLiteral {
@@ -122,7 +124,7 @@ impl Expr {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, EqualsIgnoringLocations)]
 #[cfg_attr(test, derive(StripLocations))]
 pub struct ExprField(pub Ident, pub Expr);
 impl ExprField {

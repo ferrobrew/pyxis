@@ -10,6 +10,9 @@ pub use strip_locations::*;
 pub use pyxis_macros::HasLocation;
 #[cfg(test)]
 pub use pyxis_macros::StripLocations;
+// Shares its name with the trait above; derive macros live in the macro
+// namespace, so both resolve from a single `EqualsIgnoringLocations` import.
+pub use pyxis_macros::EqualsIgnoringLocations;
 
 /// A location in source code (line and column, both 1-indexed)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

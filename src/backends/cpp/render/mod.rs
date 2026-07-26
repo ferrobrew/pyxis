@@ -24,7 +24,7 @@ mod unions;
 
 pub use idents::{cpp_ident, cpp_namespace_ident};
 pub use items::{render_free_function_decl, render_free_function_definition};
-pub use types::render_type;
+pub use types::{render_declaration, render_declaration_with, render_parameter_type, render_type};
 
 /// Bundle of state every render call needs: the module being rendered (for
 /// "same-module → bare name vs cross-module → fully qualified" decisions),

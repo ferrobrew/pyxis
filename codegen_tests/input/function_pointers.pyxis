@@ -1,0 +1,55 @@
+// Function-pointer field types -- see ferrobrew/pyxis#121.
+//
+// `#[calling_convention(C)]` is the only non-default convention whose
+// generated Rust (`extern "C"`) compiles on every host the codegen corpus
+// builds against; the Windows-only ABIs are rejected by rustc elsewhere.
+// The full ident set is covered by the semantic tests.
+
+/// The engine a callback is handed a pointer to.
+pub type Engine {
+    pub frame: u32,
+}
+
+/// A named signature, reused below. A function-pointer type is an ordinary
+/// type, so it aliases like any other.
+pub type TickFn = fn(engine: *mut Engine, dt: f32);
+
+/// Callback slots. Nothing here is a vftable: the struct simply holds raw
+/// function pointers the target installs itself.
+pub type Callbacks {
+    /// Named parameters, default calling convention.
+    pub on_tick: fn(engine: *mut Engine, dt: f32),
+    /// Parameters may be left unnamed, and the signature can return a value.
+    pub on_event: fn(*mut Engine, u32) -> bool,
+    /// A no-argument slot.
+    pub on_shutdown: fn(),
+    /// The convention is selected by an attribute on the type itself, so it
+    /// works in nested positions too.
+    pub on_alloc: #[calling_convention(C)] fn(size: u32) -> *mut Engine,
+    /// A dispatch table: an array of function pointers, each with its own
+    /// convention.
+    pub table: [#[calling_convention(C)] fn(*mut Engine); 4],
+    /// Via the alias.
+    pub aliased: TickFn,
+    /// Pointer-to-function-pointer, for a slot the target rewrites in place.
+    pub indirect: *mut fn(*mut Engine),
+    /// A signature that itself takes a callback.
+    pub on_register: fn(callback: fn(*mut Engine), user_data: *mut Engine),
+    /// A pointer to a const function-pointer slot. `const` qualifies the
+    /// pointee, so it must land on the inner `*` in C++ (`void (*const *)()`),
+    /// not on the return type.
+    pub locked: *const fn(*mut Engine),
+    /// `_` is a parameter name, as it is in field position.
+    pub on_ignore: fn(_: u32),
+}
+impl Callbacks {
+    /// Function pointers work in argument and return position too.
+    #[address(0x2_000)]
+    pub fn install(&mut self, tick: fn(*mut Engine, f32)) -> fn(*mut Engine, f32);
+
+    /// An array parameter has to render identically in the declaration and in
+    /// the function-pointer alias the body calls through, or the two disagree
+    /// and the emitted C++ doesn't compile.
+    #[address(0x2_001)]
+    pub fn seed(&mut self, values: [u32; 4]);
+}

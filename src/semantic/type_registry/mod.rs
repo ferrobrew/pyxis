@@ -31,6 +31,10 @@ pub enum TypeLookupResult {
         /// The path of the private type
         item_path: ItemPath,
     },
+    /// The type itself is fine, but an attribute written in type position on
+    /// it isn't (unknown calling convention, attribute on a type that can't
+    /// consume it). Carries the diagnostic for the caller to surface as-is.
+    InvalidAttribute { error: Box<SemanticError> },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

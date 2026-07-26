@@ -504,6 +504,7 @@ pub fn build(
                             // Type exists but isn't resolved yet - defer function building
                             return Ok(FunctionBuildOutcome::Deferred);
                         }
+                        TypeLookupResult::InvalidAttribute { error } => return Err(*error),
                         TypeLookupResult::NotFound { .. }
                         | TypeLookupResult::PrivateAccess { .. } => {
                             return Err(SemanticError::TypeResolutionFailed {
@@ -533,6 +534,7 @@ pub fn build(
                 // Return type exists but isn't resolved yet - defer function building
                 return Ok(FunctionBuildOutcome::Deferred);
             }
+            TypeLookupResult::InvalidAttribute { error } => return Err(*error),
             TypeLookupResult::NotFound { .. } | TypeLookupResult::PrivateAccess { .. } => None,
         },
         None => None,

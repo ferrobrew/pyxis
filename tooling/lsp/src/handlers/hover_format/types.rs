@@ -1,7 +1,7 @@
 use super::*;
 
 use pyxis::{
-    grammar::{Expr, Ident, ItemDefinitionInner},
+    grammar::{Attribute, Expr, Ident, ItemDefinitionInner, TypeKind},
     semantic::types::{ItemDefinitionInner as ResolvedInner, ItemStateResolved},
 };
 
@@ -161,18 +161,18 @@ pub(crate) fn shell_hover_md(
     decl_registry: &DeclarationRegistry,
     pointer_size: usize,
 ) -> String {
-    match type_ {
-        Type::ConstPointer { pointee, .. } => {
+    match &type_.kind {
+        TypeKind::ConstPointer { pointee, .. } => {
             let mut md = format!("**pointer** `{type_}`\n\npoints to `{pointee}` (const)\n");
             push_facts(&mut md, &[("size", fmt_bytes(pointer_size))]);
             md
         }
-        Type::MutPointer { pointee, .. } => {
+        TypeKind::MutPointer { pointee, .. } => {
             let mut md = format!("**pointer** `{type_}`\n\npoints to `{pointee}` (mut)\n");
             push_facts(&mut md, &[("size", fmt_bytes(pointer_size))]);
             md
         }
-        Type::Array { element, size, .. } => {
+        TypeKind::Array { element, size, .. } => {
             let mut md = format!("**array** `{type_}`\n\n`{size}` × `{element}`\n");
             let mut facts = Vec::new();
             if let Some(s) = type_size_of(type_, type_registry, scope, decl_registry, pointer_size)
@@ -186,13 +186,42 @@ pub(crate) fn shell_hover_md(
             push_facts(&mut md, &facts);
             md
         }
-        Type::Unknown { size, .. } => {
+        TypeKind::Unknown { size, .. } => {
             let mut md = format!("**unknown** `{type_}`\n");
             push_facts(&mut md, &[("size", fmt_bytes(*size))]);
             md
         }
-        // type_hit_at only yields Shell for pointer/array/unknown.
-        Type::Ident { .. } => String::new(),
+        TypeKind::Function { .. } => {
+            // `Display for Type` omits attributes, so the convention — which
+            // is written as one — has to be pulled out and shown separately.
+            let convention = type_
+                .attributes
+                .0
+                .iter()
+                .find_map(|attribute| match attribute {
+                    Attribute::Function { name, items, .. }
+                        if name.as_str() == "calling_convention" =>
+                    {
+                        items.exprs().find_map(|expr| match expr {
+                            Expr::Ident { ident, .. } => Some(ident.as_str().to_string()),
+                            _ => None,
+                        })
+                    }
+                    _ => None,
+                })
+                .unwrap_or_else(|| "system".to_string());
+            let mut md = format!("**function pointer** `{type_}`\n");
+            push_facts(
+                &mut md,
+                &[
+                    ("size", fmt_bytes(pointer_size)),
+                    ("calling convention", convention),
+                ],
+            );
+            md
+        }
+        // type_hit_at only yields Shell for pointer/array/unknown/fn.
+        TypeKind::Ident { .. } => String::new(),
     }
 }
 
@@ -205,13 +234,15 @@ pub(crate) fn type_align_of(
     decl_registry: &DeclarationRegistry,
     pointer_size: usize,
 ) -> Option<usize> {
-    match type_ {
-        Type::ConstPointer { .. } | Type::MutPointer { .. } => Some(pointer_size),
-        Type::Array { element, .. } => {
+    match &type_.kind {
+        TypeKind::ConstPointer { .. } | TypeKind::MutPointer { .. } | TypeKind::Function { .. } => {
+            Some(pointer_size)
+        }
+        TypeKind::Array { element, .. } => {
             type_align_of(element, type_registry, scope, decl_registry, pointer_size)
         }
-        Type::Unknown { .. } => None,
-        Type::Ident { path, .. } => {
+        TypeKind::Unknown { .. } => None,
+        TypeKind::Ident { path, .. } => {
             let resolved = resolve_type_path(path, scope, decl_registry)?;
             type_registry
                 .get(&resolved, &ItemLocation::internal())
@@ -231,14 +262,16 @@ pub(crate) fn type_size_of(
     decl_registry: &DeclarationRegistry,
     pointer_size: usize,
 ) -> Option<usize> {
-    match type_ {
-        Type::ConstPointer { .. } | Type::MutPointer { .. } => Some(pointer_size),
-        Type::Array { element, size, .. } => {
+    match &type_.kind {
+        TypeKind::ConstPointer { .. } | TypeKind::MutPointer { .. } | TypeKind::Function { .. } => {
+            Some(pointer_size)
+        }
+        TypeKind::Array { element, size, .. } => {
             type_size_of(element, type_registry, scope, decl_registry, pointer_size)
                 .map(|s| s * size)
         }
-        Type::Unknown { size, .. } => Some(*size),
-        Type::Ident { path, .. } => {
+        TypeKind::Unknown { size, .. } => Some(*size),
+        TypeKind::Ident { path, .. } => {
             let resolved = resolve_type_path(path, scope, decl_registry)?;
             type_registry
                 .get(&resolved, &ItemLocation::internal())

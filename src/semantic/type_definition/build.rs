@@ -299,6 +299,7 @@ fn build_type_body<'a>(
                     TypeLookupResult::NotYetResolved => {
                         return Ok(BuildFlow::Outcome(Box::new(BuildOutcome::Deferred)));
                     }
+                    TypeLookupResult::InvalidAttribute { error } => return Err(*error),
                     TypeLookupResult::NotFound { type_name } => {
                         let field_name = if field_ident.0 == "_" {
                             "<anonymous>".to_string()

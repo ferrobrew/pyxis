@@ -8,10 +8,9 @@ use crate::{
     backends::Result,
     grammar::ItemPath,
     semantic::types::{
-        BitflagField, BitflagsDefinition, CallingConvention,
-        ConstDefinition as SemanticConstDefinition, ConstValue, EnumDefinition, EnumVariant,
-        ExternValueDefinition as SemanticExternValueDefinition, Function, FunctionBody,
-        ItemDefinitionInner, Region, Type, TypeAliasDefinition,
+        BitflagField, BitflagsDefinition, ConstDefinition as SemanticConstDefinition, ConstValue,
+        EnumDefinition, EnumVariant, ExternValueDefinition as SemanticExternValueDefinition,
+        Function, FunctionBody, ItemDefinitionInner, Region, Type, TypeAliasDefinition,
     },
     span::ItemLocation,
 };
@@ -346,8 +345,10 @@ pub fn render_free_function_decl(func: &Function, ctx: RenderCtx) -> Result<Opti
             Ok(Some(out))
         }
         FunctionBody::External => {
-            let (return_text, sig_args_text) = free_function_sig_parts(func, ctx)?;
-            writeln!(out, "{return_text} {name}({sig_args_text});")?;
+            let sig_args_text = free_function_sig_parts(func, ctx)?;
+            let declaration =
+                super::structs::method_declaration(func, &name, &sig_args_text, "", ctx)?;
+            writeln!(out, "{declaration};")?;
             Ok(Some(out))
         }
         _ => Ok(None),
@@ -372,32 +373,21 @@ pub fn render_free_function_definition(func: &Function, ctx: RenderCtx) -> Resul
     Ok(Some(out))
 }
 
-fn free_function_sig_parts(func: &Function, ctx: RenderCtx) -> Result<(String, String)> {
-    let return_text = func
-        .return_type
-        .as_ref()
-        .map(|t| super::render_type(t, ctx))
-        .transpose()?
-        .unwrap_or_else(|| "void".to_string());
+/// The parameter list of a free function. As with `method_sig_parts`, the
+/// return type is assembled by the declarator builder, not prepended here.
+fn free_function_sig_parts(func: &Function, ctx: RenderCtx) -> Result<String> {
     let mut sig_args = Vec::new();
     for arg in &func.arguments {
         if let crate::semantic::types::Argument::Field { name, type_, .. } = arg {
-            let ty = super::render_type(type_, ctx)?;
             let escaped = super::cpp_ident(name);
-            sig_args.push(format!("{ty} {escaped}"));
+            sig_args.push(super::render_declaration(type_, &escaped, ctx)?);
         }
     }
-    Ok((return_text, sig_args.join(", ")))
+    Ok(sig_args.join(", "))
 }
 
 /// `using foo_t = R (CC*)(P1, P2);`
 fn function_pointer_alias(func: &Function, ctx: RenderCtx) -> Result<String> {
-    let return_text = func
-        .return_type
-        .as_ref()
-        .map(|t| super::render_type(t, ctx))
-        .transpose()?
-        .unwrap_or_else(|| "void".to_string());
     let cc = super::structs::calling_conv_macro(func.calling_convention);
     let mut arg_types: Vec<String> = Vec::new();
     for arg in &func.arguments {
@@ -405,16 +395,20 @@ fn function_pointer_alias(func: &Function, ctx: RenderCtx) -> Result<String> {
             crate::semantic::types::Argument::ConstSelf { .. } => "const void*".to_string(),
             crate::semantic::types::Argument::MutSelf { .. } => "void*".to_string(),
             crate::semantic::types::Argument::Field { type_, .. } => {
-                super::render_type(type_, ctx)?
+                super::render_parameter_type(type_, ctx)?
             }
         };
         arg_types.push(ty);
     }
     let args_text = arg_types.join(", ");
     let name = super::cpp_ident(&func.name);
-    Ok(format!(
-        "using {name}_t = {return_text} ({cc}*)({args_text});"
-    ))
+    // Built through the declarator machinery so a function-pointer return type
+    // nests correctly instead of being glued on as a leading `R`.
+    let target = match &func.return_type {
+        Some(ret) => super::render_declaration(ret, &format!("({cc}*)({args_text})"), ctx)?,
+        None => format!("void ({cc}*)({args_text})"),
+    };
+    Ok(format!("using {name}_t = {target};"))
 }
 
 /// Header-side declaration of an `extern <name>: <type>` value: a getter
@@ -469,79 +463,12 @@ pub(super) fn render_field_indented(
         return Ok(());
     };
     let field_name = super::cpp_ident(field_name);
-    // Arrays render as `T name[N1][N2]...` (C++ array dimensions follow the
-    // declarator, outer-to-inner); function pointers as `R (cc *name)(args)`;
-    // everything else as a plain `T name`.
-    match &region.type_ref {
-        Type::Array(_, _) => {
-            // Walk the nested Array chain to collect every dimension and find
-            // the innermost element type, then emit `T name[N1][N2]...`.
-            let mut dims: Vec<String> = Vec::new();
-            let mut elem = &region.type_ref;
-            while let Type::Array(inner, n) = elem {
-                dims.push(n.to_string());
-                elem = inner;
-            }
-            let inner_text = super::render_type(elem, ctx)?;
-            let suffix = dims
-                .iter()
-                .map(|d| format!("[{d}]"))
-                .collect::<Vec<_>>()
-                .join("");
-            writeln!(out, "{pad}{inner_text} {field_name}{suffix};")?;
-        }
-        Type::Function(cc, args, ret) => {
-            let decl = render_function_pointer_decl(
-                &field_name,
-                *cc,
-                args,
-                ret.as_deref(),
-                ctx,
-                rewrite_self_arg_to_void_ptr,
-            )?;
-            writeln!(out, "{pad}{decl};")?;
-        }
-        _ => {
-            let ty_text = super::render_type(&region.type_ref, ctx)?;
-            writeln!(out, "{pad}{ty_text} {field_name};")?;
-        }
-    }
+    let decl = super::render_declaration_with(
+        &region.type_ref,
+        &field_name,
+        ctx,
+        rewrite_self_arg_to_void_ptr,
+    )?;
+    writeln!(out, "{pad}{decl};")?;
     Ok(())
-}
-
-/// Render `R (cc *name)(args)` for a function-pointer-typed declaration
-/// (struct field, parameter, ...). When `rewrite_self_arg_to_void_ptr`,
-/// the first arg's pointer type is replaced with `void*` (or `const void*`
-/// preserving const-ness) - used for vftable struct slots so derived
-/// types can pass their `this` without explicit base-chain casts.
-fn render_function_pointer_decl(
-    name: &str,
-    cc: CallingConvention,
-    args: &[(String, Box<Type>)],
-    ret: Option<&Type>,
-    ctx: RenderCtx,
-    rewrite_self_arg_to_void_ptr: bool,
-) -> Result<String> {
-    let cc_macro = super::structs::calling_conv_macro(cc);
-    let ret_text = ret
-        .map(|t| super::render_type(t, ctx))
-        .transpose()?
-        .unwrap_or_else(|| "void".to_string());
-    let arg_types = args
-        .iter()
-        .enumerate()
-        .map(|(i, (_, t))| {
-            if rewrite_self_arg_to_void_ptr && i == 0 {
-                Ok(match t.as_ref() {
-                    Type::ConstPointer(_) => "const void*".to_string(),
-                    Type::MutPointer(_) => "void*".to_string(),
-                    _ => super::render_type(t, ctx)?,
-                })
-            } else {
-                super::render_type(t, ctx)
-            }
-        })
-        .collect::<Result<Vec<_>>>()?
-        .join(", ");
-    Ok(format!("{ret_text} ({cc_macro}*{name})({arg_types})"))
 }

@@ -114,6 +114,7 @@ pub mod extern_values;
 pub mod external_body;
 pub mod field_type_name_collision;
 pub mod freestanding_functions;
+pub mod function_pointers;
 pub mod generics;
 pub mod generics_cross_module;
 pub mod math;
