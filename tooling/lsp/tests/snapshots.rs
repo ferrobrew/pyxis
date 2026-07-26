@@ -181,6 +181,10 @@ fn snapshot_completion() {
           },
           {
             "kind": 14,
+            "label": "union"
+          },
+          {
+            "kind": 14,
             "label": "impl"
           },
           {

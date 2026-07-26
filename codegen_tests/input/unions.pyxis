@@ -1,0 +1,102 @@
+/// A value whose bytes have several competing readings. Which one applies is
+/// decided by [`TaggedValue::kind`], not by the union itself.
+#[copyable]
+pub union Payload {
+    /// Read as a signed integer.
+    pub as_int: i32,
+    /// Read as a float.
+    pub as_float: f32,
+    /// Read as a pointer to something else.
+    pub as_ptr: *mut i32,
+}
+
+/// A tagged value pairing a discriminant with a [`Payload`]. When `kind` is 0,
+/// the live member is [`Payload::as_int`].
+#[size(0x10)]
+pub type TaggedValue {
+    pub kind: u32,
+
+    #[address(0x8)]
+    pub payload: Payload,
+}
+
+/// A union declared inline in field position. It lowers to a generated sibling
+/// item named `InlineScratchDataUnion`.
+pub type InlineScratch {
+    pub tag: u16,
+    pub _reserved: unknown<0x6>,
+    pub data: union {
+        pub as_u64: u64,
+        pub as_bytes: [u8; 8],
+    },
+}
+
+/// Members can be structs, and the union takes the strictest alignment and the
+/// largest size among them.
+#[copyable]
+pub type Vec2 {
+    pub x: f32,
+    pub y: f32,
+}
+
+#[copyable]
+pub union Geometry {
+    pub point: Vec2,
+    pub scalar: f64,
+    pub raw: [u8; 8],
+}
+
+/// `#[size]` pads a union out beyond its largest member, and `#[align]`
+/// over-aligns it.
+#[size(0x10), align(16)]
+pub union PaddedSlot {
+    pub small: u32,
+    pub medium: u64,
+}
+
+/// `#[size]` alone asks for more room than any member needs, so the union gains
+/// a whole-width `_padding` member. Rounding up to `#[align]` needs no such help
+/// — see [`PaddedSlot`], which gets none.
+#[size(0x10)]
+pub union OversizedSlot {
+    pub small: u32,
+    pub medium: u64,
+}
+
+/// A pinned union can be neither copied nor moved.
+#[pinned]
+pub union Anchored {
+    pub value: u64,
+    pub halves: [u32; 2],
+}
+
+/// `#[packed]` drops the union's alignment to 1.
+#[packed]
+pub union PackedPair {
+    pub word: u16,
+    pub bytes: [u8; 2],
+}
+
+/// A union nested inside another union, plus a nested item declaration in a
+/// union body.
+pub union Outer {
+    /// A type declared inside a union body. Nested declarations work here
+    /// exactly as they do in a `type` body.
+    pub type Header {
+        pub magic: u32,
+    },
+
+    pub raw: u32,
+    pub inner: union {
+        pub lo: u16,
+        pub hi: [u8; 2],
+    },
+}
+
+/// A defaultable union gets a hand-written `Default` in Rust — a union can't
+/// derive one, because nothing knows which member is live.
+#[defaultable, copyable]
+pub union ZeroInit {
+    pub count: u32,
+    pub flags: [u8; 4],
+}

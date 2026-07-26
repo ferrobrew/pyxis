@@ -9,7 +9,7 @@ use crate::span::StripLocations;
 
 use super::{
     BitflagsDefinition, ConstDefinition, EnumDefinition, ExternValueDefinition,
-    TypeAliasDefinition, TypeDefinition, Visibility,
+    TypeAliasDefinition, TypeDefinition, UnionDefinition, Visibility,
 };
 
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]
@@ -18,6 +18,7 @@ pub enum ItemDefinitionInner {
     Type(TypeDefinition),
     Enum(EnumDefinition),
     Bitflags(BitflagsDefinition),
+    Union(UnionDefinition),
     TypeAlias(TypeAliasDefinition),
     Constant(ConstDefinition),
     ExternValue(ExternValueDefinition),
@@ -30,6 +31,11 @@ impl From<TypeDefinition> for ItemDefinitionInner {
 impl From<EnumDefinition> for ItemDefinitionInner {
     fn from(ed: EnumDefinition) -> Self {
         ItemDefinitionInner::Enum(ed)
+    }
+}
+impl From<UnionDefinition> for ItemDefinitionInner {
+    fn from(ud: UnionDefinition) -> Self {
+        ItemDefinitionInner::Union(ud)
     }
 }
 impl From<BitflagsDefinition> for ItemDefinitionInner {
@@ -58,6 +64,7 @@ impl ItemDefinitionInner {
             ItemDefinitionInner::Type(td) => td.defaultable,
             ItemDefinitionInner::Enum(ed) => ed.default.is_some(),
             ItemDefinitionInner::Bitflags(bd) => bd.default.is_some(),
+            ItemDefinitionInner::Union(ud) => ud.defaultable,
             ItemDefinitionInner::TypeAlias(_) => false, // Type aliases don't have defaultable
             ItemDefinitionInner::Constant(_) => false,
             ItemDefinitionInner::ExternValue(_) => false,
@@ -68,6 +75,7 @@ impl ItemDefinitionInner {
             ItemDefinitionInner::Type(td) => td.copyable,
             ItemDefinitionInner::Enum(ed) => ed.copyable,
             ItemDefinitionInner::Bitflags(bd) => bd.copyable,
+            ItemDefinitionInner::Union(ud) => ud.copyable,
             ItemDefinitionInner::TypeAlias(_) => false, // Type aliases don't have copyable
             ItemDefinitionInner::Constant(_) => false,
             ItemDefinitionInner::ExternValue(_) => false,
@@ -78,6 +86,7 @@ impl ItemDefinitionInner {
             ItemDefinitionInner::Type(td) => td.cloneable,
             ItemDefinitionInner::Enum(ed) => ed.cloneable,
             ItemDefinitionInner::Bitflags(bd) => bd.cloneable,
+            ItemDefinitionInner::Union(ud) => ud.cloneable,
             ItemDefinitionInner::TypeAlias(_) => false, // Type aliases don't have cloneable
             ItemDefinitionInner::Constant(_) => false,
             ItemDefinitionInner::ExternValue(_) => false,
@@ -88,6 +97,7 @@ impl ItemDefinitionInner {
             ItemDefinitionInner::Type(td) => td.pinned,
             ItemDefinitionInner::Enum(ed) => ed.pinned,
             ItemDefinitionInner::Bitflags(bd) => bd.pinned,
+            ItemDefinitionInner::Union(ud) => ud.pinned,
             ItemDefinitionInner::TypeAlias(_) => false, // Type aliases don't have pinned
             ItemDefinitionInner::Constant(_) => false,
             ItemDefinitionInner::ExternValue(_) => false,
@@ -110,9 +120,16 @@ impl ItemDefinitionInner {
             ItemDefinitionInner::Type(_) => "a type",
             ItemDefinitionInner::Enum(_) => "an enum",
             ItemDefinitionInner::Bitflags(_) => "a bitflags",
+            ItemDefinitionInner::Union(_) => "a union",
             ItemDefinitionInner::TypeAlias(_) => "a type alias",
             ItemDefinitionInner::Constant(_) => "a constant",
             ItemDefinitionInner::ExternValue(_) => "an extern value",
+        }
+    }
+    pub fn as_union(&self) -> Option<&UnionDefinition> {
+        match self {
+            Self::Union(v) => Some(v),
+            _ => None,
         }
     }
     pub fn as_type_alias(&self) -> Option<&TypeAliasDefinition> {

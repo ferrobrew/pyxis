@@ -8,7 +8,7 @@ pub use crate::parser::{
         BitflagsDefItem, BitflagsDefinition, BitflagsStatement, Comment, ConstDefinition,
         EnumDefItem, EnumDefinition, EnumStatement, ExternValueDefinition, ItemDefinition,
         ItemDefinitionInner, TypeAliasDefinition, TypeDefItem, TypeDefinition, TypeField,
-        TypeStatement,
+        TypeStatement, UnionDefinition,
     },
     module::{Module, ModuleItem},
     paths::{ItemPath, ItemPathSegment},
@@ -23,6 +23,7 @@ pub mod test_aliases {
     pub type ID = super::ItemDefinition;
     pub type TS = super::TypeStatement;
     pub type TD = super::TypeDefinition;
+    pub type UD = super::UnionDefinition;
     pub type ES = super::EnumStatement;
     pub type ED = super::EnumDefinition;
     pub type BFS = super::BitflagsStatement;

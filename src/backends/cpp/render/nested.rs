@@ -7,7 +7,8 @@ use std::fmt::Write;
 use super::{RenderCtx, items::format_const_value};
 use crate::{
     backends::Result,
-    semantic::types::{ConstValue, ItemDefinitionInner, TypeDefinition},
+    grammar::ItemPath,
+    semantic::types::{ConstValue, ItemDefinitionInner},
     span::ItemLocation,
 };
 
@@ -17,15 +18,15 @@ use crate::{
 /// `deferred_consts` for the caller to emit after the class body.
 pub(super) fn render_declarations(
     body: &mut String,
-    td: &TypeDefinition,
+    nested_item_paths: &[ItemPath],
     ctx: RenderCtx,
     deferred_consts: &mut Vec<(String, String, String)>,
 ) -> Result<()> {
-    if td.nested_item_paths.is_empty() {
+    if nested_item_paths.is_empty() {
         return Ok(());
     }
     let mut prev_was_constant = false;
-    for nested_path in &td.nested_item_paths {
+    for nested_path in nested_item_paths {
         if let Ok(nested_item) = ctx.registry.get(nested_path, &ItemLocation::internal()) {
             if let Some(nested_resolved) = nested_item.resolved() {
                 let curr_is_constant =
@@ -98,6 +99,20 @@ pub(super) fn render_declarations(
                                     "        static constexpr {bf_type} {nested_const_name} = {value_str};"
                                 )?;
                             }
+                        }
+                        writeln!(body, "    }};")?;
+                    }
+                    ItemDefinitionInner::Union(nested_ud) => {
+                        super::types::render_doc(
+                            body,
+                            &nested_ud.doc,
+                            1,
+                            ctx,
+                            &nested_item.location,
+                        )?;
+                        writeln!(body, "    union {nested_name} {{")?;
+                        for region in &nested_ud.regions {
+                            super::items::render_field_indented(body, region, ctx, false, 2)?;
                         }
                         writeln!(body, "    }};")?;
                     }
@@ -221,11 +236,11 @@ pub(super) fn render_declarations(
 /// picks `out` accordingly.
 pub(super) fn render_extern_value_definitions(
     out: &mut String,
-    td: &TypeDefinition,
+    nested_item_paths: &[ItemPath],
     parent_name: &str,
     ctx: RenderCtx,
 ) -> Result<()> {
-    for nested_path in &td.nested_item_paths {
+    for nested_path in nested_item_paths {
         let Ok(nested_item) = ctx.registry.get(nested_path, &ItemLocation::internal()) else {
             continue;
         };

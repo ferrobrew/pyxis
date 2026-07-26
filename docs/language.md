@@ -201,6 +201,127 @@ pub type GameObject {
 }
 ```
 
+## Unions
+
+A union is a set of competing readings of the same bytes. Every member starts at
+offset 0; only one applies at a time, and *which* one is a property of the
+surrounding data, not of the union itself. Unions turn up constantly in the code
+pyxis describes: variant payloads, reinterpreted scratch space, engine value
+types that hold an int or a float or a pointer depending on a nearby tag.
+
+```pyxis
+/// A value whose bytes have several competing readings.
+#[copyable]
+pub union Payload {
+    /// Read as a signed integer.
+    pub as_int: i32,
+    pub as_float: f32,
+    pub as_ptr: *mut void,
+}
+```
+
+The union's size is that of its largest member, rounded up to its alignment; its
+alignment is the strictest of its members'. Note this differs from a `type`,
+which falls back to the pointer size when no alignment is implied — a union of
+two `u8`s is genuinely 1-aligned, and widening it would inflate its size.
+
+A union is used like any other type:
+
+```pyxis
+#[size(0x10)]
+pub type TaggedValue {
+    pub kind: u32,
+
+    #[address(0x8)]
+    pub payload: Payload,
+}
+```
+
+### Inline unions
+
+A union that isn't worth naming separately can be written directly in field
+position. The field name supplies the name:
+
+```pyxis
+pub type Scratch {
+    pub tag: u16,
+    pub _reserved: unknown<6>,
+
+    pub data: union {
+        pub as_u64: u64,
+        pub as_bytes: [u8; 8],
+    },
+}
+```
+
+This desugars to a generated union item at module scope, named
+`{Type}{Field}Union` — here `ScratchDataUnion` — plus an ordinary `data` field
+referring to it. The generated item is a sibling of its parent rather than a
+nested item, mirroring the generated `{Name}Vftable` structs.
+
+The `union { … }` form is confined to field position. It cannot appear behind a
+pointer, inside an array, or in a function signature; for those, declare a named
+union.
+
+### What a union body can contain
+
+Inside a *named* union, nested `type`, `enum`, `bitflags`, and `union`
+declarations work exactly as they do in a `type` body. A member may itself be an
+inline union.
+
+These constructs are rejected:
+
+| Rejected | Why |
+|------|----|
+| `#[base]` on a member | A base class must sit at a known offset, and every union member starts at 0. It would break the inheritance hierarchy, the generated conversions, and vftable inheritance. |
+| A `vftable` block | A vftable pointer must occupy offset 0 exclusively, which a union cannot guarantee. |
+| `#[address]` on a member | Every union member starts at offset 0 by definition. |
+| A member named `_` | `_` marks padding, but every union member already covers the same bytes as its siblings. |
+| A nested declaration inside an *inline* union | The generated item is synthesised at a module-scope path, so anything declared under it would be unreachable. Declare it in the enclosing type, or give the union a name. |
+
+A union with no members is an error — it would have no size.
+
+The name an inline union generates must be free. `pub union FooBarUnion { … }`
+alongside `pub type Foo { pub bar: union { … } }` is an error rather than a
+silent overwrite, as are two fields whose names differ only in underscores
+(`b_c` and `bc` both generate `BC`).
+
+### Attributes on unions
+
+`#[size]`, `#[min_size]`, `#[align]`, `#[packed]`, `#[copyable]`, `#[cloneable]`,
+`#[defaultable]`, and `#[pinned]` all mean what they do on a `type`. `#[size(N)]`
+fixes the size at `N` and rejects any member larger than `N`; `#[align(N)]`
+over-aligns it and rejects an `N` below what the members require.
+
+Padding a union is not a tail the way it is for a type — there is no tail, only
+offset 0 — so when `#[size]` or `#[min_size]` asks for more room than any member
+needs, the union gains a `_padding` member covering the whole width. It shows up
+in the generated code and in the docs like any other member.
+
+On an *inline* union, these go on the field, and are forwarded to the generated
+union item — except `#[address]`, which continues to mean the field's offset
+within its parent:
+
+```pyxis
+pub type Slot {
+    #[address(0x8)]
+    #[size(0x10)]
+    pub payload: union {
+        pub small: u32,
+        pub medium: u64,
+    },
+}
+```
+
+Unions cannot be generic.
+
+### Discriminants are out of scope
+
+A union says what the bytes *could* be; it does not say which reading is live.
+Selecting a member based on a nearby tag field is a relationship between fields
+rather than a layout fact, and pyxis deliberately does not model it. The
+consumer decides which reading applies.
+
 ## Enums
 
 An enum describes a tagged integer with named variants:
@@ -632,7 +753,7 @@ The size is `N` bytes and alignment is 1. It has no type - you can't take a poin
 
 `meta` and `functions` are tokenized as keywords but have no current meaning in the language. Avoid them as identifiers to stay forward-compatible with future features.
 
-The full keyword list is: `pub`, `type`, `enum`, `bitflags`, `impl`, `fn`, `extern`, `use`, `meta`, `functions`, `vftable`, `unknown`, `prologue`, `epilogue`, `mut`, `const`, `self`, `Self`, `_`.
+The full keyword list is: `pub`, `type`, `enum`, `bitflags`, `union`, `impl`, `fn`, `extern`, `use`, `meta`, `functions`, `vftable`, `unknown`, `prologue`, `epilogue`, `mut`, `const`, `self`, `Self`, `_`.
 
 ## Attributes
 
@@ -642,10 +763,10 @@ Attributes apply to items, fields, and functions. They're written as `#[name]`, 
 
 | Attribute | Applies to | Effect |
 |------|------|----|
-| `#[size(N)]` | Types | Sets the exact size in bytes. The semantic layer verifies that fields sum to this size. |
-| `#[align(N)]` | Types | Sets alignment in bytes. Mutually exclusive with `#[packed]`. |
-| `#[min_size(N)]` | Types, opaque types | Sets a minimum size. Useful for opaque forward declarations that need a footprint: `#[min_size(8)] pub type Marker;` gives the type 8 bytes and alignment 1. |
-| `#[packed]` | Types | Removes padding between fields. Mutually exclusive with `#[align]`. |
+| `#[size(N)]` | Types, unions | Sets the exact size in bytes. The semantic layer verifies that fields sum to this size. |
+| `#[align(N)]` | Types, unions | Sets alignment in bytes. Mutually exclusive with `#[packed]`. |
+| `#[min_size(N)]` | Types, opaque types, unions | Sets a minimum size. Useful for opaque forward declarations that need a footprint: `#[min_size(8)] pub type Marker;` gives the type 8 bytes and alignment 1. |
+| `#[packed]` | Types, unions | Removes padding between fields. Mutually exclusive with `#[align]`. |
 
 `#[min_size(N)]` exists because opaque types (`pub type Foo;`) have size 0 by default, and embedding a zero-size type by value is rejected. `#[min_size]` gives the opaque type a real footprint so it can appear as a field without a known layout. If the computed size is smaller than `min_size`, it's rounded up.
 
@@ -691,11 +812,11 @@ The default calling convention is `thiscall` on 32-bit (when the function has `&
 
 | Attribute | Applies to | Effect |
 |------|------|----|
-| `#[copyable]` | Types, enums, bitflags | Rust backend: derives `Copy` + `Clone`. Suppressed by `#[pinned]`. |
-| `#[cloneable]` | Types, enums, bitflags | Rust backend: derives `Clone` only. Suppressed by `#[pinned]`. |
-| `#[defaultable]` | Types, enums, bitflags | Rust backend: derives `Default`. On enums/bitflags, requires a `#[default]` variant. |
+| `#[copyable]` | Types, enums, bitflags, unions | Rust backend: derives `Copy` + `Clone`. Suppressed by `#[pinned]`. |
+| `#[cloneable]` | Types, enums, bitflags, unions | Rust backend: derives `Clone` only. Suppressed by `#[pinned]`. |
+| `#[defaultable]` | Types, enums, bitflags, unions | Rust backend: derives `Default`. On enums/bitflags, requires a `#[default]` variant. On unions, a `Default` impl is written out rather than derived, since a union cannot derive one. |
 | `#[default]` | Enum/bitflag variants | Marks the default variant for `Default` derivation. |
-| `#[pinned]` | Types, enums, bitflags | Rust backend: adds a `PhantomPinned` field and suppresses `Copy`/`Clone`. The type must not be relocated in memory. |
+| `#[pinned]` | Types, enums, bitflags, unions | Rust backend: adds a `PhantomPinned` field and suppresses `Copy`/`Clone`. The type must not be relocated in memory. On a union it only suppresses the derives — an extra member would be another reading of the same bytes, not an extra field. |
 
 `#[pinned]` exists because some types have addresses that must not change - the target binary passes pointers to `this` or its fields around, and moving the object would invalidate those pointers. `PhantomPinned` makes the type `!Unpin`, forcing consumers to use `Pin<&mut T>` or `Box::pin`.
 

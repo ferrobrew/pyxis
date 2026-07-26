@@ -26,9 +26,34 @@ pub enum SigKind {
     Type,
     Enum,
     Bitflags,
+    Union,
     TypeAlias,
     Constant,
     ExternValue,
+}
+
+/// The kind of a declared item, for the name index's signature map.
+fn sig_kind(inner: &grammar::ItemDefinitionInner) -> SigKind {
+    match inner {
+        grammar::ItemDefinitionInner::Type(_) => SigKind::Type,
+        grammar::ItemDefinitionInner::Enum(_) => SigKind::Enum,
+        grammar::ItemDefinitionInner::Bitflags(_) => SigKind::Bitflags,
+        grammar::ItemDefinitionInner::Union(_) => SigKind::Union,
+        grammar::ItemDefinitionInner::TypeAlias(_) => SigKind::TypeAlias,
+        grammar::ItemDefinitionInner::Constant(_) => SigKind::Constant,
+        grammar::ItemDefinitionInner::ExternValue(_) => SigKind::ExternValue,
+    }
+}
+
+/// The type-body statements of an item that has one. `union` bodies reuse the
+/// `type` body AST, so anywhere that walks a type body for nested items must
+/// walk a union body the same way.
+fn body_statements(inner: &grammar::ItemDefinitionInner) -> Vec<&grammar::TypeStatement> {
+    match inner {
+        grammar::ItemDefinitionInner::Type(td) => td.statements().collect(),
+        grammar::ItemDefinitionInner::Union(ud) => ud.statements().collect(),
+        _ => Vec::new(),
+    }
 }
 
 /// A declared item's stable signature: its kind and generic arity.
@@ -136,14 +161,7 @@ impl NameIndex {
 
         for def in module.definitions() {
             let path = module_path.join(def.name.as_str().into());
-            let kind = match &def.inner {
-                grammar::ItemDefinitionInner::Type(_) => SigKind::Type,
-                grammar::ItemDefinitionInner::Enum(_) => SigKind::Enum,
-                grammar::ItemDefinitionInner::Bitflags(_) => SigKind::Bitflags,
-                grammar::ItemDefinitionInner::TypeAlias(_) => SigKind::TypeAlias,
-                grammar::ItemDefinitionInner::Constant(_) => SigKind::Constant,
-                grammar::ItemDefinitionInner::ExternValue(_) => SigKind::ExternValue,
-            };
+            let kind = sig_kind(&def.inner);
             self.items.insert(
                 path.clone(),
                 ItemSig {
@@ -153,20 +171,13 @@ impl NameIndex {
             );
             self.item_files.insert(path.clone(), file_index);
 
-            // Recurse into type bodies to find nested items.
+            // Recurse into type/union bodies to find nested items.
             // Only read TypeField::Item data (name, kind, arity) to preserve backdating.
-            if let grammar::ItemDefinitionInner::Type(td) = &def.inner {
-                for stmt in td.statements() {
+            {
+                for stmt in body_statements(&def.inner) {
                     if let grammar::TypeField::Item(inner) = &stmt.field {
                         let nested_path = path.join(inner.name.as_str().into());
-                        let nested_kind = match &inner.inner {
-                            grammar::ItemDefinitionInner::Type(_) => SigKind::Type,
-                            grammar::ItemDefinitionInner::Enum(_) => SigKind::Enum,
-                            grammar::ItemDefinitionInner::Bitflags(_) => SigKind::Bitflags,
-                            grammar::ItemDefinitionInner::TypeAlias(_) => SigKind::TypeAlias,
-                            grammar::ItemDefinitionInner::Constant(_) => SigKind::Constant,
-                            grammar::ItemDefinitionInner::ExternValue(_) => SigKind::ExternValue,
-                        };
+                        let nested_kind = sig_kind(&inner.inner);
                         self.items.insert(
                             nested_path.clone(),
                             ItemSig {
@@ -190,22 +201,7 @@ impl NameIndex {
                                 if let grammar::EnumDefItem::Item(nested2) = item {
                                     let nested2_path =
                                         nested_path.join(nested2.name.as_str().into());
-                                    let nested2_kind = match &nested2.inner {
-                                        grammar::ItemDefinitionInner::Type(_) => SigKind::Type,
-                                        grammar::ItemDefinitionInner::Enum(_) => SigKind::Enum,
-                                        grammar::ItemDefinitionInner::Bitflags(_) => {
-                                            SigKind::Bitflags
-                                        }
-                                        grammar::ItemDefinitionInner::TypeAlias(_) => {
-                                            SigKind::TypeAlias
-                                        }
-                                        grammar::ItemDefinitionInner::Constant(_) => {
-                                            SigKind::Constant
-                                        }
-                                        grammar::ItemDefinitionInner::ExternValue(_) => {
-                                            SigKind::ExternValue
-                                        }
-                                    };
+                                    let nested2_kind = sig_kind(&nested2.inner);
                                     self.items.insert(
                                         nested2_path.clone(),
                                         ItemSig {
@@ -230,22 +226,7 @@ impl NameIndex {
                                 if let grammar::BitflagsDefItem::Item(nested2) = item {
                                     let nested2_path =
                                         nested_path.join(nested2.name.as_str().into());
-                                    let nested2_kind = match &nested2.inner {
-                                        grammar::ItemDefinitionInner::Type(_) => SigKind::Type,
-                                        grammar::ItemDefinitionInner::Enum(_) => SigKind::Enum,
-                                        grammar::ItemDefinitionInner::Bitflags(_) => {
-                                            SigKind::Bitflags
-                                        }
-                                        grammar::ItemDefinitionInner::TypeAlias(_) => {
-                                            SigKind::TypeAlias
-                                        }
-                                        grammar::ItemDefinitionInner::Constant(_) => {
-                                            SigKind::Constant
-                                        }
-                                        grammar::ItemDefinitionInner::ExternValue(_) => {
-                                            SigKind::ExternValue
-                                        }
-                                    };
+                                    let nested2_kind = sig_kind(&nested2.inner);
                                     self.items.insert(
                                         nested2_path.clone(),
                                         ItemSig {
@@ -273,14 +254,7 @@ impl NameIndex {
                 for item in &ed.items {
                     if let grammar::EnumDefItem::Item(inner) = item {
                         let nested_path = path.join(inner.name.as_str().into());
-                        let nested_kind = match &inner.inner {
-                            grammar::ItemDefinitionInner::Type(_) => SigKind::Type,
-                            grammar::ItemDefinitionInner::Enum(_) => SigKind::Enum,
-                            grammar::ItemDefinitionInner::Bitflags(_) => SigKind::Bitflags,
-                            grammar::ItemDefinitionInner::TypeAlias(_) => SigKind::TypeAlias,
-                            grammar::ItemDefinitionInner::Constant(_) => SigKind::Constant,
-                            grammar::ItemDefinitionInner::ExternValue(_) => SigKind::ExternValue,
-                        };
+                        let nested_kind = sig_kind(&inner.inner);
                         self.items.insert(
                             nested_path.clone(),
                             ItemSig {
@@ -305,14 +279,7 @@ impl NameIndex {
                 for item in &bd.items {
                     if let grammar::BitflagsDefItem::Item(inner) = item {
                         let nested_path = path.join(inner.name.as_str().into());
-                        let nested_kind = match &inner.inner {
-                            grammar::ItemDefinitionInner::Type(_) => SigKind::Type,
-                            grammar::ItemDefinitionInner::Enum(_) => SigKind::Enum,
-                            grammar::ItemDefinitionInner::Bitflags(_) => SigKind::Bitflags,
-                            grammar::ItemDefinitionInner::TypeAlias(_) => SigKind::TypeAlias,
-                            grammar::ItemDefinitionInner::Constant(_) => SigKind::Constant,
-                            grammar::ItemDefinitionInner::ExternValue(_) => SigKind::ExternValue,
-                        };
+                        let nested_kind = sig_kind(&inner.inner);
                         self.items.insert(
                             nested_path.clone(),
                             ItemSig {
@@ -370,18 +337,11 @@ impl NameIndex {
         module_path: &ItemPath,
         file_index: usize,
     ) {
-        if let grammar::ItemDefinitionInner::Type(td) = inner {
-            for stmt in td.statements() {
+        {
+            for stmt in body_statements(inner) {
                 if let grammar::TypeField::Item(nested) = &stmt.field {
                     let nested_path = parent_path.join(nested.name.as_str().into());
-                    let nested_kind = match &nested.inner {
-                        grammar::ItemDefinitionInner::Type(_) => SigKind::Type,
-                        grammar::ItemDefinitionInner::Enum(_) => SigKind::Enum,
-                        grammar::ItemDefinitionInner::Bitflags(_) => SigKind::Bitflags,
-                        grammar::ItemDefinitionInner::TypeAlias(_) => SigKind::TypeAlias,
-                        grammar::ItemDefinitionInner::Constant(_) => SigKind::Constant,
-                        grammar::ItemDefinitionInner::ExternValue(_) => SigKind::ExternValue,
-                    };
+                    let nested_kind = sig_kind(&nested.inner);
                     self.items.insert(
                         nested_path.clone(),
                         ItemSig {
@@ -404,18 +364,7 @@ impl NameIndex {
                         for item in &ed.items {
                             if let grammar::EnumDefItem::Item(nested2) = item {
                                 let nested2_path = nested_path.join(nested2.name.as_str().into());
-                                let nested2_kind = match &nested2.inner {
-                                    grammar::ItemDefinitionInner::Type(_) => SigKind::Type,
-                                    grammar::ItemDefinitionInner::Enum(_) => SigKind::Enum,
-                                    grammar::ItemDefinitionInner::Bitflags(_) => SigKind::Bitflags,
-                                    grammar::ItemDefinitionInner::TypeAlias(_) => {
-                                        SigKind::TypeAlias
-                                    }
-                                    grammar::ItemDefinitionInner::Constant(_) => SigKind::Constant,
-                                    grammar::ItemDefinitionInner::ExternValue(_) => {
-                                        SigKind::ExternValue
-                                    }
-                                };
+                                let nested2_kind = sig_kind(&nested2.inner);
                                 self.items.insert(
                                     nested2_path.clone(),
                                     ItemSig {
@@ -439,18 +388,7 @@ impl NameIndex {
                         for item in &bd.items {
                             if let grammar::BitflagsDefItem::Item(nested2) = item {
                                 let nested2_path = nested_path.join(nested2.name.as_str().into());
-                                let nested2_kind = match &nested2.inner {
-                                    grammar::ItemDefinitionInner::Type(_) => SigKind::Type,
-                                    grammar::ItemDefinitionInner::Enum(_) => SigKind::Enum,
-                                    grammar::ItemDefinitionInner::Bitflags(_) => SigKind::Bitflags,
-                                    grammar::ItemDefinitionInner::TypeAlias(_) => {
-                                        SigKind::TypeAlias
-                                    }
-                                    grammar::ItemDefinitionInner::Constant(_) => SigKind::Constant,
-                                    grammar::ItemDefinitionInner::ExternValue(_) => {
-                                        SigKind::ExternValue
-                                    }
-                                };
+                                let nested2_kind = sig_kind(&nested2.inner);
                                 self.items.insert(
                                     nested2_path.clone(),
                                     ItemSig {

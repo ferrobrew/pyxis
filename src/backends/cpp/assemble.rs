@@ -285,6 +285,7 @@ fn intra_module_forward_decls(
                 format!("template <{params}> struct {leaf};")
             }
             ItemDefinitionInner::Type(_) => format!("struct {leaf};"),
+            ItemDefinitionInner::Union(_) => format!("union {leaf};"),
             ItemDefinitionInner::Enum(ed) => {
                 let underlying = render::render_type(&ed.type_, ctx)
                     .unwrap_or_else(|_| "::std::int32_t".to_string());

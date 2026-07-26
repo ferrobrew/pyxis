@@ -22,6 +22,7 @@ import type {
   JsonTypeDefinition,
   JsonEnumDefinition,
   JsonBitflagsDefinition,
+  JsonUnionDefinition,
   JsonConstValue,
   JsonDocLink,
   JsonSplice,
@@ -34,10 +35,31 @@ const KIND_KEYWORD: Record<string, string> = {
   type: 'type',
   enum: 'enum',
   bitflags: 'bitflags',
+  union: 'union',
   type_alias: 'type',
   constant: 'const',
   extern_value: 'extern',
 };
+
+// Map an item kind onto the palette/label vocabulary in `utils/colors`.
+function itemTypeOfKind(kind: JsonItem['kind']['type']): ItemType {
+  switch (kind) {
+    case 'enum':
+      return 'enum';
+    case 'bitflags':
+      return 'bitflags';
+    case 'union':
+      return 'union';
+    case 'type_alias':
+      return 'type_alias';
+    case 'constant':
+      return 'constant';
+    case 'extern_value':
+      return 'extern';
+    default:
+      return 'type';
+  }
+}
 
 // Quiet, typographic doc block. Spacing is owned by the header group, so this
 // carries no margin of its own.
@@ -78,12 +100,18 @@ const FIELD_VIEW_MODES: { mode: FieldViewMode; label: string }[] = [
   { mode: 'source', label: 'Source' },
 ];
 
+// Union members aren't laid out in sequence, so the nested/absolute-offset
+// view has nothing to say about them.
+const UNION_VIEW_MODES = FIELD_VIEW_MODES.filter((m) => m.mode !== 'nested');
+
 function ViewModeToggle({
   mode,
   onModeChange,
+  modes = FIELD_VIEW_MODES,
 }: {
   mode: FieldViewMode;
   onModeChange: (mode: FieldViewMode) => void;
+  modes?: { mode: FieldViewMode; label: string }[];
 }) {
   const base =
     'px-3 py-1 text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-accent';
@@ -92,7 +120,7 @@ function ViewModeToggle({
 
   return (
     <div className="inline-flex overflow-hidden rounded-md border border-edge">
-      {FIELD_VIEW_MODES.map(({ mode: m, label }) => (
+      {modes.map(({ mode: m, label }) => (
         <button
           key={m}
           onClick={() => onModeChange(m)}
@@ -267,12 +295,7 @@ function NestedItemsList({
       <div className="overflow-hidden rounded-md border border-edge bg-surface">
         {validItems.map(({ path, item }) => {
           const name = path.split('::').pop() || path;
-          let itemType: ItemType = 'type';
-          if (item!.kind.type === 'enum') itemType = 'enum';
-          else if (item!.kind.type === 'bitflags') itemType = 'bitflags';
-          else if (item!.kind.type === 'type_alias') itemType = 'type_alias';
-          else if (item!.kind.type === 'constant') itemType = 'constant';
-          else if (item!.kind.type === 'extern_value') itemType = 'extern';
+          const itemType = itemTypeOfKind(item!.kind.type);
           return (
             <Link
               key={path}
@@ -482,6 +505,54 @@ function BitflagsView({ def }: { def: JsonBitflagsDefinition }) {
   );
 }
 
+// Union view component. A union's members are competing readings of the same
+// bytes: every one starts at offset 0, and only one applies at a time — which
+// one is a property of the surrounding data, not of the union. The offset
+// column is therefore dropped, and the note below says why once rather than
+// repeating `0x0` down a column.
+function UnionView({ def, modulePath }: { def: JsonUnionDefinition; modulePath: string }) {
+  const [memberViewMode, setMemberViewMode] = useState<FieldViewMode>('flat');
+  const { documentation } = useDocumentation();
+
+  const nestedItems = (def.nested_items ?? []).map((path) => ({
+    path,
+    item: documentation?.items[path],
+  }));
+
+  return (
+    <div>
+      <NestedItemsList nestedItems={nestedItems} />
+
+      {def.fields.length > 0 && (
+        <div id="members" className="mb-8">
+          <div className="group mb-4 flex items-center justify-between border-b border-edge pb-1.5">
+            <h2 className="flex items-center gap-2 text-lg font-semibold text-fg">
+              Members
+              <AnchorLink targetId="members" className="opacity-0 group-hover:opacity-100" />
+            </h2>
+            <ViewModeToggle
+              mode={memberViewMode}
+              onModeChange={setMemberViewMode}
+              modes={UNION_VIEW_MODES}
+            />
+          </div>
+          <p className="mb-3 text-sm text-fg-muted">
+            All {def.fields.length} members overlap at offset{' '}
+            <span className="font-mono text-fg">0x0</span> — they are alternative readings of the
+            same {def.size} bytes, and only one applies at a time.
+          </p>
+          {memberViewMode === 'flat' && (
+            <FieldTable fields={def.fields} modulePath={modulePath} showOffsets={false} />
+          )}
+          {memberViewMode === 'source' && (
+            <FieldSourceView fields={def.fields} modulePath={modulePath} layout="overlaid" />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Main ItemView component
 export function ItemView() {
   const { itemPath = '' } = useParams();
@@ -550,12 +621,7 @@ export function ItemView() {
   );
 
   // Determine item type for color coding
-  let itemType: ItemType = 'type';
-  if (item.kind.type === 'enum') itemType = 'enum';
-  else if (item.kind.type === 'bitflags') itemType = 'bitflags';
-  else if (item.kind.type === 'type_alias') itemType = 'type_alias';
-  else if (item.kind.type === 'constant') itemType = 'constant';
-  else if (item.kind.type === 'extern_value') itemType = 'extern';
+  const itemType = itemTypeOfKind(item.kind.type);
 
   const name = decodedPath.split('::').pop() || decodedPath;
   const isExtern = item.category === 'extern';
@@ -576,10 +642,9 @@ export function ItemView() {
   const constValueType = item.kind.type === 'constant' ? item.kind.value_type : null;
   const externValueType = item.kind.type === 'extern_value' ? item.kind.value_type : null;
   const externAddress = item.kind.type === 'extern_value' ? item.kind.address : null;
+  // Only the kinds that can be `#[singleton]`-annotated carry an address.
   const singleton =
-    item.kind.type !== 'type_alias' &&
-    item.kind.type !== 'constant' &&
-    item.kind.type !== 'extern_value'
+    item.kind.type === 'type' || item.kind.type === 'enum' || item.kind.type === 'bitflags'
       ? item.kind.singleton
       : null;
 
@@ -600,6 +665,9 @@ export function ItemView() {
   } else if (k.type === 'bitflags') {
     if ((k.nested_items ?? []).length > 0) toc.push({ id: 'nested-items', label: 'Nested Items' });
     toc.push({ id: 'flags', label: 'Flags' });
+  } else if (k.type === 'union') {
+    if ((k.nested_items ?? []).length > 0) toc.push({ id: 'nested-items', label: 'Nested Items' });
+    if (k.fields.length > 0) toc.push({ id: 'members', label: 'Members' });
   }
   if (hasBackendProvided) toc.push({ id: 'backend-provided', label: 'Backend-provided' });
 
@@ -705,6 +773,7 @@ export function ItemView() {
         {item.kind.type === 'type' && <TypeView def={item.kind} modulePath={modulePath} />}
         {item.kind.type === 'enum' && <EnumView def={item.kind} modulePath={modulePath} />}
         {item.kind.type === 'bitflags' && <BitflagsView def={item.kind} />}
+        {item.kind.type === 'union' && <UnionView def={item.kind} modulePath={modulePath} />}
         {hasBackendProvided && <TypeBackendCode splices={moduleSplices} itemPath={decodedPath} />}
       </article>
 

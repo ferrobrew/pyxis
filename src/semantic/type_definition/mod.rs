@@ -16,6 +16,9 @@ mod resolve;
 mod vftable;
 
 pub use build::build;
+pub(in crate::semantic) use build::{
+    TypeAttributes, check_trait_constraints, parse_type_attributes,
+};
 pub use region::Region;
 pub(in crate::semantic) use resolve::get_region_name_and_type_definition;
 pub use vftable::TypeVftable;

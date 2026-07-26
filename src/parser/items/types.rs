@@ -6,7 +6,7 @@ use crate::{
 #[cfg(test)]
 use crate::span::StripLocations;
 
-use super::{Comment, ItemDefinition};
+use super::{Comment, ItemDefinition, UnionDefinition};
 use crate::parser::{
     ParseError,
     attributes::{Attributes, Visibility},
@@ -26,6 +26,18 @@ pub enum TypeField {
     Vftable(Vec<Function>),
     /// A nested item declaration (enum, type, bitflags, type alias) inside a `type` body.
     Item(Box<ItemDefinition>),
+    /// A field whose type is an inline anonymous union: `pub payload: union { … }`.
+    ///
+    /// This is a dedicated variant rather than a [`Type`] variant so anonymous
+    /// unions stay confined to field position — they cannot appear behind a
+    /// pointer, inside an array, or in a function signature. The field name
+    /// supplies the union's name; the semantic layer desugars it to a generated
+    /// union item plus an ordinary field referring to it.
+    UnionField {
+        visibility: Visibility,
+        name: Ident,
+        body: UnionDefinition,
+    },
 }
 #[cfg(test)]
 impl TypeField {
@@ -43,6 +55,18 @@ impl TypeField {
 
     pub fn item(item: ItemDefinition) -> TypeField {
         TypeField::Item(Box::new(item))
+    }
+
+    pub fn union_field(
+        visibility: Visibility,
+        name: impl Into<Ident>,
+        body: UnionDefinition,
+    ) -> TypeField {
+        TypeField::UnionField {
+            visibility,
+            name: name.into(),
+            body,
+        }
     }
 }
 impl TypeField {
@@ -86,6 +110,19 @@ impl TypeStatement {
     pub fn vftable(functions: impl IntoIterator<Item = Function>) -> TypeStatement {
         TypeStatement {
             field: TypeField::vftable(functions),
+            attributes: Default::default(),
+            doc_comments: vec![],
+            inline_trailing_comments: Vec::new(),
+            following_comments: Vec::new(),
+            location: ItemLocation::test(),
+        }
+    }
+    pub fn union_field(
+        (visibility, name): (Visibility, &str),
+        body: UnionDefinition,
+    ) -> TypeStatement {
+        TypeStatement {
+            field: TypeField::union_field(visibility, name, body),
             attributes: Default::default(),
             doc_comments: vec![],
             inline_trailing_comments: Vec::new(),
@@ -320,7 +357,26 @@ impl Parser {
             let visibility = self.parse_visibility()?;
             let (name, _) = self.expect_ident()?;
             self.expect(TokenKind::Colon)?;
-            let type_ = self.parse_type()?;
+
+            // `pub name: union { … }` — an inline anonymous union rather than a
+            // type reference. Checked before `parse_type` because `union` is a
+            // keyword and would not lex as a type identifier anyway.
+            let field = if matches!(self.peek(), TokenKind::Union) {
+                self.advance();
+                let items = self.parse_union_body()?;
+                TypeField::UnionField {
+                    visibility,
+                    name,
+                    body: UnionDefinition {
+                        items,
+                        attributes: Attributes::default(),
+                        inline_trailing_comments: Vec::new(),
+                        following_comments: Vec::new(),
+                    },
+                }
+            } else {
+                TypeField::Field(visibility, name, self.parse_type()?)
+            };
 
             let end_pos = if self.pos > 0 {
                 self.tokens[self.pos - 1].location.span.end
@@ -330,7 +386,7 @@ impl Parser {
 
             let location = self.item_location_from_locations(start_pos, end_pos);
             Ok(TypeStatement {
-                field: TypeField::Field(visibility, name, type_),
+                field,
                 attributes,
                 doc_comments,
                 inline_trailing_comments: Vec::new(), // Will be populated by parse_type_def_items

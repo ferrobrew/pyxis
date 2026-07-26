@@ -17,11 +17,13 @@ mod bitflags;
 mod enums;
 mod misc;
 mod types;
+mod unions;
 
 pub use bitflags::{BitflagsDefItem, BitflagsDefinition, BitflagsStatement};
 pub use enums::{EnumDefItem, EnumDefinition, EnumStatement};
 pub use misc::{ConstDefinition, ExternValueDefinition, TypeAliasDefinition};
 pub use types::{TypeDefItem, TypeDefinition, TypeField, TypeStatement};
+pub use unions::UnionDefinition;
 
 /// Comment node types
 #[derive(Debug, Clone, PartialEq, Eq, Hash, HasLocation)]
@@ -56,6 +58,7 @@ pub enum ItemDefinitionInner {
     Type(TypeDefinition),
     Enum(EnumDefinition),
     Bitflags(BitflagsDefinition),
+    Union(UnionDefinition),
     TypeAlias(TypeAliasDefinition),
     Constant(ConstDefinition),
     ExternValue(ExternValueDefinition),
@@ -63,6 +66,11 @@ pub enum ItemDefinitionInner {
 impl From<TypeDefinition> for ItemDefinitionInner {
     fn from(item: TypeDefinition) -> Self {
         ItemDefinitionInner::Type(item)
+    }
+}
+impl From<UnionDefinition> for ItemDefinitionInner {
+    fn from(item: UnionDefinition) -> Self {
+        ItemDefinitionInner::Union(item)
     }
 }
 impl From<EnumDefinition> for ItemDefinitionInner {
@@ -189,9 +197,9 @@ impl ItemDefinition {
     pub(crate) fn terminator(&self) -> ItemTerminator {
         match &self.inner {
             ItemDefinitionInner::Type(td) if !td.is_opaque => ItemTerminator::SelfTerminating,
-            ItemDefinitionInner::Enum(_) | ItemDefinitionInner::Bitflags(_) => {
-                ItemTerminator::SelfTerminating
-            }
+            ItemDefinitionInner::Enum(_)
+            | ItemDefinitionInner::Bitflags(_)
+            | ItemDefinitionInner::Union(_) => ItemTerminator::SelfTerminating,
             _ => ItemTerminator::Separated,
         }
     }
@@ -396,6 +404,36 @@ impl Parser {
                     declaration_location,
                 })
             }
+            TokenKind::Union => {
+                self.advance();
+                let (name, _) = self.expect_ident()?;
+                // Unions don't support type parameters; `union Name<T>` falls
+                // through to the `{` expectation below and errors there.
+                let items = self.parse_union_body()?;
+
+                // Capture the end position
+                let end_pos = if self.pos > 0 {
+                    self.tokens[self.pos - 1].location.span.end
+                } else {
+                    self.current().location.span.end
+                };
+
+                let location = self.item_location_from_locations(start_pos, end_pos);
+                Ok(ItemDefinition {
+                    visibility,
+                    name,
+                    type_parameters: vec![], // Unions don't support type parameters
+                    doc_comments,
+                    inner: ItemDefinitionInner::Union(UnionDefinition {
+                        items,
+                        attributes,
+                        inline_trailing_comments,
+                        following_comments,
+                    }),
+                    location,
+                    declaration_location,
+                })
+            }
             TokenKind::Const => {
                 self.advance(); // consume `const`
                 let (name, _) = self.expect_ident()?;
@@ -496,15 +534,25 @@ impl Parser {
 
     /// Whether the tokens at `pos` (already advanced past any leading doc
     /// comments, attributes, and comments) begin a nested item declaration:
-    /// `type`/`enum`/`bitflags`/`const`, or an `extern <name>: T` value — each
-    /// optionally `pub`. Note `extern type ...` is deliberately excluded: extern
-    /// types are module-level only, so `extern` counts as a nested item only
-    /// when it is *not* immediately followed by `type`.
+    /// `type`/`enum`/`bitflags`/`union`/`const`, or an `extern <name>: T` value —
+    /// each optionally `pub`. Note `extern type ...` is deliberately excluded:
+    /// extern types are module-level only, so `extern` counts as a nested item
+    /// only when it is *not* immediately followed by `type`.
+    ///
+    /// A `union` counts only when it is a *declaration* (`union Name { … }`);
+    /// the inline anonymous form appears in field position (`pub name: union
+    /// { … }`) and is handled by `parse_type_statement`.
     pub(super) fn peek_is_nested_item(&self, pos: usize) -> bool {
         fn is_item_kw(kind: Option<&TokenKind>) -> bool {
             matches!(
                 kind,
-                Some(TokenKind::Type | TokenKind::Enum | TokenKind::Bitflags | TokenKind::Const)
+                Some(
+                    TokenKind::Type
+                        | TokenKind::Enum
+                        | TokenKind::Bitflags
+                        | TokenKind::Union
+                        | TokenKind::Const
+                )
             )
         }
         let is_extern_value = |pos: usize| {

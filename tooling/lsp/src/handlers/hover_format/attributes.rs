@@ -78,6 +78,7 @@ pub(crate) fn attribute_at<'a>(
                     ItemDefinitionInner::Type(td) => &td.attributes,
                     ItemDefinitionInner::Enum(e) => &e.attributes,
                     ItemDefinitionInner::Bitflags(b) => &b.attributes,
+                    ItemDefinitionInner::Union(u) => &u.attributes,
                     ItemDefinitionInner::TypeAlias(ta) => &ta.attributes,
                     ItemDefinitionInner::Constant(c) => &c.attributes,
                     ItemDefinitionInner::ExternValue(ev) => &ev.attributes,
@@ -85,21 +86,26 @@ pub(crate) fn attribute_at<'a>(
                 if let Some(hit) = find(inner_attrs) {
                     return Some(hit);
                 }
-                match &definition.inner {
-                    ItemDefinitionInner::Type(td) => {
-                        for s in td.statements() {
-                            if let Some(hit) = find(&s.attributes) {
+                // `union` bodies reuse the `type` body AST, so both are
+                // searched the same way.
+                let body_statements: Vec<_> = match &definition.inner {
+                    ItemDefinitionInner::Type(td) => td.statements().collect(),
+                    ItemDefinitionInner::Union(u) => u.statements().collect(),
+                    _ => Vec::new(),
+                };
+                for s in body_statements {
+                    if let Some(hit) = find(&s.attributes) {
+                        return Some(hit);
+                    }
+                    if let TypeField::Vftable(fns) = &s.field {
+                        for f in fns {
+                            if let Some(hit) = find(&f.attributes) {
                                 return Some(hit);
-                            }
-                            if let TypeField::Vftable(fns) = &s.field {
-                                for f in fns {
-                                    if let Some(hit) = find(&f.attributes) {
-                                        return Some(hit);
-                                    }
-                                }
                             }
                         }
                     }
+                }
+                match &definition.inner {
                     ItemDefinitionInner::Enum(e) => {
                         for s in e.statements() {
                             if let Some(hit) = find(&s.attributes) {
@@ -114,9 +120,12 @@ pub(crate) fn attribute_at<'a>(
                             }
                         }
                     }
-                    ItemDefinitionInner::TypeAlias(_) => {}
-                    ItemDefinitionInner::Constant(_) => {}
-                    ItemDefinitionInner::ExternValue(_) => {}
+                    // Type/union bodies are searched above.
+                    ItemDefinitionInner::Type(_)
+                    | ItemDefinitionInner::Union(_)
+                    | ItemDefinitionInner::TypeAlias(_)
+                    | ItemDefinitionInner::Constant(_)
+                    | ItemDefinitionInner::ExternValue(_) => {}
                 }
             }
             ModuleItem::Impl { impl_block } => {

@@ -189,36 +189,58 @@ pub(crate) fn find_type_ref_in_definition<'a>(
 ) -> Option<TypeHit<'a>> {
     use pyxis::grammar::ItemDefinitionInner;
 
-    match &definition.inner {
-        ItemDefinitionInner::Type(td) => {
-            for statement in td.statements() {
-                match &statement.field {
-                    TypeField::Field(_, _, type_) => {
-                        if let Some(found) = type_hit_at(type_, loc) {
-                            return Some(found);
-                        }
+    /// A type/union body's type references. `union` bodies reuse the `type`
+    /// body AST, and an inline `union { … }` field nests one inside the other.
+    fn body_type_hit<'a>(
+        statements: impl Iterator<Item = &'a pyxis::grammar::TypeStatement>,
+        loc: &Location,
+    ) -> Option<TypeHit<'a>> {
+        for statement in statements {
+            match &statement.field {
+                TypeField::Field(_, _, type_) => {
+                    if let Some(found) = type_hit_at(type_, loc) {
+                        return Some(found);
                     }
-                    TypeField::Vftable(fns) => {
-                        for sig in fns {
-                            for arg in &sig.arguments {
-                                if let Argument::Named { type_, .. } = arg
-                                    && let Some(found) = type_hit_at(type_, loc)
-                                {
-                                    return Some(found);
-                                }
-                            }
-                            if let Some(ret) = &sig.return_type
-                                && let Some(found) = type_hit_at(ret, loc)
+                }
+                TypeField::Vftable(fns) => {
+                    for sig in fns {
+                        for arg in &sig.arguments {
+                            if let Argument::Named { type_, .. } = arg
+                                && let Some(found) = type_hit_at(type_, loc)
                             {
                                 return Some(found);
                             }
                         }
-                    }
-                    TypeField::Item(_) => {
-                        // A nested item's own type references are found by the
-                        // recursion below (via `nested_items`).
+                        if let Some(ret) = &sig.return_type
+                            && let Some(found) = type_hit_at(ret, loc)
+                        {
+                            return Some(found);
+                        }
                     }
                 }
+                TypeField::Item(_) => {
+                    // A nested item's own type references are found by the
+                    // recursion below (via `nested_items`).
+                }
+                TypeField::UnionField { body, .. } => {
+                    if let Some(found) = body_type_hit(body.statements(), loc) {
+                        return Some(found);
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    match &definition.inner {
+        ItemDefinitionInner::Type(td) => {
+            if let Some(found) = body_type_hit(td.statements(), loc) {
+                return Some(found);
+            }
+        }
+        ItemDefinitionInner::Union(ud) => {
+            if let Some(found) = body_type_hit(ud.statements(), loc) {
+                return Some(found);
             }
         }
         // Base type of an enum/bitflags; nested items handled by the recursion below.

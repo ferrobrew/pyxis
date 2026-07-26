@@ -20,6 +20,7 @@ mod items;
 mod nested;
 mod structs;
 mod types;
+mod unions;
 
 pub use idents::{cpp_ident, cpp_namespace_ident};
 pub use items::{render_free_function_decl, render_free_function_definition};
@@ -135,6 +136,14 @@ pub fn render_item(item: &ItemDefinition, ctx: RenderCtx) -> Result<Option<Rende
             ctx,
             item.visibility,
             &item.type_parameters,
+            &item.location,
+        )?,
+        ItemDefinitionInner::Union(ud) => unions::render_union(
+            &name,
+            ud,
+            resolved.size,
+            resolved.alignment,
+            ctx,
             &item.location,
         )?,
         ItemDefinitionInner::Enum(ed) => {

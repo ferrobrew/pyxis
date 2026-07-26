@@ -43,6 +43,8 @@
   --kind-enum-variant-hover: #635f0c;
   --kind-bitflags: #af3a03;
   --kind-bitflags-hover: #8f2f02;
+  --kind-union: #6c3fa0;
+  --kind-union-hover: #573283;
   --kind-alias: #3d7a55;
   --kind-alias-hover: #2f6343;
   --kind-constant: #1f5582;
@@ -80,6 +82,8 @@
   --kind-enum-variant-hover: #ddd56a;
   --kind-bitflags: #fe8019;
   --kind-bitflags-hover: #ff9540;
+  --kind-union: #c39ae0;
+  --kind-union-hover: #d3b1ea;
   --kind-alias: #79b8ae;
   --kind-alias-hover: #92c8bf;
   --kind-constant: #84a5c7;
@@ -120,6 +124,8 @@
   --color-kind-enum-variant-hover: var(--kind-enum-variant-hover);
   --color-kind-bitflags: var(--kind-bitflags);
   --color-kind-bitflags-hover: var(--kind-bitflags-hover);
+  --color-kind-union: var(--kind-union);
+  --color-kind-union-hover: var(--kind-union-hover);
   --color-kind-alias: var(--kind-alias);
   --color-kind-alias-hover: var(--kind-alias-hover);
   --color-kind-constant: var(--kind-constant);

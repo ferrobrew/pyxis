@@ -52,6 +52,20 @@ function BitflagsIcon() {
   );
 }
 
+// Two squares occupying overlapping ground: the same bytes read two ways.
+function UnionIcon() {
+  return (
+    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M4 4h9v9H4z M11 11h9v9h-9z"
+      />
+    </svg>
+  );
+}
+
 function FunctionIcon() {
   return (
     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -226,6 +240,9 @@ function ItemTree({ itemPath }: ItemTreeProps) {
   } else if (item.kind.type === 'bitflags') {
     Icon = BitflagsIcon;
     itemType = 'bitflags';
+  } else if (item.kind.type === 'union') {
+    Icon = UnionIcon;
+    itemType = 'union';
   } else if (item.kind.type === 'constant') {
     itemType = 'constant';
   } else if (item.kind.type === 'extern_value') {
@@ -233,9 +250,10 @@ function ItemTree({ itemPath }: ItemTreeProps) {
     itemType = 'extern';
   }
 
-  // Get public members for this item
+  // Get public members for this item. Union members are listed the same way a
+  // type's fields are — they're the item's navigable children either way.
   const publicFields =
-    item.kind.type === 'type'
+    item.kind.type === 'type' || item.kind.type === 'union'
       ? item.kind.fields.filter((f) => f.visibility === 'public' && f.name)
       : [];
   const publicVirtualFunctions =
@@ -248,6 +266,13 @@ function ItemTree({ itemPath }: ItemTreeProps) {
       : [];
   const variants = item.kind.type === 'enum' ? item.kind.variants : [];
   const flags = item.kind.type === 'bitflags' ? item.kind.flags : [];
+  const nestedItems =
+    item.kind.type === 'type' ||
+    item.kind.type === 'enum' ||
+    item.kind.type === 'bitflags' ||
+    item.kind.type === 'union'
+      ? (item.kind.nested_items ?? [])
+      : [];
 
   const hasMembers =
     publicFields.length > 0 ||
@@ -255,9 +280,7 @@ function ItemTree({ itemPath }: ItemTreeProps) {
     publicAssociatedFunctions.length > 0 ||
     variants.length > 0 ||
     flags.length > 0 ||
-    (item.kind.type === 'type' && (item.kind.nested_items ?? []).length > 0) ||
-    (item.kind.type === 'enum' && (item.kind.nested_items ?? []).length > 0) ||
-    (item.kind.type === 'bitflags' && (item.kind.nested_items ?? []).length > 0);
+    nestedItems.length > 0;
 
   const handleItemClick = () => {
     if (hasMembers) {
@@ -349,12 +372,9 @@ function ItemTree({ itemPath }: ItemTreeProps) {
             />
           ))}
 
-          {(item.kind.type === 'type' ||
-            item.kind.type === 'enum' ||
-            item.kind.type === 'bitflags') &&
-            (item.kind.nested_items ?? []).map((nestedPath) => (
-              <ItemTree key={`nested-${nestedPath}`} itemPath={nestedPath} />
-            ))}
+          {nestedItems.map((nestedPath) => (
+            <ItemTree key={`nested-${nestedPath}`} itemPath={nestedPath} />
+          ))}
         </TreeChildren>
       )}
     </div>

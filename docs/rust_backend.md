@@ -116,6 +116,35 @@ pub struct BuildOptions {
 
 For enums and bitflags, the same attributes apply. `#[defaultable]` on an enum or bitflags requires a `#[default]` variant - the `Default` impl returns that variant.
 
+## Unions
+
+A pyxis `union` lowers to a real Rust `union`, with every member wrapped in `ManuallyDrop<T>`:
+
+```rust
+#[derive(Copy, Clone)]
+#[repr(C, align(8))]
+pub union Payload {
+    pub as_int: ::core::mem::ManuallyDrop<i32>,
+    pub as_float: ::core::mem::ManuallyDrop<f32>,
+    pub as_ptr: ::core::mem::ManuallyDrop<*mut i32>,
+}
+```
+
+`ManuallyDrop` is applied unconditionally. Rust requires it for any member whose type isn't `Copy`, and applying it only where needed would make a member's spelling depend on whether its type happened to be `#[copyable]`. It is `repr(transparent)` and derefs to its contents, so it costs nothing at runtime and little at the call site: `unsafe { *value.payload.as_int }`.
+
+Two impls are written out rather than derived, because a union can derive neither - the compiler has no way to know which member is live:
+
+| Impl | Behaviour |
+|------|-------|
+| `Debug` | Prints `Name { .. }`. There is nothing safe to print, since which member applies is a property of the surrounding data. |
+| `Default` | Emitted only for `#[defaultable]` unions; returns `unsafe { core::mem::zeroed() }`. The `#[defaultable]` check already rejects members that aren't plain data, so an all-zero reading is valid. |
+
+Emitting these anyway is what lets a *containing* struct keep its own `#[derive(Debug, Default)]` working.
+
+`Copy` and `Clone` are derived normally from `#[copyable]`/`#[cloneable]` - `ManuallyDrop<T>: Copy` exactly when `T: Copy`, so the existing trait-constraint checks carry over unchanged. `#[pinned]` suppresses them as it does for structs, but adds no `PhantomPinned` member: an extra member would be another reading of the same bytes, not an extra field.
+
+Inline unions (`pub payload: union { ... }`) are emitted as ordinary module-scope items named `{Type}{Field}Union`, flattened through the same `flatten_type_name` path as any other item.
+
 ## `#[external_body]` handling
 
 When a function has `#[external_body]`, the Rust backend skips code emission entirely. The function signature is not emitted as a Rust method - the user's epilogue `impl` block is the sole source.

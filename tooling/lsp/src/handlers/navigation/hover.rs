@@ -1,10 +1,7 @@
 use super::*;
 
 use pyxis::{
-    grammar::{
-        ExternValueDefinition, FunctionBlock, Ident, ImplItem, Splice, TypeDefinition,
-        TypeStatement,
-    },
+    grammar::{ExternValueDefinition, FunctionBlock, Ident, ImplItem, Splice, TypeStatement},
     semantic::types::ItemDefinitionInner as ResolvedInner,
 };
 
@@ -210,7 +207,8 @@ impl ServerState {
             }
         }
         match &definition.inner {
-            ItemDefinitionInner::Type(td) => self.hover_type_body(ctx, definition, td),
+            ItemDefinitionInner::Type(td) => self.hover_type_body(ctx, definition, &td.items),
+            ItemDefinitionInner::Union(ud) => self.hover_type_body(ctx, definition, &ud.items),
             ItemDefinitionInner::Enum(e) => self.hover_variant(
                 ctx,
                 definition,
@@ -276,9 +274,13 @@ impl ServerState {
         &self,
         ctx: &HoverCtx,
         definition: &ItemDefinition,
-        td: &TypeDefinition,
+        items: &[TypeDefItem],
     ) -> Option<(String, Span)> {
-        for statement in td.statements() {
+        let statements = items.iter().filter_map(|i| match i {
+            TypeDefItem::Statement(s) => Some(s),
+            _ => None,
+        });
+        for statement in statements {
             if !statement.location.span.contains(&ctx.loc) {
                 continue;
             }
@@ -319,6 +321,13 @@ impl ServerState {
                 TypeField::Item(_) => {
                     // Nested items are hovered by hover_definition's recursion
                     // (via nested_items), which runs before this body walk.
+                }
+                TypeField::UnionField { body, .. } => {
+                    // The cursor is somewhere inside `name: union { … }` —
+                    // recurse so a member of the inline union hovers as a field.
+                    if let Some(hit) = self.hover_type_body(ctx, definition, &body.items) {
+                        return Some(hit);
+                    }
                 }
             }
         }

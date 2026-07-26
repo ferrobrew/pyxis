@@ -30,11 +30,11 @@ The output is a `JsonDocumentation` struct serialized to JSON:
 
 ## Schema versioning
 
-The current schema version is **11** (`CURRENT_SCHEMA_VERSION` in `src/backends/json.rs`). The version is bumped on breaking shape changes to the JSON output. The version history is documented in the source file's comments.
+The current schema version is **12** (`CURRENT_SCHEMA_VERSION` in `src/backends/json/schema.rs`). The version is bumped on breaking shape changes to the JSON output. The version history is documented in the source file's comments.
 
 Older documents (pre-v2) omit the `schema_version` field entirely. Consumers should treat a missing value as version 1. The `pyxis_version` field defaults to `"unknown"` when not available.
 
-Notable version history: schema v10 retired the per-module `backends` map in favor of a flat `splices` array of standalone `prologue`/`epilogue` statements, each carrying its own cfg gate. Schema v11 added `c_string`, `struct`, `array`, and `const_ref` variants to `JsonConstValue` for C-string literals, structured initializers, and constant aliases.
+Notable version history: schema v10 retired the per-module `backends` map in favor of a flat `splices` array of standalone `prologue`/`epilogue` statements, each carrying its own cfg gate. Schema v11 added `c_string`, `struct`, `array`, and `const_ref` variants to `JsonConstValue` for C-string literals, structured initializers, and constant aliases. Schema v12 added the `Union` item kind.
 
 ## Item model
 
@@ -45,6 +45,7 @@ Each item is a `JsonItem` with a `kind` discriminator:
 | `Type` | A struct/class definition with fields, vftable, and associated functions. |
 | `Enum` | An enum with variants. |
 | `Bitflags` | A bitflags definition with members. |
+| `Union` | A union: several readings of the same bytes, only one of which applies at a time. |
 | `TypeAlias` | A type alias pointing at a target type. |
 | `Constant` | A compile-time constant value. |
 | `ExternValue` | A global at a fixed address. |
@@ -62,6 +63,10 @@ Every item carries:
 - `kind` - the discriminator with kind-specific details (fields, variants, etc.)
 
 Type definitions carry their fields as `JsonRegion` entries, each with a name, type, offset, visibility, and optional `#[base]` flag. Vftables carry their function slots as `JsonTypeVftable`.
+
+Union definitions carry their members as `JsonRegion` entries too, but **every one has `offset: 0`** - a union's members are competing readings of the same bytes, not a sequence. A member's `size` is its own, which may be smaller than the union's. Consumers that reconstruct offsets by accumulating field sizes must special-case the `Union` kind. `JsonUnionDefinition` also carries its own `size` and `alignment` (the largest member rounded up, and the strictest member's alignment), the `copyable`/`cloneable`/`defaultable`/`packed`/`pinned` flags, and `nested_items`.
+
+An inline `pub payload: union { ... }` field appears as two things: an ordinary `JsonRegion` on the parent type pointing at a generated item, and that generated `Union` item at module scope named `{Type}{Field}Union`.
 
 ## Cfg surfacing
 

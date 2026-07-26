@@ -34,6 +34,15 @@ impl SemanticError {
             | SemanticError::OverlappingRegions { .. }
             | SemanticError::ZeroSizeFieldEmbedding { .. } => self.layout_error_message(),
 
+            SemanticError::UnionBaseNotAllowed { .. }
+            | SemanticError::UnionVftableNotAllowed { .. }
+            | SemanticError::UnionMemberAddress { .. }
+            | SemanticError::EmptyUnion { .. }
+            | SemanticError::UnionMemberExceedsSize { .. }
+            | SemanticError::UnionAnonymousMember { .. }
+            | SemanticError::InlineUnionNestedItem { .. }
+            | SemanticError::InlineUnionNameCollision { .. } => self.union_error_message(),
+
             SemanticError::VftableMissingFunctions { .. }
             | SemanticError::VftableFunctionMismatch { .. }
             | SemanticError::VftableNonAscendingIndex { .. }
@@ -315,6 +324,78 @@ impl SemanticError {
                 format!(
                     "field `{field_name}` in `{item_path}` embeds zero-size type `{field_type}`, \
                      which has no representable layout in backends that lack zero-size objects"
+                )
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    /// Constructs that a union body cannot express.
+    fn union_error_message(&self) -> String {
+        match self {
+            SemanticError::UnionBaseNotAllowed { item_path, .. } => {
+                format!(
+                    "union `{item_path}` declares a `#[base]` member; a base class must sit at a \
+                     known offset, but every union member starts at offset 0"
+                )
+            }
+            SemanticError::UnionVftableNotAllowed { item_path, .. } => {
+                format!(
+                    "union `{item_path}` declares a `vftable` block; a vftable pointer must occupy \
+                     offset 0 exclusively, which a union cannot guarantee"
+                )
+            }
+            SemanticError::UnionMemberAddress {
+                member_name,
+                item_path,
+                ..
+            } => {
+                format!(
+                    "member `{member_name}` of union `{item_path}` has an `#[address]`; every \
+                     union member starts at offset 0 by definition"
+                )
+            }
+            SemanticError::EmptyUnion { item_path, .. } => {
+                format!("union `{item_path}` has no members, so it has no size")
+            }
+            SemanticError::UnionMemberExceedsSize {
+                member_name,
+                member_size,
+                declared_size,
+                item_path,
+                ..
+            } => {
+                format!(
+                    "member `{member_name}` of union `{item_path}` is {member_size} bytes, which \
+                     exceeds the union's declared size of {declared_size}"
+                )
+            }
+            SemanticError::UnionAnonymousMember { item_path, .. } => {
+                format!(
+                    "`{item_path}` has a union member named `_`; `_` marks padding, but every \
+                     union member already covers the same bytes as its siblings"
+                )
+            }
+            SemanticError::InlineUnionNestedItem {
+                item_name,
+                item_path,
+                ..
+            } => {
+                format!(
+                    "`{item_name}` is declared inside the inline union field `{item_path}`; inline \
+                     unions become module-scope siblings, so a nested item under one would never \
+                     be reachable. Declare it in the enclosing type, or give the union a name."
+                )
+            }
+            SemanticError::InlineUnionNameCollision {
+                generated_path,
+                item_path,
+                ..
+            } => {
+                format!(
+                    "building `{item_path}` generates `{generated_path}`, but that name is already \
+                     taken. Rename the inline union's field (or, for a vftable, the type itself), \
+                     or declare the generated item separately."
                 )
             }
             _ => unreachable!(),

@@ -50,6 +50,21 @@ pub(super) fn collect_intra_module_full_deps(
                 );
             }
         }
+        // A union's members are laid out inside it, so they are full-definition
+        // dependencies exactly as a struct's fields are.
+        ItemDefinitionInner::Union(ud) => {
+            for region in &ud.regions {
+                walk_intra(
+                    &region.type_ref,
+                    EdgeKind::FullDef,
+                    module_path,
+                    item_paths,
+                    registry,
+                    bindings,
+                    out,
+                );
+            }
+        }
         ItemDefinitionInner::Enum(ed) => {
             walk_intra(
                 &ed.type_,
@@ -233,6 +248,11 @@ pub fn collect_module_deps(
         match &resolved.inner {
             ItemDefinitionInner::Type(td) => {
                 walk_type_def(td, &mut deps, module_path, registry, bindings)
+            }
+            ItemDefinitionInner::Union(ud) => {
+                for region in &ud.regions {
+                    walk_region(region, &mut deps, module_path, registry, bindings);
+                }
             }
             ItemDefinitionInner::Enum(ed) => {
                 walk_enum_def(ed, &mut deps, module_path, registry, bindings)

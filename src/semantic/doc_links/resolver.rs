@@ -153,6 +153,15 @@ impl DocLinkResolver {
                     constants,
                     extern_values,
                 },
+                // A union's members are linkable exactly like a type's fields;
+                // it just has nothing else to link to.
+                Some(ItemDefinitionInner::Union(ud)) => ItemMembers::Type {
+                    methods: vec![],
+                    vftable_methods: vec![],
+                    fields: ud.regions.iter().filter_map(|r| r.name.clone()).collect(),
+                    constants,
+                    extern_values,
+                },
                 Some(ItemDefinitionInner::Bitflags(bd)) => ItemMembers::Bitflags {
                     flags: bd.flags.iter().map(|f| f.name.clone()).collect(),
                     constants,
@@ -656,6 +665,38 @@ where
                     nested_path,
                     nested_item,
                     &type_scope,
+                    Some(path),
+                    record,
+                )?;
+            }
+        }
+        ItemDefinitionInner::Union(ud) => {
+            // Same shape as a type: the union's own path joins the scope so bare
+            // references to its nested items resolve.
+            let union_scope: Vec<ItemPath> = std::iter::once(path.clone())
+                .chain(scope.iter().cloned())
+                .collect();
+            record(
+                module_path,
+                &ud.doc,
+                &union_scope,
+                enclosing,
+                &item.location,
+            )?;
+            for r in &ud.regions {
+                record(module_path, &r.doc, &union_scope, enclosing, &r.location)?;
+            }
+            for nested_path in &ud.nested_item_paths {
+                let Ok(nested_item) = type_registry.get(nested_path, &ItemLocation::internal())
+                else {
+                    continue;
+                };
+                walk_item_docs(
+                    type_registry,
+                    module_path,
+                    nested_path,
+                    nested_item,
+                    &union_scope,
                     Some(path),
                     record,
                 )?;
