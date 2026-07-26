@@ -11,6 +11,17 @@ mod type_hierarchy;
 /// alongside fields/variants, not in its `statements()`.
 pub(crate) fn nested_items(definition: &ItemDefinition) -> Vec<&ItemDefinition> {
     match &definition.inner {
+        ItemDefinitionInner::Union(ud) => ud
+            .items
+            .iter()
+            .filter_map(|i| match i {
+                TypeDefItem::Statement(s) => match &s.field {
+                    TypeField::Item(it) => Some(&**it),
+                    _ => None,
+                },
+                _ => None,
+            })
+            .collect(),
         ItemDefinitionInner::Type(td) => td
             .items
             .iter()

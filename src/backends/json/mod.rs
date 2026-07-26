@@ -10,5 +10,5 @@ pub use schema::{
     JsonExternValueDefinition, JsonFunction, JsonFunctionArgument, JsonFunctionBody, JsonItem,
     JsonItemCategory, JsonItemKind, JsonModule, JsonReexport, JsonRegion, JsonSourceLocation,
     JsonSplice, JsonSpliceKind, JsonType, JsonTypeAliasDefinition, JsonTypeDefinition,
-    JsonTypeVftable, JsonVisibility, export_types,
+    JsonTypeVftable, JsonUnionDefinition, JsonVisibility, export_types,
 };

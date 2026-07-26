@@ -12,7 +12,7 @@ impl ServerState {
         // it stays inline.
         use TokenKind::{
             Bitflags, Const, Enum, Epilogue, Extern, Fn, Impl, Mut, Prologue, Pub, SelfType,
-            SelfValue, Type, Use, Vftable,
+            SelfValue, Type, Union, Use, Vftable,
         };
         let kw = |k: TokenKind| k.keyword_str().expect("keyword token");
         let mut items: Vec<CompletionItem> = [
@@ -20,6 +20,7 @@ impl ServerState {
             kw(Type),
             kw(Enum),
             kw(Bitflags),
+            kw(Union),
             kw(Impl),
             kw(Fn),
             kw(Extern),

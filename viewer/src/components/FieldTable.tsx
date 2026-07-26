@@ -7,15 +7,23 @@ import { Markdown } from './Markdown';
 interface FieldTableProps {
   fields: JsonRegion[];
   modulePath: string;
+  /**
+   * Whether the fields are laid out one after another. Union members are not:
+   * they all start at offset 0, so the offset column carries no information
+   * and is dropped in favour of a note that says so once.
+   */
+  showOffsets?: boolean;
 }
 
-export function FieldTable({ fields, modulePath }: FieldTableProps) {
+export function FieldTable({ fields, modulePath, showOffsets = true }: FieldTableProps) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full border border-edge rounded-md">
         <thead className="bg-surface">
           <tr>
-            <th className="px-4 py-2 text-left text-sm font-semibold text-fg">Offset</th>
+            {showOffsets && (
+              <th className="px-4 py-2 text-left text-sm font-semibold text-fg">Offset</th>
+            )}
             <th className="px-4 py-2 text-left text-sm font-semibold text-fg">Name</th>
             <th className="px-4 py-2 text-left text-sm font-semibold text-fg">Type</th>
             <th className="px-4 py-2 text-left text-sm font-semibold text-fg">Size</th>
@@ -37,9 +45,11 @@ export function FieldTable({ fields, modulePath }: FieldTableProps) {
                 id={field.name ? `field-${field.name}` : undefined}
                 className="border-b border-edge"
               >
-                <td className="px-4 py-2 text-sm text-fg-muted font-mono">
-                  0x{field.offset.toString(16).toUpperCase()}
-                </td>
+                {showOffsets && (
+                  <td className="px-4 py-2 text-sm text-fg-muted font-mono">
+                    0x{field.offset.toString(16).toUpperCase()}
+                  </td>
+                )}
                 <td className={nameClasses}>
                   {field.source ? (
                     <SourceName source={field.source}>{field.name || '<anonymous>'}</SourceName>

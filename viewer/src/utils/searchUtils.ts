@@ -60,7 +60,18 @@ export function searchDocumentation(doc: JsonDocumentation, query: string): Sear
     push(name, parentPath(path), itemKind, itemScore, itemTarget);
 
     const kind = item.kind;
-    if (kind.type === 'type') {
+    if (kind.type === 'union') {
+      // Union members are searchable exactly like a type's fields, and share
+      // the same `field-<name>` anchor.
+      for (const f of kind.fields) {
+        if (f.name) {
+          push(f.name, path, 'field', scoreName(f.name, q), {
+            ...itemTarget,
+            anchor: `field-${f.name}`,
+          });
+        }
+      }
+    } else if (kind.type === 'type') {
       for (const f of kind.fields) {
         if (f.name) {
           push(f.name, path, 'field', scoreName(f.name, q), {

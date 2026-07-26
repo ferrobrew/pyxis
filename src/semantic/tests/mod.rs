@@ -40,6 +40,7 @@ mod modules;
 mod pinned;
 mod queries;
 mod type_aliases;
+mod unions;
 mod util;
 mod vftable;
 mod visibility;

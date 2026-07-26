@@ -81,6 +81,36 @@ some_engine_api(&d->base);    // ✅ explicit upcast through the field
 In Rust the equivalent is `d.as_ref()` (which pyxis generates via
 `AsRef`/`AsMut` impls). The C++ side picks ergonomics over magic.
 
+## Unions
+
+A pyxis `union` maps straight onto a C++ `union` — the one place where this
+backend needs no encoding tricks, since C++ has the construct natively and
+with the same semantics.
+
+```cpp
+union alignas(8) Payload {
+    ::std::int32_t as_int;
+    float as_float;
+    ::std::int32_t* as_ptr;
+};
+static_assert(sizeof(Payload) == 0x8);
+static_assert(alignof(Payload) == 8);
+```
+
+The same size/alignment `static_assert`s as a struct, `#pragma pack(push, 1)`
+for `#[packed]`, and `alignas(N)` from the resolved alignment. Members that are
+themselves unions or structs are ordinary members, and a union's members are
+full-definition dependencies exactly as a struct's fields are — so the
+dependency graph orders them ahead of the union in the header.
+
+Forward declarations use `union Name;` rather than `struct Name;`: C++ requires
+the class-key to match the definition.
+
+Nested item declarations inside a union body are rendered in-class, the same way
+a struct's are. Inline `pub payload: union { ... }` fields become module-scope
+`union {Type}{Field}Union` definitions with an ordinary member referring to
+them, so the parent struct is unremarkable.
+
 ## Vftables
 
 Each type with a `vftable { ... }` block in pyxis gets:
@@ -312,6 +342,10 @@ On native Windows no toolchain file is needed; point CMake at MSVC or
   copy/move constructors and assignment operators, since pinned types
   must not be relocated in memory (the target C++ code passes pointers
   to `this` or its fields around).
+- **No union member access helpers** — a union's members are emitted as
+  plain members. Which one is live is a property of the surrounding
+  data, and pyxis deliberately does not model that relationship, so
+  there is nothing for the backend to generate an accessor from.
 - **No member access control** — pyxis's `pub`/private distinction is
   rust-only. In cpp every method and field is emitted at struct scope
   with default visibility (public for `struct`). Backend epilogues

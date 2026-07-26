@@ -6,6 +6,7 @@ pub use crate::semantic::{
     function::{Argument, CallingConvention, Function, FunctionBody},
     type_alias_definition::TypeAliasDefinition,
     type_definition::{Region, TypeDefinition, TypeVftable},
+    union_definition::UnionDefinition,
 };
 
 mod const_value;
@@ -24,6 +25,7 @@ pub use type_::{Type, Visibility};
 pub mod test_aliases {
     pub type SID = super::ItemDefinition;
     pub type STD = super::TypeDefinition;
+    pub type SUD = super::UnionDefinition;
     pub type SED = super::EnumDefinition;
     pub type SBFD = super::BitflagsDefinition;
     pub type STAD = super::TypeAliasDefinition;

@@ -56,6 +56,7 @@ When you change the language (new attributes, syntax, types, etc.), you must aud
 |---------|------|------------------------|
 | **Compiler frontend** | `src/` | Always. Parser, semantic IR, and all backends (Rust/C++/JSON). |
 | **Parser test helpers** | `src/parser/attributes.rs` | New `Attribute` variants or test constructors (e.g. `Attribute::pinned()`). The grammar parses `#[ident]` attributes generically, so simple ident attributes need no grammar change. |
+| **New item kinds** | `src/parser/items/mod.rs`, `src/semantic/types/item.rs` | Adding a whole item kind (like `union`) means a variant on *both* `ItemDefinitionInner` enums. Both are matched exhaustively in ~30 places across the compiler, LSP, and backends — let the compiler enumerate them rather than grepping. Also `SigKind` (`src/semantic/name_index.rs`) and `ItemKind` (`src/semantic/error/context.rs`). |
 | **`AttributeName` enum** | `src/semantic/error.rs` | Only if the new attribute participates in conflicting-attribute validation (e.g. `#[packed]` + `#[align]`). Most attributes don't need an entry. |
 | **Tree-sitter grammar** | `tooling/tree-sitter-pyxis/grammar.js` | Only for new syntax forms or keywords. Ident attributes (`#[foo]`) are already parsed generically as `attribute_ident -> $.identifier`. |
 | **Highlights query** | `tooling/tree-sitter-pyxis/queries/highlights.scm` | Rarely. Attributes are highlighted generically via `(attribute) @attribute`. Only change if a new node type needs a capture. |

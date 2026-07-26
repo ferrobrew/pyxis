@@ -356,7 +356,7 @@ source: JsonSourceLocation | null };
 
 export type JsonItemCategory = "defined" | "predefined" | "extern";
 
-export type JsonItemKind = ({ type: "type" } & JsonTypeDefinition) | ({ type: "enum" } & JsonEnumDefinition) | ({ type: "bitflags" } & JsonBitflagsDefinition) | ({ type: "type_alias" } & JsonTypeAliasDefinition) | ({ type: "constant" } & JsonConstantDefinition) | ({ type: "extern_value" } & JsonExternValueDefinition);
+export type JsonItemKind = ({ type: "type" } & JsonTypeDefinition) | ({ type: "enum" } & JsonEnumDefinition) | ({ type: "bitflags" } & JsonBitflagsDefinition) | ({ type: "union" } & JsonUnionDefinition) | ({ type: "type_alias" } & JsonTypeAliasDefinition) | ({ type: "constant" } & JsonConstantDefinition) | ({ type: "extern_value" } & JsonExternValueDefinition);
 
 /**
  * A module containing items and potentially submodules
@@ -569,5 +569,52 @@ export type JsonTypeVftable = {
  * Virtual functions
  */
 functions: JsonFunction[] };
+
+/**
+ * A union: several readings of the same bytes, only one of which applies at a
+ * time. Which one is a property of the surrounding data, not of the union.
+ */
+export type JsonUnionDefinition = { 
+/**
+ * Documentation
+ */
+doc: string | null; doc_links?: JsonDocLink[]; 
+/**
+ * Members. Every one has `offset: 0`; `size` is the member's own size,
+ * which may be smaller than the union's.
+ */
+fields: JsonRegion[]; 
+/**
+ * Total size in bytes: the largest member, rounded up to the alignment
+ */
+size: number; 
+/**
+ * Alignment in bytes: the strictest of the members'
+ */
+alignment: number; 
+/**
+ * Whether the union is copyable
+ */
+copyable: boolean; 
+/**
+ * Whether the union is cloneable
+ */
+cloneable: boolean; 
+/**
+ * Whether the union is defaultable
+ */
+defaultable: boolean; 
+/**
+ * Whether the union is packed
+ */
+packed: boolean; 
+/**
+ * Whether the union is pinned (non-relocatable)
+ */
+pinned: boolean; 
+/**
+ * Item paths of nested items declared inside this union body
+ */
+nested_items?: string[] };
 
 export type JsonVisibility = "public" | "private";

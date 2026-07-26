@@ -18,6 +18,7 @@ use crate::{
             self, ItemCategory, ItemDefinition, ItemState, ItemStateResolved, PredefinedItem,
             TypeDefinition, Visibility,
         },
+        union_definition,
     },
     span::ItemLocation,
 };
@@ -66,6 +67,17 @@ pub(super) fn build_item(
                 item_path,
                 visibility,
                 ty,
+                def_location,
+                doc_comments,
+                type_param_names,
+            )
+        }
+        ItemDefinitionInner::Union(u) => {
+            let mut ctx = ResolutionContext::new(type_registry, modules);
+            union_definition::build(
+                &mut ctx,
+                item_path,
+                u,
                 def_location,
                 doc_comments,
                 type_param_names,
@@ -125,6 +137,20 @@ pub(super) fn register_predefined(type_registry: &mut TypeRegistry) {
     }
 }
 
+/// The `#[cfg(...)]` predicate on an item's own attribute list, whatever kind it
+/// is.
+pub(super) fn item_cfg(inner: &ItemDefinitionInner) -> Option<crate::parser::cfg::CfgPredicate> {
+    match inner {
+        ItemDefinitionInner::Type(td) => td.attributes.cfg(),
+        ItemDefinitionInner::Enum(e) => e.attributes.cfg(),
+        ItemDefinitionInner::Bitflags(b) => b.attributes.cfg(),
+        ItemDefinitionInner::Union(u) => u.attributes.cfg(),
+        ItemDefinitionInner::TypeAlias(ta) => ta.attributes.cfg(),
+        ItemDefinitionInner::Constant(c) => c.attributes.cfg(),
+        ItemDefinitionInner::ExternValue(ev) => ev.attributes.cfg(),
+    }
+}
+
 pub(super) fn register_unresolved(
     type_registry: &mut TypeRegistry,
     path: &ItemPath,
@@ -135,14 +161,7 @@ pub(super) fn register_unresolved(
         .iter()
         .map(|tp| tp.name.clone())
         .collect();
-    let cfg = match &definition.inner {
-        ItemDefinitionInner::Type(td) => td.attributes.cfg(),
-        ItemDefinitionInner::Enum(e) => e.attributes.cfg(),
-        ItemDefinitionInner::Bitflags(b) => b.attributes.cfg(),
-        ItemDefinitionInner::TypeAlias(ta) => ta.attributes.cfg(),
-        ItemDefinitionInner::Constant(c) => c.attributes.cfg(),
-        ItemDefinitionInner::ExternValue(ev) => ev.attributes.cfg(),
-    };
+    let cfg = item_cfg(&definition.inner);
     type_registry.add(ItemDefinition {
         visibility: definition.visibility.into(),
         path: path.clone(),
@@ -257,36 +276,47 @@ pub(super) fn value_referenced_types(
     index: &NameIndex,
 ) -> Vec<ItemPath> {
     let mut refs = Vec::new();
-    match &definition.inner {
-        ItemDefinitionInner::Type(td) => {
-            for statement in td.statements() {
-                match &statement.field {
-                    TypeField::Field(_, _, type_) => {
-                        collect_value_refs(type_, scope, index, &mut refs)
-                    }
-                    // vftable function signatures resolve their by-value arg /
-                    // return types too — a generic like `WeakPtr<GameObject>` in
-                    // a method signature must be resolved to build the vftable.
-                    TypeField::Vftable(functions) => {
-                        for function in functions {
-                            for argument in &function.arguments {
-                                if let Argument::Named { type_, .. } = argument {
-                                    collect_value_refs(type_, scope, index, &mut refs);
-                                }
-                            }
-                            if let Some(return_type) = &function.return_type {
-                                collect_value_refs(return_type, scope, index, &mut refs);
+
+    /// A type/union body's by-value references. `union` bodies reuse the `type`
+    /// body AST, and an inline `union { … }` field nests one inside the other.
+    fn body_value_refs<'a>(
+        statements: impl Iterator<Item = &'a grammar::TypeStatement>,
+        scope: &[ItemPath],
+        index: &NameIndex,
+        refs: &mut Vec<ItemPath>,
+    ) {
+        for statement in statements {
+            match &statement.field {
+                TypeField::Field(_, _, type_) => collect_value_refs(type_, scope, index, refs),
+                // vftable function signatures resolve their by-value arg /
+                // return types too — a generic like `WeakPtr<GameObject>` in
+                // a method signature must be resolved to build the vftable.
+                TypeField::Vftable(functions) => {
+                    for function in functions {
+                        for argument in &function.arguments {
+                            if let Argument::Named { type_, .. } = argument {
+                                collect_value_refs(type_, scope, index, refs);
                             }
                         }
+                        if let Some(return_type) = &function.return_type {
+                            collect_value_refs(return_type, scope, index, refs);
+                        }
                     }
-                    TypeField::Item(inner_def) => {
-                        // Collect value refs from nested item definitions recursively
-                        let nested_refs = value_referenced_types(inner_def, scope, index);
-                        refs.extend(nested_refs);
-                    }
+                }
+                TypeField::Item(inner_def) => {
+                    // Collect value refs from nested item definitions recursively
+                    refs.extend(value_referenced_types(inner_def, scope, index));
+                }
+                TypeField::UnionField { body, .. } => {
+                    body_value_refs(body.statements(), scope, index, refs)
                 }
             }
         }
+    }
+
+    match &definition.inner {
+        ItemDefinitionInner::Type(td) => body_value_refs(td.statements(), scope, index, &mut refs),
+        ItemDefinitionInner::Union(ud) => body_value_refs(ud.statements(), scope, index, &mut refs),
         ItemDefinitionInner::Enum(e) => collect_value_refs(&e.type_, scope, index, &mut refs),
         ItemDefinitionInner::Bitflags(b) => collect_value_refs(&b.type_, scope, index, &mut refs),
         ItemDefinitionInner::TypeAlias(ta) => {

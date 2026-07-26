@@ -34,6 +34,7 @@
 #include "type_alias_reexport.hpp"
 #include "type_aliases.hpp"
 #include "unicode.hpp"
+#include "unions.hpp"
 #include "vftable_indices.hpp"
 #include "world/atmosphere.hpp"
 #include "world/deep/marker.hpp"

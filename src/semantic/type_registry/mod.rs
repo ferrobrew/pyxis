@@ -102,7 +102,7 @@ impl TypeRegistry {
     /// Look up an item — own additions first, then the base. A re-export alias
     /// is canonicalized to its target so the resolved definition (which may live
     /// in this overlay) is found rather than the alias path.
-    fn lookup(&self, path: &ItemPath) -> Option<&ItemDefinition> {
+    pub(in crate::semantic) fn lookup(&self, path: &ItemPath) -> Option<&ItemDefinition> {
         let canonical = self.canonicalize(path);
         self.types
             .get(&canonical)

@@ -54,7 +54,13 @@ const SUMMARY_WORDS = 24;
 
 function kindToItemType(kind: string): ItemType {
   if (kind === 'extern_value') return 'extern';
-  if (kind === 'enum' || kind === 'bitflags' || kind === 'type_alias' || kind === 'constant')
+  if (
+    kind === 'enum' ||
+    kind === 'bitflags' ||
+    kind === 'union' ||
+    kind === 'type_alias' ||
+    kind === 'constant'
+  )
     return kind;
   return 'type';
 }

@@ -1,5 +1,5 @@
 {
-  "schema_version": 11,
+  "schema_version": 12,
   "pyxis_version": "0.1.0",
   "pointer_size": 8,
   "project_name": "test-project",
@@ -9860,6 +9860,967 @@
         "line": 8
       }
     },
+    "unions::Anchored": {
+      "path": "unions::Anchored",
+      "visibility": "public",
+      "size": 8,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "union",
+        "doc": " A pinned union can be neither copied nor moved.",
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "value",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "u64"
+            },
+            "offset": 0,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 36,
+              "line": 69
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "halves",
+            "doc": null,
+            "type_ref": {
+              "type": "array",
+              "inner": {
+                "type": "raw",
+                "path": "u32"
+              },
+              "size": 2
+            },
+            "offset": 0,
+            "size": 8,
+            "alignment": 4,
+            "is_base": false,
+            "source": {
+              "file_index": 36,
+              "line": 70
+            }
+          }
+        ],
+        "size": 8,
+        "alignment": 8,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false,
+        "pinned": true
+      },
+      "source": {
+        "file_index": 36,
+        "line": 68
+      }
+    },
+    "unions::Geometry": {
+      "path": "unions::Geometry",
+      "visibility": "public",
+      "size": 8,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "union",
+        "doc": null,
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "point",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "unions::Vec2"
+            },
+            "offset": 0,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 36,
+              "line": 44
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "scalar",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "f64"
+            },
+            "offset": 0,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 36,
+              "line": 45
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "raw",
+            "doc": null,
+            "type_ref": {
+              "type": "array",
+              "inner": {
+                "type": "raw",
+                "path": "u8"
+              },
+              "size": 8
+            },
+            "offset": 0,
+            "size": 8,
+            "alignment": 1,
+            "is_base": false,
+            "source": {
+              "file_index": 36,
+              "line": 46
+            }
+          }
+        ],
+        "size": 8,
+        "alignment": 8,
+        "copyable": true,
+        "cloneable": true,
+        "defaultable": false,
+        "packed": false,
+        "pinned": false
+      },
+      "source": {
+        "file_index": 36,
+        "line": 43
+      }
+    },
+    "unions::InlineScratch": {
+      "path": "unions::InlineScratch",
+      "visibility": "public",
+      "size": 16,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": " A union declared inline in field position. It lowers to a generated sibling\n item named `InlineScratchDataUnion`.",
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "tag",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "u16"
+            },
+            "offset": 0,
+            "size": 2,
+            "alignment": 2,
+            "is_base": false,
+            "source": {
+              "file_index": 36,
+              "line": 26
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "_reserved",
+            "doc": null,
+            "type_ref": {
+              "type": "array",
+              "inner": {
+                "type": "raw",
+                "path": "u8"
+              },
+              "size": 6
+            },
+            "offset": 2,
+            "size": 6,
+            "alignment": 1,
+            "is_base": false,
+            "source": {
+              "file_index": 36,
+              "line": 27
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "data",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "unions::InlineScratchDataUnion"
+            },
+            "offset": 8,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 36,
+              "line": 28
+            }
+          }
+        ],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false,
+        "pinned": false
+      },
+      "source": {
+        "file_index": 36,
+        "line": 25
+      }
+    },
+    "unions::InlineScratchDataUnion": {
+      "path": "unions::InlineScratchDataUnion",
+      "visibility": "public",
+      "size": 8,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "union",
+        "doc": null,
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "as_u64",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "u64"
+            },
+            "offset": 0,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 36,
+              "line": 29
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "as_bytes",
+            "doc": null,
+            "type_ref": {
+              "type": "array",
+              "inner": {
+                "type": "raw",
+                "path": "u8"
+              },
+              "size": 8
+            },
+            "offset": 0,
+            "size": 8,
+            "alignment": 1,
+            "is_base": false,
+            "source": {
+              "file_index": 36,
+              "line": 30
+            }
+          }
+        ],
+        "size": 8,
+        "alignment": 8,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false,
+        "pinned": false
+      },
+      "source": {
+        "file_index": 36,
+        "line": 28
+      }
+    },
+    "unions::Outer": {
+      "path": "unions::Outer",
+      "visibility": "public",
+      "size": 4,
+      "alignment": 4,
+      "category": "defined",
+      "kind": {
+        "type": "union",
+        "doc": " A union nested inside another union, plus a nested item declaration in a\n union body.",
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "raw",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "u32"
+            },
+            "offset": 0,
+            "size": 4,
+            "alignment": 4,
+            "is_base": false,
+            "source": {
+              "file_index": 36,
+              "line": 89
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "inner",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "unions::OuterInnerUnion"
+            },
+            "offset": 0,
+            "size": 2,
+            "alignment": 2,
+            "is_base": false,
+            "source": {
+              "file_index": 36,
+              "line": 90
+            }
+          }
+        ],
+        "size": 4,
+        "alignment": 4,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false,
+        "pinned": false,
+        "nested_items": [
+          "unions::Outer::Header"
+        ]
+      },
+      "source": {
+        "file_index": 36,
+        "line": 82
+      }
+    },
+    "unions::Outer::Header": {
+      "path": "unions::Outer::Header",
+      "visibility": "public",
+      "size": 4,
+      "alignment": 4,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": " A type declared inside a union body. Nested declarations work here\n exactly as they do in a `type` body.",
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "magic",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "u32"
+            },
+            "offset": 0,
+            "size": 4,
+            "alignment": 4,
+            "is_base": false,
+            "source": {
+              "file_index": 36,
+              "line": 86
+            }
+          }
+        ],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false,
+        "pinned": false
+      },
+      "source": {
+        "file_index": 36,
+        "line": 85
+      }
+    },
+    "unions::OuterInnerUnion": {
+      "path": "unions::OuterInnerUnion",
+      "visibility": "public",
+      "size": 2,
+      "alignment": 2,
+      "category": "defined",
+      "kind": {
+        "type": "union",
+        "doc": null,
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "lo",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "u16"
+            },
+            "offset": 0,
+            "size": 2,
+            "alignment": 2,
+            "is_base": false,
+            "source": {
+              "file_index": 36,
+              "line": 91
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "hi",
+            "doc": null,
+            "type_ref": {
+              "type": "array",
+              "inner": {
+                "type": "raw",
+                "path": "u8"
+              },
+              "size": 2
+            },
+            "offset": 0,
+            "size": 2,
+            "alignment": 1,
+            "is_base": false,
+            "source": {
+              "file_index": 36,
+              "line": 92
+            }
+          }
+        ],
+        "size": 2,
+        "alignment": 2,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false,
+        "pinned": false
+      },
+      "source": {
+        "file_index": 36,
+        "line": 90
+      }
+    },
+    "unions::OversizedSlot": {
+      "path": "unions::OversizedSlot",
+      "visibility": "public",
+      "size": 16,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "union",
+        "doc": " `#[size]` alone asks for more room than any member needs, so the union gains\n a whole-width `_padding` member. Rounding up to `#[align]` needs no such help\n — see [`PaddedSlot`], which gets none.",
+        "doc_links": [
+          {
+            "text": "PaddedSlot",
+            "target_kind": "item",
+            "path": "unions::PaddedSlot"
+          }
+        ],
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "small",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "u32"
+            },
+            "offset": 0,
+            "size": 4,
+            "alignment": 4,
+            "is_base": false,
+            "source": {
+              "file_index": 36,
+              "line": 62
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "medium",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "u64"
+            },
+            "offset": 0,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 36,
+              "line": 63
+            }
+          },
+          {
+            "visibility": "private",
+            "name": "_padding",
+            "doc": null,
+            "doc_links": [
+              {
+                "text": "PaddedSlot",
+                "target_kind": "item",
+                "path": "unions::PaddedSlot"
+              }
+            ],
+            "type_ref": {
+              "type": "array",
+              "inner": {
+                "type": "raw",
+                "path": "u8"
+              },
+              "size": 16
+            },
+            "offset": 0,
+            "size": 16,
+            "alignment": 1,
+            "is_base": false,
+            "source": {
+              "file_index": 36,
+              "line": 57
+            }
+          }
+        ],
+        "size": 16,
+        "alignment": 8,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false,
+        "pinned": false
+      },
+      "source": {
+        "file_index": 36,
+        "line": 61
+      }
+    },
+    "unions::PackedPair": {
+      "path": "unions::PackedPair",
+      "visibility": "public",
+      "size": 2,
+      "alignment": 1,
+      "category": "defined",
+      "kind": {
+        "type": "union",
+        "doc": " `#[packed]` drops the union's alignment to 1.",
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "word",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "u16"
+            },
+            "offset": 0,
+            "size": 2,
+            "alignment": 2,
+            "is_base": false,
+            "source": {
+              "file_index": 36,
+              "line": 76
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "bytes",
+            "doc": null,
+            "type_ref": {
+              "type": "array",
+              "inner": {
+                "type": "raw",
+                "path": "u8"
+              },
+              "size": 2
+            },
+            "offset": 0,
+            "size": 2,
+            "alignment": 1,
+            "is_base": false,
+            "source": {
+              "file_index": 36,
+              "line": 77
+            }
+          }
+        ],
+        "size": 2,
+        "alignment": 1,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": true,
+        "pinned": false
+      },
+      "source": {
+        "file_index": 36,
+        "line": 75
+      }
+    },
+    "unions::PaddedSlot": {
+      "path": "unions::PaddedSlot",
+      "visibility": "public",
+      "size": 16,
+      "alignment": 16,
+      "category": "defined",
+      "kind": {
+        "type": "union",
+        "doc": " `#[size]` pads a union out beyond its largest member, and `#[align]`\n over-aligns it.",
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "small",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "u32"
+            },
+            "offset": 0,
+            "size": 4,
+            "alignment": 4,
+            "is_base": false,
+            "source": {
+              "file_index": 36,
+              "line": 53
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "medium",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "u64"
+            },
+            "offset": 0,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 36,
+              "line": 54
+            }
+          }
+        ],
+        "size": 16,
+        "alignment": 16,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false,
+        "pinned": false
+      },
+      "source": {
+        "file_index": 36,
+        "line": 52
+      }
+    },
+    "unions::Payload": {
+      "path": "unions::Payload",
+      "visibility": "public",
+      "size": 8,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "union",
+        "doc": " A value whose bytes have several competing readings. Which one applies is\n decided by [`TaggedValue::kind`], not by the union itself.",
+        "doc_links": [
+          {
+            "text": "TaggedValue::kind",
+            "target_kind": "item",
+            "path": "unions::TaggedValue",
+            "anchor": "field-kind"
+          }
+        ],
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "as_int",
+            "doc": " Read as a signed integer.",
+            "type_ref": {
+              "type": "raw",
+              "path": "i32"
+            },
+            "offset": 0,
+            "size": 4,
+            "alignment": 4,
+            "is_base": false,
+            "source": {
+              "file_index": 36,
+              "line": 6
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "as_float",
+            "doc": " Read as a float.",
+            "type_ref": {
+              "type": "raw",
+              "path": "f32"
+            },
+            "offset": 0,
+            "size": 4,
+            "alignment": 4,
+            "is_base": false,
+            "source": {
+              "file_index": 36,
+              "line": 8
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "as_ptr",
+            "doc": " Read as a pointer to something else.",
+            "type_ref": {
+              "type": "mut_pointer",
+              "inner": {
+                "type": "raw",
+                "path": "i32"
+              }
+            },
+            "offset": 0,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 36,
+              "line": 10
+            }
+          }
+        ],
+        "size": 8,
+        "alignment": 8,
+        "copyable": true,
+        "cloneable": true,
+        "defaultable": false,
+        "packed": false,
+        "pinned": false
+      },
+      "source": {
+        "file_index": 36,
+        "line": 4
+      }
+    },
+    "unions::TaggedValue": {
+      "path": "unions::TaggedValue",
+      "visibility": "public",
+      "size": 16,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": " A tagged value pairing a discriminant with a [`Payload`]. When `kind` is 0,\n the live member is [`Payload::as_int`].",
+        "doc_links": [
+          {
+            "text": "Payload",
+            "target_kind": "item",
+            "path": "unions::Payload"
+          },
+          {
+            "text": "Payload::as_int",
+            "target_kind": "item",
+            "path": "unions::Payload",
+            "anchor": "field-as_int"
+          }
+        ],
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "kind",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "u32"
+            },
+            "offset": 0,
+            "size": 4,
+            "alignment": 4,
+            "is_base": false,
+            "source": {
+              "file_index": 36,
+              "line": 17
+            }
+          },
+          {
+            "visibility": "private",
+            "name": "_field_4",
+            "doc": null,
+            "type_ref": {
+              "type": "array",
+              "inner": {
+                "type": "raw",
+                "path": "u8"
+              },
+              "size": 4
+            },
+            "offset": 4,
+            "size": 4,
+            "alignment": 1,
+            "is_base": false,
+            "source": {
+              "file_index": 36,
+              "line": 20
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "payload",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "unions::Payload"
+            },
+            "offset": 8,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 36,
+              "line": 20
+            }
+          }
+        ],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false,
+        "pinned": false
+      },
+      "source": {
+        "file_index": 36,
+        "line": 16
+      }
+    },
+    "unions::Vec2": {
+      "path": "unions::Vec2",
+      "visibility": "public",
+      "size": 8,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": " Members can be structs, and the union takes the strictest alignment and the\n largest size among them.",
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "x",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "f32"
+            },
+            "offset": 0,
+            "size": 4,
+            "alignment": 4,
+            "is_base": false,
+            "source": {
+              "file_index": 36,
+              "line": 38
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "y",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "f32"
+            },
+            "offset": 4,
+            "size": 4,
+            "alignment": 4,
+            "is_base": false,
+            "source": {
+              "file_index": 36,
+              "line": 39
+            }
+          }
+        ],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": true,
+        "cloneable": true,
+        "defaultable": false,
+        "packed": false,
+        "pinned": false
+      },
+      "source": {
+        "file_index": 36,
+        "line": 37
+      }
+    },
+    "unions::ZeroInit": {
+      "path": "unions::ZeroInit",
+      "visibility": "public",
+      "size": 4,
+      "alignment": 4,
+      "category": "defined",
+      "kind": {
+        "type": "union",
+        "doc": " A defaultable union gets a hand-written `Default` in Rust — a union can't\n derive one, because nothing knows which member is live.",
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "count",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "u32"
+            },
+            "offset": 0,
+            "size": 4,
+            "alignment": 4,
+            "is_base": false,
+            "source": {
+              "file_index": 36,
+              "line": 100
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "flags",
+            "doc": null,
+            "type_ref": {
+              "type": "array",
+              "inner": {
+                "type": "raw",
+                "path": "u8"
+              },
+              "size": 4
+            },
+            "offset": 0,
+            "size": 4,
+            "alignment": 1,
+            "is_base": false,
+            "source": {
+              "file_index": 36,
+              "line": 101
+            }
+          }
+        ],
+        "size": 4,
+        "alignment": 4,
+        "copyable": true,
+        "cloneable": true,
+        "defaultable": true,
+        "packed": false,
+        "pinned": false
+      },
+      "source": {
+        "file_index": 36,
+        "line": 99
+      }
+    },
     "vftable_indices::IndexedVftable": {
       "path": "vftable_indices::IndexedVftable",
       "visibility": "private",
@@ -9886,7 +10847,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 36,
+              "file_index": 37,
               "line": 13
             }
           },
@@ -9903,7 +10864,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 36,
+              "file_index": 37,
               "line": 23
             }
           }
@@ -9930,7 +10891,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 36,
+                "file_index": 37,
                 "line": 13
               }
             },
@@ -9950,7 +10911,7 @@
               "return_type": null,
               "calling_convention": "system",
               "source": {
-                "file_index": 36,
+                "file_index": 37,
                 "line": 11
               }
             },
@@ -9981,7 +10942,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 36,
+                "file_index": 37,
                 "line": 16
               }
             },
@@ -10004,7 +10965,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 36,
+                "file_index": 37,
                 "line": 19
               }
             }
@@ -10018,7 +10979,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 36,
+        "file_index": 37,
         "line": 9
       }
     },
@@ -10061,7 +11022,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 36,
+              "file_index": 37,
               "line": 13
             }
           },
@@ -10091,7 +11052,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 36,
+              "file_index": 37,
               "line": 11
             }
           },
@@ -10131,7 +11092,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 36,
+              "file_index": 37,
               "line": 16
             }
           },
@@ -10164,7 +11125,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 36,
+              "file_index": 37,
               "line": 19
             }
           }
@@ -10179,7 +11140,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 36,
+        "file_index": 37,
         "line": 13
       }
     },
@@ -10227,7 +11188,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 39,
+              "file_index": 40,
               "line": 10
             }
           }
@@ -10242,7 +11203,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 39,
+        "file_index": 40,
         "line": 9
       }
     },
@@ -10272,7 +11233,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 37,
+              "file_index": 38,
               "line": 8
             }
           },
@@ -10289,7 +11250,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 37,
+              "file_index": 38,
               "line": 9
             }
           },
@@ -10306,7 +11267,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 37,
+              "file_index": 38,
               "line": 10
             }
           }
@@ -10321,7 +11282,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 37,
+        "file_index": 38,
         "line": 7
       }
     },
@@ -10348,7 +11309,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 38,
+              "file_index": 39,
               "line": 6
             }
           }
@@ -10363,7 +11324,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 38,
+        "file_index": 39,
         "line": 5
       }
     },
@@ -10390,7 +11351,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 40,
+              "file_index": 41,
               "line": 4
             }
           },
@@ -10407,7 +11368,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 40,
+              "file_index": 41,
               "line": 5
             }
           }
@@ -10422,7 +11383,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 40,
+        "file_index": 41,
         "line": 3
       }
     },
@@ -10459,7 +11420,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 41,
+              "file_index": 42,
               "line": 14
             }
           },
@@ -10479,7 +11440,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 41,
+              "file_index": 42,
               "line": 15
             }
           }
@@ -10494,7 +11455,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 41,
+        "file_index": 42,
         "line": 13
       }
     },
@@ -10521,7 +11482,7 @@
             "alignment": 1,
             "is_base": false,
             "source": {
-              "file_index": 42,
+              "file_index": 43,
               "line": 10
             }
           },
@@ -10538,7 +11499,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 42,
+              "file_index": 43,
               "line": 13
             }
           },
@@ -10559,7 +11520,7 @@
             "alignment": 1,
             "is_base": false,
             "source": {
-              "file_index": 42,
+              "file_index": 43,
               "line": 6
             }
           }
@@ -10574,7 +11535,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 42,
+        "file_index": 43,
         "line": 9
       }
     },
@@ -10605,7 +11566,7 @@
             "alignment": 1,
             "is_base": false,
             "source": {
-              "file_index": 42,
+              "file_index": 43,
               "line": 1
             }
           }
@@ -10620,7 +11581,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 42,
+        "file_index": 43,
         "line": 4
       }
     }
@@ -11514,6 +12475,31 @@
         "line": 3
       }
     },
+    "unions": {
+      "doc": null,
+      "items": [
+        "unions::Anchored",
+        "unions::Geometry",
+        "unions::InlineScratch",
+        "unions::InlineScratchDataUnion",
+        "unions::Outer",
+        "unions::OuterInnerUnion",
+        "unions::OversizedSlot",
+        "unions::PackedPair",
+        "unions::PaddedSlot",
+        "unions::Payload",
+        "unions::TaggedValue",
+        "unions::Vec2",
+        "unions::ZeroInit"
+      ],
+      "submodules": {},
+      "functions": [],
+      "splices": [],
+      "source": {
+        "file_index": 36,
+        "line": 1
+      }
+    },
     "vftable_indices": {
       "doc": " Vftable with explicit `#[index]` attributes and padding gaps.\n\n `first` is placed at index 0, `second` jumps to index 2 (leaving a padding\n slot at index 1), and `third` continues at index 3. The `#[size(4)]` matches\n the total slot count exactly. This verifies that ascending indices with\n gaps produce the correct vftable layout.",
       "items": [
@@ -11524,7 +12510,7 @@
       "functions": [],
       "splices": [],
       "source": {
-        "file_index": 36,
+        "file_index": 37,
         "line": 8
       }
     },
@@ -11543,7 +12529,7 @@
           "functions": [],
           "splices": [],
           "source": {
-            "file_index": 37,
+            "file_index": 38,
             "line": 1
           }
         },
@@ -11560,7 +12546,7 @@
               "functions": [],
               "splices": [],
               "source": {
-                "file_index": 38,
+                "file_index": 39,
                 "line": 1
               }
             }
@@ -11578,7 +12564,7 @@
           "functions": [],
           "splices": [],
           "source": {
-            "file_index": 40,
+            "file_index": 41,
             "line": 1
           }
         }
@@ -11597,7 +12583,7 @@
         }
       ],
       "source": {
-        "file_index": 39,
+        "file_index": 40,
         "line": 7
       }
     },
@@ -11610,7 +12596,7 @@
       "functions": [],
       "splices": [],
       "source": {
-        "file_index": 41,
+        "file_index": 42,
         "line": 1
       }
     },
@@ -11624,7 +12610,7 @@
       "functions": [],
       "splices": [],
       "source": {
-        "file_index": 42,
+        "file_index": 43,
         "line": 1
       }
     }
@@ -11666,6 +12652,7 @@
     "type_alias_reexport.pyxis",
     "type_aliases.pyxis",
     "unicode.pyxis",
+    "unions.pyxis",
     "vftable_indices.pyxis",
     "world/atmosphere.pyxis",
     "world/deep/marker.pyxis",

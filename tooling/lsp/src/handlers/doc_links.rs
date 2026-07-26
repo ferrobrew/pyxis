@@ -69,10 +69,16 @@ fn enclosing_in_definition(
     line_no: usize,
 ) -> Option<ItemPath> {
     use pyxis::grammar::ItemDefinitionInner as IDI;
+    // `union` bodies reuse the `type` body AST, so both are walked the same way.
+    let body_statements: Vec<_> = match &definition.inner {
+        IDI::Type(td) => td.statements().collect(),
+        IDI::Union(ud) => ud.statements().collect(),
+        _ => Vec::new(),
+    };
     match &definition.inner {
-        IDI::Type(td) => {
+        IDI::Type(_) | IDI::Union(_) => {
             // A line inside a nested item's own span belongs to that item.
-            for statement in td.statements() {
+            for statement in body_statements {
                 if let TypeField::Item(nested) = &statement.field
                     && location_contains_line(&nested.location, line_no)
                 {
@@ -443,8 +449,13 @@ impl ServerState {
                         if &def_path != item {
                             continue;
                         }
-                        if let ItemDefinitionInner::Type(td) = &definition.inner {
-                            for statement in td.statements() {
+                        let body_statements: Vec<_> = match &definition.inner {
+                            ItemDefinitionInner::Type(td) => td.statements().collect(),
+                            ItemDefinitionInner::Union(ud) => ud.statements().collect(),
+                            _ => Vec::new(),
+                        };
+                        {
+                            for statement in body_statements {
                                 match &statement.field {
                                     TypeField::Vftable(fns) => {
                                         for f in fns {
@@ -471,6 +482,25 @@ impl ServerState {
                                     TypeField::Item(_) => {
                                         // Nested items are handled at the top level;
                                         // their internal members are not searched here.
+                                    }
+                                    TypeField::UnionField {
+                                        name: field_name, ..
+                                    } => {
+                                        // The inline union is itself a field; its
+                                        // members belong to the generated union item.
+                                        if field_name.as_str() == name {
+                                            let span = name_token_span(
+                                                tokens,
+                                                &statement.location.span.start,
+                                                name,
+                                            )
+                                            .unwrap_or(statement.location.span);
+                                            out.push((
+                                                uri.clone(),
+                                                span,
+                                                format!("**field** `{name}`"),
+                                            ));
+                                        }
                                     }
                                 }
                             }

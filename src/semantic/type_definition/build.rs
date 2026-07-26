@@ -20,26 +20,37 @@ use crate::{
 };
 
 use super::{TypeDefinition, vftable};
+use crate::semantic::union_definition::{self, InlineUnionRequest};
 
 /// Type-level attributes parsed from a `TypeDefinition`'s attribute list.
-struct TypeAttributes {
-    target_size: Option<usize>,
-    min_size: Option<usize>,
-    singleton: Option<usize>,
-    copyable: bool,
-    cloneable: bool,
-    defaultable: bool,
-    packed: bool,
-    pinned: bool,
-    align: Option<usize>,
+///
+/// Shared with `union_definition`, which accepts the same layout attributes on
+/// the same terms — a union is laid out by different rules, but `#[size]`,
+/// `#[align]`, `#[packed]` and the trait attributes mean exactly what they do on
+/// a type.
+pub(in crate::semantic) struct TypeAttributes {
+    pub target_size: Option<usize>,
+    pub min_size: Option<usize>,
+    pub singleton: Option<usize>,
+    pub copyable: bool,
+    pub cloneable: bool,
+    pub defaultable: bool,
+    pub packed: bool,
+    pub pinned: bool,
+    pub align: Option<usize>,
 }
 
 /// The layout-bearing content collected from a type body: the pending field
-/// regions, the resolved vftable functions (if any), and the nested item paths.
-struct TypeBody {
+/// regions, the resolved vftable functions (if any), the nested item paths, and
+/// the inline `union { … }` fields awaiting desugaring.
+struct TypeBody<'a> {
     pending_regions: Vec<(Option<usize>, Region)>,
     vftable_functions: Option<Vec<Function>>,
     nested_item_paths: Vec<ItemPath>,
+    /// Inline unions can't be built during the walk — registering the generated
+    /// items needs the resolution context mutably, and the walk holds it
+    /// immutably. They're collected here and built by `build` immediately after.
+    inline_unions: Vec<InlineUnionRequest<'a>>,
 }
 
 pub fn build(
@@ -76,7 +87,23 @@ pub fn build(
         pending_regions,
         vftable_functions,
         nested_item_paths,
+        inline_unions,
     } = body;
+
+    // Desugar the inline `union { … }` fields into generated sibling items. Each
+    // field's region already points at the item's path, so this only has to make
+    // that path real before layout asks for its size.
+    if !inline_unions.is_empty()
+        && union_definition::build_inline_union(
+            semantic,
+            resolvee_path,
+            &inline_unions,
+            type_parameters,
+        )?
+        .is_none()
+    {
+        return Ok(BuildOutcome::Deferred);
+    }
 
     // Handle min_size: pre-calculate alignment and round up min_size
     if let Some(min_size_value) = attributes.min_size {
@@ -152,7 +179,9 @@ enum BuildFlow<T> {
 }
 
 /// Parse the type-level attributes (`#[size]`, `#[copyable]`, `#[align]`, ...).
-fn parse_type_attributes(attributes: &[grammar::Attribute]) -> Result<TypeAttributes> {
+pub(in crate::semantic) fn parse_type_attributes(
+    attributes: &[grammar::Attribute],
+) -> Result<TypeAttributes> {
     let mut target_size: Option<usize> = None;
     let mut min_size: Option<usize> = None;
     let mut singleton = None;
@@ -207,16 +236,17 @@ fn parse_type_attributes(attributes: &[grammar::Attribute]) -> Result<TypeAttrib
 /// Walk the type body's statements, resolving field types, the vftable, and
 /// collecting nested item paths. Returns `BuildFlow::Outcome` when a field's
 /// type is unresolved (deferring or reporting a not-found type).
-fn build_type_body(
+fn build_type_body<'a>(
     semantic: &ResolutionContext<'_>,
     module: &Module,
     resolvee_path: &ItemPath,
-    definition: &grammar::TypeDefinition,
+    definition: &'a grammar::TypeDefinition,
     type_parameters: &[String],
-) -> Result<BuildFlow<TypeBody>> {
+) -> Result<BuildFlow<TypeBody<'a>>> {
     let mut pending_regions: Vec<(Option<usize>, Region)> = vec![];
     let mut vftable_functions = None;
     let mut nested_item_paths: Vec<ItemPath> = Vec::new();
+    let mut inline_unions: Vec<InlineUnionRequest<'a>> = Vec::new();
     for statement in definition.statements() {
         let grammar::TypeStatement {
             field,
@@ -373,6 +403,68 @@ fn build_type_body(
                 // Nested items are registered by name_index/declaration_registry (Phase 3),
                 // not during build. We only collect the paths here.
             }
+            grammar::TypeField::UnionField {
+                visibility,
+                name,
+                body,
+            } => {
+                // `pub payload: union { … }` is one ordinary field whose type is
+                // a generated sibling item. Recording the region here (rather
+                // than after the union is built) keeps it in body order, so the
+                // field lands at the offset the source implies.
+                //
+                // The field name is load-bearing twice over — it names the Rust
+                // field *and* the generated item — so it can't be the anonymous
+                // `_` that padding uses.
+                if name.as_str() == "_" {
+                    return Err(SemanticError::UnionAnonymousMember {
+                        item_path: resolvee_path.clone(),
+                        location: statement.location,
+                    });
+                }
+
+                let Some(path) = InlineUnionRequest::path_for(resolvee_path, name.as_str()) else {
+                    return Err(SemanticError::ModuleNotFound {
+                        path: resolvee_path.clone(),
+                        location: statement.location,
+                    });
+                };
+
+                let mut address: Option<usize> = None;
+                for attribute in attributes {
+                    if let grammar::Attribute::Function {
+                        name: attr_ident,
+                        items,
+                        ..
+                    } = attribute
+                        && let Some(attr_address) =
+                            attribute::parse_address(attr_ident, items, attribute.location())?
+                    {
+                        address = Some(attr_address);
+                    }
+                }
+
+                inline_unions.push(InlineUnionRequest {
+                    path: path.clone(),
+                    visibility: (*visibility).into(),
+                    attributes,
+                    body,
+                    doc: doc_comments.to_vec(),
+                    location: statement.location,
+                });
+
+                pending_regions.push((
+                    address,
+                    Region {
+                        visibility: (*visibility).into(),
+                        name: Some(name.0.clone()),
+                        doc: doc_comments.to_vec(),
+                        type_ref: Type::Raw(path),
+                        is_base: false,
+                        location: statement.location,
+                    },
+                ));
+            }
         }
     }
 
@@ -380,6 +472,7 @@ fn build_type_body(
         pending_regions,
         vftable_functions,
         nested_item_paths,
+        inline_unions,
     }))
 }
 
@@ -429,7 +522,7 @@ fn round_up_min_size(
 
 /// Enforce the `#[defaultable]`, `#[copyable]`, and `#[cloneable]` constraints
 /// against every region's type.
-fn check_trait_constraints(
+pub(in crate::semantic) fn check_trait_constraints(
     semantic: &ResolutionContext<'_>,
     resolvee_path: &ItemPath,
     regions: &[Region],

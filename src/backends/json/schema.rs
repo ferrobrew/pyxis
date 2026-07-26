@@ -43,7 +43,10 @@ use crate::semantic::types::{CallingConvention, ItemCategory, Visibility};
 /// - v11: added `c_string`, `struct`, `array`, and `const_ref` variants to
 ///   `JsonConstValue` for C-string literals, structured initializers, and
 ///   constant aliases.
-pub const CURRENT_SCHEMA_VERSION: u32 = 11;
+/// - v12: added a `Union` item kind (`JsonUnionDefinition`). Its `fields` are
+///   `JsonRegion`s like a type's, but every one has `offset: 0` — a union's
+///   members are competing readings of the same bytes, not a sequence.
+pub const CURRENT_SCHEMA_VERSION: u32 = 12;
 
 /// Top-level JSON documentation structure
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
@@ -225,6 +228,7 @@ pub enum JsonItemKind {
     Type(JsonTypeDefinition),
     Enum(JsonEnumDefinition),
     Bitflags(JsonBitflagsDefinition),
+    Union(JsonUnionDefinition),
     TypeAlias(JsonTypeAliasDefinition),
     Constant(JsonConstantDefinition),
     ExternValue(JsonExternValueDefinition),
@@ -297,6 +301,36 @@ pub struct JsonTypeDefinition {
     /// Whether the type is pinned (non-relocatable)
     pub pinned: bool,
     /// Item paths of nested items declared inside this type body
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub nested_items: Vec<String>,
+}
+
+/// A union: several readings of the same bytes, only one of which applies at a
+/// time. Which one is a property of the surrounding data, not of the union.
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+pub struct JsonUnionDefinition {
+    /// Documentation
+    pub doc: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub doc_links: Vec<JsonDocLink>,
+    /// Members. Every one has `offset: 0`; `size` is the member's own size,
+    /// which may be smaller than the union's.
+    pub fields: Vec<JsonRegion>,
+    /// Total size in bytes: the largest member, rounded up to the alignment
+    pub size: usize,
+    /// Alignment in bytes: the strictest of the members'
+    pub alignment: usize,
+    /// Whether the union is copyable
+    pub copyable: bool,
+    /// Whether the union is cloneable
+    pub cloneable: bool,
+    /// Whether the union is defaultable
+    pub defaultable: bool,
+    /// Whether the union is packed
+    pub packed: bool,
+    /// Whether the union is pinned (non-relocatable)
+    pub pinned: bool,
+    /// Item paths of nested items declared inside this union body
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub nested_items: Vec<String>,
 }

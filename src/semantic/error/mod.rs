@@ -354,6 +354,62 @@ pub enum SemanticError {
         field_type: SemanticType,
         location: ItemLocation,
     },
+    /// A `#[base]` field was declared inside a union. A base at a
+    /// non-deterministic offset would break the inheritance hierarchy, the
+    /// generated conversions, and vftable inheritance.
+    UnionBaseNotAllowed {
+        item_path: ItemPath,
+        location: ItemLocation,
+    },
+    /// A `vftable` block was declared inside a union. A vftable pointer must
+    /// occupy offset 0 exclusively, which a union cannot guarantee.
+    UnionVftableNotAllowed {
+        item_path: ItemPath,
+        location: ItemLocation,
+    },
+    /// `#[address]` was applied to a union member. Every member of a union
+    /// starts at offset 0 by definition.
+    UnionMemberAddress {
+        member_name: String,
+        item_path: ItemPath,
+        location: ItemLocation,
+    },
+    /// A union was declared with no members, so it has no size to speak of.
+    EmptyUnion {
+        item_path: ItemPath,
+        location: ItemLocation,
+    },
+    /// A union member is larger than the union's declared `#[size]`.
+    UnionMemberExceedsSize {
+        member_name: String,
+        member_size: usize,
+        declared_size: usize,
+        item_path: ItemPath,
+        location: ItemLocation,
+    },
+    /// A union member was named `_`. In a type that means padding, which a union
+    /// has no room for — every member already covers the same bytes.
+    UnionAnonymousMember {
+        item_path: ItemPath,
+        location: ItemLocation,
+    },
+    /// An item was declared inside an inline `union { … }` field body. The
+    /// generated union is a module-scope sibling, so a nested item under it
+    /// would never be reachable.
+    InlineUnionNestedItem {
+        item_name: String,
+        item_path: ItemPath,
+        location: ItemLocation,
+    },
+    /// A name synthesised while building an item — an inline union's
+    /// `{Type}{Field}Union`, a `{Name}Vftable` — is already taken. Registering
+    /// it anyway would silently replace whatever holds that name, after the
+    /// owner has already measured it.
+    GeneratedNameCollision {
+        generated_path: ItemPath,
+        item_path: ItemPath,
+        location: ItemLocation,
+    },
 }
 
 impl SemanticError {
@@ -412,6 +468,14 @@ impl SemanticError {
             SemanticError::ConstValueTypeMismatch { location, .. } => Some(location),
             SemanticError::StrTypeNotConst { location, .. } => Some(location),
             SemanticError::ZeroSizeFieldEmbedding { location, .. } => Some(location),
+            SemanticError::UnionBaseNotAllowed { location, .. } => Some(location),
+            SemanticError::UnionVftableNotAllowed { location, .. } => Some(location),
+            SemanticError::UnionMemberAddress { location, .. } => Some(location),
+            SemanticError::EmptyUnion { location, .. } => Some(location),
+            SemanticError::UnionMemberExceedsSize { location, .. } => Some(location),
+            SemanticError::UnionAnonymousMember { location, .. } => Some(location),
+            SemanticError::InlineUnionNestedItem { location, .. } => Some(location),
+            SemanticError::GeneratedNameCollision { location, .. } => Some(location),
         }
     }
 

@@ -7,7 +7,8 @@ use crate::{
         TypeRegistry,
         types::{
             BitflagsDefinition, EnumDefinition, ItemCategory, ItemDefinition, ItemDefinitionInner,
-            ItemStateResolved, Region, TypeAliasDefinition, TypeDefinition, Visibility,
+            ItemStateResolved, Region, TypeAliasDefinition, TypeDefinition, UnionDefinition,
+            Visibility,
         },
     },
     span::ItemLocation,
@@ -67,6 +68,17 @@ pub(super) fn build_item(
                 location,
                 type_parameters,
                 cfg_ctx,
+                options,
+                module_paths,
+                doc_cx,
+            ),
+            IDI::Union(ud) => build_union(
+                path,
+                *size,
+                *alignment,
+                visibility,
+                ud,
+                location,
                 options,
                 module_paths,
                 doc_cx,
@@ -432,6 +444,136 @@ fn build_type(
         #nested_const_impls
         #nested_extern_value_impls
         #(#as_ref_conversions)*
+    })
+}
+
+/// Emit a `union` — a real Rust union, not an opaque byte array, so the
+/// alternatives are visible in the type.
+///
+/// Every member is wrapped in `ManuallyDrop<T>` unconditionally. Rust requires
+/// it for any member that isn't `Copy`, and applying it only where needed would
+/// make a member's spelling depend on whether its type happened to be
+/// `#[copyable]`. `ManuallyDrop` is `repr(transparent)` and derefs to its
+/// contents, so it costs nothing at runtime and little at the call site.
+///
+/// `Debug` and `Default` are written out rather than derived, because a union
+/// cannot derive either — the compiler has no way to know which member is live.
+/// Emitting them anyway is what lets a *containing* struct keep its own
+/// `#[derive(Debug, Default)]` working.
+#[allow(clippy::too_many_arguments)]
+fn build_union(
+    path: &ItemPath,
+    size: usize,
+    alignment: usize,
+    visibility: Visibility,
+    union_definition: &UnionDefinition,
+    location: &ItemLocation,
+    options: &crate::BuildOptions,
+    module_paths: &BTreeSet<ItemPath>,
+    doc_cx: &DocLinkCx,
+) -> Result<proc_macro2::TokenStream> {
+    let name = flatten_type_name(path, module_paths);
+    let name = &name;
+    let prefix = options.rust_module_prefix.as_ref();
+
+    let UnionDefinition {
+        regions,
+        doc,
+        copyable,
+        cloneable,
+        defaultable,
+        packed,
+        pinned,
+        nested_item_paths: _,
+    } = union_definition;
+
+    let name_ident = str_to_ident(name);
+    let visibility_tokens = visibility_to_tokens(visibility);
+    let doc = doc_cx.node(doc, location);
+
+    let members = regions
+        .iter()
+        .map(|r| {
+            let Region {
+                visibility,
+                name: member,
+                doc,
+                type_ref,
+                is_base: _,
+                location,
+            } = r;
+            let member_name =
+                member
+                    .as_deref()
+                    .ok_or_else(|| BackendError::FieldCodeGenFailed {
+                        type_path: path.clone(),
+                        field_name: "unnamed".to_string(),
+                        kind: crate::backends::error::FieldCodeGenFailedKind::FieldNameNotPresent,
+                        location: *location,
+                    })?;
+            let member_ident = str_to_ident(member_name);
+            let visibility = visibility_to_tokens(*visibility);
+            let syn_type = sa_type_to_syn_type(type_ref, prefix, Some(module_paths))?;
+            let doc = doc_cx.node(doc, location);
+            Ok(quote! {
+                #doc
+                #visibility #member_ident: ::core::mem::ManuallyDrop<#syn_type>
+            })
+        })
+        .collect::<Result<Vec<_>>>()?;
+
+    // A pinned union must not be Copy/Clone — that would allow moving out from
+    // behind a Pin. Note a union cannot carry a PhantomPinned marker the way a
+    // struct does: an extra member would be another reading of the same bytes,
+    // not an extra field.
+    let extra_derives = build_extra_derives(*copyable && !*pinned, *cloneable && !*pinned, false);
+    let derives = if extra_derives.is_empty() {
+        quote! {}
+    } else {
+        quote! { #[derive(#(#extra_derives),*)] }
+    };
+
+    let (packed_repr, alignment_repr) = if *packed {
+        (quote! { , packed }, quote! {})
+    } else {
+        let alignment: syn::Index = alignment.into();
+        (quote! {}, quote! { , align(#alignment) })
+    };
+
+    let size_check_impl = generate_size_check(name, size);
+
+    let debug_impl = quote! {
+        impl ::core::fmt::Debug for #name_ident {
+            fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+                // Which member is live is a property of the surrounding data,
+                // not of the union, so there is nothing safe to print.
+                f.write_str(concat!(#name, " { .. }"))
+            }
+        }
+    };
+
+    let default_impl = defaultable.then(|| {
+        quote! {
+            impl ::core::default::Default for #name_ident {
+                fn default() -> Self {
+                    // Every member is plain data (the `#[defaultable]` check
+                    // rejects anything else), so an all-zero reading is valid.
+                    unsafe { ::core::mem::zeroed() }
+                }
+            }
+        }
+    });
+
+    Ok(quote! {
+        #derives
+        #[repr(C #packed_repr #alignment_repr)]
+        #doc
+        #visibility_tokens union #name_ident {
+            #(#members),*
+        }
+        #size_check_impl
+        #debug_impl
+        #default_impl
     })
 }
 

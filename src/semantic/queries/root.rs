@@ -312,6 +312,13 @@ pub fn analyze<'db>(
     // definition_paths are folded in just below.
     let mut semantic_errors: Vec<SemanticError> = Vec::new();
     let item_paths: Vec<ItemPath> = decl_registry.item_paths().cloned().collect();
+    // Each item is resolved in its own registry overlay, so `resolve_item` can
+    // only catch a generated name colliding with a *declared* item. Two items
+    // generating the same name (`type A { b_c: union {…} }` and
+    // `type AB { c: union {…} }` both produce `ABCUnion`) only meet here, and
+    // `type_registry.add` is an insert — one would silently replace the other
+    // after its owner had already measured it.
+    let mut generated_owners: BTreeMap<ItemPath, ItemPath> = BTreeMap::new();
     for item_path in &item_paths {
         let resolved = resolve_item(db, sources, pointer_size, item_path.clone());
         semantic_errors.extend(resolved.errors(db).iter().cloned());
@@ -328,6 +335,15 @@ pub fn analyze<'db>(
             });
         }
         for generated in resolved.generated_items(db).iter() {
+            if let Some(other) = generated_owners.get(&generated.path) {
+                semantic_errors.push(SemanticError::GeneratedNameCollision {
+                    generated_path: generated.path.clone(),
+                    item_path: other.clone(),
+                    location: generated.location,
+                });
+                continue;
+            }
+            generated_owners.insert(generated.path.clone(), item_path.clone());
             definition_paths.insert(generated.path.clone());
             type_registry.add(generated.clone());
         }

@@ -8,7 +8,7 @@ use std::sync::Arc;
 use crate::{
     grammar::{
         Argument, Function, ImplItem, ItemDefinition, ItemDefinitionInner, ItemPath, ModuleItem,
-        Type, TypeField,
+        Type, TypeField, TypeStatement,
     },
     semantic::name_index::NameIndex,
     span::{HasLocation, Location, Span},
@@ -117,31 +117,47 @@ fn collect_type_ref_spans(
     tokens: &[Token],
     out: &mut Vec<(Span, ItemPath)>,
 ) {
-    match &definition.inner {
-        ItemDefinitionInner::Type(td) => {
-            for statement in td.statements() {
-                match &statement.field {
-                    TypeField::Field(_, _, type_) => {
-                        type_ref_spans(type_, scope, index, tokens, out)
-                    }
-                    TypeField::Vftable(functions) => {
-                        for function in functions {
-                            for argument in &function.arguments {
-                                if let Argument::Named { type_, .. } = argument {
-                                    type_ref_spans(type_, scope, index, tokens, out);
-                                }
-                            }
-                            if let Some(return_type) = &function.return_type {
-                                type_ref_spans(return_type, scope, index, tokens, out);
+    /// A type/union body's type-reference spans. `union` bodies reuse the `type`
+    /// body AST, and an inline `union { … }` field nests one inside the other.
+    fn body_type_ref_spans<'a>(
+        statements: impl Iterator<Item = &'a TypeStatement>,
+        scope: &[ItemPath],
+        index: &NameIndex,
+        tokens: &[Token],
+        out: &mut Vec<(Span, ItemPath)>,
+    ) {
+        for statement in statements {
+            match &statement.field {
+                TypeField::Field(_, _, type_) => type_ref_spans(type_, scope, index, tokens, out),
+                TypeField::Vftable(functions) => {
+                    for function in functions {
+                        for argument in &function.arguments {
+                            if let Argument::Named { type_, .. } = argument {
+                                type_ref_spans(type_, scope, index, tokens, out);
                             }
                         }
-                    }
-                    TypeField::Item(inner_def) => {
-                        // Collect type reference spans from nested item definitions
-                        collect_type_ref_spans(inner_def, scope, index, tokens, out);
+                        if let Some(return_type) = &function.return_type {
+                            type_ref_spans(return_type, scope, index, tokens, out);
+                        }
                     }
                 }
+                TypeField::Item(inner_def) => {
+                    // Collect type reference spans from nested item definitions
+                    collect_type_ref_spans(inner_def, scope, index, tokens, out);
+                }
+                TypeField::UnionField { body, .. } => {
+                    body_type_ref_spans(body.statements(), scope, index, tokens, out)
+                }
             }
+        }
+    }
+
+    match &definition.inner {
+        ItemDefinitionInner::Type(td) => {
+            body_type_ref_spans(td.statements(), scope, index, tokens, out)
+        }
+        ItemDefinitionInner::Union(ud) => {
+            body_type_ref_spans(ud.statements(), scope, index, tokens, out)
         }
         ItemDefinitionInner::Enum(e) => type_ref_spans(&e.type_, scope, index, tokens, out),
         ItemDefinitionInner::Bitflags(b) => type_ref_spans(&b.type_, scope, index, tokens, out),

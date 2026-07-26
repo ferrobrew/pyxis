@@ -285,6 +285,7 @@ pub(super) fn forward_decl_line(
     {
         match &resolved.inner {
             ItemDefinitionInner::Type(_) => return format!("struct {leaf};"),
+            ItemDefinitionInner::Union(_) => return format!("union {leaf};"),
             ItemDefinitionInner::Enum(ed) => {
                 let underlying = render::render_type(&ed.type_, ctx)
                     .unwrap_or_else(|_| "::std::int32_t".to_string());

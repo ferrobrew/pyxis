@@ -17,6 +17,7 @@ impl PrettyPrinter {
             ItemDefinitionInner::Type(td) => {
                 self.print_type_definition(def, td, &type_params, nested)
             }
+            ItemDefinitionInner::Union(ud) => self.print_union_definition(def, ud),
             ItemDefinitionInner::Enum(ed) => self.print_enum_definition(def, ed),
             ItemDefinitionInner::Bitflags(bf) => self.print_bitflags_definition(def, bf),
             ItemDefinitionInner::TypeAlias(ta) => {
@@ -67,6 +68,11 @@ impl PrettyPrinter {
                 &bf.attributes,
                 &bf.inline_trailing_comments,
                 &bf.following_comments,
+            ),
+            ItemDefinitionInner::Union(ud) => (
+                &ud.attributes,
+                &ud.inline_trailing_comments,
+                &ud.following_comments,
             ),
             ItemDefinitionInner::TypeAlias(ta) => (&ta.attributes, &Vec::new(), &Vec::new()),
             ItemDefinitionInner::Constant(cd) => (&cd.attributes, &Vec::new(), &Vec::new()),
@@ -122,6 +128,21 @@ impl PrettyPrinter {
             .unwrap();
         } else {
             writeln!(&mut self.output, "type {}{} {{", def.name, type_params).unwrap();
+            self.print_type_body_items(&td.items);
+        }
+    }
+
+    /// Print a `union` definition body. A union body is the same AST as a type
+    /// body, so it groups and orders its items identically.
+    fn print_union_definition(&mut self, def: &ItemDefinition, ud: &UnionDefinition) {
+        writeln!(&mut self.output, "union {} {{", def.name).unwrap();
+        self.print_type_body_items(&ud.items);
+    }
+
+    /// Print the contents of a braced type/union body, including the closing
+    /// brace, with items grouped into constants, nested types, and fields.
+    fn print_type_body_items(&mut self, items: &[TypeDefItem]) {
+        {
             self.indent();
 
             // Partition items into groups: (comments, statement) pairs.
@@ -129,7 +150,7 @@ impl PrettyPrinter {
             // Then split into nested-item groups and other groups.
             let mut groups: Vec<(Vec<&Comment>, &TypeDefItem)> = Vec::new();
             let mut pending_comments: Vec<&Comment> = Vec::new();
-            for item in &td.items {
+            for item in items {
                 match item {
                     TypeDefItem::Comment(c) => {
                         pending_comments.push(c);
@@ -426,6 +447,35 @@ impl PrettyPrinter {
                 // Add blank line after vftable if there's a field following
                 if let Some(TypeDefItem::Statement(_)) = next_item {
                     self.writeln("");
+                }
+            }
+            TypeField::UnionField {
+                visibility,
+                name,
+                body,
+            } => {
+                self.write_indent();
+                if *visibility == Visibility::Public {
+                    write!(&mut self.output, "pub ").unwrap();
+                }
+                writeln!(&mut self.output, "{name}: union {{").unwrap();
+                self.print_type_body_items(&body.items);
+                // `print_type_body_items` closes with `}\n`; an inline union is
+                // a field, so it needs the field's trailing comma.
+                if self.output.ends_with("}\n") {
+                    self.output.pop();
+                    write!(&mut self.output, ",").unwrap();
+                }
+
+                for comment in &stmt.inline_trailing_comments {
+                    write!(&mut self.output, " ").unwrap();
+                    self.print_comment_inline(comment);
+                }
+
+                writeln!(&mut self.output).unwrap();
+
+                for comment in &stmt.following_comments {
+                    self.print_comment(comment);
                 }
             }
             TypeField::Item(inner_def) => {

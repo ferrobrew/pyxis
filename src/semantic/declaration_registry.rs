@@ -198,15 +198,22 @@ impl DeclarationRegistry {
         }
     }
 
-    /// Recursively register nested items inside a type body.
+    /// Recursively register nested items inside a type or union body.
     fn register_nested_in_type(
         &mut self,
         inner: &grammar::ItemDefinitionInner,
         parent_path: &ItemPath,
         module_path: &ItemPath,
     ) {
-        if let grammar::ItemDefinitionInner::Type(td) = inner {
-            for stmt in td.statements() {
+        // `union` bodies reuse the `type` body AST, so both are walked the same
+        // way for nested item declarations.
+        let statements: Vec<&grammar::TypeStatement> = match inner {
+            grammar::ItemDefinitionInner::Type(td) => td.statements().collect(),
+            grammar::ItemDefinitionInner::Union(ud) => ud.statements().collect(),
+            _ => Vec::new(),
+        };
+        {
+            for stmt in statements {
                 if let grammar::TypeField::Item(nested) = &stmt.field {
                     let nested_path = parent_path.join(nested.name.as_str().into());
                     self.items.insert(nested_path.clone(), (**nested).clone());

@@ -559,3 +559,46 @@ pub type MultipleBlocks {
 
     assert_eq!(printed, printed2);
 }
+
+#[test]
+fn unions_round_trip() {
+    // Both union forms — a standalone item and an inline anonymous union in
+    // field position — must survive a round-trip unchanged, including the
+    // trailing comma the inline form needs as a field.
+    let text = r#"#[copyable]
+pub union Payload {
+    pub as_int: i32,
+    pub as_float: f32,
+}
+
+pub type Scratch {
+    pub tag: u64,
+    pub data: union {
+        pub as_u64: u64,
+        pub as_bytes: [u8; 8],
+    },
+}"#;
+
+    let module = parse_str_for_tests(text).unwrap();
+    assert_eq!(pretty_print(&module), text);
+}
+
+#[test]
+fn nested_union_declarations_round_trip() {
+    // A union body reuses the type-body printer, so nested item declarations
+    // and nested inline unions must print the same way they do in a type.
+    let text = r#"pub union Outer {
+    pub type Header {
+        pub magic: u32,
+    },
+
+    pub raw: u32,
+    pub inner: union {
+        pub lo: u16,
+        pub hi: [u8; 2],
+    },
+}"#;
+
+    let module = parse_str_for_tests(text).unwrap();
+    assert_eq!(pretty_print(&module), text);
+}

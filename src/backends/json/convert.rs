@@ -10,7 +10,7 @@ use crate::{
             ConstValue, EnumDefinition, EnumVariant,
             ExternValueDefinition as SemanticExternValueDefinition, Function, FunctionBody,
             ItemCategory, ItemDefinition, ItemDefinitionInner, Region, Type, TypeAliasDefinition,
-            TypeDefinition, TypeVftable,
+            TypeDefinition, TypeVftable, UnionDefinition,
         },
     },
     source_store::FileStore,
@@ -407,6 +407,38 @@ fn convert_type_definition(
     }
 }
 
+/// Convert a union. Unlike a type, there is no running offset to accumulate:
+/// every member starts at offset 0, which is the whole point of a union.
+fn convert_union_definition(
+    ud: &UnionDefinition,
+    type_registry: &TypeRegistry,
+    size: usize,
+    alignment: usize,
+    cx: &DocCx,
+    item_location: &crate::span::ItemLocation,
+) -> JsonUnionDefinition {
+    let fields = ud
+        .regions
+        .iter()
+        .map(|region| convert_region(region, type_registry, 0, cx))
+        .collect();
+
+    let (doc, doc_links) = cx.convert(&ud.doc, item_location);
+    JsonUnionDefinition {
+        doc,
+        doc_links,
+        fields,
+        size,
+        alignment,
+        copyable: ud.copyable,
+        cloneable: ud.cloneable,
+        defaultable: ud.defaultable,
+        packed: ud.packed,
+        pinned: ud.pinned,
+        nested_items: ud.nested_item_paths.iter().map(|p| p.to_string()).collect(),
+    }
+}
+
 fn convert_enum_variant(variant: &EnumVariant, cx: &DocCx) -> JsonEnumVariant {
     let (doc, doc_links) = cx.convert(&variant.doc, &variant.location);
     JsonEnumVariant {
@@ -571,6 +603,14 @@ fn convert_item(
             ItemDefinitionInner::Type(td) => JsonItemKind::Type(convert_type_definition(
                 td,
                 type_registry,
+                cx,
+                &item.location,
+            )),
+            ItemDefinitionInner::Union(ud) => JsonItemKind::Union(convert_union_definition(
+                ud,
+                type_registry,
+                resolved.size,
+                resolved.alignment,
                 cx,
                 &item.location,
             )),

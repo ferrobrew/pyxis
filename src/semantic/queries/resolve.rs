@@ -6,7 +6,7 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use crate::{
-    grammar::{self, ItemDefinitionInner, ItemPath},
+    grammar::{self, ItemPath},
     semantic::{
         Module, SemanticError, TypeRegistry,
         error::BuildOutcome,
@@ -18,8 +18,8 @@ use crate::{
 use super::{
     super::{db::Db, inputs::SourceSet, ir::ResolvedItem},
     helpers::{
-        build_item, make_extern_from_sig, make_predefined_definition, make_unresolved_definition,
-        value_referenced_types,
+        build_item, item_cfg, make_extern_from_sig, make_predefined_definition,
+        make_unresolved_definition, value_referenced_types,
     },
     index::{name_index, placeholder_base},
     leaf::parse_file,
@@ -60,9 +60,16 @@ fn find_grammar_def(
     //    body for a nested item whose name matches target_path.last().
     let parent_path = target_path.parent()?;
     let parent_def = find_grammar_def(module, module_path, &parent_path)?;
-    if let grammar::ItemDefinitionInner::Type(td) = &parent_def.inner {
+    // `union` bodies reuse the `type` body AST, so nested items are found the
+    // same way in both.
+    let body_statements: Vec<&grammar::TypeStatement> = match &parent_def.inner {
+        grammar::ItemDefinitionInner::Type(td) => td.statements().collect(),
+        grammar::ItemDefinitionInner::Union(ud) => ud.statements().collect(),
+        _ => Vec::new(),
+    };
+    {
         let leaf = target_path.last()?;
-        for stmt in td.statements() {
+        for stmt in body_statements {
             if let grammar::TypeField::Item(inner) = &stmt.field {
                 if inner.name.as_str() == leaf.as_str() {
                     return Some((**inner).clone());
@@ -269,14 +276,7 @@ pub fn resolve_item<'db>(
 
     let (item_def, errors) = match outcome {
         Ok(BuildOutcome::Resolved(item)) => {
-            let cfg = match &definition.inner {
-                ItemDefinitionInner::Type(td) => td.attributes.cfg(),
-                ItemDefinitionInner::Enum(e) => e.attributes.cfg(),
-                ItemDefinitionInner::Bitflags(b) => b.attributes.cfg(),
-                ItemDefinitionInner::TypeAlias(ta) => ta.attributes.cfg(),
-                ItemDefinitionInner::Constant(c) => c.attributes.cfg(),
-                ItemDefinitionInner::ExternValue(ev) => ev.attributes.cfg(),
-            };
+            let cfg = item_cfg(&definition.inner);
             (
                 ItemDefinition {
                     visibility,

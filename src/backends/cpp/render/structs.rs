@@ -77,7 +77,12 @@ pub(super) fn render_struct(
     render_vftable_declarations(&mut body, td, ctx)?;
     render_associated_function_declarations(&mut body, td, ctx)?;
     render_deleted_special_members(&mut body, name, td)?;
-    super::nested::render_declarations(&mut body, td, ctx, &mut deferred_consts)?;
+    super::nested::render_declarations(
+        &mut body,
+        &td.nested_item_paths,
+        ctx,
+        &mut deferred_consts,
+    )?;
 
     if body.trim().is_empty() {
         writeln!(out, "{header} {{}};")?;
@@ -134,7 +139,7 @@ pub(super) fn render_struct(
     } else {
         &mut post_cpp
     };
-    super::nested::render_extern_value_definitions(def_out, td, name, ctx)?;
+    super::nested::render_extern_value_definitions(def_out, &td.nested_item_paths, name, ctx)?;
 
     Ok(RenderedItem {
         decl: out,
@@ -241,7 +246,15 @@ fn render_deleted_special_members(
     name: &str,
     td: &TypeDefinition,
 ) -> Result<()> {
-    if td.pinned {
+    render_deleted_special_members_if(body, name, td.pinned)
+}
+
+pub(super) fn render_deleted_special_members_if(
+    body: &mut String,
+    name: &str,
+    pinned: bool,
+) -> Result<()> {
+    if pinned {
         writeln!(body)?;
         writeln!(body, "    {name}(const {name}&) = delete;")?;
         writeln!(body, "    {name}({name}&&) = delete;")?;

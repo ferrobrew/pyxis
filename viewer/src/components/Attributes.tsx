@@ -115,7 +115,7 @@ export function ItemAttributes({ item, className = '' }: { item: JsonItem; class
   }
 
   const singleton =
-    kind.type !== 'type_alias' && kind.type !== 'constant' && kind.type !== 'extern_value'
+    kind.type === 'type' || kind.type === 'enum' || kind.type === 'bitflags'
       ? kind.singleton
       : null;
   if (singleton != null) {
@@ -145,7 +145,7 @@ export function ItemAttributes({ item, className = '' }: { item: JsonItem; class
     if (kind.cloneable) primary.push(<Name>cloneable</Name>);
     if (kind.pinned) primary.push(<Name>pinned</Name>);
   }
-  if (kind.type === 'type') {
+  if (kind.type === 'type' || kind.type === 'union') {
     if (kind.defaultable) primary.push(<Name>defaultable</Name>);
     if (kind.packed) primary.push(<Name>packed</Name>);
   }

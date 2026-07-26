@@ -26,6 +26,7 @@ pub(crate) fn format_type_hover(definition: &ItemDefinition) -> String {
         ItemDefinitionInner::Type(_) => "type",
         ItemDefinitionInner::Enum(_) => "enum",
         ItemDefinitionInner::Bitflags(_) => "bitflags",
+        ItemDefinitionInner::Union(_) => "union",
         ItemDefinitionInner::TypeAlias(_) => "type alias",
         ItemDefinitionInner::Constant(_) => "const",
         ItemDefinitionInner::ExternValue(_) => "extern",
@@ -37,16 +38,42 @@ pub(crate) fn format_type_hover(definition: &ItemDefinition) -> String {
         md.push_str("\n\n");
     }
 
-    if let ItemDefinitionInner::Type(td) = &definition.inner {
-        md.push_str("**Fields:**\n");
-        for statement in td.statements() {
-            if let TypeField::Field(vis, name, type_) = &statement.field {
-                let vis_str = if matches!(vis, Visibility::Public) {
+    // A union's members are listed the same way, under a heading that says
+    // they are alternatives rather than a sequence.
+    let (heading, statements) = match &definition.inner {
+        ItemDefinitionInner::Type(td) => {
+            ("**Fields:**\n", Some(td.statements().collect::<Vec<_>>()))
+        }
+        ItemDefinitionInner::Union(ud) => (
+            "**Members** (all at offset 0, one applies at a time)**:**\n",
+            Some(ud.statements().collect::<Vec<_>>()),
+        ),
+        _ => ("", None),
+    };
+    if let Some(statements) = statements {
+        md.push_str(heading);
+        for statement in statements {
+            let vis_str = |vis: &Visibility| {
+                if matches!(vis, Visibility::Public) {
                     "pub "
                 } else {
                     ""
-                };
-                md.push_str(&format!("- `{}{}: {}`\n", vis_str, name, type_));
+                }
+            };
+            match &statement.field {
+                TypeField::Field(vis, name, type_) => {
+                    md.push_str(&format!("- `{}{}: {}`\n", vis_str(vis), name, type_));
+                }
+                TypeField::UnionField {
+                    visibility, name, ..
+                } => {
+                    md.push_str(&format!(
+                        "- `{}{}: union {{ … }}`\n",
+                        vis_str(visibility),
+                        name
+                    ));
+                }
+                _ => {}
             }
         }
     }

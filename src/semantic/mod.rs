@@ -21,6 +21,7 @@ pub mod resolution_context;
 pub(crate) mod type_alias_definition;
 pub(crate) mod type_definition;
 pub mod type_registry;
+pub(crate) mod union_definition;
 pub mod validation;
 
 #[cfg(test)]

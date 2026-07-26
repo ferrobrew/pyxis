@@ -531,3 +531,81 @@ fn module_level_opaque_type_requires_semicolon() {
     assert!(parse_str_for_tests("pub type Opaque,").is_err());
     assert!(parse_str_for_tests("pub type Opaque;").is_ok());
 }
+
+#[test]
+fn can_parse_standalone_union() {
+    let text = r#"
+    #[copyable]
+    pub union Payload {
+        pub as_int: i32,
+        pub as_float: f32,
+    }
+    "#;
+
+    let ast = M::new().with_definitions([ID::new(
+        (V::Public, "Payload"),
+        UD::new([
+            TS::field((V::Public, "as_int"), T::ident("i32")),
+            TS::field((V::Public, "as_float"), T::ident("f32")),
+        ])
+        .with_attributes([A::copyable()]),
+    )]);
+
+    assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
+}
+
+#[test]
+fn can_parse_inline_union_field() {
+    let text = r#"
+    pub type Scratch {
+        pub tag: u16,
+        pub data: union {
+            pub as_u64: u64,
+        },
+    }
+    "#;
+
+    let ast = M::new().with_definitions([ID::new(
+        (V::Public, "Scratch"),
+        TD::new([
+            TS::field((V::Public, "tag"), T::ident("u16")),
+            TS::union_field(
+                (V::Public, "data"),
+                UD::new([TS::field((V::Public, "as_u64"), T::ident("u64"))]),
+            ),
+        ]),
+    )]);
+
+    assert_eq!(parse_str_for_tests(text).unwrap().strip_locations(), ast);
+}
+
+#[test]
+fn can_parse_nested_union_declaration_and_inline_union_in_union_body() {
+    let text = r#"
+    pub union Outer {
+        pub union Inner {
+            pub x: u32,
+        },
+
+        pub raw: u32,
+        pub extra: union {
+            pub lo: u16,
+        },
+    }
+    "#;
+    assert!(parse_str_for_tests(text).is_ok());
+}
+
+#[test]
+fn union_does_not_accept_type_parameters() {
+    // Unions aren't generic; `union Name<T>` fails at the `{` expectation.
+    assert!(parse_str_for_tests("pub union Bad<T> { pub a: u32, }").is_err());
+}
+
+#[test]
+fn anonymous_union_is_confined_to_field_position() {
+    // The inline form is not part of the type grammar, so it can't appear
+    // behind a pointer or inside an array.
+    assert!(parse_str_for_tests("pub type Bad { pub a: *mut union { pub x: u32, }, }").is_err());
+    assert!(parse_str_for_tests("pub type Bad { pub a: [union { pub x: u32, }; 2], }").is_err());
+}
