@@ -418,9 +418,9 @@ pub(super) fn render_extern_value_decl(
     ev: &SemanticExternValueDefinition,
     ctx: RenderCtx,
 ) -> Result<String> {
-    let ty = super::render_type(&ev.type_, ctx)?;
     let name = super::cpp_ident(name);
-    Ok(format!("{ty}& get_{name}();\n"))
+    let decl = super::render_declaration(&ev.type_, &format!("&get_{name}()"), ctx)?;
+    Ok(format!("{decl};\n"))
 }
 
 /// `.cpp` definition for an `extern` value's getter. Three lines plus
@@ -431,10 +431,11 @@ pub(super) fn render_extern_value_definition(
     ev: &SemanticExternValueDefinition,
     ctx: RenderCtx,
 ) -> Result<String> {
-    let ty = super::render_type(&ev.type_, ctx)?;
     let name = super::cpp_ident(name);
+    let decl = super::render_declaration(&ev.type_, &format!("&get_{name}()"), ctx)?;
+    let target = super::render_declaration(&ev.type_, "*", ctx)?;
     Ok(format!(
-        "{ty}& get_{name}() {{\n    return *reinterpret_cast<{ty}*>(0x{addr:X});\n}}\n\n",
+        "{decl} {{\n    return *reinterpret_cast<{target}>(0x{addr:X});\n}}\n\n",
         addr = ev.address,
     ))
 }

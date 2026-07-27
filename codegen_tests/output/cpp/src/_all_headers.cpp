@@ -16,6 +16,7 @@
 #include "external_body.hpp"
 #include "field_type_name_collision.hpp"
 #include "freestanding_functions.hpp"
+#include "function_pointer_nesting.hpp"
 #include "function_pointers.hpp"
 #include "generics.hpp"
 #include "generics_cross_module.hpp"

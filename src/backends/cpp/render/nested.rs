@@ -220,8 +220,12 @@ pub(super) fn render_declarations(
                             ctx,
                             &nested_item.location,
                         )?;
-                        let ev_type = super::render_type(&nested_ev.type_, ctx)?;
-                        writeln!(body, "    static {ev_type}& get_{nested_name}();")?;
+                        let decl = super::render_declaration(
+                            &nested_ev.type_,
+                            &format!("&get_{nested_name}()"),
+                            ctx,
+                        )?;
+                        writeln!(body, "    static {decl};")?;
                     }
                 }
             }
@@ -250,11 +254,16 @@ pub(super) fn render_extern_value_definitions(
         if let ItemDefinitionInner::ExternValue(nested_ev) = &nested_resolved.inner {
             let value_name = nested_path.last().map(|s| s.as_str()).unwrap_or_default();
             let value_name = super::cpp_ident(value_name);
-            let ev_type = super::render_type(&nested_ev.type_, ctx)?;
-            writeln!(out, "{ev_type}& {parent_name}::get_{value_name}() {{")?;
+            let decl = super::render_declaration(
+                &nested_ev.type_,
+                &format!("&{parent_name}::get_{value_name}()"),
+                ctx,
+            )?;
+            let target = super::render_declaration(&nested_ev.type_, "*", ctx)?;
+            writeln!(out, "{decl} {{")?;
             writeln!(
                 out,
-                "    return *reinterpret_cast<{ev_type}*>(0x{addr:X});",
+                "    return *reinterpret_cast<{target}>(0x{addr:X});",
                 addr = nested_ev.address
             )?;
             writeln!(out, "}}")?;

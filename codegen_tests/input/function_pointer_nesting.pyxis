@@ -1,0 +1,108 @@
+//! Deeply nested function-pointer combinations, to check that all three
+//! backends compose the type correctly rather than only handling one level.
+//!
+//! C++ declaration syntax nests inside-out, so every extra level here is a
+//! chance for the declarator to bind `*`, `[]` and `()` in the wrong order.
+//! The corpus compiles its own C++ and Rust output, so anything that composes
+//! wrongly fails the build rather than sitting in a snapshot.
+//!
+//! `C` is the only non-default convention whose Rust (`extern "C"`) compiles
+//! on every host the corpus builds against, so the convention cases below
+//! distinguish positions by pairing it against the default, `system`.
+
+/// Passed around by pointer as the callback context.
+pub type Ctx {
+    pub id: u64,
+}
+
+/// A signature that itself takes and returns signatures, reached through an
+/// alias to check aliases carry the whole nested type.
+pub type Handler = fn(inner: fn(*mut Ctx) -> bool) -> fn(*mut Ctx);
+
+/// A generic instantiated with a function pointer, exercising the type in
+/// template-argument position. Sized explicitly, as any generic whose layout
+/// can't be computed from its parameters must be.
+#[size(0x8)]
+pub type Slot<T> {
+    pub value: *mut T,
+}
+
+pub type Nested {
+    /// Three levels of parameter nesting.
+    pub three: fn(a: fn(b: fn(*mut Ctx) -> u32) -> u32) -> u32,
+    /// Three levels of return nesting, the hardest C++ declarator shape here.
+    /// Doxygen mis-parses it (see DOXYGEN_IGNORED_WARNINGS in test.py); clang
+    /// and gcc accept it, and this corpus compiles its own output.
+    pub curried: fn(*mut Ctx) -> fn(u32) -> fn() -> bool,
+    /// An array of arrays of function pointers.
+    pub grid: [[fn(*mut Ctx); 2]; 3],
+    /// A pointer to an array of function pointers. In C++ the subscript binds
+    /// tighter than the star, so this needs parens where an array of pointers
+    /// does not.
+    pub table_ptr: *mut [fn(*mut Ctx); 4],
+    /// A const pointer to a function pointer: the qualifier belongs to the
+    /// pointee, not to the return type.
+    pub locked: *const fn(*mut Ctx),
+    /// An array by value alongside a pointer to a function pointer.
+    pub bulk: fn(values: [u32; 4], sink: *mut fn(u32)),
+    /// A convention on the outer type only. The parameter and the return
+    /// type must keep the default, not inherit it - so each of the three
+    /// positions is exercised alone, with the other two left default.
+    pub cc_outer: #[calling_convention(C)] fn(cb: fn(u32) -> bool) -> fn(),
+    /// The same, on the return type only.
+    pub cc_return: fn(cb: fn(u32) -> bool) -> #[calling_convention(C)] fn(),
+    /// The same, on the parameter only.
+    pub cc_param: fn(cb: #[calling_convention(C)] fn(u32) -> bool) -> fn(),
+    /// All three annotated at once, so the attributes have to coexist in a
+    /// single type expression rather than one per field. The parameter takes
+    /// the other convention, so an outer one reaching it would still show.
+    pub cc_all: #[calling_convention(C)] fn(cb: #[calling_convention(system)] fn(u32) -> bool) -> #[calling_convention(C)] fn(),
+    /// Structs passed and returned by value through a function pointer. The
+    /// parameter is the enclosing module's type, not a pointer to it.
+    pub by_value: fn(ctx: Ctx) -> Ctx,
+    /// The alias above, which is itself a nested signature.
+    pub aliased: Handler,
+    /// A function pointer as a generic argument.
+    pub slot: Slot<fn(*mut Ctx) -> bool>,
+}
+
+/// Function pointers in vftable slots, in both argument and return position.
+#[align(8)]
+pub type Dispatch {
+    #[size(2)]
+    vftable {
+        #[index(0)]
+        pub fn install(&mut self, cb: fn(*mut Ctx) -> bool) -> fn(*mut Ctx);
+
+        #[index(1)]
+        pub fn table(&self) -> *mut [fn(); 4];
+    },
+}
+
+/// Parameters named after the locals the generated call shims used to bind.
+/// The Rust backend called the target through a local `f`, which a parameter
+/// of the same name shadowed - the shim passed itself instead of the argument.
+/// Both the `#[address]` and vftable shims are covered.
+#[align(8)]
+pub type ShimNames {
+    #[size(1)]
+    vftable {
+        #[index(0)]
+        pub fn via_vftable(&mut self, f: *mut Ctx, this: u32) -> *mut Ctx;
+    },
+}
+impl ShimNames {
+    #[address(0x6_000)]
+    pub fn via_address(&mut self, f: fn(*mut Ctx), this: u32) -> fn(*mut Ctx);
+}
+
+/// A union whose members are competing readings of one pointer-sized slot.
+#[copyable]
+pub union HookSlot {
+    pub as_fn: fn(*mut Ctx) -> bool,
+    pub as_address: u64,
+}
+
+/// A global function pointer at a fixed address.
+#[address(0x5_000)]
+pub extern g_hook: fn(*mut Ctx) -> bool;

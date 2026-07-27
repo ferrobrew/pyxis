@@ -55,14 +55,14 @@ pub fn render_declaration_with(
         false,
     )?;
 
-    // Leading `*`s bind to the base type in this codebase's house style
+    // Leading `*`/`&` bind to the base type in this codebase's house style
     // (`T* name`, not `T *name`); anything else is separated by a space.
-    let stars = declarator.len() - declarator.trim_start_matches('*').len();
-    let (stars, rest) = declarator.split_at(stars);
+    let sigils = declarator.len() - declarator.trim_start_matches(['*', '&']).len();
+    let (sigils, rest) = declarator.split_at(sigils);
     Ok(if rest.is_empty() {
-        format!("{base}{stars}")
+        format!("{base}{sigils}")
     } else {
-        format!("{base}{stars} {rest}")
+        format!("{base}{sigils} {rest}")
     })
 }
 
@@ -107,9 +107,9 @@ fn build_declarator(
             build_declarator(inner, format!("{star}{declarator}"), ctx, false, false)?
         }
         Type::Array(inner, n) => {
-            // `[]` binds tighter than `*`, so a pointer to an array needs
-            // parens; an array of pointers does not.
-            let declarator = if declarator.starts_with('*') {
+            // `[]` binds tighter than `*`/`&`, so a pointer or reference to
+            // an array needs parens; an array of pointers does not.
+            let declarator = if declarator.starts_with(['*', '&']) {
                 format!("({declarator})[{n}]")
             } else {
                 format!("{declarator}[{n}]")
