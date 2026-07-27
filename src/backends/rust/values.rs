@@ -281,6 +281,16 @@ pub(super) fn build_function(
         })
         .collect::<Vec<_>>();
 
+    // The shims below bind the callee to a local `f` and call through it. A
+    // parameter of the same name shadows that local, so the shim would pass
+    // itself instead of the argument. Only then is the wordier form that
+    // calls straight off the transmute / slot read — and so binds no name at
+    // all — worth reaching for.
+    let shim_local_is_shadowed = function
+        .arguments
+        .iter()
+        .any(|a| matches!(a, Argument::Field { name, .. } if name == "f"));
+
     let return_type = function
         .return_type
         .as_ref()
@@ -312,12 +322,22 @@ pub(super) fn build_function(
             } else {
                 quote! { #address_lit as usize }
             };
-            quote! {
-                let f:
-                    unsafe extern #calling_convention
-                    fn(#(#lambda_arguments),*) #return_type
-                = ::std::mem::transmute(#transmute_target);
-                f(#(#call_arguments),*)
+            if shim_local_is_shadowed {
+                quote! {
+                    (::std::mem::transmute::<
+                        usize,
+                        unsafe extern #calling_convention
+                        fn(#(#lambda_arguments),*) #return_type
+                    >(#transmute_target))(#(#call_arguments),*)
+                }
+            } else {
+                quote! {
+                    let f:
+                        unsafe extern #calling_convention
+                        fn(#(#lambda_arguments),*) #return_type
+                    = ::std::mem::transmute(#transmute_target);
+                    f(#(#call_arguments),*)
+                }
             }
         }
         FunctionBody::Field {
@@ -332,9 +352,17 @@ pub(super) fn build_function(
         }
         FunctionBody::Vftable { function_name } => {
             let function_to_call_name = str_to_ident(function_name);
-            quote! {
-                let f = (&raw const (*self.vftable()).#function_to_call_name).read();
-                f(#(#call_arguments),*)
+            if shim_local_is_shadowed {
+                quote! {
+                    ((&raw const (*self.vftable()).#function_to_call_name).read())(
+                        #(#call_arguments),*
+                    )
+                }
+            } else {
+                quote! {
+                    let f = (&raw const (*self.vftable()).#function_to_call_name).read();
+                    f(#(#call_arguments),*)
+                }
             }
         }
         FunctionBody::External => {
