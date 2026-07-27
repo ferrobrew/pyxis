@@ -267,9 +267,11 @@ fn fully_qualified_type_ref_impl(
         }
         Type::Function(calling_convention, args, return_type) => {
             write!(out, r#"unsafe extern "{calling_convention}" fn ("#)?;
-            for (field, type_ref) in args.iter() {
-                write!(out, "{field}: ")?;
-                fully_qualified_type_ref_impl(out, type_ref, prefix, module_paths)?;
+            for arg in args.iter() {
+                if let Some(name) = &arg.name {
+                    write!(out, "{}: ", rust_parameter_ident(name))?;
+                }
+                fully_qualified_type_ref_impl(out, &arg.type_, prefix, module_paths)?;
                 write!(out, ", ")?;
             }
             write!(out, ")")?;
@@ -279,6 +281,32 @@ fn fully_qualified_type_ref_impl(
             }
             Ok(())
         }
+    }
+}
+
+/// Rust keywords that cannot be spelled as raw identifiers. A parameter of
+/// one of these names is emitted unescaped and rejected downstream — there is
+/// no valid Rust spelling for it.
+const NON_RAW_KEYWORDS: &[&str] = &["crate", "self", "Self", "super"];
+
+/// Rust keywords, reserved words included. A pyxis function-pointer parameter
+/// may legitimately be named after one (the binary's symbols don't know about
+/// Rust), so escape it as a raw identifier rather than emitting code that
+/// fails to parse.
+const RUST_KEYWORDS: &[&str] = &[
+    "as", "break", "const", "continue", "crate", "dyn", "else", "enum", "extern", "false", "fn",
+    "for", "if", "impl", "in", "let", "loop", "match", "mod", "move", "mut", "pub", "ref",
+    "return", "self", "Self", "static", "struct", "super", "trait", "true", "type", "unsafe",
+    "use", "where", "while", "async", "await", "abstract", "become", "box", "do", "final", "macro",
+    "override", "priv", "try", "typeof", "unsized", "virtual", "yield",
+];
+
+/// Spell `name` so it is a valid Rust parameter identifier.
+fn rust_parameter_ident(name: &str) -> std::borrow::Cow<'_, str> {
+    if RUST_KEYWORDS.contains(&name) && !NON_RAW_KEYWORDS.contains(&name) {
+        std::borrow::Cow::Owned(format!("r#{name}"))
+    } else {
+        std::borrow::Cow::Borrowed(name)
     }
 }
 

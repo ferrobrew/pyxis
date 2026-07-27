@@ -343,9 +343,9 @@ fn collect_value_refs(
     index: &NameIndex,
     refs: &mut Vec<ItemPath>,
 ) {
-    use grammar::Type;
-    match type_ {
-        Type::Ident {
+    use grammar::TypeKind;
+    match &type_.kind {
+        TypeKind::Ident {
             path, generic_args, ..
         } => {
             let name = path.last().map(|s| s.as_str()).unwrap_or("");
@@ -359,10 +359,13 @@ fn collect_value_refs(
                 collect_value_refs(arg, scope, index, refs);
             }
         }
-        Type::Array { element, .. } => collect_value_refs(element, scope, index, refs),
-        // Pointers: the pointee need only exist, so don't recurse into it.
-        Type::ConstPointer { .. } | Type::MutPointer { .. } => {}
-        Type::Unknown { .. } => {}
+        TypeKind::Array { element, .. } => collect_value_refs(element, scope, index, refs),
+        // Pointers and function pointers: the target need only exist, so
+        // don't recurse into it. Treating a `fn` type's parameters as value
+        // deps would make `type A { f: fn(A) }` depend on itself.
+        TypeKind::ConstPointer { .. } | TypeKind::MutPointer { .. } | TypeKind::Function { .. } => {
+        }
+        TypeKind::Unknown { .. } => {}
     }
 }
 

@@ -26,13 +26,26 @@ def run_command(cmd, env=None, cwd=None, shell=False):
     return result
 
 
+# Doxygen's C++ parser gives up on a function-pointer declarator whose own
+# return type is a function pointer, when the inner parameter list names a
+# qualified type: `bool (*(*two)(Ctx*))(::std::uint32_t);` is valid C++ that
+# clang and gcc accept (the codegen corpus compiles it), but doxygen 1.9-1.16
+# report it as an unterminated initializer list. Every pyxis integer emits as
+# `::std::uint32_t` and friends, so this fires for any `fn(..) -> fn(u32)` -
+# not just the corpus. The message can't indicate a broken doc link, which is
+# what this check is actually for, so it is dropped rather than allowed to
+# gate legal codegen.
+DOXYGEN_IGNORED_WARNINGS = ("while parsing initializer list",)
+
+
 def check_cpp_docs():
     """Run doxygen over codegen_tests/output/cpp and fail on any warning.
 
     The emitted headers carry doxygen-markdown doc links (`[label](@ref
     ns::Target)`); an unresolvable `@ref` surfaces as a doxygen warning, so
     warnings are treated as errors. `EXTRACT_ALL` keeps undocumented items
-    from warning — only genuine doc problems remain.
+    from warning — only genuine doc problems remain, except for the parser
+    limitation listed in `DOXYGEN_IGNORED_WARNINGS`.
     """
     print(f"\n{'=' * 60}")
     print("Running: doxygen (C++ doc-link check on codegen_tests/output/cpp)")
@@ -74,7 +87,11 @@ def check_cpp_docs():
         warnings = ""
         if os.path.exists(warn_log):
             with open(warn_log) as f:
-                warnings = f.read().strip()
+                warnings = "\n".join(
+                    line
+                    for line in f.read().splitlines()
+                    if not any(ignored in line for ignored in DOXYGEN_IGNORED_WARNINGS)
+                ).strip()
         if result.returncode != 0 or warnings:
             if warnings:
                 print(warnings)

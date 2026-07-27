@@ -114,6 +114,7 @@ pub fn build(
         {
             TypeLookupResult::Found(t) => t,
             TypeLookupResult::NotYetResolved => return Ok(BuildOutcome::Deferred),
+            TypeLookupResult::InvalidAttribute { error } => return Err(*error),
             TypeLookupResult::NotFound { type_name } => {
                 return Ok(BuildOutcome::NotFoundType(UnresolvedTypeReference {
                     type_name,

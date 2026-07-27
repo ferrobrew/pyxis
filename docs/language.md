@@ -727,7 +727,38 @@ pub type Pointers {
 }
 ```
 
-Function pointers are not expressible as field types. If a struct contains a raw function pointer, model it as a `vftable { ... }` block (which generates a typed function-pointer layout) or as an opaque `unknown<N>` field of the appropriate size.
+### Function pointers
+
+`fn(A, B) -> R` is a function pointer. It is an ordinary type: it can be a field, an array element, a pointee, a parameter, a return type, or the target of a type alias. Its size is the project's `pointer_size`.
+
+```pyxis
+pub type Callbacks {
+    pub on_tick: fn(engine: *mut Engine, dt: f32),
+    pub on_event: fn(*mut Engine, u32) -> bool,
+    pub on_shutdown: fn(),
+    pub table: [fn(*mut Engine); 8],
+    pub indirect: *mut fn(*mut Engine),
+}
+
+pub type TickFn = fn(*mut Engine, f32);
+```
+
+Parameter names are optional. `fn(count: u32)` and `fn(u32)` describe the same type; the name is documentation, and it carries through to the generated Rust signature and the docs viewer. An unnamed parameter stays unnamed in the output rather than being given a synthesized name. The C++ backend emits parameter types only, as it does for vftable slots.
+
+The calling convention comes from a `#[calling_convention(...)]` attribute written in type position, immediately before the `fn`:
+
+```pyxis
+pub type Callbacks {
+    pub on_alloc: #[calling_convention(cdecl)] fn(size: u32) -> *mut Engine,
+    pub table: [#[calling_convention(stdcall)] fn(*mut Engine); 8],
+}
+```
+
+The attribute binds to the type it precedes, so each function pointer in a nested position selects its own convention. Without it, a function-pointer type defaults the same way a freestanding function does — `system`, which is stdcall on 32-bit Windows and the C convention on 64-bit.
+
+Attributes are grammatically permitted before *any* type, but only a function-pointer type has anything to do with one. `#[calling_convention(cdecl)] u32` parses and is then rejected by the semantic layer, as is any attribute other than `calling_convention` on a `fn` type.
+
+Nullability is the consumer's problem, exactly as it is for `*const T` and `*mut T`: a function-pointer field is a raw pointer-sized slot, and pyxis does not model "this slot may be null". There is no `self`-taking form — pointers to member functions have a different representation under the MSVC ABI and are out of scope.
 
 ### Arrays
 
@@ -820,10 +851,10 @@ Why composition: Pyxis describes layouts that already exist in a binary. Real C+
 
 | Attribute | Applies to | Effect |
 |------|------|----|
-| `#[calling_convention(...)]` | Functions | Sets the calling convention. Valid values: `C`, `cdecl`, `stdcall`, `fastcall`, `thiscall`, `vectorcall`, `system`. |
+| `#[calling_convention(...)]` | Functions, function-pointer types | Sets the calling convention. Valid values: `C`, `cdecl`, `stdcall`, `fastcall`, `thiscall`, `vectorcall`, `system`. In type position it is written immediately before the `fn` — see [Function pointers](#function-pointers). |
 | `#[external_body]` | Functions (not vftable functions) | The function body is supplied by a backend epilogue, not bound to an address. |
 
-The default calling convention is `thiscall` on 32-bit (when the function has `&self` or `&mut self`) or `system` otherwise. On 64-bit, member functions default to `system`.
+The default calling convention is `thiscall` on 32-bit (when the function has `&self` or `&mut self`) or `system` otherwise. On 64-bit, member functions default to `system`. A function-pointer type has no receiver, so it defaults to `system`.
 
 `#[external_body]` is rejected on vftable functions - virtual function slots always call through the vtable pointer, so there's no "body" to externalize.
 

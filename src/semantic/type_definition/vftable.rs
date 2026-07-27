@@ -9,8 +9,8 @@ use crate::{
         type_definition::get_region_name_and_type_definition,
         type_registry::TypeRegistry,
         types::{
-            Argument, CallingConvention, Function, FunctionBody, ItemCategory, ItemDefinition,
-            ItemState, ItemStateResolved, Region, Type, TypeDefinition, Visibility,
+            Argument, CallingConvention, Function, FunctionArg, FunctionBody, ItemCategory,
+            ItemDefinition, ItemState, ItemStateResolved, Region, Type, TypeDefinition, Visibility,
         },
     },
     span::{EqualsIgnoringLocations as _, HasLocation, ItemLocation},
@@ -314,17 +314,15 @@ fn function_to_region(resolvee_path: &ItemPath, function: &Function) -> Region {
         .arguments
         .iter()
         .map(|a| match a {
-            Argument::ConstSelf { .. } => (
-                "this".to_string(),
-                Box::new(Type::ConstPointer(Box::new(Type::Raw(
-                    resolvee_path.clone(),
-                )))),
+            Argument::ConstSelf { .. } => FunctionArg::named(
+                "this",
+                Type::ConstPointer(Box::new(Type::Raw(resolvee_path.clone()))),
             ),
-            Argument::MutSelf { .. } => (
-                "this".to_string(),
-                Box::new(Type::MutPointer(Box::new(Type::Raw(resolvee_path.clone())))),
+            Argument::MutSelf { .. } => FunctionArg::named(
+                "this",
+                Type::MutPointer(Box::new(Type::Raw(resolvee_path.clone()))),
             ),
-            Argument::Field { name, type_, .. } => (name.clone(), Box::new(type_.clone())),
+            Argument::Field { name, type_, .. } => FunctionArg::named(name.clone(), type_.clone()),
         })
         .collect();
     let return_type = function.return_type.as_ref().map(|t| Box::new(t.clone()));

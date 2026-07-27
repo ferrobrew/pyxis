@@ -1,6 +1,11 @@
 use crate::{
     grammar::{self, ItemPath},
-    semantic::types::Type,
+    semantic::{
+        error::SemanticError,
+        function::CallingConvention,
+        types::{FunctionArg, Type},
+    },
+    span::HasLocation,
 };
 
 use super::{TypeLookupResult, TypeRegistry};
@@ -62,13 +67,16 @@ impl TypeRegistry {
         for arg in generic_args {
             match self.resolve_grammar_type(scope, arg, type_params) {
                 TypeLookupResult::Found(t) => resolved_args.push(t),
+                // A bad attribute inside a generic argument is reported when the
+                // argument is resolved for real; this partial path just bails.
+                TypeLookupResult::InvalidAttribute { .. } => return None,
                 TypeLookupResult::NotYetResolved => {
                     // Try to get at least the path for this unresolved argument
-                    if let grammar::Type::Ident {
+                    if let grammar::TypeKind::Ident {
                         path: arg_path,
                         generic_args: nested_args,
                         ..
-                    } = arg
+                    } = &arg.kind
                     {
                         if nested_args.is_empty() {
                             // Simple unresolved type - just use its path
@@ -149,6 +157,60 @@ impl TypeRegistry {
         }
     }
 
+    /// Resolve a type that is only reachable through an indirection - a
+    /// pointee, or a function-pointer's parameter/return type.
+    ///
+    /// Such a type only has to *exist*: the enclosing pointer is
+    /// pointer-sized whatever it points at, so a target that isn't resolved
+    /// yet resolves to its canonical path instead of deferring. That is what
+    /// lets recursive and mutually recursive types close - without it
+    /// `type A { f: fn(A) }` would stall the build.
+    fn resolve_indirect_type(
+        &self,
+        scope: &[ItemPath],
+        type_: &grammar::Type,
+        type_params: &[String],
+    ) -> TypeLookupResult {
+        match self.resolve_grammar_type(scope, type_, type_params) {
+            TypeLookupResult::NotYetResolved => {
+                if let grammar::TypeKind::Ident {
+                    path, generic_args, ..
+                } = &type_.kind
+                {
+                    if generic_args.is_empty() {
+                        // Non-generic type reference — find its canonical path
+                        // even if the target isn't fully resolved. A
+                        // multi-segment path is taken directly (canonicalized
+                        // through any `pub use` re-export); a bare name
+                        // resolves through the scope.
+                        let full_path = if path.len() > 1 && self.has(path) {
+                            Some(self.canonicalize(path))
+                        } else {
+                            path.last()
+                                .and_then(|last| self.find_type_path(scope, last.as_str()))
+                        };
+                        if let Some(full_path) = full_path {
+                            return TypeLookupResult::Found(Type::Raw(full_path));
+                        }
+                    } else {
+                        // Generic type with potentially unresolved arguments.
+                        // Try partial resolution for self-referential generics.
+                        if let Some(partial) = self.try_resolve_generic_partially(
+                            scope,
+                            path,
+                            generic_args,
+                            type_params,
+                        ) {
+                            return TypeLookupResult::Found(partial);
+                        }
+                    }
+                }
+                TypeLookupResult::NotYetResolved
+            }
+            other => other,
+        }
+    }
+
     /// Helper for resolving pointer types (both const and mut).
     /// Handles the common logic for partial resolution of unresolved pointees.
     fn resolve_pointer_type<F>(
@@ -161,48 +223,8 @@ impl TypeRegistry {
     where
         F: Fn(Box<Type>) -> Type,
     {
-        match self.resolve_grammar_type(scope, pointee, type_params) {
+        match self.resolve_indirect_type(scope, pointee, type_params) {
             TypeLookupResult::Found(t) => TypeLookupResult::Found(wrap_pointer(Box::new(t))),
-            TypeLookupResult::NotYetResolved => {
-                // For pointers, we can resolve even if the pointee isn't fully resolved yet.
-                // This allows mutually recursive types to resolve.
-                // We just need to find the path to the pointee type.
-                if let grammar::Type::Ident {
-                    path, generic_args, ..
-                } = pointee
-                {
-                    if generic_args.is_empty() {
-                        // Non-generic type reference — find its canonical path
-                        // even if the pointee isn't fully resolved (a pointer only
-                        // needs the pointee to exist). A multi-segment path is
-                        // taken directly (canonicalized through any `pub use`
-                        // re-export); a bare name resolves through the scope.
-                        let full_path = if path.len() > 1 && self.has(path) {
-                            Some(self.canonicalize(path))
-                        } else {
-                            path.last()
-                                .and_then(|last| self.find_type_path(scope, last.as_str()))
-                        };
-                        if let Some(full_path) = full_path {
-                            return TypeLookupResult::Found(wrap_pointer(Box::new(Type::Raw(
-                                full_path,
-                            ))));
-                        }
-                    } else {
-                        // Generic type with potentially unresolved arguments.
-                        // Try partial resolution for self-referential generics.
-                        if let Some(partial) = self.try_resolve_generic_partially(
-                            scope,
-                            path,
-                            generic_args,
-                            type_params,
-                        ) {
-                            return TypeLookupResult::Found(wrap_pointer(Box::new(partial)));
-                        }
-                    }
-                }
-                TypeLookupResult::NotYetResolved
-            }
             other => other,
         }
     }
@@ -217,14 +239,56 @@ impl TypeRegistry {
         type_: &grammar::Type,
         type_params: &[String],
     ) -> TypeLookupResult {
-        match type_ {
-            grammar::Type::ConstPointer { pointee, .. } => {
+        let calling_convention = match validate_type_attributes(type_) {
+            Ok(calling_convention) => calling_convention,
+            Err(error) => {
+                return TypeLookupResult::InvalidAttribute {
+                    error: Box::new(error),
+                };
+            }
+        };
+
+        match &type_.kind {
+            grammar::TypeKind::ConstPointer { pointee, .. } => {
                 self.resolve_pointer_type(scope, pointee, type_params, Type::ConstPointer)
             }
-            grammar::Type::MutPointer { pointee, .. } => {
+            grammar::TypeKind::MutPointer { pointee, .. } => {
                 self.resolve_pointer_type(scope, pointee, type_params, Type::MutPointer)
             }
-            grammar::Type::Array { element, size, .. } => {
+            grammar::TypeKind::Function {
+                arguments,
+                return_type,
+            } => {
+                // Parameters and the return type sit behind the function
+                // pointer, so they resolve like a pointee: they need to exist,
+                // not to be laid out. `type A { f: fn(A) }` closes because of
+                // this.
+                let mut resolved_arguments = Vec::new();
+                for argument in arguments {
+                    match self.resolve_indirect_type(scope, &argument.type_, type_params) {
+                        TypeLookupResult::Found(t) => resolved_arguments.push(FunctionArg {
+                            name: argument.name.as_ref().map(|n| n.0.clone()),
+                            type_: Box::new(t),
+                        }),
+                        other => return other,
+                    }
+                }
+                let resolved_return_type = match return_type {
+                    Some(return_type) => {
+                        match self.resolve_indirect_type(scope, return_type, type_params) {
+                            TypeLookupResult::Found(t) => Some(Box::new(t)),
+                            other => return other,
+                        }
+                    }
+                    None => None,
+                };
+                TypeLookupResult::Found(Type::Function(
+                    calling_convention.unwrap_or(CallingConvention::System),
+                    resolved_arguments,
+                    resolved_return_type,
+                ))
+            }
+            grammar::TypeKind::Array { element, size, .. } => {
                 match self.resolve_grammar_type(scope, element, type_params) {
                     TypeLookupResult::Found(t) => {
                         TypeLookupResult::Found(Type::Array(Box::new(t), *size))
@@ -232,7 +296,7 @@ impl TypeRegistry {
                     other => other,
                 }
             }
-            grammar::Type::Ident {
+            grammar::TypeKind::Ident {
                 path, generic_args, ..
             } => {
                 // Check if this is a type parameter reference
@@ -269,6 +333,9 @@ impl TypeRegistry {
                             TypeLookupResult::PrivateAccess { item_path } => {
                                 return TypeLookupResult::PrivateAccess { item_path };
                             }
+                            TypeLookupResult::InvalidAttribute { error } => {
+                                return TypeLookupResult::InvalidAttribute { error };
+                            }
                             TypeLookupResult::NotFound { .. } => {
                                 // No exact match, proceed with generic resolution below
                             }
@@ -293,16 +360,18 @@ impl TypeRegistry {
                                 // Try to at least get the path for the unresolved argument
                                 if let Some(partial) = self.try_resolve_generic_partially(
                                     scope,
-                                    if let grammar::Type::Ident { path: arg_path, .. } = arg {
+                                    if let grammar::TypeKind::Ident { path: arg_path, .. } =
+                                        &arg.kind
+                                    {
                                         arg_path
                                     } else {
                                         // Non-ident type that's unresolved - can't proceed
                                         return TypeLookupResult::NotYetResolved;
                                     },
-                                    if let grammar::Type::Ident {
+                                    if let grammar::TypeKind::Ident {
                                         generic_args: nested_args,
                                         ..
-                                    } = arg
+                                    } = &arg.kind
                                     {
                                         nested_args
                                     } else {
@@ -385,14 +454,82 @@ impl TypeRegistry {
                         TypeLookupResult::PrivateAccess { item_path } => {
                             TypeLookupResult::PrivateAccess { item_path }
                         }
+                        TypeLookupResult::InvalidAttribute { error } => {
+                            TypeLookupResult::InvalidAttribute { error }
+                        }
                     }
                 } else {
                     self.resolve_path(scope, path)
                 }
             }
-            grammar::Type::Unknown { size, .. } => {
+            grammar::TypeKind::Unknown { size, .. } => {
                 TypeLookupResult::Found(self.padding_type(*size))
             }
         }
     }
+}
+
+/// Check the attributes written in type position and, for function-pointer
+/// types, extract the calling convention they select. Types other than `fn`
+/// have nothing to do with an attribute, so any attribute on them is an error
+/// rather than silently ignored.
+fn validate_type_attributes(
+    type_: &grammar::Type,
+) -> Result<Option<CallingConvention>, SemanticError> {
+    use crate::grammar::{Attribute, Expr};
+
+    if type_.attributes.0.is_empty() {
+        return Ok(None);
+    }
+
+    let is_function = matches!(type_.kind, grammar::TypeKind::Function { .. });
+    let type_description = match &type_.kind {
+        grammar::TypeKind::ConstPointer { .. } | grammar::TypeKind::MutPointer { .. } => {
+            "a pointer type"
+        }
+        grammar::TypeKind::Array { .. } => "an array type",
+        grammar::TypeKind::Ident { .. } => "a named type",
+        grammar::TypeKind::Unknown { .. } => "an unknown-size type",
+        grammar::TypeKind::Function { .. } => "a function pointer type",
+    };
+
+    let mut calling_convention = None;
+    for attribute in &type_.attributes {
+        let unsupported = |name: &str| SemanticError::UnsupportedTypeAttribute {
+            attribute_name: name.to_string(),
+            type_description: type_description.to_string(),
+            location: *attribute.location(),
+        };
+
+        match attribute {
+            Attribute::Function { name, items, .. }
+                if is_function && name.as_str() == "calling_convention" =>
+            {
+                let exprs = items.exprs_vec();
+                let [Expr::Ident { ident, .. }] = exprs.as_slice() else {
+                    return Err(SemanticError::InvalidTypeCallingConvention {
+                        convention: exprs
+                            .iter()
+                            .map(|e| format!("{e:?}"))
+                            .collect::<Vec<_>>()
+                            .join(", "),
+                        location: *attribute.location(),
+                    });
+                };
+                calling_convention = Some(ident.as_str().parse().map_err(|_| {
+                    SemanticError::InvalidTypeCallingConvention {
+                        convention: ident.as_str().to_string(),
+                        location: *attribute.location(),
+                    }
+                })?);
+            }
+            Attribute::Ident { ident, .. } => return Err(unsupported(ident.as_str())),
+            Attribute::Function { name, .. } | Attribute::Assign { name, .. } => {
+                return Err(unsupported(name.as_str()));
+            }
+            Attribute::Cfg { .. } => return Err(unsupported("cfg")),
+        }
+    }
+
+    Ok(calling_convention)
 }

@@ -30,11 +30,11 @@ The output is a `JsonDocumentation` struct serialized to JSON:
 
 ## Schema versioning
 
-The current schema version is **12** (`CURRENT_SCHEMA_VERSION` in `src/backends/json/schema.rs`). The version is bumped on breaking shape changes to the JSON output. The version history is documented in the source file's comments.
+The current schema version is **13** (`CURRENT_SCHEMA_VERSION` in `src/backends/json/schema.rs`). The version is bumped on breaking shape changes to the JSON output. The version history is documented in the source file's comments.
 
 Older documents (pre-v2) omit the `schema_version` field entirely. Consumers should treat a missing value as version 1. The `pyxis_version` field defaults to `"unknown"` when not available.
 
-Notable version history: schema v10 retired the per-module `backends` map in favor of a flat `splices` array of standalone `prologue`/`epilogue` statements, each carrying its own cfg gate. Schema v11 added `c_string`, `struct`, `array`, and `const_ref` variants to `JsonConstValue` for C-string literals, structured initializers, and constant aliases. Schema v12 added the `Union` item kind.
+Notable version history: schema v10 retired the per-module `backends` map in favor of a flat `splices` array of standalone `prologue`/`epilogue` statements, each carrying its own cfg gate. Schema v11 added `c_string`, `struct`, `array`, and `const_ref` variants to `JsonConstValue` for C-string literals, structured initializers, and constant aliases. Schema v12 added the `Union` item kind. Schema v13 made `JsonFunctionArgument.name` nullable: function-pointer types are writable in any type position, and a parameter written without a name stays unnamed rather than being given a synthesized one.
 
 ## Item model
 

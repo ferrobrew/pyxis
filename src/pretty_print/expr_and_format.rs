@@ -54,7 +54,7 @@ impl PrettyPrinter {
 
     /// Get the bit width from a type (e.g., u8 -> 8, u32 -> 32)
     pub(super) fn get_type_bit_width(&self, type_: &Type) -> Option<usize> {
-        if let Type::Ident { path, .. } = type_ {
+        if let TypeKind::Ident { path, .. } = &type_.kind {
             // For bit width, we only care about single-segment primitive types
             if path.len() == 1 {
                 if let Some(segment) = path.last() {
@@ -283,8 +283,21 @@ impl PrettyPrinter {
     }
 
     pub(super) fn print_type(&mut self, type_: &Type) {
-        match type_ {
-            Type::Ident {
+        // Type-position attributes print inline, ahead of the type they
+        // annotate: `#[calling_convention(cdecl)] fn()`.
+        if !type_.attributes.0.is_empty() {
+            write!(&mut self.output, "#[").unwrap();
+            for (i, attr) in type_.attributes.0.iter().enumerate() {
+                if i > 0 {
+                    write!(&mut self.output, ", ").unwrap();
+                }
+                self.print_attribute(attr);
+            }
+            write!(&mut self.output, "] ").unwrap();
+        }
+
+        match &type_.kind {
+            TypeKind::Ident {
                 path, generic_args, ..
             } => {
                 write!(&mut self.output, "{path}").unwrap();
@@ -299,22 +312,42 @@ impl PrettyPrinter {
                     write!(&mut self.output, ">").unwrap();
                 }
             }
-            Type::ConstPointer { pointee, .. } => {
+            TypeKind::ConstPointer { pointee, .. } => {
                 write!(&mut self.output, "*const ").unwrap();
                 self.print_type(pointee);
             }
-            Type::MutPointer { pointee, .. } => {
+            TypeKind::MutPointer { pointee, .. } => {
                 write!(&mut self.output, "*mut ").unwrap();
                 self.print_type(pointee);
             }
-            Type::Array { element, size, .. } => {
+            TypeKind::Array { element, size, .. } => {
                 write!(&mut self.output, "[").unwrap();
                 self.print_type(element);
                 write!(&mut self.output, "; {size}]").unwrap();
             }
-            Type::Unknown { size, .. } => {
+            TypeKind::Unknown { size, .. } => {
                 // Format unknown sizes as hex
                 write!(&mut self.output, "unknown<0x{size:X}>").unwrap();
+            }
+            TypeKind::Function {
+                arguments,
+                return_type,
+            } => {
+                write!(&mut self.output, "fn(").unwrap();
+                for (i, arg) in arguments.iter().enumerate() {
+                    if i > 0 {
+                        write!(&mut self.output, ", ").unwrap();
+                    }
+                    if let Some(name) = &arg.name {
+                        write!(&mut self.output, "{name}: ").unwrap();
+                    }
+                    self.print_type(&arg.type_);
+                }
+                write!(&mut self.output, ")").unwrap();
+                if let Some(return_type) = return_type {
+                    write!(&mut self.output, " -> ").unwrap();
+                    self.print_type(return_type);
+                }
             }
         }
     }

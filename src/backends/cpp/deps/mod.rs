@@ -206,9 +206,9 @@ fn walk_intra(
             );
         }
         Type::Function(_, args, ret) => {
-            for (_, t) in args {
+            for arg in args {
                 walk_intra(
-                    t,
+                    &arg.type_,
                     EdgeKind::FwdOnly,
                     module_path,
                     item_paths,
@@ -500,9 +500,9 @@ fn walk_type(
             walk_type(inner, kind, deps, module_path, registry, bindings);
         }
         Type::Function(_, args, ret) => {
-            for (_, arg_ty) in args {
+            for arg in args {
                 walk_type(
-                    arg_ty,
+                    &arg.type_,
                     EdgeKind::FwdOnly,
                     deps,
                     module_path,

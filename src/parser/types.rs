@@ -8,7 +8,7 @@ use crate::{
 #[cfg(test)]
 use crate::span::StripLocations;
 
-use super::{ParseError, core::Parser, paths::ItemPath};
+use super::{ParseError, attributes::Attributes, core::Parser, paths::ItemPath};
 
 /// A type parameter in a generic type definition (e.g., `T` in `type Shared<T>`)
 #[derive(Debug, Clone, PartialEq, Eq, Hash, HasLocation)]
@@ -61,152 +61,179 @@ impl fmt::Display for Ident {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, HasLocation)]
+/// A type expression. Attributes may precede any type (`#[calling_convention(cdecl)] fn()`);
+/// the semantic layer decides which kinds actually consume them and rejects the rest.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, HasLocation, EqualsIgnoringLocations)]
 #[cfg_attr(test, derive(StripLocations))]
-pub enum Type {
+pub struct Type {
+    pub attributes: Attributes,
+    pub kind: TypeKind,
+    pub location: ItemLocation,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, EqualsIgnoringLocations)]
+#[cfg_attr(test, derive(StripLocations))]
+pub enum TypeKind {
     ConstPointer {
         pointee: Box<Type>,
-        location: ItemLocation,
     },
     MutPointer {
         pointee: Box<Type>,
-        location: ItemLocation,
     },
     Array {
         element: Box<Type>,
         size: usize,
-        location: ItemLocation,
     },
     Ident {
         path: ItemPath,
         /// Generic type arguments (e.g., `[GameObject, u32]` in `Map<GameObject, u32>`)
         generic_args: Vec<Type>,
-        location: ItemLocation,
     },
     Unknown {
         size: usize,
-        location: ItemLocation,
+    },
+    /// A function-pointer type: `fn(*mut Engine, f32) -> bool`. The calling
+    /// convention comes from a `#[calling_convention(...)]` attribute on the
+    /// type, defaulting the same way a freestanding function does.
+    Function {
+        arguments: Vec<FunctionArg>,
+        return_type: Option<Box<Type>>,
     },
 }
-impl EqualsIgnoringLocations for Type {
-    fn equals_ignoring_locations(&self, other: &Self) -> bool {
-        match (self, other) {
-            (
-                Type::ConstPointer { pointee, .. },
-                Type::ConstPointer {
-                    pointee: pointee2, ..
-                },
-            ) => pointee.equals_ignoring_locations(pointee2),
-            (
-                Type::MutPointer { pointee, .. },
-                Type::MutPointer {
-                    pointee: pointee2, ..
-                },
-            ) => pointee.equals_ignoring_locations(pointee2),
-            (
-                Type::Array { element, size, .. },
-                Type::Array {
-                    element: element2,
-                    size: size2,
-                    ..
-                },
-            ) => {
-                element.equals_ignoring_locations(element2) && size.equals_ignoring_locations(size2)
-            }
-            (
-                Type::Ident {
-                    path, generic_args, ..
-                },
-                Type::Ident {
-                    path: path2,
-                    generic_args: generic_args2,
-                    ..
-                },
-            ) => {
-                path.equals_ignoring_locations(path2)
-                    && generic_args.equals_ignoring_locations(generic_args2)
-            }
-            (Type::Unknown { size, .. }, Type::Unknown { size: size2, .. }) => {
-                size.equals_ignoring_locations(size2)
-            }
-            _ => false,
+
+/// One parameter of a function-pointer type. The name is optional -
+/// `fn(u32)` and `fn(count: u32)` are both accepted, and an unnamed
+/// parameter stays unnamed all the way through to the emitted code.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, HasLocation, EqualsIgnoringLocations)]
+#[cfg_attr(test, derive(StripLocations))]
+pub struct FunctionArg {
+    pub name: Option<Ident>,
+    pub type_: Type,
+    pub location: ItemLocation,
+}
+#[cfg(test)]
+impl FunctionArg {
+    pub fn new(name: Option<&str>, type_: Type) -> Self {
+        FunctionArg {
+            name: name.map(Ident::from),
+            type_,
+            location: ItemLocation::test(),
         }
     }
 }
+
+#[cfg(test)]
+use super::attributes::Attribute;
+
 #[cfg(test)]
 impl Type {
     pub fn ident(name: &str) -> Type {
-        Type::Ident {
+        TypeKind::Ident {
             path: name.into(),
             generic_args: vec![],
-            location: ItemLocation::test(),
         }
+        .into_type()
     }
 
     pub fn generic(name: &str, args: impl IntoIterator<Item = Type>) -> Type {
-        Type::Ident {
+        TypeKind::Ident {
             path: name.into(),
             generic_args: args.into_iter().collect(),
-            location: ItemLocation::test(),
         }
+        .into_type()
     }
 
     pub fn const_pointer(self) -> Type {
-        Type::ConstPointer {
+        TypeKind::ConstPointer {
             pointee: Box::new(self),
-            location: ItemLocation::test(),
         }
+        .into_type()
     }
 
     pub fn mut_pointer(self) -> Type {
-        Type::MutPointer {
+        TypeKind::MutPointer {
             pointee: Box::new(self),
-            location: ItemLocation::test(),
         }
+        .into_type()
     }
 
     pub fn array(self, size: usize) -> Type {
-        Type::Array {
+        TypeKind::Array {
             element: Box::new(self),
             size,
-            location: ItemLocation::test(),
         }
+        .into_type()
     }
 
     pub fn unknown(size: usize) -> Type {
-        Type::Unknown {
-            size,
-            location: ItemLocation::test(),
+        TypeKind::Unknown { size }.into_type()
+    }
+
+    pub fn function(
+        arguments: impl IntoIterator<Item = FunctionArg>,
+        return_type: Option<Type>,
+    ) -> Type {
+        TypeKind::Function {
+            arguments: arguments.into_iter().collect(),
+            return_type: return_type.map(Box::new),
         }
+        .into_type()
+    }
+
+    pub fn with_attributes(mut self, attributes: impl IntoIterator<Item = Attribute>) -> Type {
+        self.attributes = Attributes(attributes.into_iter().collect());
+        self
+    }
+}
+
+#[cfg(test)]
+impl TypeKind {
+    fn into_type(self) -> Type {
+        Type::new(Attributes(vec![]), self, ItemLocation::test())
     }
 }
 
 impl Type {
+    pub fn new(attributes: Attributes, kind: TypeKind, location: ItemLocation) -> Self {
+        Type {
+            attributes,
+            kind,
+            location,
+        }
+    }
+
     /// Returns the item path if this is an `Ident` type, `None` otherwise.
     pub fn as_path(&self) -> Option<&ItemPath> {
-        match self {
-            Type::Ident { path, .. } => Some(path),
+        match &self.kind {
+            TypeKind::Ident { path, .. } => Some(path),
             _ => None,
         }
     }
 }
 impl From<&str> for Type {
     fn from(item: &str) -> Self {
-        Type::Ident {
-            path: item.into(),
-            generic_args: vec![],
-            location: ItemLocation::internal(),
-        }
+        Type::new(
+            Attributes(vec![]),
+            TypeKind::Ident {
+                path: item.into(),
+                generic_args: vec![],
+            },
+            ItemLocation::internal(),
+        )
     }
 }
 
 impl fmt::Display for Type {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Type::ConstPointer { pointee, .. } => write!(f, "*const {pointee}"),
-            Type::MutPointer { pointee, .. } => write!(f, "*mut {pointee}"),
-            Type::Array { element, size, .. } => write!(f, "[{element}; {size}]"),
-            Type::Ident {
+        // Attributes are deliberately not printed: this rendering feeds
+        // error messages and the extern-type name lookup in
+        // `resolve_grammar_type`, both of which want the bare type name.
+        // The pretty-printer reconstructs attributes itself.
+        match &self.kind {
+            TypeKind::ConstPointer { pointee, .. } => write!(f, "*const {pointee}"),
+            TypeKind::MutPointer { pointee, .. } => write!(f, "*mut {pointee}"),
+            TypeKind::Array { element, size, .. } => write!(f, "[{element}; {size}]"),
+            TypeKind::Ident {
                 path, generic_args, ..
             } => {
                 write!(f, "{path}")?;
@@ -222,71 +249,132 @@ impl fmt::Display for Type {
                 }
                 Ok(())
             }
-            Type::Unknown { size, .. } => write!(f, "unknown({size})"),
+            TypeKind::Unknown { size, .. } => write!(f, "unknown({size})"),
+            TypeKind::Function {
+                arguments,
+                return_type,
+            } => {
+                write!(f, "fn(")?;
+                for (i, arg) in arguments.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    if let Some(name) = &arg.name {
+                        write!(f, "{name}: ")?;
+                    }
+                    write!(f, "{}", arg.type_)?;
+                }
+                write!(f, ")")?;
+                if let Some(return_type) = return_type {
+                    write!(f, " -> {return_type}")?;
+                }
+                Ok(())
+            }
         }
     }
 }
 
 impl Parser {
+    /// Parse a type expression, including any attributes that precede it.
     pub(crate) fn parse_type(&mut self) -> Result<Type, ParseError> {
+        let attributes = self.parse_attributes()?;
+        let attributes_start = attributes
+            .0
+            .first()
+            .map(|a| a.location().span.start)
+            .unwrap_or_else(|| self.current().location.span.start);
+
+        let (kind, kind_end) = self.parse_type_kind()?;
+        let location = self.item_location_from_locations(attributes_start, kind_end);
+        Ok(Type::new(attributes, kind, location))
+    }
+
+    /// Parse the type expression itself, returning the kind and the source
+    /// position just past it.
+    fn parse_type_kind(&mut self) -> Result<(TypeKind, crate::span::Location), ParseError> {
         match self.peek() {
             TokenKind::Unknown => {
-                let start = self.advance();
+                self.advance();
                 self.expect(TokenKind::Lt)?;
                 let (size, _) = self.parse_int_literal()?;
                 let size = size as usize;
                 let end = self.expect(TokenKind::Gt)?;
-                let location = self.item_location_from_token_range(&start, &end);
-
-                Ok(Type::Unknown { size, location })
+                Ok((TypeKind::Unknown { size }, end.location.span.end))
             }
             TokenKind::Star => {
-                let start = self.advance();
-                if matches!(self.peek(), TokenKind::Const) {
-                    self.advance();
-                    let pointee = self.parse_type()?;
-                    let location = self.item_location_from_locations(
-                        start.start_location(),
-                        pointee.location().span.end,
-                    );
-                    Ok(Type::ConstPointer {
-                        pointee: Box::new(pointee),
-                        location,
-                    })
-                } else if matches!(self.peek(), TokenKind::Mut) {
-                    self.advance();
-                    let pointee = self.parse_type()?;
-                    let location = self.item_location_from_locations(
-                        start.start_location(),
-                        pointee.location().span.end,
-                    );
-                    Ok(Type::MutPointer {
-                        pointee: Box::new(pointee),
-                        location,
-                    })
-                } else {
-                    Err(ParseError::MissingPointerQualifier {
-                        location: self.current().location,
-                    })
-                }
+                self.advance();
+                let is_const = match self.peek() {
+                    TokenKind::Const => true,
+                    TokenKind::Mut => false,
+                    _ => {
+                        return Err(ParseError::MissingPointerQualifier {
+                            location: self.current().location,
+                        });
+                    }
+                };
+                self.advance();
+                let pointee = self.parse_type()?;
+                let end = pointee.location().span.end;
+                let pointee = Box::new(pointee);
+                Ok((
+                    if is_const {
+                        TypeKind::ConstPointer { pointee }
+                    } else {
+                        TypeKind::MutPointer { pointee }
+                    },
+                    end,
+                ))
             }
             TokenKind::LBracket => {
-                let start = self.advance();
+                self.advance();
                 let element = self.parse_type()?;
                 self.expect(TokenKind::Semi)?;
                 let (size, _) = self.parse_int_literal()?;
                 let size = size as usize;
                 let end = self.expect(TokenKind::RBracket)?;
-                let location = self.item_location_from_token_range(&start, &end);
-                Ok(Type::Array {
-                    element: Box::new(element),
-                    size,
-                    location,
-                })
+                Ok((
+                    TypeKind::Array {
+                        element: Box::new(element),
+                        size,
+                    },
+                    end.location.span.end,
+                ))
+            }
+            TokenKind::Fn => {
+                self.advance();
+                self.expect(TokenKind::LParen)?;
+
+                let mut arguments = Vec::new();
+                while !matches!(self.peek(), TokenKind::RParen) {
+                    arguments.push(self.parse_function_type_argument()?);
+                    if matches!(self.peek(), TokenKind::Comma) {
+                        self.advance();
+                    } else {
+                        break;
+                    }
+                }
+                let rparen = self.expect(TokenKind::RParen)?;
+                let mut end = rparen.location.span.end;
+
+                let return_type = if matches!(self.peek(), TokenKind::Arrow) {
+                    self.advance();
+                    let return_type = self.parse_type()?;
+                    end = return_type.location().span.end;
+                    Some(Box::new(return_type))
+                } else {
+                    None
+                };
+
+                Ok((
+                    TypeKind::Function {
+                        arguments,
+                        return_type,
+                    },
+                    end,
+                ))
             }
             TokenKind::Ident(_) => {
                 let (first_ident, ident_span) = self.expect_ident()?;
-                let start_pos = ident_span.start;
                 let mut end_pos = ident_span.end;
                 let mut segments = vec![first_ident.0];
 
@@ -327,12 +415,7 @@ impl Parser {
                     .collect::<Vec<_>>()
                     .into_iter()
                     .collect();
-                let location = self.item_location_from_locations(start_pos, end_pos);
-                Ok(Type::Ident {
-                    path,
-                    generic_args,
-                    location,
-                })
+                Ok((TypeKind::Ident { path, generic_args }, end_pos))
             }
             _ => Err(ParseError::ExpectedType {
                 found: self.peek().clone(),
@@ -340,11 +423,42 @@ impl Parser {
             }),
         }
     }
+
+    /// A function-type parameter: `name: T` or just `T`. The name is only
+    /// taken when an identifier is directly followed by `:`, so a bare type
+    /// path stays a type. `_` is accepted as a name, matching field position.
+    fn parse_function_type_argument(&mut self) -> Result<FunctionArg, ParseError> {
+        let start = self.current().location.span.start;
+        let named = matches!(self.peek(), TokenKind::Ident(_) | TokenKind::Underscore)
+            && matches!(self.peek_nth(1), TokenKind::Colon);
+        let name = if named {
+            let name = match self.peek() {
+                TokenKind::Underscore => {
+                    self.advance();
+                    Ident::from("_")
+                }
+                _ => self.expect_ident()?.0,
+            };
+            self.advance(); // consume :
+            Some(name)
+        } else {
+            None
+        };
+        let type_ = self.parse_type()?;
+        let location = self.item_location_from_locations(start, type_.location().span.end);
+        Ok(FunctionArg {
+            name,
+            type_,
+            location,
+        })
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use super::{FunctionArg, Type};
     use crate::{
+        grammar::Attribute,
         parser::{error::ParseError, parse_str_for_tests},
         span::{ItemLocation, StripLocations},
         tokenizer::TokenKind,
@@ -584,6 +698,146 @@ mod tests {
             err.strip_locations(),
             ParseError::ExpectedType {
                 found: TokenKind::RBrace,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    // ========================================================================
+    // Function pointer types
+    // ========================================================================
+
+    /// Pull the single field's type out of `type Test { field: <ty>, }`.
+    fn field_type(text: &str) -> Type {
+        use crate::grammar::{ItemDefinitionInner, ModuleItem, TypeDefItem, TypeField};
+        let module = parse_str_for_tests(text).unwrap();
+        let ModuleItem::Definition { definition } = &module.items[0] else {
+            panic!("expected an item definition")
+        };
+        let ItemDefinitionInner::Type(type_definition) = &definition.inner else {
+            panic!("expected a type")
+        };
+        let TypeDefItem::Statement(statement) = &type_definition.items[0] else {
+            panic!("expected a statement")
+        };
+        let TypeField::Field(_, _, type_) = &statement.field else {
+            panic!("expected a field")
+        };
+        type_.strip_locations()
+    }
+
+    #[test]
+    fn function_pointer_parses_with_and_without_argument_names() {
+        assert_eq!(
+            field_type("type Test { field: fn(engine: *mut Engine, dt: f32), }"),
+            Type::function(
+                [
+                    FunctionArg::new(Some("engine"), Type::ident("Engine").mut_pointer()),
+                    FunctionArg::new(Some("dt"), Type::ident("f32")),
+                ],
+                None,
+            )
+        );
+        assert_eq!(
+            field_type("type Test { field: fn(*mut Engine, f32), }"),
+            Type::function(
+                [
+                    FunctionArg::new(None, Type::ident("Engine").mut_pointer()),
+                    FunctionArg::new(None, Type::ident("f32")),
+                ],
+                None,
+            )
+        );
+    }
+
+    #[test]
+    fn function_pointer_parses_empty_arguments_and_return_type() {
+        assert_eq!(
+            field_type("type Test { field: fn(), }"),
+            Type::function([], None)
+        );
+        assert_eq!(
+            field_type("type Test { field: fn() -> bool, }"),
+            Type::function([], Some(Type::ident("bool")))
+        );
+    }
+
+    #[test]
+    fn function_pointer_accepts_underscore_as_an_argument_name() {
+        // `_` names a field, so it should name a parameter too.
+        assert_eq!(
+            field_type("type Test { field: fn(_: u32), }"),
+            Type::function([FunctionArg::new(Some("_"), Type::ident("u32"))], None)
+        );
+    }
+
+    #[test]
+    fn function_pointer_accepts_a_trailing_comma() {
+        assert_eq!(
+            field_type("type Test { field: fn(a: u32,), }"),
+            Type::function([FunctionArg::new(Some("a"), Type::ident("u32"))], None)
+        );
+    }
+
+    #[test]
+    fn function_pointer_nests_in_pointers_arrays_and_itself() {
+        assert_eq!(
+            field_type("type Test { field: [fn(u32); 4], }"),
+            Type::function([FunctionArg::new(None, Type::ident("u32"))], None).array(4)
+        );
+        assert_eq!(
+            field_type("type Test { field: *mut fn(), }"),
+            Type::function([], None).mut_pointer()
+        );
+        assert_eq!(
+            field_type("type Test { field: fn(cb: fn(u32)) -> fn(), }"),
+            Type::function(
+                [FunctionArg::new(
+                    Some("cb"),
+                    Type::function([FunctionArg::new(None, Type::ident("u32"))], None)
+                )],
+                Some(Type::function([], None)),
+            )
+        );
+    }
+
+    #[test]
+    fn attributes_attach_to_the_type_they_precede() {
+        assert_eq!(
+            field_type("type Test { field: #[calling_convention(cdecl)] fn(), }"),
+            Type::function([], None).with_attributes([Attribute::calling_convention("cdecl")])
+        );
+        // Inside an array, the attribute binds to the element, not the array.
+        assert_eq!(
+            field_type("type Test { field: [#[calling_convention(cdecl)] fn(); 2], }"),
+            Type::function([], None)
+                .with_attributes([Attribute::calling_convention("cdecl")])
+                .array(2)
+        );
+    }
+
+    #[test]
+    fn function_pointer_missing_parens_errors() {
+        let err = parse_str_for_tests("type Test { field: fn, }").unwrap_err();
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedToken {
+                expected: vec![TokenKind::LParen],
+                found: TokenKind::Comma,
+                location: ItemLocation::test(),
+            }
+            .strip_locations()
+        );
+    }
+
+    #[test]
+    fn function_pointer_missing_return_type_errors() {
+        let err = parse_str_for_tests("type Test { field: fn() ->, }").unwrap_err();
+        assert_eq!(
+            err.strip_locations(),
+            ParseError::ExpectedType {
+                found: TokenKind::Comma,
                 location: ItemLocation::test(),
             }
             .strip_locations()

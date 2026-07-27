@@ -235,6 +235,20 @@ pub enum SemanticError {
         function_name: String,
         location: ItemLocation,
     },
+    /// An attribute was written in type position (`#[foo] T`) on a type that
+    /// has no use for it. Only function-pointer types consume attributes today.
+    UnsupportedTypeAttribute {
+        attribute_name: String,
+        /// Human-readable description of the annotated type, e.g. "a pointer"
+        type_description: String,
+        location: ItemLocation,
+    },
+    /// `#[calling_convention(...)]` on a function-pointer type named a
+    /// convention that doesn't exist
+    InvalidTypeCallingConvention {
+        convention: String,
+        location: ItemLocation,
+    },
     /// Attribute not supported in context
     AttributeNotSupported {
         attribute_name: AttributeName,
@@ -449,6 +463,8 @@ impl SemanticError {
             SemanticError::DuplicateDefinition { location, .. } => Some(location),
             SemanticError::FunctionMissingImplementation { location, .. } => Some(location),
             SemanticError::InvalidCallingConvention { location, .. } => Some(location),
+            SemanticError::UnsupportedTypeAttribute { location, .. } => Some(location),
+            SemanticError::InvalidTypeCallingConvention { location, .. } => Some(location),
             SemanticError::AttributeNotSupported { location, .. } => Some(location),
             SemanticError::AttributeWrongForm { location, .. } => Some(location),
             SemanticError::EnumUnsupportedValue { location, .. } => Some(location),
@@ -500,7 +516,7 @@ impl SemanticError {
                 .with_note(
                     "Defaultable bitflags must have exactly one value marked with #[default]",
                 ),
-            Self::InvalidCallingConvention { .. } => {
+            Self::InvalidCallingConvention { .. } | Self::InvalidTypeCallingConvention { .. } => {
                 let valid_list = CallingConvention::ALL
                     .iter()
                     .map(|cc| cc.as_str())

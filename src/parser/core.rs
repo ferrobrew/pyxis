@@ -186,12 +186,4 @@ impl Parser {
     ) -> ItemLocation {
         self.item_location_from_span(Span::new(start, end))
     }
-
-    pub(crate) fn item_location_from_token_range(
-        &self,
-        start: &Token,
-        end: &Token,
-    ) -> ItemLocation {
-        self.item_location_from_span(Span::new(start.location.span.start, end.location.span.end))
-    }
 }

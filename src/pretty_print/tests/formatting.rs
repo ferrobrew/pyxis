@@ -602,3 +602,49 @@ fn nested_union_declarations_round_trip() {
     let module = parse_str_for_tests(text).unwrap();
     assert_eq!(pretty_print(&module), text);
 }
+
+#[test]
+fn function_pointer_types_round_trip() {
+    // Every position a function-pointer type can occupy — field, array
+    // element, pointee, nested parameter, return type, and type alias —
+    // along with the type-position attribute that selects its convention.
+    let text = r#"pub type Callbacks {
+    pub on_tick: fn(engine: *mut Engine, dt: f32),
+    pub on_event: fn(*mut Engine, u32) -> bool,
+    pub on_shutdown: fn(),
+    pub on_alloc: #[calling_convention(cdecl)] fn(size: u32) -> *mut Engine,
+    pub table: [#[calling_convention(C)] fn(*mut Engine); 4],
+    pub indirect: *mut fn(*mut Engine),
+    pub on_register: fn(callback: fn(*mut Engine), user_data: *mut Engine),
+}
+
+pub type TickFn = fn(*mut Engine, f32);"#;
+
+    let module = parse_str_for_tests(text).unwrap();
+    assert_eq!(pretty_print(&module), text);
+}
+
+#[test]
+fn deeply_nested_function_pointer_types_round_trip() {
+    // Multiple levels of parameter and return nesting, arrays of arrays, and
+    // a convention on both an outer type and its return type.
+    let text = r#"pub type Nested {
+    pub three: fn(a: fn(b: fn(*mut Ctx) -> u32) -> u32) -> u32,
+    pub curried: fn(*mut Ctx) -> fn(u32) -> fn() -> bool,
+    pub grid: [[fn(*mut Ctx); 2]; 3],
+    pub table_ptr: *mut [fn(*mut Ctx); 4],
+    pub locked: *const fn(*mut Ctx),
+    pub cc_outer: #[calling_convention(C)] fn(cb: fn(u32) -> bool) -> fn(),
+    pub cc_return: fn(cb: fn(u32) -> bool) -> #[calling_convention(C)] fn(),
+    pub cc_param: fn(cb: #[calling_convention(C)] fn(u32) -> bool) -> fn(),
+    pub cc_all: #[calling_convention(C)] fn(cb: #[calling_convention(system)] fn(u32) -> bool) -> #[calling_convention(C)] fn(),
+    pub ignored: fn(_: u32),
+}"#;
+
+    let module = parse_str_for_tests(text).unwrap();
+    let printed = pretty_print(&module);
+    assert_eq!(printed, text);
+
+    // And it is a fixed point: printing the reparse gives the same text.
+    assert_eq!(pretty_print(&parse_str_for_tests(&printed).unwrap()), text);
+}

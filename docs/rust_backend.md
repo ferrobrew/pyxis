@@ -145,6 +145,22 @@ Emitting these anyway is what lets a *containing* struct keep its own `#[derive(
 
 Inline unions (`pub payload: union { ... }`) are emitted as ordinary module-scope items named `{Type}{Field}Union`, flattened through the same `flatten_type_name` path as any other item.
 
+## Function pointers
+
+A pyxis `fn(A, B) -> R` lowers to `unsafe extern "<cc>" fn(A, B) -> R`. Every generated function pointer is `unsafe` — pyxis describes slots in a foreign binary, and nothing verifies the target.
+
+```rust
+pub struct Callbacks {
+    pub on_tick: unsafe extern "system" fn(engine: *mut Engine, dt: f32),
+    pub on_event: unsafe extern "system" fn(*mut Engine, u32) -> bool,
+    pub table: [unsafe extern "C" fn(*mut Engine); 4],
+}
+```
+
+Parameter names written in pyxis are carried into the emitted signature; a parameter written without one stays anonymous rather than getting a synthesized name.
+
+The type is emitted bare, not wrapped in `Option`. A null slot is as expressible — and as unchecked — as a null `*mut T`, matching how pyxis treats every other pointer. Callers that need to test for null can `transmute` or compare the address themselves.
+
 ## `#[external_body]` handling
 
 When a function has `#[external_body]`, the Rust backend skips code emission entirely. The function signature is not emitted as a Rust method - the user's epilogue `impl` block is the sole source.

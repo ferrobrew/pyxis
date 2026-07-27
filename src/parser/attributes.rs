@@ -1,6 +1,9 @@
 use std::ops::{Deref, DerefMut};
 
-use crate::{span::ItemLocation, tokenizer::TokenKind};
+use crate::{
+    span::{EqualsIgnoringLocations, ItemLocation},
+    tokenizer::TokenKind,
+};
 
 #[cfg(test)]
 use crate::span::StripLocations;
@@ -10,7 +13,7 @@ use super::{ParseError, core::Parser, expressions::Expr, types::Ident};
 #[cfg(test)]
 use super::expressions::{IntFormat, StringFormat};
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, HasLocation)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, HasLocation, EqualsIgnoringLocations)]
 #[cfg_attr(test, derive(StripLocations))]
 pub enum AttributeItem {
     Expr {
@@ -23,7 +26,7 @@ pub enum AttributeItem {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, EqualsIgnoringLocations)]
 #[cfg_attr(test, derive(StripLocations))]
 pub struct AttributeItems(pub Vec<AttributeItem>);
 #[cfg(test)]
@@ -60,7 +63,7 @@ impl AttributeItems {
 
 use crate::span::HasLocation;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, HasLocation)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, HasLocation, EqualsIgnoringLocations)]
 #[cfg_attr(test, derive(StripLocations))]
 pub enum Attribute {
     Ident {
@@ -275,7 +278,7 @@ impl Attribute {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default, EqualsIgnoringLocations)]
 #[cfg_attr(test, derive(StripLocations))]
 pub struct Attributes(pub Vec<Attribute>);
 #[cfg(test)]

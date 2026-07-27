@@ -14,6 +14,7 @@
 //! - `defaultable` - Defaultable trait resolution
 //! - `doc_comments` - Documentation comment propagation
 //! - `bitflags` - Bitflags type resolution
+//! - `function_pointers` - Function-pointer types in type position
 //! - `functions` - Freestanding function resolution
 //! - `type_aliases` - Type alias resolution
 //! - `generics` - Generic type resolution
@@ -31,6 +32,7 @@ mod enums;
 mod error_messages;
 mod extern_types;
 mod extern_values;
+mod function_pointers;
 mod functions;
 mod generics;
 mod imports;

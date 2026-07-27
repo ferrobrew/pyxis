@@ -111,6 +111,41 @@ a struct's are. Inline `pub payload: union { ... }` fields become module-scope
 `union {Type}{Field}Union` definitions with an ordinary member referring to
 them, so the parent struct is unremarkable.
 
+## Function pointers and declarator nesting
+
+A pyxis `fn(A, B) -> R` becomes a C++ function pointer. C declaration syntax
+nests inside-out, so the backend builds declarations with a declarator walker
+(`render_declaration` in `src/backends/cpp/render/types.rs`) rather than
+concatenating a rendered type with a name. This is what makes the nested cases
+come out right:
+
+| pyxis | C++ |
+|-------|-----|
+| `f: fn(*mut Engine)` | `void (*f)(Engine*);` |
+| `f: [fn(*mut Engine); 4]` | `void (*f[4])(Engine*);` |
+| `f: *mut fn(*mut Engine)` | `void (**f)(Engine*);` |
+| `fn install(...) -> fn(*mut Engine)` | `void (*install(...))(Engine*);` |
+| `f: *const fn(*mut Engine)` | `void (*const *f)(Engine*);` |
+
+Gluing `render_type`'s type-id form onto a name would produce
+`void (*)(Engine*) f[4]`, which is not valid C++.
+
+`*const T` qualifies the pointee, and for a function or array pointee there is
+no base type to hang `const` on — `const void (**f)(Engine*)` would qualify the
+*return* type instead. The walker therefore carries const-ness down and spends
+it on the `*` that the qualified level itself contributes.
+
+Parameter types are rendered with `render_parameter_type`, which keeps an
+array's extent. A declaration and the `using fn_t = ...` alias its body calls
+through must agree on every parameter; rendering one as `uint32_t x[4]` and the
+other as `uint32_t` produces C++ that doesn't compile. Note that C++ decays an
+array parameter to a pointer where Rust passes it by value, so a by-value array
+parameter has a different ABI in the two backends — a pre-existing property of
+array parameters, not of function pointers.
+
+Parameter names on a pyxis function-pointer type are dropped in the C++
+output — only the parameter types are emitted, as they are for vftable slots.
+
 ## Vftables
 
 Each type with a `vftable { ... }` block in pyxis gets:

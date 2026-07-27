@@ -1,5 +1,5 @@
 {
-  "schema_version": 12,
+  "schema_version": 13,
   "pyxis_version": "0.1.0",
   "pointer_size": 8,
   "project_name": "test-project",
@@ -4357,6 +4357,1935 @@
         "line": 1
       }
     },
+    "function_pointer_nesting::Ctx": {
+      "path": "function_pointer_nesting::Ctx",
+      "visibility": "public",
+      "size": 8,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": " Passed around by pointer as the callback context.",
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "id",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "u64"
+            },
+            "offset": 0,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 19,
+              "line": 15
+            }
+          }
+        ],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false,
+        "pinned": false
+      },
+      "source": {
+        "file_index": 19,
+        "line": 14
+      }
+    },
+    "function_pointer_nesting::Dispatch": {
+      "path": "function_pointer_nesting::Dispatch",
+      "visibility": "public",
+      "size": 8,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": " Function pointers in vftable slots, in both argument and return position.",
+        "fields": [
+          {
+            "visibility": "private",
+            "name": "vftable",
+            "doc": null,
+            "type_ref": {
+              "type": "const_pointer",
+              "inner": {
+                "type": "raw",
+                "path": "function_pointer_nesting::DispatchVftable"
+              }
+            },
+            "offset": 0,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 19,
+              "line": 75
+            }
+          }
+        ],
+        "associated_functions": [],
+        "vftable": {
+          "functions": [
+            {
+              "visibility": "public",
+              "name": "install",
+              "doc": null,
+              "body": {
+                "type": "vftable",
+                "function_name": "install"
+              },
+              "arguments": [
+                {
+                  "type": "mut_self"
+                },
+                {
+                  "type": "field",
+                  "name": "cb",
+                  "type_ref": {
+                    "type": "function",
+                    "calling_convention": "system",
+                    "arguments": [
+                      {
+                        "name": null,
+                        "type_ref": {
+                          "type": "mut_pointer",
+                          "inner": {
+                            "type": "raw",
+                            "path": "function_pointer_nesting::Ctx"
+                          }
+                        }
+                      }
+                    ],
+                    "return_type": {
+                      "type": "raw",
+                      "path": "bool"
+                    }
+                  }
+                }
+              ],
+              "return_type": {
+                "type": "function",
+                "calling_convention": "system",
+                "arguments": [
+                  {
+                    "name": null,
+                    "type_ref": {
+                      "type": "mut_pointer",
+                      "inner": {
+                        "type": "raw",
+                        "path": "function_pointer_nesting::Ctx"
+                      }
+                    }
+                  }
+                ],
+                "return_type": null
+              },
+              "calling_convention": "system",
+              "source": {
+                "file_index": 19,
+                "line": 75
+              }
+            },
+            {
+              "visibility": "public",
+              "name": "table",
+              "doc": null,
+              "body": {
+                "type": "vftable",
+                "function_name": "table"
+              },
+              "arguments": [
+                {
+                  "type": "const_self"
+                }
+              ],
+              "return_type": {
+                "type": "mut_pointer",
+                "inner": {
+                  "type": "array",
+                  "inner": {
+                    "type": "function",
+                    "calling_convention": "system",
+                    "arguments": [],
+                    "return_type": null
+                  },
+                  "size": 4
+                }
+              },
+              "calling_convention": "system",
+              "source": {
+                "file_index": 19,
+                "line": 78
+              }
+            }
+          ]
+        },
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false,
+        "pinned": false
+      },
+      "source": {
+        "file_index": 19,
+        "line": 71
+      }
+    },
+    "function_pointer_nesting::DispatchVftable": {
+      "path": "function_pointer_nesting::DispatchVftable",
+      "visibility": "public",
+      "size": 16,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "install",
+            "doc": null,
+            "type_ref": {
+              "type": "function",
+              "calling_convention": "system",
+              "arguments": [
+                {
+                  "name": "this",
+                  "type_ref": {
+                    "type": "mut_pointer",
+                    "inner": {
+                      "type": "raw",
+                      "path": "function_pointer_nesting::Dispatch"
+                    }
+                  }
+                },
+                {
+                  "name": "cb",
+                  "type_ref": {
+                    "type": "function",
+                    "calling_convention": "system",
+                    "arguments": [
+                      {
+                        "name": null,
+                        "type_ref": {
+                          "type": "mut_pointer",
+                          "inner": {
+                            "type": "raw",
+                            "path": "function_pointer_nesting::Ctx"
+                          }
+                        }
+                      }
+                    ],
+                    "return_type": {
+                      "type": "raw",
+                      "path": "bool"
+                    }
+                  }
+                }
+              ],
+              "return_type": {
+                "type": "function",
+                "calling_convention": "system",
+                "arguments": [
+                  {
+                    "name": null,
+                    "type_ref": {
+                      "type": "mut_pointer",
+                      "inner": {
+                        "type": "raw",
+                        "path": "function_pointer_nesting::Ctx"
+                      }
+                    }
+                  }
+                ],
+                "return_type": null
+              }
+            },
+            "offset": 0,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 19,
+              "line": 75
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "table",
+            "doc": null,
+            "type_ref": {
+              "type": "function",
+              "calling_convention": "system",
+              "arguments": [
+                {
+                  "name": "this",
+                  "type_ref": {
+                    "type": "const_pointer",
+                    "inner": {
+                      "type": "raw",
+                      "path": "function_pointer_nesting::Dispatch"
+                    }
+                  }
+                }
+              ],
+              "return_type": {
+                "type": "mut_pointer",
+                "inner": {
+                  "type": "array",
+                  "inner": {
+                    "type": "function",
+                    "calling_convention": "system",
+                    "arguments": [],
+                    "return_type": null
+                  },
+                  "size": 4
+                }
+              }
+            },
+            "offset": 8,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 19,
+              "line": 78
+            }
+          }
+        ],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false,
+        "pinned": false
+      },
+      "source": {
+        "file_index": 19,
+        "line": 75
+      }
+    },
+    "function_pointer_nesting::Handler": {
+      "path": "function_pointer_nesting::Handler",
+      "visibility": "public",
+      "size": 0,
+      "alignment": 1,
+      "category": "defined",
+      "kind": {
+        "type": "type_alias",
+        "doc": " A signature that itself takes and returns signatures, reached through an\n alias to check aliases carry the whole nested type.",
+        "target": {
+          "type": "function",
+          "calling_convention": "system",
+          "arguments": [
+            {
+              "name": "inner",
+              "type_ref": {
+                "type": "function",
+                "calling_convention": "system",
+                "arguments": [
+                  {
+                    "name": null,
+                    "type_ref": {
+                      "type": "mut_pointer",
+                      "inner": {
+                        "type": "raw",
+                        "path": "function_pointer_nesting::Ctx"
+                      }
+                    }
+                  }
+                ],
+                "return_type": {
+                  "type": "raw",
+                  "path": "bool"
+                }
+              }
+            }
+          ],
+          "return_type": {
+            "type": "function",
+            "calling_convention": "system",
+            "arguments": [
+              {
+                "name": null,
+                "type_ref": {
+                  "type": "mut_pointer",
+                  "inner": {
+                    "type": "raw",
+                    "path": "function_pointer_nesting::Ctx"
+                  }
+                }
+              }
+            ],
+            "return_type": null
+          }
+        }
+      },
+      "source": {
+        "file_index": 19,
+        "line": 20
+      }
+    },
+    "function_pointer_nesting::HookSlot": {
+      "path": "function_pointer_nesting::HookSlot",
+      "visibility": "public",
+      "size": 8,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "union",
+        "doc": " A union whose members are competing readings of one pointer-sized slot.",
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "as_fn",
+            "doc": null,
+            "type_ref": {
+              "type": "function",
+              "calling_convention": "system",
+              "arguments": [
+                {
+                  "name": null,
+                  "type_ref": {
+                    "type": "mut_pointer",
+                    "inner": {
+                      "type": "raw",
+                      "path": "function_pointer_nesting::Ctx"
+                    }
+                  }
+                }
+              ],
+              "return_type": {
+                "type": "raw",
+                "path": "bool"
+              }
+            },
+            "offset": 0,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 19,
+              "line": 102
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "as_address",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "u64"
+            },
+            "offset": 0,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 19,
+              "line": 103
+            }
+          }
+        ],
+        "size": 8,
+        "alignment": 8,
+        "copyable": true,
+        "cloneable": true,
+        "defaultable": false,
+        "packed": false,
+        "pinned": false
+      },
+      "source": {
+        "file_index": 19,
+        "line": 101
+      }
+    },
+    "function_pointer_nesting::Nested": {
+      "path": "function_pointer_nesting::Nested",
+      "visibility": "public",
+      "size": 144,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "three",
+            "doc": " Three levels of parameter nesting.",
+            "type_ref": {
+              "type": "function",
+              "calling_convention": "system",
+              "arguments": [
+                {
+                  "name": "a",
+                  "type_ref": {
+                    "type": "function",
+                    "calling_convention": "system",
+                    "arguments": [
+                      {
+                        "name": "b",
+                        "type_ref": {
+                          "type": "function",
+                          "calling_convention": "system",
+                          "arguments": [
+                            {
+                              "name": null,
+                              "type_ref": {
+                                "type": "mut_pointer",
+                                "inner": {
+                                  "type": "raw",
+                                  "path": "function_pointer_nesting::Ctx"
+                                }
+                              }
+                            }
+                          ],
+                          "return_type": {
+                            "type": "raw",
+                            "path": "u32"
+                          }
+                        }
+                      }
+                    ],
+                    "return_type": {
+                      "type": "raw",
+                      "path": "u32"
+                    }
+                  }
+                }
+              ],
+              "return_type": {
+                "type": "raw",
+                "path": "u32"
+              }
+            },
+            "offset": 0,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 19,
+              "line": 32
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "curried",
+            "doc": " Three levels of return nesting, the hardest C++ declarator shape here.\n Doxygen mis-parses it (see DOXYGEN_IGNORED_WARNINGS in test.py); clang\n and gcc accept it, and this corpus compiles its own output.",
+            "type_ref": {
+              "type": "function",
+              "calling_convention": "system",
+              "arguments": [
+                {
+                  "name": null,
+                  "type_ref": {
+                    "type": "mut_pointer",
+                    "inner": {
+                      "type": "raw",
+                      "path": "function_pointer_nesting::Ctx"
+                    }
+                  }
+                }
+              ],
+              "return_type": {
+                "type": "function",
+                "calling_convention": "system",
+                "arguments": [
+                  {
+                    "name": null,
+                    "type_ref": {
+                      "type": "raw",
+                      "path": "u32"
+                    }
+                  }
+                ],
+                "return_type": {
+                  "type": "function",
+                  "calling_convention": "system",
+                  "arguments": [],
+                  "return_type": {
+                    "type": "raw",
+                    "path": "bool"
+                  }
+                }
+              }
+            },
+            "offset": 8,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 19,
+              "line": 36
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "grid",
+            "doc": " An array of arrays of function pointers.",
+            "type_ref": {
+              "type": "array",
+              "inner": {
+                "type": "array",
+                "inner": {
+                  "type": "function",
+                  "calling_convention": "system",
+                  "arguments": [
+                    {
+                      "name": null,
+                      "type_ref": {
+                        "type": "mut_pointer",
+                        "inner": {
+                          "type": "raw",
+                          "path": "function_pointer_nesting::Ctx"
+                        }
+                      }
+                    }
+                  ],
+                  "return_type": null
+                },
+                "size": 2
+              },
+              "size": 3
+            },
+            "offset": 16,
+            "size": 48,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 19,
+              "line": 38
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "table_ptr",
+            "doc": " A pointer to an array of function pointers. In C++ the subscript binds\n tighter than the star, so this needs parens where an array of pointers\n does not.",
+            "type_ref": {
+              "type": "mut_pointer",
+              "inner": {
+                "type": "array",
+                "inner": {
+                  "type": "function",
+                  "calling_convention": "system",
+                  "arguments": [
+                    {
+                      "name": null,
+                      "type_ref": {
+                        "type": "mut_pointer",
+                        "inner": {
+                          "type": "raw",
+                          "path": "function_pointer_nesting::Ctx"
+                        }
+                      }
+                    }
+                  ],
+                  "return_type": null
+                },
+                "size": 4
+              }
+            },
+            "offset": 64,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 19,
+              "line": 42
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "locked",
+            "doc": " A const pointer to a function pointer: the qualifier belongs to the\n pointee, not to the return type.",
+            "type_ref": {
+              "type": "const_pointer",
+              "inner": {
+                "type": "function",
+                "calling_convention": "system",
+                "arguments": [
+                  {
+                    "name": null,
+                    "type_ref": {
+                      "type": "mut_pointer",
+                      "inner": {
+                        "type": "raw",
+                        "path": "function_pointer_nesting::Ctx"
+                      }
+                    }
+                  }
+                ],
+                "return_type": null
+              }
+            },
+            "offset": 72,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 19,
+              "line": 45
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "bulk",
+            "doc": " An array by value alongside a pointer to a function pointer.",
+            "type_ref": {
+              "type": "function",
+              "calling_convention": "system",
+              "arguments": [
+                {
+                  "name": "values",
+                  "type_ref": {
+                    "type": "array",
+                    "inner": {
+                      "type": "raw",
+                      "path": "u32"
+                    },
+                    "size": 4
+                  }
+                },
+                {
+                  "name": "sink",
+                  "type_ref": {
+                    "type": "mut_pointer",
+                    "inner": {
+                      "type": "function",
+                      "calling_convention": "system",
+                      "arguments": [
+                        {
+                          "name": null,
+                          "type_ref": {
+                            "type": "raw",
+                            "path": "u32"
+                          }
+                        }
+                      ],
+                      "return_type": null
+                    }
+                  }
+                }
+              ],
+              "return_type": null
+            },
+            "offset": 80,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 19,
+              "line": 47
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "cc_outer",
+            "doc": " A convention on the outer type only. The parameter and the return\n type must keep the default, not inherit it - so each of the three\n positions is exercised alone, with the other two left default.",
+            "type_ref": {
+              "type": "function",
+              "calling_convention": "c",
+              "arguments": [
+                {
+                  "name": "cb",
+                  "type_ref": {
+                    "type": "function",
+                    "calling_convention": "system",
+                    "arguments": [
+                      {
+                        "name": null,
+                        "type_ref": {
+                          "type": "raw",
+                          "path": "u32"
+                        }
+                      }
+                    ],
+                    "return_type": {
+                      "type": "raw",
+                      "path": "bool"
+                    }
+                  }
+                }
+              ],
+              "return_type": {
+                "type": "function",
+                "calling_convention": "system",
+                "arguments": [],
+                "return_type": null
+              }
+            },
+            "offset": 88,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 19,
+              "line": 51
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "cc_return",
+            "doc": " The same, on the return type only.",
+            "type_ref": {
+              "type": "function",
+              "calling_convention": "system",
+              "arguments": [
+                {
+                  "name": "cb",
+                  "type_ref": {
+                    "type": "function",
+                    "calling_convention": "system",
+                    "arguments": [
+                      {
+                        "name": null,
+                        "type_ref": {
+                          "type": "raw",
+                          "path": "u32"
+                        }
+                      }
+                    ],
+                    "return_type": {
+                      "type": "raw",
+                      "path": "bool"
+                    }
+                  }
+                }
+              ],
+              "return_type": {
+                "type": "function",
+                "calling_convention": "c",
+                "arguments": [],
+                "return_type": null
+              }
+            },
+            "offset": 96,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 19,
+              "line": 53
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "cc_param",
+            "doc": " The same, on the parameter only.",
+            "type_ref": {
+              "type": "function",
+              "calling_convention": "system",
+              "arguments": [
+                {
+                  "name": "cb",
+                  "type_ref": {
+                    "type": "function",
+                    "calling_convention": "c",
+                    "arguments": [
+                      {
+                        "name": null,
+                        "type_ref": {
+                          "type": "raw",
+                          "path": "u32"
+                        }
+                      }
+                    ],
+                    "return_type": {
+                      "type": "raw",
+                      "path": "bool"
+                    }
+                  }
+                }
+              ],
+              "return_type": {
+                "type": "function",
+                "calling_convention": "system",
+                "arguments": [],
+                "return_type": null
+              }
+            },
+            "offset": 104,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 19,
+              "line": 55
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "cc_all",
+            "doc": " All three annotated at once, so the attributes have to coexist in a\n single type expression rather than one per field. The parameter takes\n the other convention, so an outer one reaching it would still show.",
+            "type_ref": {
+              "type": "function",
+              "calling_convention": "c",
+              "arguments": [
+                {
+                  "name": "cb",
+                  "type_ref": {
+                    "type": "function",
+                    "calling_convention": "system",
+                    "arguments": [
+                      {
+                        "name": null,
+                        "type_ref": {
+                          "type": "raw",
+                          "path": "u32"
+                        }
+                      }
+                    ],
+                    "return_type": {
+                      "type": "raw",
+                      "path": "bool"
+                    }
+                  }
+                }
+              ],
+              "return_type": {
+                "type": "function",
+                "calling_convention": "c",
+                "arguments": [],
+                "return_type": null
+              }
+            },
+            "offset": 112,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 19,
+              "line": 59
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "by_value",
+            "doc": " Structs passed and returned by value through a function pointer. The\n parameter is the enclosing module's type, not a pointer to it.",
+            "type_ref": {
+              "type": "function",
+              "calling_convention": "system",
+              "arguments": [
+                {
+                  "name": "ctx",
+                  "type_ref": {
+                    "type": "raw",
+                    "path": "function_pointer_nesting::Ctx"
+                  }
+                }
+              ],
+              "return_type": {
+                "type": "raw",
+                "path": "function_pointer_nesting::Ctx"
+              }
+            },
+            "offset": 120,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 19,
+              "line": 62
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "aliased",
+            "doc": " The alias above, which is itself a nested signature.",
+            "type_ref": {
+              "type": "function",
+              "calling_convention": "system",
+              "arguments": [
+                {
+                  "name": "inner",
+                  "type_ref": {
+                    "type": "function",
+                    "calling_convention": "system",
+                    "arguments": [
+                      {
+                        "name": null,
+                        "type_ref": {
+                          "type": "mut_pointer",
+                          "inner": {
+                            "type": "raw",
+                            "path": "function_pointer_nesting::Ctx"
+                          }
+                        }
+                      }
+                    ],
+                    "return_type": {
+                      "type": "raw",
+                      "path": "bool"
+                    }
+                  }
+                }
+              ],
+              "return_type": {
+                "type": "function",
+                "calling_convention": "system",
+                "arguments": [
+                  {
+                    "name": null,
+                    "type_ref": {
+                      "type": "mut_pointer",
+                      "inner": {
+                        "type": "raw",
+                        "path": "function_pointer_nesting::Ctx"
+                      }
+                    }
+                  }
+                ],
+                "return_type": null
+              }
+            },
+            "offset": 128,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 19,
+              "line": 64
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "slot",
+            "doc": " A function pointer as a generic argument.",
+            "type_ref": {
+              "type": "generic",
+              "base": "function_pointer_nesting::Slot",
+              "args": [
+                {
+                  "type": "function",
+                  "calling_convention": "system",
+                  "arguments": [
+                    {
+                      "name": null,
+                      "type_ref": {
+                        "type": "mut_pointer",
+                        "inner": {
+                          "type": "raw",
+                          "path": "function_pointer_nesting::Ctx"
+                        }
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "type": "raw",
+                    "path": "bool"
+                  }
+                }
+              ]
+            },
+            "offset": 136,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 19,
+              "line": 66
+            }
+          }
+        ],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false,
+        "pinned": false
+      },
+      "source": {
+        "file_index": 19,
+        "line": 30
+      }
+    },
+    "function_pointer_nesting::ShimNames": {
+      "path": "function_pointer_nesting::ShimNames",
+      "visibility": "public",
+      "size": 8,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": " Parameters named after the locals the generated call shims used to bind.\n The Rust backend called the target through a local `f`, which a parameter\n of the same name shadowed - the shim passed itself instead of the argument.\n Both the `#[address]` and vftable shims are covered.",
+        "fields": [
+          {
+            "visibility": "private",
+            "name": "vftable",
+            "doc": null,
+            "type_ref": {
+              "type": "const_pointer",
+              "inner": {
+                "type": "raw",
+                "path": "function_pointer_nesting::ShimNamesVftable"
+              }
+            },
+            "offset": 0,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 19,
+              "line": 91
+            }
+          }
+        ],
+        "associated_functions": [
+          {
+            "visibility": "public",
+            "name": "via_address",
+            "doc": null,
+            "body": {
+              "type": "address",
+              "address": 24576
+            },
+            "arguments": [
+              {
+                "type": "mut_self"
+              },
+              {
+                "type": "field",
+                "name": "f",
+                "type_ref": {
+                  "type": "function",
+                  "calling_convention": "system",
+                  "arguments": [
+                    {
+                      "name": null,
+                      "type_ref": {
+                        "type": "mut_pointer",
+                        "inner": {
+                          "type": "raw",
+                          "path": "function_pointer_nesting::Ctx"
+                        }
+                      }
+                    }
+                  ],
+                  "return_type": null
+                }
+              },
+              {
+                "type": "field",
+                "name": "this",
+                "type_ref": {
+                  "type": "raw",
+                  "path": "u32"
+                }
+              }
+            ],
+            "return_type": {
+              "type": "function",
+              "calling_convention": "system",
+              "arguments": [
+                {
+                  "name": null,
+                  "type_ref": {
+                    "type": "mut_pointer",
+                    "inner": {
+                      "type": "raw",
+                      "path": "function_pointer_nesting::Ctx"
+                    }
+                  }
+                }
+              ],
+              "return_type": null
+            },
+            "calling_convention": "system",
+            "source": {
+              "file_index": 19,
+              "line": 96
+            }
+          }
+        ],
+        "vftable": {
+          "functions": [
+            {
+              "visibility": "public",
+              "name": "via_vftable",
+              "doc": null,
+              "body": {
+                "type": "vftable",
+                "function_name": "via_vftable"
+              },
+              "arguments": [
+                {
+                  "type": "mut_self"
+                },
+                {
+                  "type": "field",
+                  "name": "f",
+                  "type_ref": {
+                    "type": "mut_pointer",
+                    "inner": {
+                      "type": "raw",
+                      "path": "function_pointer_nesting::Ctx"
+                    }
+                  }
+                },
+                {
+                  "type": "field",
+                  "name": "this",
+                  "type_ref": {
+                    "type": "raw",
+                    "path": "u32"
+                  }
+                }
+              ],
+              "return_type": {
+                "type": "mut_pointer",
+                "inner": {
+                  "type": "raw",
+                  "path": "function_pointer_nesting::Ctx"
+                }
+              },
+              "calling_convention": "system",
+              "source": {
+                "file_index": 19,
+                "line": 91
+              }
+            }
+          ]
+        },
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false,
+        "pinned": false
+      },
+      "source": {
+        "file_index": 19,
+        "line": 87
+      }
+    },
+    "function_pointer_nesting::ShimNamesVftable": {
+      "path": "function_pointer_nesting::ShimNamesVftable",
+      "visibility": "public",
+      "size": 8,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": null,
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "via_vftable",
+            "doc": null,
+            "type_ref": {
+              "type": "function",
+              "calling_convention": "system",
+              "arguments": [
+                {
+                  "name": "this",
+                  "type_ref": {
+                    "type": "mut_pointer",
+                    "inner": {
+                      "type": "raw",
+                      "path": "function_pointer_nesting::ShimNames"
+                    }
+                  }
+                },
+                {
+                  "name": "f",
+                  "type_ref": {
+                    "type": "mut_pointer",
+                    "inner": {
+                      "type": "raw",
+                      "path": "function_pointer_nesting::Ctx"
+                    }
+                  }
+                },
+                {
+                  "name": "this",
+                  "type_ref": {
+                    "type": "raw",
+                    "path": "u32"
+                  }
+                }
+              ],
+              "return_type": {
+                "type": "mut_pointer",
+                "inner": {
+                  "type": "raw",
+                  "path": "function_pointer_nesting::Ctx"
+                }
+              }
+            },
+            "offset": 0,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 19,
+              "line": 91
+            }
+          }
+        ],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false,
+        "pinned": false
+      },
+      "source": {
+        "file_index": 19,
+        "line": 91
+      }
+    },
+    "function_pointer_nesting::Slot": {
+      "path": "function_pointer_nesting::Slot",
+      "visibility": "public",
+      "type_parameters": [
+        "T"
+      ],
+      "size": 8,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": " A generic instantiated with a function pointer, exercising the type in\n template-argument position. Sized explicitly, as any generic whose layout\n can't be computed from its parameters must be.",
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "value",
+            "doc": null,
+            "type_ref": {
+              "type": "mut_pointer",
+              "inner": {
+                "type": "type_parameter",
+                "name": "T"
+              }
+            },
+            "offset": 0,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 19,
+              "line": 27
+            }
+          }
+        ],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false,
+        "pinned": false
+      },
+      "source": {
+        "file_index": 19,
+        "line": 26
+      }
+    },
+    "function_pointer_nesting::g_hook": {
+      "path": "function_pointer_nesting::g_hook",
+      "visibility": "public",
+      "size": 0,
+      "alignment": 1,
+      "category": "defined",
+      "kind": {
+        "type": "extern_value",
+        "doc": " A global function pointer at a fixed address.",
+        "value_type": {
+          "type": "function",
+          "calling_convention": "system",
+          "arguments": [
+            {
+              "name": null,
+              "type_ref": {
+                "type": "mut_pointer",
+                "inner": {
+                  "type": "raw",
+                  "path": "function_pointer_nesting::Ctx"
+                }
+              }
+            }
+          ],
+          "return_type": {
+            "type": "raw",
+            "path": "bool"
+          }
+        },
+        "address": 20480
+      },
+      "source": {
+        "file_index": 19,
+        "line": 108
+      }
+    },
+    "function_pointers::Callbacks": {
+      "path": "function_pointers::Callbacks",
+      "visibility": "public",
+      "size": 104,
+      "alignment": 8,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": " Callback slots. Nothing here is a vftable: the struct simply holds raw\n function pointers the target installs itself.",
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "on_tick",
+            "doc": " Named parameters, default calling convention.",
+            "type_ref": {
+              "type": "function",
+              "calling_convention": "system",
+              "arguments": [
+                {
+                  "name": "engine",
+                  "type_ref": {
+                    "type": "mut_pointer",
+                    "inner": {
+                      "type": "raw",
+                      "path": "function_pointers::Engine"
+                    }
+                  }
+                },
+                {
+                  "name": "dt",
+                  "type_ref": {
+                    "type": "raw",
+                    "path": "f32"
+                  }
+                }
+              ],
+              "return_type": null
+            },
+            "offset": 0,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 20,
+              "line": 21
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "on_event",
+            "doc": " Parameters may be left unnamed, and the signature can return a value.",
+            "type_ref": {
+              "type": "function",
+              "calling_convention": "system",
+              "arguments": [
+                {
+                  "name": null,
+                  "type_ref": {
+                    "type": "mut_pointer",
+                    "inner": {
+                      "type": "raw",
+                      "path": "function_pointers::Engine"
+                    }
+                  }
+                },
+                {
+                  "name": null,
+                  "type_ref": {
+                    "type": "raw",
+                    "path": "u32"
+                  }
+                }
+              ],
+              "return_type": {
+                "type": "raw",
+                "path": "bool"
+              }
+            },
+            "offset": 8,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 20,
+              "line": 23
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "on_shutdown",
+            "doc": " A no-argument slot.",
+            "type_ref": {
+              "type": "function",
+              "calling_convention": "system",
+              "arguments": [],
+              "return_type": null
+            },
+            "offset": 16,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 20,
+              "line": 25
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "on_alloc",
+            "doc": " The convention is selected by an attribute on the type itself, so it\n works in nested positions too.",
+            "type_ref": {
+              "type": "function",
+              "calling_convention": "c",
+              "arguments": [
+                {
+                  "name": "size",
+                  "type_ref": {
+                    "type": "raw",
+                    "path": "u32"
+                  }
+                }
+              ],
+              "return_type": {
+                "type": "mut_pointer",
+                "inner": {
+                  "type": "raw",
+                  "path": "function_pointers::Engine"
+                }
+              }
+            },
+            "offset": 24,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 20,
+              "line": 28
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "table",
+            "doc": " A dispatch table: an array of function pointers, each with its own\n convention.",
+            "type_ref": {
+              "type": "array",
+              "inner": {
+                "type": "function",
+                "calling_convention": "c",
+                "arguments": [
+                  {
+                    "name": null,
+                    "type_ref": {
+                      "type": "mut_pointer",
+                      "inner": {
+                        "type": "raw",
+                        "path": "function_pointers::Engine"
+                      }
+                    }
+                  }
+                ],
+                "return_type": null
+              },
+              "size": 4
+            },
+            "offset": 32,
+            "size": 32,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 20,
+              "line": 31
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "aliased",
+            "doc": " Via the alias.",
+            "type_ref": {
+              "type": "function",
+              "calling_convention": "system",
+              "arguments": [
+                {
+                  "name": "engine",
+                  "type_ref": {
+                    "type": "mut_pointer",
+                    "inner": {
+                      "type": "raw",
+                      "path": "function_pointers::Engine"
+                    }
+                  }
+                },
+                {
+                  "name": "dt",
+                  "type_ref": {
+                    "type": "raw",
+                    "path": "f32"
+                  }
+                }
+              ],
+              "return_type": null
+            },
+            "offset": 64,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 20,
+              "line": 33
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "indirect",
+            "doc": " Pointer-to-function-pointer, for a slot the target rewrites in place.",
+            "type_ref": {
+              "type": "mut_pointer",
+              "inner": {
+                "type": "function",
+                "calling_convention": "system",
+                "arguments": [
+                  {
+                    "name": null,
+                    "type_ref": {
+                      "type": "mut_pointer",
+                      "inner": {
+                        "type": "raw",
+                        "path": "function_pointers::Engine"
+                      }
+                    }
+                  }
+                ],
+                "return_type": null
+              }
+            },
+            "offset": 72,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 20,
+              "line": 35
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "on_register",
+            "doc": " A signature that itself takes a callback.",
+            "type_ref": {
+              "type": "function",
+              "calling_convention": "system",
+              "arguments": [
+                {
+                  "name": "callback",
+                  "type_ref": {
+                    "type": "function",
+                    "calling_convention": "system",
+                    "arguments": [
+                      {
+                        "name": null,
+                        "type_ref": {
+                          "type": "mut_pointer",
+                          "inner": {
+                            "type": "raw",
+                            "path": "function_pointers::Engine"
+                          }
+                        }
+                      }
+                    ],
+                    "return_type": null
+                  }
+                },
+                {
+                  "name": "user_data",
+                  "type_ref": {
+                    "type": "mut_pointer",
+                    "inner": {
+                      "type": "raw",
+                      "path": "function_pointers::Engine"
+                    }
+                  }
+                }
+              ],
+              "return_type": null
+            },
+            "offset": 80,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 20,
+              "line": 37
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "locked",
+            "doc": " A pointer to a const function-pointer slot. `const` qualifies the\n pointee, so it must land on the inner `*` in C++ (`void (*const *)()`),\n not on the return type.",
+            "type_ref": {
+              "type": "const_pointer",
+              "inner": {
+                "type": "function",
+                "calling_convention": "system",
+                "arguments": [
+                  {
+                    "name": null,
+                    "type_ref": {
+                      "type": "mut_pointer",
+                      "inner": {
+                        "type": "raw",
+                        "path": "function_pointers::Engine"
+                      }
+                    }
+                  }
+                ],
+                "return_type": null
+              }
+            },
+            "offset": 88,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 20,
+              "line": 41
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "on_ignore",
+            "doc": " `_` is a parameter name, as it is in field position.",
+            "type_ref": {
+              "type": "function",
+              "calling_convention": "system",
+              "arguments": [
+                {
+                  "name": "_",
+                  "type_ref": {
+                    "type": "raw",
+                    "path": "u32"
+                  }
+                }
+              ],
+              "return_type": null
+            },
+            "offset": 96,
+            "size": 8,
+            "alignment": 8,
+            "is_base": false,
+            "source": {
+              "file_index": 20,
+              "line": 43
+            }
+          }
+        ],
+        "associated_functions": [
+          {
+            "visibility": "public",
+            "name": "install",
+            "doc": " Function pointers work in argument and return position too.",
+            "body": {
+              "type": "address",
+              "address": 8192
+            },
+            "arguments": [
+              {
+                "type": "mut_self"
+              },
+              {
+                "type": "field",
+                "name": "tick",
+                "type_ref": {
+                  "type": "function",
+                  "calling_convention": "system",
+                  "arguments": [
+                    {
+                      "name": null,
+                      "type_ref": {
+                        "type": "mut_pointer",
+                        "inner": {
+                          "type": "raw",
+                          "path": "function_pointers::Engine"
+                        }
+                      }
+                    },
+                    {
+                      "name": null,
+                      "type_ref": {
+                        "type": "raw",
+                        "path": "f32"
+                      }
+                    }
+                  ],
+                  "return_type": null
+                }
+              }
+            ],
+            "return_type": {
+              "type": "function",
+              "calling_convention": "system",
+              "arguments": [
+                {
+                  "name": null,
+                  "type_ref": {
+                    "type": "mut_pointer",
+                    "inner": {
+                      "type": "raw",
+                      "path": "function_pointers::Engine"
+                    }
+                  }
+                },
+                {
+                  "name": null,
+                  "type_ref": {
+                    "type": "raw",
+                    "path": "f32"
+                  }
+                }
+              ],
+              "return_type": null
+            },
+            "calling_convention": "system",
+            "source": {
+              "file_index": 20,
+              "line": 48
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "seed",
+            "doc": " An array parameter has to render identically in the declaration and in\n the function-pointer alias the body calls through, or the two disagree\n and the emitted C++ doesn't compile.",
+            "body": {
+              "type": "address",
+              "address": 8193
+            },
+            "arguments": [
+              {
+                "type": "mut_self"
+              },
+              {
+                "type": "field",
+                "name": "values",
+                "type_ref": {
+                  "type": "array",
+                  "inner": {
+                    "type": "raw",
+                    "path": "u32"
+                  },
+                  "size": 4
+                }
+              }
+            ],
+            "return_type": null,
+            "calling_convention": "system",
+            "source": {
+              "file_index": 20,
+              "line": 54
+            }
+          }
+        ],
+        "vftable": null,
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false,
+        "pinned": false
+      },
+      "source": {
+        "file_index": 20,
+        "line": 19
+      }
+    },
+    "function_pointers::Engine": {
+      "path": "function_pointers::Engine",
+      "visibility": "public",
+      "size": 4,
+      "alignment": 4,
+      "category": "defined",
+      "kind": {
+        "type": "type",
+        "doc": " The engine a callback is handed a pointer to.",
+        "fields": [
+          {
+            "visibility": "public",
+            "name": "frame",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "u32"
+            },
+            "offset": 0,
+            "size": 4,
+            "alignment": 4,
+            "is_base": false,
+            "source": {
+              "file_index": 20,
+              "line": 10
+            }
+          }
+        ],
+        "associated_functions": [],
+        "vftable": null,
+        "singleton": null,
+        "copyable": false,
+        "cloneable": false,
+        "defaultable": false,
+        "packed": false,
+        "pinned": false
+      },
+      "source": {
+        "file_index": 20,
+        "line": 9
+      }
+    },
+    "function_pointers::TickFn": {
+      "path": "function_pointers::TickFn",
+      "visibility": "public",
+      "size": 0,
+      "alignment": 1,
+      "category": "defined",
+      "kind": {
+        "type": "type_alias",
+        "doc": " A named signature, reused below. A function-pointer type is an ordinary\n type, so it aliases like any other.",
+        "target": {
+          "type": "function",
+          "calling_convention": "system",
+          "arguments": [
+            {
+              "name": "engine",
+              "type_ref": {
+                "type": "mut_pointer",
+                "inner": {
+                  "type": "raw",
+                  "path": "function_pointers::Engine"
+                }
+              }
+            },
+            {
+              "name": "dt",
+              "type_ref": {
+                "type": "raw",
+                "path": "f32"
+              }
+            }
+          ],
+          "return_type": null
+        }
+      },
+      "source": {
+        "file_index": 20,
+        "line": 15
+      }
+    },
     "generics::Boxed": {
       "path": "generics::Boxed",
       "visibility": "public",
@@ -4386,7 +6315,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 19,
+              "file_index": 21,
               "line": 55
             }
           },
@@ -4403,7 +6332,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 19,
+              "file_index": 21,
               "line": 56
             }
           },
@@ -4424,7 +6353,7 @@
             "alignment": 1,
             "is_base": false,
             "source": {
-              "file_index": 19,
+              "file_index": 21,
               "line": 50
             }
           }
@@ -4439,7 +6368,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 19,
+        "file_index": 21,
         "line": 54
       }
     },
@@ -4472,7 +6401,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 19,
+              "file_index": 21,
               "line": 63
             }
           }
@@ -4487,7 +6416,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 19,
+        "file_index": 21,
         "line": 62
       }
     },
@@ -4517,7 +6446,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 19,
+              "file_index": 21,
               "line": 72
             }
           }
@@ -4555,7 +6484,7 @@
               "return_type": null,
               "calling_convention": "system",
               "source": {
-                "file_index": 19,
+                "file_index": 21,
                 "line": 72
               }
             }
@@ -4569,7 +6498,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 19,
+        "file_index": 21,
         "line": 70
       }
     },
@@ -4622,7 +6551,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 19,
+              "file_index": 21,
               "line": 72
             }
           }
@@ -4637,7 +6566,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 19,
+        "file_index": 21,
         "line": 72
       }
     },
@@ -4670,7 +6599,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 19,
+              "file_index": 21,
               "line": 27
             }
           },
@@ -4693,7 +6622,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 19,
+              "file_index": 21,
               "line": 28
             }
           },
@@ -4720,7 +6649,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 19,
+              "file_index": 21,
               "line": 29
             }
           }
@@ -4735,7 +6664,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 19,
+        "file_index": 21,
         "line": 26
       }
     },
@@ -4772,7 +6701,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 19,
+              "file_index": 21,
               "line": 35
             }
           }
@@ -4787,7 +6716,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 19,
+        "file_index": 21,
         "line": 34
       }
     },
@@ -4823,7 +6752,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 19,
+              "file_index": 21,
               "line": 41
             }
           }
@@ -4838,7 +6767,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 19,
+        "file_index": 21,
         "line": 40
       }
     },
@@ -4872,7 +6801,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 19,
+              "file_index": 21,
               "line": 20
             }
           },
@@ -4892,7 +6821,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 19,
+              "file_index": 21,
               "line": 21
             }
           }
@@ -4907,7 +6836,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 19,
+        "file_index": 21,
         "line": 19
       }
     },
@@ -4934,7 +6863,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 19,
+              "file_index": 21,
               "line": 47
             }
           }
@@ -4949,7 +6878,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 19,
+        "file_index": 21,
         "line": 46
       }
     },
@@ -4982,7 +6911,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 19,
+              "file_index": 21,
               "line": 7
             }
           }
@@ -4997,7 +6926,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 19,
+        "file_index": 21,
         "line": 6
       }
     },
@@ -5030,7 +6959,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 19,
+              "file_index": 21,
               "line": 14
             }
           }
@@ -5045,7 +6974,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 19,
+        "file_index": 21,
         "line": 13
       }
     },
@@ -5072,7 +7001,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 20,
+              "file_index": 22,
               "line": 8
             }
           },
@@ -5089,7 +7018,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 20,
+              "file_index": 22,
               "line": 9
             }
           }
@@ -5104,7 +7033,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 20,
+        "file_index": 22,
         "line": 7
       }
     },
@@ -5141,7 +7070,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 20,
+              "file_index": 22,
               "line": 27
             }
           }
@@ -5156,7 +7085,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 20,
+        "file_index": 22,
         "line": 26
       }
     },
@@ -5195,7 +7124,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 20,
+              "file_index": 22,
               "line": 33
             }
           }
@@ -5210,7 +7139,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 20,
+        "file_index": 22,
         "line": 32
       }
     },
@@ -5243,7 +7172,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 20,
+              "file_index": 22,
               "line": 15
             }
           }
@@ -5258,7 +7187,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 20,
+        "file_index": 22,
         "line": 14
       }
     },
@@ -5291,7 +7220,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 20,
+              "file_index": 22,
               "line": 21
             }
           }
@@ -5306,7 +7235,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 20,
+        "file_index": 22,
         "line": 20
       }
     },
@@ -5438,7 +7367,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 21,
+              "file_index": 23,
               "line": 24
             }
           },
@@ -5459,7 +7388,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 21,
+              "file_index": 23,
               "line": 25
             }
           }
@@ -5474,7 +7403,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 21,
+        "file_index": 23,
         "line": 23
       }
     },
@@ -5505,7 +7434,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 21,
+              "file_index": 23,
               "line": 4
             }
           }
@@ -5520,7 +7449,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 21,
+        "file_index": 23,
         "line": 3
       }
     },
@@ -5547,7 +7476,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 21,
+              "file_index": 23,
               "line": 16
             }
           },
@@ -5564,7 +7493,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 21,
+              "file_index": 23,
               "line": 17
             }
           },
@@ -5581,7 +7510,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 21,
+              "file_index": 23,
               "line": 18
             }
           }
@@ -5596,7 +7525,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 21,
+        "file_index": 23,
         "line": 15
       }
     },
@@ -5635,7 +7564,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 21,
+              "file_index": 23,
               "line": 10
             }
           }
@@ -5650,7 +7579,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 21,
+        "file_index": 23,
         "line": 9
       }
     },
@@ -5677,7 +7606,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 22,
+              "file_index": 24,
               "line": 11
             }
           },
@@ -5698,7 +7627,7 @@
             "alignment": 1,
             "is_base": false,
             "source": {
-              "file_index": 22,
+              "file_index": 24,
               "line": 8
             }
           }
@@ -5713,7 +7642,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 22,
+        "file_index": 24,
         "line": 10
       }
     },
@@ -5740,7 +7669,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 22,
+              "file_index": 24,
               "line": 4
             }
           },
@@ -5757,7 +7686,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 22,
+              "file_index": 24,
               "line": 5
             }
           },
@@ -5778,7 +7707,7 @@
             "alignment": 1,
             "is_base": false,
             "source": {
-              "file_index": 22,
+              "file_index": 24,
               "line": 1
             }
           }
@@ -5793,7 +7722,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 22,
+        "file_index": 24,
         "line": 3
       }
     },
@@ -5823,7 +7752,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 23,
+              "file_index": 25,
               "line": 4
             }
           },
@@ -5840,7 +7769,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 23,
+              "file_index": 25,
               "line": 8
             }
           }
@@ -5873,7 +7802,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 23,
+              "file_index": 25,
               "line": 12
             }
           }
@@ -5907,7 +7836,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 23,
+                "file_index": 25,
                 "line": 4
               }
             }
@@ -5921,7 +7850,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 23,
+        "file_index": 25,
         "line": 2
       }
     },
@@ -5971,7 +7900,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 23,
+              "file_index": 25,
               "line": 4
             }
           }
@@ -5986,7 +7915,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 23,
+        "file_index": 25,
         "line": 4
       }
     },
@@ -6013,7 +7942,7 @@
             "alignment": 8,
             "is_base": true,
             "source": {
-              "file_index": 23,
+              "file_index": 25,
               "line": 23
             }
           },
@@ -6030,7 +7959,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 23,
+              "file_index": 25,
               "line": 24
             }
           }
@@ -6064,7 +7993,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 23,
+              "file_index": 25,
               "line": 12
             }
           },
@@ -6095,7 +8024,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 23,
+              "file_index": 25,
               "line": 28
             }
           }
@@ -6129,7 +8058,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 23,
+                "file_index": 25,
                 "line": 18
               }
             },
@@ -6160,7 +8089,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 23,
+                "file_index": 25,
                 "line": 19
               }
             }
@@ -6174,7 +8103,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 23,
+        "file_index": 25,
         "line": 16
       }
     },
@@ -6201,7 +8130,7 @@
             "alignment": 8,
             "is_base": true,
             "source": {
-              "file_index": 23,
+              "file_index": 25,
               "line": 40
             }
           },
@@ -6218,7 +8147,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 23,
+              "file_index": 25,
               "line": 41
             }
           }
@@ -6252,7 +8181,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 23,
+              "file_index": 25,
               "line": 12
             }
           },
@@ -6284,7 +8213,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 23,
+              "file_index": 25,
               "line": 28
             }
           },
@@ -6315,7 +8244,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 23,
+              "file_index": 25,
               "line": 45
             }
           }
@@ -6349,7 +8278,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 23,
+                "file_index": 25,
                 "line": 34
               }
             },
@@ -6380,7 +8309,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 23,
+                "file_index": 25,
                 "line": 35
               }
             },
@@ -6411,7 +8340,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 23,
+                "file_index": 25,
                 "line": 36
               }
             }
@@ -6425,7 +8354,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 23,
+        "file_index": 25,
         "line": 32
       }
     },
@@ -6452,7 +8381,7 @@
             "alignment": 8,
             "is_base": true,
             "source": {
-              "file_index": 23,
+              "file_index": 25,
               "line": 58
             }
           },
@@ -6469,7 +8398,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 23,
+              "file_index": 25,
               "line": 59
             }
           }
@@ -6503,7 +8432,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 23,
+              "file_index": 25,
               "line": 12
             }
           },
@@ -6535,7 +8464,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 23,
+              "file_index": 25,
               "line": 28
             }
           },
@@ -6567,7 +8496,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 23,
+              "file_index": 25,
               "line": 45
             }
           },
@@ -6598,7 +8527,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 23,
+              "file_index": 25,
               "line": 63
             }
           }
@@ -6632,7 +8561,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 23,
+                "file_index": 25,
                 "line": 51
               }
             },
@@ -6663,7 +8592,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 23,
+                "file_index": 25,
                 "line": 52
               }
             },
@@ -6694,7 +8623,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 23,
+                "file_index": 25,
                 "line": 53
               }
             },
@@ -6725,7 +8654,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 23,
+                "file_index": 25,
                 "line": 54
               }
             }
@@ -6739,7 +8668,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 23,
+        "file_index": 25,
         "line": 49
       }
     },
@@ -6789,7 +8718,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 23,
+              "file_index": 25,
               "line": 51
             }
           },
@@ -6829,7 +8758,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 23,
+              "file_index": 25,
               "line": 52
             }
           },
@@ -6869,7 +8798,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 23,
+              "file_index": 25,
               "line": 53
             }
           },
@@ -6909,7 +8838,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 23,
+              "file_index": 25,
               "line": 54
             }
           }
@@ -6924,7 +8853,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 23,
+        "file_index": 25,
         "line": 51
       }
     },
@@ -6974,7 +8903,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 23,
+              "file_index": 25,
               "line": 34
             }
           },
@@ -7014,7 +8943,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 23,
+              "file_index": 25,
               "line": 35
             }
           },
@@ -7054,7 +8983,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 23,
+              "file_index": 25,
               "line": 36
             }
           }
@@ -7069,7 +8998,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 23,
+        "file_index": 25,
         "line": 34
       }
     },
@@ -7119,7 +9048,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 23,
+              "file_index": 25,
               "line": 18
             }
           },
@@ -7159,7 +9088,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 23,
+              "file_index": 25,
               "line": 19
             }
           }
@@ -7174,7 +9103,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 23,
+        "file_index": 25,
         "line": 18
       }
     },
@@ -7233,7 +9162,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 24,
+              "file_index": 26,
               "line": 31
             }
           }
@@ -7254,7 +9183,7 @@
         ]
       },
       "source": {
-        "file_index": 24,
+        "file_index": 26,
         "line": 6
       }
     },
@@ -7280,7 +9209,7 @@
         }
       },
       "source": {
-        "file_index": 24,
+        "file_index": 26,
         "line": 29
       }
     },
@@ -7328,7 +9257,7 @@
             "value": 0,
             "doc": null,
             "source": {
-              "file_index": 24,
+              "file_index": 26,
               "line": 11
             }
           },
@@ -7337,7 +9266,7 @@
             "value": 1,
             "doc": null,
             "source": {
-              "file_index": 24,
+              "file_index": 26,
               "line": 12
             }
           },
@@ -7346,7 +9275,7 @@
             "value": 2,
             "doc": null,
             "source": {
-              "file_index": 24,
+              "file_index": 26,
               "line": 13
             }
           }
@@ -7359,7 +9288,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 24,
+        "file_index": 26,
         "line": 10
       }
     },
@@ -7401,7 +9330,7 @@
             "value": 1,
             "doc": null,
             "source": {
-              "file_index": 24,
+              "file_index": 26,
               "line": 25
             }
           },
@@ -7410,7 +9339,7 @@
             "value": 2,
             "doc": null,
             "source": {
-              "file_index": 24,
+              "file_index": 26,
               "line": 26
             }
           }
@@ -7422,7 +9351,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 24,
+        "file_index": 26,
         "line": 24
       }
     },
@@ -7462,7 +9391,7 @@
             "alignment": 2,
             "is_base": false,
             "source": {
-              "file_index": 24,
+              "file_index": 26,
               "line": 19
             }
           }
@@ -7477,7 +9406,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 24,
+        "file_index": 26,
         "line": 18
       }
     },
@@ -7504,7 +9433,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 25,
+              "file_index": 27,
               "line": 10
             }
           }
@@ -7519,7 +9448,7 @@
         "pinned": true
       },
       "source": {
-        "file_index": 25,
+        "file_index": 27,
         "line": 9
       }
     },
@@ -7542,7 +9471,7 @@
             "value": 0,
             "doc": null,
             "source": {
-              "file_index": 25,
+              "file_index": 27,
               "line": 16
             }
           },
@@ -7551,7 +9480,7 @@
             "value": 1,
             "doc": null,
             "source": {
-              "file_index": 25,
+              "file_index": 27,
               "line": 17
             }
           }
@@ -7564,7 +9493,7 @@
         "pinned": true
       },
       "source": {
-        "file_index": 25,
+        "file_index": 27,
         "line": 15
       }
     },
@@ -7587,7 +9516,7 @@
             "value": 1,
             "doc": null,
             "source": {
-              "file_index": 25,
+              "file_index": 27,
               "line": 23
             }
           },
@@ -7596,7 +9525,7 @@
             "value": 2,
             "doc": null,
             "source": {
-              "file_index": 25,
+              "file_index": 27,
               "line": 24
             }
           }
@@ -7608,7 +9537,7 @@
         "pinned": true
       },
       "source": {
-        "file_index": 25,
+        "file_index": 27,
         "line": 22
       }
     },
@@ -7635,7 +9564,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 25,
+              "file_index": 27,
               "line": 4
             }
           }
@@ -7650,7 +9579,7 @@
         "pinned": true
       },
       "source": {
-        "file_index": 25,
+        "file_index": 27,
         "line": 3
       }
     },
@@ -7690,7 +9619,7 @@
             "alignment": 1,
             "is_base": false,
             "source": {
-              "file_index": 26,
+              "file_index": 28,
               "line": 6
             }
           }
@@ -7705,7 +9634,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 26,
+        "file_index": 28,
         "line": 5
       }
     },
@@ -7728,7 +9657,7 @@
         "address": 512
       },
       "source": {
-        "file_index": 27,
+        "file_index": 29,
         "line": 7
       }
     },
@@ -7755,7 +9684,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 28,
+              "file_index": 30,
               "line": 11
             }
           },
@@ -7772,7 +9701,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 28,
+              "file_index": 30,
               "line": 12
             }
           }
@@ -7787,7 +9716,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 28,
+        "file_index": 30,
         "line": 10
       }
     },
@@ -7814,7 +9743,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 29,
+              "file_index": 31,
               "line": 8
             }
           }
@@ -7829,7 +9758,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 29,
+        "file_index": 31,
         "line": 7
       }
     },
@@ -7856,7 +9785,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 30,
+              "file_index": 32,
               "line": 20
             }
           },
@@ -7877,7 +9806,7 @@
             "alignment": 1,
             "is_base": false,
             "source": {
-              "file_index": 30,
+              "file_index": 32,
               "line": 23
             }
           },
@@ -7900,7 +9829,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 30,
+              "file_index": 32,
               "line": 23
             }
           },
@@ -7923,7 +9852,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 30,
+              "file_index": 32,
               "line": 24
             }
           },
@@ -7946,7 +9875,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 30,
+              "file_index": 32,
               "line": 25
             }
           },
@@ -7967,7 +9896,7 @@
             "alignment": 1,
             "is_base": false,
             "source": {
-              "file_index": 30,
+              "file_index": 32,
               "line": 13
             }
           }
@@ -7982,7 +9911,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 30,
+        "file_index": 32,
         "line": 19
       }
     },
@@ -8015,7 +9944,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 30,
+              "file_index": 32,
               "line": 4
             }
           }
@@ -8030,7 +9959,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 30,
+        "file_index": 32,
         "line": 3
       }
     },
@@ -8057,7 +9986,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 30,
+              "file_index": 32,
               "line": 31
             }
           },
@@ -8078,7 +10007,7 @@
             "alignment": 1,
             "is_base": false,
             "source": {
-              "file_index": 30,
+              "file_index": 32,
               "line": 34
             }
           },
@@ -8101,7 +10030,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 30,
+              "file_index": 32,
               "line": 34
             }
           },
@@ -8124,7 +10053,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 30,
+              "file_index": 32,
               "line": 35
             }
           }
@@ -8139,7 +10068,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 30,
+        "file_index": 32,
         "line": 30
       }
     },
@@ -8172,7 +10101,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 30,
+              "file_index": 32,
               "line": 10
             }
           }
@@ -8187,7 +10116,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 30,
+        "file_index": 32,
         "line": 9
       }
     },
@@ -8214,7 +10143,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 31,
+              "file_index": 33,
               "line": 3
             }
           }
@@ -8229,7 +10158,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 31,
+        "file_index": 33,
         "line": 2
       }
     },
@@ -8280,7 +10209,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 32,
+              "file_index": 34,
               "line": 4
             }
           },
@@ -8297,7 +10226,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 32,
+              "file_index": 34,
               "line": 8
             }
           }
@@ -8330,7 +10259,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 32,
+              "file_index": 34,
               "line": 12
             }
           }
@@ -8364,7 +10293,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 32,
+                "file_index": 34,
                 "line": 4
               }
             }
@@ -8378,7 +10307,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 32,
+        "file_index": 34,
         "line": 2
       }
     },
@@ -8428,7 +10357,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 32,
+              "file_index": 34,
               "line": 4
             }
           }
@@ -8443,7 +10372,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 32,
+        "file_index": 34,
         "line": 4
       }
     },
@@ -8473,7 +10402,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 32,
+              "file_index": 34,
               "line": 18
             }
           },
@@ -8490,7 +10419,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 32,
+              "file_index": 34,
               "line": 22
             }
           }
@@ -8523,7 +10452,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 32,
+              "file_index": 34,
               "line": 26
             }
           }
@@ -8557,7 +10486,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 32,
+                "file_index": 34,
                 "line": 18
               }
             }
@@ -8571,7 +10500,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 32,
+        "file_index": 34,
         "line": 16
       }
     },
@@ -8621,7 +10550,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 32,
+              "file_index": 34,
               "line": 18
             }
           }
@@ -8636,7 +10565,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 32,
+        "file_index": 34,
         "line": 18
       }
     },
@@ -8663,7 +10592,7 @@
             "alignment": 8,
             "is_base": true,
             "source": {
-              "file_index": 32,
+              "file_index": 34,
               "line": 37
             }
           },
@@ -8680,7 +10609,7 @@
             "alignment": 8,
             "is_base": true,
             "source": {
-              "file_index": 32,
+              "file_index": 34,
               "line": 39
             }
           }
@@ -8714,7 +10643,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 32,
+              "file_index": 34,
               "line": 12
             }
           },
@@ -8746,7 +10675,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 32,
+              "file_index": 34,
               "line": 26
             }
           },
@@ -8778,7 +10707,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 32,
+              "file_index": 34,
               "line": 18
             }
           },
@@ -8809,7 +10738,7 @@
             },
             "calling_convention": "system",
             "source": {
-              "file_index": 32,
+              "file_index": 34,
               "line": 43
             }
           }
@@ -8843,7 +10772,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 32,
+                "file_index": 34,
                 "line": 32
               }
             },
@@ -8874,7 +10803,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 32,
+                "file_index": 34,
                 "line": 33
               }
             }
@@ -8888,7 +10817,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 32,
+        "file_index": 34,
         "line": 30
       }
     },
@@ -8938,7 +10867,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 32,
+              "file_index": 34,
               "line": 32
             }
           },
@@ -8978,7 +10907,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 32,
+              "file_index": 34,
               "line": 33
             }
           }
@@ -8993,7 +10922,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 32,
+        "file_index": 34,
         "line": 32
       }
     },
@@ -9023,7 +10952,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 33,
+              "file_index": 35,
               "line": 9
             }
           }
@@ -9038,7 +10967,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 33,
+        "file_index": 35,
         "line": 8
       }
     },
@@ -9074,7 +11003,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 34,
+              "file_index": 36,
               "line": 59
             }
           },
@@ -9101,7 +11030,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 34,
+              "file_index": 36,
               "line": 60
             }
           }
@@ -9116,7 +11045,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 34,
+        "file_index": 36,
         "line": 58
       }
     },
@@ -9141,7 +11070,7 @@
         }
       },
       "source": {
-        "file_index": 34,
+        "file_index": 36,
         "line": 16
       }
     },
@@ -9171,7 +11100,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 34,
+              "file_index": 36,
               "line": 33
             }
           },
@@ -9191,7 +11120,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 34,
+              "file_index": 36,
               "line": 34
             }
           }
@@ -9206,7 +11135,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 34,
+        "file_index": 36,
         "line": 32
       }
     },
@@ -9239,7 +11168,7 @@
         }
       },
       "source": {
-        "file_index": 34,
+        "file_index": 36,
         "line": 25
       }
     },
@@ -9272,7 +11201,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 34,
+              "file_index": 36,
               "line": 42
             }
           },
@@ -9295,7 +11224,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 34,
+              "file_index": 36,
               "line": 43
             }
           },
@@ -9322,7 +11251,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 34,
+              "file_index": 36,
               "line": 44
             }
           },
@@ -9342,7 +11271,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 34,
+              "file_index": 36,
               "line": 45
             }
           },
@@ -9362,7 +11291,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 34,
+              "file_index": 36,
               "line": 46
             }
           }
@@ -9377,7 +11306,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 34,
+        "file_index": 36,
         "line": 41
       }
     },
@@ -9399,7 +11328,7 @@
         }
       },
       "source": {
-        "file_index": 34,
+        "file_index": 36,
         "line": 9
       }
     },
@@ -9424,7 +11353,7 @@
         }
       },
       "source": {
-        "file_index": 34,
+        "file_index": 36,
         "line": 13
       }
     },
@@ -9455,7 +11384,7 @@
         }
       },
       "source": {
-        "file_index": 34,
+        "file_index": 36,
         "line": 28
       }
     },
@@ -9483,7 +11412,7 @@
         }
       },
       "source": {
-        "file_index": 34,
+        "file_index": 36,
         "line": 19
       }
     },
@@ -9505,7 +11434,7 @@
         }
       },
       "source": {
-        "file_index": 34,
+        "file_index": 36,
         "line": 6
       }
     },
@@ -9534,7 +11463,7 @@
         }
       },
       "source": {
-        "file_index": 34,
+        "file_index": 36,
         "line": 54
       }
     },
@@ -9562,7 +11491,7 @@
         }
       },
       "source": {
-        "file_index": 34,
+        "file_index": 36,
         "line": 51
       }
     },
@@ -9590,7 +11519,7 @@
         }
       },
       "source": {
-        "file_index": 34,
+        "file_index": 36,
         "line": 22
       }
     },
@@ -9725,7 +11654,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 35,
+              "file_index": 37,
               "line": 8
             }
           },
@@ -9742,7 +11671,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 35,
+              "file_index": 37,
               "line": 13
             }
           }
@@ -9764,7 +11693,7 @@
             "return_type": null,
             "calling_convention": "system",
             "source": {
-              "file_index": 35,
+              "file_index": 37,
               "line": 20
             }
           }
@@ -9787,7 +11716,7 @@
               "return_type": null,
               "calling_convention": "system",
               "source": {
-                "file_index": 35,
+                "file_index": 37,
                 "line": 8
               }
             }
@@ -9801,7 +11730,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 35,
+        "file_index": 37,
         "line": 5
       }
     },
@@ -9841,7 +11770,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 35,
+              "file_index": 37,
               "line": 8
             }
           }
@@ -9856,7 +11785,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 35,
+        "file_index": 37,
         "line": 8
       }
     },
@@ -9883,7 +11812,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 36,
+              "file_index": 38,
               "line": 69
             }
           },
@@ -9904,7 +11833,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 36,
+              "file_index": 38,
               "line": 70
             }
           }
@@ -9918,7 +11847,7 @@
         "pinned": true
       },
       "source": {
-        "file_index": 36,
+        "file_index": 38,
         "line": 68
       }
     },
@@ -9945,7 +11874,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 36,
+              "file_index": 38,
               "line": 44
             }
           },
@@ -9962,7 +11891,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 36,
+              "file_index": 38,
               "line": 45
             }
           },
@@ -9983,7 +11912,7 @@
             "alignment": 1,
             "is_base": false,
             "source": {
-              "file_index": 36,
+              "file_index": 38,
               "line": 46
             }
           }
@@ -9997,7 +11926,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 36,
+        "file_index": 38,
         "line": 43
       }
     },
@@ -10024,7 +11953,7 @@
             "alignment": 2,
             "is_base": false,
             "source": {
-              "file_index": 36,
+              "file_index": 38,
               "line": 26
             }
           },
@@ -10045,7 +11974,7 @@
             "alignment": 1,
             "is_base": false,
             "source": {
-              "file_index": 36,
+              "file_index": 38,
               "line": 27
             }
           },
@@ -10062,7 +11991,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 36,
+              "file_index": 38,
               "line": 28
             }
           }
@@ -10077,7 +12006,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 36,
+        "file_index": 38,
         "line": 25
       }
     },
@@ -10104,7 +12033,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 36,
+              "file_index": 38,
               "line": 29
             }
           },
@@ -10125,7 +12054,7 @@
             "alignment": 1,
             "is_base": false,
             "source": {
-              "file_index": 36,
+              "file_index": 38,
               "line": 30
             }
           }
@@ -10139,7 +12068,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 36,
+        "file_index": 38,
         "line": 28
       }
     },
@@ -10166,7 +12095,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 36,
+              "file_index": 38,
               "line": 89
             }
           },
@@ -10183,7 +12112,7 @@
             "alignment": 2,
             "is_base": false,
             "source": {
-              "file_index": 36,
+              "file_index": 38,
               "line": 90
             }
           }
@@ -10200,7 +12129,7 @@
         ]
       },
       "source": {
-        "file_index": 36,
+        "file_index": 38,
         "line": 82
       }
     },
@@ -10227,7 +12156,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 36,
+              "file_index": 38,
               "line": 86
             }
           }
@@ -10242,7 +12171,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 36,
+        "file_index": 38,
         "line": 85
       }
     },
@@ -10269,7 +12198,7 @@
             "alignment": 2,
             "is_base": false,
             "source": {
-              "file_index": 36,
+              "file_index": 38,
               "line": 91
             }
           },
@@ -10290,7 +12219,7 @@
             "alignment": 1,
             "is_base": false,
             "source": {
-              "file_index": 36,
+              "file_index": 38,
               "line": 92
             }
           }
@@ -10304,7 +12233,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 36,
+        "file_index": 38,
         "line": 90
       }
     },
@@ -10338,7 +12267,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 36,
+              "file_index": 38,
               "line": 62
             }
           },
@@ -10355,7 +12284,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 36,
+              "file_index": 38,
               "line": 63
             }
           },
@@ -10383,7 +12312,7 @@
             "alignment": 1,
             "is_base": false,
             "source": {
-              "file_index": 36,
+              "file_index": 38,
               "line": 57
             }
           }
@@ -10397,7 +12326,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 36,
+        "file_index": 38,
         "line": 61
       }
     },
@@ -10424,7 +12353,7 @@
             "alignment": 2,
             "is_base": false,
             "source": {
-              "file_index": 36,
+              "file_index": 38,
               "line": 76
             }
           },
@@ -10445,7 +12374,7 @@
             "alignment": 1,
             "is_base": false,
             "source": {
-              "file_index": 36,
+              "file_index": 38,
               "line": 77
             }
           }
@@ -10459,7 +12388,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 36,
+        "file_index": 38,
         "line": 75
       }
     },
@@ -10486,7 +12415,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 36,
+              "file_index": 38,
               "line": 53
             }
           },
@@ -10503,7 +12432,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 36,
+              "file_index": 38,
               "line": 54
             }
           }
@@ -10517,7 +12446,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 36,
+        "file_index": 38,
         "line": 52
       }
     },
@@ -10552,7 +12481,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 36,
+              "file_index": 38,
               "line": 6
             }
           },
@@ -10569,7 +12498,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 36,
+              "file_index": 38,
               "line": 8
             }
           },
@@ -10589,7 +12518,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 36,
+              "file_index": 38,
               "line": 10
             }
           }
@@ -10603,7 +12532,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 36,
+        "file_index": 38,
         "line": 4
       }
     },
@@ -10643,7 +12572,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 36,
+              "file_index": 38,
               "line": 17
             }
           },
@@ -10664,7 +12593,7 @@
             "alignment": 1,
             "is_base": false,
             "source": {
-              "file_index": 36,
+              "file_index": 38,
               "line": 20
             }
           },
@@ -10681,7 +12610,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 36,
+              "file_index": 38,
               "line": 20
             }
           }
@@ -10696,7 +12625,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 36,
+        "file_index": 38,
         "line": 16
       }
     },
@@ -10723,7 +12652,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 36,
+              "file_index": 38,
               "line": 38
             }
           },
@@ -10740,7 +12669,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 36,
+              "file_index": 38,
               "line": 39
             }
           }
@@ -10755,7 +12684,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 36,
+        "file_index": 38,
         "line": 37
       }
     },
@@ -10782,7 +12711,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 36,
+              "file_index": 38,
               "line": 100
             }
           },
@@ -10803,7 +12732,7 @@
             "alignment": 1,
             "is_base": false,
             "source": {
-              "file_index": 36,
+              "file_index": 38,
               "line": 101
             }
           }
@@ -10817,7 +12746,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 36,
+        "file_index": 38,
         "line": 99
       }
     },
@@ -10847,7 +12776,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 37,
+              "file_index": 39,
               "line": 13
             }
           },
@@ -10864,7 +12793,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 37,
+              "file_index": 39,
               "line": 23
             }
           }
@@ -10891,7 +12820,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 37,
+                "file_index": 39,
                 "line": 13
               }
             },
@@ -10911,7 +12840,7 @@
               "return_type": null,
               "calling_convention": "system",
               "source": {
-                "file_index": 37,
+                "file_index": 39,
                 "line": 11
               }
             },
@@ -10942,7 +12871,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 37,
+                "file_index": 39,
                 "line": 16
               }
             },
@@ -10965,7 +12894,7 @@
               },
               "calling_convention": "system",
               "source": {
-                "file_index": 37,
+                "file_index": 39,
                 "line": 19
               }
             }
@@ -10979,7 +12908,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 37,
+        "file_index": 39,
         "line": 9
       }
     },
@@ -11022,7 +12951,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 37,
+              "file_index": 39,
               "line": 13
             }
           },
@@ -11052,7 +12981,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 37,
+              "file_index": 39,
               "line": 11
             }
           },
@@ -11092,7 +13021,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 37,
+              "file_index": 39,
               "line": 16
             }
           },
@@ -11125,7 +13054,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 37,
+              "file_index": 39,
               "line": 19
             }
           }
@@ -11140,7 +13069,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 37,
+        "file_index": 39,
         "line": 13
       }
     },
@@ -11188,7 +13117,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 40,
+              "file_index": 42,
               "line": 10
             }
           }
@@ -11203,7 +13132,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 40,
+        "file_index": 42,
         "line": 9
       }
     },
@@ -11233,7 +13162,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 38,
+              "file_index": 40,
               "line": 8
             }
           },
@@ -11250,7 +13179,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 38,
+              "file_index": 40,
               "line": 9
             }
           },
@@ -11267,7 +13196,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 38,
+              "file_index": 40,
               "line": 10
             }
           }
@@ -11282,7 +13211,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 38,
+        "file_index": 40,
         "line": 7
       }
     },
@@ -11309,7 +13238,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 39,
+              "file_index": 41,
               "line": 6
             }
           }
@@ -11324,7 +13253,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 39,
+        "file_index": 41,
         "line": 5
       }
     },
@@ -11351,7 +13280,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 41,
+              "file_index": 43,
               "line": 4
             }
           },
@@ -11368,7 +13297,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 41,
+              "file_index": 43,
               "line": 5
             }
           }
@@ -11383,7 +13312,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 41,
+        "file_index": 43,
         "line": 3
       }
     },
@@ -11420,7 +13349,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 42,
+              "file_index": 44,
               "line": 14
             }
           },
@@ -11440,7 +13369,7 @@
             "alignment": 8,
             "is_base": false,
             "source": {
-              "file_index": 42,
+              "file_index": 44,
               "line": 15
             }
           }
@@ -11455,7 +13384,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 42,
+        "file_index": 44,
         "line": 13
       }
     },
@@ -11482,7 +13411,7 @@
             "alignment": 1,
             "is_base": false,
             "source": {
-              "file_index": 43,
+              "file_index": 45,
               "line": 10
             }
           },
@@ -11499,7 +13428,7 @@
             "alignment": 4,
             "is_base": false,
             "source": {
-              "file_index": 43,
+              "file_index": 45,
               "line": 13
             }
           },
@@ -11520,7 +13449,7 @@
             "alignment": 1,
             "is_base": false,
             "source": {
-              "file_index": 43,
+              "file_index": 45,
               "line": 6
             }
           }
@@ -11535,7 +13464,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 43,
+        "file_index": 45,
         "line": 9
       }
     },
@@ -11566,7 +13495,7 @@
             "alignment": 1,
             "is_base": false,
             "source": {
-              "file_index": 43,
+              "file_index": 45,
               "line": 1
             }
           }
@@ -11581,7 +13510,7 @@
         "pinned": false
       },
       "source": {
-        "file_index": 43,
+        "file_index": 45,
         "line": 4
       }
     }
@@ -12170,6 +14099,43 @@
         "line": 1
       }
     },
+    "function_pointer_nesting": {
+      "doc": " Deeply nested function-pointer combinations, to check that all three\n backends compose the type correctly rather than only handling one level.\n\n C++ declaration syntax nests inside-out, so every extra level here is a\n chance for the declarator to bind `*`, `[]` and `()` in the wrong order.\n The corpus compiles its own C++ and Rust output, so anything that composes\n wrongly fails the build rather than sitting in a snapshot.\n\n `C` is the only non-default convention whose Rust (`extern \"C\"`) compiles\n on every host the corpus builds against, so the convention cases below\n distinguish positions by pairing it against the default, `system`.",
+      "items": [
+        "function_pointer_nesting::Ctx",
+        "function_pointer_nesting::Dispatch",
+        "function_pointer_nesting::DispatchVftable",
+        "function_pointer_nesting::Handler",
+        "function_pointer_nesting::HookSlot",
+        "function_pointer_nesting::Nested",
+        "function_pointer_nesting::ShimNames",
+        "function_pointer_nesting::ShimNamesVftable",
+        "function_pointer_nesting::Slot",
+        "function_pointer_nesting::g_hook"
+      ],
+      "submodules": {},
+      "functions": [],
+      "splices": [],
+      "source": {
+        "file_index": 19,
+        "line": 13
+      }
+    },
+    "function_pointers": {
+      "doc": null,
+      "items": [
+        "function_pointers::Callbacks",
+        "function_pointers::Engine",
+        "function_pointers::TickFn"
+      ],
+      "submodules": {},
+      "functions": [],
+      "splices": [],
+      "source": {
+        "file_index": 20,
+        "line": 1
+      }
+    },
     "generics": {
       "doc": null,
       "items": [
@@ -12189,7 +14155,7 @@
       "functions": [],
       "splices": [],
       "source": {
-        "file_index": 19,
+        "file_index": 21,
         "line": 1
       }
     },
@@ -12206,7 +14172,7 @@
       "functions": [],
       "splices": [],
       "source": {
-        "file_index": 20,
+        "file_index": 22,
         "line": 1
       }
     },
@@ -12222,7 +14188,7 @@
       "functions": [],
       "splices": [],
       "source": {
-        "file_index": 21,
+        "file_index": 23,
         "line": 1
       }
     },
@@ -12236,7 +14202,7 @@
       "functions": [],
       "splices": [],
       "source": {
-        "file_index": 22,
+        "file_index": 24,
         "line": 1
       }
     },
@@ -12256,7 +14222,7 @@
       "functions": [],
       "splices": [],
       "source": {
-        "file_index": 23,
+        "file_index": 25,
         "line": 1
       }
     },
@@ -12269,7 +14235,7 @@
       "functions": [],
       "splices": [],
       "source": {
-        "file_index": 24,
+        "file_index": 26,
         "line": 1
       }
     },
@@ -12285,7 +14251,7 @@
       "functions": [],
       "splices": [],
       "source": {
-        "file_index": 25,
+        "file_index": 27,
         "line": 1
       }
     },
@@ -12298,7 +14264,7 @@
       "functions": [],
       "splices": [],
       "source": {
-        "file_index": 26,
+        "file_index": 28,
         "line": 1
       }
     },
@@ -12321,14 +14287,14 @@
           "return_type": null,
           "calling_convention": "system",
           "source": {
-            "file_index": 27,
+            "file_index": 29,
             "line": 3
           }
         }
       ],
       "splices": [],
       "source": {
-        "file_index": 27,
+        "file_index": 29,
         "line": 3
       }
     },
@@ -12351,7 +14317,7 @@
       "functions": [],
       "splices": [],
       "source": {
-        "file_index": 28,
+        "file_index": 30,
         "line": 1
       }
     },
@@ -12364,7 +14330,7 @@
       "functions": [],
       "splices": [],
       "source": {
-        "file_index": 29,
+        "file_index": 31,
         "line": 1
       }
     },
@@ -12388,7 +14354,7 @@
       "functions": [],
       "splices": [],
       "source": {
-        "file_index": 30,
+        "file_index": 32,
         "line": 1
       }
     },
@@ -12401,7 +14367,7 @@
       "functions": [],
       "splices": [],
       "source": {
-        "file_index": 31,
+        "file_index": 33,
         "line": 1
       }
     },
@@ -12419,7 +14385,7 @@
       "functions": [],
       "splices": [],
       "source": {
-        "file_index": 32,
+        "file_index": 34,
         "line": 1
       }
     },
@@ -12432,7 +14398,7 @@
       "functions": [],
       "splices": [],
       "source": {
-        "file_index": 33,
+        "file_index": 35,
         "line": 1
       }
     },
@@ -12457,7 +14423,7 @@
       "functions": [],
       "splices": [],
       "source": {
-        "file_index": 34,
+        "file_index": 36,
         "line": 1
       }
     },
@@ -12471,7 +14437,7 @@
       "functions": [],
       "splices": [],
       "source": {
-        "file_index": 35,
+        "file_index": 37,
         "line": 3
       }
     },
@@ -12496,7 +14462,7 @@
       "functions": [],
       "splices": [],
       "source": {
-        "file_index": 36,
+        "file_index": 38,
         "line": 1
       }
     },
@@ -12510,7 +14476,7 @@
       "functions": [],
       "splices": [],
       "source": {
-        "file_index": 37,
+        "file_index": 39,
         "line": 8
       }
     },
@@ -12529,7 +14495,7 @@
           "functions": [],
           "splices": [],
           "source": {
-            "file_index": 38,
+            "file_index": 40,
             "line": 1
           }
         },
@@ -12546,7 +14512,7 @@
               "functions": [],
               "splices": [],
               "source": {
-                "file_index": 39,
+                "file_index": 41,
                 "line": 1
               }
             }
@@ -12564,7 +14530,7 @@
           "functions": [],
           "splices": [],
           "source": {
-            "file_index": 41,
+            "file_index": 43,
             "line": 1
           }
         }
@@ -12583,7 +14549,7 @@
         }
       ],
       "source": {
-        "file_index": 40,
+        "file_index": 42,
         "line": 7
       }
     },
@@ -12596,7 +14562,7 @@
       "functions": [],
       "splices": [],
       "source": {
-        "file_index": 42,
+        "file_index": 44,
         "line": 1
       }
     },
@@ -12610,7 +14576,7 @@
       "functions": [],
       "splices": [],
       "source": {
-        "file_index": 43,
+        "file_index": 45,
         "line": 1
       }
     }
@@ -12635,6 +14601,8 @@
     "external_body.pyxis",
     "field_type_name_collision.pyxis",
     "freestanding_functions.pyxis",
+    "function_pointer_nesting.pyxis",
+    "function_pointers.pyxis",
     "generics.pyxis",
     "generics_cross_module.pyxis",
     "math.pyxis",

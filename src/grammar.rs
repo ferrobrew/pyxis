@@ -12,7 +12,7 @@ pub use crate::parser::{
     },
     module::{Module, ModuleItem},
     paths::{ItemPath, ItemPathSegment},
-    types::{Ident, Type, TypeParameter},
+    types::{FunctionArg, Ident, Type, TypeKind, TypeParameter},
 };
 
 #[cfg(test)]
@@ -38,6 +38,7 @@ pub mod test_aliases {
     pub type As = super::Attributes;
     pub type Ar = super::Argument;
     pub type TF = super::TypeField;
+    pub type GFA = super::FunctionArg;
     pub type E = super::Expr;
     pub type Ident = super::Ident;
     pub type F = super::Function;

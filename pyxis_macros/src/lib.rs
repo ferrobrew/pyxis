@@ -358,6 +358,192 @@ fn generate_enum_variant_strip_locations(
     }
 }
 
+/// Derive macro for the EqualsIgnoringLocations trait.
+///
+/// For structs, compares every field except `location` with
+/// `equals_ignoring_locations`. For enums, matches both sides on the same
+/// variant and compares its fields the same way; mismatched variants are
+/// unequal.
+///
+/// # Attributes
+/// - `#[equals_ignoring_locations(eq)]` - compare with `==` instead
+///   (for location-free types such as `Copy` marker enums)
+///
+/// # Example
+/// ```ignore
+/// #[derive(EqualsIgnoringLocations)]
+/// pub struct FunctionArg {
+///     pub name: Option<Ident>,
+///     pub type_: Type,
+///     pub location: ItemLocation,
+/// }
+/// ```
+#[proc_macro_derive(EqualsIgnoringLocations, attributes(equals_ignoring_locations))]
+pub fn derive_equals_ignoring_locations(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    let name = &input.ident;
+    let generics = &input.generics;
+    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+
+    let is_eq = input.attrs.iter().any(|attr| {
+        attr.path().is_ident("equals_ignoring_locations")
+            && attr.parse_args::<Ident>().is_ok_and(|ident| ident == "eq")
+    });
+
+    let body = if is_eq {
+        quote! { self == other }
+    } else {
+        match &input.data {
+            Data::Struct(data) => generate_struct_equals(&data.fields),
+            Data::Enum(data) => {
+                let arms = data.variants.iter().map(|variant| {
+                    generate_enum_variant_equals(name, &variant.ident, &variant.fields)
+                });
+                quote! {
+                    #[allow(unreachable_patterns)]
+                    match (self, other) {
+                        #(#arms,)*
+                        _ => false,
+                    }
+                }
+            }
+            Data::Union(_) => {
+                return syn::Error::new(
+                    input.span(),
+                    "EqualsIgnoringLocations cannot be derived for unions",
+                )
+                .to_compile_error()
+                .into();
+            }
+        }
+    };
+
+    let expanded = quote! {
+        impl #impl_generics crate::span::EqualsIgnoringLocations for #name #ty_generics #where_clause {
+            fn equals_ignoring_locations(&self, other: &Self) -> bool {
+                #body
+            }
+        }
+    };
+
+    TokenStream::from(expanded)
+}
+
+/// Field comparisons for a struct, skipping `location`. An all-`location`
+/// struct compares equal, which matches the trait's intent.
+fn generate_struct_equals(fields: &Fields) -> proc_macro2::TokenStream {
+    let comparisons: Vec<_> = match fields {
+        Fields::Named(fields) => fields
+            .named
+            .iter()
+            .filter(|f| f.ident.as_ref().is_none_or(|i| i != "location"))
+            .map(|f| {
+                let field_name = f.ident.as_ref().unwrap();
+                quote! {
+                    crate::span::EqualsIgnoringLocations::equals_ignoring_locations(
+                        &self.#field_name, &other.#field_name
+                    )
+                }
+            })
+            .collect(),
+        Fields::Unnamed(fields) => (0..fields.unnamed.len())
+            .map(|i| {
+                let index = syn::Index::from(i);
+                quote! {
+                    crate::span::EqualsIgnoringLocations::equals_ignoring_locations(
+                        &self.#index, &other.#index
+                    )
+                }
+            })
+            .collect(),
+        Fields::Unit => vec![],
+    };
+
+    if comparisons.is_empty() {
+        quote! { true }
+    } else {
+        quote! { #(#comparisons)&&* }
+    }
+}
+
+/// One `(Self::V { .. }, Self::V { .. }) => ...` arm. Fields are bound as
+/// `a_<name>` / `b_<name>` so the two sides never shadow each other.
+fn generate_enum_variant_equals(
+    enum_name: &Ident,
+    variant_name: &Ident,
+    fields: &Fields,
+) -> proc_macro2::TokenStream {
+    match fields {
+        Fields::Named(fields) => {
+            let names: Vec<_> = fields
+                .named
+                .iter()
+                .map(|f| f.ident.as_ref().unwrap())
+                .filter(|i| *i != "location")
+                .collect();
+            let a_bindings = names.iter().map(|n| {
+                let a = format_ident!("a_{}", n);
+                quote! { #n: #a }
+            });
+            let b_bindings = names.iter().map(|n| {
+                let b = format_ident!("b_{}", n);
+                quote! { #n: #b }
+            });
+            let comparisons: Vec<_> = names
+                .iter()
+                .map(|n| {
+                    let (a, b) = (format_ident!("a_{}", n), format_ident!("b_{}", n));
+                    quote! {
+                        crate::span::EqualsIgnoringLocations::equals_ignoring_locations(#a, #b)
+                    }
+                })
+                .collect();
+            let body = if comparisons.is_empty() {
+                quote! { true }
+            } else {
+                quote! { #(#comparisons)&&* }
+            };
+            quote! {
+                (
+                    #enum_name::#variant_name { #(#a_bindings,)* .. },
+                    #enum_name::#variant_name { #(#b_bindings,)* .. },
+                ) => #body
+            }
+        }
+        Fields::Unnamed(fields) => {
+            let a_bindings: Vec<_> = (0..fields.unnamed.len())
+                .map(|i| format_ident!("a{}", i))
+                .collect();
+            let b_bindings: Vec<_> = (0..fields.unnamed.len())
+                .map(|i| format_ident!("b{}", i))
+                .collect();
+            let comparisons: Vec<_> = a_bindings
+                .iter()
+                .zip(&b_bindings)
+                .map(|(a, b)| {
+                    quote! {
+                        crate::span::EqualsIgnoringLocations::equals_ignoring_locations(#a, #b)
+                    }
+                })
+                .collect();
+            let body = if comparisons.is_empty() {
+                quote! { true }
+            } else {
+                quote! { #(#comparisons)&&* }
+            };
+            quote! {
+                (
+                    #enum_name::#variant_name(#(#a_bindings),*),
+                    #enum_name::#variant_name(#(#b_bindings),*),
+                ) => #body
+            }
+        }
+        Fields::Unit => quote! {
+            (#enum_name::#variant_name, #enum_name::#variant_name) => true
+        },
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum FieldAttr {
     Skip,

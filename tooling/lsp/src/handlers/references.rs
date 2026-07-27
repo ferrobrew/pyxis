@@ -1,6 +1,6 @@
 use super::{navigation::nested_items, *};
 
-use pyxis::grammar::Argument;
+use pyxis::grammar::{Argument, TypeKind};
 
 pub(crate) enum Ref {
     Item {
@@ -348,8 +348,8 @@ pub(crate) fn type_hit_at<'a>(type_: &'a Type, loc: &Location) -> Option<TypeHit
     if !type_.location().span.contains(loc) {
         return None;
     }
-    match type_ {
-        Type::Ident {
+    match &type_.kind {
+        TypeKind::Ident {
             path, generic_args, ..
         } => {
             for arg in generic_args {
@@ -359,21 +359,37 @@ pub(crate) fn type_hit_at<'a>(type_: &'a Type, loc: &Location) -> Option<TypeHit
             }
             Some(TypeHit::Ident(path, type_.location().span))
         }
-        Type::ConstPointer { pointee, .. } | Type::MutPointer { pointee, .. } => {
+        TypeKind::ConstPointer { pointee, .. } | TypeKind::MutPointer { pointee, .. } => {
             if pointee.location().span.contains(loc) {
                 type_hit_at(pointee, loc)
             } else {
                 Some(TypeHit::Shell(type_))
             }
         }
-        Type::Array { element, .. } => {
+        TypeKind::Array { element, .. } => {
             if element.location().span.contains(loc) {
                 type_hit_at(element, loc)
             } else {
                 Some(TypeHit::Shell(type_))
             }
         }
-        Type::Unknown { .. } => Some(TypeHit::Shell(type_)),
+        TypeKind::Function {
+            arguments,
+            return_type,
+        } => {
+            for argument in arguments {
+                if let Some(found) = type_hit_at(&argument.type_, loc) {
+                    return Some(found);
+                }
+            }
+            if let Some(return_type) = return_type
+                && let Some(found) = type_hit_at(return_type, loc)
+            {
+                return Some(found);
+            }
+            Some(TypeHit::Shell(type_))
+        }
+        TypeKind::Unknown { .. } => Some(TypeHit::Shell(type_)),
     }
 }
 

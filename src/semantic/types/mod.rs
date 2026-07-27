@@ -19,7 +19,7 @@ pub use item::{
     ItemCategory, ItemDefinition, ItemDefinitionInner, ItemState, ItemStateResolved, PredefinedItem,
 };
 pub use splice::Splice;
-pub use type_::{Type, Visibility};
+pub use type_::{FunctionArg, Type, Visibility};
 
 #[allow(dead_code, clippy::upper_case_acronyms)]
 pub mod test_aliases {
@@ -31,6 +31,7 @@ pub mod test_aliases {
     pub type STAD = super::TypeAliasDefinition;
     pub type ST = super::Type;
     pub type SAr = super::Argument;
+    pub type SFA = super::FunctionArg;
     pub type SF = super::Function;
     pub type SIP = super::ItemPath;
     pub type SSp = super::Splice;

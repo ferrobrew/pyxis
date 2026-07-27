@@ -20,6 +20,8 @@ impl SemanticError {
             | SemanticError::InvalidAttributeFunctionArgumentCount { .. }
             | SemanticError::InvalidAttributeValue { .. }
             | SemanticError::ConflictingAttributes { .. }
+            | SemanticError::UnsupportedTypeAttribute { .. }
+            | SemanticError::InvalidTypeCallingConvention { .. }
             | SemanticError::AttributeNotSupported { .. }
             | SemanticError::AttributeWrongForm { .. } => self.attribute_error_message(),
 
@@ -187,6 +189,16 @@ impl SemanticError {
                 format!(
                     "cannot specify both `{attr1}` and `{attr2}` attributes for type `{item_path}`"
                 )
+            }
+            SemanticError::UnsupportedTypeAttribute {
+                attribute_name,
+                type_description,
+                ..
+            } => {
+                format!("Attribute `{attribute_name}` is not supported on {type_description}")
+            }
+            SemanticError::InvalidTypeCallingConvention { convention, .. } => {
+                format!("Invalid calling convention `{convention}` on function pointer type")
             }
             SemanticError::AttributeNotSupported {
                 attribute_name,

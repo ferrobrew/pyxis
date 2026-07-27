@@ -387,7 +387,7 @@ fn render_method_signature(out: &mut String, func: &Function, ctx: RenderCtx) ->
         return Ok(());
     }
     super::types::render_doc(out, &func.doc, 1, ctx, &func.location)?;
-    let (return_text, sig_args_text, const_qual) = method_sig_parts(func, ctx)?;
+    let (sig_args_text, const_qual) = method_sig_parts(func, ctx)?;
     let static_kw = if func_has_self(func) { "" } else { "static " };
     // Method-level template parameters (e.g. `Y` in
     // `impl<T, Y> Foo<T> { fn cast() -> Foo<Y>; }`) become a `template
@@ -402,11 +402,14 @@ fn render_method_signature(out: &mut String, func: &Function, ctx: RenderCtx) ->
             .join(", ");
         writeln!(out, "    template <{params}>")?;
     }
-    writeln!(
-        out,
-        "    {static_kw}{return_text} {fn_name}({sig_args_text}){const_qual};",
-        fn_name = super::cpp_ident(&func.name)
+    let declaration = method_declaration(
+        func,
+        &super::cpp_ident(&func.name),
+        &sig_args_text,
+        const_qual,
+        ctx,
     )?;
+    writeln!(out, "    {static_kw}{declaration};")?;
     Ok(())
 }
 
@@ -436,7 +439,7 @@ fn render_method_definition(
     if func.body.is_external() {
         return Ok(());
     }
-    let (return_text, sig_args_text, const_qual) = method_sig_parts(func, ctx)?;
+    let (sig_args_text, const_qual) = method_sig_parts(func, ctx)?;
     let body_lines = method_body_lines(func, ctx)?;
     // Method-level template parameters require a `template <...>` clause
     // on the out-of-class definition. Without method-level templates, the
@@ -454,11 +457,17 @@ fn render_method_definition(
     }
     // Out-of-class definitions never repeat `static` — that keyword belongs
     // only on the in-class declaration.
-    writeln!(
-        out,
-        "{return_text} {parent_name}::{fn_name}({sig_args_text}){const_qual} {{",
-        fn_name = super::cpp_ident(&func.name)
+    let declaration = method_declaration(
+        func,
+        &format!(
+            "{parent_name}::{fn_name}",
+            fn_name = super::cpp_ident(&func.name)
+        ),
+        &sig_args_text,
+        const_qual,
+        ctx,
     )?;
+    writeln!(out, "{declaration} {{")?;
     for line in &body_lines {
         writeln!(out, "    {line}")?;
     }
@@ -468,16 +477,11 @@ fn render_method_definition(
     Ok(())
 }
 
-pub(super) fn method_sig_parts(
-    func: &Function,
-    ctx: RenderCtx,
-) -> Result<(String, String, &'static str)> {
-    let return_text = if let Some(ret) = &func.return_type {
-        super::render_type(ret, ctx)?
-    } else {
-        "void".to_string()
-    };
-
+/// The parameter list and cv-qualifier of a method signature. The return type
+/// is deliberately not part of this: a function-pointer return type can't be
+/// written as a leading `R`, so the declaration is assembled by
+/// [`method_declaration`] instead of being concatenated from pieces.
+pub(super) fn method_sig_parts(func: &Function, ctx: RenderCtx) -> Result<(String, &'static str)> {
     let mut sig_args: Vec<String> = Vec::new();
     let mut self_kind: Option<&'static str> = None;
     for arg in &func.arguments {
@@ -485,9 +489,8 @@ pub(super) fn method_sig_parts(
             Argument::ConstSelf { .. } => self_kind = Some("const"),
             Argument::MutSelf { .. } => self_kind = Some("mut"),
             Argument::Field { name, type_, .. } => {
-                let ty = super::render_type(type_, ctx)?;
                 let escaped = super::cpp_ident(name);
-                sig_args.push(format!("{ty} {escaped}"));
+                sig_args.push(super::render_declaration(type_, &escaped, ctx)?);
             }
         }
     }
@@ -496,7 +499,24 @@ pub(super) fn method_sig_parts(
     } else {
         ""
     };
-    Ok((return_text, sig_args.join(", "), const_qual))
+    Ok((sig_args.join(", "), const_qual))
+}
+
+/// Assemble a complete method declaration: `R name(args) const`, or the
+/// declarator form when the return type is itself a function pointer
+/// (`void (*name(args) const)(...)`).
+pub(super) fn method_declaration(
+    func: &Function,
+    qualified_name: &str,
+    sig_args_text: &str,
+    const_qual: &str,
+    ctx: RenderCtx,
+) -> Result<String> {
+    let core = format!("{qualified_name}({sig_args_text}){const_qual}");
+    match &func.return_type {
+        Some(ret) => super::render_declaration(ret, &core, ctx),
+        None => Ok(format!("void {core}")),
+    }
 }
 
 fn method_body_lines(func: &Function, ctx: RenderCtx) -> Result<Vec<String>> {
@@ -523,7 +543,7 @@ fn method_body_lines(func: &Function, ctx: RenderCtx) -> Result<Vec<String>> {
                 .map(|a| match a {
                     Argument::ConstSelf { .. } => Ok("const void*".to_string()),
                     Argument::MutSelf { .. } => Ok("void*".to_string()),
-                    Argument::Field { type_, .. } => super::render_type(type_, ctx),
+                    Argument::Field { type_, .. } => super::render_parameter_type(type_, ctx),
                 })
                 .collect::<Result<Vec<_>>>()?
                 .join(", ");
@@ -535,8 +555,16 @@ fn method_body_lines(func: &Function, ctx: RenderCtx) -> Result<Vec<String>> {
                 }
             }
             call_payload.push_str(&call_args.join(", "));
+            // The alias target goes through the declarator builder so a
+            // function-pointer return type nests instead of being glued on.
+            let fn_t = match &func.return_type {
+                Some(ret) => {
+                    super::render_declaration(ret, &format!("({cc}*)({arg_types_text})"), ctx)?
+                }
+                None => format!("void ({cc}*)({arg_types_text})"),
+            };
             vec![
-                format!("using fn_t = {return_text} ({cc}*)({arg_types_text});"),
+                format!("using fn_t = {fn_t};"),
                 format!("{ret_kw}reinterpret_cast<fn_t>(0x{address:X})({call_payload});"),
             ]
         }

@@ -46,7 +46,11 @@ use crate::semantic::types::{CallingConvention, ItemCategory, Visibility};
 /// - v12: added a `Union` item kind (`JsonUnionDefinition`). Its `fields` are
 ///   `JsonRegion`s like a type's, but every one has `offset: 0` — a union's
 ///   members are competing readings of the same bytes, not a sequence.
-pub const CURRENT_SCHEMA_VERSION: u32 = 12;
+/// - v13: `JsonFunctionArgument.name` became nullable. Function-pointer types
+///   are now writable in any type position (`fn(*mut Engine, f32)`), and a
+///   parameter written without a name stays unnamed rather than being given
+///   a synthesized one. Vftable-derived signatures still carry their names.
+pub const CURRENT_SCHEMA_VERSION: u32 = 13;
 
 /// Top-level JSON documentation structure
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
@@ -571,7 +575,8 @@ pub enum JsonType {
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 pub struct JsonFunctionArgument {
-    pub name: String,
+    /// `None` for a parameter written without a name, as in `fn(u32)`.
+    pub name: Option<String>,
     pub type_ref: JsonType,
 }
 
