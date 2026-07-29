@@ -178,7 +178,7 @@ pub trait HasLocation {
 /// Convert a Span to a byte offset in the source string
 pub fn span_to_offset(source: &str, span: &Span) -> usize {
     source
-        .lines()
+        .split('\n')
         .take(span.start.line.saturating_sub(1))
         .map(|line| line.len() + 1)
         .sum::<usize>()
@@ -191,13 +191,13 @@ pub fn span_length(source: &str, span: &Span) -> usize {
         span.end.column.saturating_sub(span.start.column)
     } else {
         let first_line_len = source
-            .lines()
+            .split('\n')
             .nth(span.start.line.saturating_sub(1))
             .map(|line| line.len())
             .unwrap_or(0)
             .saturating_sub(span.start.column.saturating_sub(1));
         let middle_lines_len: usize = source
-            .lines()
+            .split('\n')
             .skip(span.start.line)
             .take(
                 span.end

@@ -179,3 +179,61 @@ fn test_column_is_byte_offset_with_non_ascii() {
         "column must be a byte offset, not a char offset"
     );
 }
+
+#[test]
+fn test_span_text_with_crlf_and_multibyte() {
+    // Simulates a Windows checkout: CRLF line endings plus a multibyte
+    // UTF-8 character (em-dash U+2014, 3 bytes) in a doc comment on line 1.
+    // Previously, span_text used str::lines() which strips \r, causing
+    // one byte of drift per CRLF line. After enough lines the computed
+    // byte offset landed inside the em-dash, panicking the slice.
+    //
+    // The bitflags variant `A = 0x1` forces parse_expr → span_text to run,
+    // which is the actual code path that panicked in CI. We assert the
+    // parsed IntFormat is Hex — if span_text returns the wrong slice (due
+    // to \r drift), the format detection sees `= 0` instead of `0x1` and
+    // misclassifies it as Decimal.
+    use crate::{
+        grammar::{ItemDefinitionInner, ModuleItem},
+        parser::{
+            Parser,
+            expressions::{Expr, IntFormat},
+        },
+        span::FileId,
+    };
+
+    let raw = "/// hello — world\r\npub bitflags Foo: u32 {\r\n    A = 0x1,\r\n}\r\n";
+
+    let tokens = tokenize_with_file_id(raw.to_string(), FileId::TEST).unwrap();
+    let mut parser = Parser::new(tokens, FileId::TEST, raw.to_string());
+    let module = parser.parse_module().expect("parse should succeed");
+
+    // Find the bitflags definition and extract variant A's expression.
+    let bd = module
+        .items
+        .iter()
+        .find_map(|item| {
+            if let ModuleItem::Definition { definition } = item {
+                if let ItemDefinitionInner::Bitflags(bd) = &definition.inner {
+                    return Some(bd);
+                }
+            }
+            None
+        })
+        .expect("expected a bitflags definition");
+
+    let stmt = bd
+        .statements()
+        .next()
+        .expect("expected at least one statement");
+    assert_eq!(stmt.name.0, "A");
+    let Expr::IntLiteral { format, .. } = &stmt.expr else {
+        panic!("expected IntLiteral, got {:?}", stmt.expr);
+    };
+    assert_eq!(
+        *format,
+        IntFormat::Hex,
+        "span_text must return '0x1' so format detection classifies as Hex; \
+         with buggy .lines() the \\r drift makes it see '= 0' and classify as Decimal"
+    );
+}

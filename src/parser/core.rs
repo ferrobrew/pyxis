@@ -25,43 +25,16 @@ impl Parser {
         }
     }
 
-    /// Extract text from a span using the source
+    /// Extract text from a span using the source.
+    ///
+    /// Delegates to [`crate::span::span_to_offset`] and
+    /// [`crate::span::span_length`], which are the single source of truth for
+    /// byte-offset computation. See those functions for the rationale on
+    /// using `split('\n')` rather than `lines()` (CRLF safety).
     pub(crate) fn span_text(&self, span: &Span) -> &str {
-        let start_offset = self
-            .source
-            .lines()
-            .take(span.start.line.saturating_sub(1))
-            .map(|line| line.len() + 1)
-            .sum::<usize>()
-            + span.start.column.saturating_sub(1);
-
-        let end_offset = if span.start.line == span.end.line {
-            start_offset + (span.end.column.saturating_sub(span.start.column))
-        } else {
-            let first_line_len = self
-                .source
-                .lines()
-                .nth(span.start.line.saturating_sub(1))
-                .map(|line| line.len())
-                .unwrap_or(0)
-                .saturating_sub(span.start.column.saturating_sub(1));
-            let middle_lines_len: usize = self
-                .source
-                .lines()
-                .skip(span.start.line)
-                .take(
-                    span.end
-                        .line
-                        .saturating_sub(span.start.line)
-                        .saturating_sub(1),
-                )
-                .map(|line| line.len() + 1)
-                .sum();
-            let last_line_len = span.end.column.saturating_sub(1);
-            start_offset + first_line_len + middle_lines_len + last_line_len
-        };
-
-        &self.source[start_offset..end_offset.min(self.source.len())]
+        let start = crate::span::span_to_offset(&self.source, span);
+        let len = crate::span::span_length(&self.source, span);
+        &self.source[start..(start + len).min(self.source.len())]
     }
 
     pub(crate) fn current(&self) -> &Token {
