@@ -104,6 +104,14 @@ impl ItemPath {
         self.0.last()
     }
 
+    /// Clone `self` and append every segment of `path` onto it. Used to resolve
+    /// a qualified path relative to a scope base: `base.join_path(path)`.
+    pub fn join_path(&self, path: &ItemPath) -> ItemPath {
+        let mut out = self.clone();
+        out.0.extend_from_slice(&path.0);
+        out
+    }
+
     /// Check if this path starts with the given prefix.
     /// For example, `a::b::c` starts with `a::b` but not with `a::c`.
     pub fn starts_with(&self, prefix: &ItemPath) -> bool {
@@ -263,6 +271,23 @@ mod path_mapping_tests {
         assert_eq!(
             ItemPath::from_path(Path::new("clock.pyxis")),
             ItemPath::from("clock")
+        );
+    }
+
+    #[test]
+    fn join_path_appends_all_segments() {
+        assert_eq!(
+            ItemPath::from("main").join_path(&ItemPath::from("Outer::Header")),
+            ItemPath::from("main::Outer::Header")
+        );
+        assert_eq!(
+            ItemPath::empty().join_path(&ItemPath::from("Outer::Header")),
+            ItemPath::from("Outer::Header")
+        );
+        // Appending an empty path is a no-op.
+        assert_eq!(
+            ItemPath::from("main").join_path(&ItemPath::empty()),
+            ItemPath::from("main")
         );
     }
 }

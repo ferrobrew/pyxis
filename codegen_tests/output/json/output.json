@@ -9110,8 +9110,8 @@
     "nested_items::Outer": {
       "path": "nested_items::Outer",
       "visibility": "public",
-      "size": 4,
-      "alignment": 4,
+      "size": 8,
+      "alignment": 8,
       "category": "defined",
       "kind": {
         "type": "type",
@@ -9151,11 +9151,11 @@
         "fields": [
           {
             "visibility": "public",
-            "name": "field",
-            "doc": null,
+            "name": "inner",
+            "doc": " Reference a nested item by its qualified name inside the parent's own\n body.",
             "type_ref": {
               "type": "raw",
-              "path": "u32"
+              "path": "nested_items::Outer::InnerFlags"
             },
             "offset": 0,
             "size": 4,
@@ -9163,7 +9163,24 @@
             "is_base": false,
             "source": {
               "file_index": 26,
-              "line": 31
+              "line": 33
+            }
+          },
+          {
+            "visibility": "public",
+            "name": "field",
+            "doc": null,
+            "type_ref": {
+              "type": "raw",
+              "path": "u32"
+            },
+            "offset": 4,
+            "size": 4,
+            "alignment": 4,
+            "is_base": false,
+            "source": {
+              "file_index": 26,
+              "line": 34
             }
           }
         ],
@@ -12084,6 +12101,23 @@
         "fields": [
           {
             "visibility": "public",
+            "name": "header",
+            "doc": " Reference the nested item by its qualified name inside the union body.",
+            "type_ref": {
+              "type": "raw",
+              "path": "unions::Outer::Header"
+            },
+            "offset": 0,
+            "size": 4,
+            "alignment": 4,
+            "is_base": false,
+            "source": {
+              "file_index": 38,
+              "line": 90
+            }
+          },
+          {
+            "visibility": "public",
             "name": "raw",
             "doc": null,
             "type_ref": {
@@ -12096,7 +12130,7 @@
             "is_base": false,
             "source": {
               "file_index": 38,
-              "line": 89
+              "line": 91
             }
           },
           {
@@ -12113,7 +12147,7 @@
             "is_base": false,
             "source": {
               "file_index": 38,
-              "line": 90
+              "line": 92
             }
           }
         ],
@@ -12199,7 +12233,7 @@
             "is_base": false,
             "source": {
               "file_index": 38,
-              "line": 91
+              "line": 93
             }
           },
           {
@@ -12220,7 +12254,7 @@
             "is_base": false,
             "source": {
               "file_index": 38,
-              "line": 92
+              "line": 94
             }
           }
         ],
@@ -12234,7 +12268,7 @@
       },
       "source": {
         "file_index": 38,
-        "line": 90
+        "line": 92
       }
     },
     "unions::OversizedSlot": {
@@ -12712,7 +12746,7 @@
             "is_base": false,
             "source": {
               "file_index": 38,
-              "line": 100
+              "line": 102
             }
           },
           {
@@ -12733,7 +12767,7 @@
             "is_base": false,
             "source": {
               "file_index": 38,
-              "line": 101
+              "line": 103
             }
           }
         ],
@@ -12747,7 +12781,7 @@
       },
       "source": {
         "file_index": 38,
-        "line": 99
+        "line": 101
       }
     },
     "vftable_indices::IndexedVftable": {

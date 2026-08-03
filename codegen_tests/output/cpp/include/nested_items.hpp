@@ -13,9 +13,7 @@ namespace nested_items {
     /// See [`InnerEnum`](@ref nested_items::Outer::InnerEnum), [`InnerType`](@ref nested_items::Outer::InnerType), [`InnerFlags`](@ref nested_items::Outer::InnerFlags), and [`InnerAlias`](@ref nested_items::Outer::InnerAlias).
     ///
     /// You can also qualify them: [`Outer::InnerEnum`](@ref nested_items::Outer::InnerEnum), [`Outer::InnerType`](@ref nested_items::Outer::InnerType).
-    struct alignas(4) Outer {
-        ::std::uint32_t field;
-
+    struct alignas(8) Outer {
         /// An enum nested inside [`Outer`](@ref nested_items::Outer).
         ///
         /// Variants: [`InnerEnum::A`](@ref nested_items::Outer::InnerEnum::A), [`InnerEnum::B`](@ref nested_items::Outer::InnerEnum::B), [`InnerEnum::C`](@ref nested_items::Outer::InnerEnum::C).
@@ -42,7 +40,11 @@ namespace nested_items {
 
         /// A type alias nested inside [`Outer`](@ref nested_items::Outer).
         using InnerAlias = ::std::uint32_t;
+        /// Reference a nested item by its qualified name inside the parent's own
+        /// body.
+        ::nested_items::Outer::InnerFlags inner;
+        ::std::uint32_t field;
     };
-    static_assert(sizeof(Outer) == 0x4);
-    static_assert(alignof(Outer) == 4);
+    static_assert(sizeof(Outer) == 0x8);
+    static_assert(alignof(Outer) == 8);
 } // namespace nested_items
