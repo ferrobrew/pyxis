@@ -1,16 +1,19 @@
 #![cfg_attr(any(), rustfmt::skip)]
-#[repr(C, align(4))]
+#[repr(C, align(8))]
 /// A type with nested declarations.
 ///
 /// See [`InnerEnum`](crate::nested_items::Outer_InnerEnum), [`InnerType`](crate::nested_items::Outer_InnerType), [`InnerFlags`](crate::nested_items::Outer_InnerFlags), and [`InnerAlias`](crate::nested_items::Outer_InnerAlias).
 ///
 /// You can also qualify them: [`Outer::InnerEnum`](crate::nested_items::Outer_InnerEnum), [`Outer::InnerType`](crate::nested_items::Outer_InnerType).
 pub struct Outer {
+    /// Reference a nested item by its qualified name inside the parent's own
+    /// body.
+    pub inner: crate::nested_items::Outer_InnerFlags,
     pub field: u32,
 }
 fn _Outer_size_check() {
     unsafe {
-        ::std::mem::transmute::<[u8; 0x4], Outer>([0u8; 0x4]);
+        ::std::mem::transmute::<[u8; 0x8], Outer>([0u8; 0x8]);
     }
     unreachable!()
 }

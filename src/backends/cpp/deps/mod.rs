@@ -607,6 +607,15 @@ fn record_path(
     if &target_module == module_path {
         return;
     }
+    // A nested item's immediate parent is a *type*, not a module, so
+    // `target.parent()` above is `Outer`, not this module. If the target is
+    // nested inside this same module, its definition lives in this module's
+    // own header — no cross-module include or forward decl is needed (and
+    // including `nested_items::Outer.hpp` would name a header that doesn't
+    // exist). Cross-module nested references are not modeled here.
+    if target.starts_with(module_path) {
+        return;
+    }
     match kind {
         EdgeKind::FullDef => {
             deps.include_modules.insert(target_module);

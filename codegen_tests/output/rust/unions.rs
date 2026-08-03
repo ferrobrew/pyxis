@@ -79,6 +79,8 @@ impl ::core::fmt::Debug for InlineScratchDataUnion {
 /// A union nested inside another union, plus a nested item declaration in a
 /// union body.
 pub union Outer {
+    /// Reference the nested item by its qualified name inside the union body.
+    pub header: ::core::mem::ManuallyDrop<crate::unions::Outer_Header>,
     pub raw: ::core::mem::ManuallyDrop<u32>,
     pub inner: ::core::mem::ManuallyDrop<crate::unions::OuterInnerUnion>,
 }

@@ -39,6 +39,7 @@ mod imports;
 mod inheritance;
 mod min_size;
 mod modules;
+mod nested_items;
 mod pinned;
 mod queries;
 mod type_aliases;

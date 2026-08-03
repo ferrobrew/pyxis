@@ -348,9 +348,20 @@ fn collect_value_refs(
         TypeKind::Ident {
             path, generic_args, ..
         } => {
-            let name = path.last().map(|s| s.as_str()).unwrap_or("");
-            if let NameResolution::Found(p) = index.resolve_name(scope, name) {
-                refs.push(p);
+            if path.len() > 1 {
+                // A qualified type path: resolve it fully so its owner is
+                // awaited, e.g. `Outer::Header` -> `main::Outer::Header`, or
+                // the module-relative absolute `sub::inner::Header`. Leaf-only
+                // fallback could not find either, which is what stalled the
+                // build.
+                if let Some(p) = index.resolve_path(scope, path) {
+                    refs.push(p);
+                }
+            } else {
+                let name = path.last().map(|s| s.as_str()).unwrap_or("");
+                if let NameResolution::Found(p) = index.resolve_name(scope, name) {
+                    refs.push(p);
+                }
             }
             // Generic arguments of a value type are treated as value deps too
             // (conservative — resolving an extra one is harmless; missing one

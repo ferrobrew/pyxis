@@ -68,6 +68,13 @@ pub(super) fn render_struct(
     // system without inheritance is awkward, so we use `void*` as the
     // ABI-compatible escape hatch.
     let is_vftable_struct = name.ends_with("Vftable");
+
+    // Type-declaring nested items (types, unions, enums, bitflags, aliases)
+    // come before the fields so a field inside this struct may reference one
+    // (`Outer::Inner`). Value items (constants, extern values) are emitted
+    // after the fields.
+    super::nested::render_type_declarations(&mut body, &td.nested_item_paths, ctx)?;
+
     for region in &td.regions {
         super::items::render_field(&mut body, region, ctx, is_vftable_struct)?;
     }
@@ -76,13 +83,13 @@ pub(super) fn render_struct(
     render_singleton_declaration(&mut body, name, td)?;
     render_vftable_declarations(&mut body, td, ctx)?;
     render_associated_function_declarations(&mut body, td, ctx)?;
-    render_deleted_special_members(&mut body, name, td)?;
-    super::nested::render_declarations(
+    super::nested::render_value_declarations(
         &mut body,
         &td.nested_item_paths,
         ctx,
         &mut deferred_consts,
     )?;
+    render_deleted_special_members(&mut body, name, td)?;
 
     if body.trim().is_empty() {
         writeln!(out, "{header} {{}};")?;
