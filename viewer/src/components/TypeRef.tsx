@@ -4,10 +4,10 @@ import { getRelativePath } from '../utils/pathUtils';
 import { useDocumentation } from '../contexts/DocumentationContext';
 import { buildItemUrl } from '../utils/navigation';
 
-interface TypeRefProps {
+type TypeRefProps = {
   type: JsonType;
   currentModule?: string;
-}
+};
 
 function getCallingConvention(cc: JsonCallingConvention): string {
   if (cc === 'c') return '';
@@ -29,7 +29,15 @@ export function TypeRef({ type, currentModule = '' }: TypeRefProps) {
           <Link
             to={buildItemUrl(t.path, selectedSource)}
             className={
-              isPredefined ? 'text-kind-type hover:underline' : 'text-kind-module hover:underline'
+              isPredefined
+                ? `
+                text-kind-type
+                hover:underline
+              `
+                : `
+                text-kind-module
+                hover:underline
+              `
             }
           >
             {displayPath}
@@ -74,7 +82,15 @@ export function TypeRef({ type, currentModule = '' }: TypeRefProps) {
             <Link
               to={buildItemUrl(t.base, selectedSource)}
               className={
-                isPredefined ? 'text-kind-type hover:underline' : 'text-kind-module hover:underline'
+                isPredefined
+                  ? `
+                  text-kind-type
+                  hover:underline
+                `
+                  : `
+                  text-kind-module
+                  hover:underline
+                `
               }
             >
               {displayBase}

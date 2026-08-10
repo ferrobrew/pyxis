@@ -11,11 +11,7 @@ impl ServerState {
         let uri = &params.text_document.uri;
 
         let actions = self.import_actions(uri, params.range);
-        Response {
-            id: req.id,
-            result: Some(serde_json::to_value(actions).unwrap()),
-            error: None,
-        }
+        response_with_json(req.id, &actions)
     }
 
     /// "Import `path`" quick-fixes for an unresolved type reference under the
@@ -196,8 +192,8 @@ pub(crate) fn render_use_group(paths: &[&[String]]) -> String {
             }
         })
         .collect();
-    if entries.len() == 1 {
-        entries.into_iter().next().unwrap()
+    if let [entry] = entries.as_slice() {
+        entry.clone()
     } else {
         format!("{{{}}}", entries.join(", "))
     }

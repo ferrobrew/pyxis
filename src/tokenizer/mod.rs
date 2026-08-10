@@ -122,7 +122,18 @@ impl Lexer {
         let start = self.current_location();
         let start_pos = self.pos;
 
-        let ch = self.peek().unwrap();
+        // `tokenize` verifies `!is_eof()` before calling `next_token`, so the
+        // input has a character here; reaching this with `None` is an internal
+        // lexer invariant violation (ICE-tier), reported as such.
+        let ch = match self.peek() {
+            Some(ch) => ch,
+            // ICE-tier: tokenize guards `!is_eof()` before calling next_token.
+            #[expect(
+                clippy::unreachable,
+                reason = "tokenize guards !is_eof() before next_token"
+            )]
+            None => unreachable!("next_token called at EOF"),
+        };
 
         // Handle comments
         if ch == '/' {

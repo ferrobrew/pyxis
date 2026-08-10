@@ -270,11 +270,7 @@ impl ServerState {
                 locs
             })
             .unwrap_or_default();
-        Response {
-            id: req.id,
-            result: Some(serde_json::to_value(locations).unwrap()),
-            error: None,
-        }
+        response_with_json(req.id, &locations)
     }
 
     /// textDocument/documentHighlight — occurrences within the current file only.
@@ -299,23 +295,23 @@ impl ServerState {
                     .collect()
             })
             .unwrap_or_default();
-        Response {
-            id: req.id,
-            result: Some(serde_json::to_value(highlights).unwrap()),
-            error: None,
-        }
+        response_with_json(req.id, &highlights)
     }
 
     /// textDocument/prepareRename — validate the cursor is on a renameable
     /// identifier (a user-defined type/reference/use-leaf, not a builtin) and
     /// return its range + current text.
     pub fn handle_prepare_rename(&self, req: Request) -> Response {
-        let result = self
-            .prepare_rename(&req)
-            .map(|r| serde_json::to_value(r).unwrap());
+        let result = match self.prepare_rename(&req) {
+            Some(r) => match json_value(&r) {
+                Ok(v) => v,
+                Err(e) => return error_response(req.id, e),
+            },
+            None => serde_json::Value::Null,
+        };
         Response {
             id: req.id,
-            result: Some(result.unwrap_or(serde_json::Value::Null)),
+            result: Some(result),
             error: None,
         }
     }
@@ -390,11 +386,7 @@ impl ServerState {
         // occurrence span is exactly the identifier token, so renaming a leaf of
         // a path leaves the rest of the path intact.
         let Some(target) = self.symbol_at(uri, &loc) else {
-            return Response {
-                id: req.id,
-                result: Some(serde_json::to_value(WorkspaceEdit::default()).unwrap()),
-                error: None,
-            };
+            return response_with_json(req.id, &WorkspaceEdit::default());
         };
 
         let mut edits: HashMap<Uri, Vec<TextEdit>> = HashMap::new();
@@ -411,11 +403,7 @@ impl ServerState {
             change_annotations: None,
         };
 
-        Response {
-            id: req.id,
-            result: Some(serde_json::to_value(workspace_edit).unwrap()),
-            error: None,
-        }
+        response_with_json(req.id, &workspace_edit)
     }
 }
 
@@ -425,7 +413,9 @@ pub(crate) fn is_valid_identifier(s: &str) -> bool {
         return false;
     }
     let mut chars = s.chars();
-    let first = chars.next().unwrap();
+    let Some(first) = chars.next() else {
+        return false;
+    };
     if !first.is_alphabetic() && first != '_' {
         return false;
     }

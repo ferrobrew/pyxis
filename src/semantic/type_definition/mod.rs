@@ -7,6 +7,11 @@ use crate::{
     },
 };
 
+/// The display name used for a region or field with no declared name.
+/// Shared across the type/union builders and the backends so the fallback
+/// reads consistently everywhere.
+pub(crate) const UNNAMED: &str = "unnamed";
+
 #[cfg(test)]
 use crate::span::StripLocations;
 

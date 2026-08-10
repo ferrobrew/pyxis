@@ -5,10 +5,23 @@ use serde::{Deserialize, Serialize};
 
 use crate::semantic::types::{CallingConvention, ItemCategory, Visibility};
 
-// If changing the structure, ensure you rerun `cargo run -- gen-types` to
-// update the TypeScript definitions. When making a breaking change to the
-// shape, bump `CURRENT_SCHEMA_VERSION` so downstream consumers can detect
-// the new format.
+// SYNCHRONISATION NOTICE — read this if you touch the JSON wire shape:
+//
+// The Rust structs in this file derive `specta::Type` and generate
+// `types/json.ts` (via `cargo run -p pyxis-driver -- gen-types`), and the
+// viewer validates inbound documents against a zod schema that mirrors the
+// same shape (`viewer/src/utils/jsonDocumentationSchema.ts`). Any change to
+// one of the three must be reflected in the other two:
+//
+//   - Rust structs:        this file
+//   - generated types:     types/json.ts  (regenerate with `cargo run -p pyxis-driver -- gen-types`)
+//   - zod schema:          viewer/src/utils/jsonDocumentationSchema.ts
+//
+// There is no automated tie between the Rust source and the zod schema; this
+// is a documented convention. See the matching notice in
+// `jsonDocumentationSchema.ts`. When making a breaking change to the shape,
+// bump `CURRENT_SCHEMA_VERSION` so downstream consumers can detect the new
+// format.
 
 /// Current JSON schema version. Bump on any breaking shape change.
 ///

@@ -1,9 +1,9 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 
-interface LigatureContextType {
+type LigatureContextType = {
   ligatures: boolean;
   toggleLigatures: () => void;
-}
+};
 
 const LigatureContext = createContext<LigatureContextType | undefined>(undefined);
 

@@ -6,6 +6,12 @@
 //! - each segment of a fully-qualified path (`a::b::C`) resolving independently
 //!   (leaf → type, earlier segments → their module files).
 
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::unreachable
+)]
 use lsp_server::{Request, RequestId};
 use lsp_types::{Position, TextDocumentIdentifier, TextDocumentPositionParams};
 use pyxis_lsp::state::ServerState;

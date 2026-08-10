@@ -36,11 +36,7 @@ impl ServerState {
             }
         }
 
-        Response {
-            id: req.id,
-            result: Some(serde_json::to_value(DocumentSymbolResponse::Nested(symbols)).unwrap()),
-            error: None,
-        }
+        response_with_json(req.id, &DocumentSymbolResponse::Nested(symbols))
     }
 
     /// workspace/symbol
@@ -82,11 +78,7 @@ impl ServerState {
             }
         }
 
-        Response {
-            id: req.id,
-            result: Some(serde_json::to_value(symbols).unwrap()),
-            error: None,
-        }
+        response_with_json(req.id, &symbols)
     }
 
     /// textDocument/formatting
@@ -136,11 +128,7 @@ impl ServerState {
                     new_text: formatted,
                 };
 
-                Response {
-                    id: req.id,
-                    result: Some(serde_json::to_value(vec![edit]).unwrap()),
-                    error: None,
-                }
+                response_with_json(req.id, &vec![edit])
             }
             Err(_) => Response {
                 id: req.id,
@@ -194,11 +182,7 @@ impl ServerState {
             }
         }
 
-        Response {
-            id: req.id,
-            result: Some(serde_json::to_value(lenses).unwrap()),
-            error: None,
-        }
+        response_with_json(req.id, &lenses)
     }
 
     /// textDocument/inlayHint
@@ -261,11 +245,7 @@ impl ServerState {
             }
         }
 
-        Response {
-            id: req.id,
-            result: Some(serde_json::to_value(hints).unwrap()),
-            error: None,
-        }
+        response_with_json(req.id, &hints)
     }
 
     /// textDocument/semanticTokens/full — resolution-aware tokens layered over
@@ -282,11 +262,7 @@ impl ServerState {
             result_id: None,
             data,
         };
-        Response {
-            id: req.id,
-            result: Some(serde_json::to_value(result).unwrap()),
-            error: None,
-        }
+        response_with_json(req.id, &result)
     }
 
     fn semantic_tokens(&self, uri: &Uri) -> Vec<lsp_types::SemanticToken> {
@@ -420,11 +396,7 @@ impl ServerState {
             .ok()
             .map(|p| self.folding_ranges(&p.text_document.uri))
             .unwrap_or_default();
-        Response {
-            id: req.id,
-            result: Some(serde_json::to_value(ranges).unwrap()),
-            error: None,
-        }
+        response_with_json(req.id, &ranges)
     }
 
     fn folding_ranges(&self, uri: &Uri) -> Vec<FoldingRange> {

@@ -88,11 +88,13 @@ impl ParseError {
                     .iter()
                     .map(|t| format!("{t:?}"))
                     .collect();
-                format!(
-                    "{}, or {:?}",
-                    all_but_last.join(", "),
-                    expected.last().unwrap()
-                )
+                // The `_` arm only fires when `expected` has more than one
+                // entry (the single-entry case is matched above), so the last
+                // element exists.
+                let Some(last) = expected.last() else {
+                    return "(expected at least one token)".to_string();
+                };
+                format!("{}, or {:?}", all_but_last.join(", "), last)
             }
         }
     }
@@ -125,9 +127,9 @@ impl ParseError {
             .finish();
 
         let mut buffer = Vec::new();
-        report
-            .write((filename, Source::from(source)), &mut buffer)
-            .expect("writing to Vec should not fail");
+        // Writing an ariadne report into a `Vec<u8>` cannot fail — the `Write`
+        // impl on `Vec` is infallible — so the result is deliberately dropped.
+        let _ = report.write((filename, Source::from(source)), &mut buffer);
         String::from_utf8_lossy(&buffer).to_string()
     }
 

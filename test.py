@@ -175,6 +175,15 @@ def main():
         shell=sys.platform == "win32",
     )
 
+    # Run the viewer's unit tests (vitest). These cover the JSON boundary
+    # validator, so a schema-vs-wire divergence fails CI rather than only a
+    # local run.
+    run_command(
+        ["npm", "test"],
+        cwd="viewer",
+        shell=sys.platform == "win32",
+    )
+
     print(f"\n{'=' * 60}")
     print("All checks passed!")
     print(f"{'=' * 60}\n")

@@ -8,11 +8,11 @@ import { typeToString, WRAP_COLUMN } from '../utils/typeString';
 import { useDocumentation } from '../contexts/DocumentationContext';
 import { Markdown } from './Markdown';
 
-interface FunctionDisplayProps {
+type FunctionDisplayProps = {
   func: JsonFunction;
   modulePath: string;
   id?: string;
-}
+};
 
 export function FunctionDisplay({ func, modulePath, id }: FunctionDisplayProps) {
   const location = useLocation();
@@ -68,15 +68,25 @@ export function FunctionDisplay({ func, modulePath, id }: FunctionDisplayProps) 
     <div
       id={id}
       onClick={handleClick}
-      className="group relative cursor-pointer border-b border-edge p-3 transition-colors last:border-b-0 hover:bg-surface-2"
+      className="
+        group relative cursor-pointer border-b border-edge p-3 transition-colors
+        last:border-b-0
+        hover:bg-surface-2
+      "
     >
       {(address || id) && (
-        <div className="absolute right-2 top-2 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+        <div
+          className="
+          absolute top-2 right-2 flex items-center gap-1 opacity-0
+          transition-opacity
+          group-hover:opacity-100
+        "
+        >
           {address && <CopyButton value={address} title="Copy address" label="copy addr" />}
           {id && <AnchorLink targetId={id} label="link" />}
         </div>
       )}
-      <div className="font-mono text-sm leading-relaxed">
+      <div className="font-mono text-sm/relaxed">
         <FunctionAttributes func={func} />
         <div>
           {!isPrivate && <span className="text-fg-muted">pub </span>}

@@ -16,10 +16,10 @@ hljs.registerLanguage('c++', cpp);
 hljs.registerLanguage('rust', rust);
 hljs.registerLanguage('json', json);
 
-interface CodeBlockProps {
+type CodeBlockProps = {
   code: string;
   language?: string;
-}
+};
 
 export function CodeBlock({ code, language }: CodeBlockProps) {
   const codeRef = useRef<HTMLElement>(null);
@@ -41,8 +41,21 @@ export function CodeBlock({ code, language }: CodeBlockProps) {
   }, [code, language]);
 
   return (
-    <pre className="text-xs md:text-sm font-mono bg-surface overflow-x-auto p-3">
-      <code ref={codeRef} className={language ? `language-${language.toLowerCase()}` : ''}>
+    <pre
+      className="
+      overflow-x-auto bg-surface p-3 font-mono text-xs
+      md:text-sm
+    "
+    >
+      <code
+        ref={codeRef}
+        // The highlight.js language class (`language-<lang>`) is inherently
+        // dynamic — the language ID comes from the documented content and
+        // cannot be enumerated statically, so this is an enumerated allowlist
+        // case (not literal-fragment interpolation of a Tailwind utility).
+        // eslint-disable-next-line better-tailwindcss/no-concatenated-classes
+        className={language ? `language-${language.toLowerCase()}` : ''}
+      >
         {code}
       </code>
     </pre>

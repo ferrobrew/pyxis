@@ -11,21 +11,22 @@ import {
   extractSourceId,
 } from '../utils/navigation';
 import { findModule } from '../utils/pathUtils';
+import { parseJsonDocumentation } from '../utils/jsonDocumentationSchema';
 
 const INDEX_URL =
   'https://raw.githubusercontent.com/ferrobrew/pyxis-defs/refs/heads/main/docs/index.json';
 const BASE_URL = 'https://raw.githubusercontent.com/ferrobrew/pyxis-defs/refs/heads/main/';
 
-interface DocEntry {
+type DocEntry = {
   name: string;
   path: string;
   last_modified_iso8601: string;
-}
+};
 
-interface DocsIndex {
+type DocsIndex = {
   generated_iso8601: string;
   docs: DocEntry[];
-}
+};
 
 // Try to preserve the current module/item position when switching
 // projects. Returns true if the position exists in the new project and
@@ -132,14 +133,23 @@ export function FileUpload() {
       if (isLocalFile) return; // We have a local file loaded, don't overwrite it
     }
 
-    // Load the documentation
-    setIsLoading(true);
+    // Load the documentation. The loading flag flips inside the async
+    // continuation (not synchronously in the effect body), which is what the
+    // react-hooks set-state-in-effect rule requires.
     fetch(BASE_URL + docEntry.path)
-      .then((response) => {
+      .then(async (response) => {
+        setIsLoading(true);
         if (!response.ok) {
           throw new Error(`Failed to fetch: ${response.statusText}`);
         }
-        return response.json();
+        const parsed = parseJsonDocumentation(await response.text());
+        if (!parsed.ok) {
+          throw new Error(parsed.error);
+        }
+        // The schema validated the shape; the only remaining step is
+        // asserting the validated value is a `JsonDocumentation`, which is
+        // exactly what the boundary check guarantees.
+        return parsed.document as JsonDocumentation;
       })
       .then((json: JsonDocumentation) => {
         setDocumentation(json);
@@ -190,7 +200,12 @@ export function FileUpload() {
 
     try {
       const text = await file.text();
-      const json = JSON.parse(text) as JsonDocumentation;
+      const parsed = parseJsonDocumentation(text);
+      if (!parsed.ok) {
+        alert('Error parsing JSON file. Please ensure it is a valid Pyxis documentation file.');
+        return;
+      }
+      const json = parsed.document as JsonDocumentation;
       setDocumentation(json);
       setFileName(file.name);
       setSelectedSource('local'); // Ensure selectedSource is set to 'local' after upload
@@ -254,7 +269,11 @@ export function FileUpload() {
       if (!response.ok) {
         throw new Error(`Failed to fetch: ${response.statusText}`);
       }
-      const json = (await response.json()) as JsonDocumentation;
+      const parsed = parseJsonDocumentation(await response.text());
+      if (!parsed.ok) {
+        throw new Error(parsed.error);
+      }
+      const json = parsed.document as JsonDocumentation;
       setDocumentation(json);
       setFileName(docEntry.name);
 
@@ -313,8 +332,13 @@ export function FileUpload() {
   ];
 
   return (
-    <div className="flex items-stretch gap-2 flex-nowrap">
-      <div className="min-w-0 flex-1 lg:flex-initial">
+    <div className="flex flex-nowrap items-stretch gap-2">
+      <div
+        className="
+        min-w-0 flex-1
+        lg:flex-initial
+      "
+      >
         <CustomDropdown
           value={selectedSource}
           onChange={handleSourceChange}
@@ -334,7 +358,11 @@ export function FileUpload() {
           />
           <button
             onClick={handleButtonClick}
-            className="px-3 py-2 text-sm font-medium border border-edge rounded-md bg-surface text-fg hover:bg-surface-2 transition-colors flex-shrink-0 whitespace-nowrap"
+            className="
+              shrink-0 rounded-md border border-edge bg-surface px-3 py-2
+              text-sm font-medium whitespace-nowrap text-fg transition-colors
+              hover:bg-surface-2
+            "
           >
             Browse
           </button>
@@ -342,7 +370,7 @@ export function FileUpload() {
       )}
 
       {isLoading && (
-        <span className="text-sm text-fg-muted whitespace-nowrap self-center">Loading...</span>
+        <span className="self-center text-sm whitespace-nowrap text-fg-muted">Loading...</span>
       )}
     </div>
   );

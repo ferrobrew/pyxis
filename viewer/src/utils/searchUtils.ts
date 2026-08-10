@@ -1,9 +1,9 @@
-import type { JsonDocumentation, JsonModule } from '@pyxis/types';
+import type { JsonDocumentation, JsonItemKind, JsonModule } from '@pyxis/types';
 import type { ItemType } from './colors';
 
 export type SearchKind = ItemType | 'module';
 
-export interface SearchResult {
+export type SearchResult = {
   /** The matched identifier, shown prominently. */
   name: string;
   /** Owning context (module or parent type), shown dimmed for disambiguation. */
@@ -12,7 +12,7 @@ export interface SearchResult {
   score: number;
   /** Where to navigate: an item or module page, optionally with an anchor. */
   target: { kind: 'module' | 'item'; path: string; anchor?: string };
-}
+};
 
 function scoreName(name: string, query: string): number {
   const n = name.toLowerCase();
@@ -25,6 +25,23 @@ function scoreName(name: string, query: string): number {
 function parentPath(path: string): string {
   const idx = path.lastIndexOf('::');
   return idx === -1 ? '' : path.slice(0, idx);
+}
+
+/// Map a wire `JsonItemKind` discriminator to the local search-kind union.
+/// Explicit and exhaustive rather than a cast: adding a wire kind is a
+/// compile error here instead of an untyped passthrough.
+function searchKindForItem(kind: JsonItemKind['type']): SearchKind {
+  switch (kind) {
+    case 'type':
+    case 'enum':
+    case 'bitflags':
+    case 'union':
+    case 'type_alias':
+    case 'constant':
+      return kind;
+    case 'extern_value':
+      return 'extern';
+  }
 }
 
 /**
@@ -55,8 +72,7 @@ export function searchDocumentation(doc: JsonDocumentation, query: string): Sear
     let itemScore = scoreName(name, q);
     if (itemScore === 0 && path.toLowerCase().includes(q)) itemScore = 40;
     if (itemScore === 0 && item.kind.doc && item.kind.doc.toLowerCase().includes(q)) itemScore = 20;
-    const itemKind: SearchKind =
-      item.kind.type === 'extern_value' ? 'extern' : (item.kind.type as SearchKind);
+    const itemKind: SearchKind = searchKindForItem(item.kind.type);
     push(name, parentPath(path), itemKind, itemScore, itemTarget);
 
     const kind = item.kind;

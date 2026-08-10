@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useMemo, type ReactNode } from 're
 import type { JsonDocumentation } from '@pyxis/types';
 import { getPredefinedTypes } from '../utils/pathUtils';
 
-interface DocumentationContextType {
+type DocumentationContextType = {
   documentation: JsonDocumentation | null;
   setDocumentation: (doc: JsonDocumentation | null) => void;
   fileName: string | null;
@@ -10,7 +10,7 @@ interface DocumentationContextType {
   selectedSource: string;
   setSelectedSource: (source: string) => void;
   predefinedTypes: Set<string>;
-}
+};
 
 const DocumentationContext = createContext<DocumentationContextType | undefined>(undefined);
 

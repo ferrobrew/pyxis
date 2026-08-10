@@ -2,6 +2,12 @@
 //!
 //! These tests verify the full request/response cycle including serialization.
 
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::unreachable
+)]
 use lsp_server::{Connection, Message, Request, RequestId};
 use lsp_types::{
     ClientCapabilities, DidOpenTextDocumentParams, InitializeParams, InitializedParams, Position,

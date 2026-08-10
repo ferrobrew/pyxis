@@ -4,9 +4,7 @@
 //! derive from the table below, so renaming or adding a macro is one
 //! edit in one place.
 
-use std::fmt::Write as _;
-
-use crate::semantic::types::CallingConvention;
+use crate::{infallible_write, infallible_writeln, semantic::types::CallingConvention};
 
 /// One entry per calling-convention shim macro. `name` is the
 /// `PYXIS_*` identifier that lands in emitted code; the keyword /
@@ -80,37 +78,37 @@ pub fn macro_emit(cc: CallingConvention) -> &'static str {
 ///    on hosts where the calling convention is meaningless.
 pub fn runtime_header_defines() -> String {
     let mut out = String::new();
-    writeln!(out, "#if defined(_MSC_VER)").unwrap();
+    infallible_writeln!(out, "#if defined(_MSC_VER)");
     for m in PYXIS_CC_MACROS {
-        writeln!(out, "#  define {} {}", m.name, m.msvc_keyword).unwrap();
+        infallible_writeln!(out, "#  define {} {}", m.name, m.msvc_keyword);
     }
-    writeln!(
+    infallible_writeln!(
         out,
         "#elif (defined(__i386__) || defined(_M_IX86)) && (defined(__GNUC__) || defined(__clang__))"
-    )
-    .unwrap();
+    );
     for m in PYXIS_CC_MACROS {
         match m.gnu_i386_attr {
-            Some(attr) => writeln!(out, "#  define {} __attribute__(({}))", m.name, attr).unwrap(),
+            Some(attr) => {
+                infallible_writeln!(out, "#  define {} __attribute__(({}))", m.name, attr)
+            }
             // No equivalent in clang/GCC on i386; the in-header comment
             // explains why a downstream reader sees an empty macro here.
             None => {
-                writeln!(
+                infallible_writeln!(
                     out,
                     "// `{}` expands to nothing on this branch — clang/GCC \
                      don't have a real equivalent on i386; binaries that need \
                      the convention's semantics must build against the MSVC arm.",
                     m.name
-                )
-                .unwrap();
-                writeln!(out, "#  define {}", m.name).unwrap();
+                );
+                infallible_writeln!(out, "#  define {}", m.name);
             }
         }
     }
-    writeln!(out, "#else").unwrap();
+    infallible_writeln!(out, "#else");
     for m in PYXIS_CC_MACROS {
-        writeln!(out, "#  define {}", m.name).unwrap();
+        infallible_writeln!(out, "#  define {}", m.name);
     }
-    write!(out, "#endif").unwrap();
+    infallible_write!(out, "#endif");
     out
 }

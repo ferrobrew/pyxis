@@ -3,8 +3,9 @@ import { TypeRef } from './TypeRef';
 import { SmallBadge } from './Badge';
 import { SourceName } from './SourceLink';
 import { Markdown } from './Markdown';
+import { cn } from '../utils/styles';
 
-interface FieldTableProps {
+type FieldTableProps = {
   fields: JsonRegion[];
   modulePath: string;
   /**
@@ -13,12 +14,12 @@ interface FieldTableProps {
    * and is dropped in favour of a note that says so once.
    */
   showOffsets?: boolean;
-}
+};
 
 export function FieldTable({ fields, modulePath, showOffsets = true }: FieldTableProps) {
   return (
     <div className="overflow-x-auto">
-      <table className="w-full border border-edge rounded-md">
+      <table className="w-full rounded-md border border-edge">
         <thead className="bg-surface">
           <tr>
             {showOffsets && (
@@ -46,7 +47,7 @@ export function FieldTable({ fields, modulePath, showOffsets = true }: FieldTabl
                 className="border-b border-edge"
               >
                 {showOffsets && (
-                  <td className="px-4 py-2 text-sm text-fg-muted font-mono">
+                  <td className="px-4 py-2 font-mono text-sm text-fg-muted">
                     0x{field.offset.toString(16).toUpperCase()}
                   </td>
                 )}
@@ -57,15 +58,22 @@ export function FieldTable({ fields, modulePath, showOffsets = true }: FieldTabl
                     field.name || '<anonymous>'
                   )}
                 </td>
-                <td className={`whitespace-nowrap px-4 py-2 font-mono text-sm ${typeClasses}`}>
+                <td
+                  className={cn(
+                    `
+                  px-4 py-2 font-mono text-sm whitespace-nowrap
+                `,
+                    typeClasses
+                  )}
+                >
                   <TypeRef type={field.type_ref} currentModule={modulePath} />
                 </td>
                 <td className="px-4 py-2 text-sm text-fg-muted">{field.size}</td>
                 <td className="px-4 py-2 text-sm text-fg-muted">{field.alignment}</td>
-                <td className="whitespace-nowrap px-4 py-2 text-sm">
+                <td className="px-4 py-2 text-sm whitespace-nowrap">
                   {field.is_base && <SmallBadge variant="violet">base</SmallBadge>}
                   {field.doc && (
-                    <div className="text-fg-muted mt-1">
+                    <div className="mt-1 text-fg-muted">
                       <Markdown docLinks={field.doc_links}>{field.doc}</Markdown>
                     </div>
                   )}

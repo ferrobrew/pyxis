@@ -52,6 +52,13 @@ impl JsonDocLink {
                     K::Field => format!("field-{name}"),
                     K::Variant => format!("variant-{name}"),
                     K::Flag => format!("flag-{name}"),
+                    // Constant/ExternValue members are skipped by the caller
+                    // before this match; the arm exists only for exhaustiveness
+                    // and is unreachable.
+                    #[expect(
+                        clippy::unreachable,
+                        reason = "Constant/ExternValue filtered before this match"
+                    )]
                     K::Constant | K::ExternValue => unreachable!("handled above"),
                 };
                 JsonDocLink {

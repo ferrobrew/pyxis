@@ -2,6 +2,9 @@ mod equals_ignoring_location;
 pub use equals_ignoring_location::*;
 
 #[cfg(test)]
+mod proptests;
+
+#[cfg(test)]
 mod strip_locations;
 #[cfg(test)]
 pub use strip_locations::*;

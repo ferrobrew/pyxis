@@ -2,15 +2,30 @@
 //! `rust_module_prefix` (so refs become `crate::<prefix>::...`), a custom
 //! root file name (`mod.rs` instead of `lib.rs`), and explicit `pub use`
 //! re-exports rewritten through the prefix.
+//!
+//! This test exercises emitted output layout, which the compiler writes to a
+//! real directory (there is no in-memory output seam), so it writes to a
+//! per-run directory under `target/test-artifacts` — inside the crate's own
+//! workspace, never `std::env::temp_dir()` — and cleans it up afterwards.
+//! The input side is staged the same way; the sources themselves are simple
+//! enough that the filesystem staging carries no behavioral coupling.
 
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::unreachable
+)]
 use std::path::{Path, PathBuf};
 
 use pyxis::{Backend, BuildOptions, grammar::ItemPath, source_store::FileStore};
 
-/// Create a fresh scratch directory for this test, removing any leftovers
-/// from a previous run.
+/// Workspace-local scratch directory for emitted-output tests. Resolved from
+/// `CARGO_MANIFEST_DIR` (never CWD) so the test is hermetic, and the path is
+/// unique per invocation.
 fn scratch_dir(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("pyxis_test_{name}"));
+    let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/test-artifacts");
+    let dir = base.join(format!("{name}_{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     dir

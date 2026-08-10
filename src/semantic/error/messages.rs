@@ -98,7 +98,15 @@ impl SemanticError {
             SemanticError::UseItemNotFound { path, .. } => {
                 format!("Item in use statement not found: `{path}`")
             }
-            _ => unreachable!(),
+            // The outer `error_message` match routes each variant to its
+            // category sub-function exhaustively, so this catch-all is
+            // unreachable. Kept so a future variant addition fails at the
+            // routing match rather than silently falling through here.
+            #[expect(
+                clippy::unreachable,
+                reason = "outer error_message routing is exhaustive"
+            )]
+            _ => unreachable!("routing in error_message is exhaustive; this arm is unreachable"),
         }
     }
 
@@ -125,7 +133,15 @@ impl SemanticError {
                     "`for {target}` on a `backend` block in module `{module}` resolves to a type defined in module `{defined_in}`; attribution must target a type defined in the same module"
                 )
             }
-            _ => unreachable!(),
+            // The outer `error_message` match routes each variant to its
+            // category sub-function exhaustively, so this catch-all is
+            // unreachable. Kept so a future variant addition fails at the
+            // routing match rather than silently falling through here.
+            #[expect(
+                clippy::unreachable,
+                reason = "outer error_message routing is exhaustive"
+            )]
+            _ => unreachable!("routing in error_message is exhaustive; this arm is unreachable"),
         }
     }
 
@@ -214,7 +230,15 @@ impl SemanticError {
             } => {
                 format!("Attribute `{attribute_name}` must be written as {expected}")
             }
-            _ => unreachable!(),
+            // The outer `error_message` match routes each variant to its
+            // category sub-function exhaustively, so this catch-all is
+            // unreachable. Kept so a future variant addition fails at the
+            // routing match rather than silently falling through here.
+            #[expect(
+                clippy::unreachable,
+                reason = "outer error_message routing is exhaustive"
+            )]
+            _ => unreachable!("routing in error_message is exhaustive; this arm is unreachable"),
         }
     }
 
@@ -258,7 +282,15 @@ impl SemanticError {
                     )
                 }
             }
-            _ => unreachable!(),
+            // The outer `error_message` match routes each variant to its
+            // category sub-function exhaustively, so this catch-all is
+            // unreachable. Kept so a future variant addition fails at the
+            // routing match rather than silently falling through here.
+            #[expect(
+                clippy::unreachable,
+                reason = "outer error_message routing is exhaustive"
+            )]
+            _ => unreachable!("routing in error_message is exhaustive; this arm is unreachable"),
         }
     }
 
@@ -338,7 +370,15 @@ impl SemanticError {
                      which has no representable layout in backends that lack zero-size objects"
                 )
             }
-            _ => unreachable!(),
+            // The outer `error_message` match routes each variant to its
+            // category sub-function exhaustively, so this catch-all is
+            // unreachable. Kept so a future variant addition fails at the
+            // routing match rather than silently falling through here.
+            #[expect(
+                clippy::unreachable,
+                reason = "outer error_message routing is exhaustive"
+            )]
+            _ => unreachable!("routing in error_message is exhaustive; this arm is unreachable"),
         }
     }
 
@@ -399,7 +439,15 @@ impl SemanticError {
                      be reachable. Declare it in the enclosing type, or give the union a name."
                 )
             }
-            _ => unreachable!(),
+            // The outer `error_message` match routes each variant to its
+            // category sub-function exhaustively, so this catch-all is
+            // unreachable. Kept so a future variant addition fails at the
+            // routing match rather than silently falling through here.
+            #[expect(
+                clippy::unreachable,
+                reason = "outer error_message routing is exhaustive"
+            )]
+            _ => unreachable!("routing in error_message is exhaustive; this arm is unreachable"),
         }
     }
 
@@ -443,7 +491,15 @@ impl SemanticError {
             SemanticError::VftableMustBeFirst { item_path, .. } => {
                 format!("Vftable field must precede all fields in type `{item_path}`")
             }
-            _ => unreachable!(),
+            // The outer `error_message` match routes each variant to its
+            // category sub-function exhaustively, so this catch-all is
+            // unreachable. Kept so a future variant addition fails at the
+            // routing match rather than silently falling through here.
+            #[expect(
+                clippy::unreachable,
+                reason = "outer error_message routing is exhaustive"
+            )]
+            _ => unreachable!("routing in error_message is exhaustive; this arm is unreachable"),
         }
     }
 
@@ -500,7 +556,15 @@ impl SemanticError {
                     "bitflags `{item_path}` is marked as defaultable but has no default value set"
                 )
             }
-            _ => unreachable!(),
+            // The outer `error_message` match routes each variant to its
+            // category sub-function exhaustively, so this catch-all is
+            // unreachable. Kept so a future variant addition fails at the
+            // routing match rather than silently falling through here.
+            #[expect(
+                clippy::unreachable,
+                reason = "outer error_message routing is exhaustive"
+            )]
+            _ => unreachable!("routing in error_message is exhaustive; this arm is unreachable"),
         }
     }
 
@@ -549,7 +613,15 @@ impl SemanticError {
             } => {
                 format!("field `{field_name}` of type `{item_path}` is not a cloneable type")
             }
-            _ => unreachable!(),
+            // The outer `error_message` match routes each variant to its
+            // category sub-function exhaustively, so this catch-all is
+            // unreachable. Kept so a future variant addition fails at the
+            // routing match rather than silently falling through here.
+            #[expect(
+                clippy::unreachable,
+                reason = "outer error_message routing is exhaustive"
+            )]
+            _ => unreachable!("routing in error_message is exhaustive; this arm is unreachable"),
         }
     }
 
@@ -610,7 +682,15 @@ impl SemanticError {
             SemanticError::StrTypeNotConst { .. } => {
                 "`str` type is only allowed on `const` declarations".to_string()
             }
-            _ => unreachable!(),
+            // The outer `error_message` match routes each variant to its
+            // category sub-function exhaustively, so this catch-all is
+            // unreachable. Kept so a future variant addition fails at the
+            // routing match rather than silently falling through here.
+            #[expect(
+                clippy::unreachable,
+                reason = "outer error_message routing is exhaustive"
+            )]
+            _ => unreachable!("routing in error_message is exhaustive; this arm is unreachable"),
         }
     }
 }

@@ -72,13 +72,11 @@ impl Parser {
 
     pub(crate) fn expect_ident(&mut self) -> Result<(Ident, Span), ParseError> {
         match self.peek() {
-            TokenKind::Ident(_) => {
-                let token = self.advance();
-                if let TokenKind::Ident(name) = token.kind {
-                    Ok((Ident(name), token.location.span))
-                } else {
-                    unreachable!()
-                }
+            TokenKind::Ident(name) => {
+                let ident = Ident(name.clone());
+                let span = self.current().location.span;
+                self.advance();
+                Ok((ident, span))
             }
             TokenKind::Underscore => {
                 let token = self.advance();

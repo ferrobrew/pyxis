@@ -36,14 +36,10 @@ impl ServerState {
         // 0. A doc-comment cross-reference link → jump to the referenced member
         //    (impl/vftable method, field) or type.
         if let Some((_span, location, _hover)) = self.doc_link_at(uri, &loc) {
-            return Response {
-                id: req.id,
-                result: Some(
-                    serde_json::to_value(lsp_types::GotoDefinitionResponse::Scalar(location))
-                        .unwrap(),
-                ),
-                error: None,
-            };
+            return response_with_json(
+                req.id,
+                &lsp_types::GotoDefinitionResponse::Scalar(location),
+            );
         }
 
         // 1. Cursor on a type or import reference (e.g. `Camera` in
@@ -72,14 +68,10 @@ impl ServerState {
             {
                 let range = pyxis_span_to_lsp_range(target_content, &rd.name_span);
                 let location = lsp_types::Location { uri: rd.uri, range };
-                return Response {
-                    id: req.id,
-                    result: Some(
-                        serde_json::to_value(lsp_types::GotoDefinitionResponse::Scalar(location))
-                            .unwrap(),
-                    ),
-                    error: None,
-                };
+                return response_with_json(
+                    req.id,
+                    &lsp_types::GotoDefinitionResponse::Scalar(location),
+                );
             }
             // b) Module segment → jump to the top of its file.
             if let Some(target_uri) = self.module_uri(&module_path, uri) {
@@ -96,14 +88,10 @@ impl ServerState {
                         },
                     },
                 };
-                return Response {
-                    id: req.id,
-                    result: Some(
-                        serde_json::to_value(lsp_types::GotoDefinitionResponse::Scalar(location))
-                            .unwrap(),
-                    ),
-                    error: None,
-                };
+                return response_with_json(
+                    req.id,
+                    &lsp_types::GotoDefinitionResponse::Scalar(location),
+                );
             }
         }
 
@@ -121,14 +109,10 @@ impl ServerState {
                     uri: uri.clone(),
                     range,
                 };
-                return Response {
-                    id: req.id,
-                    result: Some(
-                        serde_json::to_value(lsp_types::GotoDefinitionResponse::Scalar(location))
-                            .unwrap(),
-                    ),
-                    error: None,
-                };
+                return response_with_json(
+                    req.id,
+                    &lsp_types::GotoDefinitionResponse::Scalar(location),
+                );
             }
         }
 
@@ -152,11 +136,7 @@ impl ServerState {
                 Some(self.impl_locations(symbol.type_path()?, &uri))
             })
             .unwrap_or_default();
-        Response {
-            id: req.id,
-            result: Some(serde_json::to_value(locations).unwrap()),
-            error: None,
-        }
+        response_with_json(req.id, &locations)
     }
 
     /// Locations of every `impl` block whose target resolves to `target`,

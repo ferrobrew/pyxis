@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
-import { HEADER_INPUT_HEIGHT } from '../utils/styles';
+import { cn, HEADER_INPUT_HEIGHT } from '../utils/styles';
 import { useNavigate } from 'react-router-dom';
 import { useDocumentation } from '../contexts/DocumentationContext';
 import { searchDocumentation, type SearchResult, type SearchKind } from '../utils/searchUtils';
@@ -40,19 +40,21 @@ function ResultContent({ result, query }: { result: SearchResult; query: string 
     <div className="flex items-center gap-2">
       <KindIcon
         kind={result.kind}
-        className={`h-4 w-4 flex-shrink-0 ${getItemTypeColor(result.kind)}`}
+        className={cn('size-4 shrink-0', getItemTypeColor(result.kind))}
       />
-      <span className={`font-mono text-sm ${getItemTypeColor(result.kind)}`}>
+      <span className={cn('font-mono text-sm', getItemTypeColor(result.kind))}>
         {highlightMatch(result.name, query)}
       </span>
       {result.detail && (
-        <span className="min-w-0 flex-1 truncate font-mono text-xs text-fg-subtle">
+        <span
+          className="
+          min-w-0 flex-1 truncate font-mono text-xs text-fg-subtle
+        "
+        >
           {result.detail}
         </span>
       )}
-      <span className="ml-auto flex-shrink-0 text-xs text-fg-subtle">
-        {KIND_LABEL[result.kind]}
-      </span>
+      <span className="ml-auto shrink-0 text-xs text-fg-subtle">{KIND_LABEL[result.kind]}</span>
     </div>
   );
 }
@@ -74,10 +76,17 @@ export function SearchBar() {
     return searchDocumentation(documentation, query).slice(0, 10); // Limit to 10 results
   }, [documentation, query]);
 
-  useEffect(() => {
-    setIsOpen(results.length > 0 && query.trim().length > 0);
+  // Auto-open on new results and reset the highlighted row when the result set
+  // changes. Adjusted during render (previous-value tracking) rather than in
+  // an effect, per the react-hooks set-state-in-effect rule.
+  const [prevResults, setPrevResults] = useState(results);
+  if (prevResults !== results) {
+    setPrevResults(results);
     setSelectedIndex(0);
-  }, [results, query]);
+    if (results.length > 0) {
+      setIsOpen(true);
+    }
+  }
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent | TouchEvent) => {
@@ -140,10 +149,15 @@ export function SearchBar() {
       {/* Mobile: Search button */}
       <button
         onClick={() => setIsMobileSearchOpen(true)}
-        className="lg:hidden p-2 rounded-md border border-edge bg-surface hover:bg-surface-2 transition-colors flex-shrink-0"
+        className="
+          shrink-0 rounded-md border border-edge bg-surface p-2
+          transition-colors
+          hover:bg-surface-2
+          lg:hidden
+        "
         aria-label="Search"
       >
-        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <svg className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -154,7 +168,13 @@ export function SearchBar() {
       </button>
 
       {/* Desktop: Full search bar */}
-      <div ref={searchRef} className="hidden lg:flex relative lg:w-full lg:flex-1 lg:min-w-0">
+      <div
+        ref={searchRef}
+        className="
+        relative hidden
+        lg:flex lg:w-full lg:min-w-0 lg:flex-1
+      "
+      >
         <div className="relative w-full">
           <input
             type="text"
@@ -163,10 +183,17 @@ export function SearchBar() {
             onKeyDown={handleKeyDown}
             onFocus={() => results.length > 0 && setIsOpen(true)}
             placeholder="Search documentation..."
-            className="w-full h-full px-4 py-2 text-sm border rounded-md bg-surface border-edge focus:outline-none focus:ring-2 focus:ring-accent"
+            className="
+              size-full rounded-md border border-edge bg-surface px-4 py-2
+              text-sm
+              focus:ring-2 focus:ring-accent focus:outline-none
+            "
           />
           <svg
-            className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-fg-subtle pointer-events-none"
+            className="
+              pointer-events-none absolute top-1/2 right-3 size-5
+              -translate-y-1/2 text-fg-subtle
+            "
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -181,14 +208,23 @@ export function SearchBar() {
         </div>
 
         {isOpen && results.length > 0 && (
-          <div className="absolute top-full mt-1 w-full bg-surface border border-edge rounded-md shadow-lg max-h-96 overflow-y-auto z-50">
+          <div
+            className="
+            absolute top-full z-50 mt-1 max-h-96 w-full overflow-y-auto
+            rounded-md border border-edge bg-surface shadow-lg
+          "
+          >
             {results.map((result, index) => (
               <button
                 key={`${result.kind}:${result.target.path}:${result.target.anchor ?? ''}:${result.name}`}
                 onClick={() => handleSelect(result)}
-                className={`w-full px-4 py-2 text-left hover:bg-surface-2 ${
-                  index === selectedIndex ? 'bg-surface-2' : ''
-                }`}
+                className={cn(
+                  `
+                  w-full px-4 py-2 text-left
+                  hover:bg-surface-2
+                `,
+                  index === selectedIndex ? `bg-surface-2` : ''
+                )}
               >
                 <ResultContent result={result} query={query} />
               </button>
@@ -199,18 +235,27 @@ export function SearchBar() {
 
       {/* Mobile: Full-screen search modal */}
       {isMobileSearchOpen && (
-        <div className="lg:hidden fixed inset-0 z-50 bg-canvas flex flex-col overflow-hidden">
-          <div className="flex items-stretch gap-2 p-3 border-b border-edge">
+        <div
+          className="
+          fixed inset-0 z-50 flex flex-col overflow-hidden bg-canvas
+          lg:hidden
+        "
+        >
+          <div className="flex items-stretch gap-2 border-b border-edge p-3">
             <button
               onClick={() => {
                 setIsMobileSearchOpen(false);
                 setQuery('');
                 setIsOpen(false);
               }}
-              className="px-2 rounded-md border border-edge bg-surface hover:bg-surface-2 transition-colors flex-shrink-0 flex items-center justify-center"
+              className="
+                flex shrink-0 items-center justify-center rounded-md border
+                border-edge bg-surface px-2 transition-colors
+                hover:bg-surface-2
+              "
               aria-label="Close search"
             >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -227,10 +272,20 @@ export function SearchBar() {
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder="Search documentation..."
-                className={`w-full ${HEADER_INPUT_HEIGHT} px-4 text-[16px] border rounded-md bg-surface border-edge focus:outline-none focus:ring-2 focus:ring-accent`}
+                className={cn(
+                  'w-full',
+                  HEADER_INPUT_HEIGHT,
+                  `
+                  rounded-md border border-edge bg-surface px-4 text-[16px]
+                  focus:ring-2 focus:ring-accent focus:outline-none
+                `
+                )}
               />
               <svg
-                className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-fg-subtle"
+                className="
+                  absolute top-1/2 right-3 size-5 -translate-y-1/2
+                  text-fg-subtle
+                "
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -251,9 +306,13 @@ export function SearchBar() {
                 <button
                   key={`${result.kind}:${result.target.path}:${result.target.anchor ?? ''}:${result.name}`}
                   onClick={() => handleSelect(result)}
-                  className={`w-full border-b border-edge px-4 py-3 text-left hover:bg-surface-2 ${
-                    index === selectedIndex ? 'bg-surface-2' : ''
-                  }`}
+                  className={cn(
+                    `
+                    w-full border-b border-edge px-4 py-3 text-left
+                    hover:bg-surface-2
+                  `,
+                    index === selectedIndex ? `bg-surface-2` : ''
+                  )}
                 >
                   <ResultContent result={result} query={query} />
                 </button>

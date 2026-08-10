@@ -333,9 +333,14 @@ impl TypeRegistry {
             } => {
                 // Check if this is a type parameter reference
                 if path.len() == 1 && generic_args.is_empty() {
-                    let name = path.iter().next().unwrap().as_str();
-                    if type_params.contains(&name.to_string()) {
-                        return TypeLookupResult::Found(Type::TypeParameter(name.to_string()));
+                    // `path.len() == 1` guarantees the single segment; treating
+                    // it as the type-parameter name is safe.
+                    if let Some(name) = path.last()
+                        && type_params.contains(&name.as_str().to_string())
+                    {
+                        return TypeLookupResult::Found(Type::TypeParameter(
+                            name.as_str().to_string(),
+                        ));
                     }
                 }
 

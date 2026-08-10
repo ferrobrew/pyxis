@@ -70,8 +70,18 @@ pub(super) fn file_uri(path: &std::path::Path) -> Uri {
     }
     let encoded = percent_encode(&path.display().to_string());
     let uri_str = format!("file:///{}", encoded.trim_start_matches('/'));
-    Uri::from_str(&uri_str)
-        .unwrap_or_else(|_| Uri::from_str("file:///").expect("`file:///` is a valid URI"))
+    match Uri::from_str(&uri_str) {
+        Ok(uri) => uri,
+        // The encoded string is ASCII and starts with `file:///`, so the parse
+        // succeeds by construction; this arm is unreachable. `#[expect]`
+        // rather than `#[allow]` so the lint warns if a future change ever
+        // makes the arm reachable.
+        #[expect(
+            clippy::unreachable,
+            reason = "percent-encoded `file:///` string always parses as a URI"
+        )]
+        Err(_) => unreachable!("percent-encoded `file:///` string is a valid URI"),
+    }
 }
 
 /// Percent-decoding for file paths. Decodes `%XX` escapes to raw bytes and

@@ -6,3 +6,17 @@ edition = "2024"
 [lib]
 name = "codegen_tests"
 path = "lib.rs"
+
+# Generated-code policy: this crate is emitted output from `cargo run
+# --example codegen_tests` and intentionally contains `unreachable!()`
+# size-check bodies and other panicking forms that the generator emits.
+# Handwritten code stays lint-clean under the workspace lints
+# (unwrap_used/expect_used/panic/unreachable); emitted code is exempted
+# at the crate boundary rather than patched at generation time or
+# `cfg`-gated out of the restriction. See the conformance status note
+# in the contributing guidelines.
+[lints.clippy]
+unwrap_used = "allow"
+expect_used = "allow"
+panic = "allow"
+unreachable = "allow"

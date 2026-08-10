@@ -19,11 +19,7 @@ impl ServerState {
                 self.type_hierarchy_item(symbol.type_path()?, &uri, type_registry, decl_registry)?;
             Some(vec![item])
         })();
-        Response {
-            id: req.id,
-            result: Some(serde_json::to_value(items).unwrap()),
-            error: None,
-        }
+        response_with_json(req.id, &items)
     }
 
     /// typeHierarchy/supertypes — a type's base classes (its `#[base]` fields).
@@ -32,11 +28,7 @@ impl ServerState {
             .ok()
             .map(|p| self.related_types(&p.item, true))
             .unwrap_or_default();
-        Response {
-            id: req.id,
-            result: Some(serde_json::to_value(items).unwrap()),
-            error: None,
-        }
+        response_with_json(req.id, &items)
     }
 
     /// typeHierarchy/subtypes — types that declare this one as a `#[base]`.
@@ -45,11 +37,7 @@ impl ServerState {
             .ok()
             .map(|p| self.related_types(&p.item, false))
             .unwrap_or_default();
-        Response {
-            id: req.id,
-            result: Some(serde_json::to_value(items).unwrap()),
-            error: None,
-        }
+        response_with_json(req.id, &items)
     }
 
     /// Build a TypeHierarchyItem for a resolved type path; the path round-trips

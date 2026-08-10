@@ -7,29 +7,91 @@ import type { JsonDocLink } from '@pyxis/types';
 import { useDocumentation } from '../contexts/DocumentationContext';
 import { buildItemUrl, buildModuleUrl } from '../utils/navigation';
 import { remarkTruncate } from './remarkTruncate';
+import { cn } from '../utils/styles';
 
 // Element styling for rendered doc-comment Markdown. Text colour and size are
 // inherited from the surrounding container, so docs blend into their context;
 // only structure (code, links, lists, emphasis) is styled here.
 const baseComponents: Components = {
-  p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
-  ul: ({ children }) => <ul className="mb-2 list-inside list-disc last:mb-0">{children}</ul>,
-  ol: ({ children }) => <ol className="mb-2 list-inside list-decimal last:mb-0">{children}</ol>,
+  p: ({ children }) => (
+    <p
+      className="
+    mb-2
+    last:mb-0
+  "
+    >
+      {children}
+    </p>
+  ),
+  ul: ({ children }) => (
+    <ul
+      className="
+    mb-2 list-inside list-disc
+    last:mb-0
+  "
+    >
+      {children}
+    </ul>
+  ),
+  ol: ({ children }) => (
+    <ol
+      className="
+    mb-2 list-inside list-decimal
+    last:mb-0
+  "
+    >
+      {children}
+    </ol>
+  ),
   li: ({ children }) => <li className="ml-1">{children}</li>,
   // Inline code gets a subtle pill; fenced blocks (which carry a language
   // class and are wrapped in <pre>) just stay monospace to avoid double bg.
   code: ({ className, children }) =>
     className ? (
-      <code className={`${className} font-mono`}>{children}</code>
+      <code className={cn(className, 'font-mono')}>{children}</code>
     ) : (
-      <code className="rounded bg-inset px-1 py-0.5 font-mono text-[0.9em]">{children}</code>
+      <code className="rounded-sm bg-inset px-1 py-0.5 font-mono text-[0.9em]">{children}</code>
     ),
   pre: ({ children }) => (
-    <pre className="mb-2 overflow-x-auto rounded bg-inset p-3 text-sm last:mb-0">{children}</pre>
+    <pre
+      className="
+      mb-2 overflow-x-auto rounded-sm bg-inset p-3 text-sm
+      last:mb-0
+    "
+    >
+      {children}
+    </pre>
   ),
-  h1: ({ children }) => <h4 className="mb-1 mt-2 font-semibold first:mt-0">{children}</h4>,
-  h2: ({ children }) => <h4 className="mb-1 mt-2 font-semibold first:mt-0">{children}</h4>,
-  h3: ({ children }) => <h4 className="mb-1 mt-2 font-semibold first:mt-0">{children}</h4>,
+  h1: ({ children }) => (
+    <h4
+      className="
+    mt-2 mb-1 font-semibold
+    first:mt-0
+  "
+    >
+      {children}
+    </h4>
+  ),
+  h2: ({ children }) => (
+    <h4
+      className="
+    mt-2 mb-1 font-semibold
+    first:mt-0
+  "
+    >
+      {children}
+    </h4>
+  ),
+  h3: ({ children }) => (
+    <h4
+      className="
+    mt-2 mb-1 font-semibold
+    first:mt-0
+  "
+    >
+      {children}
+    </h4>
+  ),
 };
 
 // The router destination for a resolved intra-doc link: the item or module
@@ -103,7 +165,13 @@ export function Markdown({
         const link = href ? linkMap.get(href) : undefined;
         if (link) {
           return (
-            <Link to={docLinkTo(link, selectedSource)} className="text-accent hover:underline">
+            <Link
+              to={docLinkTo(link, selectedSource)}
+              className="
+              text-accent
+              hover:underline
+            "
+            >
               {children}
             </Link>
           );
@@ -113,7 +181,10 @@ export function Markdown({
             href={href}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-accent hover:underline"
+            className="
+              text-accent
+              hover:underline
+            "
           >
             {children}
           </a>

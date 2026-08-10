@@ -1,12 +1,13 @@
 import { useDocumentation } from '../contexts/DocumentationContext';
 import type { JsonSourceLocation } from '@pyxis/types';
+import { cn } from '../utils/styles';
 
 // Base URL for pyxis-defs repository
 const PYXIS_DEFS_REPO = 'https://github.com/ferrobrew/pyxis-defs';
 
-interface SourceLinkProps {
+type SourceLinkProps = {
   source: JsonSourceLocation;
-}
+};
 
 /**
  * Resolves the source file path from the file index.
@@ -48,11 +49,11 @@ function buildGitHubUrl(sourcePath: string, line: number, selectedSource: string
   return `${PYXIS_DEFS_REPO}/blob/main/projects/${projectPath}/${sourcePath}#L${line}`;
 }
 
-interface SourceNameProps {
+type SourceNameProps = {
   source: JsonSourceLocation;
   children: React.ReactNode;
   className?: string;
-}
+};
 
 /**
  * Wraps a name/label to make it a clickable source link.
@@ -77,7 +78,13 @@ export function SourceName({ source, children, className = '' }: SourceNameProps
         href={githubUrl}
         target="_blank"
         rel="noopener noreferrer"
-        className={`hover:underline text-accent ${className}`}
+        className={cn(
+          `
+          text-accent
+          hover:underline
+        `,
+          className
+        )}
         title={tooltip}
       >
         {children}
@@ -87,7 +94,7 @@ export function SourceName({ source, children, className = '' }: SourceNameProps
 
   // For local sources, show with dotted underline to indicate source info available
   return (
-    <span className={`border-b border-dotted border-edge-strong ${className}`} title={tooltip}>
+    <span className={cn('border-b border-dotted border-edge-strong', className)} title={tooltip}>
       {children}
     </span>
   );
@@ -111,7 +118,10 @@ export function SourceLink({ source }: SourceLinkProps) {
         href={githubUrl}
         target="_blank"
         rel="noopener noreferrer"
-        className="font-mono text-xs text-fg-subtle hover:text-accent hover:underline"
+        className="
+          font-mono text-xs text-fg-subtle
+          hover:text-accent hover:underline
+        "
         title={tooltip}
       >
         [source]

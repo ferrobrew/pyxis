@@ -154,7 +154,13 @@ impl SemanticBuilder {
 
         // Parse errors should never occur here — we pretty-print valid
         // grammar::Module ASTs, which always parse back. If this fires,
-        // there's a bug in pretty_print.
+        // there's a bug in pretty_print. This is an internal compiler error
+        // (the two-tier error model's "ICE" tier), not a user-facing failure,
+        // so panicking with the parse error is the honest behavior.
+        #[expect(
+            clippy::panic,
+            reason = "pretty-printed source failing to parse is an internal compiler bug"
+        )]
         if let Some(first_parse_err) = analysis.parse_errors(&db).first() {
             panic!("SemanticBuilder: pretty-printed source failed to parse: {first_parse_err}");
         }

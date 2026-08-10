@@ -1,6 +1,8 @@
 use super::{PrettyPrinter, is_value_item};
-use crate::grammar::{ItemDefinitionInner, *};
-use std::fmt::Write;
+use crate::{
+    grammar::{ItemDefinitionInner, *},
+    infallible_write, infallible_writeln,
+};
 
 impl PrettyPrinter {
     pub(super) fn print_item_definition(&mut self, def: &ItemDefinition, nested: bool) {
@@ -8,7 +10,7 @@ impl PrettyPrinter {
 
         self.write_indent();
         if def.visibility == Visibility::Public {
-            write!(&mut self.output, "pub ").unwrap();
+            infallible_write!(&mut self.output, "pub ");
         }
 
         let type_params = self.format_type_parameters(&def.type_parameters);
@@ -21,24 +23,24 @@ impl PrettyPrinter {
             ItemDefinitionInner::Enum(ed) => self.print_enum_definition(def, ed),
             ItemDefinitionInner::Bitflags(bf) => self.print_bitflags_definition(def, bf),
             ItemDefinitionInner::TypeAlias(ta) => {
-                write!(&mut self.output, "type {}{} = ", def.name, type_params).unwrap();
+                infallible_write!(&mut self.output, "type {}{} = ", def.name, type_params);
                 self.print_type(&ta.target);
                 let terminator = if nested { ',' } else { ';' };
-                writeln!(&mut self.output, "{terminator}").unwrap();
+                infallible_writeln!(&mut self.output, "{terminator}");
             }
             ItemDefinitionInner::Constant(cd) => {
-                write!(&mut self.output, "const {}: ", def.name).unwrap();
+                infallible_write!(&mut self.output, "const {}: ", def.name);
                 self.print_type(&cd.type_);
-                write!(&mut self.output, " = ").unwrap();
+                infallible_write!(&mut self.output, " = ");
                 self.print_expr(&cd.expr);
                 let terminator = if nested { ',' } else { ';' };
-                writeln!(&mut self.output, "{terminator}").unwrap();
+                infallible_writeln!(&mut self.output, "{terminator}");
             }
             ItemDefinitionInner::ExternValue(ev) => {
-                write!(&mut self.output, "extern {}: ", def.name).unwrap();
+                infallible_write!(&mut self.output, "extern {}: ", def.name);
                 self.print_type(&ev.type_);
                 let terminator = if nested { ',' } else { ';' };
-                writeln!(&mut self.output, "{terminator}").unwrap();
+                infallible_writeln!(&mut self.output, "{terminator}");
             }
         }
     }
@@ -49,7 +51,7 @@ impl PrettyPrinter {
         // Print doc comments (they already include the space after ///)
         for doc in &def.doc_comments {
             self.write_indent();
-            writeln!(&mut self.output, "///{doc}").unwrap();
+            infallible_writeln!(&mut self.output, "///{doc}");
         }
 
         // Print attributes and comments from the inner definition
@@ -82,22 +84,22 @@ impl PrettyPrinter {
         // Print attributes with inline trailing comments
         if !attributes.0.is_empty() {
             self.write_indent();
-            write!(&mut self.output, "#[").unwrap();
+            infallible_write!(&mut self.output, "#[");
             for (i, attr) in attributes.0.iter().enumerate() {
                 if i > 0 {
-                    write!(&mut self.output, ", ").unwrap();
+                    infallible_write!(&mut self.output, ", ");
                 }
                 self.print_attribute(attr);
             }
-            write!(&mut self.output, "]").unwrap();
+            infallible_write!(&mut self.output, "]");
 
             // Print inline trailing comments (comments on the same line as attributes)
             for comment in inline_trailing_comments {
-                write!(&mut self.output, " ").unwrap();
+                infallible_write!(&mut self.output, " ");
                 self.print_comment_inline(comment);
             }
 
-            writeln!(&mut self.output).unwrap();
+            infallible_writeln!(&mut self.output);
         }
 
         // Print following comments (comments on lines after attributes)
@@ -120,14 +122,14 @@ impl PrettyPrinter {
         // level. A braced body — even an empty one — is self-terminating.
         if td.is_opaque {
             let terminator = if nested { ',' } else { ';' };
-            writeln!(
+            infallible_writeln!(
                 &mut self.output,
                 "type {}{}{terminator}",
-                def.name, type_params
-            )
-            .unwrap();
+                def.name,
+                type_params
+            );
         } else {
-            writeln!(&mut self.output, "type {}{} {{", def.name, type_params).unwrap();
+            infallible_writeln!(&mut self.output, "type {}{} {{", def.name, type_params);
             self.print_type_body_items(&td.items);
         }
     }
@@ -135,7 +137,7 @@ impl PrettyPrinter {
     /// Print a `union` definition body. A union body is the same AST as a type
     /// body, so it groups and orders its items identically.
     fn print_union_definition(&mut self, def: &ItemDefinition, ud: &UnionDefinition) {
-        writeln!(&mut self.output, "union {} {{", def.name).unwrap();
+        infallible_writeln!(&mut self.output, "union {} {{", def.name);
         self.print_type_body_items(&ud.items);
     }
 
@@ -247,16 +249,16 @@ impl PrettyPrinter {
 
             self.dedent();
             self.write_indent();
-            writeln!(&mut self.output, "}}").unwrap();
+            infallible_writeln!(&mut self.output, "}}");
         }
     }
 
     /// Print an `enum` definition body: the backing type, then constants
     /// followed by variants and comments.
     fn print_enum_definition(&mut self, def: &ItemDefinition, ed: &EnumDefinition) {
-        write!(&mut self.output, "enum {}: ", def.name).unwrap();
+        infallible_write!(&mut self.output, "enum {}: ", def.name);
         self.print_type(&ed.type_);
-        writeln!(&mut self.output, " {{").unwrap();
+        infallible_writeln!(&mut self.output, " {{");
         self.indent();
         // Set binary literal width based on enum type
         let old_width = self.binary_literal_width;
@@ -304,15 +306,15 @@ impl PrettyPrinter {
         self.binary_literal_width = old_width;
         self.dedent();
         self.write_indent();
-        writeln!(&mut self.output, "}}").unwrap();
+        infallible_writeln!(&mut self.output, "}}");
     }
 
     /// Print a `bitflags` definition body: the backing type, then constants
     /// followed by flags and comments.
     fn print_bitflags_definition(&mut self, def: &ItemDefinition, bf: &BitflagsDefinition) {
-        write!(&mut self.output, "bitflags {}: ", def.name).unwrap();
+        infallible_write!(&mut self.output, "bitflags {}: ", def.name);
         self.print_type(&bf.type_);
-        writeln!(&mut self.output, " {{").unwrap();
+        infallible_writeln!(&mut self.output, " {{");
         self.indent();
         // Set binary literal width based on bitflags type
         let old_width = self.binary_literal_width;
@@ -364,7 +366,7 @@ impl PrettyPrinter {
         self.binary_literal_width = old_width;
         self.dedent();
         self.write_indent();
-        writeln!(&mut self.output, "}}").unwrap();
+        infallible_writeln!(&mut self.output, "}}");
     }
 
     fn print_type_statement(&mut self, stmt: &TypeStatement, next_item: Option<&TypeDefItem>) {
@@ -381,7 +383,7 @@ impl PrettyPrinter {
         // Print doc comments (they already include the space after ///)
         for doc in &stmt.doc_comments {
             self.write_indent();
-            writeln!(&mut self.output, "///{doc}").unwrap();
+            infallible_writeln!(&mut self.output, "///{doc}");
         }
 
         self.print_attributes(&stmt.attributes);
@@ -390,19 +392,19 @@ impl PrettyPrinter {
             TypeField::Field(vis, name, type_) => {
                 self.write_indent();
                 if *vis == Visibility::Public {
-                    write!(&mut self.output, "pub ").unwrap();
+                    infallible_write!(&mut self.output, "pub ");
                 }
-                write!(&mut self.output, "{name}: ").unwrap();
+                infallible_write!(&mut self.output, "{name}: ");
                 self.print_type(type_);
-                write!(&mut self.output, ",").unwrap();
+                infallible_write!(&mut self.output, ",");
 
                 // Print inline trailing comments
                 for comment in &stmt.inline_trailing_comments {
-                    write!(&mut self.output, " ").unwrap();
+                    infallible_write!(&mut self.output, " ");
                     self.print_comment_inline(comment);
                 }
 
-                writeln!(&mut self.output).unwrap();
+                infallible_writeln!(&mut self.output);
 
                 // Print following comments (comments on lines after the field)
                 for comment in &stmt.following_comments {
@@ -412,9 +414,9 @@ impl PrettyPrinter {
             TypeField::Vftable(funcs) => {
                 self.write_indent();
                 if funcs.is_empty() {
-                    write!(&mut self.output, "vftable {{}},").unwrap();
+                    infallible_write!(&mut self.output, "vftable {{}},");
                 } else {
-                    writeln!(&mut self.output, "vftable {{").unwrap();
+                    infallible_writeln!(&mut self.output, "vftable {{");
                     self.indent();
                     for (i, func) in funcs.iter().enumerate() {
                         // Add blank line before function if it has index attribute and it's not the first
@@ -428,16 +430,16 @@ impl PrettyPrinter {
                     }
                     self.dedent();
                     self.write_indent();
-                    write!(&mut self.output, "}},").unwrap();
+                    infallible_write!(&mut self.output, "}},");
                 }
 
                 // Print inline trailing comments for vftable too
                 for comment in &stmt.inline_trailing_comments {
-                    write!(&mut self.output, " ").unwrap();
+                    infallible_write!(&mut self.output, " ");
                     self.print_comment_inline(comment);
                 }
 
-                writeln!(&mut self.output).unwrap();
+                infallible_writeln!(&mut self.output);
 
                 // Print following comments (comments on lines after vftable)
                 for comment in &stmt.following_comments {
@@ -456,23 +458,23 @@ impl PrettyPrinter {
             } => {
                 self.write_indent();
                 if *visibility == Visibility::Public {
-                    write!(&mut self.output, "pub ").unwrap();
+                    infallible_write!(&mut self.output, "pub ");
                 }
-                writeln!(&mut self.output, "{name}: union {{").unwrap();
+                infallible_writeln!(&mut self.output, "{name}: union {{");
                 self.print_type_body_items(&body.items);
                 // `print_type_body_items` closes with `}\n`; an inline union is
                 // a field, so it needs the field's trailing comma.
                 if self.output.ends_with("}\n") {
                     self.output.pop();
-                    write!(&mut self.output, ",").unwrap();
+                    infallible_write!(&mut self.output, ",");
                 }
 
                 for comment in &stmt.inline_trailing_comments {
-                    write!(&mut self.output, " ").unwrap();
+                    infallible_write!(&mut self.output, " ");
                     self.print_comment_inline(comment);
                 }
 
-                writeln!(&mut self.output).unwrap();
+                infallible_writeln!(&mut self.output);
 
                 for comment in &stmt.following_comments {
                     self.print_comment(comment);
@@ -488,7 +490,7 @@ impl PrettyPrinter {
                     // Replace the trailing newline after `}` with `},\n`
                     if self.output.ends_with("}\n") {
                         self.output.pop(); // remove \n
-                        writeln!(&mut self.output, ",").unwrap();
+                        infallible_writeln!(&mut self.output, ",");
                     }
                 }
             }
@@ -499,25 +501,25 @@ impl PrettyPrinter {
         // Print doc comments (they already include the space after ///)
         for doc in &stmt.doc_comments {
             self.write_indent();
-            writeln!(&mut self.output, "///{doc}").unwrap();
+            infallible_writeln!(&mut self.output, "///{doc}");
         }
 
         self.print_attributes(&stmt.attributes);
         self.write_indent();
-        write!(&mut self.output, "{}", stmt.name).unwrap();
+        infallible_write!(&mut self.output, "{}", stmt.name);
         if let Some(expr) = &stmt.expr {
-            write!(&mut self.output, " = ").unwrap();
+            infallible_write!(&mut self.output, " = ");
             self.print_expr(expr);
         }
-        write!(&mut self.output, ",").unwrap();
+        infallible_write!(&mut self.output, ",");
 
         // Print inline trailing comments
         for comment in &stmt.inline_trailing_comments {
-            write!(&mut self.output, " ").unwrap();
+            infallible_write!(&mut self.output, " ");
             self.print_comment_inline(comment);
         }
 
-        writeln!(&mut self.output).unwrap();
+        infallible_writeln!(&mut self.output);
 
         // Print following comments (comments on lines after the enum variant)
         for comment in &stmt.following_comments {
@@ -533,22 +535,22 @@ impl PrettyPrinter {
         // Print doc comments (they already include the space after ///)
         for doc in &stmt.doc_comments {
             self.write_indent();
-            writeln!(&mut self.output, "///{doc}").unwrap();
+            infallible_writeln!(&mut self.output, "///{doc}");
         }
 
         self.print_attributes(&stmt.attributes);
         self.write_indent();
-        write!(&mut self.output, "{} = ", stmt.name).unwrap();
+        infallible_write!(&mut self.output, "{} = ", stmt.name);
         self.print_expr(&stmt.expr);
-        write!(&mut self.output, ",").unwrap();
+        infallible_write!(&mut self.output, ",");
 
         // Print inline trailing comments
         for comment in &stmt.inline_trailing_comments {
-            write!(&mut self.output, " ").unwrap();
+            infallible_write!(&mut self.output, " ");
             self.print_comment_inline(comment);
         }
 
-        writeln!(&mut self.output).unwrap();
+        infallible_writeln!(&mut self.output);
 
         // Print following comments (comments on lines after the bitflag)
         for comment in &stmt.following_comments {

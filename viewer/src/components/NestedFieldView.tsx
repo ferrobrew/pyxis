@@ -1,17 +1,18 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import type { JsonRegion, JsonType, JsonDocumentation } from '@pyxis/types';
 import { useDocumentation } from '../contexts/DocumentationContext';
 import { TypeRef } from './TypeRef';
 import { SmallBadge } from './Badge';
 import { SourceName } from './SourceLink';
 import { Markdown } from './Markdown';
+import { cn } from '../utils/styles';
 
-interface NestedFieldViewProps {
+type NestedFieldViewProps = {
   fields: JsonRegion[];
   modulePath: string;
-}
+};
 
-interface NestedFieldRowProps {
+type NestedFieldRowProps = {
   field: JsonRegion;
   modulePath: string;
   baseOffset: number;
@@ -19,7 +20,7 @@ interface NestedFieldRowProps {
   expandedPaths: Set<string>;
   onToggleExpand: (path: string) => void;
   fieldPath: string;
-}
+};
 
 /**
  * Get the raw type path from a JsonType, if it's a simple raw type.
@@ -100,20 +101,38 @@ function NestedFieldRow({
 
   return (
     <>
-      <tr id={field.name ? `field-${field.name}` : undefined} className="border-b border-edge">
+      <tr
+        id={field.name ? `field-${field.name}` : undefined}
+        className="
+        border-b border-edge
+      "
+      >
         <td
-          className="px-4 py-2 text-sm text-fg-muted font-mono whitespace-nowrap"
+          className="
+            px-4 py-2 font-mono text-sm whitespace-nowrap text-fg-muted
+          "
           style={indentStyle}
         >
           <span className="inline-flex items-center gap-2">
             {isExpandable && (
               <button
                 onClick={() => onToggleExpand(fieldPath)}
-                className="w-4 h-4 flex items-center justify-center text-fg-subtle hover:text-fg focus:outline-none"
+                className="
+                  flex size-4 items-center justify-center text-fg-subtle
+                  hover:text-fg
+                  focus:outline-none
+                "
                 aria-label={isExpanded ? 'Collapse' : 'Expand'}
               >
                 <svg
-                  className={`w-3 h-3 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+                  className={cn(
+                    'size-3 transition-transform',
+                    isExpanded
+                      ? `
+                    rotate-90
+                  `
+                      : ''
+                  )}
                   fill="currentColor"
                   viewBox="0 0 20 20"
                 >
@@ -129,22 +148,22 @@ function NestedFieldRow({
             0x{absoluteOffset.toString(16).toUpperCase()}
           </span>
         </td>
-        <td className={`px-4 py-2 ${nameClasses}`}>
+        <td className={cn('px-4 py-2', nameClasses)}>
           {field.source ? (
             <SourceName source={field.source}>{field.name || '<anonymous>'}</SourceName>
           ) : (
             field.name || '<anonymous>'
           )}
         </td>
-        <td className={`whitespace-nowrap px-4 py-2 font-mono text-sm ${typeClasses}`}>
+        <td className={cn('px-4 py-2 font-mono text-sm whitespace-nowrap', typeClasses)}>
           <TypeRef type={field.type_ref} currentModule={modulePath} />
         </td>
         <td className="px-4 py-2 text-sm text-fg-muted">{field.size}</td>
         <td className="px-4 py-2 text-sm text-fg-muted">{field.alignment}</td>
-        <td className="whitespace-nowrap px-4 py-2 text-sm">
+        <td className="px-4 py-2 text-sm whitespace-nowrap">
           {field.is_base && <SmallBadge variant="violet">base</SmallBadge>}
           {field.doc && (
-            <div className="text-fg-muted mt-1">
+            <div className="mt-1 text-fg-muted">
               <Markdown docLinks={field.doc_links}>{field.doc}</Markdown>
             </div>
           )}
@@ -190,10 +209,15 @@ export function NestedFieldView({ fields, modulePath }: NestedFieldViewProps) {
 
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(initialExpandedPaths);
 
-  // Reset expanded paths when fields change (e.g., navigating to a different type)
-  useEffect(() => {
+  // Reset expanded paths when fields change (e.g., navigating to a different
+  // type). Done during render (storing the previous value and adjusting when
+  // it differs) rather than in an effect, per the react-hooks
+  // set-state-in-effect rule.
+  const [prevExpanded, setPrevExpanded] = useState(initialExpandedPaths);
+  if (prevExpanded !== initialExpandedPaths) {
+    setPrevExpanded(initialExpandedPaths);
     setExpandedPaths(initialExpandedPaths);
-  }, [initialExpandedPaths]);
+  }
 
   const handleToggleExpand = (path: string) => {
     setExpandedPaths((prev) => {
@@ -209,7 +233,7 @@ export function NestedFieldView({ fields, modulePath }: NestedFieldViewProps) {
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full border border-edge rounded-md">
+      <table className="w-full rounded-md border border-edge">
         <thead className="bg-surface">
           <tr>
             <th className="px-4 py-2 text-left text-sm font-semibold text-fg">Offset</th>

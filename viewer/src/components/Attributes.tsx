@@ -2,6 +2,7 @@ import { Fragment, type ReactNode } from 'react';
 import type { JsonItem, JsonFunction, JsonCfg } from '@pyxis/types';
 import { formatHexAddress } from '../utils/format';
 import { WRAP_COLUMN } from '../utils/typeString';
+import { cn } from '../utils/styles';
 
 // --- token helpers ---
 
@@ -88,7 +89,7 @@ function AttrBracket({ attrs }: { attrs: ReactNode[] }) {
 function AttrContainer({ groups, className = '' }: { groups: ReactNode[][]; className?: string }) {
   if (groups.every((g) => g.length === 0)) return null;
   return (
-    <div className={`font-mono text-sm text-fg-subtle ${className}`}>
+    <div className={cn('font-mono text-sm text-fg-subtle', className)}>
       {groups
         .filter((g) => g.length > 0)
         .map((group, i) => (

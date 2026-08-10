@@ -3,11 +3,12 @@ import { useLigatures } from '../contexts/LigatureContext';
 import { useDocumentation } from '../contexts/DocumentationContext';
 import { FileUpload } from './FileUpload';
 import { SearchBar } from './SearchBar';
+import { cn } from '../utils/styles';
 
-interface HeaderProps {
+type HeaderProps = {
   isSidebarOpen: boolean;
   onToggleSidebar: () => void;
-}
+};
 
 const iconButton =
   'p-2 rounded-md border border-edge bg-surface text-fg-muted hover:text-fg hover:bg-surface-2 transition-colors flex-shrink-0';
@@ -18,16 +19,16 @@ export function Header({ isSidebarOpen, onToggleSidebar }: HeaderProps) {
   const { documentation } = useDocumentation();
 
   return (
-    <header className="flex-shrink-0 border-b border-edge bg-surface">
-      <div className="flex items-stretch p-3 gap-2">
+    <header className="shrink-0 border-b border-edge bg-surface">
+      <div className="flex items-stretch gap-2 p-3">
         {/* Sidebar toggle button (mobile only) */}
         {documentation && (
           <button
             onClick={onToggleSidebar}
-            className={`lg:hidden ${iconButton}`}
+            className={cn('lg:hidden', iconButton)}
             aria-label="Toggle sidebar"
           >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -41,19 +42,34 @@ export function Header({ isSidebarOpen, onToggleSidebar }: HeaderProps) {
         {/* Wordmark */}
         <a
           href="#/"
-          className="hidden lg:flex items-center px-1 select-none font-mono text-lg font-bold tracking-tight text-fg hover:text-fg flex-shrink-0"
+          className="
+            hidden shrink-0 items-center px-1 font-mono text-lg font-bold
+            tracking-tight text-fg select-none
+            hover:text-fg
+            lg:flex
+          "
           aria-label="pyxisdoc home"
         >
           pyxis<span className="text-accent">doc</span>
         </a>
 
         {/* FileUpload with constrained width on mobile */}
-        <div className="flex-1 min-w-0 lg:flex-initial lg:flex-shrink-0">
+        <div
+          className="
+          min-w-0 flex-1
+          lg:flex-initial lg:shrink-0
+        "
+        >
           <FileUpload />
         </div>
 
         {/* Right side: Search + Ligature toggle + Theme toggle */}
-        <div className="flex items-stretch gap-2 min-w-0 lg:flex-1">
+        <div
+          className="
+          flex min-w-0 items-stretch gap-2
+          lg:flex-1
+        "
+        >
           {documentation && <SearchBar />}
           <button
             onClick={toggleLigatures}
@@ -63,7 +79,7 @@ export function Header({ isSidebarOpen, onToggleSidebar }: HeaderProps) {
             title={ligatures ? 'Disable code ligatures' : 'Enable code ligatures'}
           >
             <span
-              className="font-mono text-sm font-semibold leading-none"
+              className="font-mono text-sm leading-none font-semibold"
               style={{ fontVariantLigatures: ligatures ? 'none' : 'normal' }}
             >
               {'=>'}
@@ -71,7 +87,7 @@ export function Header({ isSidebarOpen, onToggleSidebar }: HeaderProps) {
           </button>
           <button onClick={toggleTheme} className={iconButton} aria-label="Toggle theme">
             {theme === 'light' ? (
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -80,7 +96,7 @@ export function Header({ isSidebarOpen, onToggleSidebar }: HeaderProps) {
                 />
               </svg>
             ) : (
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"

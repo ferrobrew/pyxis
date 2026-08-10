@@ -77,6 +77,22 @@ impl From<Backend> for pyxis::Backend {
     }
 }
 
+/// Build [`pyxis::BuildOptions`] from the CLI's Rust-specific flags. Pure and
+/// unit-testable: the smoke tests exercise the option mapping and the
+/// in-memory build path without a command-line harness.
+fn build_options(
+    rust_root_file_name: Option<String>,
+    rust_module_prefix: Option<String>,
+) -> pyxis::BuildOptions {
+    pyxis::BuildOptions {
+        rust_root_file_name,
+        rust_module_prefix: rust_module_prefix
+            .as_deref()
+            .map(pyxis::grammar::ItemPath::from),
+        ..Default::default()
+    }
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
 
@@ -90,13 +106,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         } => {
             std::fs::create_dir_all(&out_dir)?;
             let mut file_store = pyxis::source_store::FileStore::new();
-            let options = pyxis::BuildOptions {
-                rust_root_file_name,
-                rust_module_prefix: rust_module_prefix
-                    .as_deref()
-                    .map(pyxis::grammar::ItemPath::from),
-                ..Default::default()
-            };
+            let options = build_options(rust_root_file_name, rust_module_prefix);
             let result = pyxis::build_with_store_and_options(
                 &in_dir,
                 &out_dir,
@@ -259,5 +269,126 @@ fn format_file(file: &PathBuf, check: bool) -> Result<bool, Box<dyn std::error::
         Ok(true)
     } else {
         Ok(false)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use pyxis::source_store::FileStore;
+
+    use super::*;
+
+    fn project() -> pyxis::config::Project {
+        pyxis::config::Project {
+            name: "smoke".to_string(),
+            pointer_size: 8,
+        }
+    }
+
+    #[test]
+    fn backend_mapping_is_exhaustive() {
+        // Every CLI backend maps to the corresponding compiler backend.
+        assert!(matches!(
+            pyxis::Backend::from(Backend::Rust),
+            pyxis::Backend::Rust
+        ));
+        assert!(matches!(
+            pyxis::Backend::from(Backend::Json),
+            pyxis::Backend::Json
+        ));
+        assert!(matches!(
+            pyxis::Backend::from(Backend::Cpp),
+            pyxis::Backend::Cpp
+        ));
+    }
+
+    #[test]
+    fn build_options_mapping() {
+        // Defaults carry through.
+        let defaults = build_options(None, None);
+        assert_eq!(defaults.rust_root_file_name, None);
+        assert_eq!(defaults.rust_module_prefix, None);
+
+        // A root file name and a module prefix are mapped through.
+        let opted = build_options(Some("mod.rs".to_string()), Some("prefixed".to_string()));
+        assert_eq!(opted.rust_root_file_name.as_deref(), Some("mod.rs"));
+        assert_eq!(
+            opted.rust_module_prefix.map(|p| p.to_string()),
+            Some("prefixed".to_string())
+        );
+    }
+
+    #[test]
+    fn build_smoke_rust_in_memory() {
+        // The driver's build decision (Rust backend, prefixed submodule mount)
+        // succeeds against in-memory sources via `build_sources` — the same
+        // pipeline the driver invokes, minus the CLI/filesystem shell.
+        let sources = vec![
+            (
+                "foo.pyxis".to_string(),
+                "pub type Foo {\n    pub value: u32,\n}\n".to_string(),
+            ),
+            (
+                "bar.pyxis".to_string(),
+                "use foo::Foo;\n\npub type Bar {\n    pub foo: *mut Foo,\n}\n".to_string(),
+            ),
+        ];
+        let mut file_store = FileStore::new();
+        // The rust backend writes output to `out_dir`; point it at the
+        // crate-local `target` dir so the test doesn't litter the working tree.
+        let out_dir =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("target/test-artifacts/driver");
+        let result = pyxis::build_sources(
+            sources,
+            &project(),
+            &out_dir,
+            pyxis::Backend::Rust,
+            &mut file_store,
+            build_options(Some("mod.rs".to_string()), Some("prefixed".to_string())),
+        );
+        assert!(
+            result.is_ok(),
+            "expected in-memory Rust build to succeed, got {result:?}"
+        );
+    }
+
+    #[test]
+    fn build_smoke_json_in_memory() {
+        // The JSON backend build path also runs against in-memory sources.
+        let sources = vec![(
+            "foo.pyxis".to_string(),
+            "pub type Foo {\n    pub value: u32,\n}\n".to_string(),
+        )];
+        let mut file_store = FileStore::new();
+        let out_dir =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("target/test-artifacts/driver");
+        let result = pyxis::build_sources(
+            sources,
+            &project(),
+            &out_dir,
+            pyxis::Backend::Json,
+            &mut file_store,
+            pyxis::BuildOptions::default(),
+        );
+        assert!(
+            result.is_ok(),
+            "expected in-memory JSON build to succeed, got {result:?}"
+        );
+    }
+
+    #[test]
+    fn check_smoke_in_memory() {
+        // The check decision path (used by `pyxis check`) runs the analysis
+        // pipeline against in-memory sources and reports no errors.
+        let sources = vec![(
+            "foo.pyxis".to_string(),
+            "pub type Foo {\n    pub value: u32,\n}\n".to_string(),
+        )];
+        let mut file_store = FileStore::new();
+        let result = pyxis::check_sources(sources, 8, &mut file_store);
+        assert!(
+            result.is_ok(),
+            "expected in-memory check to succeed, got {result:?}"
+        );
     }
 }
