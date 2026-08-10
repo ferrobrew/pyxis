@@ -500,6 +500,19 @@ impl NameIndex {
                 return Some(canonical);
             }
         }
+        // Relative multi-segment: mirror the type registry — try `base + path`
+        // for each base in empty() ∪ scope, so `Outer::Header` resolves to
+        // `main::Outer::Header` when scope contains `main`.
+        if path.len() > 1 {
+            for base in std::iter::once(&ItemPath::empty()).chain(scope) {
+                let candidate = base.join_path(path);
+                let canonical = self.canonicalize(&candidate);
+                if self.items.contains_key(&canonical) || self.extern_types.contains_key(&canonical)
+                {
+                    return Some(canonical);
+                }
+            }
+        }
         match self.resolve_name(scope, path.last()?.as_str()) {
             NameResolution::Found(p)
             | NameResolution::FoundExtern(p)

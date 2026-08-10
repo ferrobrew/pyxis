@@ -17,15 +17,14 @@ namespace doc_self_links {
     /// [`Self::Nested`](@ref doc_self_links::Container::Nested), and to a nested type's member as
     /// [`Self::Nested::nested_field`](@ref doc_self_links::Container::Nested::nested_field).
     struct alignas(4) Container {
-        /// A field.
-        ::std::uint32_t field;
-        /// A method.
-        void method() const;
-
         /// A nested type. Its field is [`Self::nested_field`](@ref doc_self_links::Container::Nested::nested_field).
         struct Nested {
             ::std::uint16_t nested_field;
         };
+        /// A field.
+        ::std::uint32_t field;
+        /// A method.
+        void method() const;
     };
     static_assert(sizeof(Container) == 0x4);
     static_assert(alignof(Container) == 4);

@@ -24,6 +24,10 @@ pub(super) fn render_union(
     }
 
     let mut body = String::new();
+
+    // Type-declaring nested items come before fields so a member may reference
+    // one (`Outer::Inner`).
+    super::nested::render_type_declarations(&mut body, &ud.nested_item_paths, ctx)?;
     for region in &ud.regions {
         super::items::render_field(&mut body, region, ctx, false)?;
     }
@@ -34,7 +38,7 @@ pub(super) fn render_union(
     // identically.
     let mut deferred_consts: Vec<(String, String, String)> = Vec::new();
     super::structs::render_deleted_special_members_if(&mut body, name, ud.pinned)?;
-    super::nested::render_declarations(
+    super::nested::render_value_declarations(
         &mut body,
         &ud.nested_item_paths,
         ctx,

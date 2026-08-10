@@ -40,6 +40,11 @@ namespace consts {
     constexpr Color Color_DEFAULT = Color::Red;
 
     struct alignas(4) Player {
+        struct Inventory {
+            ::std::uint32_t slots;
+
+            static constexpr ::std::uint32_t MAX_SLOTS = 30;
+        };
         /// New players begin with [`STARTING_GOLD`](@ref consts::Player::STARTING_GOLD) gold,
         /// spawn at x=[`SPAWN_X`](@ref consts::Player::SPAWN_X), and can hold up to
         /// [`MAX_SLOTS`](@ref consts::Player::Inventory::MAX_SLOTS) items.
@@ -49,12 +54,6 @@ namespace consts {
         static constexpr float SPAWN_X = 0.0f;
         static const ::math::Matrix4 IDENTITY_MATRIX;
         static constexpr const char* const PLAYER_DLL = "player.dll";
-
-        struct Inventory {
-            ::std::uint32_t slots;
-
-            static constexpr ::std::uint32_t MAX_SLOTS = 30;
-        };
     };
     static_assert(sizeof(Player) == 0x4);
     static_assert(alignof(Player) == 4);

@@ -146,8 +146,40 @@ impl TypeRegistry {
             }
         }
 
-        // For single-segment paths or unresolved multi-segment paths,
-        // try scope-based resolution using the last segment
+        // Relative multi-segment: mirror doc_links/resolver.rs — try `base + path`
+        // for each base in empty() ∪ scope, so `Outer::Header` resolves to
+        // `main::Outer::Header` when scope contains `main`.
+        if path.len() > 1 {
+            for base in std::iter::once(&ItemPath::empty()).chain(scope) {
+                let candidate = base.join_path(path);
+                let canonical = self.canonicalize(&candidate);
+                if let Some(item_def) = self.lookup(&canonical) {
+                    // Check visibility for paths resolved through the scope.
+                    if let Some(from) = from_module {
+                        if !self.can_access(from, &canonical) {
+                            return TypeLookupResult::PrivateAccess {
+                                item_path: canonical,
+                            };
+                        }
+                    }
+                    return if item_def.is_resolved() {
+                        TypeLookupResult::Found(self.resolve_type_alias(Type::Raw(canonical)))
+                    } else {
+                        TypeLookupResult::NotYetResolved
+                    };
+                }
+            }
+        }
+
+        // A multi-segment path that matched nothing absolute or relative is a
+        // genuine miss: report the full written path, not just the leaf.
+        if path.len() > 1 {
+            return TypeLookupResult::NotFound {
+                type_name: path.to_string(),
+            };
+        }
+
+        // For single-segment paths, try scope-based resolution using the leaf.
         if let Some(last_segment) = path.last() {
             self.resolve_string(scope, last_segment.as_str())
         } else {

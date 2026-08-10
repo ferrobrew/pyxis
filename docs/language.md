@@ -157,7 +157,7 @@ pub type Outer {
 }
 ```
 
-Nested items are accessed as `Outer::InnerEnum` etc. In the Rust backend, nested types are flattened to `Outer_InnerEnum` (rustdoc can't represent true nested types). In the JSON backend, they appear under the parent's `nested_items` with their full paths preserved.
+Nested items are accessed as `Outer::InnerEnum` etc. — both in a `use` and inline wherever a type name appears (e.g. `pub field: Outer::InnerEnum` inside `Outer`'s own body). The qualified spelling is required: a bare nested name (`pub field: InnerEnum`) does not resolve. In the Rust backend, nested types are flattened to `Outer_InnerEnum` (rustdoc can't represent true nested types). In the JSON backend, they appear under the parent's `nested_items` with their full paths preserved.
 
 ### Generated names
 

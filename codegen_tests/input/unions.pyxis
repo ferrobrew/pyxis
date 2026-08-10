@@ -86,6 +86,8 @@ pub union Outer {
         pub magic: u32,
     },
 
+    /// Reference the nested item by its qualified name inside the union body.
+    pub header: Outer::Header,
     pub raw: u32,
     pub inner: union {
         pub lo: u16,

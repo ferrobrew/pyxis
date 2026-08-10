@@ -28,5 +28,8 @@ pub type Outer {
     /// A type alias nested inside [`Outer`].
     pub type InnerAlias = u32,
 
+    /// Reference a nested item by its qualified name inside the parent's own
+    /// body.
+    pub inner: Outer::InnerFlags,
     pub field: u32,
 }

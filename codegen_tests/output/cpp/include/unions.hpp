@@ -77,14 +77,15 @@ namespace unions {
     /// A union nested inside another union, plus a nested item declaration in a
     /// union body.
     union alignas(4) Outer {
-        ::std::uint32_t raw;
-        OuterInnerUnion inner;
-
         /// A type declared inside a union body. Nested declarations work here
         /// exactly as they do in a `type` body.
         struct Header {
             ::std::uint32_t magic;
         };
+        /// Reference the nested item by its qualified name inside the union body.
+        ::unions::Outer::Header header;
+        ::std::uint32_t raw;
+        OuterInnerUnion inner;
     };
     static_assert(sizeof(Outer) == 0x4);
     static_assert(alignof(Outer) == 4);
