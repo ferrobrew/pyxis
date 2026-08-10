@@ -4,6 +4,7 @@ use super::{
 };
 use crate::{
     grammar::{self, ItemPath},
+    math,
     semantic::{
         attribute,
         error::{
@@ -16,7 +17,6 @@ use crate::{
         types::{Function, ItemDefinitionInner, ItemState, ItemStateResolved, Type, Visibility},
     },
     span::{HasLocation, ItemLocation},
-    util,
 };
 
 use super::{TypeDefinition, vftable};
@@ -503,7 +503,7 @@ fn round_up_min_size(
             .unwrap_or(semantic.type_registry.pointer_size());
 
         // Calculate the minimum required alignment from field types
-        let required_alignment = util::lcm(
+        let required_alignment = math::lcm(
             pending_regions
                 .iter()
                 .flat_map(|(_, r)| r.type_ref.alignment(semantic.type_registry)),
@@ -541,7 +541,7 @@ pub(in crate::semantic) fn check_trait_constraints(
                 is_base: _,
                 location: _,
             } = region;
-            let name = name.as_deref().unwrap_or("unnamed");
+            let name = name.as_deref().unwrap_or(super::UNNAMED);
             fn get_defaultable_type_path(type_ref: &Type) -> Option<&ItemPath> {
                 match type_ref {
                     Type::Raw(tp) => Some(tp),
@@ -594,7 +594,7 @@ pub(in crate::semantic) fn check_trait_constraints(
                 is_base: _,
                 location: _,
             } = region;
-            let name = name.as_deref().unwrap_or("unnamed");
+            let name = name.as_deref().unwrap_or(super::UNNAMED);
 
             // Check if the type is copyable, recursively handling generics and arrays
             if !is_type_trait_satisfied(
@@ -624,7 +624,7 @@ pub(in crate::semantic) fn check_trait_constraints(
                 is_base: _,
                 location: _,
             } = region;
-            let name = name.as_deref().unwrap_or("unnamed");
+            let name = name.as_deref().unwrap_or(super::UNNAMED);
 
             // Check if the type is cloneable, recursively handling generics and arrays
             if !is_type_trait_satisfied(
@@ -678,7 +678,7 @@ fn resolve_alignment(
         .unwrap_or(semantic.type_registry.pointer_size());
 
     // Calculate the minimum required alignment.
-    let required_alignment = util::lcm(
+    let required_alignment = math::lcm(
         regions
             .iter()
             .flat_map(|r| r.type_ref.alignment(semantic.type_registry)),
@@ -698,8 +698,18 @@ fn resolve_alignment(
     {
         let mut last_address = 0;
         for region in regions {
-            let name = region.name.as_deref().unwrap_or("unnamed");
-            let field_alignment = region.type_ref.alignment(semantic.type_registry).unwrap();
+            let name = region.name.as_deref().unwrap_or(super::UNNAMED);
+            // Region types are resolved before the field-alignment check runs
+            // (unresolved types stall the earlier resolution pass), so
+            // alignment is always known here.
+            let field_alignment = match region.type_ref.alignment(semantic.type_registry) {
+                Some(a) => a,
+                #[expect(
+                    clippy::unreachable,
+                    reason = "region types are resolved before this check"
+                )]
+                None => unreachable!("region type unresolved at field-alignment check"),
+            };
             if last_address % field_alignment != 0 {
                 return Err(SemanticError::FieldNotAligned {
                     field_name: name.into(),
@@ -709,7 +719,16 @@ fn resolve_alignment(
                     location: *location,
                 });
             }
-            last_address += region.size(semantic.type_registry).unwrap();
+            // Same invariant for size.
+            let region_size = match region.size(semantic.type_registry) {
+                Some(s) => s,
+                #[expect(
+                    clippy::unreachable,
+                    reason = "region types are resolved before this check"
+                )]
+                None => unreachable!("region type unresolved at field-alignment check"),
+            };
+            last_address += region_size;
         }
     }
 

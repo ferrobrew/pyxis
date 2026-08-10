@@ -167,13 +167,21 @@ impl Parser {
             }
             TokenKind::FloatLiteral(_) => {
                 let token = self.advance();
-                let TokenKind::FloatLiteral(s) = token.kind else {
-                    unreachable!()
-                };
-                Ok(Expr::FloatLiteral {
-                    raw_text: s,
-                    location: token.location,
-                })
+                match token.kind {
+                    TokenKind::FloatLiteral(s) => Ok(Expr::FloatLiteral {
+                        raw_text: s,
+                        location: token.location,
+                    }),
+                    // The token was just peeked as `FloatLiteral` and `advance()`
+                    // returns that same token, so this arm is unreachable. It
+                    // exists so a future token-restructure fails exhaustively
+                    // at compile time rather than silently.
+                    #[expect(
+                        clippy::unreachable,
+                        reason = "peeked as FloatLiteral; advance() returns the same token"
+                    )]
+                    _ => unreachable!("peeked as FloatLiteral; advance() returns the same token"),
+                }
             }
             TokenKind::StringLiteral(_) => {
                 let token = self.current().clone();
@@ -193,8 +201,15 @@ impl Parser {
             }
             TokenKind::CStringLiteral(_) => {
                 let token = self.advance();
-                let TokenKind::CStringLiteral(s) = token.kind else {
-                    unreachable!()
+                let s = match token.kind {
+                    TokenKind::CStringLiteral(s) => s,
+                    // Peeked as `CStringLiteral` above; `advance()` returns the
+                    // same token, so this arm is unreachable.
+                    #[expect(
+                        clippy::unreachable,
+                        reason = "peeked as CStringLiteral; advance() returns it"
+                    )]
+                    _ => unreachable!("peeked as CStringLiteral; advance() returns the same token"),
                 };
                 // Detect raw-ness from the original token text: `cr` prefix
                 // means raw, `c"` means regular.
@@ -308,8 +323,15 @@ impl Parser {
         match self.peek() {
             TokenKind::IntLiteral(_) => {
                 let token = self.advance();
-                let TokenKind::IntLiteral(s) = token.kind else {
-                    unreachable!()
+                let s = match token.kind {
+                    TokenKind::IntLiteral(s) => s,
+                    // Peeked as `IntLiteral` above; `advance()` returns the
+                    // same token, so this arm is unreachable.
+                    #[expect(
+                        clippy::unreachable,
+                        reason = "peeked as IntLiteral; advance() returns it"
+                    )]
+                    _ => unreachable!("peeked as IntLiteral; advance() returns the same token"),
                 };
                 // Remove underscores
                 let s = s.replace('_', "");
@@ -383,8 +405,15 @@ impl Parser {
         match self.peek() {
             TokenKind::StringLiteral(_) => {
                 let token = self.advance();
-                let TokenKind::StringLiteral(s) = token.kind else {
-                    unreachable!()
+                let s = match token.kind {
+                    TokenKind::StringLiteral(s) => s,
+                    // Peeked as `StringLiteral` above; `advance()` returns the
+                    // same token, so this arm is unreachable.
+                    #[expect(
+                        clippy::unreachable,
+                        reason = "peeked as StringLiteral; advance() returns it"
+                    )]
+                    _ => unreachable!("peeked as StringLiteral; advance() returns the same token"),
                 };
                 Ok((s, token.location))
             }

@@ -70,11 +70,8 @@ pub(super) fn resolve_regions(
                 let existing_region = resolved
                     .regions
                     .last()
-                    .unwrap()
-                    .name
-                    .as_deref()
-                    .unwrap_or_default()
-                    .to_string();
+                    .map(|r| r.name.as_deref().unwrap_or_default().to_string())
+                    .unwrap_or_else(|| super::UNNAMED.to_string());
                 return Err(SemanticError::OverlappingRegions {
                     item_path: resolvee_path.clone(),
                     region_name: existing_region,
@@ -206,7 +203,10 @@ pub(in crate::semantic) fn get_region_name_and_type_definition<'a>(
     let region_name = region
         .name
         .clone()
-        .expect("region had no name, this shouldn't be possible");
+        // A region with no name is rendered as "unnamed" elsewhere in the
+        // compiler (see the field-alignment loop in `build.rs`), so treat it
+        // the same way here rather than panicking.
+        .unwrap_or_else(|| super::UNNAMED.to_string());
 
     let Type::Raw(path) = &region.type_ref else {
         return Err({
@@ -292,7 +292,7 @@ pub(super) fn is_type_trait_satisfied(
 /// Check if a resolved type is `str`.
 pub(super) fn is_str_type(type_: &Type) -> bool {
     match type_ {
-        Type::Raw(path) if path.len() == 1 => path.iter().next().unwrap().as_str() == "str",
+        Type::Raw(path) if path.len() == 1 => path.last().is_some_and(|s| s.as_str() == "str"),
         _ => false,
     }
 }

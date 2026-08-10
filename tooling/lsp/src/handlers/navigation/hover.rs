@@ -563,18 +563,14 @@ pub(crate) fn hover_response(
     content: &str,
     span: &Span,
 ) -> Response {
-    Response {
+    response_with_json(
         id,
-        result: Some(
-            serde_json::to_value(Hover {
-                contents: HoverContents::Markup(MarkupContent {
-                    kind: MarkupKind::Markdown,
-                    value,
-                }),
-                range: Some(pyxis_span_to_lsp_range(content, span)),
-            })
-            .unwrap(),
-        ),
-        error: None,
-    }
+        &Hover {
+            contents: HoverContents::Markup(MarkupContent {
+                kind: MarkupKind::Markdown,
+                value,
+            }),
+            range: Some(pyxis_span_to_lsp_range(content, span)),
+        },
+    )
 }

@@ -161,7 +161,15 @@ impl Parser {
                 // For use statements and other item paths, we need to skip over
                 // generic-like syntax to get to the end of the path segment
                 let (generic_str, generic_end) = self.parse_generic_args_as_string()?;
-                let last = segments.last_mut().unwrap();
+                // `segments` is non-empty here: every path has at least one
+                // segment by the time `<` generic args are parsed.
+                let Some(last) = segments.last_mut() else {
+                    return Err(ParseError::ExpectedToken {
+                        expected: vec![TokenKind::Ident(String::new())],
+                        found: self.peek().clone(),
+                        location: self.current().location,
+                    });
+                };
                 *last = ItemPathSegment::from(format!("{}{}", last.as_str(), generic_str));
                 end_pos = generic_end;
             }

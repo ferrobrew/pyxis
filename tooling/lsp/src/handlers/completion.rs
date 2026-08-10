@@ -14,7 +14,10 @@ impl ServerState {
             Bitflags, Const, Enum, Epilogue, Extern, Fn, Impl, Mut, Prologue, Pub, SelfType,
             SelfValue, Type, Union, Use, Vftable,
         };
-        let kw = |k: TokenKind| k.keyword_str().expect("keyword token");
+        let kw = |k: TokenKind| k.keyword_str().unwrap_or_default();
+        // Keyword spellings come from the tokenizer's canonical table; every
+        // token below is a keyword, so the `unwrap_or_default` fallback is
+        // unreachable — it exists only to avoid panicking in the closure.
         let mut items: Vec<CompletionItem> = [
             kw(Pub),
             kw(Type),
@@ -46,11 +49,7 @@ impl ServerState {
             items.extend(self.type_completions(uri));
         }
 
-        Response {
-            id: req.id,
-            result: Some(serde_json::to_value(items).unwrap()),
-            error: None,
-        }
+        response_with_json(req.id, &items)
     }
 
     /// Type-name completions for a document: builtins, in-scope user types

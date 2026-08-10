@@ -280,3 +280,33 @@ fn error_response(id: lsp_server::RequestId, e: serde_json::Error) -> Response {
         }),
     }
 }
+
+/// Serialize `value` into a `serde_json::Value` for an LSP response body.
+///
+/// LSP response payloads are JSON-RPC values, so each handler body must
+/// serialize its typed result. The types involved (`lsp_types` models, our own
+/// item lists) all impl `Serialize` infallibly in practice, but a serialization
+/// failure must still surface as an LSP error response rather than panicking —
+/// that is what `error_response` is for.
+pub(crate) fn json_value<T: serde::Serialize>(
+    value: &T,
+) -> Result<serde_json::Value, serde_json::Error> {
+    serde_json::to_value(value)
+}
+
+/// Build a success response whose body is the JSON serialization of `value`,
+/// or an LSP error response if serialization fails. Handlers use this so a
+/// non-serializable result becomes an error response instead of an unwrap.
+pub(crate) fn response_with_json(
+    id: lsp_server::RequestId,
+    value: &impl serde::Serialize,
+) -> Response {
+    match json_value(value) {
+        Ok(result) => Response {
+            id,
+            result: Some(result),
+            error: None,
+        },
+        Err(e) => error_response(id, e),
+    }
+}

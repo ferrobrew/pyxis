@@ -279,7 +279,10 @@ pub fn write_module(
                     path.display(),
                     lc.line,
                     lc.column,
-                    raw_output.lines().nth(lc.line - 1).unwrap(),
+                    raw_output
+                        .lines()
+                        .nth(lc.line - 1)
+                        .unwrap_or(raw_output.as_str()),
                     format!("{}^", " ".repeat(lc.column))
                 ));
                 raw_output

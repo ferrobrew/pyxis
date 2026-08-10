@@ -201,7 +201,7 @@ fn build_type(
                 .as_deref()
                 .ok_or_else(|| BackendError::FieldCodeGenFailed {
                     type_path: path.clone(),
-                    field_name: "unnamed".to_string(),
+                    field_name: crate::semantic::type_definition::UNNAMED.to_string(),
                     kind: crate::backends::error::FieldCodeGenFailedKind::FieldNameNotPresent,
                     location: *location,
                 })?;
@@ -507,7 +507,7 @@ fn build_union(
                     .as_deref()
                     .ok_or_else(|| BackendError::FieldCodeGenFailed {
                         type_path: path.clone(),
-                        field_name: "unnamed".to_string(),
+                        field_name: crate::semantic::type_definition::UNNAMED.to_string(),
                         kind: crate::backends::error::FieldCodeGenFailedKind::FieldNameNotPresent,
                         location: *location,
                     })?;

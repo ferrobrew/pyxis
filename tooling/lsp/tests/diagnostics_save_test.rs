@@ -1,6 +1,12 @@
 //! Regression test for issue 4: saving a corrupt .pyxis file must NOT clear
 //! the parse-error diagnostic that typing produced.
 
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::unreachable
+)]
 use lsp_server::Notification;
 use lsp_types::{
     DidChangeTextDocumentParams, DidOpenTextDocumentParams, DidSaveTextDocumentParams,

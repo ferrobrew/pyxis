@@ -1,3 +1,18 @@
+//! Pyxis macro crate: derive macros for the compiler's internal traits.
+//!
+//! The workspace restriction lints (unwrap_used/expect_used/panic/unreachable)
+//! target production code. Test code is explicitly exempt per the contributing
+//! guidelines, so allow them under `cfg(test)` only.
+#![cfg_attr(
+    test,
+    allow(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        clippy::unreachable
+    )
+)]
+
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use syn::{Data, DeriveInput, Fields, Ident, parse_macro_input, spanned::Spanned};
@@ -76,8 +91,19 @@ pub fn derive_has_location(input: TokenStream) -> TokenStream {
                                     #name::#variant_name { location, .. } => location
                                 })
                             } else if let Some(first_field) = fields.named.first() {
-                                // Variant delegates to an inner type that implements HasLocation
-                                let field_name = first_field.ident.as_ref().unwrap();
+                                // Variant delegates to an inner type that implements HasLocation.
+                                // Named fields always carry an ident; an unnamed named-field would
+                                // be a syntax error, so this is a safety net rather than control flow.
+                                let Some(field_name) = first_field.ident.as_ref() else {
+                                    errors.push(syn::Error::new(
+                                        variant.span(),
+                                        format!(
+                                            "variant `{}` has an unnamed field; cannot derive HasLocation",
+                                            variant_name
+                                        ),
+                                    ));
+                                    return None;
+                                };
                                 Some(quote! {
                                     #name::#variant_name { #field_name, .. } => #field_name.location()
                                 })
@@ -249,8 +275,8 @@ fn generate_struct_strip_locations(name: &Ident, fields: &Fields) -> proc_macro2
             let field_assignments: Vec<_> = fields
                 .named
                 .iter()
-                .map(|field| {
-                    let field_name = field.ident.as_ref().unwrap();
+                .filter_map(|field| field.ident.as_ref().map(|field_name| (field, field_name)))
+                .map(|(field, field_name)| {
                     let field_attr = get_strip_locations_attr(field);
 
                     if field_name == "location" {
@@ -301,15 +327,14 @@ fn generate_enum_variant_strip_locations(
             let field_names: Vec<_> = fields
                 .named
                 .iter()
-                .map(|f| f.ident.as_ref().unwrap())
+                .filter_map(|f| f.ident.as_ref())
                 .collect();
 
             let field_assignments: Vec<_> = fields
                 .named
                 .iter()
-                .map(|field| {
-                    let field_name = field.ident.as_ref().unwrap();
-
+                .filter_map(|field| field.ident.as_ref())
+                .map(|field_name| {
                     if field_name == "location" {
                         quote! { #field_name: crate::span::ItemLocation::test() }
                     } else {
@@ -437,8 +462,8 @@ fn generate_struct_equals(fields: &Fields) -> proc_macro2::TokenStream {
             .named
             .iter()
             .filter(|f| f.ident.as_ref().is_none_or(|i| i != "location"))
-            .map(|f| {
-                let field_name = f.ident.as_ref().unwrap();
+            .filter_map(|f| f.ident.as_ref())
+            .map(|field_name| {
                 quote! {
                     crate::span::EqualsIgnoringLocations::equals_ignoring_locations(
                         &self.#field_name, &other.#field_name
@@ -478,7 +503,7 @@ fn generate_enum_variant_equals(
             let names: Vec<_> = fields
                 .named
                 .iter()
-                .map(|f| f.ident.as_ref().unwrap())
+                .filter_map(|f| f.ident.as_ref())
                 .filter(|i| *i != "location")
                 .collect();
             let a_bindings = names.iter().map(|n| {

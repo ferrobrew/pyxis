@@ -2,6 +2,12 @@
 members = [".", "driver", "codegen_tests/output/rust", "pyxis_macros", "tooling/lsp"]
 default-members = [".", "driver", "tooling/lsp"]
 
+[workspace.lints.clippy]
+unwrap_used = "warn"
+expect_used = "warn"
+panic = "warn"
+unreachable = "warn"
+
 [workspace.dependencies]
 specta = { git = "https://github.com/specta-rs/specta.git", rev = "effe988832312009388a11487ad0ceb09b934a80", features = [
     "derive",
@@ -15,11 +21,16 @@ lsp-types = "0.97"
 crossbeam-channel = "0.5"
 url = "2.5"
 expect-test = "1.4"
+proptest = "1.11"
+test-case = "3.3"
 
 [package]
 name = "pyxis"
 version = "0.1.0"
 edition = "2024"
+
+[lints]
+workspace = true
 
 [dependencies]
 glob = { version = "0.3.0" }
@@ -48,3 +59,5 @@ required-features = ["json", "cpp"]
 
 [dev-dependencies]
 pretty_assertions = "1.4"
+proptest = { workspace = true }
+test-case = { workspace = true }

@@ -28,11 +28,13 @@ impl ServerState {
 
         if let Some(doc_uri) = existing_uri {
             // File was already discovered/opened — update its content in place
-            // (the editor's version may differ from disk).
-            let doc = self
-                .documents
-                .get_mut(&doc_uri)
-                .expect("existing_uri came from documents");
+            // (the editor's version may differ from disk). The key came from
+            // `documents` itself (either the direct `contains_key` hit or
+            // `find_document_by_abs_path`), so the entry exists; the `else`
+            // arm is the non-panicking form of that invariant.
+            let Some(doc) = self.documents.get_mut(&doc_uri) else {
+                return Ok(());
+            };
             use pyxis::semantic::Setter;
             doc.source_file.set_contents(&mut self.db).to(text.clone());
             doc.content = text;

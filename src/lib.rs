@@ -1,6 +1,19 @@
 #![allow(clippy::result_large_err)]
 #![allow(clippy::collapsible_if)]
 #![deny(clippy::uninlined_format_args)]
+// The workspace restriction lints (unwrap_used/expect_used/panic/unreachable)
+// target production code. Test code is explicitly exempt per the contributing
+// guidelines ("No `unwrap()` or `expect()` in production code; tests are
+// fine"), so allow them under `cfg(test)` only.
+#![cfg_attr(
+    test,
+    allow(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        clippy::unreachable
+    )
+)]
 
 use std::path::Path;
 
@@ -14,7 +27,8 @@ pub mod source_store;
 pub mod span;
 pub mod tokenizer;
 
-pub(crate) mod util;
+pub mod fmt;
+pub(crate) mod math;
 
 // Re-export semantic error for convenience
 pub use semantic::SemanticError;
@@ -260,9 +274,10 @@ impl BuildError {
                         .finish();
 
                 let mut buffer = Vec::new();
-                report
-                    .write(("", Source::from("")), &mut buffer)
-                    .expect("writing to Vec should not fail");
+                // Writing an ariadne report into a `Vec<u8>` cannot fail — the
+                // `Write` impl on `Vec` is infallible — so the `fmt::Result` is
+                // deliberately dropped here.
+                let _ = report.write(("", Source::from("")), &mut buffer);
                 String::from_utf8_lossy(&buffer).to_string()
             }
         }
@@ -324,10 +339,11 @@ pub fn build_with_store_and_options(
 ) -> Result<(), BuildError> {
     let config = config::Config::load(&in_dir.join("pyxis.toml"))?;
 
-    // Build a Salsa database and register all .pyxis source files as inputs.
-    let db = semantic::PyxisDatabaseImpl::default();
-    let mut sources = Vec::new();
-
+    // Read all .pyxis source files from the input directory into memory, then
+    // delegate to the source-based core. This keeps the filesystem access in
+    // one place: the test suite drives the same pipeline through
+    // [`build_sources`] without touching the disk.
+    let mut sources: Vec<(String, String)> = Vec::new();
     for path in glob::glob(&format!("{}/**/*.pyxis", in_dir.display()))?.filter_map(Result::ok) {
         let source = std::fs::read_to_string(&path).map_err(|e| BuildError::Io {
             error: e,
@@ -335,17 +351,54 @@ pub fn build_with_store_and_options(
         })?;
         let relative_path = path.strip_prefix(in_dir).unwrap_or(&path);
         let filename = relative_path.display().to_string();
-        let file_id = file_store.register_path(filename.clone(), path.to_path_buf());
+        sources.push((filename, source));
+    }
+
+    build_sources(
+        sources,
+        &config.project,
+        out_dir,
+        backend,
+        file_store,
+        options,
+    )
+}
+
+/// Build from in-memory sources without touching the filesystem.
+///
+/// `sources` is a list of `(filename, content)` pairs where `filename` is the
+/// project-relative path (as it would appear in error messages). This is the
+/// filesystem-free entry point used by the test suite; the disk-based
+/// [`build_with_store_and_options`] reads files then calls through to here.
+pub fn build_sources(
+    sources: Vec<(String, String)>,
+    project: &config::Project,
+    out_dir: &Path,
+    backend: Backend,
+    file_store: &mut source_store::FileStore,
+    options: BuildOptions,
+) -> Result<(), BuildError> {
+    // Build a Salsa database and register all sources as inputs.
+    let db = semantic::PyxisDatabaseImpl::default();
+    let mut source_set_entries = Vec::new();
+
+    for (filename, source) in sources {
+        // The disk-based pipeline globs `**/*.pyxis` only (config files like
+        // `pyxis.toml` are never registered as sources); mirror that here.
+        if !filename.ends_with(".pyxis") {
+            continue;
+        }
+        let file_id = file_store.register_in_memory(filename.clone(), source.clone());
         let file_id_u32 = file_id.index() as u32;
         let source_file = semantic::SourceFile::new(&db, filename, file_id_u32, source);
-        sources.push(source_file);
+        source_set_entries.push(source_file);
     }
 
     // Create an interned source set for the Salsa query
-    let source_set = semantic::SourceSet::new(&db, sources);
+    let source_set = semantic::SourceSet::new(&db, source_set_entries);
 
     // Run the Salsa-backed analysis query.
-    let analysis = semantic::analyze(&db, config.project.pointer_size, source_set);
+    let analysis = semantic::analyze(&db, project.pointer_size, source_set);
 
     // Dual-path error model: collect all errors, but return the first as Err
     // to preserve the existing Result<(), BuildError> contract.
@@ -356,9 +409,16 @@ pub fn build_with_store_and_options(
         return Err(BuildError::Semantic(first_semantic_err.clone()));
     }
 
-    let resolved_semantic_state = analysis
-        .to_semantic_output(&db)
-        .expect("to_semantic_output returns Some when there are no parse or semantic errors");
+    let resolved_semantic_state = analysis.to_semantic_output(&db).ok_or_else(|| {
+        // `to_semantic_output` returns None when stale/unresolved types remain
+        // after the error-free pass above; report that as a stalled build
+        // rather than panicking.
+        BuildError::Semantic(SemanticError::TypeResolutionStalled {
+            unresolved_types: vec![],
+            resolved_types: vec![],
+            unresolved_references: vec![],
+        })
+    })?;
 
     match backend {
         Backend::Rust => {
@@ -375,17 +435,12 @@ pub fn build_with_store_and_options(
         }
         #[cfg(feature = "json")]
         Backend::Json => {
-            backends::json::build(
-                out_dir,
-                &resolved_semantic_state,
-                &config.project.name,
-                file_store,
-            )?;
+            backends::json::build(out_dir, &resolved_semantic_state, &project.name, file_store)?;
             Ok(())
         }
         #[cfg(feature = "cpp")]
         Backend::Cpp => {
-            backends::cpp::build(out_dir, &resolved_semantic_state, &config.project)?;
+            backends::cpp::build(out_dir, &resolved_semantic_state, project)?;
             Ok(())
         }
         // The backend is a valid, parseable target, but its codegen wasn't
@@ -422,10 +477,9 @@ pub fn check_with_store(
 ) -> Result<(), Vec<BuildError>> {
     let config = config::Config::load(&in_dir.join("pyxis.toml")).map_err(|e| vec![e.into()])?;
 
-    // Build a Salsa database and register all .pyxis source files as inputs.
-    let db = semantic::PyxisDatabaseImpl::default();
-    let mut sources = Vec::new();
-
+    // Read all .pyxis source files into memory, then delegate to the
+    // source-based core (see [`check_sources`]).
+    let mut sources: Vec<(String, String)> = Vec::new();
     for path in glob::glob(&format!("{}/**/*.pyxis", in_dir.display()))
         .map_err(|e| vec![e.into()])?
         .filter_map(Result::ok)
@@ -438,17 +492,43 @@ pub fn check_with_store(
         })?;
         let relative_path = path.strip_prefix(in_dir).unwrap_or(&path);
         let filename = relative_path.display().to_string();
-        let file_id = file_store.register_path(filename.clone(), path.to_path_buf());
+        sources.push((filename, source));
+    }
+
+    check_sources(sources, config.project.pointer_size, file_store)
+}
+
+/// Check in-memory sources for errors without touching the filesystem.
+///
+/// `sources` is a list of `(filename, content)` pairs where `filename` is the
+/// project-relative path (as it would appear in error messages). The
+/// filesystem-free twin of [`check_with_store`], used by the test suite.
+pub fn check_sources(
+    sources: Vec<(String, String)>,
+    pointer_size: usize,
+    file_store: &mut source_store::FileStore,
+) -> Result<(), Vec<BuildError>> {
+    // Build a Salsa database and register all sources as inputs.
+    let db = semantic::PyxisDatabaseImpl::default();
+    let mut source_set_entries = Vec::new();
+
+    for (filename, source) in sources {
+        // The disk-based pipeline globs `**/*.pyxis` only (config files like
+        // `pyxis.toml` are never registered as sources); mirror that here.
+        if !filename.ends_with(".pyxis") {
+            continue;
+        }
+        let file_id = file_store.register_in_memory(filename.clone(), source.clone());
         let file_id_u32 = file_id.index() as u32;
         let source_file = semantic::SourceFile::new(&db, filename, file_id_u32, source);
-        sources.push(source_file);
+        source_set_entries.push(source_file);
     }
 
     // Create an interned source set for the Salsa query
-    let source_set = semantic::SourceSet::new(&db, sources);
+    let source_set = semantic::SourceSet::new(&db, source_set_entries);
 
     // Run the Salsa-backed analysis query.
-    let analysis = semantic::analyze(&db, config.project.pointer_size, source_set);
+    let analysis = semantic::analyze(&db, pointer_size, source_set);
 
     // Collect ALL errors — parse errors first (matching build's priority),
     // then semantic errors. Parse errors short-circuit semantic analysis

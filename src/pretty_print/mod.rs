@@ -6,7 +6,7 @@
 /// - Formatting/normalizing code
 /// - Testing round-trip parsing
 use crate::grammar::{ItemDefinitionInner, *};
-use std::fmt::Write;
+use crate::{infallible_write, infallible_writeln};
 
 mod definitions;
 mod expr_and_format;
@@ -66,7 +66,7 @@ impl PrettyPrinter {
     pub fn print_module(&mut self, module: &Module) -> String {
         // Print module-level doc comments
         for doc in &module.doc_comments {
-            writeln!(&mut self.output, "//!{doc}").unwrap();
+            infallible_writeln!(&mut self.output, "//!{doc}");
         }
 
         // Add blank line after module doc comments if there are any
@@ -122,7 +122,7 @@ impl PrettyPrinter {
                     Visibility::Public => "pub ",
                     Visibility::Private => "",
                 };
-                writeln!(&mut self.output, "{vis}use {tree_str};").unwrap();
+                infallible_writeln!(&mut self.output, "{vis}use {tree_str};");
                 // Only add blank line if next item is not a use statement
                 if !matches!(next_item, Some(ModuleItem::Use { .. })) {
                     self.writeln("");
@@ -137,11 +137,11 @@ impl PrettyPrinter {
                 // Print doc comments
                 for doc in doc_comments {
                     self.write_indent();
-                    writeln!(&mut self.output, "///{doc}").unwrap();
+                    infallible_writeln!(&mut self.output, "///{doc}");
                 }
                 self.print_attributes(attributes);
                 self.write_indent();
-                writeln!(&mut self.output, "extern type {name};").unwrap();
+                infallible_writeln!(&mut self.output, "extern type {name};");
                 self.writeln("");
             }
             ModuleItem::Splice { splice } => {
@@ -180,25 +180,25 @@ impl PrettyPrinter {
             Comment::DocOuter { lines, .. } => {
                 for line in lines {
                     self.write_indent();
-                    writeln!(&mut self.output, "/// {line}").unwrap();
+                    infallible_writeln!(&mut self.output, "/// {line}");
                 }
             }
             Comment::DocInner { lines, .. } => {
                 for line in lines {
                     self.write_indent();
-                    writeln!(&mut self.output, "//! {line}").unwrap();
+                    infallible_writeln!(&mut self.output, "//! {line}");
                 }
             }
             Comment::Regular { text, .. } => {
                 // Regular comments include the // prefix
                 self.write_indent();
-                writeln!(&mut self.output, "{text}").unwrap();
+                infallible_writeln!(&mut self.output, "{text}");
             }
             Comment::MultiLine { lines, .. } => {
                 // Multiline comments include /* and */ in the text
                 for line in lines {
                     self.write_indent();
-                    writeln!(&mut self.output, "{line}").unwrap();
+                    infallible_writeln!(&mut self.output, "{line}");
                 }
             }
         }
@@ -208,18 +208,18 @@ impl PrettyPrinter {
         match comment {
             Comment::Regular { text, .. } => {
                 // Regular comments include the // prefix
-                write!(&mut self.output, "{text}").unwrap();
+                infallible_write!(&mut self.output, "{text}");
             }
             Comment::MultiLine { lines, .. } => {
                 // Multiline comments - just print first line inline for now
                 if let Some(first) = lines.first() {
-                    write!(&mut self.output, "{first}").unwrap();
+                    infallible_write!(&mut self.output, "{first}");
                 }
                 // If there are more lines, print them on separate lines
                 for line in lines.iter().skip(1) {
-                    writeln!(&mut self.output).unwrap();
+                    infallible_writeln!(&mut self.output);
                     self.write_indent();
-                    write!(&mut self.output, "{line}").unwrap();
+                    infallible_write!(&mut self.output, "{line}");
                 }
             }
             _ => {
@@ -245,20 +245,20 @@ impl PrettyPrinter {
         }
 
         self.write_indent();
-        write!(&mut self.output, "{}[", if inner { "#!" } else { "#" }).unwrap();
+        infallible_write!(&mut self.output, "{}[", if inner { "#!" } else { "#" });
         for (i, attr) in attrs.0.iter().enumerate() {
             if i > 0 {
-                write!(&mut self.output, ", ").unwrap();
+                infallible_write!(&mut self.output, ", ");
             }
             self.print_attribute(attr);
         }
-        writeln!(&mut self.output, "]").unwrap();
+        infallible_writeln!(&mut self.output, "]");
     }
 
     pub(super) fn print_attribute(&mut self, attr: &Attribute) {
         match attr {
             Attribute::Ident { ident, .. } => {
-                write!(&mut self.output, "{ident}").unwrap();
+                infallible_write!(&mut self.output, "{ident}");
             }
             Attribute::Function { name, items, .. } => {
                 // Check special formatting requirements
@@ -269,13 +269,13 @@ impl PrettyPrinter {
                     self.in_vftable_index = true;
                 }
 
-                write!(&mut self.output, "{name}(").unwrap();
+                infallible_write!(&mut self.output, "{name}(");
                 let mut first_expr = true;
                 for item in items {
                     match item {
                         AttributeItem::Expr { expr, .. } => {
                             if !first_expr {
-                                write!(&mut self.output, ", ").unwrap();
+                                infallible_write!(&mut self.output, ", ");
                             }
                             first_expr = false;
 
@@ -283,7 +283,7 @@ impl PrettyPrinter {
                             if needs_underscore {
                                 if let Expr::IntLiteral { value, .. } = expr {
                                     let formatted = self.format_hex_with_underscores(*value);
-                                    write!(&mut self.output, "{formatted}").unwrap();
+                                    infallible_write!(&mut self.output, "{formatted}");
                                 } else {
                                     self.print_expr(expr);
                                 }
@@ -292,33 +292,33 @@ impl PrettyPrinter {
                             }
                         }
                         AttributeItem::Comment { text, .. } => {
-                            write!(&mut self.output, " {text}").unwrap();
+                            infallible_write!(&mut self.output, " {text}");
                         }
                     }
                 }
-                write!(&mut self.output, ")").unwrap();
+                infallible_write!(&mut self.output, ")");
 
                 if is_index {
                     self.in_vftable_index = false;
                 }
             }
             Attribute::Assign { name, items, .. } => {
-                write!(&mut self.output, "{name} = ").unwrap();
+                infallible_write!(&mut self.output, "{name} = ");
                 for item in items {
                     match item {
                         AttributeItem::Expr { expr, .. } => {
                             self.print_expr(expr);
                         }
                         AttributeItem::Comment { text, .. } => {
-                            write!(&mut self.output, " {text}").unwrap();
+                            infallible_write!(&mut self.output, " {text}");
                         }
                     }
                 }
             }
             Attribute::Cfg { predicate, .. } => {
-                write!(&mut self.output, "cfg(").unwrap();
+                infallible_write!(&mut self.output, "cfg(");
                 self.print_cfg_predicate(predicate);
-                write!(&mut self.output, ")").unwrap();
+                infallible_write!(&mut self.output, ")");
             }
         }
     }
@@ -328,36 +328,36 @@ impl PrettyPrinter {
         match p {
             CfgPredicate::Atom { atom, .. } => match atom {
                 CfgAtom::Ident { name, .. } => {
-                    write!(&mut self.output, "{name}").unwrap();
+                    infallible_write!(&mut self.output, "{name}");
                 }
                 CfgAtom::KeyValue { key, value, .. } => {
-                    write!(&mut self.output, "{key} = \"{value}\"").unwrap();
+                    infallible_write!(&mut self.output, "{key} = \"{value}\"");
                 }
             },
             CfgPredicate::Any { predicates, .. } => {
-                write!(&mut self.output, "any(").unwrap();
+                infallible_write!(&mut self.output, "any(");
                 for (i, child) in predicates.iter().enumerate() {
                     if i > 0 {
-                        write!(&mut self.output, ", ").unwrap();
+                        infallible_write!(&mut self.output, ", ");
                     }
                     self.print_cfg_predicate(child);
                 }
-                write!(&mut self.output, ")").unwrap();
+                infallible_write!(&mut self.output, ")");
             }
             CfgPredicate::All { predicates, .. } => {
-                write!(&mut self.output, "all(").unwrap();
+                infallible_write!(&mut self.output, "all(");
                 for (i, child) in predicates.iter().enumerate() {
                     if i > 0 {
-                        write!(&mut self.output, ", ").unwrap();
+                        infallible_write!(&mut self.output, ", ");
                     }
                     self.print_cfg_predicate(child);
                 }
-                write!(&mut self.output, ")").unwrap();
+                infallible_write!(&mut self.output, ")");
             }
             CfgPredicate::Not { predicate, .. } => {
-                write!(&mut self.output, "not(").unwrap();
+                infallible_write!(&mut self.output, "not(");
                 self.print_cfg_predicate(predicate);
-                write!(&mut self.output, ")").unwrap();
+                infallible_write!(&mut self.output, ")");
             }
         }
     }

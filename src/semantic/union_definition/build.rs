@@ -1,5 +1,6 @@
 use crate::{
     grammar::{self, ItemPath},
+    math,
     semantic::{
         attribute,
         error::{
@@ -12,7 +13,6 @@ use crate::{
         types::{ItemCategory, ItemDefinition, ItemState, ItemStateResolved, Type, Visibility},
     },
     span::{HasLocation, ItemLocation},
-    util,
 };
 
 use super::{UnionDefinition, inline_union_name};
@@ -497,7 +497,7 @@ fn resolve_alignment(
         return Ok(1);
     }
 
-    let required_alignment = util::lcm(
+    let required_alignment = math::lcm(
         regions
             .iter()
             .flat_map(|r| r.type_ref.alignment(semantic.type_registry)),
@@ -543,7 +543,10 @@ fn resolve_size(
             && size > declared
         {
             return Err(SemanticError::UnionMemberExceedsSize {
-                member_name: region.name.clone().unwrap_or_else(|| "unnamed".to_string()),
+                member_name: region
+                    .name
+                    .clone()
+                    .unwrap_or_else(|| crate::semantic::type_definition::UNNAMED.to_string()),
                 member_size: size,
                 declared_size: declared,
                 item_path: resolvee_path.clone(),

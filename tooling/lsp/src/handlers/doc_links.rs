@@ -211,11 +211,7 @@ impl ServerState {
             .ok()
             .map(|p| self.doc_links(&p.text_document.uri))
             .unwrap_or_default();
-        Response {
-            id: req.id,
-            result: Some(serde_json::to_value(links).unwrap()),
-            error: None,
-        }
+        response_with_json(req.id, &links)
     }
 
     fn doc_links(&self, uri: &Uri) -> Vec<DocumentLink> {

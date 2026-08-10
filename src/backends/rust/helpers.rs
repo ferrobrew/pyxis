@@ -4,8 +4,9 @@ use std::{
 };
 
 use crate::{
-    backends::Result,
+    backends::{BackendError, Result},
     grammar::ItemPath,
+    infallible_write,
     semantic::{
         doc_links::ResolvedDocLink,
         types::{PredefinedItem, Type, Visibility},
@@ -143,18 +144,13 @@ fn fully_qualified_type_ref_impl(
     type_ref: &Type,
     prefix: Option<&ItemPath>,
     module_paths: Option<&BTreeSet<ItemPath>>,
-) -> std::result::Result<(), std::fmt::Error> {
-    use std::fmt::Write;
-
+) -> Result<()> {
     // `crate::` qualifier, including any module prefix that mounts the
     // generated tree as a submodule (e.g. `crate::jc2::`).
-    fn write_crate_qualifier(
-        out: &mut String,
-        prefix: Option<&ItemPath>,
-    ) -> std::result::Result<(), std::fmt::Error> {
-        write!(out, "crate::")?;
+    fn write_crate_qualifier(out: &mut String, prefix: Option<&ItemPath>) -> Result<()> {
+        infallible_write!(out, "crate::");
         if let Some(prefix) = prefix {
-            write!(out, "{prefix}::")?;
+            infallible_write!(out, "{prefix}::");
         }
         Ok(())
     }
@@ -205,11 +201,21 @@ fn fully_qualified_type_ref_impl(
     });
 
     match type_ref {
-        Type::Unresolved(_) => panic!("received unresolved type {type_ref:?}"),
+        Type::Unresolved(type_ref) => {
+            // An unresolved type reference cannot be rendered into Rust; report
+            // it as a codegen error rather than panicking. The rendered type
+            // string is the best diagnostic attribution available.
+            Err(BackendError::TypeCodeGenFailed {
+                type_path: ItemPath::from(type_ref.to_string().as_str()),
+                kind: crate::backends::error::TypeCodeGenFailedKind::TypeNotResolved,
+                location: type_ref.location,
+            })
+        }
         Type::Raw(path) => {
             // Check if this is a predefined type
             if let Some(rust_type) = PREDEFINED_TYPE_MAP.get(path) {
-                return write!(out, "{rust_type}");
+                infallible_write!(out, "{rust_type}");
+                return Ok(());
             }
             // Not a predefined type - qualify with crate:: if needed
             if path.len() > 1 {
@@ -224,59 +230,65 @@ fn fully_qualified_type_ref_impl(
                     let module_part: Vec<&str> =
                         path.iter().take(module_len).map(|s| s.as_str()).collect();
                     if !module_part.is_empty() {
-                        write!(out, "{}::", module_part.join("::"))?;
+                        infallible_write!(out, "{}::", module_part.join("::"));
                     }
-                    write!(out, "{flat}")
+                    infallible_write!(out, "{flat}");
                 } else {
-                    write!(out, "{flat}")
+                    infallible_write!(out, "{flat}");
                 }
             } else {
-                write!(out, "{path}")
+                infallible_write!(out, "{path}");
             }
+            Ok(())
         }
         Type::Generic(base_path, args) => {
             // Generate Rust generic syntax: `Base<Arg1, Arg2>`
             if base_path.len() > 1 {
                 write_crate_qualifier(out, prefix)?;
             }
-            write!(out, "{base_path}<")?;
+            infallible_write!(out, "{base_path}<");
             for (i, arg) in args.iter().enumerate() {
                 if i > 0 {
-                    write!(out, ", ")?;
+                    infallible_write!(out, ", ");
                 }
                 fully_qualified_type_ref_impl(out, arg, prefix, module_paths)?;
             }
-            write!(out, ">")
+            infallible_write!(out, ">");
+            Ok(())
         }
         Type::TypeParameter(name) => {
             // Type parameter - just output the name (e.g., `T`)
-            write!(out, "{name}")
+            infallible_write!(out, "{name}");
+            Ok(())
         }
         Type::ConstPointer(tr) => {
-            write!(out, "*const ")?;
-            fully_qualified_type_ref_impl(out, tr.as_ref(), prefix, module_paths)
+            infallible_write!(out, "*const ");
+            fully_qualified_type_ref_impl(out, tr.as_ref(), prefix, module_paths)?;
+            Ok(())
         }
         Type::MutPointer(tr) => {
-            write!(out, "*mut ")?;
-            fully_qualified_type_ref_impl(out, tr.as_ref(), prefix, module_paths)
+            infallible_write!(out, "*mut ");
+            fully_qualified_type_ref_impl(out, tr.as_ref(), prefix, module_paths)?;
+            Ok(())
         }
         Type::Array(tr, size) => {
-            write!(out, "[")?;
+            infallible_write!(out, "[");
             fully_qualified_type_ref_impl(out, tr.as_ref(), prefix, module_paths)?;
-            write!(out, "; {size}]")
+            infallible_write!(out, "; {size}]");
+            Ok(())
         }
         Type::Function(calling_convention, args, return_type) => {
-            write!(out, r#"unsafe extern "{calling_convention}" fn ("#)?;
+            infallible_write!(out, r#"unsafe extern "{calling_convention}" fn ("#);
             for arg in args.iter() {
                 if let Some(name) = &arg.name {
-                    write!(out, "{}: ", rust_parameter_ident(name))?;
+                    infallible_write!(out, "{}: ", rust_parameter_ident(name));
                 }
                 fully_qualified_type_ref_impl(out, &arg.type_, prefix, module_paths)?;
-                write!(out, ", ")?;
+                infallible_write!(out, ", ");
             }
-            write!(out, ")")?;
+            infallible_write!(out, ")");
             if let Some(type_ref) = return_type {
-                write!(out, " -> ")?;
+                infallible_write!(out, " -> ");
                 fully_qualified_type_ref_impl(out, type_ref, prefix, module_paths)?;
             }
             Ok(())
@@ -314,7 +326,7 @@ fn fully_qualified_type_ref(
     type_ref: &Type,
     prefix: Option<&ItemPath>,
     module_paths: Option<&BTreeSet<ItemPath>>,
-) -> std::result::Result<String, std::fmt::Error> {
+) -> Result<String> {
     let mut out = String::new();
     fully_qualified_type_ref_impl(&mut out, type_ref, prefix, module_paths)?;
     Ok(out)

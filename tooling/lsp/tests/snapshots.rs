@@ -2,6 +2,12 @@
 //!
 //! Run `UPDATE_EXPECT=1 cargo test -p pyxis-lsp --test snapshots` to update.
 
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::unreachable
+)]
 use expect_test::expect;
 use lsp_server::{Connection, Message, Notification, Request, RequestId};
 use lsp_types::{

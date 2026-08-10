@@ -365,9 +365,14 @@ pub(super) fn build_function(
                 }
             }
         }
+        // External-body functions are short-circuited at the top of
+        // build_function — we never reach here. The arm exists only for
+        // exhaustiveness of the `FunctionBody` enum.
+        #[expect(
+            clippy::unreachable,
+            reason = "External bodies are short-circuited in build_function"
+        )]
         FunctionBody::External => {
-            // External-body functions are short-circuited at the top of
-            // build_function — we never reach here.
             unreachable!("FunctionBody::External handled above");
         }
     };

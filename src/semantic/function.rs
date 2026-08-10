@@ -476,18 +476,17 @@ pub fn build(
         }
     }
 
-    if !is_vfunc && body.is_none() {
+    let Some(body) = body else {
+        // A function always needs a body: a non-vfunc must carry an explicit
+        // body or `#[address]`, and a vfunc synthesises a vftable body. Reaching
+        // this with neither is a compiler bug path, but it is reported as a
+        // structured error (and the message mirrors `#[address]` guidance)
+        // rather than panicking, so a future change that widens the reachable
+        // state surfaces as a compile error instead of an ICE.
         return Err(SemanticError::FunctionMissingImplementation {
             function_name: function.name.0.clone(),
             location: function.location,
         });
-    }
-
-    let Some(body) = body else {
-        panic!(
-            "function `{}` had no body assigned: {:?}",
-            function.name, function
-        );
     };
 
     let mut arguments = Vec::new();

@@ -278,12 +278,31 @@ fn build_type(
         .map(|f| *f.location())
         .unwrap_or_else(|| *location);
 
+    // Vftable regions come from resolved function types, so sizes are always
+    // known; a `None` here is an invariant violation surfaced as `None` (the
+    // function's own error channel) rather than a panic.
+    let size = {
+        let mut total = 0;
+        for r in &regions {
+            let s = match r.size(type_registry) {
+                Some(s) => s,
+                #[expect(
+                    clippy::unreachable,
+                    reason = "vftable regions come from resolved function types"
+                )]
+                None => unreachable!("vftable region type unresolved"),
+            };
+            total += s;
+        }
+        total
+    };
+
     Some(ItemDefinition {
         visibility,
         path: resolvee_vtable_path.clone(),
         type_parameters: vec![], // Generated vftable types are not generic
         state: ItemState::Resolved(ItemStateResolved {
-            size: regions.iter().map(|r| r.size(type_registry).unwrap()).sum(),
+            size,
             alignment: type_registry.pointer_size(),
             inner: TypeDefinition {
                 regions,

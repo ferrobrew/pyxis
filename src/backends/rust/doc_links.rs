@@ -144,5 +144,11 @@ impl DocLinkCx<'_> {
 
 pub(super) fn hex_literal(value: impl Into<usize>) -> proc_macro2::Literal {
     // https://stackoverflow.com/a/78902864
-    proc_macro2::Literal::from_str(&format!("0x{:X}", value.into())).unwrap()
+    let hex = format!("0x{:X}", value.into());
+    proc_macro2::Literal::from_str(&hex).unwrap_or_else(|_| {
+        // An uppercase 0x-prefixed hex string of a `usize` is always a valid
+        // Rust literal; this arm is unreachable and only keeps the function
+        // total. `Literal::from_str` rejects nothing we can produce here.
+        proc_macro2::Literal::u64_unsuffixed(0)
+    })
 }

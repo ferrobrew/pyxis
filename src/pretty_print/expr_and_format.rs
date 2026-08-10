@@ -1,6 +1,5 @@
 use super::PrettyPrinter;
-use crate::grammar::*;
-use std::fmt::Write;
+use crate::{grammar::*, infallible_write, infallible_writeln};
 
 impl PrettyPrinter {
     /// Format a hex number with underscores every 3 digits from the right
@@ -75,13 +74,13 @@ impl PrettyPrinter {
     pub(super) fn print_expr(&mut self, expr: &Expr) {
         match expr {
             Expr::IntLiteral { value, format, .. } => match format {
-                IntFormat::Hex => write!(&mut self.output, "0x{value:X}").unwrap(),
+                IntFormat::Hex => infallible_write!(&mut self.output, "0x{value:X}"),
                 IntFormat::Binary => {
                     let formatted = self.format_binary_with_padding(*value);
-                    write!(&mut self.output, "{formatted}").unwrap();
+                    infallible_write!(&mut self.output, "{formatted}");
                 }
-                IntFormat::Octal => write!(&mut self.output, "0o{value:o}").unwrap(),
-                IntFormat::Decimal => write!(&mut self.output, "{value}").unwrap(),
+                IntFormat::Octal => infallible_write!(&mut self.output, "0o{value:o}"),
+                IntFormat::Decimal => infallible_write!(&mut self.output, "{value}"),
             },
             Expr::StringLiteral { value, format, .. } => {
                 match format {
@@ -89,22 +88,22 @@ impl PrettyPrinter {
                         // Determine the number of # needed
                         let hash_count = self.count_hashes_needed(value);
                         let hashes = "#".repeat(hash_count);
-                        write!(&mut self.output, "r{hashes}\"{value}\"{hashes}").unwrap();
+                        infallible_write!(&mut self.output, "r{hashes}\"{value}\"{hashes}");
                     }
                     StringFormat::Regular => {
                         // Escape special characters for regular strings
-                        write!(&mut self.output, "\"").unwrap();
+                        infallible_write!(&mut self.output, "\"");
                         for ch in value.chars() {
                             match ch {
-                                '"' => write!(&mut self.output, "\\\"").unwrap(),
-                                '\\' => write!(&mut self.output, "\\\\").unwrap(),
-                                '\n' => write!(&mut self.output, "\\n").unwrap(),
-                                '\r' => write!(&mut self.output, "\\r").unwrap(),
-                                '\t' => write!(&mut self.output, "\\t").unwrap(),
-                                _ => write!(&mut self.output, "{ch}").unwrap(),
+                                '"' => infallible_write!(&mut self.output, "\\\""),
+                                '\\' => infallible_write!(&mut self.output, "\\\\"),
+                                '\n' => infallible_write!(&mut self.output, "\\n"),
+                                '\r' => infallible_write!(&mut self.output, "\\r"),
+                                '\t' => infallible_write!(&mut self.output, "\\t"),
+                                _ => infallible_write!(&mut self.output, "{ch}"),
                             }
                         }
-                        write!(&mut self.output, "\"").unwrap();
+                        infallible_write!(&mut self.output, "\"");
                     }
                 }
             }
@@ -112,52 +111,52 @@ impl PrettyPrinter {
                 StringFormat::Raw => {
                     let hash_count = self.count_hashes_needed(value);
                     let hashes = "#".repeat(hash_count);
-                    write!(&mut self.output, "cr{hashes}\"{value}\"{hashes}").unwrap();
+                    infallible_write!(&mut self.output, "cr{hashes}\"{value}\"{hashes}");
                 }
                 StringFormat::Regular => {
-                    write!(&mut self.output, "c\"").unwrap();
+                    infallible_write!(&mut self.output, "c\"");
                     for ch in value.chars() {
                         match ch {
-                            '"' => write!(&mut self.output, "\\\"").unwrap(),
-                            '\\' => write!(&mut self.output, "\\\\").unwrap(),
-                            '\n' => write!(&mut self.output, "\\n").unwrap(),
-                            '\r' => write!(&mut self.output, "\\r").unwrap(),
-                            '\t' => write!(&mut self.output, "\\t").unwrap(),
-                            _ => write!(&mut self.output, "{ch}").unwrap(),
+                            '"' => infallible_write!(&mut self.output, "\\\""),
+                            '\\' => infallible_write!(&mut self.output, "\\\\"),
+                            '\n' => infallible_write!(&mut self.output, "\\n"),
+                            '\r' => infallible_write!(&mut self.output, "\\r"),
+                            '\t' => infallible_write!(&mut self.output, "\\t"),
+                            _ => infallible_write!(&mut self.output, "{ch}"),
                         }
                     }
-                    write!(&mut self.output, "\"").unwrap();
+                    infallible_write!(&mut self.output, "\"");
                 }
             },
-            Expr::Ident { ident, .. } => write!(&mut self.output, "{ident}").unwrap(),
+            Expr::Ident { ident, .. } => infallible_write!(&mut self.output, "{ident}"),
             Expr::FloatLiteral { raw_text, .. } => {
-                write!(&mut self.output, "{raw_text}").unwrap();
+                infallible_write!(&mut self.output, "{raw_text}");
             }
             Expr::Path { path, .. } => {
-                write!(&mut self.output, "{path}").unwrap();
+                infallible_write!(&mut self.output, "{path}");
             }
             Expr::StructLiteral {
                 type_name, fields, ..
             } => {
-                write!(&mut self.output, "{type_name} {{ ").unwrap();
+                infallible_write!(&mut self.output, "{type_name} {{ ");
                 for (i, field) in fields.iter().enumerate() {
                     if i > 0 {
-                        write!(&mut self.output, ", ").unwrap();
+                        infallible_write!(&mut self.output, ", ");
                     }
-                    write!(&mut self.output, "{}: ", field.ident()).unwrap();
+                    infallible_write!(&mut self.output, "{}: ", field.ident());
                     self.print_expr(&field.1);
                 }
-                write!(&mut self.output, " }}").unwrap();
+                infallible_write!(&mut self.output, " }}");
             }
             Expr::ArrayLiteral { elements, .. } => {
-                write!(&mut self.output, "[").unwrap();
+                infallible_write!(&mut self.output, "[");
                 for (i, elem) in elements.iter().enumerate() {
                     if i > 0 {
-                        write!(&mut self.output, ", ").unwrap();
+                        infallible_write!(&mut self.output, ", ");
                     }
                     self.print_expr(elem);
                 }
-                write!(&mut self.output, "]").unwrap();
+                infallible_write!(&mut self.output, "]");
             }
         }
     }
@@ -263,7 +262,7 @@ impl PrettyPrinter {
         let s = self.format_string_with_format(&splice.text, format);
         let m = self.splice_modifiers(splice.definition, splice.for_type.as_ref());
         let kw = splice.kind.keyword();
-        writeln!(&mut self.output, "{kw}{m} {s};").unwrap();
+        infallible_writeln!(&mut self.output, "{kw}{m} {s};");
     }
 
     /// Format the modifier suffix for a splice slot: an optional `definition`
@@ -286,66 +285,66 @@ impl PrettyPrinter {
         // Type-position attributes print inline, ahead of the type they
         // annotate: `#[calling_convention(cdecl)] fn()`.
         if !type_.attributes.0.is_empty() {
-            write!(&mut self.output, "#[").unwrap();
+            infallible_write!(&mut self.output, "#[");
             for (i, attr) in type_.attributes.0.iter().enumerate() {
                 if i > 0 {
-                    write!(&mut self.output, ", ").unwrap();
+                    infallible_write!(&mut self.output, ", ");
                 }
                 self.print_attribute(attr);
             }
-            write!(&mut self.output, "] ").unwrap();
+            infallible_write!(&mut self.output, "] ");
         }
 
         match &type_.kind {
             TypeKind::Ident {
                 path, generic_args, ..
             } => {
-                write!(&mut self.output, "{path}").unwrap();
+                infallible_write!(&mut self.output, "{path}");
                 if !generic_args.is_empty() {
-                    write!(&mut self.output, "<").unwrap();
+                    infallible_write!(&mut self.output, "<");
                     for (i, arg) in generic_args.iter().enumerate() {
                         if i > 0 {
-                            write!(&mut self.output, ", ").unwrap();
+                            infallible_write!(&mut self.output, ", ");
                         }
                         self.print_type(arg);
                     }
-                    write!(&mut self.output, ">").unwrap();
+                    infallible_write!(&mut self.output, ">");
                 }
             }
             TypeKind::ConstPointer { pointee, .. } => {
-                write!(&mut self.output, "*const ").unwrap();
+                infallible_write!(&mut self.output, "*const ");
                 self.print_type(pointee);
             }
             TypeKind::MutPointer { pointee, .. } => {
-                write!(&mut self.output, "*mut ").unwrap();
+                infallible_write!(&mut self.output, "*mut ");
                 self.print_type(pointee);
             }
             TypeKind::Array { element, size, .. } => {
-                write!(&mut self.output, "[").unwrap();
+                infallible_write!(&mut self.output, "[");
                 self.print_type(element);
-                write!(&mut self.output, "; {size}]").unwrap();
+                infallible_write!(&mut self.output, "; {size}]");
             }
             TypeKind::Unknown { size, .. } => {
                 // Format unknown sizes as hex
-                write!(&mut self.output, "unknown<0x{size:X}>").unwrap();
+                infallible_write!(&mut self.output, "unknown<0x{size:X}>");
             }
             TypeKind::Function {
                 arguments,
                 return_type,
             } => {
-                write!(&mut self.output, "fn(").unwrap();
+                infallible_write!(&mut self.output, "fn(");
                 for (i, arg) in arguments.iter().enumerate() {
                     if i > 0 {
-                        write!(&mut self.output, ", ").unwrap();
+                        infallible_write!(&mut self.output, ", ");
                     }
                     if let Some(name) = &arg.name {
-                        write!(&mut self.output, "{name}: ").unwrap();
+                        infallible_write!(&mut self.output, "{name}: ");
                     }
                     self.print_type(&arg.type_);
                 }
-                write!(&mut self.output, ")").unwrap();
+                infallible_write!(&mut self.output, ")");
                 if let Some(return_type) = return_type {
-                    write!(&mut self.output, " -> ").unwrap();
+                    infallible_write!(&mut self.output, " -> ");
                     self.print_type(return_type);
                 }
             }
@@ -368,7 +367,7 @@ impl PrettyPrinter {
             impl_block.name.as_str().to_string()
         };
         if impl_block.type_parameters.is_empty() {
-            writeln!(&mut self.output, "impl {name_str} {{").unwrap();
+            infallible_writeln!(&mut self.output, "impl {name_str} {{");
         } else {
             let params = impl_block
                 .type_parameters
@@ -383,9 +382,9 @@ impl PrettyPrinter {
                 .collect::<Vec<_>>()
                 .join(", ");
             if args.is_empty() {
-                writeln!(&mut self.output, "impl<{params}> {name_str} {{").unwrap();
+                infallible_writeln!(&mut self.output, "impl<{params}> {name_str} {{");
             } else {
-                writeln!(&mut self.output, "impl<{params}> {name_str}<{args}> {{",).unwrap();
+                infallible_writeln!(&mut self.output, "impl<{params}> {name_str}<{args}> {{",);
             }
         }
         self.indent();
@@ -410,48 +409,48 @@ impl PrettyPrinter {
 
         self.dedent();
         self.write_indent();
-        writeln!(&mut self.output, "}}").unwrap();
+        infallible_writeln!(&mut self.output, "}}");
     }
 
     pub(super) fn print_function(&mut self, func: &Function) {
         // Print doc comments (they already include the space after ///)
         for doc in &func.doc_comments {
             self.write_indent();
-            writeln!(&mut self.output, "///{doc}").unwrap();
+            infallible_writeln!(&mut self.output, "///{doc}");
         }
 
         self.print_attributes(&func.attributes);
         self.write_indent();
         if func.visibility == Visibility::Public {
-            write!(&mut self.output, "pub ").unwrap();
+            infallible_write!(&mut self.output, "pub ");
         }
-        write!(&mut self.output, "fn {}(", func.name).unwrap();
+        infallible_write!(&mut self.output, "fn {}(", func.name);
 
         for (i, arg) in func.arguments.iter().enumerate() {
             if i > 0 {
-                write!(&mut self.output, ", ").unwrap();
+                infallible_write!(&mut self.output, ", ");
             }
             self.print_argument(arg);
         }
 
-        write!(&mut self.output, ")").unwrap();
+        infallible_write!(&mut self.output, ")");
 
         if let Some(ret_type) = &func.return_type {
-            write!(&mut self.output, " -> ").unwrap();
+            infallible_write!(&mut self.output, " -> ");
             self.print_type(ret_type);
         }
 
-        writeln!(&mut self.output, ";").unwrap();
+        infallible_writeln!(&mut self.output, ";");
     }
 
     fn print_argument(&mut self, arg: &Argument) {
         match arg {
             Argument::Named { ident, type_, .. } => {
-                write!(&mut self.output, "{ident}: ").unwrap();
+                infallible_write!(&mut self.output, "{ident}: ");
                 self.print_type(type_);
             }
-            Argument::ConstSelf { .. } => write!(&mut self.output, "&self").unwrap(),
-            Argument::MutSelf { .. } => write!(&mut self.output, "&mut self").unwrap(),
+            Argument::ConstSelf { .. } => infallible_write!(&mut self.output, "&self"),
+            Argument::MutSelf { .. } => infallible_write!(&mut self.output, "&mut self"),
         }
     }
 }

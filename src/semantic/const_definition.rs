@@ -133,14 +133,11 @@ fn validate_const_expr(
                 return Err(mismatch("`cstr`".to_string(), format!("{expected_type}")));
             }
             // CStr is NUL-terminated; interior NUL bytes are invalid.
-            if value.contains('\0') {
+            if let Some(nul_pos) = value.find('\0') {
                 return Err(SemanticError::ConstValueTypeMismatch {
                     item_path: resolvee_path.clone(),
                     expected: "a cstr without interior NUL bytes".to_string(),
-                    found: format!(
-                        "a string with a NUL byte at position {}",
-                        value.find('\0').unwrap()
-                    ),
+                    found: format!("a string with a NUL byte at position {nul_pos}"),
                     location: *expr.location(),
                 });
             }
@@ -309,10 +306,16 @@ fn validate_const_expr(
             // Build the ordered field values (in declaration order) by recursing.
             let mut ordered_fields = Vec::with_capacity(named_fields.len());
             for (name, field_type) in &named_fields {
-                let field_expr = fields
-                    .iter()
-                    .find(|f| f.ident_as_str() == *name)
-                    .expect("checked above");
+                // The coverage check above verified every named field is
+                // initialized, so `find` cannot miss here.
+                let Some(field_expr) = fields.iter().find(|f| f.ident_as_str() == *name) else {
+                    return Err(SemanticError::ConstValueTypeMismatch {
+                        item_path: resolvee_path.clone(),
+                        expected: format!("all fields of `{struct_type_path}` to be initialized"),
+                        found: format!("missing field `{name}`"),
+                        location: *expr.location(),
+                    });
+                };
                 let field_value = match validate_const_expr(
                     semantic,
                     scope,

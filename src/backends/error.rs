@@ -255,9 +255,9 @@ impl BackendError {
         let report = report_builder.finish();
 
         let mut buffer = Vec::new();
-        report
-            .write((filename, Source::from(source)), &mut buffer)
-            .expect("writing to Vec should not fail");
+        // Writing an ariadne report into a `Vec<u8>` cannot fail — the `Write`
+        // impl on `Vec` is infallible — so the result is deliberately dropped.
+        let _ = report.write((filename, Source::from(source)), &mut buffer);
         String::from_utf8_lossy(&buffer).to_string()
     }
 }

@@ -401,9 +401,12 @@ fn collect_expr_value_refs(
                     refs.push(p);
                 }
                 // Also resolve the first segment (for enum types like `Color::Red`)
-                let first = path.iter().next().unwrap().as_str();
-                if let NameResolution::Found(p) = index.resolve_name(scope, first) {
-                    refs.push(p);
+                // `path.len() > 1` guarantees a first segment exists.
+                if let Some(first) = path.iter().next() {
+                    let first = first.as_str();
+                    if let NameResolution::Found(p) = index.resolve_name(scope, first) {
+                        refs.push(p);
+                    }
                 }
             } else if let Some(name) = path.last() {
                 if let NameResolution::Found(p) = index.resolve_name(scope, name.as_str()) {

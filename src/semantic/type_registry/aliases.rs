@@ -95,6 +95,13 @@ impl TypeRegistry {
     pub(crate) fn padding_type(&self, bytes: usize) -> Type {
         match self.resolve_string(&[], "u8") {
             TypeLookupResult::Found(t) => Type::Array(Box::new(t), bytes),
+            // `u8` is a predefined type inserted at registry construction, so
+            // lookup always succeeds. Resolving to anything else is an internal
+            // invariant violation, which is an ICE-tier bug.
+            #[expect(
+                clippy::panic,
+                reason = "u8 is a predefined type guaranteed at registry construction"
+            )]
             _ => panic!("u8 type not found in type registry"),
         }
     }

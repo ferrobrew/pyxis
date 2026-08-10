@@ -171,22 +171,42 @@ where
                     if st.cycle.is_some() {
                         return;
                     }
-                    let w_low = *st.lowlinks.get(w).unwrap();
-                    let v_low = st.lowlinks.get_mut(node).unwrap();
+                    // `w` was just visited by `strongconnect`, which inserts it
+                    // into `lowlinks`/`indices` before recursing; `node` is
+                    // inserted at this function's start. Both keys are present
+                    // by the Tarjan invariant, so the `else` arms are
+                    // unreachable safety nets, not real control flow.
+                    let Some(&w_low) = st.lowlinks.get(w) else {
+                        continue;
+                    };
+                    let Some(v_low) = st.lowlinks.get_mut(node) else {
+                        continue;
+                    };
                     *v_low = (*v_low).min(w_low);
                 } else if st.on_stack.contains(w) {
-                    let w_idx = *st.indices.get(w).unwrap();
-                    let v_low = st.lowlinks.get_mut(node).unwrap();
+                    // `on_stack` membership means `w` was indexed already, so
+                    // `indices[w]` exists; `node` is present per the invariant
+                    // above.
+                    let Some(&w_idx) = st.indices.get(w) else {
+                        continue;
+                    };
+                    let Some(v_low) = st.lowlinks.get_mut(node) else {
+                        continue;
+                    };
                     *v_low = (*v_low).min(w_idx);
                 }
             }
         }
 
         if st.lowlinks.get(node) == st.indices.get(node) {
-            // Pop an SCC off the stack.
+            // Pop an SCC off the stack. The current `node` was pushed at this
+            // function's start and is popped in this loop, so the stack is
+            // non-empty here.
             let mut scc = Vec::new();
             loop {
-                let w = st.stack.pop().expect("non-empty stack at SCC root");
+                let Some(w) = st.stack.pop() else {
+                    return;
+                };
                 st.on_stack.remove(&w);
                 let done = w == *node;
                 scc.push(w);

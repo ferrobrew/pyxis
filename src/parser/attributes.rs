@@ -321,11 +321,25 @@ impl Attributes {
         }
         match found.len() {
             0 => None,
-            1 => Some(found.into_iter().next().unwrap()),
-            _ => Some(CfgPredicate::All {
-                predicates: found,
-                location: location.unwrap(),
-            }),
+            1 => {
+                // len() == 1 guarantees the single element is present; this
+                // cannot be None.
+                let [predicate] = found.as_slice() else {
+                    return None;
+                };
+                Some(predicate.clone())
+            }
+            _ => {
+                // `location` is set in the same loop that collected `found`, so
+                // the `_` arm implies `Some`. Kept match-shaped so a future
+                // refactor that decouples them fails loudly at compile time
+                // rather than dereferencing None.
+                let location = location.unwrap_or(ItemLocation::internal());
+                Some(CfgPredicate::All {
+                    predicates: found,
+                    location,
+                })
+            }
         }
     }
 }
@@ -449,19 +463,30 @@ impl Parser {
                     location,
                 },
                 "not" => {
-                    if children.len() != 1 {
+                    // The `children.len() != 1` check above guarantees the
+                    // single element is present.
+                    let [child] = children.as_slice() else {
                         return Err(ParseError::ExpectedToken {
                             expected: vec![TokenKind::RParen],
                             found: self.peek().clone(),
                             location,
                         });
-                    }
+                    };
                     CfgPredicate::Not {
-                        predicate: Box::new(children.into_iter().next().unwrap()),
+                        predicate: Box::new(child.clone()),
                         location,
                     }
                 }
-                _ => unreachable!(),
+                // The `matches!(name.as_str(), "any" | "all" | "not")` guard
+                // bounds `name`; a catch-all here reports a parse error rather
+                // than panicking if the guard and match ever drift apart.
+                _ => {
+                    return Err(ParseError::ExpectedToken {
+                        expected: vec![TokenKind::Ident(name)],
+                        found: self.peek().clone(),
+                        location,
+                    });
+                }
             });
         }
 
@@ -518,7 +543,14 @@ impl Parser {
                     let comment_text = match &token.kind {
                         TokenKind::Comment(text) => text.clone(),
                         TokenKind::MultiLineComment(text) => text.clone(),
-                        _ => unreachable!(),
+                        // The `matches!(..., Comment(_) | MultiLineComment(_))`
+                        // guard above bounds the token kind to these two; this
+                        // arm is unreachable.
+                        #[expect(
+                            clippy::unreachable,
+                            reason = "guard bounds kind to Comment/MultiLineComment"
+                        )]
+                        _ => unreachable!("token was just matched as a comment"),
                     };
                     items.push(AttributeItem::Comment {
                         text: comment_text,
@@ -548,7 +580,14 @@ impl Parser {
                     let comment_text = match &token.kind {
                         TokenKind::Comment(text) => text.clone(),
                         TokenKind::MultiLineComment(text) => text.clone(),
-                        _ => unreachable!(),
+                        // The `matches!(..., Comment(_) | MultiLineComment(_))`
+                        // guard above bounds the token kind to these two; this
+                        // arm is unreachable.
+                        #[expect(
+                            clippy::unreachable,
+                            reason = "guard bounds kind to Comment/MultiLineComment"
+                        )]
+                        _ => unreachable!("token was just matched as a comment"),
                     };
                     items.push(AttributeItem::Comment {
                         text: comment_text,
@@ -583,7 +622,14 @@ impl Parser {
                 let comment_text = match &token.kind {
                     TokenKind::Comment(text) => text.clone(),
                     TokenKind::MultiLineComment(text) => text.clone(),
-                    _ => unreachable!(),
+                    // The `matches!(..., Comment(_) | MultiLineComment(_))`
+                    // guard above bounds the token kind to these two; this arm
+                    // is unreachable.
+                    #[expect(
+                        clippy::unreachable,
+                        reason = "guard bounds kind to Comment/MultiLineComment"
+                    )]
+                    _ => unreachable!("token was just matched as a comment"),
                 };
                 items.push(AttributeItem::Comment {
                     text: comment_text,
@@ -608,7 +654,14 @@ impl Parser {
                 let comment_text = match &token.kind {
                     TokenKind::Comment(text) => text.clone(),
                     TokenKind::MultiLineComment(text) => text.clone(),
-                    _ => unreachable!(),
+                    // The `matches!(..., Comment(_) | MultiLineComment(_))`
+                    // guard above bounds the token kind to these two; this arm
+                    // is unreachable.
+                    #[expect(
+                        clippy::unreachable,
+                        reason = "guard bounds kind to Comment/MultiLineComment"
+                    )]
+                    _ => unreachable!("token was just matched as a comment"),
                 };
                 items.push(AttributeItem::Comment {
                     text: comment_text,

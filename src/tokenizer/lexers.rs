@@ -323,7 +323,17 @@ impl Lexer {
                     self.advance();
                 }
             } else {
-                value.push(self.peek().unwrap());
+                // The loop-top `is_eof()` guard means a char is present here;
+                // `None` would be an internal lexer invariant violation.
+                let ch = match self.peek() {
+                    Some(ch) => ch,
+                    #[expect(
+                        clippy::unreachable,
+                        reason = "loop-top is_eof() guard ensures a char"
+                    )]
+                    None => unreachable!("string lexer consumed past EOF"),
+                };
+                value.push(ch);
                 self.advance();
             }
         }
@@ -449,7 +459,17 @@ impl Lexer {
                     self.advance();
                 }
             } else {
-                value.push(self.peek().unwrap());
+                // The loop-top `is_eof()` guard means a char is present here;
+                // `None` would be an internal lexer invariant violation.
+                let ch = match self.peek() {
+                    Some(ch) => ch,
+                    #[expect(
+                        clippy::unreachable,
+                        reason = "loop-top is_eof() guard ensures a char"
+                    )]
+                    None => unreachable!("c-string lexer consumed past EOF"),
+                };
+                value.push(ch);
                 self.advance();
             }
         }

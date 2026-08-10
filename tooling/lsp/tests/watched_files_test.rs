@@ -1,13 +1,30 @@
 //! File-watching (workspace/didChangeWatchedFiles) is inherently coupled to the
 //! real filesystem — the handler re-reads changed files from disk — so unlike
-//! the in-memory handler tests this one writes to a temp dir.
+//! the in-memory handler tests this one stages files on disk. The staging dir
+//! lives under `target/test-artifacts` (workspace-local, hermetic via
+//! `CARGO_MANIFEST_DIR`, unique per run) rather than `std::env::temp_dir()`.
+//!
+//! An in-memory seam is deliberately not used here: the behaviour under test
+//! is the handler reading the *file system* in response to watch events, so
+//! substituting a fake FS would test nothing the real handler does.
 
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::unreachable
+)]
 use lsp_server::{Notification, Request, RequestId};
 use lsp_types::{
     CompletionParams, FileChangeType, FileEvent, Position, TextDocumentIdentifier,
     TextDocumentPositionParams,
 };
 use pyxis_lsp::state::ServerState;
+
+/// Workspace-local staging directory for this inherently-filesystem test.
+fn scratch_base() -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("target/test-artifacts")
+}
 
 fn completion_labels(s: &ServerState, uri: &lsp_types::Uri) -> Vec<String> {
     let params = CompletionParams {
@@ -48,7 +65,7 @@ fn notify_watched(state: &mut ServerState, path: &std::path::Path, typ: FileChan
 
 #[test]
 fn watched_files_pick_up_on_disk_changes() {
-    let base = std::env::temp_dir().join(format!("pyxis-watched-{}", std::process::id()));
+    let base = scratch_base().join(format!("pyxis-watched-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&base);
     std::fs::create_dir_all(&base).unwrap();
     std::fs::write(
