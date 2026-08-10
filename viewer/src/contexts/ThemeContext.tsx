@@ -2,10 +2,10 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 
 type Theme = 'light' | 'dark';
 
-interface ThemeContextType {
+type ThemeContextType = {
   theme: Theme;
   toggleTheme: () => void;
-}
+};
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
@@ -16,8 +16,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   // Initialize theme: use stored if available, otherwise default to browser pref and store it
   const [theme, setTheme] = useState<Theme>(() => {
-    const stored = localStorage.getItem('theme') as Theme | null;
-    if (stored && (stored === 'light' || stored === 'dark')) {
+    const stored = localStorage.getItem('theme');
+    if (stored === 'light' || stored === 'dark') {
       return stored;
     }
     // No stored theme, use browser preference and store it

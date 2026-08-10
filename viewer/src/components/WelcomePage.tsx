@@ -7,7 +7,12 @@ import { useDocumentTitle } from '../utils/title';
 function Step({ n, children }: { n: number; children: React.ReactNode }) {
   return (
     <li className="flex gap-3">
-      <span className="flex-shrink-0 mt-0.5 flex h-5 w-5 items-center justify-center rounded-full border border-edge-strong font-mono text-[11px] text-fg-muted">
+      <span
+        className="
+        mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full
+        border border-edge-strong font-mono text-[11px] text-fg-muted
+      "
+      >
         {n}
       </span>
       <span className="text-fg-muted">{children}</span>
@@ -32,9 +37,18 @@ export function WelcomePage() {
   }, [documentation, navigate, selectedSource]);
 
   return (
-    <div className="flex min-h-full items-center justify-center p-6 md:p-10">
+    <div
+      className="
+      flex min-h-full items-center justify-center p-6
+      md:p-10
+    "
+    >
       <div className="w-full max-w-xl">
-        <p className="font-mono text-xs uppercase tracking-[0.2em] text-fg-subtle">
+        <p
+          className="
+          font-mono text-xs tracking-[0.2em] text-fg-subtle uppercase
+        "
+        >
           Pyxis documentation
         </p>
         <h1 className="mt-2 font-mono text-5xl font-bold tracking-tight text-fg">
@@ -46,7 +60,12 @@ export function WelcomePage() {
         </p>
 
         <div className="mt-10">
-          <h2 className="font-mono text-xs font-semibold uppercase tracking-[0.15em] text-fg-subtle">
+          <h2
+            className="
+            font-mono text-xs font-semibold tracking-[0.15em] text-fg-subtle
+            uppercase
+          "
+          >
             Getting started
           </h2>
           <ol className="mt-4 space-y-3 text-sm">

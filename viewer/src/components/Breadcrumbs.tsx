@@ -3,15 +3,15 @@ import { buildModuleUrl, buildItemUrl, buildRootUrl } from '../utils/navigation'
 import { useDocumentation } from '../contexts/DocumentationContext';
 import type { ItemType } from '../utils/colors';
 
-interface BreadcrumbsProps {
+type BreadcrumbsProps = {
   path: string;
   isItem?: boolean;
   itemType?: ItemType;
-}
+};
 
 function Separator() {
   return (
-    <svg className="mx-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <svg className="mx-2 size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
     </svg>
   );

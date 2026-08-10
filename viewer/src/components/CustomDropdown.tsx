@@ -1,32 +1,32 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
-import { HEADER_INPUT_HEIGHT } from '../utils/styles';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import { cn, HEADER_INPUT_HEIGHT } from '../utils/styles';
 
-interface DropdownOption {
+type DropdownOption = {
   value: string;
   label: string;
   datetime?: string;
   group?: string;
-}
+};
 
-interface CustomDropdownProps {
+type CustomDropdownProps = {
   value: string;
   onChange: (value: string) => void;
   options: DropdownOption[];
   disabled?: boolean;
-}
+};
 
-interface RenderGroup {
+type RenderGroup = {
   name?: string;
   options: { option: DropdownOption; index: number }[];
-}
+};
 
 // Label + optional subtitle, used by option buttons, group headers, and
 // the main dropdown button.
 function TileContent({ label, subtitle }: { label: string; subtitle?: string }) {
   return (
-    <div className="flex flex-col min-w-0">
-      <span className="text-sm text-fg truncate">{label}</span>
-      {subtitle && <span className="text-xs text-fg-subtle mt-0.5 truncate">{subtitle}</span>}
+    <div className="flex min-w-0 flex-col">
+      <span className="truncate text-sm text-fg">{label}</span>
+      {subtitle && <span className="mt-0.5 truncate text-xs text-fg-subtle">{subtitle}</span>}
     </div>
   );
 }
@@ -57,9 +57,20 @@ function OptionButton({
       data-index={index}
       onClick={onClick}
       onMouseEnter={onHover}
-      className={`w-full px-3 py-2 text-left hover:bg-surface-2 focus:bg-surface-2 focus:outline-none ${
-        indented ? 'pl-6' : ''
-      } ${focused ? 'bg-surface-2' : ''} ${selected ? 'bg-accent-soft' : ''}`}
+      className={cn(
+        `
+        w-full px-3 py-2 text-left
+        hover:bg-surface-2
+        focus:bg-surface-2 focus:outline-none
+      `,
+        indented ? `pl-6` : '',
+        focused ? `bg-surface-2` : '',
+        selected
+          ? `
+        bg-accent-soft
+      `
+          : ''
+      )}
     >
       <TileContent label={option.label} subtitle={option.datetime} />
     </button>
@@ -70,7 +81,14 @@ function OptionButton({
 function Chevron({ open }: { open: boolean }) {
   return (
     <svg
-      className={`w-3 h-3 ml-2 flex-shrink-0 transition-transform ${open ? 'rotate-90' : ''}`}
+      className={cn(
+        'ml-2 size-3 shrink-0 transition-transform',
+        open
+          ? `
+        rotate-90
+      `
+          : ''
+      )}
       fill="none"
       viewBox="0 0 24 24"
       stroke="currentColor"
@@ -88,6 +106,18 @@ export function CustomDropdown({ value, onChange, options, disabled }: CustomDro
   const buttonRef = useRef<HTMLButtonElement>(null);
 
   const selectedOption = options.find((opt) => opt.value === value) || options[0];
+
+  // Close the dropdown. Resets the transient open state together so the next
+  // open starts fresh: focused selection and expanded groups. Doing the reset
+  // here (at the transition) instead of in an effect keeps the state changes
+  // at the event boundary, which the react-hooks set-state-in-effect rule
+  // requires. `useCallback` keeps the identity stable so the click-outside
+  // effect's dependency list doesn't churn every render.
+  const close = useCallback(() => {
+    setIsOpen(false);
+    setFocusedIndex(-1);
+    setExpandedGroups(new Set());
+  }, []);
 
   // Pre-group options: consecutive options sharing a `group` string form
   // one group. Ungrouped options are each their own singleton group.
@@ -108,8 +138,7 @@ export function CustomDropdown({ value, onChange, options, disabled }: CustomDro
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent | TouchEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-        setFocusedIndex(-1);
+        close();
       }
     };
 
@@ -121,7 +150,7 @@ export function CustomDropdown({ value, onChange, options, disabled }: CustomDro
         document.removeEventListener('touchstart', handleClickOutside);
       };
     }
-  }, [isOpen]);
+  }, [isOpen, close]);
 
   useEffect(() => {
     if (isOpen && focusedIndex >= 0 && dropdownRef.current) {
@@ -131,11 +160,6 @@ export function CustomDropdown({ value, onChange, options, disabled }: CustomDro
       optionElement?.scrollIntoView({ block: 'nearest' });
     }
   }, [focusedIndex, isOpen]);
-
-  // Reset expanded groups when dropdown closes so it starts fresh next time.
-  useEffect(() => {
-    if (!isOpen) setExpandedGroups(new Set());
-  }, [isOpen]);
 
   const handleKeyDown = (event: React.KeyboardEvent) => {
     if (disabled) return;
@@ -147,16 +171,14 @@ export function CustomDropdown({ value, onChange, options, disabled }: CustomDro
           event.preventDefault();
           const option = options[focusedIndex];
           onChange(option.value);
-          setIsOpen(false);
-          setFocusedIndex(-1);
+          close();
         } else if (!isOpen) {
           event.preventDefault();
           setIsOpen(true);
         }
         break;
       case 'Escape':
-        setIsOpen(false);
-        setFocusedIndex(-1);
+        close();
         buttonRef.current?.focus();
         break;
       case 'ArrowDown':
@@ -178,8 +200,7 @@ export function CustomDropdown({ value, onChange, options, disabled }: CustomDro
 
   const handleOptionClick = (optionValue: string) => {
     onChange(optionValue);
-    setIsOpen(false);
-    setFocusedIndex(-1);
+    close();
   };
 
   const toggleGroup = (gi: number) => {
@@ -205,27 +226,47 @@ export function CustomDropdown({ value, onChange, options, disabled }: CustomDro
   );
 
   return (
-    <div className="relative w-full lg:w-100" ref={dropdownRef}>
+    <div
+      className="
+      relative w-full
+      lg:w-100
+    "
+      ref={dropdownRef}
+    >
       <button
         ref={buttonRef}
         type="button"
         onClick={() => !disabled && setIsOpen(!isOpen)}
         onKeyDown={handleKeyDown}
         disabled={disabled}
-        className={`w-full ${HEADER_INPUT_HEIGHT} px-3 text-sm text-left border border-edge rounded-md bg-surface text-fg focus:outline-none focus:ring-2 focus:ring-accent disabled:opacity-50 flex items-center justify-between`}
+        className={cn(
+          'w-full',
+          HEADER_INPUT_HEIGHT,
+          `
+          flex items-center justify-between rounded-md border border-edge
+          bg-surface px-3 text-left text-sm text-fg
+          focus:ring-2 focus:ring-accent focus:outline-none
+          disabled:opacity-50
+        `
+        )}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
       >
-        <div className="flex flex-col items-start flex-1 min-w-0">
-          <span className="truncate w-full">{selectedOption.label}</span>
+        <div className="flex min-w-0 flex-1 flex-col items-start">
+          <span className="w-full truncate">{selectedOption.label}</span>
           {selectedOption.datetime && (
-            <span className="text-xs text-fg-subtle mt-0.5">{selectedOption.datetime}</span>
+            <span className="mt-0.5 text-xs text-fg-subtle">{selectedOption.datetime}</span>
           )}
         </div>
         <svg
-          className={`w-4 h-4 ml-2 flex-shrink-0 transition-transform ${
-            isOpen ? 'rotate-180' : ''
-          }`}
+          className={cn(
+            'ml-2 size-4 shrink-0 transition-transform',
+            isOpen
+              ? `
+            rotate-180
+          `
+              : ''
+          )}
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -235,7 +276,12 @@ export function CustomDropdown({ value, onChange, options, disabled }: CustomDro
       </button>
 
       {isOpen && (
-        <div className="absolute top-full mt-1 w-full bg-surface border border-edge rounded-md shadow-lg z-50">
+        <div
+          className="
+          absolute top-full z-50 mt-1 w-full rounded-md border border-edge
+          bg-surface shadow-lg
+        "
+        >
           {renderGroups.map((group, gi) => {
             // Single-option groups (or ungrouped) render flat.
             if (!group.name || group.options.length === 1) {
@@ -262,9 +308,13 @@ export function CustomDropdown({ value, onChange, options, disabled }: CustomDro
                 <button
                   type="button"
                   onClick={() => toggleGroup(gi)}
-                  className={`w-full px-3 py-2 text-left hover:bg-surface-2 flex items-center justify-between ${
-                    hasSelected ? 'bg-accent-soft' : ''
-                  }`}
+                  className={cn(
+                    `
+                    flex w-full items-center justify-between px-3 py-2 text-left
+                    hover:bg-surface-2
+                  `,
+                    hasSelected ? `bg-accent-soft` : ''
+                  )}
                 >
                   <TileContent label={group.name} subtitle={versions} />
                   <Chevron open={isExpanded} />

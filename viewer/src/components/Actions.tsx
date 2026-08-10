@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { cn } from '../utils/styles';
 
 // Briefly-latching clipboard helper used by the copy affordances.
 function useCopy(timeout = 1200) {
@@ -45,7 +46,14 @@ function ActionButton({
       }}
       title={title}
       aria-label={title}
-      className={`inline-flex items-center gap-1 rounded p-1 text-fg-subtle transition-colors hover:bg-surface-2 hover:text-fg ${className}`}
+      className={cn(
+        `
+        inline-flex items-center gap-1 rounded-sm p-1 text-fg-subtle
+        transition-colors
+        hover:bg-surface-2 hover:text-fg
+      `,
+        className
+      )}
     >
       {icon}
       {label && <span className="text-xs">{label}</span>}
@@ -55,7 +63,7 @@ function ActionButton({
 
 function CopyIcon({ checked }: { checked: boolean }) {
   return (
-    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <svg className="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
       {checked ? (
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
       ) : (

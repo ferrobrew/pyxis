@@ -3,7 +3,7 @@ import { TypeRef } from './TypeRef';
 import { SourceName } from './SourceLink';
 import { formatHexAddress } from '../utils/format';
 
-interface FieldSourceViewProps {
+type FieldSourceViewProps = {
   fields: JsonRegion[];
   modulePath: string;
   /**
@@ -15,7 +15,7 @@ interface FieldSourceViewProps {
    * member after the first.
    */
   layout?: 'sequential' | 'overlaid';
-}
+};
 
 // Emit an `#[address(...)]` attribute only where a field doesn't sit
 // immediately after the previous one (i.e. where the source needs to jump),
@@ -43,7 +43,12 @@ export function FieldSourceView({
   const fieldAttrs = computeFieldAttrs(fields, layout);
 
   return (
-    <div className="overflow-x-auto rounded-md border border-edge bg-inset p-4 font-mono text-sm leading-relaxed">
+    <div
+      className="
+      overflow-x-auto rounded-md border border-edge bg-inset p-4 font-mono
+      text-sm/relaxed
+    "
+    >
       {fields.map((field, idx) => {
         const attrs = fieldAttrs[idx];
         const isPrivate = field.visibility === 'private';

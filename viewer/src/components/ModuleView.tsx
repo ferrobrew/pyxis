@@ -12,38 +12,61 @@ import { Markdown } from './Markdown';
 import { AnchorLink } from './Actions';
 import { SourceLink } from './SourceLink';
 import { OnThisPage, type TocEntry } from './OnThisPage';
+import { cn } from '../utils/styles';
 import type {
   JsonSplice,
   JsonItem,
   JsonFunction,
+  JsonModule,
   JsonReexport,
   JsonSourceLocation,
   JsonDocLink,
 } from '@pyxis/types';
 
-interface ModuleData {
+type ModuleData = {
   doc?: string | null;
   doc_links?: JsonDocLink[];
   items?: string[];
   reexports?: JsonReexport[];
-  submodules?: { [key: string]: unknown };
+  submodules?: Record<string, JsonModule>;
   functions?: JsonFunction[];
   splices?: JsonSplice[];
   source?: JsonSourceLocation | null;
-}
+};
 
 function SectionHeader({ anchor, children }: { anchor?: string; children: React.ReactNode }) {
   return (
-    <h2 className="group mb-4 flex items-center gap-2 border-b border-edge pb-1.5 text-lg font-semibold text-fg">
+    <h2
+      className="
+      group mb-4 flex items-center gap-2 border-b border-edge pb-1.5 text-lg
+      font-semibold text-fg
+    "
+    >
       {children}
-      {anchor && <AnchorLink targetId={anchor} className="opacity-0 group-hover:opacity-100" />}
+      {anchor && (
+        <AnchorLink
+          targetId={anchor}
+          className="
+        opacity-0
+        group-hover:opacity-100
+      "
+        />
+      )}
     </h2>
   );
 }
 
 // A panel that wraps a list of rows.
 function Panel({ children }: { children: React.ReactNode }) {
-  return <div className="overflow-hidden rounded-md border border-edge bg-surface">{children}</div>;
+  return (
+    <div
+      className="
+    overflow-hidden rounded-md border border-edge bg-surface
+  "
+    >
+      {children}
+    </div>
+  );
 }
 
 const ROW = 'block p-3 border-b border-edge last:border-0 hover:bg-surface-2 transition-colors';
@@ -66,9 +89,9 @@ function kindToItemType(kind: string): ItemType {
 }
 
 // Item list component
-interface ItemListProps {
+type ItemListProps = {
   items: Array<{ path: string; item: JsonItem }>;
-}
+};
 
 function ItemList({ items }: ItemListProps) {
   const { selectedSource } = useDocumentation();
@@ -86,9 +109,10 @@ function ItemList({ items }: ItemListProps) {
               <div className="flex items-center justify-between gap-4">
                 <div className="min-w-0">
                   <div
-                    className={`font-mono text-sm font-semibold ${getItemTypeColor(
-                      kindToItemType(item.kind.type)
-                    )}`}
+                    className={cn(
+                      'font-mono text-sm font-semibold',
+                      getItemTypeColor(kindToItemType(item.kind.type))
+                    )}
                   >
                     {name}
                   </div>
@@ -97,7 +121,11 @@ function ItemList({ items }: ItemListProps) {
                   </div>
                 </div>
                 {item.kind.doc && (
-                  <div className="ml-4 max-w-md overflow-hidden text-sm text-fg-muted">
+                  <div
+                    className="
+                    ml-4 max-w-md overflow-hidden text-sm text-fg-muted
+                  "
+                  >
                     <Markdown docLinks={item.kind.doc_links} truncate={SUMMARY_WORDS}>
                       {item.kind.doc}
                     </Markdown>
@@ -134,7 +162,7 @@ function ReexportList({ reexports }: { reexports: JsonReexport[] }) {
             >
               <div className="font-mono text-sm">
                 <span className="text-fg-subtle">pub use </span>
-                <span className={`font-semibold ${color}`}>{reexport.name}</span>
+                <span className={cn('font-semibold', color)}>{reexport.name}</span>
               </div>
               <div className="mt-1 font-mono text-xs text-fg-subtle">{reexport.path}</div>
             </Link>
@@ -146,15 +174,15 @@ function ReexportList({ reexports }: { reexports: JsonReexport[] }) {
 }
 
 // Submodule list component
-interface SubmoduleListProps {
-  submodules: { [key: string]: unknown };
+type SubmoduleListProps = {
+  submodules: Record<string, JsonModule>;
   parentPath: string;
-}
+};
 
-interface SubmoduleData {
+type SubmoduleData = {
   doc?: string | null;
   doc_links?: JsonDocLink[];
-}
+};
 
 function SubmoduleList({ submodules, parentPath }: SubmoduleListProps) {
   const { selectedSource } = useDocumentation();
@@ -166,12 +194,19 @@ function SubmoduleList({ submodules, parentPath }: SubmoduleListProps) {
       <Panel>
         {Object.entries(submodules).map(([name, submodule]) => {
           const subPath = parentPath ? `${parentPath}::${name}` : name;
-          const data = submodule as SubmoduleData;
+          // `submodule` is a validated `JsonModule`; `SubmoduleData` is the
+          // subset this component reads, and the subset is structurally
+          // assignable — no cast needed.
+          const data: SubmoduleData = submodule;
           return (
             <Link key={name} to={buildModuleUrl(subPath, selectedSource)} className={ROW}>
               <div className="font-mono text-sm font-semibold text-kind-module">{name}</div>
               {data.doc && (
-                <div className="mt-1 max-w-md overflow-hidden text-sm text-fg-muted">
+                <div
+                  className="
+                  mt-1 max-w-md overflow-hidden text-sm text-fg-muted
+                "
+                >
                   <Markdown docLinks={data.doc_links} truncate={SUMMARY_WORDS}>
                     {data.doc}
                   </Markdown>
@@ -237,7 +272,10 @@ export function ModuleView() {
     return null;
   }
 
-  const module = moduleRaw as ModuleData;
+  // `moduleRaw` is a validated `JsonModule`; `ModuleData` is the subset this
+  // component reads, and the subset is structurally assignable — no cast
+  // needed.
+  const module: ModuleData = moduleRaw;
   const name = decodedPath.split('::').pop() || decodedPath;
 
   const items =
@@ -264,15 +302,32 @@ export function ModuleView() {
   if (hasBackendSlot('epilogue')) toc.push({ id: 'backend-epilogue', label: 'Backend Epilogue' });
 
   return (
-    <div className="mx-auto flex max-w-6xl gap-8 px-4 py-6 md:px-8 lg:px-10">
+    <div
+      className="
+      mx-auto flex max-w-6xl gap-8 px-4 py-6
+      md:px-8
+      lg:px-10
+    "
+    >
       <article className="min-w-0 flex-1">
         <div className="mb-4">
           <Breadcrumbs path={decodedPath} />
         </div>
 
-        <div className="mb-6 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <div
+          className="
+          mb-6 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1
+        "
+        >
           <h1 className="font-mono text-2xl font-semibold tracking-tight">
-            <span className="text-kind-module">mod</span> <span className="text-fg">{name}</span>
+            <span className="text-kind-module">mod</span>{' '}
+            <span
+              className="
+              text-fg
+            "
+            >
+              {name}
+            </span>
           </h1>
           {module.source && <SourceLink source={module.source} />}
         </div>

@@ -73,7 +73,7 @@ function AppLayout() {
   );
 }
 
-export default function App() {
+export function App() {
   return (
     <ThemeProvider>
       <LigatureProvider>

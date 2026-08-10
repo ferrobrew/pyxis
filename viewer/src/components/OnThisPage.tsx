@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
+import { cn } from '../utils/styles';
 
-export interface TocEntry {
+export type TocEntry = {
   id: string;
   label: string;
-}
+};
 
 // rustdoc-style "On this page" rail with scroll-spy. Hidden below xl, where
 // there isn't room beside the content column.
@@ -38,8 +39,19 @@ export function OnThisPage({ entries }: { entries: TocEntry[] }) {
   if (entries.length < 2) return null;
 
   return (
-    <nav className="sticky top-0 hidden max-h-screen w-48 flex-shrink-0 self-start overflow-y-auto py-6 xl:block">
-      <div className="mb-3 font-mono text-xs font-semibold uppercase tracking-wider text-fg-subtle">
+    <nav
+      className="
+      sticky top-0 hidden max-h-screen w-48 shrink-0 self-start overflow-y-auto
+      py-6
+      xl:block
+    "
+    >
+      <div
+        className="
+        mb-3 font-mono text-xs font-semibold tracking-wider text-fg-subtle
+        uppercase
+      "
+      >
         On this page
       </div>
       <ul className="border-l border-edge">
@@ -52,11 +64,18 @@ export function OnThisPage({ entries }: { entries: TocEntry[] }) {
                   .getElementById(e.id)
                   ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
               }
-              className={`-ml-px block border-l-2 py-1 pl-3 text-left text-sm transition-colors ${
+              className={cn(
+                `
+                -ml-px block border-l-2 py-1 pl-3 text-left text-sm
+                transition-colors
+              `,
                 active === e.id
-                  ? 'border-accent text-accent'
-                  : 'border-transparent text-fg-muted hover:border-edge-strong hover:text-fg'
-              }`}
+                  ? `border-accent text-accent`
+                  : `
+                border-transparent text-fg-muted
+                hover:border-edge-strong hover:text-fg
+              `
+              )}
             >
               {e.label}
             </button>

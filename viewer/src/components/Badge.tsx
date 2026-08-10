@@ -1,3 +1,4 @@
+import { cn } from '../utils/styles';
 type BadgeVariant =
   | 'green'
   | 'blue'
@@ -12,10 +13,10 @@ type BadgeVariant =
   | 'indigo'
   | 'teal';
 
-interface BadgeProps {
+type BadgeProps = {
   variant: BadgeVariant;
   children: React.ReactNode;
-}
+};
 
 // Badges are quiet outline chips: a shared neutral shell carries the shape, and
 // only the text color signals meaning. This keeps a metadata row from turning
@@ -39,7 +40,7 @@ const shell = 'inline-flex items-center rounded-md border border-edge bg-surface
 
 export function Badge({ variant, children }: BadgeProps) {
   return (
-    <span className={`${shell} px-2.5 py-0.5 text-xs ${variantText[variant]}`}>{children}</span>
+    <span className={cn(shell, 'px-2.5 py-0.5 text-xs', variantText[variant])}>{children}</span>
   );
 }
 
@@ -49,7 +50,7 @@ export function SmallBadge({
   className = '',
 }: BadgeProps & { className?: string }) {
   return (
-    <span className={`${shell} px-1.5 py-0.5 text-[11px] ${variantText[variant]} ${className}`}>
+    <span className={cn(shell, 'px-1.5 py-0.5 text-[11px]', variantText[variant], className)}>
       {children}
     </span>
   );

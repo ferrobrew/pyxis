@@ -54,9 +54,22 @@ function spliceLanguage(cfg: JsonCfg | null | undefined): string | undefined {
 
 function SectionHeader({ anchor, children }: { anchor?: string; children: React.ReactNode }) {
   return (
-    <h2 className="group mb-4 flex items-center gap-2 border-b border-edge pb-1.5 text-lg font-semibold text-fg">
+    <h2
+      className="
+      group mb-4 flex items-center gap-2 border-b border-edge pb-1.5 text-lg
+      font-semibold text-fg
+    "
+    >
       {children}
-      {anchor && <AnchorLink targetId={anchor} className="opacity-0 group-hover:opacity-100" />}
+      {anchor && (
+        <AnchorLink
+          targetId={anchor}
+          className="
+        opacity-0
+        group-hover:opacity-100
+      "
+        />
+      )}
     </h2>
   );
 }
@@ -70,14 +83,23 @@ function SpliceItem({ splice }: { splice: JsonSplice }) {
   const title = splice.kind === 'prologue' ? 'Prologue' : 'Epilogue';
   return (
     <div className="mb-4">
-      <div className="mb-2 flex items-center gap-2 font-mono text-xs text-fg-muted">
+      <div
+        className="
+        mb-2 flex items-center gap-2 font-mono text-xs text-fg-muted
+      "
+      >
         {splice.cfg ? (
           <code className="text-fg-subtle">#[cfg({renderCfg(splice.cfg)})]</code>
         ) : (
           <span className="text-fg-subtle italic">all backends</span>
         )}
         {splice.definition && (
-          <span className="rounded bg-surface px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-fg-subtle">
+          <span
+            className="
+            rounded-sm bg-surface px-1.5 py-0.5 text-[10px] font-semibold
+            tracking-wider text-fg-subtle uppercase
+          "
+          >
             definition
           </span>
         )}
@@ -89,10 +111,10 @@ function SpliceItem({ splice }: { splice: JsonSplice }) {
   );
 }
 
-interface BackendSpliceSectionProps {
+type BackendSpliceSectionProps = {
   splices: JsonSplice[];
   slot: SpliceSlot;
-}
+};
 
 // Module-page section: renders one slot (prologue OR epilogue), excluding any
 // splice tagged `for <Type>` (those render on the type's page instead). Each
@@ -117,10 +139,10 @@ export function BackendSpliceSection({ splices, slot }: BackendSpliceSectionProp
   );
 }
 
-interface TypeBackendCodeProps {
+type TypeBackendCodeProps = {
   splices: JsonSplice[];
   itemPath: string;
-}
+};
 
 // Type-page section: renders every splice (prologue and epilogue) whose
 // `for_type` resolves to this item's path. These are splices the defs author

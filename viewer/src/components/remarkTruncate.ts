@@ -4,11 +4,11 @@ const ELLIPSIS = '…';
 
 // A minimal structural view of an mdast node: either a parent (has `children`)
 // or a literal (has `value`, e.g. `text`/`inlineCode`).
-interface AnyNode {
+type AnyNode = {
   type: string;
   value?: string;
   children?: AnyNode[];
-}
+};
 
 // Clip a string to its first `limit` whitespace-delimited words, dropping any
 // trailing whitespace after the last kept word. Leading whitespace is kept so

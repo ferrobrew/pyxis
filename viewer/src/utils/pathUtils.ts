@@ -92,6 +92,11 @@ export function findModule(
   for (let i = 0; i < segments.length; i++) {
     const segment = segments[i];
 
+    // The `Record<string, unknown>` narrowings below are deliberate: the
+    // module tree arrives as untyped JSON, and walking it requires indexing
+    // into values we only know are objects. Each `as` is guarded by the
+    // `typeof`/presence check immediately above it, so the cast is a
+    // type-level narrowing of a value we've already validated.
     if (i === 0) {
       // First segment: navigate to top-level module
       if (!current[segment]) return null;

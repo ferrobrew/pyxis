@@ -1,23 +1,28 @@
 import { useState, type ReactNode } from 'react';
+import { cn } from '../utils/styles';
 
-interface CollapsibleProps {
+type CollapsibleProps = {
   title: string;
   children: ReactNode;
   defaultOpen?: boolean;
-}
+};
 
 export function Collapsible({ title, children, defaultOpen = false }: CollapsibleProps) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
 
   return (
-    <div className="border border-edge rounded-md overflow-hidden">
+    <div className="overflow-hidden rounded-md border border-edge">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between p-2 bg-surface hover:bg-surface-2 transition-colors"
+        className="
+          flex w-full items-center justify-between bg-surface p-2
+          transition-colors
+          hover:bg-surface-2
+        "
       >
-        <span className="font-medium text-sm text-fg">{title}</span>
+        <span className="text-sm font-medium text-fg">{title}</span>
         <svg
-          className={`w-5 h-5 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+          className={cn('size-5 transition-transform', isOpen ? 'rotate-180' : '')}
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
