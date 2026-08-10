@@ -128,7 +128,7 @@ Anchors follow a convention: `field-<name>`, `variant-<name>`, `flag-<name>`, `f
 The JSON backend's structs derive `specta::Type`, which lets the driver generate TypeScript type definitions:
 
 ```sh
-cargo run -p pyxis-driver - gen-types
+cargo run -p pyxis-driver -- gen-types
 ```
 
 This regenerates `types/json.ts` from the Rust struct definitions. The viewer consumes these types via npm workspaces (the `@pyxis/types` package symlinks to the generated file).
@@ -159,3 +159,9 @@ npm run dev
 ```
 
 The viewer uses Vite for development and builds to static files for production. It loads a JSON documentation file via a file picker in the UI.
+
+## Testing and known gaps
+
+The codegen test corpus (`codegen_tests/input` → `codegen_tests/output/json`) exercises the JSON backend end to end: `cargo run --example codegen_tests` emits `output.json` and deserialises it back into a `JsonDocumentation`, so the wire schema is round-tripped on every corpus change.
+
+Property round-trip tests over the full `JsonDocumentation` shape (arbitrary documents → `serde_json` → parse → equal) are deliberately **not** implemented: the schema is versioned (`CURRENT_SCHEMA_VERSION`) and a meaningful property test would need a second independent implementation of the schema to act as an oracle, which is disproportionate for a versioned, corpus-covered wire format. This is a known, documented gap; revisit if the schema ever grows out of the corpus's reach.
