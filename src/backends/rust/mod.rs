@@ -283,7 +283,7 @@ pub fn write_module(
                         .lines()
                         .nth(lc.line - 1)
                         .unwrap_or(raw_output.as_str()),
-                    format!("{}^", " ".repeat(lc.column))
+                    format_args!("{}^", " ".repeat(lc.column))
                 ));
                 raw_output
             }
