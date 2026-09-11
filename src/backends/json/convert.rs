@@ -223,6 +223,10 @@ pub fn build(
 
     // Write to file
     let output_path = out_dir.join("output.json");
+    std::fs::create_dir_all(out_dir).map_err(|e| BackendError::Io {
+        error: e,
+        context: format!("Failed to create directory {}", out_dir.display()),
+    })?;
     let json_string = serde_json::to_string_pretty(&documentation).map_err(|e| {
         BackendError::Formatting(format!("Failed to serialize JSON documentation: {e}"))
     })?;
