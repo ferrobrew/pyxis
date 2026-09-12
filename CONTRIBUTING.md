@@ -118,6 +118,7 @@ After syncing, reinstall the Zed dev extension to pick up the new grammar.
 The compiler uses a [Salsa](https://github.com/salsa-rs/salsa)-backed query graph (`src/salsa/`). Both the batch compilation pipeline (`build_with_store_and_options`) and the LSP server call the same Salsa queries; there is no separate imperative pipeline and LSP pipeline.
 
 - `src/salsa/`: Salsa database, inputs, IR, and tracked functions
+- `src/output.rs`: `OutputWriter` abstraction — the single output-write path. Backends write generated files through an injected writer (`DiskWriter` on disk, `MemoryWriter` in tests) rather than calling `std::fs` directly; see `build_sources_into`.
 - `tooling/tree-sitter-pyxis/`: tree-sitter grammar for syntax highlighting (a submodule pointing at [`ferrobrew/tree-sitter-pyxis`](https://github.com/ferrobrew/tree-sitter-pyxis))
 - `tooling/zed-pyxis/`: Zed extension
 - `tooling/lsp/`: LSP server binary (`pyxis-lsp`)

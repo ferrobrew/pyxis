@@ -3,12 +3,9 @@
 //! root file name (`mod.rs` instead of `lib.rs`), and explicit `pub use`
 //! re-exports rewritten through the prefix.
 //!
-//! This test exercises emitted output layout, which the compiler writes to a
-//! real directory (there is no in-memory output seam), so it writes to a
-//! per-run directory under `target/test-artifacts` — inside the crate's own
-//! workspace, never `std::env::temp_dir()` — and cleans it up afterwards.
-//! The input side is staged the same way; the sources themselves are simple
-//! enough that the filesystem staging carries no behavioral coupling.
+//! Output is generated through a `MemoryWriter`, so this test never touches
+//! the filesystem: `out` is a synthetic base that only feeds path
+//! computation inside the backends.
 
 #![allow(
     clippy::unwrap_used,
@@ -16,94 +13,84 @@
     clippy::panic,
     clippy::unreachable
 )]
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
-use pyxis::{Backend, BuildOptions, grammar::ItemPath, source_store::FileStore};
-
-/// Workspace-local scratch directory for emitted-output tests. Resolved from
-/// `CARGO_MANIFEST_DIR` (never CWD) so the test is hermetic, and the path is
-/// unique per invocation.
-fn scratch_dir(name: &str) -> PathBuf {
-    let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/test-artifacts");
-    let dir = base.join(format!("{name}_{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
-    dir
-}
-
-fn write(path: &Path, contents: &str) {
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).unwrap();
-    }
-    std::fs::write(path, contents).unwrap();
-}
+use pyxis::{
+    Backend, BuildOptions, grammar::ItemPath, output::MemoryWriter, source_store::FileStore,
+};
 
 #[test]
 fn mounts_generated_tree_as_a_prefixed_submodule() {
-    let root = scratch_dir("module_mounting");
-    let in_dir = root.join("in");
-    let out_dir = root.join("out");
+    let mut file_store = FileStore::new();
+    let mut writer = MemoryWriter::default();
 
-    write(
-        &in_dir.join("pyxis.toml"),
-        r#"
-[project]
-name = "mount-test"
-pointer_size = 8
-"#,
-    );
-    write(
-        &in_dir.join("foo.pyxis"),
-        r#"
-pub type Foo {
-    pub value: u32,
-}
-"#,
-    );
-    // References `foo::Foo`, producing a `crate::`-relative path that the
-    // prefix should rewrite to `crate::prefixed::foo::Foo`.
-    write(
-        &in_dir.join("bar.pyxis"),
-        r#"
-use foo::Foo;
-
-pub type Bar {
-    pub foo: *mut Foo,
-}
-"#,
-    );
-    // Explicitly re-exports `foo::Foo` as `baz::Foo`; the emitted `pub use`
-    // must be rewritten through the prefix too.
-    write(
-        &in_dir.join("baz.pyxis"),
-        r#"
-pub use foo::Foo;
-
-pub type Baz {
-    pub value: u32,
-}
-"#,
-    );
-
+    let project = pyxis::config::Project {
+        name: "mount-test".to_string(),
+        pointer_size: 8,
+    };
     let options = BuildOptions {
         rust_module_prefix: Some(ItemPath::from("prefixed")),
         rust_root_file_name: Some("mod.rs".to_string()),
         ..Default::default()
     };
 
-    let mut file_store = FileStore::new();
-    pyxis::build_with_store_and_options(&in_dir, &out_dir, Backend::Rust, &mut file_store, options)
-        .expect("build failed");
+    pyxis::build_sources_into(
+        vec![
+            // References `foo::Foo`, producing a `crate::`-relative path that
+            // the prefix should rewrite to `crate::prefixed::foo::Foo`.
+            (
+                "foo.pyxis".to_string(),
+                r#"
+pub type Foo {
+    pub value: u32,
+}
+"#
+                .to_string(),
+            ),
+            (
+                "bar.pyxis".to_string(),
+                r#"
+use foo::Foo;
+
+pub type Bar {
+    pub foo: *mut Foo,
+}
+"#
+                .to_string(),
+            ),
+            // Explicitly re-exports `foo::Foo` as `baz::Foo`; the emitted
+            // `pub use` must be rewritten through the prefix too.
+            (
+                "baz.pyxis".to_string(),
+                r#"
+pub use foo::Foo;
+
+pub type Baz {
+    pub value: u32,
+}
+"#
+                .to_string(),
+            ),
+        ],
+        &project,
+        Path::new("out"),
+        Backend::Rust,
+        &mut file_store,
+        options,
+        &mut writer,
+    )
+    .expect("build failed");
 
     // Root module is emitted as `mod.rs` (not `lib.rs`).
-    assert!(out_dir.join("mod.rs").exists(), "expected mod.rs root file");
+    let root_rs = writer
+        .file(Path::new("out/mod.rs"))
+        .expect("expected mod.rs root file");
     assert!(
-        !out_dir.join("lib.rs").exists(),
+        writer.file(Path::new("out/lib.rs")).is_none(),
         "lib.rs should not be emitted when the root file name is mod.rs"
     );
 
     // Root wires up children with `pub mod`, without any glob re-export.
-    let root_rs = std::fs::read_to_string(out_dir.join("mod.rs")).unwrap();
     assert!(root_rs.contains("pub mod foo;"), "{root_rs}");
     assert!(root_rs.contains("pub mod bar;"), "{root_rs}");
     assert!(root_rs.contains("pub mod baz;"), "{root_rs}");
@@ -113,7 +100,9 @@ pub type Baz {
     );
 
     // Cross-module references are rewritten through the prefix.
-    let bar_rs = std::fs::read_to_string(out_dir.join("bar.rs")).unwrap();
+    let bar_rs = writer
+        .file(Path::new("out/bar.rs"))
+        .expect("expected generated bar.rs");
     assert!(
         bar_rs.contains("crate::prefixed::foo::Foo"),
         "expected prefixed reference, got:\n{bar_rs}"
@@ -121,11 +110,11 @@ pub type Baz {
 
     // An explicit `pub use` re-export is emitted, and its path is rewritten
     // through the prefix like any other cross-module reference.
-    let baz_rs = std::fs::read_to_string(out_dir.join("baz.rs")).unwrap();
+    let baz_rs = writer
+        .file(Path::new("out/baz.rs"))
+        .expect("expected generated baz.rs");
     assert!(
         baz_rs.contains("pub use crate::prefixed::foo::Foo;"),
         "expected prefixed re-export, got:\n{baz_rs}"
     );
-
-    let _ = std::fs::remove_dir_all(&root);
 }

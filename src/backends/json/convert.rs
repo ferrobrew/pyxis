@@ -3,6 +3,7 @@ use std::{collections::BTreeMap, path::Path};
 use crate::{
     backends::{BackendError, Result},
     grammar::ItemPath,
+    output::OutputWriter,
     semantic::{
         ExternBindings, SemanticOutput, TypeRegistry,
         types::{
@@ -138,6 +139,7 @@ pub fn build(
     semantic_state: &SemanticOutput,
     project_name: &str,
     file_store: &FileStore,
+    writer: &mut impl OutputWriter,
 ) -> Result<()> {
     let type_registry = semantic_state.type_registry();
 
@@ -221,19 +223,12 @@ pub fn build(
         source_paths,
     };
 
-    // Write to file
+    // Write to output
     let output_path = out_dir.join("output.json");
-    std::fs::create_dir_all(out_dir).map_err(|e| BackendError::Io {
-        error: e,
-        context: format!("Failed to create directory {}", out_dir.display()),
-    })?;
     let json_string = serde_json::to_string_pretty(&documentation).map_err(|e| {
         BackendError::Formatting(format!("Failed to serialize JSON documentation: {e}"))
     })?;
-    std::fs::write(&output_path, &json_string).map_err(|e| BackendError::Io {
-        error: e,
-        context: format!("Failed to write JSON output to {}", output_path.display()),
-    })?;
+    writer.write(&output_path, &json_string)?;
 
     Ok(())
 }

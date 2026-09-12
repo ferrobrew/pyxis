@@ -9,10 +9,11 @@ use std::{
 
 use crate::{
     backends::{
-        BackendError, Result,
+        Result,
         cpp::{deps, render},
     },
     grammar::ItemPath,
+    output::OutputWriter,
     semantic::{Module, SemanticOutput, types::ItemDefinitionInner},
 };
 
@@ -33,6 +34,7 @@ pub(super) fn write_module(
     semantic_state: &SemanticOutput,
     module: &Module,
     bindings: &std::collections::BTreeMap<ItemPath, CppExternBinding>,
+    writer: &mut impl OutputWriter,
 ) -> Result<()> {
     if key.is_empty() {
         return Ok(());
@@ -69,12 +71,6 @@ pub(super) fn write_module(
 
     // Header.
     let header_path = module_to_header_path(out_dir, key);
-    if let Some(parent) = header_path.parent() {
-        std::fs::create_dir_all(parent).map_err(|e| BackendError::Io {
-            error: e,
-            context: format!("Failed to create directory {}", parent.display()),
-        })?;
-    }
     let header_text = assemble_header(
         key,
         semantic_state,
@@ -85,10 +81,7 @@ pub(super) fn write_module(
         &body.body,
         &splices,
     )?;
-    std::fs::write(&header_path, &header_text).map_err(|e| BackendError::Io {
-        error: e,
-        context: format!("Failed to write header to {}", header_path.display()),
-    })?;
+    writer.write(&header_path, &header_text)?;
 
     // Source file, if there are out-of-line definitions to produce:
     // free functions with #[address], extern values, non-template
@@ -102,17 +95,8 @@ pub(super) fn write_module(
         || !splices.epilogue_def.is_empty();
     if needs_cpp {
         let cpp_path = module_to_emitted_path(out_dir, key, "src", "cpp");
-        if let Some(parent) = cpp_path.parent() {
-            std::fs::create_dir_all(parent).map_err(|e| BackendError::Io {
-                error: e,
-                context: format!("Failed to create directory {}", parent.display()),
-            })?;
-        }
         let cpp_text = assemble_source(key, ctx, &body, &splices, &module_deps)?;
-        std::fs::write(&cpp_path, &cpp_text).map_err(|e| BackendError::Io {
-            error: e,
-            context: format!("Failed to write source to {}", cpp_path.display()),
-        })?;
+        writer.write(&cpp_path, &cpp_text)?;
     }
 
     Ok(())
@@ -142,14 +126,8 @@ fn module_to_emitted_path(
 
 /// Emit `<out_dir>/include/pyxis_runtime.hpp` — shared typedefs / utility
 /// templates used by every generated module.
-pub fn write_runtime_header(out_dir: &Path) -> Result<()> {
+pub fn write_runtime_header(out_dir: &Path, writer: &mut impl OutputWriter) -> Result<()> {
     let path = out_dir.join("include").join("pyxis_runtime.hpp");
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).map_err(|e| BackendError::Io {
-            error: e,
-            context: format!("Failed to create directory {}", parent.display()),
-        })?;
-    }
 
     let cc_defines = runtime::runtime_header_defines();
     let out = format!(
@@ -197,16 +175,17 @@ union ManuallyDrop {{
 "#
     );
 
-    std::fs::write(&path, out).map_err(|e| BackendError::Io {
-        error: e,
-        context: format!("Failed to write {}", path.display()),
-    })?;
+    writer.write(&path, &out)?;
     Ok(())
 }
 
 /// Emit `<out_dir>/CMakeLists.txt` and `<out_dir>/cmake-toolchains/xwin-x86.cmake`.
-pub fn write_cmake(out_dir: &Path, project: &crate::config::Project) -> Result<()> {
-    cmake::write_cmake(out_dir, project)
+pub fn write_cmake(
+    out_dir: &Path,
+    project: &crate::config::Project,
+    writer: &mut impl OutputWriter,
+) -> Result<()> {
+    cmake::write_cmake(out_dir, project, writer)
 }
 
 fn module_to_header_path(out_dir: &Path, module_path: &ItemPath) -> PathBuf {

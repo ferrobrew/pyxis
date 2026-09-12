@@ -11,7 +11,10 @@
 
 use std::path::Path;
 
-use crate::{backends::Result, config::Project, grammar::ItemPath, semantic::SemanticOutput};
+use crate::{
+    backends::Result, config::Project, grammar::ItemPath, output::OutputWriter,
+    semantic::SemanticOutput,
+};
 
 mod assemble;
 mod cmake;
@@ -29,7 +32,12 @@ use write::write_module;
 /// Top-level C++-backend entry point. Builds the cross-module C++ binding
 /// map once, then emits a `.hpp` (and matching `.cpp` if needed) per module,
 /// the shared `pyxis_runtime.hpp`, and the project-level CMake glue.
-pub fn build(out_dir: &Path, semantic_state: &SemanticOutput, project: &Project) -> Result<()> {
+pub fn build(
+    out_dir: &Path,
+    semantic_state: &SemanticOutput,
+    project: &Project,
+    writer: &mut impl OutputWriter,
+) -> Result<()> {
     let bindings = build_cpp_extern_bindings(semantic_state);
 
     // Pre-flight: detect cross-module FullDef cycles by aggregating each
@@ -60,9 +68,9 @@ pub fn build(out_dir: &Path, semantic_state: &SemanticOutput, project: &Project)
     }
 
     for (key, module) in semantic_state.modules() {
-        write_module(out_dir, key, semantic_state, module, &bindings)?;
+        write_module(out_dir, key, semantic_state, module, &bindings, writer)?;
     }
-    write_runtime_header(out_dir)?;
-    write_cmake(out_dir, project)?;
+    write_runtime_header(out_dir, writer)?;
+    write_cmake(out_dir, project, writer)?;
     Ok(())
 }

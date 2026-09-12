@@ -274,6 +274,10 @@ fn format_file(file: &PathBuf, check: bool) -> Result<bool, Box<dyn std::error::
 
 #[cfg(test)]
 mod tests {
+    // The workspace restriction lints target production code; test code is
+    // explicitly exempt (see CONTRIBUTING.md).
+    #![expect(clippy::expect_used)]
+
     use pyxis::source_store::FileStore;
 
     use super::*;
@@ -321,8 +325,10 @@ mod tests {
     #[test]
     fn build_smoke_rust_in_memory() {
         // The driver's build decision (Rust backend, prefixed submodule mount)
-        // succeeds against in-memory sources via `build_sources` — the same
-        // pipeline the driver invokes, minus the CLI/filesystem shell.
+        // succeeds against in-memory sources via `build_sources_into` — the
+        // same pipeline the driver invokes, minus the CLI/filesystem shell.
+        // Output lands in a `MemoryWriter`; the synthetic `out` base only
+        // feeds path computation and never touches disk.
         let sources = vec![
             (
                 "foo.pyxis".to_string(),
@@ -334,22 +340,30 @@ mod tests {
             ),
         ];
         let mut file_store = FileStore::new();
-        // The rust backend writes output to `out_dir`; point it at the
-        // crate-local `target` dir so the test doesn't litter the working tree.
-        let out_dir =
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("target/test-artifacts/driver");
-        let result = pyxis::build_sources(
+        let mut writer = pyxis::output::MemoryWriter::default();
+        let result = pyxis::build_sources_into(
             sources,
             &project(),
-            &out_dir,
+            std::path::Path::new("out"),
             pyxis::Backend::Rust,
             &mut file_store,
             build_options(Some("mod.rs".to_string()), Some("prefixed".to_string())),
+            &mut writer,
         );
         assert!(
             result.is_ok(),
             "expected in-memory Rust build to succeed, got {result:?}"
         );
+        // The root is `mod.rs` (per `rust_root_file_name`) and wires up child
+        // modules; leaf types land in per-module files.
+        let root = writer
+            .file(std::path::Path::new("out/mod.rs"))
+            .expect("expected a generated out/mod.rs");
+        assert!(root.contains("pub mod foo;"), "{root}");
+        let foo_rs = writer
+            .file(std::path::Path::new("out/foo.rs"))
+            .expect("expected a generated out/foo.rs");
+        assert!(foo_rs.contains("pub struct Foo"), "{foo_rs}");
     }
 
     #[test]
@@ -360,19 +374,67 @@ mod tests {
             "pub type Foo {\n    pub value: u32,\n}\n".to_string(),
         )];
         let mut file_store = FileStore::new();
-        let out_dir =
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("target/test-artifacts/driver");
-        let result = pyxis::build_sources(
+        let mut writer = pyxis::output::MemoryWriter::default();
+        let result = pyxis::build_sources_into(
             sources,
             &project(),
-            &out_dir,
+            std::path::Path::new("out"),
             pyxis::Backend::Json,
             &mut file_store,
             pyxis::BuildOptions::default(),
+            &mut writer,
         );
         assert!(
             result.is_ok(),
             "expected in-memory JSON build to succeed, got {result:?}"
+        );
+        let output_json = writer
+            .file(std::path::Path::new("out/output.json"))
+            .expect("expected a generated out/output.json");
+        assert!(output_json.starts_with('{'), "{output_json}");
+        assert!(output_json.contains("\"foo::Foo\""), "{output_json}");
+    }
+
+    #[test]
+    fn build_smoke_cpp_in_memory() {
+        // The C++ backend build path runs against in-memory sources too
+        // (the driver compiles pyxis with the `cpp` feature).
+        let sources = vec![(
+            "foo.pyxis".to_string(),
+            "pub type Foo {\n    pub value: u32,\n}\n".to_string(),
+        )];
+        let mut file_store = FileStore::new();
+        let mut writer = pyxis::output::MemoryWriter::default();
+        let result = pyxis::build_sources_into(
+            sources,
+            &project(),
+            std::path::Path::new("out"),
+            pyxis::Backend::Cpp,
+            &mut file_store,
+            pyxis::BuildOptions::default(),
+            &mut writer,
+        );
+        assert!(
+            result.is_ok(),
+            "expected in-memory C++ build to succeed, got {result:?}"
+        );
+        // The module header, shared runtime header, and CMake glue are all
+        // emitted through the writer.
+        let foo_hpp = writer
+            .file(std::path::Path::new("out/include/foo.hpp"))
+            .expect("expected a generated out/include/foo.hpp");
+        assert!(foo_hpp.contains("struct Foo"), "{foo_hpp}");
+        assert!(
+            writer
+                .file(std::path::Path::new("out/include/pyxis_runtime.hpp"))
+                .is_some(),
+            "expected a generated pyxis_runtime.hpp"
+        );
+        assert!(
+            writer
+                .file(std::path::Path::new("out/CMakeLists.txt"))
+                .is_some(),
+            "expected a generated CMakeLists.txt"
         );
     }
 

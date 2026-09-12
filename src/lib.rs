@@ -20,6 +20,7 @@ use std::path::Path;
 pub mod backends;
 pub mod config;
 pub mod grammar;
+pub mod output;
 pub mod parser;
 pub mod pretty_print;
 pub mod semantic;
@@ -364,12 +365,12 @@ pub fn build_with_store_and_options(
     )
 }
 
-/// Build from in-memory sources without touching the filesystem.
+/// Build from in-memory sources, writing the generated output to `out_dir`.
 ///
 /// `sources` is a list of `(filename, content)` pairs where `filename` is the
-/// project-relative path (as it would appear in error messages). This is the
-/// filesystem-free entry point used by the test suite; the disk-based
-/// [`build_with_store_and_options`] reads files then calls through to here.
+/// project-relative path (as it would appear in error messages). Output is
+/// written to disk via [`output::DiskWriter`]; for a filesystem-free build,
+/// use [`build_sources_into`] with an [`output::MemoryWriter`].
 pub fn build_sources(
     sources: Vec<(String, String)>,
     project: &config::Project,
@@ -377,6 +378,35 @@ pub fn build_sources(
     backend: Backend,
     file_store: &mut source_store::FileStore,
     options: BuildOptions,
+) -> Result<(), BuildError> {
+    build_sources_into(
+        sources,
+        project,
+        out_dir,
+        backend,
+        file_store,
+        options,
+        &mut output::DiskWriter,
+    )
+}
+
+/// Build from in-memory sources, writing generated output through `writer`.
+///
+/// `sources` is a list of `(filename, content)` pairs where `filename` is the
+/// project-relative path (as it would appear in error messages). `out_dir` is
+/// a path-computation root for the backends; the writer decides where the
+/// bytes actually land. Tests pass an [`output::MemoryWriter`] to build
+/// entirely in memory, without a filesystem; the disk-based
+/// [`build_with_store_and_options`] reads files then calls through to here
+/// with an [`output::DiskWriter`].
+pub fn build_sources_into(
+    sources: Vec<(String, String)>,
+    project: &config::Project,
+    out_dir: &Path,
+    backend: Backend,
+    file_store: &mut source_store::FileStore,
+    options: BuildOptions,
+    writer: &mut impl output::OutputWriter,
 ) -> Result<(), BuildError> {
     // Build a Salsa database and register all sources as inputs.
     let db = semantic::PyxisDatabaseImpl::default();
@@ -429,18 +459,25 @@ pub fn build_sources(
                     &resolved_semantic_state,
                     module,
                     &options,
+                    writer,
                 )?;
             }
             Ok(())
         }
         #[cfg(feature = "json")]
         Backend::Json => {
-            backends::json::build(out_dir, &resolved_semantic_state, &project.name, file_store)?;
+            backends::json::build(
+                out_dir,
+                &resolved_semantic_state,
+                &project.name,
+                file_store,
+                writer,
+            )?;
             Ok(())
         }
         #[cfg(feature = "cpp")]
         Backend::Cpp => {
-            backends::cpp::build(out_dir, &resolved_semantic_state, project)?;
+            backends::cpp::build(out_dir, &resolved_semantic_state, project, writer)?;
             Ok(())
         }
         // The backend is a valid, parseable target, but its codegen wasn't

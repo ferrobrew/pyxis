@@ -10,15 +10,16 @@
 
 use std::path::Path;
 
-use crate::{
-    backends::{BackendError, Result},
-    config::Project,
-};
+use crate::{backends::Result, config::Project, output::OutputWriter};
 
 /// Emit `<out_dir>/CMakeLists.txt`. The output is normative MSVC-ABI: no
 /// compiler/toolchain coupling, no Linux-specific concerns. Builders supply
 /// their own toolchain file.
-pub fn write_cmake(out_dir: &Path, project: &Project) -> Result<()> {
+pub fn write_cmake(
+    out_dir: &Path,
+    project: &Project,
+    writer: &mut impl OutputWriter,
+) -> Result<()> {
     let project_name = sanitize_target_name(&project.name);
     let pointer_size = project.pointer_size;
     let bits = pointer_size * 8;
@@ -59,10 +60,7 @@ endif()
     );
 
     let cmake_path = out_dir.join("CMakeLists.txt");
-    std::fs::write(&cmake_path, cmake).map_err(|e| BackendError::Io {
-        error: e,
-        context: format!("Failed to write {}", cmake_path.display()),
-    })?;
+    writer.write(&cmake_path, &cmake)?;
     Ok(())
 }
 

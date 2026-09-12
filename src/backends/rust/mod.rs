@@ -7,6 +7,7 @@ use std::{
 use crate::{
     backends::{BackendError, Result},
     grammar::ItemPath,
+    output::OutputWriter,
     semantic::{Module, SemanticOutput, types::ItemDefinitionInner},
 };
 
@@ -61,6 +62,7 @@ pub fn write_module(
     semantic_state: &SemanticOutput,
     module: &Module,
     options: &crate::BuildOptions,
+    writer: &mut impl OutputWriter,
 ) -> Result<()> {
     const FORMAT_OUTPUT: bool = true;
 
@@ -90,12 +92,6 @@ pub fn write_module(
     } else {
         path.set_extension("rs");
     }
-
-    let directory_path = path.parent().map(|p| p.to_path_buf()).unwrap_or_default();
-    std::fs::create_dir_all(&directory_path).map_err(|e| BackendError::Io {
-        error: e,
-        context: format!("Failed to create directory {}", directory_path.display()),
-    })?;
 
     let mut raw_output = String::new();
 
@@ -292,10 +288,7 @@ pub fn write_module(
         raw_output
     };
 
-    std::fs::write(&path, &output).map_err(|e| BackendError::Io {
-        error: e,
-        context: format!("Failed to write Rust output to {}", path.display()),
-    })?;
+    writer.write(&path, &output)?;
 
     if let Some(error) = error {
         return Err(BackendError::Formatting(error));

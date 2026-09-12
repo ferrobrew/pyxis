@@ -75,6 +75,40 @@ The root module also carries lint `allow`s that cascade to descendant modules:
 
 The rustfmt skip prevents a stray `cargo fmt` from reformatting the prettyplease-formatted output.
 
+## Writing output through a writer
+
+Backends don't write to the filesystem directly: every generated file goes through an `OutputWriter` ([`pyxis::output`]). Production uses `DiskWriter`, which streams each file to disk as it is generated (one file in memory at a time — peak memory matches a hand-rolled `std::fs::write` per file). `MemoryWriter` buffers generated files in a `BTreeMap<PathBuf, String>` for inspection, letting tests build entirely in memory.
+
+`build_sources_into` is the in-memory entry point. It runs the same analysis pipeline and backend dispatch as `build_sources`, but writes each output file through an injected writer:
+
+```rust
+use std::path::Path;
+use pyxis::output::MemoryWriter;
+
+let mut file_store = pyxis::source_store::FileStore::new();
+let mut writer = MemoryWriter::default();
+pyxis::build_sources_into(
+    vec![(
+        "types.pyxis".to_string(),
+        "pub type Foo {\n    pub value: u32,\n}\n".to_string(),
+    )],
+    &pyxis::config::Project { name: "demo".to_string(), pointer_size: 8 },
+    Path::new("out"), // path-computation root only
+    pyxis::Backend::Rust,
+    &mut file_store,
+    pyxis::BuildOptions::default(),
+    &mut writer,
+)
+.expect("build failed");
+
+let root = writer.file(Path::new("out/lib.rs")).expect("root module");
+assert!(root.contains("pub mod types;"));
+```
+
+`out_dir` is a *path-computation* root: backends use it to decide generated paths (e.g. `out/lib.rs`, `out/types.rs`), while the writer decides where the bytes actually land. A `MemoryWriter` build never touches the filesystem; a `DiskWriter` build writes under `out_dir`.
+
+`build_sources` keeps its signature and is a thin wrapper over `build_sources_into` with a `DiskWriter`, so the `build.rs` story above is unchanged.
+
 ## Module mounting
 
 ### `-rust-module-prefix`
