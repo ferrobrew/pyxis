@@ -29,7 +29,7 @@ pub(super) fn render_union(
     // one (`Outer::Inner`).
     super::nested::render_type_declarations(&mut body, &ud.nested_item_paths, ctx)?;
     for region in &ud.regions {
-        super::items::render_field(&mut body, region, ctx, false)?;
+        super::items::render_field(&mut body, name, region, ctx, false)?;
     }
 
     // Nested items declared inside the union body are rendered in-class, the

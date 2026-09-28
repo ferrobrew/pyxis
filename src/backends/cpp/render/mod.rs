@@ -22,7 +22,7 @@ mod structs;
 mod types;
 mod unions;
 
-pub use idents::{cpp_ident, cpp_namespace_ident};
+pub use idents::{cpp_ident, cpp_member_ident, cpp_namespace_ident};
 pub use items::{render_free_function_decl, render_free_function_definition};
 pub use types::{render_declaration, render_declaration_with, render_parameter_type, render_type};
 

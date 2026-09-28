@@ -200,21 +200,48 @@ fn render_path(path: &ItemPath, ctx: RenderCtx) -> String {
     // Cross-module (or a same-module collision): fully qualified. Module
     // segments are namespaces (escaped against C-runtime globals too); the
     // leaf is the type name.
-    let mut out = String::new();
-    out.push_str("::");
+    format!("::{}", qualified_segments(path, ctx).join("::"))
+}
+
+/// The C++ spelling of each segment of a fully-qualified item path. Module
+/// segments are namespaces (escaped against C-runtime globals too); the leaf
+/// is the item's name. A segment nested inside a struct or union is a member
+/// of that class, so it is escaped against the class's name as its
+/// declaration was (see [`super::cpp_member_ident`]).
+fn qualified_segments(path: &ItemPath, ctx: RenderCtx) -> Vec<String> {
     let last = path.len().saturating_sub(1);
+    let mut prefix = ItemPath::empty();
+    let mut previous: Option<&str> = None;
+    let mut segments = Vec::with_capacity(path.len());
     for (i, seg) in path.iter().enumerate() {
-        if i > 0 {
-            out.push_str("::");
-        }
-        let escaped = if i == last {
-            super::cpp_ident(seg.as_str())
-        } else {
-            super::cpp_namespace_ident(seg.as_str())
+        let escaped = match previous {
+            Some(owner) if is_class_like(&prefix, ctx) => {
+                super::cpp_member_ident(owner, seg.as_str())
+            }
+            _ if i == last => super::cpp_ident(seg.as_str()),
+            _ => super::cpp_namespace_ident(seg.as_str()),
         };
-        out.push_str(&escaped);
+        segments.push(escaped.into_owned());
+        prefix.push(seg.clone());
+        previous = Some(seg.as_str());
     }
-    out
+    segments
+}
+
+/// Whether `path` names a struct or union, whose nested items and members are
+/// emitted as members of a C++ class.
+fn is_class_like(path: &ItemPath, ctx: RenderCtx) -> bool {
+    use crate::semantic::types::ItemDefinitionInner;
+    ctx.registry
+        .get(path, &crate::span::ItemLocation::internal())
+        .ok()
+        .and_then(|item| item.resolved())
+        .is_some_and(|resolved| {
+            matches!(
+                resolved.inner,
+                ItemDefinitionInner::Type(_) | ItemDefinitionInner::Union(_)
+            )
+        })
 }
 
 pub(super) fn render_doc(
@@ -306,20 +333,7 @@ fn doxygen_ref(
                 return None;
             }
         }
-        let last = path.len().saturating_sub(1);
-        Some(
-            path.iter()
-                .enumerate()
-                .map(|(i, seg)| {
-                    if i == last {
-                        super::cpp_ident(seg.as_str()).into_owned()
-                    } else {
-                        super::cpp_namespace_ident(seg.as_str()).into_owned()
-                    }
-                })
-                .collect::<Vec<_>>()
-                .join("::"),
-        )
+        Some(qualified_segments(path, ctx).join("::"))
     };
 
     match target {
@@ -345,8 +359,25 @@ fn doxygen_ref(
                 kind,
                 DocLinkMemberKind::Constant | DocLinkMemberKind::ExternValue
             );
+            // Members of a struct or union, and the flags of a nested
+            // bitflags (emitted as a struct of static constants), are class
+            // members and escaped against the class's name. Extern values are
+            // reached through a `get_` accessor, which cannot collide.
+            let owner = item.last().map(|s| s.as_str()).unwrap_or_default();
+            let is_bitflags = ctx
+                .registry
+                .get(item, &crate::span::ItemLocation::internal())
+                .ok()
+                .and_then(|i| i.resolved())
+                .is_some_and(|r| matches!(r.inner, ItemDefinitionInner::Bitflags(_)));
+            let owner_is_class = is_class_like(item, ctx)
+                || (is_bitflags
+                    && item
+                        .parent()
+                        .is_some_and(|parent| is_class_like(&parent, ctx)));
             let accessor = |name: &str| match kind {
                 DocLinkMemberKind::ExternValue => format!("get_{}", super::cpp_ident(name)),
+                _ if owner_is_class => super::cpp_member_ident(owner, name).into_owned(),
                 _ => super::cpp_ident(name).into_owned(),
             };
             Some(if parent_is_bodyless && value_member {

@@ -38,6 +38,26 @@ pub fn cpp_ident(name: &str) -> Cow<'_, str> {
     }
 }
 
+/// Like [`cpp_ident`], but for a member of the class `owner`: a member named
+/// after its enclosing class is also escaped by suffixing an underscore.
+///
+/// Pyxis and Rust keep a type's members in their own namespace, so a
+/// `Teleport` type may have a `Teleport` method. C++ does not: a member
+/// function named after its class is a constructor, and a static data
+/// member, member type, or (once the class declares a constructor, which
+/// pinned types do) data member with that name is ill-formed. Every member
+/// declaration and every reference to one goes through this function, so
+/// the escaped name is used consistently. `owner` may be given raw or
+/// already escaped; both are compared in escaped form.
+pub fn cpp_member_ident<'a>(owner: &str, name: &'a str) -> Cow<'a, str> {
+    let escaped = cpp_ident(name);
+    if escaped == cpp_ident(owner) {
+        Cow::Owned(format!("{escaped}_"))
+    } else {
+        escaped
+    }
+}
+
 /// Like [`cpp_ident`], but for module/namespace segments: also escapes
 /// C-runtime globals (see [`CPP_RESERVED_GLOBALS`]) that collide with a
 /// global `namespace` of the same name.
@@ -179,7 +199,22 @@ pub(super) fn predefined_to_cpp(p: PredefinedItem) -> &'static str {
 
 #[cfg(test)]
 mod ident_tests {
-    use super::{cpp_ident, cpp_namespace_ident};
+    use super::{cpp_ident, cpp_member_ident, cpp_namespace_ident};
+
+    #[test]
+    fn members_named_after_their_class_are_escaped() {
+        assert_eq!(cpp_member_ident("Teleport", "Teleport"), "Teleport_");
+        assert_eq!(cpp_member_ident("Teleport", "state"), "state");
+    }
+
+    #[test]
+    fn member_escaping_composes_with_keyword_escaping() {
+        // A keyword member is escaped once as a keyword; it only gains a
+        // second underscore when it also collides with its class's name.
+        assert_eq!(cpp_member_ident("Owner", "class"), "class_");
+        assert_eq!(cpp_member_ident("class", "class"), "class__");
+        assert_eq!(cpp_member_ident("class_", "class"), "class__");
+    }
 
     #[test]
     fn keywords_are_escaped_everywhere() {

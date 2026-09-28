@@ -42,18 +42,21 @@ pub(super) fn render_type_declarations(
         if !body.trim().is_empty() {
             writeln!(body)?;
         }
-        let nested_name = nested_path
+        // A nested type is a member of its enclosing class, so it is escaped
+        // against that class's name; its own members are escaped against its
+        // own name (`raw_name`).
+        let raw_name = nested_path
             .last()
             .map(|s| s.as_str().to_string())
             .unwrap_or_default();
-        let nested_name = super::cpp_ident(&nested_name);
+        let nested_name = super::cpp_member_ident(owner_leaf(nested_path), &raw_name);
         match &nested_resolved.inner {
             ItemDefinitionInner::Type(nested_td) => {
                 super::types::render_doc(body, &nested_td.doc, 1, ctx, &nested_item.location)?;
                 writeln!(body, "    struct {nested_name} {{")?;
                 let nested_had_fields = !nested_td.regions.is_empty();
                 for region in &nested_td.regions {
-                    super::items::render_field_indented(body, region, ctx, false, 2)?;
+                    super::items::render_field_indented(body, &raw_name, region, ctx, false, 2)?;
                 }
                 // Render nested constants inside the nested struct
                 let nested_has_consts = nested_td.nested_item_paths.iter().any(|p| {
@@ -79,7 +82,8 @@ pub(super) fn render_type_declarations(
                             .last()
                             .map(|s| s.as_str().to_string())
                             .unwrap_or_default();
-                        let nested_const_name = super::cpp_ident(&nested_const_name);
+                        let nested_const_name =
+                            super::cpp_member_ident(&raw_name, &nested_const_name);
                         super::types::render_doc(
                             body,
                             &nested_cd.doc,
@@ -101,7 +105,7 @@ pub(super) fn render_type_declarations(
                 super::types::render_doc(body, &nested_ud.doc, 1, ctx, &nested_item.location)?;
                 writeln!(body, "    union {nested_name} {{")?;
                 for region in &nested_ud.regions {
-                    super::items::render_field_indented(body, region, ctx, false, 2)?;
+                    super::items::render_field_indented(body, &raw_name, region, ctx, false, 2)?;
                 }
                 writeln!(body, "    }};")?;
             }
@@ -130,7 +134,7 @@ pub(super) fn render_type_declarations(
                     writeln!(
                         body,
                         "        static constexpr {bf_type} {} = {};",
-                        super::cpp_ident(&flag.name),
+                        super::cpp_member_ident(&raw_name, &flag.name),
                         flag.value
                     )?;
                 }
@@ -188,9 +192,12 @@ pub(super) fn render_value_declarations(
             .last()
             .map(|s| s.as_str().to_string())
             .unwrap_or_default();
-        let nested_name = super::cpp_ident(&nested_name);
+        let accessor_name = super::cpp_ident(&nested_name);
         match &nested_resolved.inner {
             ItemDefinitionInner::Constant(nested_cd) => {
+                // A nested constant is a static data member of its enclosing
+                // class, so it is escaped against that class's name.
+                let nested_name = super::cpp_member_ident(owner_leaf(nested_path), &nested_name);
                 super::types::render_doc(body, &nested_cd.doc, 1, ctx, &nested_item.location)?;
                 let bf_type = super::render_type(&nested_cd.type_, ctx)?;
                 let value_str = format_const_value(&nested_cd.value, &nested_cd.type_);
@@ -225,7 +232,7 @@ pub(super) fn render_value_declarations(
                 super::types::render_doc(body, &nested_ev.doc, 1, ctx, &nested_item.location)?;
                 let decl = super::render_declaration(
                     &nested_ev.type_,
-                    &format!("&get_{nested_name}()"),
+                    &format!("&get_{accessor_name}()"),
                     ctx,
                 )?;
                 writeln!(body, "    static {decl};")?;
@@ -273,4 +280,18 @@ pub(super) fn render_extern_value_definitions(
         }
     }
     Ok(())
+}
+
+/// The name of the class a nested item belongs to: the parent segment of its
+/// path.
+fn owner_leaf(nested_path: &ItemPath) -> &str {
+    let len = nested_path.len();
+    if len < 2 {
+        return "";
+    }
+    nested_path
+        .iter()
+        .nth(len - 2)
+        .map(|s| s.as_str())
+        .unwrap_or_default()
 }
