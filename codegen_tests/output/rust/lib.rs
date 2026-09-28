@@ -119,6 +119,7 @@ pub mod function_pointers;
 pub mod generics;
 pub mod generics_cross_module;
 pub mod math;
+pub mod member_named_after_type;
 pub mod min_size;
 pub mod multiple_levels;
 pub mod nested_items;

@@ -1,0 +1,86 @@
+// Regression test: members named after their enclosing type.
+//
+// Legal in pyxis and Rust, where a type's members live in their own
+// namespace, but not in C++: a member function named after its class is a
+// constructor, so a declared return type fails (MSVC C2533, and ill-formed
+// under GCC/Clang), and a static data member or member type named after its
+// class is ill-formed. A data member named after its class is ill-formed once
+// the class declares a constructor, which a pinned type's deleted copy and
+// move constructors do. The cpp backend escapes each such member with a
+// trailing underscore, as it does for C++ keywords, in declarations,
+// definitions, calls, qualified paths, and doc links alike. The corpus build
+// compiles the emitted C++ with the host compiler, and the doxygen pass
+// resolves the doc links, so this input fails locally if the escaping
+// regresses at any of those sites.
+
+/// A type with a method named after it: [`Teleporter::Teleporter`].
+pub type Teleporter {
+    pub state: u32,
+}
+impl Teleporter {
+    /// Teleports.
+    #[address(0x3_000)]
+    pub fn Teleporter(&mut self) -> bool;
+}
+
+/// A type that forwards [`Teleporter::Teleporter`] through its base field
+/// [`Station::base`].
+pub type Station {
+    #[base]
+    pub base: Teleporter,
+}
+
+/// A pinned type with a field named after it: [`Counter::Counter`].
+#[pinned]
+pub type Counter {
+    pub Counter: u32,
+}
+
+/// A type with a vftable function named after it:
+/// [`Dispatcher::Dispatcher`].
+pub type Dispatcher {
+    vftable {
+        pub fn Dispatcher(&mut self, value: u32) -> u32;
+    },
+}
+
+/// A type whose nested items are named after it: [`Registry::Registry`] is a
+/// constant, and [`Catalogue::Catalogue`] is a nested type.
+pub type Registry {
+    /// A nested constant named after its enclosing type.
+    pub const Registry: u32 = 7,
+
+    pub size: u32,
+}
+
+/// A type with a nested type named after it, referenced by a field.
+pub type Catalogue {
+    /// A nested type named after its enclosing type. Its field is
+    /// [`Catalogue::Catalogue::entries`].
+    pub type Catalogue {
+        pub entries: u32,
+    },
+    /// Nested bitflags with a flag named after them:
+    /// [`Shelf::Shelf`](Catalogue::Shelf::Shelf).
+    pub bitflags Shelf: u32 {
+        Shelf = 1,
+        Other = 2,
+    },
+    /// A nested enum with a variant named after it:
+    /// [`Kind::Kind`](Catalogue::Kind::Kind).
+    pub enum Kind: u32 {
+        Kind,
+        Other,
+    },
+
+    pub inner: Catalogue::Catalogue,
+    pub shelf: Catalogue::Shelf,
+    pub kind: Catalogue::Kind,
+    pub reserved: u32,
+}
+
+/// A union with a member named after it: [`Choice::Choice`].
+pub union Choice {
+    pub Choice: u32,
+    pub other: f32,
+}

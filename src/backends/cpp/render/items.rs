@@ -442,15 +442,18 @@ pub(super) fn render_extern_value_definition(
 
 pub(super) fn render_field(
     out: &mut String,
+    owner: &str,
     region: &Region,
     ctx: RenderCtx,
     rewrite_self_arg_to_void_ptr: bool,
 ) -> Result<()> {
-    render_field_indented(out, region, ctx, rewrite_self_arg_to_void_ptr, 1)
+    render_field_indented(out, owner, region, ctx, rewrite_self_arg_to_void_ptr, 1)
 }
 
+/// Render one data member of the class `owner`.
 pub(super) fn render_field_indented(
     out: &mut String,
+    owner: &str,
     region: &Region,
     ctx: RenderCtx,
     rewrite_self_arg_to_void_ptr: bool,
@@ -463,7 +466,7 @@ pub(super) fn render_field_indented(
         writeln!(out, "{pad}// <unnamed region skipped>")?;
         return Ok(());
     };
-    let field_name = super::cpp_ident(field_name);
+    let field_name = super::cpp_member_ident(owner, field_name);
     let decl = super::render_declaration_with(
         &region.type_ref,
         &field_name,

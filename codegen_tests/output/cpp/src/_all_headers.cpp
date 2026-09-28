@@ -21,6 +21,7 @@
 #include "generics.hpp"
 #include "generics_cross_module.hpp"
 #include "math.hpp"
+#include "member_named_after_type.hpp"
 #include "min_size.hpp"
 #include "multiple_levels.hpp"
 #include "nested_items.hpp"

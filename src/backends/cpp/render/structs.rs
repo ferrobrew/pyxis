@@ -8,7 +8,7 @@ use super::{RenderCtx, RenderedItem, template_clause};
 use crate::{
     backends::{Result, cpp::runtime},
     semantic::types::{
-        Argument, CallingConvention, Function, FunctionBody, TypeDefinition, TypeVftable,
+        Argument, CallingConvention, Function, FunctionBody, Type, TypeDefinition, TypeVftable,
         Visibility,
     },
     span::ItemLocation,
@@ -33,7 +33,7 @@ pub(super) fn render_struct(
     // would resolve to the member instead of the type, so `render_path`
     // qualifies those references. Normalize through `cpp_ident` so the
     // comparison is against the emitted C++ names.
-    let shadowed_members = compute_shadowed_members(td);
+    let shadowed_members = compute_shadowed_members(name, td);
     let ctx = ctx.with_shadowed_members(&shadowed_members);
 
     let mut out = String::new();
@@ -76,13 +76,13 @@ pub(super) fn render_struct(
     super::nested::render_type_declarations(&mut body, &td.nested_item_paths, ctx)?;
 
     for region in &td.regions {
-        super::items::render_field(&mut body, region, ctx, is_vftable_struct)?;
+        super::items::render_field(&mut body, name, region, ctx, is_vftable_struct)?;
     }
 
-    render_base_conversion_operators(&mut body, td, ctx)?;
+    render_base_conversion_operators(&mut body, name, td, ctx)?;
     render_singleton_declaration(&mut body, name, td)?;
-    render_vftable_declarations(&mut body, td, ctx)?;
-    render_associated_function_declarations(&mut body, td, ctx)?;
+    render_vftable_declarations(&mut body, name, td, ctx)?;
+    render_associated_function_declarations(&mut body, name, td, ctx)?;
     super::nested::render_value_declarations(
         &mut body,
         &td.nested_item_paths,
@@ -158,9 +158,9 @@ pub(super) fn render_struct(
 /// Names this class introduces into its own scope (data members and methods).
 /// A same-module type reference whose leaf matches one of these would resolve
 /// to the member instead of the type, so `render_path` qualifies those
-/// references. Normalized through `cpp_ident` so the comparison is against the
-/// emitted C++ names.
-fn compute_shadowed_members(td: &TypeDefinition) -> BTreeSet<String> {
+/// references. Normalized through `cpp_member_ident` so the comparison is
+/// against the emitted C++ names.
+fn compute_shadowed_members(owner: &str, td: &TypeDefinition) -> BTreeSet<String> {
     td.regions
         .iter()
         .filter_map(|r| r.name.as_deref())
@@ -170,13 +170,14 @@ fn compute_shadowed_members(td: &TypeDefinition) -> BTreeSet<String> {
                 .iter()
                 .flat_map(|v| v.functions.iter().map(|f| f.name.as_str())),
         )
-        .map(|n| super::cpp_ident(n).into_owned())
+        .map(|n| super::cpp_member_ident(owner, n).into_owned())
         .collect()
 }
 
 /// Conversion operators for `#[base]` regions (composition-based upcast).
 fn render_base_conversion_operators(
     body: &mut String,
+    owner: &str,
     td: &TypeDefinition,
     ctx: RenderCtx,
 ) -> Result<()> {
@@ -187,6 +188,7 @@ fn render_base_conversion_operators(
         let Some(field_name) = region.name.as_deref() else {
             continue;
         };
+        let field_name = super::cpp_member_ident(owner, field_name);
         let base_type = super::render_type(&region.type_ref, ctx)?;
         writeln!(body)?;
         writeln!(
@@ -216,6 +218,7 @@ fn render_singleton_declaration(body: &mut String, name: &str, td: &TypeDefiniti
 /// able to call into them by name).
 fn render_vftable_declarations(
     body: &mut String,
+    owner: &str,
     td: &TypeDefinition,
     ctx: RenderCtx,
 ) -> Result<()> {
@@ -225,7 +228,7 @@ fn render_vftable_declarations(
             if !ctx.cfg_passes(&func.cfg) {
                 continue;
             }
-            render_method_signature(body, func, ctx)?;
+            render_method_signature(body, owner, func, ctx)?;
         }
     }
     Ok(())
@@ -234,6 +237,7 @@ fn render_vftable_declarations(
 /// Associated function signatures (impl block, e.g. `#[address(0x...)] pub fn foo()`).
 fn render_associated_function_declarations(
     body: &mut String,
+    owner: &str,
     td: &TypeDefinition,
     ctx: RenderCtx,
 ) -> Result<()> {
@@ -241,7 +245,7 @@ fn render_associated_function_declarations(
         if !ctx.cfg_passes(&func.cfg) {
             continue;
         }
-        render_method_signature(body, func, ctx)?;
+        render_method_signature(body, owner, func, ctx)?;
     }
     Ok(())
 }
@@ -309,14 +313,14 @@ fn render_out_of_class_method_definitions(
                 if !ctx.cfg_passes(&func.cfg) {
                     continue;
                 }
-                render_method_definition(post_header, name, func, ctx)?;
+                render_method_definition(post_header, name, td, func, ctx)?;
             }
         }
         for func in &td.associated_functions {
             if !ctx.cfg_passes(&func.cfg) {
                 continue;
             }
-            render_method_definition(post_header, name, func, ctx)?;
+            render_method_definition(post_header, name, td, func, ctx)?;
         }
     } else {
         if let Some(addr) = td.singleton {
@@ -335,9 +339,9 @@ fn render_out_of_class_method_definitions(
                     continue;
                 }
                 if !func.method_type_parameters.is_empty() {
-                    render_method_definition(post_header, name, func, ctx)?;
+                    render_method_definition(post_header, name, td, func, ctx)?;
                 } else {
-                    render_method_definition(post_cpp, name, func, ctx)?;
+                    render_method_definition(post_cpp, name, td, func, ctx)?;
                 }
             }
         }
@@ -346,9 +350,9 @@ fn render_out_of_class_method_definitions(
                 continue;
             }
             if !func.method_type_parameters.is_empty() {
-                render_method_definition(post_header, name, func, ctx)?;
+                render_method_definition(post_header, name, td, func, ctx)?;
             } else {
-                render_method_definition(post_cpp, name, func, ctx)?;
+                render_method_definition(post_cpp, name, td, func, ctx)?;
             }
         }
     }
@@ -375,6 +379,7 @@ fn render_vftable_accessor_definition(
     let vftable_type = super::render_type(&vftable.type_, ctx)?;
     writeln!(out, "{vftable_type} {parent_name}::_vftable_ptr() const {{")?;
     if let Some(base_field) = &vftable.base_field {
+        let base_field = super::cpp_member_ident(parent_name, base_field);
         writeln!(
             out,
             "    return reinterpret_cast<{vftable_type}>(this->{base_field}._vftable_ptr());"
@@ -389,7 +394,12 @@ fn render_vftable_accessor_definition(
 }
 
 /// In-class method declaration (signature only).
-fn render_method_signature(out: &mut String, func: &Function, ctx: RenderCtx) -> Result<()> {
+fn render_method_signature(
+    out: &mut String,
+    owner: &str,
+    func: &Function,
+    ctx: RenderCtx,
+) -> Result<()> {
     if func.name.starts_with("_vfunc_") {
         return Ok(());
     }
@@ -411,7 +421,7 @@ fn render_method_signature(out: &mut String, func: &Function, ctx: RenderCtx) ->
     }
     let declaration = method_declaration(
         func,
-        &super::cpp_ident(&func.name),
+        &super::cpp_member_ident(owner, &func.name),
         &sig_args_text,
         const_qual,
         ctx,
@@ -434,6 +444,7 @@ fn func_has_self(func: &Function) -> bool {
 fn render_method_definition(
     out: &mut String,
     parent_name: &str,
+    parent: &TypeDefinition,
     func: &Function,
     ctx: RenderCtx,
 ) -> Result<()> {
@@ -447,7 +458,7 @@ fn render_method_definition(
         return Ok(());
     }
     let (sig_args_text, const_qual) = method_sig_parts(func, ctx)?;
-    let body_lines = method_body_lines(func, ctx)?;
+    let body_lines = method_body_lines(parent_name, parent, func, ctx)?;
     // Method-level template parameters require a `template <...>` clause
     // on the out-of-class definition. Without method-level templates, the
     // definition lands in the .cpp file where `inline` would be wrong;
@@ -468,7 +479,7 @@ fn render_method_definition(
         func,
         &format!(
             "{parent_name}::{fn_name}",
-            fn_name = super::cpp_ident(&func.name)
+            fn_name = super::cpp_member_ident(parent_name, &func.name)
         ),
         &sig_args_text,
         const_qual,
@@ -526,7 +537,15 @@ pub(super) fn method_declaration(
     }
 }
 
-fn method_body_lines(func: &Function, ctx: RenderCtx) -> Result<Vec<String>> {
+/// The body of an out-of-class method definition. `owner` and `parent` are
+/// the class the method is defined on; they name the members the body reaches
+/// through (a forwarding field, the vftable).
+fn method_body_lines(
+    owner: &str,
+    parent: &TypeDefinition,
+    func: &Function,
+    ctx: RenderCtx,
+) -> Result<Vec<String>> {
     let return_text = if let Some(ret) = &func.return_type {
         super::render_type(ret, ctx)?
     } else {
@@ -586,7 +605,14 @@ fn method_body_lines(func: &Function, ctx: RenderCtx) -> Result<Vec<String>> {
                 call_payload.push_str(", ");
             }
             call_payload.push_str(&call_args.join(", "));
-            let function_name = super::cpp_ident(function_name);
+            // The slot is a field of the vftable struct, so it is escaped
+            // against that struct's name, as its declaration was.
+            let vftable_struct = parent
+                .vftable
+                .as_ref()
+                .and_then(|v| type_leaf(&v.type_))
+                .unwrap_or_default();
+            let function_name = super::cpp_member_ident(vftable_struct, function_name);
             vec![format!(
                 "{ret_kw}_vftable_ptr()->{function_name}({call_payload});"
             )]
@@ -596,8 +622,16 @@ fn method_body_lines(func: &Function, ctx: RenderCtx) -> Result<Vec<String>> {
             function_name,
         } => {
             let call_payload = call_args.join(", ");
-            let field = super::cpp_ident(field);
-            let function_name = super::cpp_ident(function_name);
+            // The forwarded-to method is a member of the base field's type,
+            // so it is escaped against that type's name.
+            let base_type = parent
+                .regions
+                .iter()
+                .find(|r| r.name.as_deref() == Some(field.as_str()))
+                .and_then(|r| type_leaf(&r.type_ref))
+                .unwrap_or_default();
+            let field = super::cpp_member_ident(owner, field);
+            let function_name = super::cpp_member_ident(base_type, function_name);
             vec![format!(
                 "{ret_kw}this->{field}.{function_name}({call_payload});"
             )]
@@ -610,6 +644,16 @@ fn method_body_lines(func: &Function, ctx: RenderCtx) -> Result<Vec<String>> {
             Vec::new()
         }
     })
+}
+
+/// The leaf name of the type a region or vftable pointer refers to, looking
+/// through pointers, or `None` for types without one.
+fn type_leaf(type_: &Type) -> Option<&str> {
+    match type_ {
+        Type::Raw(path) | Type::Generic(path, _) => path.last().map(|s| s.as_str()),
+        Type::ConstPointer(inner) | Type::MutPointer(inner) => type_leaf(inner),
+        _ => None,
+    }
 }
 
 /// Map a calling convention to its `PYXIS_*` shim macro (with a
